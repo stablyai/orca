@@ -11,7 +11,11 @@ import { listEphemeralVmRuntimes } from '../../../shared/ephemeral-vm-runtime-st
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
 import type { CloudMcpSyncPreferences } from '../../../shared/agent-mcp-sync/mcp-sync-preferences'
+import { mcpEgressHostsOf } from '../../../shared/agent-mcp-sync/mcp-egress-hosts'
+import { environmentHandleFromRecipeResult } from '../../environment-providers/environment-provider-recipe-adapter'
+import { HOSTED_SANDBOX_DRIVER_ID } from '../../hosted-sandbox/hosted-sandbox-driver'
 import { readLocalMcpConfig, type LocalMcpConfig } from './local-mcp-config-read'
+import type { CloudMcpEgress } from './cloud-mcp-egress'
 
 const SYNC_TIMEOUT_MS = 30_000
 
@@ -24,6 +28,8 @@ export type CloudMcpSyncDeps = {
   broadcast: (status: McpSyncStatus) => void
   readLocal?: (repoPath: string | null) => Promise<LocalMcpConfig>
   call?: (environmentId: string, params: unknown) => Promise<unknown>
+  /** Opens the sandbox's allowlist for synced remote servers; absent without a control plane. */
+  egress?: CloudMcpEgress
   now?: () => number
 }
 
@@ -103,6 +109,35 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
     )
   }
 
+  function sandboxIdOf(environmentId: string): string | null {
+    const runtime = cloudRuntime(environmentId)
+    const handle = runtime?.recipeResult
+      ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
+      : null
+    const sandboxId = handle?.driverState.sandboxId
+    return typeof sandboxId === 'string' && sandboxId ? sandboxId : null
+  }
+
+  /** Before the host checks reachability, so a remote server's first call already gets through. */
+  async function openEgress(environmentId: string, rows: McpSyncStatus['rows']): Promise<void> {
+    const sandboxId = deps.egress ? sandboxIdOf(environmentId) : null
+    if (!deps.egress || !sandboxId) {
+      return
+    }
+    try {
+      const { hosts, dropped } = await deps.egress.apply(sandboxId, mcpEgressHostsOf(rows))
+      const over = dropped.length ? `, ${dropped.length} over the limit` : ''
+      console.info(
+        `[cloud-mcp-sync] ${environmentId}: sandbox allows ${hosts.length} extra hosts${over}`
+      )
+    } catch (error) {
+      // The host still gets the servers; ones it can't reach show as unreachable.
+      console.warn(
+        `[cloud-mcp-sync] ${environmentId}: could not open egress (${error instanceof Error ? error.message : String(error)})`
+      )
+    }
+  }
+
   async function plan(environmentId: string) {
     const runtime = cloudRuntime(environmentId)
     const local = await readLocal(runtime?.repoPath ?? null)
@@ -145,6 +180,7 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
       rows: previous?.rows.length ? previous.rows : rows
     })
     try {
+      await openEgress(environmentId, rows)
       const result = AgentMcpSyncResult.parse(await call(environmentId, params))
       const applied = applyMcpSyncResult(rows, result)
       const synced = applied.filter((row) => row.state === 'synced').length

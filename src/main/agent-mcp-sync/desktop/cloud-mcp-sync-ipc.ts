@@ -6,6 +6,8 @@ import {
   type CloudMcpSync,
   type CloudMcpSyncPreferences
 } from './cloud-mcp-sync'
+import { createCloudMcpEgress } from './cloud-mcp-egress'
+import type { HostedSandboxControlPlaneClientOptions } from '../../hosted-sandbox/hosted-sandbox-request'
 
 let instance: CloudMcpSync | null = null
 
@@ -31,9 +33,13 @@ function preferencesOf(value: unknown): Partial<CloudMcpSyncPreferences> {
 }
 
 /** Orca Cloud builds only; other builds answer null so the renderer hides the affordance. */
-export function installCloudMcpSync(userDataPath: string): CloudMcpSync {
+export function installCloudMcpSync(
+  userDataPath: string,
+  controlPlane: HostedSandboxControlPlaneClientOptions
+): CloudMcpSync {
   instance ??= createCloudMcpSync({
     userDataPath,
+    egress: createCloudMcpEgress({ userDataPath, controlPlane }),
     broadcast: (status: McpSyncStatus) => {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.isDestroyed()) {

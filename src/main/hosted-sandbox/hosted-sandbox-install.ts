@@ -72,7 +72,10 @@ export function installHostedSandbox(): void {
   const client = createHostedSandboxRecipeClient(config)
   const base = createHostedSandboxRecipeDriver(config, client)
   controlPlaneClient = client
-  const mcpSync = installCloudMcpSync(userDataPath)
+  const mcpSync = installCloudMcpSync(userDataPath, {
+    baseUrl: config.controlPlaneUrl,
+    getAccessToken: config.getAccessToken
+  })
   // Dev rehearsals shorten idle sleep; packaged builds always use the provider's default.
   const idleOverride = app.isPackaged
     ? Number.NaN
