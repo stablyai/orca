@@ -22,12 +22,20 @@ export type HostModelCatalogLaunch = {
   seedsModel: boolean
 }
 
+const unnamedDefaults = new WeakMap<ListedHostModelCatalog, ListedHostModelCatalog>()
+
 function withoutNamedDefault(catalog: ListedHostModelCatalog): ListedHostModelCatalog {
-  return {
+  const held = unnamedDefaults.get(catalog)
+  if (held) {
+    return held
+  }
+  const projected: ListedHostModelCatalog = {
     ...catalog,
     models: catalog.models.map((model) => ({ ...model, isDefault: false })),
     listingNamesConfiguredModel: false
   }
+  unnamedDefaults.set(catalog, projected)
+  return projected
 }
 
 /** A host-global default is nameable only when no workspace config can replace it. */

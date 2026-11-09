@@ -178,19 +178,56 @@ it.each([75, 750])(
         efforts: []
       }))
     })
-    for (let i = 0; i < count; i += 1) {
-      recordHostModelCatalogSnapshot(target, 'codex', `id:wt-${i}`, answer())
-    }
-    visits = 0
-    recordHostModelCatalogSnapshot(target, 'codex', 'id:wt-0', answer())
-    recordHostModelCatalogSnapshot(target, 'codex', 'id:wt-0', answer(true))
-    expect(visits).toBeLessThanOrEqual(80)
-    const held = readHostModelCatalogSnapshot(target, 'codex', {
-      newLaunch: true,
-      seedsModel: true,
-      worktree: 'id:wt-0'
+    let accountReads = 0
+    recordHostModelCatalogSnapshot(target, 'codex', null, {
+      origin: 'probe',
+      fetchedAt: 3,
+      modelsDifferByWorkspace: true,
+      listingNamesConfiguredModel: true,
+      models: Array.from({ length: 20 }, (_, index) => ({
+        id: `gpt-6.1-sol-${index}`,
+        get label() {
+          accountReads += 1
+          return 'GPT-6.1 Sol'
+        },
+        isDefault: true,
+        efforts: [
+          {
+            value: 'high',
+            get label() {
+              accountReads += 1
+              return 'High'
+            }
+          },
+          { value: 'ultra', label: 'Ultra' }
+        ],
+        defaultEffort: 'high'
+      }))
     })
-    expect(held?.origin !== 'unknown' && held?.models[0].id).toBe('new-0')
+    const account = hostModelMenuCatalog({ target, agent: 'codex' })
+    const onAccount = vi.fn()
+    const stop = account.subscribe(onAccount)
+    accountReads = 0
+    try {
+      for (let i = 0; i < count; i += 1) {
+        recordHostModelCatalogSnapshot(target, 'codex', `id:wt-${i}`, answer())
+      }
+      visits = 0
+      recordHostModelCatalogSnapshot(target, 'codex', 'id:wt-0', answer())
+      recordHostModelCatalogSnapshot(target, 'codex', 'id:wt-0', answer(true))
+      expect(visits).toBeLessThanOrEqual(80)
+      const held = readHostModelCatalogSnapshot(target, 'codex', {
+        newLaunch: true,
+        seedsModel: true,
+        worktree: 'id:wt-0'
+      })
+      expect(held?.origin !== 'unknown' && held?.models[0].id).toBe('new-0')
+      // Unchanged account output requires neither row copying nor nested payload serialization.
+      expect(accountReads).toBe(0)
+      expect(onAccount).not.toHaveBeenCalled()
+    } finally {
+      stop()
+    }
   }
 )
 
