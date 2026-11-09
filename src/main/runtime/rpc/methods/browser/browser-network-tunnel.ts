@@ -4,10 +4,9 @@ import {
   BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL
 } from '../../../../browser/network/tunnels/browser-network-tunnel-stream-state'
-import {
-  browserNetworkExecutionHostKey,
-  type BrowserNetworkExecutionRouteResolver
-} from '../../../../browser/network/execution-routes/browser-network-execution-route'
+import '../../../../browser/network/execution-routes/browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type { BrowserNetworkExecutionRouteResolver } from '../../../../browser/network/execution-routes/browser-network-execution-route-contract'
 import { resolveBrowserNetworkExecutionRoute } from '../../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
 import { BrowserNetworkTunnelAttachParams } from '../../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import '../../../../../shared/protocol-version'

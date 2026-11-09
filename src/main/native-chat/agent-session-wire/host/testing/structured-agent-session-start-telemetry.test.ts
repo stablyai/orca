@@ -1,13 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { track } from '../../telemetry/client'
-import {
-  CALLER,
-  attachParams,
-  hostTestState
-} from './host/testing/structured-agent-session-host-test-harness'
-import './host/testing/structured-agent-session-create-test-fixture'
+import { track } from '../../../../telemetry/client'
+import { CALLER, attachParams, hostTestState } from './structured-agent-session-host-test-harness'
+import './structured-agent-session-create-test-fixture'
 
-vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 beforeEach(() => vi.mocked(track).mockClear())
 
 it('keeps a proved process live when telemetry capture fails', async () => {
