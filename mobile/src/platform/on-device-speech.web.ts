@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { normalizeDictationTerms } from '../../../src/shared/dictation-dictionary'
+import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
 import { createDictationTextPipeline } from '../../../src/shared/dictation-text-pipeline'
 import { useNativeVerbs, type NativeVerbs } from '../mobile-web-shell/bridge/use-native-verbs'
 import type { OnDeviceSpeech } from './on-device-speech-contract'
@@ -11,20 +11,23 @@ const keepText = (text: string): string => text
 function phoneDictationTextCleaner(
   locale: string | null,
   removeFillerWords: boolean,
-  dictationTerms: unknown
+  dictationTerms: readonly DictationTerm[] | undefined
 ): (text: string) => string {
   const language = locale?.split('-')[0].toLowerCase()
   const clean = createDictationTextPipeline(
     language ? { language } : undefined,
     { removeFillerWords },
-    normalizeDictationTerms(dictationTerms)
+    dictationTerms
   )
   return clean ?? keepText
 }
 
 function createPageOnDeviceSpeech(
   verbs: NativeVerbs,
-  textSettings: () => { removeFillerWords: boolean; dictationTerms: unknown }
+  textSettings: () => {
+    removeFillerWords: boolean
+    dictationTerms: readonly DictationTerm[] | undefined
+  }
 ): OnDeviceSpeech {
   let clean = keepText
   return {
@@ -54,7 +57,7 @@ function createPageOnDeviceSpeech(
 // The computer's filler switch and dictionary for this worktree, read at each start.
 export function useOnDeviceSpeech(
   removeFillerWords = true,
-  dictationTerms?: unknown
+  dictationTerms?: readonly DictationTerm[]
 ): OnDeviceSpeech | null {
   const verbs = useNativeVerbs()
   const textSettingsRef = useRef({ removeFillerWords, dictationTerms })

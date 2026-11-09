@@ -49,25 +49,34 @@ export function mergeDictationTerms(repoTerms: unknown, personalTerms: unknown):
   ]
 }
 
+type Spelling = { term: string; lead: string; trail: string }
+
+function spelling(term: string): Spelling {
+  const [, lead = '', trail = ''] = EDGE_JOINERS_RE.exec(term) ?? []
+  return { term, lead, trail }
+}
+
 /** Rewrites words that key the same as a term (or its "heard as") to the term's spelling; null when there are none. */
 export function createDictationDictionary(
   terms: readonly DictationTerm[] | undefined
 ): ((text: string) => string) | null {
-  const byKey = new Map<string, string>()
+  const byKey = new Map<string, Spelling>()
   const unspacedAliases: [heardAs: string, term: string][] = []
+  const add = (key: string, term: string): void => {
+    if (key && !byKey.has(key)) {
+      byKey.set(key, spelling(term))
+    }
+  }
   // A "heard as" is what the user asked for, so it beats another term spelled the same.
   for (const { term, heardAs } of terms ?? []) {
     if (heardAs && UNSPACED_SCRIPT_RE.test(heardAs)) {
       unspacedAliases.push([heardAs, term])
-    } else if (heardAs && wordKey(heardAs) && !byKey.has(wordKey(heardAs))) {
-      byKey.set(wordKey(heardAs), term)
+    } else if (heardAs) {
+      add(wordKey(heardAs), term)
     }
   }
   for (const { term } of terms ?? []) {
-    const key = wordKey(term)
-    if (key && !byKey.has(key)) {
-      byKey.set(key, term)
-    }
+    add(wordKey(term), term)
   }
   if (byKey.size === 0 && unspacedAliases.length === 0) {
     return null
@@ -82,43 +91,48 @@ export function createDictationDictionary(
 }
 
 // At each word, the longest run of joined words whose key is a term's becomes that term.
-function replaceWordRuns(text: string, byKey: Map<string, string>, longestKey: number): string {
-  const words = [...text.matchAll(WORD_RE)]
+function replaceWordRuns(text: string, byKey: Map<string, Spelling>, longestKey: number): string {
+  const words = [...text.matchAll(WORD_RE)].map((word) => ({
+    from: word.index,
+    to: word.index + word[0].length,
+    key: wordKey(word[0])
+  }))
+  // joinsNext[i]: words i and i + 1 may belong to one term.
+  const joinsNext = words.map(
+    (word, i) => i + 1 < words.length && JOINING_GAP_RE.test(text.slice(word.to, words[i + 1].from))
+  )
   let out = ''
   let cursor = 0
   for (let start = 0; start < words.length;) {
     let key = ''
-    let match: { end: number; term: string } | null = null
+    let match: { end: number; spelling: Spelling } | null = null
     for (let end = start; end < words.length && end - start < MAX_WORDS_PER_TERM; end++) {
-      if (end > start) {
-        const gapStart = words[end - 1].index + words[end - 1][0].length
-        if (!JOINING_GAP_RE.test(text.slice(gapStart, words[end].index))) {
-          break
-        }
+      if (end > start && !joinsNext[end - 1]) {
+        break
       }
-      key += wordKey(words[end][0])
+      key += words[end].key
       if (key.length > longestKey) {
         break
       }
-      const term = byKey.get(key)
-      if (term !== undefined) {
-        match = { end, term }
+      const found = byKey.get(key)
+      if (found) {
+        match = { end, spelling: found }
       }
     }
     if (!match) {
       start++
       continue
     }
-    const [, lead, trail] = EDGE_JOINERS_RE.exec(match.term) ?? ['', '', '']
-    let from = words[start].index
-    let to = words[match.end].index + words[match.end][0].length
+    const { term, lead, trail } = match.spelling
+    let from = words[start].from
+    let to = words[match.end].to
     if (lead && from - lead.length >= cursor && text.slice(from - lead.length, from) === lead) {
       from -= lead.length
     }
     if (trail && text.startsWith(trail, to)) {
       to += trail.length
     }
-    out += text.slice(cursor, from) + match.term
+    out += text.slice(cursor, from) + term
     cursor = to
     start = match.end + 1
   }
