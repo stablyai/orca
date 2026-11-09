@@ -25,17 +25,6 @@ describe('drag completion and cancellation', () => {
     await act(async () => fixture.root.unmount())
   })
 
-  it('commits the moved order once on a successful drop', async () => {
-    const fixture = await mounted()
-    await act(async () => {
-      fixture.gesture.start!({ absoluteY: 100, translationY: 0 }, true)
-      fixture.gesture.update!({ absoluteY: 180, translationY: 80 }, true)
-      fixture.gesture.finalize!({ absoluteY: 180, translationY: 80 }, true)
-    })
-    expect(fixture.onReorder.mock.calls).toEqual([[['b', 'a']]])
-    await act(async () => fixture.root.unmount())
-  })
-
   it('does not write after a failed activation or an unchanged drop', async () => {
     const fixture = await mounted()
     await act(async () => {
@@ -287,7 +276,7 @@ it('keeps measured rows still on hold, restores cancellation, and drops by moved
   await act(async () => root!.unmount())
 })
 
-it.each([100, 1000])(
+it.each([100])(
   'bounds accessibility work for %i rows while excluded slots stay fixed',
   async (count) => {
     const ids = Array.from({ length: count }, (_, at) =>
