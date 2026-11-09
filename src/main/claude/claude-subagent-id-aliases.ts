@@ -1,17 +1,8 @@
-// Which Claude ids name the same subagent, and which name no subagent at all.
-//
-// Claude re-announces a resumed task under a NEW `tool_use_id` while `task_id`
-// stays put, so tool ids are aliases of a canonical task id — a store keyed on
-// the tool id would show the child twice after every resume.
-//
-// The exclusions matter just as much: `task_updated` carries no `task_type` and
-// child traffic carries no task metadata at all, so the one announcement that
-// said "this is a backgrounded shell, not an agent" has to be remembered or a
-// later frame re-admits it.
+// Resumes change tool IDs but keep task IDs; retain aliases across restarts and remember non-agent exclusions.
 
 import { isBoundedClaudeTaskId } from './claude-background-task-tracker'
 
-/** Both maps are event-accumulated and nothing prunes them, so both are bounded. */
+/** Bound event-accumulated aliases and exclusions. */
 const MAX_TOOL_USE_ALIASES = 512
 const MAX_EXCLUDED_IDS = 512
 
@@ -19,9 +10,15 @@ export class ClaudeSubagentIds {
   private readonly canonicalByToolUse = new Map<string, string>()
   private readonly excluded = new Set<string>()
 
-  /** The task id a tool id stands for, or the id itself when nothing aliases it. */
+  constructor(private readonly journaled?: (toolUseId: string) => string | null) {}
+
   canonical(id: string): string {
-    return this.canonicalByToolUse.get(id) ?? id
+    return this.canonicalByToolUse.get(id) ?? this.journaled?.(id) ?? id
+  }
+
+  /** Announcement evidence distinguishes a settled self-alias from an unknown ID. */
+  isAnnounced(toolUseId: string): boolean {
+    return this.canonicalByToolUse.has(toolUseId) || (this.journaled?.(toolUseId) ?? null) !== null
   }
 
   alias(toolUseId: string, taskId: string): void {

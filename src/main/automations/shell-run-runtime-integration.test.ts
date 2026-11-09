@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import { AutomationService } from './service'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
+import { withShellRunCompletion } from './shell-run-completion'
 
 const testState = { dir: '' }
 
@@ -36,7 +37,8 @@ describe('shell run completion through the execution runtime', () => {
     async (reloadRenderer) => {
       vi.resetModules()
       installFakeAppEnvironment({ getPath: () => testState.dir })
-      const { Store, initDataPath } = await import('../persistence')
+      const { Store } = await import('../persistence/loading-store/store')
+      const { initDataPath } = await import('../persistence/loading-store/user-data-path')
       const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
       initDataPath()
       const store = new Store()
@@ -88,7 +90,10 @@ describe('shell run completion through the execution runtime', () => {
         runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
       }
       const service = new AutomationService(store, {
-        terminalObserver: createRuntimeAutomationRunTerminalObserver(runtime)
+        terminalObserver: withShellRunCompletion(
+          runtime,
+          createRuntimeAutomationRunTerminalObserver(runtime)
+        )
       })
       runtime.setAutomationService(service)
 
@@ -108,11 +113,13 @@ describe('shell run completion through the execution runtime', () => {
           leafId: LEAF_ID,
           incarnationId: INCARNATION_ID
         })
-        expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
-          status: 'dispatched',
-          terminalPtyId: PTY_ID,
-          terminalIncarnationId: INCARNATION_ID
-        })
+        await vi.waitFor(() =>
+          expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
+            status: 'dispatched',
+            terminalPtyId: PTY_ID,
+            terminalIncarnationId: INCARNATION_ID
+          })
+        )
         const terminal = runtime.resolveTerminalPane(PANE_KEY, workspaceId)
 
         if (reloadRenderer) {

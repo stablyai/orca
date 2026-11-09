@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "files.preview-save",
   "family": "files.preview-save",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
-  "scenarioSha256": "1a4f7dff351be244712bedb8f495c83a531cfbfc5b5923267d1ed46bf2d6d11b",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "0181c916a00b": {
       "name": "files.readTerminalArtifact#1",
@@ -60,6 +51,17 @@
         "message": "Unable to load preview",
         "reconnect": false,
         "status": "error"
+      }
+    },
+    "2198677d4b7f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (files.readTerminalArtifact)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
       }
     },
     "24ffb7059792": {
@@ -577,9 +579,9 @@
           "sender": ["359261481665"],
           "payloads": ["5beb3ae90517"],
           "settlements": {
-            "save": "15467bba2d60"
+            "save": "2198677d4b7f"
           },
-          "state": "5ac141a87b5a",
+          "state": "935100df69e4",
           "effects": []
         }
       },
@@ -589,9 +591,9 @@
           "sender": ["fc8164cc9095"],
           "payloads": ["5beb3ae90517"],
           "settlements": {
-            "save": "15467bba2d60"
+            "save": "2198677d4b7f"
           },
-          "state": "5ac141a87b5a",
+          "state": "935100df69e4",
           "effects": []
         }
       },
@@ -601,9 +603,9 @@
           "sender": ["6eb653749642"],
           "payloads": ["5beb3ae90517"],
           "settlements": {
-            "save": "15467bba2d60"
+            "save": "2198677d4b7f"
           },
-          "state": "5ac141a87b5a",
+          "state": "935100df69e4",
           "effects": []
         }
       },
@@ -613,9 +615,9 @@
           "sender": ["ce7d56dd9080"],
           "payloads": ["5beb3ae90517"],
           "settlements": {
-            "save": "15467bba2d60"
+            "save": "2198677d4b7f"
           },
-          "state": "5ac141a87b5a",
+          "state": "935100df69e4",
           "effects": []
         }
       },
@@ -625,9 +627,9 @@
           "sender": ["0181c916a00b"],
           "payloads": ["5beb3ae90517"],
           "settlements": {
-            "save": "15467bba2d60"
+            "save": "2198677d4b7f"
           },
-          "state": "5ac141a87b5a",
+          "state": "935100df69e4",
           "effects": []
         }
       },

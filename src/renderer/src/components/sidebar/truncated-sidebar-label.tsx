@@ -62,9 +62,7 @@ export function TruncatedSidebarLabel({
     [measureTruncated]
   )
 
-  // Why: ResizeObserver does not fire when only the rendered text changes, but
-  // scrollWidth can. Remeasure in place rather than remounting the span, which
-  // would tear down and rebuild the observer on every title update.
+  // Text can change scrollWidth without firing ResizeObserver; remeasure without remounting the observer.
   useLayoutEffect(() => {
     measureTruncated(nodeRef.current)
   }, [measureTruncated, text])

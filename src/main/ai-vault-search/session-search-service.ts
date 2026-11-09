@@ -2,13 +2,21 @@ import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,
   AiVaultSearchStatus
-} from '../../shared/ai-vault-search-types'
+} from '../../shared/ai-vault/search/ai-vault-search-types'
 import type { SessionSearchEngine } from './session-search-engine'
 import type { SessionSearchIndexer } from './session-search-indexer'
 import { SessionSearchCursorError } from './session-search-page-cursor'
 
+/** Host scope bypasses the client path cap; absent scope leaves request filters unchanged. */
+export type SessionSearchHostScope =
+  | { kind: 'resolved'; paths: readonly string[] }
+  | { kind: 'unknown' }
+
 export type SessionSearchService = {
-  search(req: AiVaultSearchRequest): Promise<AiVaultSearchResponse>
+  search(
+    req: AiVaultSearchRequest,
+    hostScope?: SessionSearchHostScope
+  ): Promise<AiVaultSearchResponse>
   status(): Promise<AiVaultSearchStatus>
   reconcile(): Promise<void>
 }
@@ -23,12 +31,20 @@ export function createSessionSearchService({
   return {
     reconcile: () => indexer.reconcile({ full: true }),
     status: async () => ({ enabled: true, ...indexer.status(), generation: engine.generation() }),
-    search: async (request) => {
+    search: async (request, hostScope) => {
+      // The live-index route has already checked consent and readiness.
+      if (hostScope?.kind === 'unknown') {
+        return { kind: 'unavailable', reason: 'scope-unknown' }
+      }
       if (request.cursor === '') {
         return { kind: 'malformed-cursor' }
       }
       try {
-        const result = engine.search(request)
+        const result = engine.search(
+          hostScope
+            ? { ...request, filters: { ...request.filters, scopePaths: hostScope.paths } }
+            : request
+        )
         return {
           kind: 'results',
           hits: result.hits.map(

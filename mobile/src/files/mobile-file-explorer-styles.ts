@@ -1,46 +1,14 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const fileExplorerStyles = StyleSheet.create({
+export const fileExplorerStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
   },
   header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
+    backgroundColor: colors.bgBase
   },
   list: { flex: 1 },
   listContent: {
@@ -89,6 +57,26 @@ export const fileExplorerStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
+  inlineStatusFill: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  showMoreText: {
+    color: colors.accentBlue,
+    fontSize: typography.bodySize,
+    fontWeight: '500'
+  },
+  entryCount: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
+  },
+  searchAllText: {
+    color: colors.accentBlue,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   inlineErrorText: {
     flex: 1,
     minWidth: 0,
@@ -99,7 +87,7 @@ export const fileExplorerStyles = StyleSheet.create({
     minHeight: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md
@@ -118,25 +106,23 @@ export const fileExplorerStyles = StyleSheet.create({
   },
   emptyText: {
     color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  errorText: {
-    color: colors.statusRed,
     fontSize: typography.bodySize,
     textAlign: 'center'
   },
-  retryButton: {
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.lg
+  stateTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.titleSize,
+    fontWeight: '600'
   },
-  retryText: {
+  clearFilterButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.control
+  },
+  clearFilterText: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
   }
-})
+}))

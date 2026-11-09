@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-28T07:20:19.119Z",
+  "platform": "darwin",
+  "command": ["freebuff", "--cwd", "/tmp/orca-freebuff-verify"],
+  "cols": 100,
+  "rows": 32,
+  "note": "Freebuff npm 0.1.2, unauthenticated, macOS arm64; no model inference",
+  "exitCode": 0
+}

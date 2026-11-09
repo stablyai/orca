@@ -1,79 +1,13 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "speech.setup-sheet",
   "family": "speech.setup-sheet",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
-  "scenarioSha256": "140ede79a9ee0c02bedbfe67551060ef85692b6cb71968a48a1c41fcb4863804",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "0629aa17065f": {
-      "configure": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
-      },
-      "delete": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
-      },
-      "download": "started",
-      "list": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
-      }
-    },
     "0e61f11d0307": {
       "name": "speech.models.delete#1",
       "ordinal": 6,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"speech.models.delete\",\"params\":{\"modelId\":\"whisper-small\"}}"
-    },
-    "1117d44df3f8": {
-      "configure": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
-      },
-      "delete": "started",
-      "download": "started",
-      "list": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
-      }
     },
     "1f67869c3be1": {
       "configure": {
@@ -135,14 +69,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "301151228fa3": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "refused"
       }
     },
     "32a7c0ae7918": {
@@ -262,34 +188,6 @@
           "message": "",
           "isRpcDeliveryUnknown": true
         }
-      }
-    },
-    "3eac8959f5ab": {
-      "configure": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
-      },
-      "delete": {
-        "$rpc": "null"
-      },
-      "download": "started",
-      "list": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
       }
     },
     "47237ace2093": {
@@ -474,15 +372,6 @@
         "selectedModelId": "whisper-small"
       }
     },
-    "9f00dd54ba64": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "inner refused",
-        "ok": false
-      }
-    },
     "a2879fd6371d": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -517,17 +406,6 @@
         "category": "Error",
         "message": "Failed to delete model",
         "isRpcDeliveryUnknown": false
-      }
-    },
-    "ad8a954e879d": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": {
-          "message": "inner refused"
-        },
-        "ok": false
       }
     },
     "adbb96fcc08c": {
@@ -619,34 +497,6 @@
         }
       }
     },
-    "d32fe9752c54": {
-      "configure": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
-      },
-      "delete": {
-        "error": "refused"
-      },
-      "download": "started",
-      "list": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
-      }
-    },
     "d8c329a93e43": {
       "name": "speech.models.delete#1",
       "ordinal": 5,
@@ -718,35 +568,6 @@
         }
       }
     },
-    "e2401fd120ea": {
-      "configure": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
-      },
-      "delete": {
-        "error": "inner refused",
-        "ok": false
-      },
-      "download": "started",
-      "list": {
-        "enabled": true,
-        "models": [
-          {
-            "id": "whisper-small",
-            "name": "Small",
-            "status": "ready"
-          }
-        ],
-        "selectedModelId": "whisper-small"
-      }
-    },
     "e35a372455e8": {
       "name": "speech.models.delete#1",
       "ordinal": 5,
@@ -780,6 +601,16 @@
             "ok": false
           }
         }
+      }
+    },
+    "e5305075c4c9": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (speech.models.delete)",
+        "isRpcDeliveryUnknown": false
       }
     },
     "eb5c8d14744b": {
@@ -820,14 +651,6 @@
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "ee20a1dc39e7": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "null"
       }
     },
     "fba26d61d9d2": {
@@ -872,10 +695,10 @@
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
-            "delete": "eb79a9b3682a",
+            "delete": "e5305075c4c9",
             "configure": "a2879fd6371d"
           },
-          "state": "1117d44df3f8",
+          "state": "1f67869c3be1",
           "effects": []
         }
       },
@@ -887,10 +710,10 @@
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
-            "delete": "ee20a1dc39e7",
+            "delete": "e5305075c4c9",
             "configure": "a2879fd6371d"
           },
-          "state": "3eac8959f5ab",
+          "state": "1f67869c3be1",
           "effects": []
         }
       },
@@ -902,10 +725,10 @@
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
-            "delete": "301151228fa3",
+            "delete": "e5305075c4c9",
             "configure": "a2879fd6371d"
           },
-          "state": "d32fe9752c54",
+          "state": "1f67869c3be1",
           "effects": []
         }
       },
@@ -917,10 +740,10 @@
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
-            "delete": "9f00dd54ba64",
+            "delete": "e5305075c4c9",
             "configure": "a2879fd6371d"
           },
-          "state": "e2401fd120ea",
+          "state": "1f67869c3be1",
           "effects": []
         }
       },
@@ -932,10 +755,10 @@
           "settlements": {
             "list": "a2879fd6371d",
             "download": "eb79a9b3682a",
-            "delete": "ad8a954e879d",
+            "delete": "e5305075c4c9",
             "configure": "a2879fd6371d"
           },
-          "state": "0629aa17065f",
+          "state": "1f67869c3be1",
           "effects": []
         }
       },

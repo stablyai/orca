@@ -1,31 +1,60 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.diff-review-load",
   "family": "session.diff-review",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
-  "scenarioSha256": "182f37fbe6ae7c0694b50d603ecd4a03bc9a8c7c9738ebb775b47eb5f3b9660f",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "14804a5e414f": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "kind": "unavailable",
-        "message": "Update Orca desktop to review changes on mobile."
+    "1f10fad6906c": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "168d1f64ca9b": {
-      "name": "git.status#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    "3374ccf2bc9a": {
+      "name": "repo.list#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
     "45d1ea7c0b42": {
       "name": "git.status#1",
@@ -62,13 +91,29 @@
         }
       }
     },
-    "55c07df45014": {
+    "5dbd52d6a1c7": {
+      "name": "worktree.show#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "648638103acb": {
+      "name": "repo.list#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "8db27b0778a5": {
+      "name": "git.status#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "e39817462870": {
       "branchCompare": "unloaded",
       "diff": "unloaded",
-      "snapshot": {
-        "kind": "unavailable",
-        "message": "Update Orca desktop to review changes on mobile."
-      }
+      "snapshot": "unloaded"
     }
   },
   "recording": {
@@ -77,12 +122,12 @@
       {
         "id": "unavailable",
         "observation": {
-          "sender": ["45d1ea7c0b42"],
-          "payloads": ["168d1f64ca9b"],
+          "sender": ["45d1ea7c0b42", "1f10fad6906c", "3374ccf2bc9a"],
+          "payloads": ["8db27b0778a5", "5dbd52d6a1c7", "648638103acb"],
           "settlements": {
-            "unavailable": "14804a5e414f"
+            "unavailable": "9270aeb7d9c6"
           },
-          "state": "55c07df45014",
+          "state": "e39817462870",
           "effects": []
         }
       }

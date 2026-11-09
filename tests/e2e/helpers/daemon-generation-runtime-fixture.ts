@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { build } from 'esbuild'
@@ -45,14 +53,26 @@ function isEqualToOrInside(candidate: string, parent: string): boolean {
 function knownOrcaUserDataDirs(): string[] {
   if (process.platform === 'darwin') {
     const appSupport = path.join(homedir(), 'Library', 'Application Support')
-    return [path.join(appSupport, 'orca'), path.join(appSupport, 'orca-dev')]
+    return [
+      path.join(appSupport, 'orca'),
+      path.join(appSupport, 'orca-dev'),
+      path.join(appSupport, 'orca-dev-wt')
+    ]
   }
   if (process.platform === 'win32') {
     const roaming = process.env.APPDATA ?? path.join(homedir(), 'AppData', 'Roaming')
-    return [path.join(roaming, 'orca'), path.join(roaming, 'orca-dev')]
+    return [
+      path.join(roaming, 'orca'),
+      path.join(roaming, 'orca-dev'),
+      path.join(roaming, 'orca-dev-wt')
+    ]
   }
   const config = process.env.XDG_CONFIG_HOME ?? path.join(homedir(), '.config')
-  return [path.join(config, 'orca'), path.join(config, 'orca-dev')]
+  return [
+    path.join(config, 'orca'),
+    path.join(config, 'orca-dev'),
+    path.join(config, 'orca-dev-wt')
+  ]
 }
 
 function assertDisposableRoot(rootDir: string): void {
@@ -70,7 +90,7 @@ function assertDisposableRoot(rootDir: string): void {
   }
 }
 
-function resolveElectronExecutable(repoRoot: string): string {
+export function resolveElectronExecutable(repoRoot: string): string {
   const relativePath = readFileSync(
     path.join(repoRoot, 'node_modules', 'electron', 'path.txt'),
     'utf8'
@@ -109,6 +129,12 @@ export async function createDaemonGenerationRuntime(
   const reconnectClientEntryPath = path.join(rootDir, 'daemon-generation-reconnect-client.cjs')
   const legacyCloseClientEntryPath = path.join(rootDir, 'daemon-generation-legacy-close-client.cjs')
   const repoRoot = process.cwd()
+  // ESM imports in the bundled fixture resolve from its temp directory, not NODE_PATH.
+  symlinkSync(
+    path.join(repoRoot, 'node_modules'),
+    path.join(rootDir, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : 'dir'
+  )
   await buildFixtureEntry(
     path.join(repoRoot, 'tests/e2e/fixtures/daemon-generation-entry.ts'),
     entryPath
@@ -150,8 +176,7 @@ export async function createDaemonGenerationRuntime(
     },
     remove: () => {
       assertDisposableRoot(rootDir)
-      // Why: Windows can release ConPTY/log handles just after exact-PID
-      // liveness reaches zero; keep fixture cleanup bounded but non-flaky.
+      // Retry briefly after process exit because Windows may still hold ConPTY/log handles.
       rmSync(rootDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
     }
   }

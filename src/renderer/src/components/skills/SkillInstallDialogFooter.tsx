@@ -2,7 +2,7 @@ import { Download, Loader2, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import type { SkillInstallResult } from '../../../../shared/skill-install-contract'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type SkillInstallDialogFooterProps = {
   activeOperationId: string | null
@@ -35,6 +35,7 @@ export function SkillInstallDialogFooter({
   onInspect,
   onInstall
 }: SkillInstallDialogFooterProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (hasBundleVersion) {
     return null
   }
@@ -42,22 +43,19 @@ export function SkillInstallDialogFooter({
   return (
     <DialogFooter>
       <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
-        {translate('auto.components.skills.SkillInstallDialog.d198ec91e5', 'Close')}
+        {t('auto.components.skills.SkillInstallDialog.d198ec91e5', 'Close')}
       </Button>
       {!hasPreview && !resolvingInitialLink ? (
         <Button type="button" disabled={busy || !link.trim()} onClick={onInspect}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
           {busy
-            ? translate('auto.components.skills.SkillInstallReviewContent.69236de8d6', 'Checking…')
-            : translate(
-                'auto.components.skills.SkillInstallReviewContent.157de228b4',
-                'Inspect skill'
-              )}
+            ? t('auto.components.skills.SkillInstallReviewContent.69236de8d6', 'Checking…')
+            : t('auto.components.skills.SkillInstallReviewContent.157de228b4', 'Inspect skill')}
         </Button>
       ) : null}
       {busy && activeOperationId ? (
         <Button type="button" variant="secondary" onClick={onCancelInstall}>
-          {translate('auto.components.skills.SkillInstallDialog.05588076a9', 'Cancel installation')}
+          {t('auto.components.skills.SkillInstallDialog.05588076a9', 'Cancel installation')}
         </Button>
       ) : null}
       {hasPreview &&
@@ -70,10 +68,10 @@ export function SkillInstallDialogFooter({
         >
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
           {busy
-            ? translate('auto.components.skills.SkillInstallDialog.241e72f9d6', 'Installing…')
+            ? t('auto.components.skills.SkillInstallDialog.241e72f9d6', 'Installing…')
             : result
-              ? translate('auto.components.skills.SkillInstallDialog.59c3b76cdd', 'Retry install')
-              : translate('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
+              ? t('auto.components.skills.SkillInstallDialog.59c3b76cdd', 'Retry install')
+              : t('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
         </Button>
       ) : null}
     </DialogFooter>

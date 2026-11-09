@@ -1,33 +1,51 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
+import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import {
   getProjectHostSetupForRepoHost,
   repoHostId,
-  withRepoHostOwnership
+  withRepoHostOwnership,
+  worktreeHostMatchOptions,
+  worktreeMatchesHost
 } from '../listing/worktree-host-ownership'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 
 /** Folds a fresh create result into the worktree, lineage and base-status maps. */
 export function applyCreatedWorktree(
   set: WorktreeSliceSet,
   repoId: string,
-  result: CreateWorktreeResult
+  result: CreateWorktreeResult,
+  executionHostId?: ExecutionHostId
 ) {
   // Why: worktrees.onChanged can add this worktree before this callback runs; appending blindly would duplicate it (React key clash).
   set((s) => {
-    const hostId = repoHostId(s, repoId)
+    const hostId = executionHostId ?? repoHostId(s, repoId)
     const createdWorktree = withRepoHostOwnership(
       result.worktree,
       hostId,
       getProjectHostSetupForRepoHost(s, repoId, hostId)
     )
     const current = s.worktreesByRepo[repoId] ?? []
-    const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
-    const nextWorktrees = alreadyPresent
-      ? current.map((worktree) =>
-          worktree.id === createdWorktree.id ? { ...worktree, ...createdWorktree } : worktree
-        )
-      : [...current, createdWorktree]
+    // Why host-scoped: a same-id twin on another host must neither absorb nor lend its stamp.
+    const matchOptions = worktreeHostMatchOptions(s, repoId, hostId)
+    const nextWorktrees: typeof current = []
+    let merged = false
+    for (const worktree of current) {
+      const sameCopy =
+        worktree.id === createdWorktree.id && worktreeMatchesHost(worktree, hostId, matchOptions)
+      nextWorktrees.push(sameCopy ? { ...worktree, ...createdWorktree } : worktree)
+      merged ||= sameCopy
+    }
+    if (!merged) {
+      nextWorktrees.push(createdWorktree)
+    }
+    const crossStoreKey = result.crossStoreLineage
+      ? lineageStoreKeyOfRow({ id: result.worktree.id, hostId })
+      : undefined
     return {
+      // Why: a listing scanned before this create must not be applied after it.
+      ...appliedWorktreeCatalogVersionPatch(s, repoId, hostId, result.catalogVersion),
       worktreesByRepo: {
         ...s.worktreesByRepo,
         [repoId]: nextWorktrees
@@ -37,6 +55,18 @@ export function applyCreatedWorktree(
             workspaceLineageByChildKey: {
               ...s.workspaceLineageByChildKey,
               [result.workspaceLineage.childWorkspaceKey]: result.workspaceLineage
+            }
+          }
+        : {}),
+      // The child's store saved a parent on another machine; nest it before the next lineage list.
+      ...(result.crossStoreLineage && crossStoreKey !== undefined
+        ? {
+            crossStoreLineageByStoreKey: {
+              ...s.crossStoreLineageByStoreKey,
+              [crossStoreKey]: {
+                ...s.crossStoreLineageByStoreKey[crossStoreKey],
+                [result.crossStoreLineage.childWorkspaceKey]: result.crossStoreLineage
+              }
             }
           }
         : {}),

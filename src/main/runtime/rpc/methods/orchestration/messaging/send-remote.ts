@@ -1,18 +1,27 @@
-import type { MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type {
+  MessageType,
+  WorkerDispatchState
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { waitForFederatedLifecycleSettlement } from '../../../../orchestration/federation-lifecycle-settlement'
-import { bindCoordinatorMutationPayload } from '../../../../orchestration/dispatch-message-binding'
-import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
+import { waitForFederatedLifecycleSettlement } from '../../../../orchestration/federation/federation-lifecycle-settlement'
+import { bindCoordinatorMutationPayload } from '../../../../orchestration/workers/reports/dispatch-message-binding'
+import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { z } from 'zod'
-import { parseRemoteWorkerPayload } from '../schemas'
-import type { SendParams } from '../schemas'
+import { parseRemoteWorkerPayload } from './message-payload'
+import type { SendParams } from './send-params'
 import { rejectFederatedExplicitTarget } from '../routing'
+import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
+import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
 
 type SendParamsInput = z.infer<typeof SendParams>
 
 type RemoteAttachment = {
   dispatch_id: string
+  home_run_id: string
+  state: WorkerDispatchState
   protocol_version: number
 }
 
@@ -24,24 +33,20 @@ export async function sendRemoteMessage(args: {
   senderPaneKey: string
   remoteAttachment: RemoteAttachment
   processIncarnation?: string | null
-  orchestrationCapability?: string
   signal?: AbortSignal
-}): Promise<unknown> {
+}) {
   const { params, runtime, db, from, senderPaneKey, remoteAttachment } = args
-  rejectFederatedExplicitTarget(params)
-  if (
-    !db.verifyRemoteAttachmentAuthority({
+  rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
+  assertWorkerCanReport({
+    dispatchId: remoteAttachment.dispatch_id,
+    from,
+    workerState: remoteAttachment.state,
+    processCurrent: db.isRemoteAttachmentProcessCurrent({
       dispatchId: remoteAttachment.dispatch_id,
-      capability: args.orchestrationCapability,
       paneKey: senderPaneKey,
       processIncarnation: args.processIncarnation ?? null
     })
-  ) {
-    throw new OrchestrationError(
-      'dispatch_capability_invalid',
-      'The remote Dispatch capability or exact worker process is invalid.'
-    )
-  }
+  })
 
   const type = (params.type ?? 'status') as MessageType
   const payload = parseRemoteWorkerPayload(params.payload)
@@ -109,6 +114,7 @@ export async function sendRemoteMessage(args: {
       destination: 'run_home',
       accepted: true
     },
-    ...(lifecycle ? { lifecycle } : {})
+    ...(lifecycle ? { lifecycle } : {}),
+    ...(lifecycle && lifecycle.action !== 'rejected' ? { next: WORKER_DONE_RECORDED_NEXT } : {})
   }
 }

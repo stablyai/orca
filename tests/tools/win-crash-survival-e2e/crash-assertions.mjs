@@ -1,19 +1,5 @@
-// Profile assertions for the crash-survival proof.
-//
-// Two directional profiles over the SAME observed evidence, so CI can prove the
-// harness catches a regression (an --expect that disagrees with reality fails):
-//   survival — the fixed #7742 behavior. The main crash actually landed, yet the
-//     detached daemon and the same interactive shell PID survive, ZERO pwsh
-//     FailFast events fire, a relaunch ADOPTS the same daemon PID, and the
-//     reattached UI reads back the survivor shell's env sentinel (proving
-//     keystrokes reach the same PTY, not a re-spawn).
-//   orphaned — the OLD broken behavior. The daemon dies with main (primary) and,
-//     because the shell was left idle at a live PSReadLine prompt, pwsh FailFasts
-//     with 0xE9 (secondary). On a fixed build this profile is EXPECTED to fail.
-//     NOTE: the orphaned direction is NOT exercised in CI (workflow_dispatch is
-//     unavailable on a non-default branch) and the 0xE9 only reproduces on a
-//     genuinely broken build — it is the directional inverse, documented and
-//     locally runnable, not a gate.
+// #7742 survival: require actual main death, surviving daemon/same shell, no pwsh FailFast, same-daemon adoption and shell canary readback.
+// orphaned is the locally runnable inverse, not a CI gate: require daemon death and idle-PSReadLine 0xE9 on a genuinely broken build.
 
 function assertion(name, pass, expected, actual, detail = '') {
   return { name, pass, expected, actual, detail }
@@ -21,8 +7,7 @@ function assertion(name, pass, expected, actual, detail = '') {
 
 /** Build the ordered assertion list for the run's profile. */
 export function buildCrashAssertions(ctx) {
-  // The crash actually landing is the shared antecedent for BOTH profiles: without
-  // it, every survival/orphan signal below would be meaningless.
+  // Require actual crash before accepting any survival/orphan evidence.
   const mainDied = assertion(
     'main process actually died (crash landed)',
     Boolean(ctx.mainDied),
@@ -77,13 +62,7 @@ function survivalAssertions(ctx) {
 }
 
 function orphanedAssertions(ctx) {
-  // The directional inverse: this profile passes ONLY on a build that reproduces
-  // the #7742 orphaning. Daemon death is the PRIMARY inverse (deterministic);
-  // pwsh FailFast is SECONDARY — faithful here only because the shell is left idle
-  // at a live PSReadLine prompt, which is what queries the severed console and
-  // triggers the 0xE9 on a broken build. Running this profile against a fixed
-  // build makes these FAIL, which is the proof the survival assertions above are
-  // not vacuous.
+  // Inverse requires daemon death plus secondary pwsh FailFast at live PSReadLine console read; fixed builds must fail these assertions.
   return [
     assertion(
       'daemon dies with main crash (old #7742 behavior)',

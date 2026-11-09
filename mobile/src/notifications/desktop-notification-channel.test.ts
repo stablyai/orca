@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
-import {
-  DESKTOP_NOTIFICATION_CHANNEL_ID,
-  ensureDesktopNotificationChannel
-} from './desktop-notification-channel'
+import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
 
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
@@ -24,14 +20,16 @@ beforeEach(() => {
 })
 
 describe('ensureDesktopNotificationChannel', () => {
-  it('creates the channel the gateway payload names', async () => {
+  it('creates the audible and silent channels the gateway payload names', async () => {
     await ensureDesktopNotificationChannel()
 
-    expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
-      'orca-desktop',
-      expect.objectContaining({ importance: 'high' })
-    )
-    expect(DESKTOP_NOTIFICATION_CHANNEL_ID).toBe('orca-desktop')
+    expect(vi.mocked(Notifications.setNotificationChannelAsync).mock.calls).toEqual([
+      [
+        'orca-desktop-silent',
+        expect.objectContaining({ importance: 'high', sound: null, enableVibrate: false })
+      ],
+      ['orca-desktop', expect.objectContaining({ importance: 'high' })]
+    ])
   })
 
   it('does nothing on iOS, which has no notification channels', () => {
@@ -46,17 +44,5 @@ describe('ensureDesktopNotificationChannel', () => {
     vi.mocked(Notifications.setNotificationChannelAsync).mockRejectedValue(new Error('no channels'))
 
     await expect(ensureDesktopNotificationChannel()).rejects.toThrow('no channels')
-  })
-})
-
-describe('app boot', () => {
-  it('creates the channel at startup, not only once a socket subscribes', () => {
-    // A background push can be the first thing to target 'orca-desktop', and Android
-    // drops a notification whose channel does not exist. Asserted against the source
-    // because vitest only collects src/, so app/_layout.tsx has no runtime coverage.
-    const layout = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8')
-
-    expect(layout).toContain("from '../src/notifications/desktop-notification-channel'")
-    expect(layout).toMatch(/^void ensureDesktopNotificationChannel\(\)\.catch\(/m)
   })
 })

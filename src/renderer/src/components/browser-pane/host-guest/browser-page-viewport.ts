@@ -1,14 +1,16 @@
-// Why: Electron <webview> guests are destroyed when their DOM parent is removed.
-// BrowserPane chrome unmounts on worktree switch, but the guest must stay in a
-// stable parent inside the overlay slot. Each page gets a flex-column viewport
-// (chrome inset spacer + flex-1 container) that mirrors the in-tree layout
-// without reparenting the webview or using fixed/float-over positioning.
+// Keep guests in stable overlay-slot parents across chrome unmounts; Electron destroys them on DOM removal/reparenting.
 
 const slotViewportRoots = new Map<string, HTMLDivElement>()
+
+/** Lays docked DevTools out below the page when the dock says bottom, beside it otherwise. */
+export const BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME =
+  'flex min-h-0 min-w-0 flex-1 has-[>[data-browser-devtools-dock=bottom]]:flex-col'
 
 type BrowserPageViewport = {
   shell: HTMLDivElement
   chromeInset: HTMLDivElement
+  /** Holds the page container and, while docked, DevTools below or beside it. */
+  devToolsSplit: HTMLDivElement
   container: HTMLDivElement
   scroller: HTMLDivElement
   content: HTMLDivElement
@@ -23,11 +25,12 @@ export type BrowserPageViewportScrollState = {
 
 const browserPageViewports = new Map<string, BrowserPageViewport>()
 
-// Why: React measures the chrome only on mount, but shells are rebuilt without a
-// re-measure (guest recovery/replacement, profile switch, slot remount). Remembering
-// the inset keeps geometry a property of attaching a guest, not of the first mount.
+// Remember chrome insets across shell recovery/profile/slot rebuilds that do not trigger React remeasurement.
 const browserPageChromeInsetHeights = new Map<string, number>()
 const browserPageViewportPresetSizes = new Map<string, { width: number; height: number }>()
+// An agent's size outlives pane remounts until the page's next load or a user preset clears it.
+const browserPageAgentViewportSizes = new Map<string, { width: number; height: number }>()
+const MAX_REMEMBERED_BROWSER_PAGE_INSETS = 512
 
 const slotRootListeners = new Map<string, Set<() => void>>()
 
@@ -47,8 +50,7 @@ export function registerBrowserOverlaySlotViewport(
     return
   }
   slotViewportRoots.delete(workspaceTabId)
-  // Why: subscribers outlive the root they watch — dropping them here would leave a
-  // remounted slot with live components that never hear about the new root.
+  // Subscribers outlive the root; notify them on removal so they can observe its replacement.
   notifySlotRootListeners(workspaceTabId)
 }
 
@@ -69,8 +71,7 @@ export function subscribeBrowserOverlaySlotViewport(
   ownedListeners.add(listener)
   return () => {
     ownedListeners.delete(listener)
-    // Why: only drop the map entry this unsubscribe still owns; a replacement Set
-    // may already be registered for the same tab.
+    // Unsubscribe only from the owned Set; a newer one may already occupy the same tab key.
     if (ownedListeners.size === 0 && slotRootListeners.get(workspaceTabId) === ownedListeners) {
       slotRootListeners.delete(workspaceTabId)
     }
@@ -113,9 +114,12 @@ export function ensureBrowserPageViewport(
     chromeInset.style.height = `${rememberedInsetHeight}px`
   }
 
+  const devToolsSplit = document.createElement('div')
+  devToolsSplit.className = BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME
+
   const container = document.createElement('div')
   container.dataset.browserPageContainer = ''
-  container.className = 'relative flex min-h-0 flex-1 overflow-hidden bg-background'
+  container.className = 'relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background'
 
   const scroller = document.createElement('div')
   scroller.dataset.browserPageScroller = ''
@@ -127,22 +131,21 @@ export function ensureBrowserPageViewport(
 
   scroller.appendChild(content)
   container.appendChild(scroller)
+  devToolsSplit.appendChild(container)
 
-  shell.append(chromeInset, container)
+  shell.append(chromeInset, devToolsSplit)
   root.appendChild(shell)
 
-  const viewport = { shell, chromeInset, container, scroller, content }
+  const viewport = { shell, chromeInset, devToolsSplit, container, scroller, content }
   browserPageViewports.set(browserPageId, viewport)
-  applyViewportPresetSizeStyles(viewport, browserPageViewportPresetSizes.get(browserPageId) ?? null)
+  applyViewportPresetSizeStyles(viewport, browserPageBoxSize(browserPageId))
   return viewport
 }
 
 /** Divides the preset's window-DIP size by the live UI zoom factor (see `main.css`). */
 export const BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME = 'browser-page-preset-viewport'
 
-// Why the DIP conversion: CDP emulates the guest viewport in window DIP, but UI zoom
-// redefines this renderer's CSS px, so an unconverted `${width}px` host box outgrows the
-// emulated page and leaves an unpainted strip beside it (STA-7568).
+// CDP presets use window DIP while UI zoom changes CSS pixels; divide the host box to avoid unpainted strips.
 function applyViewportPresetSizeStyles(
   viewport: BrowserPageViewport,
   size: { width: number; height: number } | null
@@ -164,22 +167,47 @@ function applyViewportPresetSizeStyles(
   viewport.scroller.style.overflow = size ? 'auto' : ''
 }
 
-export function setBrowserPageViewportPresetSize(
+function browserPageBoxSize(browserPageId: string): { width: number; height: number } | null {
+  return (
+    browserPageAgentViewportSizes.get(browserPageId) ??
+    browserPageViewportPresetSizes.get(browserPageId) ??
+    null
+  )
+}
+
+function rememberSize(
+  sizes: Map<string, { width: number; height: number }>,
   browserPageId: string,
   size: { width: number; height: number } | null
 ): void {
   if (size) {
-    browserPageViewportPresetSizes.set(browserPageId, size)
+    sizes.set(browserPageId, size)
   } else {
-    browserPageViewportPresetSizes.delete(browserPageId)
+    sizes.delete(browserPageId)
   }
   const viewport = browserPageViewports.get(browserPageId)
   if (viewport) {
-    applyViewportPresetSizeStyles(viewport, size)
+    applyViewportPresetSizeStyles(viewport, browserPageBoxSize(browserPageId))
   }
 }
 
+export function setBrowserPageViewportPresetSize(
+  browserPageId: string,
+  size: { width: number; height: number } | null
+): void {
+  rememberSize(browserPageViewportPresetSizes, browserPageId, size)
+}
+
+/** An agent's viewport sizes the box ahead of the user's preset until cleared. */
+export function setBrowserPageAgentViewportSize(
+  browserPageId: string,
+  size: { width: number; height: number } | null
+): void {
+  rememberSize(browserPageAgentViewportSizes, browserPageId, size)
+}
+
 export function clearBrowserPageViewportPresetSize(browserPageId: string): void {
+  browserPageAgentViewportSizes.delete(browserPageId)
   setBrowserPageViewportPresetSize(browserPageId, null)
 }
 
@@ -264,6 +292,13 @@ export function applyBrowserPageViewportLayout(
 export function syncBrowserPageChromeInset(browserPageId: string, heightPx: number): void {
   const insetHeight = Math.max(0, heightPx)
   browserPageChromeInsetHeights.set(browserPageId, insetHeight)
+  while (browserPageChromeInsetHeights.size > MAX_REMEMBERED_BROWSER_PAGE_INSETS) {
+    const oldest = browserPageChromeInsetHeights.keys().next()
+    if (oldest.done) {
+      break
+    }
+    browserPageChromeInsetHeights.delete(oldest.value)
+  }
   const viewport = browserPageViewports.get(browserPageId)
   if (!viewport) {
     return

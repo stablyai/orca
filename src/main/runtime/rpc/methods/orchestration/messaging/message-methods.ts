@@ -1,150 +1,48 @@
+import { ORCHESTRATION_REPLY_METHOD } from './reply-method'
 import { defineMethod } from '../../../core'
-import type { TaskStatus } from '../../../../orchestration/db'
+import type { TaskStatus } from '../../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
-import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestration-task-summary'
-import { parseOrchestrationTaskDepsFlag } from '../../../../orchestration/task-deps-flag'
-import { resolveRunScope } from '../runs/run-scope'
+import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestration/orchestration-task-summary'
+import { parseOrchestrationTaskDepsFlag } from '../../../../orchestration/coordinator/dispatch/task-deps-flag'
+import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
+import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import {
-  readMutationReplayNudge,
-  stripMutationReplayNudge
-} from '../../../orchestration-mutation-executor'
-import { exposeMessage } from './mailbox-message-receipt'
-import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay-nudge'
-import {
-  ReplyParams,
   InboxParams,
   TaskCreateParams,
-  TaskListParams,
-  TaskUpdateParams
-} from '../schemas'
+  TaskListParams
+} from '../../../../../../shared/rpc-contract/orchestration-params'
+import { TaskUpdateParams } from './task-update-params'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
-  defineMethod({
-    name: 'orchestration.reply',
-    params: ReplyParams,
-    handler: async (
-      params,
-      {
-        orchestrationCompatibilityEvidence,
-        runtime,
-        legacyCoordinatorRunId,
-        recordMutationReceipt,
-        replayedMutationReceipt
-      }
-    ) => {
-      const replayNudge = readMutationReplayNudge(replayedMutationReceipt)
-      if (replayNudge) {
-        replayMutationNudge(runtime, replayNudge)
-        return stripMutationReplayNudge(replayedMutationReceipt)
-      }
-      const db = runtime.getOrchestrationDb()
-      const original = db.getMessageById(params.id)
-      if (!original) {
-        throw new Error(`Message not found: ${params.id}`)
-      }
-      if (
-        legacyCoordinatorRunId &&
-        (original.run_id !== legacyCoordinatorRunId ||
-          (params.run !== undefined && params.run !== legacyCoordinatorRunId))
-      ) {
-        throw new OrchestrationError(
-          'request_mismatch',
-          `Message ${params.id} does not belong to this adopted Run.`,
-          { effectsApplied: false }
-        )
-      }
-      if (
-        original.run_id === ORCHESTRATION_LEGACY_RUN_ID ||
-        original.delivery_contract === 'legacy_direct' ||
-        original.delivery_contract === 'audit_only'
-      ) {
-        throw new OrchestrationError(
-          'legacy_read_only',
-          'Legacy orchestration messages are inspect-only; no reply was applied.',
-          { effectsApplied: false }
-        )
-      }
-
-      const question = db.getQuestion(params.id)
-      if (question) {
-        const run = resolveRunScope(runtime, {
-          runId: params.run ?? question.run_id,
-          callerTerminalHandle: params.from,
-          requireCurrentConsumer: true,
-          legacyCoordinatorRunId,
-          callerEvidence: orchestrationCompatibilityEvidence
-        })
-        const answered = db.answerQuestion({
-          messageId: question.message_id,
-          runId: run.id,
-          consumerGeneration: run.consumer_generation,
-          body: params.body
-        })
-        const federated = db.getFederatedDispatch(question.dispatch_id)
-        const receipt = {
-          message: exposeMessage(answered.message),
-          question: answered.question,
-          duplicate: answered.duplicate
-        }
-        if (federated) {
-          db.enqueueFederationRelay({
-            dispatchId: question.dispatch_id,
-            direction: 'to_worker',
-            kind: 'reply',
-            payload: JSON.stringify({
-              questionId: question.message_id,
-              answerMessageId: answered.message.id,
-              body: params.body
-            })
-          })
-          return recordReceiptBeforeNudge(
-            recordMutationReceipt,
-            receipt,
-            () => runtime.ensureOrchestrationFederationRelay(run.id),
-            { kind: 'federation', runId: run.id }
-          )
-        }
-        return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
-          runtime.notifyMessageArrived(`dispatch:${question.dispatch_id}`, 'status')
-        )
-      }
-
-      db.markAsRead([original.id])
-
-      const reply = db.insertMessage({
-        from: params.from ?? original.to_handle,
-        to: original.from_handle,
-        subject: `Re: ${original.subject}`,
-        body: params.body,
-        threadId: original.thread_id ?? original.id,
-        runId: original.run_id
-      })
-
-      const receipt = { message: exposeMessage(reply) }
-      return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
-        runtime.notifyMessageArrived(reply.to_handle, reply.type)
-      )
-    }
-  }),
-
+  ORCHESTRATION_REPLY_METHOD,
   defineMethod({
     name: 'orchestration.inbox',
+    permission: 'workspace',
     params: InboxParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
+      // Return empty for stale/unknown handles because historical mail outlives handle deletion (design doc §3.3).
       const messages = params.terminal
-        ? db.getAllMessagesForHandle(params.terminal, params.limit)
+        ? db.getAllMessagesForHandle(
+            resolveOrchestrationParty(params.terminal, db).address,
+            params.limit
+          )
         : db.getInbox(params.limit)
-      return { messages, count: messages.length }
+      return {
+        messages: messages.map(({ answer_sender_snapshot: _answer, ...message }) => message),
+        count: messages.length
+      }
     }
   }),
 
   defineMethod({
     name: 'orchestration.taskCreate',
+    permission: 'workspace',
     params: TaskCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
+    handler: (
+      params,
+      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       const deps = params.deps ? parseOrchestrationTaskDepsFlag(params.deps) : undefined
       const run = resolveRunScope(runtime, {
@@ -152,10 +50,19 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         callerTerminalHandle: params.callerTerminalHandle,
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
       })
-      const creatorAuthority = params.callerTerminalHandle
-        ? runtime.getOrchestrationDispatchAuthority(params.callerTerminalHandle)
+      // A handle-less session creates root Tasks: Task lineage is recorded by terminal only.
+      const creatorHandle = params.callerTerminalHandle
+        ? orchestrationCallerIdentity(runtime, {
+            handle: params.callerTerminalHandle,
+            session: orchestrationCaller,
+            paneKey: null
+          }).terminalHandle
+        : null
+      const creatorAuthority = creatorHandle
+        ? runtime.getOrchestrationDispatchAuthority(creatorHandle)
         : null
       const task = db.createTask({
         spec: params.spec,
@@ -163,7 +70,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         displayName: params.displayName,
         deps,
         parentId: params.parent,
-        createdByTerminalHandle: params.callerTerminalHandle,
+        createdByTerminalHandle: creatorHandle ?? undefined,
         ...(creatorAuthority?.paneKey && creatorAuthority.processIncarnation
           ? {
               createdByPaneKey: creatorAuthority.paneKey,
@@ -179,8 +86,12 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.taskList',
+    permission: 'workspace',
     params: TaskListParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
+    handler: (
+      params,
+      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       const explicitRun = params.run ? db.getRun(params.run) : undefined
       const run =
@@ -191,9 +102,10 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
               callerTerminalHandle: params.callerTerminalHandle,
               requireCurrentConsumer: params.run === undefined,
               legacyCoordinatorRunId,
-              callerEvidence: orchestrationCompatibilityEvidence
+              callerEvidence: orchestrationCompatibilityEvidence,
+              callerSession: orchestrationCaller
             })
-      // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
+      // Add nullable assignee_handle/dispatch_id without changing legacy non-dispatched rows.
       const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
         ready: params.ready,
@@ -217,15 +129,20 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
 
   defineMethod({
     name: 'orchestration.taskUpdate',
+    permission: 'workspace',
     params: TaskUpdateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
+    handler: (
+      params,
+      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
       })
       const existing = db.getTask(params.id)
       if (!existing || existing.run_id !== run.id) {

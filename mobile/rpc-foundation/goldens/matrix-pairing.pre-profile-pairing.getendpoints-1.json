@@ -1,32 +1,13 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "pairing.pre-profile",
   "family": "pairing.pre-profile",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "e33d584229530c716ecdc44d198b95fcfb4dfd9468fba7d5222ee3f122950197",
-  "scenarioSha256": "ccd2ef7c617d13bdf5987f5f89fed6917206205268633b9ef061b92c3580d672",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "061b247f2805": {
       "name": "host-saved",
       "ordinal": 13,
       "value": "relay-host-0001x"
-    },
-    "06dee54a3689": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "ZodError",
-        "message": "[\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received null\"\n  }\n]",
-        "isRpcDeliveryUnknown": false
-      }
     },
     "077b94702eb7": {
       "name": "candidate-closed",
@@ -384,13 +365,6 @@
         }
       }
     },
-    "706827e9c433": {
-      "outcome": "failed: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"relay\"\n    ],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key: \\\"error\\\"\"\n  }\n]",
-      "savedHost": {
-        "$rpc": "null"
-      },
-      "timedOut": false
-    },
     "74238de471a6": {
       "name": "pairing.getEndpoints#1",
       "ordinal": 10,
@@ -425,28 +399,11 @@
         }
       }
     },
-    "7adfb8f30333": {
-      "outcome": "failed: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"relay\"\n    ],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"ok\",\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized keys: \\\"ok\\\", \\\"error\\\"\"\n  }\n]",
-      "savedHost": {
-        "$rpc": "null"
-      },
-      "timedOut": false
-    },
     "8bf25ca8d4ae": {
       "name": "bundle-written",
       "ordinal": 12,
       "value": {
         "version": 4
-      }
-    },
-    "8cfbee11e6cb": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "ZodError",
-        "message": "[\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  }\n]",
-        "isRpcDeliveryUnknown": false
       }
     },
     "8e378786864c": {
@@ -480,6 +437,17 @@
       "name": "candidate-closed",
       "ordinal": 13,
       "value": "relay"
+    },
+    "bec79643b16c": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (pairing.getEndpoints)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
     },
     "c3972c583458": {
       "outcome": "failed: method_not_found: Unknown method",
@@ -532,13 +500,6 @@
         }
       }
     },
-    "ccde11a35347": {
-      "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received null\"\n  }\n]",
-      "savedHost": {
-        "$rpc": "null"
-      },
-      "timedOut": false
-    },
     "d1b2eddf66f4": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -547,6 +508,13 @@
         "hostId": "host-1"
       }
     },
+    "d48b2942ccf2": {
+      "outcome": "failed: The host sent a reply this app could not read (pairing.getEndpoints)",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
     "d56bfdbce702": {
       "status": "rejected",
       "startedAt": 0,
@@ -554,16 +522,6 @@
       "error": {
         "category": "Error",
         "message": "refused: ",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "d6e7487f3275": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "ZodError",
-        "message": "[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"relay\"\n    ],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"ok\",\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized keys: \\\"ok\\\", \\\"error\\\"\"\n  }\n]",
         "isRpcDeliveryUnknown": false
       }
     },
@@ -715,27 +673,10 @@
         }
       }
     },
-    "f413abdb830a": {
-      "outcome": "failed: [\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  }\n]",
-      "savedHost": {
-        "$rpc": "null"
-      },
-      "timedOut": false
-    },
     "f49423f836f9": {
       "name": "pairing.provisionRelay#1",
       "ordinal": 9,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"pairing.provisionRelay\",\"params\":{\"reqId\":\"install-l99UBPM71AZiC1ghz2glnA\",\"newResumeTokenHash\":\"yrnYzw4B0YZ_R6Tcm4arO3oysaG7lsPjvyp4uWmdBtU\"}}"
-    },
-    "f4f341e9c757": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "ZodError",
-        "message": "[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      1\n    ],\n    \"path\": [\n      \"v\"\n    ],\n    \"message\": \"Invalid input: expected 1\"\n  },\n  {\n    \"expected\": \"object\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"relay\"\n    ],\n    \"message\": \"Invalid input: expected object, received undefined\"\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"error\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key: \\\"error\\\"\"\n  }\n]",
-        "isRpcDeliveryUnknown": false
-      }
     },
     "f624ac81d963": {
       "status": "rejected",
@@ -783,9 +724,9 @@
           "sender": ["6995d6b0bd4c", "c86730581187", "28a5fc6036c5", "62448636d417"],
           "payloads": ["6d04596c636d", "edde120654bf", "f49423f836f9", "1f647ffe77b0"],
           "settlements": {
-            "pair": "8cfbee11e6cb"
+            "pair": "bec79643b16c"
           },
-          "state": "f413abdb830a",
+          "state": "d48b2942ccf2",
           "effects": [
             "406c8ab0b9b6",
             "8e378786864c",
@@ -801,9 +742,9 @@
           "sender": ["6995d6b0bd4c", "c86730581187", "28a5fc6036c5", "74238de471a6"],
           "payloads": ["6d04596c636d", "edde120654bf", "f49423f836f9", "1f647ffe77b0"],
           "settlements": {
-            "pair": "06dee54a3689"
+            "pair": "bec79643b16c"
           },
-          "state": "ccde11a35347",
+          "state": "d48b2942ccf2",
           "effects": [
             "406c8ab0b9b6",
             "8e378786864c",
@@ -819,9 +760,9 @@
           "sender": ["6995d6b0bd4c", "c86730581187", "28a5fc6036c5", "5dd0e9be3459"],
           "payloads": ["6d04596c636d", "edde120654bf", "f49423f836f9", "1f647ffe77b0"],
           "settlements": {
-            "pair": "f4f341e9c757"
+            "pair": "bec79643b16c"
           },
-          "state": "706827e9c433",
+          "state": "d48b2942ccf2",
           "effects": [
             "406c8ab0b9b6",
             "8e378786864c",
@@ -837,9 +778,9 @@
           "sender": ["6995d6b0bd4c", "c86730581187", "28a5fc6036c5", "576427a4aab3"],
           "payloads": ["6d04596c636d", "edde120654bf", "f49423f836f9", "1f647ffe77b0"],
           "settlements": {
-            "pair": "d6e7487f3275"
+            "pair": "bec79643b16c"
           },
-          "state": "7adfb8f30333",
+          "state": "d48b2942ccf2",
           "effects": [
             "406c8ab0b9b6",
             "8e378786864c",
@@ -855,9 +796,9 @@
           "sender": ["6995d6b0bd4c", "c86730581187", "28a5fc6036c5", "1abb87dd96cf"],
           "payloads": ["6d04596c636d", "edde120654bf", "f49423f836f9", "1f647ffe77b0"],
           "settlements": {
-            "pair": "d6e7487f3275"
+            "pair": "bec79643b16c"
           },
-          "state": "7adfb8f30333",
+          "state": "d48b2942ccf2",
           "effects": [
             "406c8ab0b9b6",
             "8e378786864c",

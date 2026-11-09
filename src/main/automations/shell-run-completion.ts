@@ -1,16 +1,88 @@
-import type { AutomationRun, AutomationRunOutputSnapshot } from '../../shared/automations-types'
+import type {
+  AutomationRun,
+  AutomationRunOutputSnapshot
+} from '../../shared/automations/history/automation-run'
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
 } from '../../shared/ansi-escape-sequences'
-import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
-import { createAutomationShellReceiptScanner } from '../../shared/automation-shell-exit-receipt'
-import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
-import type { AutomationRunTerminalHost } from './runtime-terminal-run-observer'
-import type { AutomationRunCompletionObservation } from './run-completion-watcher'
+import { isProvenProcessExit } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { createAutomationShellReceiptScanner } from '../../shared/automations/launch/automation-shell-exit-receipt'
+import { createAutomationOutputSnapshotBuffer } from './automation-launch'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import type {
+  AutomationRunCompletionObservation,
+  AutomationRunTerminalObserver
+} from './run-completion-watcher'
+
+/** The runtime surface a shell run settles on: its own PTY incarnation, host stream and exit. */
+export type ShellRunTerminalHost = {
+  resolveTerminalPane?(
+    paneKey: string,
+    workspaceId?: string
+  ): { handle: string; ptyId: string | null; incarnationId?: string | null; connected?: boolean }
+  subscribeToTerminalData?(ptyId: string, listener: (data: string) => void): () => void
+  subscribeToPtyExit?(ptyId: string, listener: () => void): () => void
+  waitForTerminal(
+    handle: string,
+    options?: { condition?: 'tui-idle' | 'exit'; timeoutMs?: number; signal?: AbortSignal }
+  ): Promise<{
+    satisfied: boolean
+    blockedReason?: string
+    exitCode?: number | null
+    exitCause?: TerminalExitCause | null
+  }>
+  readTerminal(
+    handle: string,
+    opts?: { limit?: number },
+    snapshot?: { streamOnly?: boolean }
+  ): Promise<{ tail: string[]; truncated?: boolean; limited?: boolean }>
+}
+
+/** Settles exit-condition runs from their own PTY; every other run keeps the agent observer. */
+export function withShellRunCompletion(
+  runtime: ShellRunTerminalHost,
+  observer: AutomationRunTerminalObserver
+): AutomationRunTerminalObserver {
+  return {
+    resolveRunTerminal: (run) =>
+      run.completionCondition === 'exit'
+        ? resolveShellRunTerminal(runtime, run)
+        : observer.resolveRunTerminal(run),
+    observeCompletion: (handle, options) =>
+      options.run?.completionCondition === 'exit'
+        ? observeShellRunCompletion(
+            runtime,
+            handle,
+            options.run,
+            options.signal,
+            options.onUnverifiable,
+            options.onCommandExit
+          )
+        : observer.observeCompletion(handle, options)
+  }
+}
+
+function resolveShellRunTerminal(runtime: ShellRunTerminalHost, run: AutomationRun): string | null {
+  if (!run.terminalPaneKey || !run.terminalPtyId || !run.terminalIncarnationId) {
+    return null
+  }
+  try {
+    const terminal = runtime.resolveTerminalPane?.(
+      run.terminalPaneKey,
+      run.workspaceId ?? undefined
+    )
+    return terminal?.ptyId === run.terminalPtyId &&
+      terminal.incarnationId === run.terminalIncarnationId
+      ? terminal.handle
+      : null
+  } catch {
+    return null
+  }
+}
 
 function resolveRunHandle(
-  runtime: AutomationRunTerminalHost,
+  runtime: ShellRunTerminalHost,
   run: AutomationRun,
   fallback: string
 ): string {
@@ -28,7 +100,7 @@ function resolveRunHandle(
 }
 
 export async function observeShellRunCompletion(
-  runtime: AutomationRunTerminalHost,
+  runtime: ShellRunTerminalHost,
   handle: string,
   run: AutomationRun,
   signal: AbortSignal,
@@ -49,7 +121,7 @@ export async function observeShellRunCompletion(
   const initial = runtime
     .readTerminal(boundHandle, { limit: 2_000 }, { streamOnly: true })
     .catch(() => ({ tail: [], truncated: false, limited: false }))
-  const live = createHeadlessAutomationOutputSnapshotBuffer()
+  const live = createAutomationOutputSnapshotBuffer()
   let commandExitCode: number | null = run.terminalCommandExitCode ?? null
   const receipt = createAutomationShellReceiptScanner(run.id, (code) => {
     commandExitCode = code
@@ -68,7 +140,7 @@ export async function observeShellRunCompletion(
     const seed = await initial
     receipt.scan(seed.tail.join('\n'))
     const snapshot = (): AutomationRunOutputSnapshot | null => {
-      const buffer = createHeadlessAutomationOutputSnapshotBuffer()
+      const buffer = createAutomationOutputSnapshotBuffer()
       buffer.append(seed.tail.join('\n') || run.outputSnapshot?.content || '')
       const captured = live.snapshot()
       if ((seed.tail.length || run.outputSnapshot?.content) && captured) {

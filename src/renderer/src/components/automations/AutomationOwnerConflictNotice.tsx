@@ -2,7 +2,7 @@ import React from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   recoveryActionLabel,
   type AutomationHostRecoveryAction
@@ -10,13 +10,7 @@ import {
 import type { AutomationOwnerConflict } from './automation-owner-action-runner'
 import type { AutomationActionBlock } from './automation-captured-owner'
 
-/**
- * An owner conflict shown where the user was working, not as a toast: the
- * request performed nothing, so the message has to survive long enough to be
- * read and acted on. It offers a recovery action only when one exists — a host
- * that was deregistered gets a plain explanation rather than a button that
- * cannot help.
- */
+/** Keep refused actions visible where the user worked; offer recovery only when it can help, never Retry for a removed host. */
 
 type AutomationOwnerNotice = {
   message: string
@@ -44,6 +38,7 @@ export function AutomationOwnerConflictNotice({
   onDismiss,
   className
 }: AutomationOwnerConflictNoticeProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (!notice) {
     return null
   }
@@ -68,7 +63,7 @@ export function AutomationOwnerConflictNotice({
             className="border-amber-500/40 bg-background font-medium text-foreground shadow-xs hover:bg-muted"
             onClick={() => onRecover(recovery)}
           >
-            {recoveryActionLabel(recovery)}
+            {recoveryActionLabel(recovery, t)}
           </Button>
         ) : null}
         {onDismiss ? (
@@ -79,7 +74,7 @@ export function AutomationOwnerConflictNotice({
             className="text-muted-foreground hover:bg-amber-500/20 hover:text-foreground"
             onClick={onDismiss}
           >
-            {translate('auto.components.automations.ownerConflict.dismiss', 'Dismiss')}
+            {t('auto.components.automations.ownerConflict.dismiss', 'Dismiss')}
           </Button>
         ) : null}
       </div>

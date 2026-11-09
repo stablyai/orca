@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
+const { spawnMock, reclaimStaleLockMock, printReclaimResultMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  reclaimStaleLockMock: vi.fn(),
+  printReclaimResultMock: vi.fn()
+}))
 
-// The claude-teams handler spawns `claude` via node:child_process; mock it so we
-// can inspect the child env without launching a real process.
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
+vi.mock('../../main/orcad/orcad-stale-lock-reclaim.js', () => ({
+  reclaimStaleOrcadInstanceLock: reclaimStaleLockMock,
+  printOrcadStaleLockReclaimResult: printReclaimResultMock
+}))
 
-// Keep the socket runtime client out of the import graph; only the error type
-// and serveOrcaApp binding are referenced by the module under test.
+// Exclude the socket runtime graph; this handler needs only errors and serveOrcaApp.
 vi.mock('../runtime-client', () => ({
   RuntimeClientError: class RuntimeClientError extends Error {
     readonly code: string
@@ -25,8 +30,7 @@ import type { RuntimeClient } from '../runtime-client'
 
 type SpawnEnv = Record<string, string | undefined>
 
-// Minimal child stub: the handler only awaits `exit`, so resolve it on the next
-// microtask to complete the spawned-process promise deterministically.
+// Emit exit on the next microtask so the spawned-process promise settles deterministically.
 function mockClaudeChild(): { once: (event: string, cb: (...args: unknown[]) => void) => unknown } {
   const child = {
     once(event: string, cb: (...args: unknown[]) => void) {
@@ -60,6 +64,9 @@ describe('orca claude-teams CLI handler', () => {
   }
 
   beforeEach(() => {
+    reclaimStaleLockMock.mockReset()
+    reclaimStaleLockMock.mockRejectedValue(new Error('Unexpected stale-lock reclaim'))
+    printReclaimResultMock.mockReset()
     spawnMock.mockReset()
     spawnMock.mockImplementation(() => mockClaudeChild())
     callMock.mockReset()
@@ -71,8 +78,7 @@ describe('orca claude-teams CLI handler', () => {
     previousRunAsNode = process.env.ELECTRON_RUN_AS_NODE
     previousPaneKey = process.env.ORCA_PANE_KEY
     previousExitCode = process.exitCode
-    // The `orca` launcher runs Orca's Electron binary as Node, so the CLI process
-    // itself carries ELECTRON_RUN_AS_NODE=1. Reproduce that inherited flag here.
+    // Reproduce the Electron-as-Node flag inherited from the orca launcher.
     process.env.ELECTRON_RUN_AS_NODE = '1'
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
   })
@@ -91,8 +97,7 @@ describe('orca claude-teams CLI handler', () => {
     process.exitCode = previousExitCode
   })
 
-  // Guarded to non-Windows: the handler early-returns unsupported_platform on
-  // win32, so the leak path never runs there.
+  // Windows refuses the command before reaching child-process creation.
   it.skipIf(isWindows)(
     'does not leak ELECTRON_RUN_AS_NODE into the spawned claude child',
     async () => {
@@ -102,8 +107,6 @@ describe('orca claude-teams CLI handler', () => {
       const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
       expect(spawnEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
 
-      // The prepareLaunch request env is built from the same helper, so it must
-      // be sanitized too.
       const prepareLaunchEnv = (callMock.mock.calls[0][1] as { env: SpawnEnv }).env
       expect(prepareLaunchEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
     }
@@ -130,4 +133,72 @@ describe('orca claude-teams CLI handler', () => {
       expect(spawnEnv.PATH).toBe('/shim:/usr/bin')
     }
   )
+
+  it.skipIf(isWindows)('removes managed auth variables before spawning Claude', async () => {
+    const previousApiKey = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-inherited'
+    callMock.mockResolvedValueOnce({
+      result: {
+        launch: {
+          env: {
+            CLAUDE_CONFIG_DIR: '/managed/claude',
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1'
+          },
+          envToDelete: ['ANTHROPIC_API_KEY']
+        }
+      }
+    })
+    try {
+      await runClaudeTeams()
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.ANTHROPIC_API_KEY
+      } else {
+        process.env.ANTHROPIC_API_KEY = previousApiKey
+      }
+    }
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
+    expect(spawnEnv.ANTHROPIC_API_KEY).toBeUndefined()
+    expect(spawnEnv.CLAUDE_CONFIG_DIR).toBe('/managed/claude')
+  })
+
+  it.skipIf(isWindows)('preserves API-key auth when no managed deletion is requested', async () => {
+    const previousApiKey = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-system'
+    try {
+      await runClaudeTeams()
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.ANTHROPIC_API_KEY
+      } else {
+        process.env.ANTHROPIC_API_KEY = previousApiKey
+      }
+    }
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
+    expect(spawnEnv.ANTHROPIC_API_KEY).toBe('sk-ant-system')
+  })
+
+  // #32177: an empty --data-root must never fall back to the default profile's lock.
+  it('refuses `orca serve --reclaim-stale-lock` with a --data-root that names no directory', async () => {
+    const ctx: HandlerContext = {
+      flags: new Map<string, string | boolean>([
+        ['reclaim-stale-lock', true],
+        ['data-root', true],
+        ['yes', true]
+      ]),
+      client,
+      cwd: '/tmp',
+      json: true,
+      rawArgs: []
+    }
+    await expect(CORE_HANDLERS.serve(ctx)).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message:
+        '--data-root expects a directory. Usage: orca serve --reclaim-stale-lock [--data-root <dir>] [--yes] [--json]'
+    })
+    expect(reclaimStaleLockMock).not.toHaveBeenCalled()
+    expect(printReclaimResultMock).not.toHaveBeenCalled()
+  })
 })

@@ -7,14 +7,18 @@ import type {
 import {
   createClaudeProvider,
   createCodexProvider,
+  createMuseProvider,
   createOpenCodeProvider
 } from './usage-provider-normalization'
+import { getIntlLocale } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
-export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewModel {
+export function buildUsageOverview(input: UsageOverviewInput, t?: Translate): UsageOverviewModel {
   const providers = [
-    createClaudeProvider(input.claude),
-    createCodexProvider(input.codex),
-    createOpenCodeProvider(input.opencode)
+    createClaudeProvider(input.claude, t),
+    createCodexProvider(input.codex, t),
+    createOpenCodeProvider(input.opencode, t),
+    createMuseProvider(input.muse, t)
   ]
   const daily = buildDailyOverview(input)
   const bestDay =
@@ -33,9 +37,13 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
   const activityCount = providers.reduce((sum, provider) => sum + provider.activityCount, 0)
   const knownCost = providers.reduce((sum, provider) => sum + (provider.estimatedCostUsd ?? 0), 0)
   const hasKnownCost = providers.some((provider) => provider.estimatedCostUsd !== null)
-  const hasPartialCost = providers.some(
-    (provider) => provider.hasData && provider.estimatedCostUsd === null
-  )
+  // Why: with no priced provider the total already reads n/a; "some prices unavailable" would mislead.
+  const hasPartialCost =
+    hasKnownCost &&
+    providers.some(
+      (provider) =>
+        provider.hasPartialCost || (provider.hasData && provider.estimatedCostUsd === null)
+    )
   const lastUpdatedAt =
     providers.reduce<number | null>(
       (latest, provider) =>
@@ -71,7 +79,7 @@ export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewMode
   }
 }
 
-export function formatUsageTokens(value: number): string {
+export function formatUsageTokens(value: number, intlLocale: string = getIntlLocale()): string {
   if (value >= 1_000_000_000) {
     return `${(value / 1_000_000_000).toFixed(1)}B`
   }
@@ -81,7 +89,7 @@ export function formatUsageTokens(value: number): string {
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString()
+  return value.toLocaleString(intlLocale)
 }
 
 export function formatUsageCost(value: number | null): string {

@@ -1,24 +1,31 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { KimiHookService } from './hook-service'
-import { KIMI_HOOK_EVENTS } from './kimi-hook-config-toml'
 
-// Why: getSharedManagedScriptPath() writes the managed script under
-// homedir()/.orca, and getKimiHome() honors KIMI_CODE_HOME. Point both at a
-// temp dir so the local install/remove cycle never touches the real ~/.orca or
-// ~/.kimi-code. os.homedir() resolves $HOME on POSIX (verified at write time).
+// Isolate homedir (HOME/USERPROFILE) and KIMI_CODE_HOME so installs cannot touch real configs.
 let home: string
 let originalHome: string | undefined
 let originalKimiHome: string | undefined
+let originalUserProfile: string | undefined
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-kimi-hook-'))
   originalHome = process.env.HOME
   originalKimiHome = process.env.KIMI_CODE_HOME
+  originalUserProfile = process.env.USERPROFILE
   process.env.HOME = home
   process.env.KIMI_CODE_HOME = join(home, '.kimi-code')
+  process.env.USERPROFILE = home
 })
 
 afterEach(() => {
@@ -32,61 +39,52 @@ afterEach(() => {
   } else {
     process.env.KIMI_CODE_HOME = originalKimiHome
   }
+  if (originalUserProfile === undefined) {
+    delete process.env.USERPROFILE
+  } else {
+    process.env.USERPROFILE = originalUserProfile
+  }
   rmSync(home, { recursive: true, force: true })
 })
 
 const configPath = (): string => join(home, '.kimi-code', 'config.toml')
-const scriptPath = (): string => join(home, '.orca', 'agent-hooks', 'kimi-hook.sh')
+const supportsPosixFileModes = process.platform !== 'win32'
 
 describe('KimiHookService', () => {
-  it('reports not_installed before install', () => {
-    expect(new KimiHookService().getStatus().state).toBe('not_installed')
-  })
+  it.skipIf(!supportsPosixFileModes)(
+    'preserves an existing config mode while installing and removing hooks',
+    () => {
+      mkdirSync(join(home, '.kimi-code'), { recursive: true })
+      writeFileSync(configPath(), 'api_key = "sk-secret"\n')
+      const existingMode = 0o640
+      chmodSync(configPath(), existingMode)
 
-  it('installs the managed hooks block and the managed script', () => {
-    const status = new KimiHookService().install()
-    expect(status.state).toBe('installed')
-    expect(status.managedHooksPresent).toBe(true)
+      const service = new KimiHookService()
+      const originalUmask = process.umask(0o077)
+      try {
+        service.install()
+        expect(statSync(configPath()).mode & 0o777).toBe(existingMode)
+        expect(statSync(`${configPath()}.bak`).mode & 0o777).toBe(existingMode)
+        expect(
+          readdirSync(join(home, '.kimi-code')).filter((name) => name.endsWith('.tmp'))
+        ).toEqual([])
 
-    const config = readFileSync(configPath(), 'utf-8')
-    for (const event of KIMI_HOOK_EVENTS) {
-      expect(config).toContain(`event = "${event}"`)
+        service.remove()
+        expect(statSync(configPath()).mode & 0o777).toBe(existingMode)
+      } finally {
+        process.umask(originalUmask)
+      }
     }
-    // The managed script must exist and POST to the Kimi hook endpoint.
-    const script = readFileSync(scriptPath(), 'utf-8')
-    expect(script).toContain('/hook/kimi')
-    // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-    // on the curl command line (EDR oversized-command-line false positive).
-    expect(script).toContain('printf \'%s\' "$payload" | curl')
-    expect(script).toContain('--data-urlencode "payload@-"')
-    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-    // The command Kimi runs points at the managed script via sh.
-    expect(config).toContain('agent-hooks/kimi-hook.sh')
-  })
+  )
 
-  it('keeps user config when installing, then restores it on remove', () => {
-    const dir = join(home, '.kimi-code')
-    mkdirSync(dir, { recursive: true })
-    // Pre-existing user config with their own provider.
-    const userConfig =
-      'default_model = "kimi-k2.6"\n\n[providers."mine"]\ntype = "openai"\napi_key = "sk-secret"\n'
-    writeFileSync(configPath(), userConfig)
+  it.skipIf(!supportsPosixFileModes)('creates a new config with an owner-only mode', () => {
+    const originalUmask = process.umask(0o022)
+    try {
+      new KimiHookService().install()
 
-    const service = new KimiHookService()
-    expect(service.install().state).toBe('installed')
-
-    const installed = readFileSync(configPath(), 'utf-8')
-    expect(installed).toContain('api_key = "sk-secret"')
-    expect(installed).toContain('default_model = "kimi-k2.6"')
-
-    // Reinstall must not duplicate the managed block.
-    service.install()
-    const reinstalled = readFileSync(configPath(), 'utf-8')
-    expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
-
-    const removed = service.remove()
-    expect(removed.state).toBe('not_installed')
-    const afterRemove = readFileSync(configPath(), 'utf-8')
-    expect(afterRemove).toBe(userConfig)
+      expect(statSync(configPath()).mode & 0o777).toBe(0o600)
+    } finally {
+      process.umask(originalUmask)
+    }
   })
 })

@@ -7,17 +7,15 @@ import {
 } from './managed-codex-auth-readiness'
 
 export const CODEX_CREDENTIAL_ABSENCE_GRACE_MS = 5_000
+export const CODEX_CREDENTIAL_ABSENCE_MAX_TRACKED_PATHS = 512
 
 export type CodexCredentialAbsenceVerdict = {
   state: StoredCodexCredentialState
-  /** For 'missing'/'unreadable': true once the absence outlived the grace window. */
+  /** Whether the observed credential state is settled enough to act on. */
   durable: boolean
 }
 
-// Why: codex rotates auth.json in place, so one missing/unreadable read can be
-// a write in progress. Deselecting the managed account on that snapshot logs
-// the user out over a race; absence must persist across a grace window first.
-// Valid JSON (with or without a credential) is a settled file and needs none.
+// Delay deselection during auth.json rotation; readable credential state needs no grace.
 export class CodexCredentialAbsenceGrace {
   private readonly firstAbsenceAtByPath = new Map<string, number>()
 
@@ -30,8 +28,7 @@ export class CodexCredentialAbsenceGrace {
       this.firstAbsenceAtByPath.delete(key)
       return { state, durable: true }
     }
-    // Why: rotation replaces auth.json inside an existing home; the home
-    // directory itself being gone is structural, not a write in flight.
+    // A missing home directory cannot be explained by auth.json rotation.
     if (state === 'missing' && !existsSync(dirname(authPath))) {
       this.firstAbsenceAtByPath.delete(key)
       return { state, durable: true }
@@ -39,8 +36,20 @@ export class CodexCredentialAbsenceGrace {
     const firstAbsenceAt = this.firstAbsenceAtByPath.get(key)
     if (firstAbsenceAt === undefined) {
       this.firstAbsenceAtByPath.set(key, now)
+      while (this.firstAbsenceAtByPath.size > CODEX_CREDENTIAL_ABSENCE_MAX_TRACKED_PATHS) {
+        const oldest = this.firstAbsenceAtByPath.keys().next()
+        if (oldest.done) {
+          break
+        }
+        this.firstAbsenceAtByPath.delete(oldest.value)
+      }
       return { state, durable: false }
     }
     return { state, durable: now - firstAbsenceAt >= this.graceMs }
+  }
+
+  /** @internal - exposed for leak-regression tests. */
+  trackedPathCountForTests(): number {
+    return this.firstAbsenceAtByPath.size
   }
 }

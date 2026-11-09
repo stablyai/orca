@@ -1,3 +1,4 @@
+import { capturedAutomationOwner } from './automation-captured-owner'
 import { useCallback, useEffect, useMemo } from 'react'
 import {
   getLocalExecutionHostLabel,
@@ -7,12 +8,12 @@ import {
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import type { Repo } from '../../../../shared/repo-types'
 import { getAutomationTargetAvailability } from './automation-target-availability'
-import type { AutomationSourceAvailability } from './use-automation-source-availability'
 import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
 import type { AutomationsPageDestinationFormState } from './use-automations-page-destination-form'
 import type { AutomationsPageListState } from './use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
+import { useTranslate } from '../../i18n/use-translate'
 
 /** Display labels and action availability derived from the selected host row. */
 export function useAutomationsPagePresentationState({
@@ -20,19 +21,19 @@ export function useAutomationsPagePresentationState({
   local,
   list,
   destination,
-  destinationForm,
-  sourceAvailability
+  destinationForm
 }: {
   store: AutomationsPageStoreState
   local: AutomationsPageLocalState
   list: AutomationsPageListState
   destination: AutomationsPageDestinationState
   destinationForm: AutomationsPageDestinationFormState
-  sourceAvailability: AutomationSourceAvailability
 }) {
+  const t = useTranslate()
   const {
     projectHostSetups,
     sshConnectionStates,
+    sshStateByEnvironment,
     runtimeStatusByEnvironmentId,
     sshTargetLabels,
     runtimeEnvironments,
@@ -43,27 +44,31 @@ export function useAutomationsPagePresentationState({
   const { editingAutomationId, draftAtOpen, draft, activePaneTab, setActivePaneTab } = local
   const { selected, selectedRow } = list
   const { automationHostTargetFor } = destination
-  const { automationSourceHostAvailabilityByRowKey } = sourceAvailability
   const selectedRepo = selectedRow ? (repoForRow(selectedRow) ?? null) : null
   const selectedWorktree =
     selectedRow && selected?.workspaceId
       ? (worktreeForRow(selectedRow, selectedRepo ?? undefined) ?? null)
       : null
   const selectedRunNowAvailability = selectedRow
-    ? getAutomationTargetAvailability({
-        automation: selectedRow.automation,
-        repo: selectedRepo,
-        workspace: selectedWorktree,
-        projectHostSetups,
-        sshConnectionStates,
-        runtimeStatusByEnvironmentId,
-        automationHostTarget: automationHostTargetFor(selectedRow),
-        sourceHostAvailability: automationSourceHostAvailabilityByRowKey.get(selectedRow.key)
-      })
+    ? getAutomationTargetAvailability(
+        {
+          automation: selectedRow.automation,
+          capturedOwner: capturedAutomationOwner(list.capturedAutomationOwners, selectedRow.key),
+          repo: selectedRepo,
+          workspace: selectedWorktree,
+          projectHostSetups,
+          sshConnectionStates,
+          sshStateByEnvironment,
+          runtimeStatusByEnvironmentId,
+          automationHostTarget: automationHostTargetFor(selectedRow)
+        },
+        t
+      )
     : null
   const canSaveDraft =
     editingAutomationId === null ||
     !draftAtOpen ||
+    local.targetEdited ||
     JSON.stringify(draft) !== JSON.stringify(draftAtOpen) ||
     (editingAutomationId !== null &&
       local.editingHostStableKey !== destination.rowRecoveryHost(local.editingRowKey)?.stableKey)

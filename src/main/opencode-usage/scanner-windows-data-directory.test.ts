@@ -2,15 +2,23 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { opencodeDiscoveries } from '../ai-vault/session-scanner-opencode-sources'
+import { opencodeDiscoveries } from '../ai-vault/scanners/opencode/session-scanner-opencode-sources'
 import Database from '../sqlite/sync-database'
 import { scanOpenCodeUsageDatabases } from './scanner'
 
-vi.mock('../ai-vault/session-scanner-opencode-sqlite-worker-spawn', async () => {
-  const { listOpenCodeSqliteSessions } =
-    await import('../ai-vault/session-scanner-opencode-sqlite-list')
-  return { listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions }
-})
+vi.mock(
+  '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async () => {
+    const { listOpenCodeSqliteSessions } =
+      await import('../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-list')
+    const { listOpenCode2SqliteSessions } =
+      await import('../ai-vault/scanners/opencode2/session-scanner-opencode2-sqlite-list')
+    return {
+      listOpenCodeSqliteSessionsViaWorker: listOpenCodeSqliteSessions,
+      listOpenCode2SqliteSessionsViaWorker: listOpenCode2SqliteSessions
+    }
+  }
+)
 
 describe('OpenCode usage discovery on Windows', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!

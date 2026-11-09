@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.project-row-review-checks",
   "family": "tasks.project-row-review-checks",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "370aeaee59978071ccb821da13c9e6114936c168947b608539cdb80d40cc9889",
-  "scenarioSha256": "ca6b0d81b19811806ce332a776361a40e526a73bef90cfa3df05a764e2ee83b6",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "058c73abcfe0": {
       "name": "projectRowDetailError",

@@ -1,5 +1,6 @@
 export {
   applyPostgresSchema,
+  schemaDeferrable,
   type SchemaApplySummary,
   type SchemaStartupOptions
 } from './apply-postgres-schema.js'

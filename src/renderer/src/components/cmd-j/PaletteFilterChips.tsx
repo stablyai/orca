@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
-import { X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { ListFilter, X } from 'lucide-react'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PaletteFilterModel } from './palette-filter-options'
 import {
   EMPTY_PALETTE_FILTER,
@@ -21,6 +21,7 @@ export default function PaletteFilterChips({
   filter: PaletteFilterState
   onFilterChange: (next: PaletteFilterState) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const chips = useMemo<Chip[]>(() => {
     const hostLabels = new Map(model.hosts.map((host) => [host.id, host.label]))
     const repositoryLabels = new Map(
@@ -45,34 +46,44 @@ export default function PaletteFilterChips({
   }
 
   return (
-    <div className="mx-3 mt-2 flex items-center gap-1.5">
+    // Sidebar-seeded scope is metadata; avoid implying the user chose filters here.
+    <div className="mx-3 mt-2 flex items-center gap-1.5 pl-3.5 text-[11px] text-muted-foreground">
+      {/* Why: a fixed anchor the eye can find at one filter, where a bare muted line vanishes. */}
+      <ListFilter className="size-3 shrink-0" aria-hidden="true" />
+      <span className="sr-only">{t('worktreeJumpPalette.filter.scopedTo', 'Scoped to')}</span>
       {/* Why: horizontal scroll keeps every chip reachable without a hard +N dead-end. */}
-      <div className="scrollbar-sleek flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
-        {chips.map((chip) => (
-          <button
-            key={`${chip.field}:${chip.id}`}
-            type="button"
-            onClick={() => onFilterChange(togglePaletteFilterValue(filter, chip.field, chip.id))}
-            aria-label={translate(
-              'worktreeJumpPalette.filter.removeChip',
-              'Remove filter {{value0}}',
-              {
+      <div className="scrollbar-sleek flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+        {chips.map((chip, index) => (
+          <React.Fragment key={`${chip.field}:${chip.id}`}>
+            {index > 0 ? (
+              <span className="shrink-0 opacity-50" aria-hidden="true">
+                ·
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onFilterChange(togglePaletteFilterValue(filter, chip.field, chip.id))}
+              aria-label={t('worktreeJumpPalette.filter.removeChip', 'Remove filter {{value0}}', {
                 value0: chip.label
-              }
-            )}
-            className="flex h-6 max-w-[140px] shrink-0 items-center gap-1 rounded-full border border-primary/35 bg-primary/12 px-2 text-[11px] text-foreground transition-colors hover:bg-primary/20"
-          >
-            <span className="truncate">{chip.label}</span>
-            <X className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </button>
+              })}
+              className="group flex h-6 max-w-[140px] shrink-0 items-center gap-1 rounded-sm px-1.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:bg-accent focus-visible:text-foreground"
+            >
+              <span className="min-w-0 truncate">{chip.label}</span>
+              {/* Space stays reserved so revealing the dismiss does not shift the row. */}
+              <X
+                className="size-2.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-70 group-focus-visible:opacity-70"
+                aria-hidden="true"
+              />
+            </button>
+          </React.Fragment>
         ))}
       </div>
       <button
         type="button"
         onClick={() => onFilterChange(EMPTY_PALETTE_FILTER)}
-        className="ml-1 shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
+        className="ml-1 mr-4 shrink-0 rounded-md px-1.5 py-0.5 hover:bg-accent hover:text-foreground"
       >
-        {translate('worktreeJumpPalette.filter.clearAll', 'Clear all')}
+        {t('worktreeJumpPalette.filter.clearAll', 'Clear all')}
       </button>
     </div>
   )

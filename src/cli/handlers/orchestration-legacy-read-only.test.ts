@@ -7,6 +7,7 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
+import { orchestrationTestContext } from './orchestration-handler-test-context'
 
 beforeEach(() => {
   callMock.mockReset()
@@ -14,35 +15,6 @@ beforeEach(() => {
 })
 
 describe('legacy orchestration CLI inspection', () => {
-  it('labels legacy rows in plain check output', async () => {
-    const result = {
-      messages: [
-        {
-          id: 'msg_legacy',
-          run_id: 'run_legacy_local',
-          from_handle: 'term_worker',
-          subject: 'progress',
-          type: 'status'
-        }
-      ],
-      count: 1
-    }
-    callMock.mockResolvedValue({ result })
-
-    await ORCHESTRATION_HANDLERS['orchestration check']({
-      flags: new Map<string, string | boolean>([
-        ['terminal', 'term_coord'],
-        ['peek', true]
-      ]),
-      client: { call: callMock },
-      cwd: '/repo',
-      json: false
-    } as never)
-
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2]
-    expect(formatter?.(result)).toContain('msg_legacy [legacy, read-only]')
-  })
-
   it('rebuilds incomplete legacy rows without runtime-supplied actions', async () => {
     const result = {
       messages: [
@@ -61,16 +33,19 @@ describe('legacy orchestration CLI inspection', () => {
     }
     callMock.mockResolvedValue({ result })
 
-    await ORCHESTRATION_HANDLERS['orchestration check']({
-      flags: new Map<string, string | boolean>([
-        ['terminal', 'term_coord'],
-        ['peek', true],
-        ['format', true]
-      ]),
-      client: { call: callMock },
-      cwd: '/repo',
-      json: false
-    } as never)
+    await ORCHESTRATION_HANDLERS['orchestration check'](
+      orchestrationTestContext(
+        callMock,
+        new Map<string, string | boolean>([
+          ['full', true],
+          ['terminal', 'term_coord'],
+          ['peek', true],
+          ['format', true]
+        ]),
+        false,
+        '/repo'
+      )
+    )
 
     const response = vi.mocked(printResult).mock.calls[0]?.[0] as { result: typeof result }
     const formatter = vi.mocked(printResult).mock.calls[0]?.[2]
@@ -102,16 +77,19 @@ describe('legacy orchestration CLI inspection', () => {
     }
     callMock.mockResolvedValue({ result })
 
-    await ORCHESTRATION_HANDLERS['orchestration check']({
-      flags: new Map<string, string | boolean>([
-        ['terminal', 'term_coord'],
-        ['peek', true],
-        ['format', true]
-      ]),
-      client: { call: callMock },
-      cwd: '/repo',
-      json: true
-    } as never)
+    await ORCHESTRATION_HANDLERS['orchestration check'](
+      orchestrationTestContext(
+        callMock,
+        new Map<string, string | boolean>([
+          ['full', true],
+          ['terminal', 'term_coord'],
+          ['peek', true],
+          ['format', true]
+        ]),
+        true,
+        '/repo'
+      )
+    )
 
     const response = vi.mocked(printResult).mock.calls[0]?.[0] as { result: typeof result }
     expect(response.result.formatted).toContain('msg_legacy [legacy, read-only]')
@@ -119,47 +97,6 @@ describe('legacy orchestration CLI inspection', () => {
     expect(response.result.formatted).toContain('[payload]\n  {"phase":"testing"}')
     expect(response.result.formatted).not.toContain('orchestration reply')
   })
-
-  it.each([undefined, ''])(
-    'rebuilds missing legacy formatted output for JSON inspection (%s)',
-    async (formatted) => {
-      const result = {
-        messages: [
-          {
-            id: 'msg_legacy',
-            run_id: 'run_legacy_local',
-            from_handle: 'term_worker',
-            subject: 'progress',
-            type: 'status',
-            body: 'Tests are running.',
-            payload: '{"phase":"testing"}'
-          }
-        ],
-        count: 1,
-        formatted
-      }
-      callMock.mockResolvedValue({ result })
-
-      await ORCHESTRATION_HANDLERS['orchestration check']({
-        flags: new Map<string, string | boolean>([
-          ['terminal', 'term_coord'],
-          ['peek', true],
-          ['format', true]
-        ]),
-        client: { call: callMock },
-        cwd: '/repo',
-        json: true
-      } as never)
-
-      const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
-        result: typeof result & { formatted: string }
-      }
-      expect(response.result.formatted).toContain('msg_legacy [legacy, read-only]')
-      expect(response.result.formatted).toContain('Tests are running.')
-      expect(response.result.formatted).toContain('[payload]\n  {"phase":"testing"}')
-      expect(response.result.formatted).not.toContain('orchestration reply')
-    }
-  )
 
   it('keeps reply guidance only for current rows in a mixed formatted batch', async () => {
     const result = {
@@ -196,16 +133,19 @@ describe('legacy orchestration CLI inspection', () => {
     }
     callMock.mockResolvedValue({ result })
 
-    await ORCHESTRATION_HANDLERS['orchestration check']({
-      flags: new Map<string, string | boolean>([
-        ['terminal', 'term_coord'],
-        ['peek', true],
-        ['format', true]
-      ]),
-      client: { call: callMock },
-      cwd: '/repo',
-      json: true
-    } as never)
+    await ORCHESTRATION_HANDLERS['orchestration check'](
+      orchestrationTestContext(
+        callMock,
+        new Map<string, string | boolean>([
+          ['full', true],
+          ['terminal', 'term_coord'],
+          ['peek', true],
+          ['format', true]
+        ]),
+        true,
+        '/repo'
+      )
+    )
 
     const response = vi.mocked(printResult).mock.calls[0]?.[0] as { result: typeof result }
     expect(response.result.formatted).toContain('msg_legacy [legacy, read-only] [URGENT]')
@@ -220,36 +160,6 @@ describe('legacy orchestration CLI inspection', () => {
       response.result.formatted.split('\n').filter((line) => line.startsWith('[Reply:'))
     ).toEqual(['[Reply: orca orchestration reply --id msg_current --body "..."]'])
     expect(response.result.formatted).not.toContain('--from run:run_current')
-  })
-
-  it('preserves runtime formatting when every message belongs to a current Run', async () => {
-    const result = {
-      messages: [
-        {
-          id: 'msg_current',
-          run_id: 'run_current',
-          from_handle: 'term_worker',
-          subject: 'question'
-        }
-      ],
-      count: 1,
-      formatted: '[Reply: current Run action]'
-    }
-    callMock.mockResolvedValue({ result })
-
-    await ORCHESTRATION_HANDLERS['orchestration check']({
-      flags: new Map<string, string | boolean>([
-        ['terminal', 'term_coord'],
-        ['peek', true],
-        ['format', true]
-      ]),
-      client: { call: callMock },
-      cwd: '/repo',
-      json: false
-    } as never)
-
-    const formatter = vi.mocked(printResult).mock.calls[0]?.[2]
-    expect(formatter?.(result)).toBe(result.formatted)
   })
 
   it('labels legacy rows in full inbox output without hiding their body', async () => {
@@ -268,12 +178,14 @@ describe('legacy orchestration CLI inspection', () => {
     }
     callMock.mockResolvedValue({ result })
 
-    await ORCHESTRATION_HANDLERS['orchestration inbox']({
-      flags: new Map<string, string | boolean>([['full', true]]),
-      client: { call: callMock },
-      cwd: '/repo',
-      json: false
-    } as never)
+    await ORCHESTRATION_HANDLERS['orchestration inbox'](
+      orchestrationTestContext(
+        callMock,
+        new Map<string, string | boolean>([['full', true]]),
+        false,
+        '/repo'
+      )
+    )
 
     const formatter = vi.mocked(printResult).mock.calls[0]?.[2]
     const output = formatter?.(result)

@@ -1,6 +1,7 @@
-import { isFinalAutomationRunStatus, type AutomationRun } from '../../shared/automations-types'
-import type { Store } from '../persistence'
-import type { AutomationRunWriter } from './automation-run-writer'
+import {
+  isFinalAutomationRunStatus,
+  type AutomationRun
+} from '../../shared/automations/history/automation-run'
 
 export type ShellRunTerminalBinding = {
   workspaceId: string
@@ -9,21 +10,9 @@ export type ShellRunTerminalBinding = {
   incarnationId: string
 }
 
+/** Shell runs reserved by pane, waiting for their PTY registration to name its incarnation. */
 export class ShellRunTerminalBindings {
   private readonly pending = new Map<string, AutomationRun>()
-
-  restore(retained: AutomationRun[], runs: AutomationRunWriter): void {
-    for (const run of retained) {
-      this.remember(run)
-      if (run.completionCondition === 'exit' && !isFinalAutomationRunStatus(run.status)) {
-        runs.updateRun({
-          runId: run.id,
-          status: run.status,
-          error: 'Orca is waiting for the execution host to confirm this command’s completion.'
-        })
-      }
-    }
-  }
 
   remember(run: AutomationRun): void {
     if (run.completionCondition !== 'exit' || !run.workspaceId || !run.terminalPaneKey) {
@@ -37,19 +26,25 @@ export class ShellRunTerminalBindings {
     }
   }
 
-  bind(
-    store: Pick<Store, 'listAutomationRuns'>,
-    runs: AutomationRunWriter,
-    binding: ShellRunTerminalBinding
+  forget(runId: string): void {
+    for (const [key, run] of this.pending) {
+      if (run.id === runId) {
+        this.pending.delete(key)
+      }
+    }
+  }
+
+  /** Claims the run reserved for this pane; null when none waits or its identity changed. */
+  claim(
+    binding: ShellRunTerminalBinding,
+    readRun: (automationId: string, runId: string) => AutomationRun | null
   ): AutomationRun | null {
     const key = JSON.stringify([binding.workspaceId, binding.paneKey])
     const reserved = this.pending.get(key)
     if (!reserved) {
       return null
     }
-    const run = store
-      .listAutomationRuns(reserved.automationId)
-      .find((run) => run.id === reserved.id)
+    const run = readRun(reserved.automationId, reserved.id)
     if (!run || isFinalAutomationRunStatus(run.status)) {
       this.pending.delete(key)
       return null
@@ -60,13 +55,7 @@ export class ShellRunTerminalBindings {
     ) {
       return null
     }
-    const bound = runs.updateRun({
-      runId: run.id,
-      status: 'dispatched',
-      terminalPtyId: binding.ptyId,
-      terminalIncarnationId: binding.incarnationId
-    })
     this.pending.delete(key)
-    return bound
+    return run
   }
 }

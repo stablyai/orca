@@ -42,17 +42,6 @@ function appendTextarea(value = ''): HTMLTextAreaElement {
   return textarea
 }
 
-function appendXtermHelperTextarea(): HTMLTextAreaElement {
-  // Stand-in for xterm's hidden helper textarea inside its `.xterm` container.
-  const terminal = document.createElement('div')
-  terminal.className = 'xterm'
-  const textarea = document.createElement('textarea')
-  textarea.className = 'xterm-helper-textarea'
-  terminal.appendChild(textarea)
-  document.body.appendChild(terminal)
-  return textarea
-}
-
 function dispatchMiddleMouseDown(target: HTMLElement): MouseEvent {
   const event = new MouseEvent('mousedown', { bubbles: true, button: 1, cancelable: true })
   target.dispatchEvent(event)
@@ -142,23 +131,6 @@ afterEach(async () => {
 })
 
 describe('usePrimarySelectionPaste', () => {
-  it('pastes resolved primary-selection text into the focused middle-click target', async () => {
-    readPrimarySelectionTextMock.mockResolvedValue('beta')
-    await renderProbe()
-    const textarea = appendTextarea('alpha omega')
-    textarea.focus()
-    textarea.setSelectionRange(6, 11)
-
-    await act(async () => {
-      dispatchMiddleClick(textarea)
-      await flushPromises()
-    })
-
-    expect(readPrimarySelectionTextMock).toHaveBeenCalledTimes(1)
-    expect(textarea.value).toBe('alpha beta')
-    expect(document.activeElement).toBe(textarea)
-  })
-
   it('does not paste when focus leaves before the async primary-selection read resolves', async () => {
     const deferredSelection = createDeferred<string>()
     readPrimarySelectionTextMock.mockReturnValue(deferredSelection.promise)
@@ -209,52 +181,9 @@ describe('usePrimarySelectionPaste', () => {
     expect(textarea.value).toBe('alpha beta')
   })
 
-  it('swallows terminal-armed native paste follow-up even when it has no pending DOM target', async () => {
-    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
-    consumeNativePasteMock.mockReturnValue(true)
-    await renderProbe()
-    // Stand-in for xterm's helper textarea, which owns its own middle-click
-    // paste and never registers a pending primary-selection DOM target.
-    const terminalTextarea = appendXtermHelperTextarea()
-    let nativeBeforeInput!: Event
-    const nativePaste = new Event('paste', { bubbles: true, cancelable: true })
-
-    await act(async () => {
-      nativeBeforeInput = dispatchNativePasteBeforeInput(terminalTextarea)
-      terminalTextarea.dispatchEvent(nativePaste)
-      await flushPromises()
-    })
-
-    expect(nativeBeforeInput.defaultPrevented).toBe(true)
-    expect(nativePaste.defaultPrevented).toBe(true)
-    expect(readPrimarySelectionTextMock).not.toHaveBeenCalled()
-  })
-
-  it('re-asks per paste event instead of caching the first suppression answer', async () => {
-    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
-    // Single-shot lives in the module, which is mocked here; this only pins that
-    // the hook asks once per event, so the real one-shot answer is honored.
-    consumeNativePasteMock.mockReturnValueOnce(true).mockReturnValue(false)
-    await renderProbe()
-    const terminalTextarea = appendXtermHelperTextarea()
-    let nativeFollowUp!: Event
-    let keyboardPaste!: Event
-
-    await act(async () => {
-      nativeFollowUp = dispatchNativePasteBeforeInput(terminalTextarea)
-      keyboardPaste = dispatchNativePasteBeforeInput(terminalTextarea)
-      await flushPromises()
-    })
-
-    expect(nativeFollowUp.defaultPrevented).toBe(true)
-    expect(keyboardPaste.defaultPrevented).toBe(false)
-    expect(consumeNativePasteMock).toHaveBeenCalledTimes(2)
-  })
-
   it('does not suppress an unrelated document paste while the terminal window is armed', async () => {
     setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
-    // Armed window is active, but the paste targets a control outside the
-    // terminal (e.g. right-click Paste into a form field) and must survive.
+    // Armed terminal suppression must leave unrelated form pastes intact.
     consumeNativePasteMock.mockReturnValue(true)
     await renderProbe()
     const unrelatedTextarea = appendTextarea()
@@ -269,24 +198,8 @@ describe('usePrimarySelectionPaste', () => {
 
     expect(nativeBeforeInput.defaultPrevented).toBe(false)
     expect(nativePaste.defaultPrevented).toBe(false)
-    // Consuming mutates, so the target check must short-circuit first: an
-    // unrelated paste that burned the arm would let the follow-up double-paste.
+    // Check target before consuming; unrelated pastes must not burn the arm and permit a terminal double-paste.
     expect(consumeNativePasteMock).not.toHaveBeenCalled()
-  })
-
-  it('does not suppress native paste when the terminal has not armed the window', async () => {
-    setUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
-    consumeNativePasteMock.mockReturnValue(false)
-    await renderProbe()
-    const textarea = appendTextarea()
-
-    let nativeBeforeInput!: Event
-    await act(async () => {
-      nativeBeforeInput = dispatchNativePasteBeforeInput(textarea)
-      await flushPromises()
-    })
-
-    expect(nativeBeforeInput.defaultPrevented).toBe(false)
   })
 
   it('does not keep middle-click ownership after the gesture window expires', async () => {

@@ -10,9 +10,9 @@ for (const workspaceMode of ['existing', 'new_per_run'] as const) {
     await orcaPage.getByRole('button', { name: 'Add new', exact: true }).click()
 
     const dialog = orcaPage.getByRole('dialog', { name: /^(Create|Edit) automation$/ })
-    const agentPicker = dialog.locator('button[data-agent-combobox-root="true"]')
+    const agentPicker = dialog.locator('button[data-agent-launch-picker-trigger="true"]')
     await agentPicker.click()
-    await orcaPage.getByRole('option', { name: 'Blank Terminal', exact: true }).click()
+    await orcaPage.getByRole('menuitem', { name: 'Blank Terminal', exact: true }).click()
     await dialog.screenshot({
       path: testInfo.outputPath('blank-terminal-selected.png'),
       animations: 'disabled'

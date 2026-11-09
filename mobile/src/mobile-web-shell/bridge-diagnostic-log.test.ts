@@ -1,0 +1,123 @@
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
+
+let warned: MockInstance<typeof console.warn>
+
+beforeEach(() => {
+  warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  warned.mockClear()
+})
+
+function readPart(part: unknown): string {
+  return part instanceof Error ? part.message : JSON.stringify(part)
+}
+
+function lines(): string[] {
+  return warned.mock.calls.map((call) => call.map(readPart).join(' '))
+}
+
+describe('the bridge diagnostic log', () => {
+  it('hands the connection log the same once-per-key diagnostics as the console', () => {
+    const reported: string[] = []
+    const report = createBridgeDiagnosticReporter((diagnostic) => reported.push(diagnostic.kind))
+    report({ kind: 'frame-after-close' })
+    report({ kind: 'frame-after-close' })
+    report({ kind: 'notify-refused', name: 'fault', why: 'ungranted' })
+    report({ kind: 'notify-refused', name: 'fault', why: 'ungranted' })
+    expect(reported).toEqual(['frame-after-close', 'notify-refused'])
+    expect(lines()).toHaveLength(2)
+  })
+
+  it('names the notification it refused and why, for each refusal', () => {
+    const report = createBridgeDiagnosticReporter()
+    report({ kind: 'notify-refused', name: 'fault', why: 'before-ready' })
+    report({ kind: 'notify-refused', name: 'fault', why: 'ungranted' })
+    expect(lines()).toHaveLength(2)
+    expect(lines()[0]).toContain('fault')
+    expect(lines()[0]).toContain('before-ready')
+    expect(lines()[1]).toContain('ungranted')
+  })
+
+  it('says a view outlived its host only for a frame that did', () => {
+    const report = createBridgeDiagnosticReporter()
+    report({ kind: 'frame-after-dispose' })
+    report({ kind: 'notify-refused', name: 'fault', why: 'before-ready' })
+    report({ kind: 'route-refused', issue: 'the shell named no screen' })
+    expect(lines()[0]).toContain('outlived')
+    expect(lines()[1]).not.toContain('outlived')
+    expect(lines()[2]).not.toContain('outlived')
+  })
+
+  it('names the key a page was refused a write to', () => {
+    const report = createBridgeDiagnosticReporter()
+    report({ kind: 'storage-refused', key: 'orca:pins:another-host' })
+    expect(lines()[0]).toContain('orca:pins:another-host')
+    expect(lines()[0]).not.toContain('outlived')
+  })
+
+  it('carries what was wrong with the screen the shell named', () => {
+    const report = createBridgeDiagnosticReporter()
+    report({ kind: 'route-refused', issue: 'the shell named no screen' })
+    expect(lines()[0]).toContain('the shell named no screen')
+  })
+
+  it('carries the cause of the kinds that have one', () => {
+    const report = createBridgeDiagnosticReporter()
+    report({ kind: 'refused', refusal: 'malformed-json' })
+    report({ kind: 'post-failed', error: new Error('no view') })
+    report({ kind: 'notify-failed', error: new Error('the listener threw') })
+    expect(lines()[0]).toContain('malformed-json')
+    expect(lines()[1]).toContain('no view')
+    expect(lines()[2]).toContain('the listener threw')
+  })
+
+  // Backlog metrics exist only in diagnostics; both termination causes reach the page as overflow for wire compatibility. Keep every metric and ended in the log.
+  it('reports what a held terminal stream did, rather than calling it an outlived view', () => {
+    const report = createBridgeDiagnosticReporter()
+    report({
+      kind: 'terminal-backlog',
+      id: 'stream-1',
+      coalescedFrames: 9,
+      deliveredFrames: 4,
+      peakPendingBytes: 131_072,
+      ended: 'ack-silence'
+    })
+    expect(lines()[0]).not.toContain('outlived')
+    for (const part of ['stream-1', '9', '4', '131072', 'ack-silence']) {
+      expect(lines()[0]).toContain(part)
+    }
+  })
+
+  it('keeps one line per stream, so a second terminal is not buried by the first', () => {
+    // Each terminal owns a stream; kind-only deduplication would hide every backlog report after the first.
+    const report = createBridgeDiagnosticReporter()
+    report({
+      kind: 'terminal-backlog',
+      id: 'stream-1',
+      coalescedFrames: 1,
+      deliveredFrames: 1,
+      peakPendingBytes: 10,
+      ended: null
+    })
+    report({
+      kind: 'terminal-backlog',
+      id: 'stream-2',
+      coalescedFrames: 2,
+      deliveredFrames: 2,
+      peakPendingBytes: 20,
+      ended: 'pending-ceiling'
+    })
+    report({
+      kind: 'terminal-backlog',
+      id: 'stream-1',
+      coalescedFrames: 3,
+      deliveredFrames: 3,
+      peakPendingBytes: 30,
+      ended: null
+    })
+    expect(lines()).toHaveLength(2)
+    expect(lines()[1]).toContain('stream-2')
+  })
+})
+
+afterEach(() => warned.mockRestore())

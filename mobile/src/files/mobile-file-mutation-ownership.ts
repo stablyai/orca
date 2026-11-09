@@ -1,7 +1,7 @@
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
-import { assertFileMutationOwnershipCapability } from '../../../src/shared/file-mutation-ownership'
-import type { RuntimeStatus } from '../../../src/shared/runtime-types'
+import { assertFileMutationOwnershipCapability } from '../../../src/shared/file-write/file-mutation-ownership'
 import type { SshConnectionState, SshMutationExpectation } from '../../../src/shared/ssh-types'
+import { translate } from '../i18n/mobile-i18n'
 import {
   fileOwnershipRuntimeStatusRead,
   fileOwnershipSshStateRead,
@@ -10,26 +10,37 @@ import {
 } from './mobile-file-ownership-operations'
 
 const FILE_MUTATION_TIMEOUT_MS = 15_000
-const SSH_OWNER_CHANGED_MESSAGE =
-  "Couldn't verify the SSH connection. Reconnect the host and try again."
+
+function sshOwnerChangedMessage(): string {
+  return translate(
+    'files.fileMutationOwnership.sshOwnerChanged',
+    "Couldn't verify the SSH connection. Reconnect the host and try again."
+  )
+}
 
 export type MobileFileMutationOwnership = SshMutationExpectation & {
   expectedExecutionHostId: 'local' | `ssh:${string}`
 }
 
+// Keep absence distinct from null; the host omits state when it has no target connection.
+export type MobileFileMutationSshState =
+  | (Pick<SshConnectionState, 'connectionGeneration'> & { targetId?: string })
+  | null
+  | undefined
+
 export function buildMobileFileMutationOwnership(
   worktreeHostId: string | null | undefined,
-  sshState: SshConnectionState | null = null
+  sshState: MobileFileMutationSshState = null
 ): MobileFileMutationOwnership {
   const host = parseExecutionHostId(worktreeHostId)
   if (worktreeHostId !== undefined && !host) {
-    throw new Error(SSH_OWNER_CHANGED_MESSAGE)
+    throw new Error(sshOwnerChangedMessage())
   }
   if (!host || host.kind === 'local' || host.kind === 'runtime') {
     return { expectedExecutionHostId: 'local' }
   }
   if (sshState?.targetId !== host.targetId || sshState.connectionGeneration === undefined) {
-    throw new Error(SSH_OWNER_CHANGED_MESSAGE)
+    throw new Error(sshOwnerChangedMessage())
   }
   return {
     expectedExecutionHostId: host.id,
@@ -45,11 +56,7 @@ export async function captureMobileFileMutationOwnership(
   const statusReply = await fileOwnershipRuntimeStatusRead.request(client, undefined, {
     timeoutMs: FILE_MUTATION_TIMEOUT_MS
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const status = fileOwnershipRuntimeStatusRead.interpret(statusReply) as Pick<
-    RuntimeStatus,
-    'capabilities'
-  >
+  const status = fileOwnershipRuntimeStatusRead.interpret(statusReply)
   assertFileMutationOwnershipCapability(status)
 
   const worktreeReply = await fileOwnershipWorktreeRead.request(
@@ -57,24 +64,20 @@ export async function captureMobileFileMutationOwnership(
     { worktree },
     { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const summary = fileOwnershipWorktreeRead.interpret(worktreeReply) as
-    | { hostId?: string | null }
-    | undefined
+  const summary = fileOwnershipWorktreeRead.interpret(worktreeReply)
   if (!summary) {
-    throw new Error(SSH_OWNER_CHANGED_MESSAGE)
+    throw new Error(sshOwnerChangedMessage())
   }
 
   const host = parseExecutionHostId(summary.hostId)
-  let sshState: SshConnectionState | null = null
+  let sshState: MobileFileMutationSshState = null
   if (host?.kind === 'ssh') {
     const stateReply = await fileOwnershipSshStateRead.request(
       client,
       { targetId: host.targetId },
       { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
     )
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    sshState = fileOwnershipSshStateRead.interpret(stateReply) as SshConnectionState | null
+    sshState = fileOwnershipSshStateRead.interpret(stateReply)
   }
   return buildMobileFileMutationOwnership(summary.hostId, sshState)
 }

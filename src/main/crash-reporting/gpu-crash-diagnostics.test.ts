@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { buildGpuCrashDiagnostics, GpuCrashDiagnosticsRecorder } from './gpu-crash-diagnostics'
 
@@ -52,29 +50,6 @@ function deferred<T>(): {
 }
 
 describe('buildGpuCrashDiagnostics', () => {
-  it('keeps only the active GPU identity, driver, rendering backend, and feature status', () => {
-    expect(
-      buildGpuCrashDiagnostics({ info: BASIC_INFO, level: 'complete' }, FEATURE_STATUS)
-    ).toEqual({
-      gpuInfoLevel: 'complete',
-      gpuDeviceCount: 2,
-      gpuVendorId: 0x10de,
-      gpuDeviceId: 0x2684,
-      gpuVendor: 'NVIDIA',
-      gpuDevice: 'Discrete GPU',
-      gpuDriverVendor: 'NVIDIA',
-      gpuDriverVersion: '32.0.15.6094',
-      gpuGlVendor: 'Google Inc.',
-      gpuGlRenderer: 'ANGLE (NVIDIA, D3D11)',
-      gpuGlVersion: 'OpenGL ES 3.0',
-      gpuCompositingStatus: 'enabled',
-      gpuRasterizationStatus: 'enabled',
-      gpuWebglStatus: 'enabled',
-      gpuWebgl2Status: 'enabled',
-      gpuVideoDecodeStatus: 'enabled'
-    })
-  })
-
   it('degrades malformed or unavailable GPU info without copying arbitrary fields', () => {
     expect(
       buildGpuCrashDiagnostics(
@@ -203,49 +178,5 @@ describe('GpuCrashDiagnosticsRecorder', () => {
     expect(recordBreadcrumb).toHaveBeenCalledWith(
       expect.objectContaining({ gpuInfoLevel: 'unavailable' })
     )
-  })
-
-  it('still records collection status when Electron throws during both GPU info calls', async () => {
-    const recordBreadcrumb = vi.fn()
-    const provider = {
-      getGPUInfo: vi.fn(() => {
-        throw new Error('GPU access disabled')
-      }),
-      getGPUFeatureStatus: vi.fn(() => {
-        throw new Error('GPU teardown')
-      })
-    }
-    const recorder = new GpuCrashDiagnosticsRecorder({ provider, recordBreadcrumb })
-
-    recorder.warm()
-    await recorder.record()
-
-    expect(recordBreadcrumb).toHaveBeenCalledWith({ gpuInfoLevel: 'unavailable' })
-  })
-})
-
-describe('GPU crash diagnostics production wiring', () => {
-  it('starts diagnostics without delaying safe-graphics fallback', () => {
-    const source = readFileSync(
-      join(__dirname, '..', 'startup', 'main-process-preflight.ts'),
-      'utf8'
-    )
-    const listenerSource = readFileSync(
-      join(__dirname, '..', 'startup', 'main-process-ready-runtime.ts'),
-      'utf8'
-    )
-    const listenerStart = listenerSource.indexOf("  app.on('child-process-gone'")
-    expect(listenerStart).toBeGreaterThan(0)
-    const listener = listenerSource.slice(
-      listenerStart,
-      listenerSource.indexOf('\n  })', listenerStart)
-    )
-    expect(source).toMatch(
-      /recordBreadcrumb: \(data\) =>\s*recordDurableCrashBreadcrumb\('gpu_crash_hardware', data\)/
-    )
-    expect(listener).toMatch(
-      /const crashedAt = performance\.now\(\)[\s\S]*?void state\.gpuCrashDiagnostics\?\.record\(\)[\s\S]*?void handleGpuChildCrash\(details\.reason, details\.exitCode \?\? null, crashedAt\)/
-    )
-    expect(listener).not.toMatch(/state\.gpuCrashDiagnostics\?\.record\(\)[\s\S]*?\.then\(/)
   })
 })

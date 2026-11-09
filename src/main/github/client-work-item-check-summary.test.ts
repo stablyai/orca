@@ -34,7 +34,8 @@ vi.mock('./gh-utils', () => ({
   classifyListIssuesError: (stderr: string) => ({ type: 'unknown', message: stderr })
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: vi.fn()
 }))
 
@@ -47,16 +48,60 @@ vi.mock('./rate-limit', () => ({
   spendsSharedGitHubComQuota: vi.fn(() => true)
 }))
 
-import { getWorkItem, _resetMergeQueueCacheForTests, _resetOwnerRepoCache } from './client'
+import { getWorkItem } from './client/fetch/get-work-item'
+import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
+import { _resetOwnerRepoCache } from './gh-utils'
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
-// Why: only `pr view` is fixtured; the merge-metadata fan-out is best-effort and must not mask the summary.
+// Metadata and complete checks are independent provider responses.
 function mockPullRequestDetail(payload: Record<string, unknown>): void {
+  const head = 'a'.repeat(40)
   ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-    if (args[0] !== 'pr' || args[1] !== 'view') {
-      throw new Error('unexpected gh call')
+    if (args[0] === 'pr' && args[1] === 'view') {
+      return { stdout: JSON.stringify({ ...payload, headRefOid: head }) }
     }
-    return { stdout: JSON.stringify(payload) }
+    if (args.includes('graphql') && args.some((arg) => arg.includes('statusCheckRollup'))) {
+      return {
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                number: payload.number,
+                headRefOid: head,
+                commits: {
+                  nodes: [
+                    {
+                      commit: {
+                        oid: head,
+                        statusCheckRollup: {
+                          contexts: {
+                            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these test payloads contain object rollup rows only.
+                            nodes: (payload.statusCheckRollup as Record<string, unknown>[]).map(
+                              (raw) => ({
+                                ...raw,
+                                __typename:
+                                  raw.__typename ?? (raw.state ? 'StatusContext' : 'CheckRun'),
+                                ...(!raw.state ? { checkSuite: { databaseId: 7 } } : {})
+                              })
+                            ),
+                            pageInfo: { hasNextPage: false, endCursor: null }
+                          }
+                        },
+                        checkSuites: {
+                          nodes: [],
+                          pageInfo: { hasNextPage: false, endCursor: null }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        })
+      }
+    }
+    throw new Error('unexpected gh call')
   })
 }
 
@@ -81,7 +126,7 @@ describe('work item checksSummary', () => {
       updatedAt: '2026-04-01T00:00:00Z',
       statusCheckRollup: [
         { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SKIPPED' },
-        // Why: StatusContext carries no status/conclusion — only `state`.
+        // StatusContext supplies state instead of CheckRun's status/conclusion.
         { __typename: 'StatusContext', state: 'SUCCESS' },
         { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'NEUTRAL' }
       ]
@@ -94,62 +139,24 @@ describe('work item checksSummary', () => {
       total: 3,
       passed: 2,
       failed: 0,
+      cancelled: 0,
       pending: 0,
       neutral: 1
     })
   })
 
-  it('reports a still-running check as pending', async () => {
+  it.each([
+    [[{ state: 'SUCCESS' }, { state: 'EXPECTED' }], 'pending', 0],
+    [[{ state: 'SUCCESS' }, { status: 'COMPLETED', conclusion: 'CANCELLED' }], 'failure', 1]
+  ] as const)('preserves the raw task rollup contract for %j', async (rollup, state, cancelled) => {
     mockPullRequestDetail({
       number: 43,
-      title: 'Add feature',
+      title: 'Waiting checks',
       state: 'OPEN',
       url: 'https://github.com/acme/widgets/pull/43',
-      updatedAt: '2026-04-01T00:00:00Z',
-      statusCheckRollup: [
-        { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SUCCESS' },
-        { __typename: 'CheckRun', status: 'IN_PROGRESS', conclusion: null }
-      ]
+      statusCheckRollup: rollup
     })
-
     const item = await getWorkItem('/repo-root', 43, 'pr', null, {}, 'origin')
-
-    expect(item?.checksSummary).toEqual({
-      state: 'pending',
-      total: 2,
-      passed: 1,
-      failed: 0,
-      pending: 1,
-      neutral: 0
-    })
-  })
-
-  it('fails the summary on a failing run and leaves an empty rollup with no state', async () => {
-    mockPullRequestDetail({
-      number: 44,
-      title: 'Add feature',
-      state: 'OPEN',
-      url: 'https://github.com/acme/widgets/pull/44',
-      updatedAt: '2026-04-01T00:00:00Z',
-      statusCheckRollup: [
-        { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SUCCESS' },
-        { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'FAILURE' }
-      ]
-    })
-    await expect(getWorkItem('/repo-root', 44, 'pr', null, {}, 'origin')).resolves.toMatchObject({
-      checksSummary: { state: 'failure', total: 2, passed: 1, failed: 1, pending: 0, neutral: 0 }
-    })
-
-    mockPullRequestDetail({
-      number: 45,
-      title: 'Add feature',
-      state: 'OPEN',
-      url: 'https://github.com/acme/widgets/pull/45',
-      updatedAt: '2026-04-01T00:00:00Z',
-      statusCheckRollup: []
-    })
-    await expect(getWorkItem('/repo-root', 45, 'pr', null, {}, 'origin')).resolves.toMatchObject({
-      checksSummary: { state: 'none', total: 0, passed: 0, failed: 0, pending: 0, neutral: 0 }
-    })
+    expect(item?.checksSummary).toMatchObject({ state, total: 2, passed: 1, cancelled })
   })
 })

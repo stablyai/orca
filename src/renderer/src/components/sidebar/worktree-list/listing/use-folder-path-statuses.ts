@@ -1,38 +1,97 @@
 import { useCallback, useEffect, useMemo } from 'react'
+import { getFolderWorkspaceStatusRequestDependencies } from '@/store/folder-workspaces/folder-path-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-workspace-path-status-cache-expiry'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/workspace/paths/folder-workspace-path-status-cache-expiry'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { AppState } from '@/store/types'
-import { getFolderPathStatusRouteOptionsForRows } from './host-filtering'
+import { getFolderPathStatusRouteOptionsForRows } from './folder-path-status-routing'
+import { recomputeOn } from '@/lib/recompute-on'
 
 type FolderPathStatusRequest = Parameters<AppState['fetchFolderWorkspacePathStatus']>[0]
 
-// Keeps the sidebar's folder-path probes fresh for every project group and folder workspace
-// it renders, and hands rows a cache reader that ignores expired negative results.
+type RoutedRequest = {
+  request: FolderPathStatusRequest
+  options: { runtimeEnvironmentId: string | null }
+}
+const EMPTY_DEPENDENCIES: readonly string[] = []
+
+function createFolderPathStatusDependenciesSelector(requests: ReadonlyMap<string, RoutedRequest>) {
+  let repos: AppState['repos'] | undefined
+  let groups: AppState['projectGroups'] | undefined
+  let folders: AppState['folderWorkspaces'] | undefined
+  let ssh: AppState['sshConnectionStates'] | undefined
+  let connectionIds: string[] = []
+  let membership = ''
+  let result = EMPTY_DEPENDENCIES
+  return (state: AppState) => {
+    if (requests.size === 0) {
+      return EMPTY_DEPENDENCIES
+    }
+    const nextFolders = selectFolderWorkspaces(state)
+    if (
+      repos === state.repos &&
+      groups === state.projectGroups &&
+      folders === nextFolders &&
+      ssh === state.sshConnectionStates
+    ) {
+      return result
+    }
+    if (repos !== state.repos || groups !== state.projectGroups || folders !== nextFolders) {
+      const dependencies = [...requests.values()].map(({ request, options }) =>
+        getFolderWorkspaceStatusRequestDependencies(state, request, options)
+      )
+      membership = JSON.stringify(
+        dependencies.map((value) => value && [value.scope, value.repoFingerprint])
+      )
+      connectionIds = [
+        ...new Set(dependencies.flatMap((value) => (value ? [...value.relevantConnectionIds] : [])))
+      ].sort()
+    }
+    repos = state.repos
+    groups = state.projectGroups
+    folders = nextFolders
+    ssh = state.sshConnectionStates
+    let next: string[] | undefined
+    if (result[0] !== membership || result.length !== connectionIds.length + 1) {
+      next = [membership]
+    }
+    for (let index = 0; index < connectionIds.length; index++) {
+      const status = state.sshConnectionStates.get(connectionIds[index]!)?.status ?? 'missing'
+      if (next || result[index + 1] !== status) {
+        next ??= [...result]
+        next[index + 1] = status
+      }
+    }
+    if (next) {
+      result = next
+    }
+    return result
+  }
+}
+
+// Refresh rendered folder paths and ignore expired negative results while reprobes run.
 export function useFolderWorkspacePathStatusRows(args: {
   allRepoIds: string[]
   repoMap: Map<string, Repo>
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
-  sshConnectionStates: AppState['sshConnectionStates']
 }) {
-  const { allRepoIds, repoMap, projectGroups, folderWorkspaces, sshConnectionStates } = args
+  const { allRepoIds, repoMap, projectGroups, folderWorkspaces } = args
   const {
     folderWorkspacePathStatuses,
     fetchFolderWorkspacePathStatus,
     getFolderWorkspacePathStatusCacheKey,
-    getFreshFolderWorkspacePathStatus,
-    activeRuntimeEnvironmentId
+    getFreshFolderWorkspacePathStatus
   } = useAppStore(
     useShallow((s) => ({
       folderWorkspacePathStatuses: s.folderWorkspacePathStatuses,
       fetchFolderWorkspacePathStatus: s.fetchFolderWorkspacePathStatus,
       getFolderWorkspacePathStatusCacheKey: s.getFolderWorkspacePathStatusCacheKey,
-      getFreshFolderWorkspacePathStatus: s.getFreshFolderWorkspacePathStatus,
-      activeRuntimeEnvironmentId: s.settings?.activeRuntimeEnvironmentId ?? null
+      getFreshFolderWorkspacePathStatus: s.getFreshFolderWorkspacePathStatus
     }))
   )
   const folderPathStatusRepoMembershipKey = useMemo(
@@ -44,14 +103,6 @@ export function useFolderWorkspacePathStatusRows(args: {
         })
         .join('\0'),
     [allRepoIds, repoMap]
-  )
-  const folderPathStatusSshConnectionKey = useMemo(
-    () =>
-      [...sshConnectionStates.entries()]
-        .map(([connectionId, state]) => `${connectionId}:${state.status}`)
-        .sort()
-        .join('\0'),
-    [sshConnectionStates]
   )
   const folderPathStatusCacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(
     folderWorkspacePathStatuses
@@ -73,53 +124,67 @@ export function useFolderWorkspacePathStatusRows(args: {
       }),
     [folderWorkspaceByIdForFolderPathStatus, projectGroupByIdForFolderPathStatus]
   )
-  useEffect(() => {
-    const requests = new Map<
-      string,
-      {
-        request: FolderPathStatusRequest
-        options?: { runtimeEnvironmentId: string | null }
-      }
-    >()
-    for (const group of projectGroups) {
-      if (group.parentPath) {
-        const request = { scope: 'project-group' as const, projectGroupId: group.id }
-        const options = getFolderPathStatusRouteOptions(request)
+  const requests = useMemo(() => {
+    const requests = new Map<string, RoutedRequest>()
+    // Why: a request whose group row has not landed has no owner to ask, so it waits.
+    const addRequest = (request: FolderPathStatusRequest): void => {
+      const options = getFolderPathStatusRouteOptions(request)
+      if (options) {
         requests.set(getFolderWorkspacePathStatusCacheKey(request, options), { request, options })
       }
     }
+    for (const group of projectGroups) {
+      if (group.parentPath) {
+        addRequest({ scope: 'project-group' as const, projectGroupId: group.id })
+      }
+    }
     for (const workspace of folderWorkspaces) {
-      const request = { scope: 'folder-workspace' as const, folderWorkspaceId: workspace.id }
-      const options = getFolderPathStatusRouteOptions(request)
-      requests.set(getFolderWorkspacePathStatusCacheKey(request, options), { request, options })
+      addRequest({ scope: 'folder-workspace' as const, folderWorkspaceId: workspace.id })
     }
-    for (const { request, options } of requests.values()) {
-      void fetchFolderWorkspacePathStatus(request, { force: true, ...options })
-    }
+    return requests
   }, [
-    activeRuntimeEnvironmentId,
-    fetchFolderWorkspacePathStatus,
-    folderPathStatusRepoMembershipKey,
-    folderPathStatusSshConnectionKey,
     folderWorkspaces,
     getFolderPathStatusRouteOptions,
     getFolderWorkspacePathStatusCacheKey,
     projectGroups
   ])
-  const getCachedFolderWorkspacePathStatus = useCallback(
-    (request: FolderPathStatusRequest) => {
-      const options = getFolderPathStatusRouteOptions(request)
-      const cacheKey = getFolderWorkspacePathStatusCacheKey(request, options)
-      // Why: don't let an expired negative status keep folder workspaces disabled while a refresh is in flight.
-      void folderWorkspacePathStatuses[cacheKey]
-      void folderPathStatusCacheExpiryTick
-      return getFreshFolderWorkspacePathStatus(request, options)
-    },
+  const selectDependencies = useMemo(
+    () => createFolderPathStatusDependenciesSelector(requests),
+    [requests]
+  )
+  const dependencies = useAppStore(selectDependencies)
+  useEffect(() => {
+    for (const { request, options } of requests.values()) {
+      void fetchFolderWorkspacePathStatus(request, { force: true, ...options })
+    }
+  }, [
+    fetchFolderWorkspacePathStatus,
+    folderPathStatusRepoMembershipKey,
+    dependencies,
+    requests,
+    folderWorkspaces,
+    getFolderPathStatusRouteOptions,
+    getFolderWorkspacePathStatusCacheKey,
+    projectGroups
+  ])
+  // Why: status writes and expiry ticks renew the getter so an expired negative status can't keep
+  // folder workspaces disabled while a refresh is in flight.
+  const getCachedFolderWorkspacePathStatus = useMemo(
+    () =>
+      recomputeOn(
+        [folderWorkspacePathStatuses, folderPathStatusCacheExpiryTick],
+        () => (request: FolderPathStatusRequest) => {
+          const options = getFolderPathStatusRouteOptions(request)
+          if (!options) {
+            return null
+          }
+          return getFreshFolderWorkspacePathStatus(request, options)
+        }
+      ),
     [
       folderWorkspacePathStatuses,
       folderPathStatusCacheExpiryTick,
       getFolderPathStatusRouteOptions,
-      getFolderWorkspacePathStatusCacheKey,
       getFreshFolderWorkspacePathStatus
     ]
   )

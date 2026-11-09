@@ -1,0 +1,23 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcamobilewebshell'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcamobilewebshell'
+}
+
+dependencies {
+  // react-native-webview already ships this exact version; no new APK artifact.
+  implementation 'androidx.webkit:webkit:1.14.0'
+  // JVM android.jar stubs org.json; manifest checks need the real parser.
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20240303'
+}

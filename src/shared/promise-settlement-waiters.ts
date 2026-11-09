@@ -3,6 +3,7 @@ type PromiseSettlement<T> =
   | { status: 'rejected'; error: unknown }
 
 type PromiseSettlementWaiter<T> = {
+  ready: boolean
   resolve: (value: T) => void
   reject: (error: unknown) => void
   onFulfilled?: (value: T) => void
@@ -13,15 +14,19 @@ type PromiseSettlementWaiter<T> = {
 
 export type PromiseSettlementWaitOptions<T> = {
   signal?: AbortSignal
+  /** Defer delivery a microtask so an abort queued after this wait() still wins.
+   *  Later callers settle in the first caller's reaction turn, not their own. */
+  deferSettled?: boolean
+  /** Preserve Promise.race ordering when raw settlement and abort share a turn. */
+  abortInMicrotask?: boolean
   timeoutMs?: number
-  createAbortError?: () => Error
+  createAbortError?: () => unknown
   createTimeoutError?: () => Error
   onFulfilled?: (value: T) => void
   onAbandon?: (reason: 'abort' | 'timeout') => void
 }
 
-// Why: Promise.then reactions cannot be detached. One reaction fans settlement
-// into explicit waiters so aborted or timed-out callers release their closures.
+// Promise reactions cannot detach; fan one reaction into removable waiters so timeout/abort releases caller closures.
 export class PromiseSettlementWaiters<T> {
   private readonly waiters = new Set<PromiseSettlementWaiter<T>>()
   private settlement: PromiseSettlement<T> | null = null
@@ -45,12 +50,12 @@ export class PromiseSettlementWaiters<T> {
       options.onAbandon?.('abort')
       return Promise.reject(options.createAbortError?.() ?? createDefaultAbortError())
     }
-    if (this.settlement) {
+    if (this.settlement && !options.deferSettled) {
       return settleWaiterImmediately(this.settlement, options.onFulfilled)
     }
     return new Promise<T>((resolve, reject) => {
       let waiter!: PromiseSettlementWaiter<T>
-      const abandon = (reason: 'abort' | 'timeout', error: Error): void => {
+      const abandon = (reason: 'abort' | 'timeout', error: unknown): void => {
         if (!this.waiters.delete(waiter)) {
           return
         }
@@ -58,9 +63,16 @@ export class PromiseSettlementWaiters<T> {
         options.onAbandon?.(reason)
         reject(error)
       }
-      const onAbort = (): void =>
-        abandon('abort', options.createAbortError?.() ?? createDefaultAbortError())
+      const onAbort = (): void => {
+        const error = options.createAbortError?.() ?? createDefaultAbortError()
+        if (options.abortInMicrotask) {
+          queueMicrotask(() => abandon('abort', error))
+        } else {
+          abandon('abort', error)
+        }
+      }
       waiter = {
+        ready: !options.deferSettled,
         resolve,
         reject,
         onFulfilled: options.onFulfilled,
@@ -76,12 +88,31 @@ export class PromiseSettlementWaiters<T> {
             ),
           Math.max(1, options.timeoutMs)
         )
-        waiter.timer.unref?.()
+        // Mobile timers are numeric; Node timers can detach from the event loop.
+        const timer: unknown = waiter.timer
+        if (
+          typeof timer === 'object' &&
+          timer !== null &&
+          'unref' in timer &&
+          typeof timer.unref === 'function'
+        ) {
+          timer.unref()
+        }
       }
       this.waiters.add(waiter)
       options.signal?.addEventListener('abort', onAbort, { once: true })
       if (options.signal?.aborted) {
         onAbort()
+      }
+      if (options.deferSettled) {
+        queueMicrotask(() => {
+          waiter.ready = true
+          const settlement = this.settlement
+          if (settlement && this.waiters.delete(waiter)) {
+            cleanupWaiter(waiter)
+            settleWaiter(settlement, waiter)
+          }
+        })
       }
     })
   }
@@ -92,12 +123,30 @@ export class PromiseSettlementWaiters<T> {
     }
     this.settlement = settlement
     for (const waiter of this.waiters) {
+      if (!waiter.ready) {
+        continue
+      }
       this.waiters.delete(waiter)
       cleanupWaiter(waiter)
       settleWaiter(settlement, waiter)
     }
     onSettled?.()
   }
+}
+
+const sharedWaiters = new WeakMap<Promise<unknown>, PromiseSettlementWaiters<unknown>>()
+
+/** One settlement observer per shared operation; abandoned callers can detach independently. */
+export function sharedPromiseSettlementWaiters<T>(
+  promise: Promise<T>
+): PromiseSettlementWaiters<T> {
+  let waiters = sharedWaiters.get(promise)
+  if (!waiters) {
+    waiters = new PromiseSettlementWaiters<unknown>(promise)
+    sharedWaiters.set(promise, waiters)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the promise key supplies this observer's only settlement, whose value is T.
+  return waiters as PromiseSettlementWaiters<T>
 }
 
 function cleanupWaiter<T>(waiter: PromiseSettlementWaiter<T>): void {

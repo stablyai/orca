@@ -1,10 +1,11 @@
+import { GitHistoryRefName } from './git-params'
 import { z } from 'zod'
-import { isFeatureTipId } from '../feature-tips'
+import { isFeatureTipSeenId } from '../feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
 } from '../worktree/card-properties'
-import { isPluginPanelTabKey } from '../plugins/plugin-manifest'
+import { isPluginPanelTabKey } from '../plugins/manifest/plugin-manifest'
 import { isFeatureInteractionId } from '../feature-interactions'
 import type { FeatureInteractionId } from '../feature-interactions'
 import { ACTIVITY_GROUP_BY_VALUES, THREAD_READ_FILTER_VALUES } from '../agents-view-thread-filters'
@@ -20,7 +21,7 @@ export const NullableString = z.string().nullable()
 export const StringArray = z.array(z.string())
 
 export const FeatureTipIds = z.array(
-  z.custom(isFeatureTipId, { message: 'Unknown feature tip id' })
+  z.custom(isFeatureTipSeenId, { message: 'Unknown feature tip id' })
 )
 
 export const UnknownRecord = z.record(z.string(), z.unknown())
@@ -29,8 +30,7 @@ export const UnknownRecordArray = z.array(UnknownRecord)
 
 export type StaticRightSidebarTab = (typeof STATIC_RIGHT_SIDEBAR_TABS)[number]
 
-// Derived from the shared union so a new card property cannot drift out of the
-// client schema — it previously omitted 'cli' and rejected the whole payload.
+// Derive from the shared union; drift previously omitted cli and rejected whole client payloads.
 export const WorktreeCardPropertyParam = z.enum(WORKTREE_CARD_PROPERTIES)
 
 export const WorktreeCardProperties = z
@@ -69,6 +69,9 @@ export const StatusBarItem = z.enum([
   'kimi',
   'minimax',
   'grok',
+  'cursor',
+  'zcode',
+  'muse',
   'ssh',
   'resource-usage',
   'ports'
@@ -125,6 +128,7 @@ export const UiUpdateFields = z
     // Why: sync hydration ignores this persisted startup view, so paired windows stay put.
     activeView: TopLevelViewSchema.optional(),
     sidebarWidth: z.number().finite().optional(),
+    sidebarOpen: z.boolean().optional(),
     rightSidebarOpen: z.boolean().optional(),
     rightSidebarTab: RightSidebarTabParam.optional(),
     rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
@@ -143,6 +147,9 @@ export const UiUpdateFields = z
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     agentsVisibleHostIds: z.array(z.string()).nullable().optional(),
     agentsFilterRepoIds: StringArray.optional(),
+    agentsHideWorkspacesFromOtherDevices: z.boolean().optional(),
+    agentsHideAutomationGeneratedWorkspaces: z.boolean().optional(),
+    agentsHideCliCreatedWorkspaces: z.boolean().optional(),
     agentsShowChildAgents: z.boolean().optional(),
     agentsCompactMode: z.boolean().optional(),
     agentsShowSearch: z.boolean().optional(),
@@ -159,14 +166,21 @@ export const UiUpdateFields = z
       .array(z.object({ hostId: z.string(), repoId: z.string() }).strict())
       .optional(),
     ...ClientUiWorkspaceFilterFields,
-    // Why: rides App.tsx's debounced writer, so omitting it rejected that entire
-    // payload (sidebar widths, filters, agent acks) for every paired client.
+    // Part of App.tsx’s debounced writer; missing fields reject the whole paired-client payload.
+    explorerDisplayRootByWorktree: z.record(z.string(), z.string()).optional(),
+    gitGraphFiltersByWorktree: z
+      .record(
+        z.string(),
+        z.union([z.literal('head'), z.literal('all'), z.array(GitHistoryRefName).max(1000)])
+      )
+      .optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),
     worktreeCardProperties: WorktreeCardProperties.optional(),
     _worktreeCardModeDefaulted: z.boolean().optional(),
+    showAgentModels: z.boolean().optional(),
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
@@ -182,6 +196,9 @@ export const UiUpdateFields = z
     _minimaxStatusBarDefaultAdded: z.boolean().optional(),
     _antigravityStatusBarDefaultAdded: z.boolean().optional(),
     _grokStatusBarDefaultAdded: z.boolean().optional(),
+    _cursorStatusBarDefaultAdded: z.boolean().optional(),
+    _zcodeStatusBarDefaultAdded: z.boolean().optional(),
+    _museStatusBarDefaultAdded: z.boolean().optional(),
     statusBarVisible: z.boolean().optional(),
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
@@ -190,12 +207,11 @@ export const UiUpdateFields = z
     lastUpdateCheckAt: z.number().finite().nullable().optional(),
     pendingUpdateNudgeId: NullableString.optional(),
     dismissedUpdateNudgeId: NullableString.optional(),
-    // Why the predicate rather than an inline z.enum: an enum here is a copy of
-    // RELEASE_CHANNELS, and a copy that drifts silently rejects the new
-    // channel's override on its way here — the picker moves, nothing installs.
+    // Share the release-channel predicate so new channel overrides cannot silently fail parsing.
     releaseChannelOverride: z.custom<ReleaseChannel>(isReleaseChannel).nullable().optional(),
     notificationPermissionRequested: z.boolean().optional(),
     updateReassuranceSeen: z.boolean().optional(),
+    seenMacosUpdateRequirement: NullableString.optional(),
     osc52ClipboardDefaultOnNoticePending: z.boolean().optional(),
     acknowledgedAgentsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     activityClearedAtByPaneKey: z.record(z.string(), z.number().finite()).optional(),
@@ -207,6 +223,13 @@ export const UiUpdateFields = z
       .optional(),
     browserDefaultZoomLevel: z.number().finite().optional(),
     browserKagiSessionLink: NullableString.optional(),
+    browserDevToolsDock: z
+      .object({
+        side: z.enum(['bottom', 'right']),
+        bottomFraction: z.number().finite(),
+        rightFraction: z.number().finite()
+      })
+      .optional(),
     windowBounds: z
       .object({
         x: z.number().finite(),
@@ -222,8 +245,7 @@ export const UiUpdateFields = z
     _inlineAgentsDefaultedForAllUsers: z.boolean().optional(),
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
-    // Why: one-shot dismissals the renderer writes through ui.set; each was a
-    // whole-payload rejection for paired clients while unlisted.
+    // Declare renderer one-shot dismissals to avoid whole-payload rejections for paired clients.
     setupGuideSidebarDismissed: z.boolean().optional(),
     setupGuideBrowserMilestoneMigrated: z.boolean().optional(),
     setupGuideBrowserMilestoneLegacyComplete: z.boolean().optional(),
@@ -232,7 +254,13 @@ export const UiUpdateFields = z
     mobileEmulatorAgentSetupDismissed: z.boolean().optional(),
     projectOrderManualDefaultNoticeDismissed: z.boolean().optional(),
     usagePercentageDisplayChangeNoticeDismissed: z.boolean().optional(),
+    statusBarCompactChangeNoticeDismissed: z.boolean().optional(),
     usageEmptyStateDismissed: z.boolean().optional(),
+    pluginsAlphaNoticeDismissed: z.boolean().optional(),
+    codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
+    codexSharedSettingsNoticeSeen: z.boolean().optional(),
+    claudeDiffPanelNoticeSeen: z.boolean().optional(),
+    claudeAccountSignInNoticeSeen: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),

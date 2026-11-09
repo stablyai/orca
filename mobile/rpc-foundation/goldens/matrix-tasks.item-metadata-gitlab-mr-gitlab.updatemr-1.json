@@ -1,150 +1,12 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "tasks.item-metadata-gitlab-mr",
   "family": "tasks.item-metadata-gitlab-mr",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "97cfbcd82778ed6517ca2d10b2f3ad5a8d366e380d7846c1e89d5a5baf17e739",
-  "scenarioSha256": "186444ac8dc34dc63d1fbf304275e2265d96c6742e4c8f1e8e5568aa5504bf5d",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "0687dba3171a": {
-      "error": "Unknown method",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": [],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "mr"
-          },
-          "title": "A merge request"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
-    "14949c71727e": {
-      "name": "mutatingStatus",
-      "ordinal": 7,
-      "value": false
-    },
-    "231f5648a833": {
+    "0e88368229ef": {
       "name": "gitlab.updateMR#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"projectRef\":\"group/project\",\"updates\":{\"title\":\"Renamed\",\"addLabels\":[\"triage\"]}}}"
-    },
-    "2a33d3e3468b": {
-      "name": "error",
-      "ordinal": 6,
-      "value": "Failed to update GitLab item"
-    },
-    "438d6fb98dc1": {
-      "error": "Failed to update GitLab item",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": [],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "mr"
-          },
-          "title": "A merge request"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
-    "510654109df9": {
-      "name": "items",
-      "ordinal": 6,
-      "value": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": ["bug", "triage"],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "title": "Renamed",
-            "type": "mr"
-          },
-          "title": "Renamed"
-        }
-      ]
-    },
-    "52952495ce9f": {
-      "name": "gitlab.updateMR#1",
-      "ordinal": 3,
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -154,7 +16,10 @@
           "name": "params",
           "value": {
             "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -181,14 +46,214 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "transport failure",
+          "message": "",
           "isRpcDeliveryUnknown": true
         }
       }
     },
-    "58a340d11739": {
+    "14949c71727e": {
+      "name": "mutatingStatus",
+      "ordinal": 7,
+      "value": false
+    },
+    "21d560a20bed": {
+      "name": "error",
+      "ordinal": 14,
+      "value": "inner refused"
+    },
+    "23ede8191c86": {
+      "name": "detailPayload",
+      "ordinal": 9,
+      "value": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "266686bfdeec": {
+      "error": "",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": ["bug", "triage"],
+          "number": 7,
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
+          "repoId": "repo-1",
+          "state": "opened",
+          "title": "Renamed",
+          "type": "mr"
+        },
+        "title": "Renamed"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:mr:7",
+            "labels": ["bug", "triage"],
+            "number": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repoId": "repo-1",
+            "state": "opened",
+            "title": "Renamed",
+            "type": "mr"
+          },
+          "title": "Renamed"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug", "triage"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "29c6b20b5026": {
+      "error": "Failed to update GitLab item",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:mr:7",
+            "labels": [],
+            "number": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "mr"
+          },
+          "title": "A merge request"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "2b180013807d": {
+      "name": "error",
+      "ordinal": 15,
+      "value": "Failed to update GitLab item"
+    },
+    "36782b753721": {
+      "name": "error",
+      "ordinal": 14,
+      "value": "Unknown method"
+    },
+    "37c27ca402e4": {
+      "error": "outer refused",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:mr:7",
+            "labels": [],
+            "number": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "mr"
+          },
+          "title": "A merge request"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "391753b01006": {
       "name": "reply-salvage",
-      "ordinal": 5,
+      "ordinal": 14,
       "value": {
         "droppedCount": 1,
         "droppedPaths": ["error"],
@@ -197,9 +262,37 @@
         "variant": "task-item-mutation"
       }
     },
-    "59642c50afeb": {
+    "3aefb3006914": {
+      "name": "error",
+      "ordinal": 10,
+      "value": ""
+    },
+    "3af513ef8a7e": {
+      "name": "items",
+      "ordinal": 14,
+      "value": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:mr:7",
+            "labels": ["bug", "triage"],
+            "number": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repoId": "repo-1",
+            "state": "opened",
+            "title": "Renamed",
+            "type": "mr"
+          },
+          "title": "Renamed"
+        }
+      ]
+    },
+    "4d65b351d366": {
       "name": "gitlab.updateMR#1",
-      "ordinal": 3,
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -209,7 +302,10 @@
           "name": "params",
           "value": {
             "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -235,29 +331,31 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
           "id": "frame-1",
-          "ok": false
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
         }
       }
     },
-    "5c50471cdd48": {
+    "5737a7806a0c": {
       "name": "mutatingStatus",
-      "ordinal": 10,
+      "ordinal": 15,
       "value": false
     },
-    "69841347ee06": {
-      "error": "",
+    "5a043e84e661": {
+      "error": "Unknown method",
       "item": {
         "provider": "gitlab",
         "source": {
           "id": "gitlab:mr:7",
           "labels": [],
           "number": 7,
-          "projectRef": "group/project",
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
           "repoId": "repo-1",
           "state": "opened",
           "type": "mr"
@@ -271,7 +369,10 @@
             "id": "gitlab:mr:7",
             "labels": [],
             "number": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repoId": "repo-1",
             "state": "opened",
             "type": "mr"
@@ -296,16 +397,24 @@
         "provider": "gitlab"
       }
     },
-    "6b479af80b3b": {
+    "62e92e71cb1f": {
+      "name": "mutatingStatus",
+      "ordinal": 17,
+      "value": false
+    },
+    "806d212f3150": {
       "name": "actionItem",
-      "ordinal": 5,
+      "ordinal": 15,
       "value": {
         "provider": "gitlab",
         "source": {
           "id": "gitlab:mr:7",
           "labels": ["bug", "triage"],
           "number": 7,
-          "projectRef": "group/project",
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
           "repoId": "repo-1",
           "state": "opened",
           "title": "Renamed",
@@ -314,113 +423,9 @@
         "title": "Renamed"
       }
     },
-    "6bb96c7332db": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "transport failure"
-    },
-    "702351d98030": {
-      "error": "outer refused",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": [],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "mr"
-          },
-          "title": "A merge request"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
-    "776607d47471": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "inner refused"
-    },
-    "82de13ba46dd": {
-      "error": "The host sent a reply this app could not read (gitlab.updateMR)",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": [],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "mr"
-          },
-          "title": "A merge request"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
-    },
-    "8b75d0a6b159": {
+    "873e4c5b437e": {
       "name": "gitlab.updateMR#1",
-      "ordinal": 3,
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -430,7 +435,10 @@
           "name": "params",
           "value": {
             "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -464,43 +472,25 @@
         }
       }
     },
-    "91259ae589b2": {
+    "882a7c341ec4": {
       "name": "error",
-      "ordinal": 5,
-      "value": "outer refused"
+      "ordinal": 14,
+      "value": "The host sent a reply this app could not read (gitlab.updateMR)"
     },
-    "98354008c52b": {
-      "error": "inner refused",
-      "item": {
-        "provider": "gitlab",
-        "source": {
-          "id": "gitlab:mr:7",
-          "labels": [],
-          "number": 7,
-          "projectRef": "group/project",
-          "repoId": "repo-1",
-          "state": "opened",
-          "type": "mr"
-        },
-        "title": "A merge request"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": [],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "type": "mr"
-          },
-          "title": "A merge request"
-        }
-      ],
-      "mutating": false,
-      "payload": {
+    "886c60a7e62e": {
+      "name": "mutatingStatus",
+      "ordinal": 12,
+      "value": true
+    },
+    "98fe08e442ec": {
+      "name": "itemRemoveAssigneesDraft",
+      "ordinal": 5,
+      "value": ""
+    },
+    "9e46e6e7c627": {
+      "name": "detailPayload",
+      "ordinal": 16,
+      "value": {
         "assignees": [],
         "body": "body",
         "comments": [
@@ -511,14 +501,14 @@
             "id": "comment-2"
           }
         ],
-        "labels": ["bug"],
+        "labels": ["bug", "triage"],
         "pipelineJobs": [],
         "provider": "gitlab"
       }
     },
-    "a1646d9e9194": {
+    "9e8914ee317f": {
       "name": "gitlab.updateMR#1",
-      "ordinal": 3,
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -528,54 +518,10 @@
           "name": "params",
           "value": {
             "iid": 7,
-            "projectRef": "group/project",
-            "repo": "id:repo-1",
-            "updates": {
-              "addLabels": ["triage"],
-              "body": {
-                "$rpc": "undefined"
-              },
-              "removeLabels": {
-                "$rpc": "undefined"
-              },
-              "title": "Renamed"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "a6357bef2eec": {
-      "name": "gitlab.updateMR#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.updateMR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -612,186 +558,90 @@
         }
       }
     },
-    "ac46e56e89fe": {
-      "name": "error",
-      "ordinal": 5,
-      "value": "Unknown method"
+    "a211d26782cb": {
+      "name": "gitlab.updateMR#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.updateMR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "iid": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "updates": {
+              "addLabels": ["triage"],
+              "body": {
+                "$rpc": "undefined"
+              },
+              "removeLabels": {
+                "$rpc": "undefined"
+              },
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
     },
-    "b4055ff60394": {
-      "name": "itemAddLabelsDraft",
+    "a4c82b4992bd": {
+      "name": "actionItem",
       "ordinal": 8,
-      "value": ""
-    },
-    "cb0f27a85172": {
-      "name": "gitlab.updateMR#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.updateMR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "iid": 7,
-            "projectRef": "group/project",
-            "repo": "id:repo-1",
-            "updates": {
-              "addLabels": ["triage"],
-              "body": {
-                "$rpc": "undefined"
-              },
-              "removeLabels": {
-                "$rpc": "undefined"
-              },
-              "title": "Renamed"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "ce0c8b4affc0": {
-      "name": "gitlab.updateMR#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.updateMR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "iid": 7,
-            "projectRef": "group/project",
-            "repo": "id:repo-1",
-            "updates": {
-              "addLabels": ["triage"],
-              "body": {
-                "$rpc": "undefined"
-              },
-              "removeLabels": {
-                "$rpc": "undefined"
-              },
-              "title": "Renamed"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "d03b2863c41e": {
-      "error": "",
-      "item": {
+      "value": {
         "provider": "gitlab",
         "source": {
           "id": "gitlab:mr:7",
-          "labels": ["bug", "triage"],
+          "labels": [],
           "number": 7,
-          "projectRef": "group/project",
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
           "repoId": "repo-1",
           "state": "opened",
-          "title": "Renamed",
           "type": "mr"
         },
-        "title": "Renamed"
-      },
-      "items": [
-        {
-          "provider": "gitlab",
-          "source": {
-            "id": "gitlab:mr:7",
-            "labels": ["bug", "triage"],
-            "number": 7,
-            "projectRef": "group/project",
-            "repoId": "repo-1",
-            "state": "opened",
-            "title": "Renamed",
-            "type": "mr"
-          },
-          "title": "Renamed"
-        }
-      ],
-      "mutating": false,
-      "payload": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug", "triage"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
+        "title": "A merge request"
       }
     },
-    "d6b74d32804d": {
-      "name": "detailPayload",
-      "ordinal": 7,
-      "value": {
-        "assignees": [],
-        "body": "body",
-        "comments": [
-          {
-            "author": "octocat",
-            "body": "a thought",
-            "createdAt": "2020-01-01T00:00:00.000Z",
-            "id": "comment-2"
-          }
-        ],
-        "labels": ["bug", "triage"],
-        "pipelineJobs": [],
-        "provider": "gitlab"
-      }
+    "a80ee9a342f1": {
+      "name": "itemAddAssigneesDraft",
+      "ordinal": 3,
+      "value": ""
     },
-    "d6f17e3de7da": {
-      "error": "transport failure",
+    "b5f237e60c83": {
+      "error": "",
       "item": {
         "provider": "gitlab",
         "source": {
           "id": "gitlab:mr:7",
           "labels": [],
           "number": 7,
-          "projectRef": "group/project",
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
           "repoId": "repo-1",
           "state": "opened",
           "type": "mr"
@@ -805,7 +655,10 @@
             "id": "gitlab:mr:7",
             "labels": [],
             "number": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repoId": "repo-1",
             "state": "opened",
             "type": "mr"
@@ -830,9 +683,14 @@
         "provider": "gitlab"
       }
     },
-    "d98b736ab220": {
+    "b93b4f6d74db": {
+      "name": "itemAddLabelsDraft",
+      "ordinal": 4,
+      "value": ""
+    },
+    "c41542d48b3c": {
       "name": "gitlab.updateMR#1",
-      "ordinal": 3,
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -842,7 +700,10 @@
           "name": "params",
           "value": {
             "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -876,9 +737,84 @@
         }
       }
     },
-    "de008e50629f": {
+    "c566e36ed73d": {
+      "error": "inner refused",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:mr:7",
+            "labels": [],
+            "number": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "mr"
+          },
+          "title": "A merge request"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "c79fe0d83267": {
+      "name": "itemRemoveLabelsDraft",
+      "ordinal": 6,
+      "value": ""
+    },
+    "cb543ce964ae": {
+      "name": "error",
+      "ordinal": 14,
+      "value": "outer refused"
+    },
+    "cbae54d3d351": {
+      "name": "mutatingStatus",
+      "ordinal": 16,
+      "value": false
+    },
+    "cc2ece9478f0": {
+      "name": "actionItem",
+      "ordinal": 1,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "cf0ba5d9fc21": {
       "name": "gitlab.updateMR#1",
-      "ordinal": 3,
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -888,7 +824,214 @@
           "name": "params",
           "value": {
             "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "updates": {
+              "addLabels": ["triage"],
+              "body": {
+                "$rpc": "undefined"
+              },
+              "removeLabels": {
+                "$rpc": "undefined"
+              },
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d04422b812a2": {
+      "error": "The host sent a reply this app could not read (gitlab.updateMR)",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:mr:7",
+            "labels": [],
+            "number": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "mr"
+          },
+          "title": "A merge request"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "d160740ade20": {
+      "name": "gitlab.updateMR#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.updateMR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "iid": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "updates": {
+              "addLabels": ["triage"],
+              "body": {
+                "$rpc": "undefined"
+              },
+              "removeLabels": {
+                "$rpc": "undefined"
+              },
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d4f3b321d730": {
+      "name": "gitlab.updateMR#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.updateMR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "iid": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "updates": {
+              "addLabels": ["triage"],
+              "body": {
+                "$rpc": "undefined"
+              },
+              "removeLabels": {
+                "$rpc": "undefined"
+              },
+              "title": "Renamed"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "daa0db125085": {
+      "name": "gitlab.updateMR#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.updateMR\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"},\"updates\":{\"title\":\"Renamed\",\"addLabels\":[\"triage\"]}}}"
+    },
+    "eaaa38aaf3d5": {
+      "name": "gitlab.updateMR#1",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.updateMR"
+        },
+        {
+          "name": "params",
+          "value": {
+            "iid": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -923,50 +1066,6 @@
         }
       }
     },
-    "ea3a1df3a54e": {
-      "name": "gitlab.updateMR#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.updateMR"
-        },
-        {
-          "name": "params",
-          "value": {
-            "iid": 7,
-            "projectRef": "group/project",
-            "repo": "id:repo-1",
-            "updates": {
-              "addLabels": ["triage"],
-              "body": {
-                "$rpc": "undefined"
-              },
-              "removeLabels": {
-                "$rpc": "undefined"
-              },
-              "title": "Renamed"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -975,24 +1074,74 @@
         "$rpc": "undefined"
       }
     },
-    "ecf9003e4ef1": {
-      "name": "mutatingStatus",
-      "ordinal": 6,
-      "value": false
-    },
-    "ed3a7d6bc894": {
-      "name": "error",
+    "eda130337c99": {
+      "name": "detailPayload",
       "ordinal": 2,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "ef61a5798943": {
+      "error": "transport failure",
+      "item": {
+        "provider": "gitlab",
+        "source": {
+          "id": "gitlab:mr:7",
+          "labels": [],
+          "number": 7,
+          "projectRef": {
+            "host": "gitlab.com",
+            "path": "group/project"
+          },
+          "repoId": "repo-1",
+          "state": "opened",
+          "type": "mr"
+        },
+        "title": "A merge request"
+      },
+      "items": [
+        {
+          "provider": "gitlab",
+          "source": {
+            "id": "gitlab:mr:7",
+            "labels": [],
+            "number": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repoId": "repo-1",
+            "state": "opened",
+            "type": "mr"
+          },
+          "title": "A merge request"
+        }
+      ],
+      "mutating": false,
+      "payload": {
+        "assignees": [],
+        "body": "body",
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "labels": ["bug"],
+        "pipelineJobs": [],
+        "provider": "gitlab"
+      }
+    },
+    "ef8932b03a8c": {
+      "name": "error",
+      "ordinal": 14,
       "value": ""
     },
-    "f11c308f1979": {
-      "name": "itemRemoveLabelsDraft",
-      "ordinal": 9,
-      "value": ""
-    },
-    "f639547d6c09": {
+    "f36c99fda371": {
       "name": "gitlab.updateMR#1",
-      "ordinal": 3,
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -1002,7 +1151,10 @@
           "name": "params",
           "value": {
             "iid": 7,
-            "projectRef": "group/project",
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -1029,24 +1181,18 @@
         "settledAt": 0,
         "value": {
           "id": "frame-1",
-          "ok": true
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
         }
       }
     },
-    "f73d2249e573": {
+    "f65e0af02b52": {
       "name": "error",
-      "ordinal": 5,
-      "value": "The host sent a reply this app could not read (gitlab.updateMR)"
-    },
-    "f8df20507017": {
-      "name": "error",
-      "ordinal": 5,
-      "value": ""
-    },
-    "fd2fad47bec2": {
-      "name": "mutatingStatus",
-      "ordinal": 1,
-      "value": true
+      "ordinal": 14,
+      "value": "transport failure"
     }
   },
   "recording": {
@@ -1055,168 +1201,303 @@
       {
         "id": "tk-item-metadata-gitlab-mr.normal:update-gitlab-settled",
         "observation": {
-          "sender": ["d98b736ab220"],
-          "payloads": ["231f5648a833"],
+          "sender": ["c41542d48b3c"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "d03b2863c41e",
+          "state": "266686bfdeec",
           "effects": [
-            "fd2fad47bec2",
-            "ed3a7d6bc894",
-            "6b479af80b3b",
-            "510654109df9",
-            "d6b74d32804d",
-            "b4055ff60394",
-            "f11c308f1979",
-            "5c50471cdd48"
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "3af513ef8a7e",
+            "806d212f3150",
+            "9e46e6e7c627",
+            "62e92e71cb1f"
           ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.result-absent:update-gitlab-settled",
         "observation": {
-          "sender": ["f639547d6c09"],
-          "payloads": ["231f5648a833"],
+          "sender": ["d4f3b321d730"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "82de13ba46dd",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "f73d2249e573", "ecf9003e4ef1"]
+          "state": "d04422b812a2",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "882a7c341ec4",
+            "5737a7806a0c"
+          ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.result-null:update-gitlab-settled",
         "observation": {
-          "sender": ["ce0c8b4affc0"],
-          "payloads": ["231f5648a833"],
+          "sender": ["4d65b351d366"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "82de13ba46dd",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "f73d2249e573", "ecf9003e4ef1"]
+          "state": "d04422b812a2",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "882a7c341ec4",
+            "5737a7806a0c"
+          ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.inner-ok-missing:update-gitlab-settled",
         "observation": {
-          "sender": ["8b75d0a6b159"],
-          "payloads": ["231f5648a833"],
+          "sender": ["873e4c5b437e"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "d03b2863c41e",
+          "state": "266686bfdeec",
           "effects": [
-            "fd2fad47bec2",
-            "ed3a7d6bc894",
-            "6b479af80b3b",
-            "510654109df9",
-            "d6b74d32804d",
-            "b4055ff60394",
-            "f11c308f1979",
-            "5c50471cdd48"
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "3af513ef8a7e",
+            "806d212f3150",
+            "9e46e6e7c627",
+            "62e92e71cb1f"
           ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.inner-false-string-error:update-gitlab-settled",
         "observation": {
-          "sender": ["cb0f27a85172"],
-          "payloads": ["231f5648a833"],
+          "sender": ["f36c99fda371"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "98354008c52b",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "776607d47471", "ecf9003e4ef1"]
+          "state": "c566e36ed73d",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "21d560a20bed",
+            "5737a7806a0c"
+          ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.inner-false-object-error:update-gitlab-settled",
         "observation": {
-          "sender": ["a6357bef2eec"],
-          "payloads": ["231f5648a833"],
+          "sender": ["9e8914ee317f"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "438d6fb98dc1",
+          "state": "29c6b20b5026",
           "effects": [
-            "fd2fad47bec2",
-            "ed3a7d6bc894",
-            "58a340d11739",
-            "2a33d3e3468b",
-            "14949c71727e"
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "391753b01006",
+            "2b180013807d",
+            "cbae54d3d351"
           ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.outer-refused:update-gitlab-settled",
         "observation": {
-          "sender": ["a1646d9e9194"],
-          "payloads": ["231f5648a833"],
+          "sender": ["d160740ade20"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "702351d98030",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "91259ae589b2", "ecf9003e4ef1"]
+          "state": "37c27ca402e4",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "cb543ce964ae",
+            "5737a7806a0c"
+          ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.outer-refused-no-message:update-gitlab-settled",
         "observation": {
-          "sender": ["de008e50629f"],
-          "payloads": ["231f5648a833"],
+          "sender": ["eaaa38aaf3d5"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "69841347ee06",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "f8df20507017", "ecf9003e4ef1"]
+          "state": "b5f237e60c83",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "ef8932b03a8c",
+            "5737a7806a0c"
+          ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.method-not-found:update-gitlab-settled",
         "observation": {
-          "sender": ["59642c50afeb"],
-          "payloads": ["231f5648a833"],
+          "sender": ["cf0ba5d9fc21"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "0687dba3171a",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "ac46e56e89fe", "ecf9003e4ef1"]
+          "state": "5a043e84e661",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "36782b753721",
+            "5737a7806a0c"
+          ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.transport-rejection:update-gitlab-settled",
         "observation": {
-          "sender": ["52952495ce9f"],
-          "payloads": ["231f5648a833"],
+          "sender": ["a211d26782cb"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "d6f17e3de7da",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "6bb96c7332db", "ecf9003e4ef1"]
+          "state": "ef61a5798943",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "f65e0af02b52",
+            "5737a7806a0c"
+          ]
         }
       },
       {
         "id": "tk-item-metadata-gitlab-mr.transport-rejection-no-message:update-gitlab-settled",
         "observation": {
-          "sender": ["ea3a1df3a54e"],
-          "payloads": ["231f5648a833"],
+          "sender": ["0e88368229ef"],
+          "payloads": ["daa0db125085"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "update-gitlab-0": "eb79a9b3682a"
           },
-          "state": "69841347ee06",
-          "effects": ["fd2fad47bec2", "ed3a7d6bc894", "f8df20507017", "ecf9003e4ef1"]
+          "state": "b5f237e60c83",
+          "effects": [
+            "cc2ece9478f0",
+            "eda130337c99",
+            "a80ee9a342f1",
+            "b93b4f6d74db",
+            "98fe08e442ec",
+            "c79fe0d83267",
+            "14949c71727e",
+            "a4c82b4992bd",
+            "23ede8191c86",
+            "3aefb3006914",
+            "886c60a7e62e",
+            "ef8932b03a8c",
+            "5737a7806a0c"
+          ]
         }
       }
     ]

@@ -1,0 +1,100 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
+import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge-caps'
+import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
+import { createPageClient as createPage, idOf, readError } from './bridge-page-client-test-harness'
+
+const resources = new Set<ReturnType<typeof createPage>>()
+function createPageClient(...args: Parameters<typeof createPage>): ReturnType<typeof createPage> {
+  const resource = createPage(...args)
+  resources.add(resource)
+  return resource
+}
+function closeResources(): void {
+  for (const resource of resources) {
+    resource.client.close()
+  }
+  resources.clear()
+}
+
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
+afterEach(() => {
+  closeResources()
+  vi.useRealTimers()
+})
+
+describe('bridge client refusals and send failures', () => {
+  it('settles the request a reply it could not read was answering, on the same turn', async () => {
+    const page = createPageClient()
+    page.start()
+    const answer = page.client.sendRequest('worktree.ps')
+    // `{ ok: true }` with no `result`: refused by this reader and by `isRpcResponse` alike.
+    page.deliver({
+      v: BRIDGE_PROTOCOL_VERSION,
+      type: 'reply',
+      id: idOf(page, 0),
+      payload: { id: 'frame-1', ok: true }
+    })
+    // Settle immediately; waiting for a timer lets consumers render without their answer.
+    const error = await answer.catch((thrown: unknown) => thrown)
+    expect(readError(error).name).toBe('BridgeReplyRefusedError')
+    expect(readError(error).message).toContain('unrecognised-message')
+    expect(isRpcDeliveryUnknown(error)).toBe(true)
+    expect(page.diagnostics).toContainEqual({
+      kind: 'refused',
+      refusal: 'unrecognised-message'
+    })
+  })
+
+  it('cannot settle a reply whose frame it never parsed, and nothing on the page can', async () => {
+    const page = createPageClient()
+    page.start()
+    const answer = page.client.sendRequest('worktree.ps')
+    let settled = false
+    void answer.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    // Oversized/malformed JSON yields no salvageable id; only close/replacement can release its exchange. A conforming host instead chunks or sends an error within caps.
+    page.deliverRaw(`{"v":1,"type":"reply","id":"${idOf(page, 0)}",`)
+    page.deliverRaw(`"${'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES)}"`)
+    await Promise.resolve()
+    expect(page.diagnostics).toEqual([
+      { kind: 'refused', refusal: 'malformed-json' },
+      { kind: 'refused', refusal: 'oversized' }
+    ])
+    expect(settled).toBe(false)
+    page.client.close()
+    const error = await answer.catch((thrown: unknown) => thrown)
+    expect(readError(error).name).toBe('BridgeClientClosedError')
+    expect(isRpcDeliveryUnknown(error)).toBe(true)
+  })
+
+  it('fails a request whose frame never left the page, without the delivery mark', async () => {
+    let live = true
+    const page = createPageClient({
+      send: () => {
+        if (!live) {
+          throw new Error('the port is gone')
+        }
+      }
+    })
+    page.start()
+    live = false
+    const answer = page.client.sendRequest('worktree.ps')
+    const error = await answer.catch((thrown: unknown) => thrown)
+    expect(readError(error).name).toBe('BridgeSendFailedError')
+    expect(isRpcDeliveryUnknown(error)).toBe(false)
+    expect(page.diagnostics.at(-1)).toEqual({
+      kind: 'send-failed',
+      error: expect.any(Error)
+    })
+  })
+})

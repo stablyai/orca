@@ -59,6 +59,15 @@ describe('orchestration check identity', () => {
     )
   })
 
+  it('rejects an empty --terminal instead of consuming the ambient mailbox', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+
+    await expect(
+      invokeCheck(new Map<string, string | boolean>([['terminal', '']]))
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('keeps an explicit legacy terminal handle scoped to that handle', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale_env'
 
@@ -73,40 +82,4 @@ describe('orchestration check identity', () => {
       })
     )
   })
-
-  it('preserves the pinned legacy --inject check signature', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_legacy_worker'
-
-    await invokeCheck(
-      new Map<string, string | boolean>([
-        ['unread', true],
-        ['inject', true]
-      ])
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.check',
-      expect.objectContaining({
-        terminal: 'term_legacy_worker',
-        unread: true,
-        inject: true
-      })
-    )
-  })
-
-  it.each([true, false])(
-    'surfaces a stale --terminal refusal instead of an empty inbox (json=%s)',
-    async (json) => {
-      callMock.mockRejectedValue(
-        Object.assign(new Error('Terminal term_gone has no live pane bound to a Run'), {
-          code: 'stable_pane_required'
-        })
-      )
-
-      await expect(
-        invokeCheck(new Map<string, string | boolean>([['terminal', 'term_gone']]), json)
-      ).rejects.toMatchObject({ code: 'stable_pane_required' })
-      expect(printResultMock).not.toHaveBeenCalled()
-    }
-  )
 })

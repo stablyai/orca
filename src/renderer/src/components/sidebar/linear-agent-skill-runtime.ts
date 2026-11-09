@@ -1,9 +1,9 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../../shared/skills'
 import { translate } from '@/i18n/i18n'
-import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
-import type { LocalAgentRuntime } from '../settings/CliSkillRuntimeSetup'
+import type { Translate } from '@/i18n/use-translate'
+import type { LocalAgentRuntime } from '../../lib/skill-runtime-command'
 
 const LOCAL_DISMISS_STORAGE_KEY_PREFIX = 'orca.linearTicketsSkill.setupDismissed'
 
@@ -26,17 +26,17 @@ export function getLinearPromptAgentRuntime(
   settings: LinearAgentSkillPromptSettings | null | undefined,
   currentPlatform: NodeJS.Platform,
   remote: boolean,
-  projectRuntime?: ProjectExecutionRuntimeResolution
+  projectRuntime?: ProjectExecutionRuntimeResolution,
+  t: Translate = translate
 ): LocalAgentRuntime {
   if (remote) {
-    // Why: this prompt opens a local terminal; remote environments need their
-    // own setup even when local agent discovery prefers WSL.
+    // This prompt opens a local terminal; remote hosts need separate skill setup even when local discovery uses WSL.
     return {
       runtime: 'host',
       label: currentPlatform === 'win32' ? 'Windows' : 'This device'
     }
   }
-  const resolvedProjectRuntime = getProjectAgentRuntime(projectRuntime, currentPlatform)
+  const resolvedProjectRuntime = getProjectAgentRuntime(projectRuntime, currentPlatform, t)
   if (resolvedProjectRuntime) {
     return resolvedProjectRuntime
   }
@@ -48,7 +48,7 @@ export function getLinearPromptAgentRuntime(
       wslDistro: selectedDistro,
       label: selectedDistro
         ? `WSL ${selectedDistro}`
-        : translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL default')
+        : t('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL default')
     }
   }
   return {
@@ -59,18 +59,18 @@ export function getLinearPromptAgentRuntime(
 
 function getProjectAgentRuntime(
   projectRuntime: ProjectExecutionRuntimeResolution | undefined,
-  currentPlatform: NodeJS.Platform
+  currentPlatform: NodeJS.Platform,
+  t?: Translate
 ): LocalAgentRuntime | null {
   if (!projectRuntime) {
     return null
   }
   if (projectRuntime.status === 'repair-required') {
-    // Why: a repair state still owns the project runtime; falling back to host
-    // here would mix skill setup state between Windows and WSL.
-    return getWslAgentRuntime(projectRuntime.repair.preferredRuntime.distro)
+    // Repair-required WSL projects still own their runtime; do not mix their skill state with Windows.
+    return getWslAgentRuntime(projectRuntime.repair.preferredRuntime.distro, t)
   }
   if (projectRuntime.runtime.kind === 'wsl') {
-    return getWslAgentRuntime(projectRuntime.runtime.distro)
+    return getWslAgentRuntime(projectRuntime.runtime.distro, t)
   }
   return {
     runtime: 'host',
@@ -78,22 +78,14 @@ function getProjectAgentRuntime(
   }
 }
 
-function getWslAgentRuntime(distro: string | null): LocalAgentRuntime {
+function getWslAgentRuntime(distro: string | null, t: Translate = translate): LocalAgentRuntime {
   return {
     runtime: 'wsl',
     wslDistro: distro,
     label: distro
       ? `WSL ${distro}`
-      : translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL default')
+      : t('auto.components.sidebar.LinearAgentSkillSetupPrompt.wslLabel', 'WSL default')
   }
-}
-
-export function getLinearPromptTerminalShellOverride(
-  currentPlatform: NodeJS.Platform,
-  settings: LinearAgentSkillPromptSettings | null | undefined,
-  runtime: LocalAgentRuntime
-): string | undefined {
-  return getProjectAgentSkillTerminalShellOverride(currentPlatform, settings, runtime)
 }
 
 export function getLinearPromptSetupCheckIdentity(args: {

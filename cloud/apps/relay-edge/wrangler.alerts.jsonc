@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Edge alerts (src/alerts.ts): separate from the edge so they keep running when it is broken.
+  // Secrets, set from stdin only: AE_READ_TOKEN, ALERT_WEBHOOK_URL, and optionally CF_GRAPHQL_TOKEN
+  // (enables the cloudflare-errors rule). Optional vars and their defaults: src/alerts-rules.ts.
+  // Local only; deployed environments live in the private deploy config.
+  "name": "orca-relay-edge-alerts-local",
+  "main": "src/alerts.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": {
+    "ACCOUNT_ID": "local",
+    "DATASET": "orca_relay_edge_local",
+    "ENVIRONMENT": "local",
+    "MIN_VOLUME": "200",
+    // Optional: the edge origin probed each run (an unauthenticated control upgrade must get 401;
+    // any other status, a network error or over 5 s alerts, on every failing run; and
+    // GET /__health/object must answer 200 {ok:true} within 2 s). Omit to skip.
+    "EDGE_PROBE_URL": "http://127.0.0.1:8787"
+  }
+}

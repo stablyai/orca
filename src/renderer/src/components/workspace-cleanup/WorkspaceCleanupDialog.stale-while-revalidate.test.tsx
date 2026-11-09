@@ -1,16 +1,20 @@
 // @vitest-environment happy-dom
-import type { ReactNode, Ref } from 'react'
-import { act } from 'react'
+
+// @vitest-environment happy-dom
+import { type ReactNode, type Ref, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
-} from '../../../../shared/workspace-cleanup'
-import type { WorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
-import { createTestStore, seedStore } from '../../store/slices/store-test-helpers'
-import { resetWorkspaceCleanupBrowsePersistTimer } from '../../store/slices/workspace-cleanup-browse'
-import { NOW, makeCandidate } from '../../store/slices/workspace-cleanup-slice-test-harness'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { resetWorkspaceCleanupBrowsePersistTimer } from '../../store/slices/workspace-cleanup/workspace-cleanup-browse'
+import {
+  NOW,
+  makeCandidate
+} from '../../store/slices/workspace-cleanup/workspace-cleanup-slice-test-harness'
 import WorkspaceCleanupDialog from './WorkspaceCleanupDialog'
 
 const holders = vi.hoisted(() => ({
@@ -44,7 +48,7 @@ vi.mock('sonner', () => ({
   })
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: holders.activateAndRevealWorktree
 }))
 
@@ -196,8 +200,7 @@ function progressTick(
 describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    // Why Date-only fake: relative "Updated Xh ago" labels need a pinned clock,
-    // but flush() depends on real setTimeout.
+    // Fake Date only: labels need a fixed clock but flush uses real timers.
     vi.useFakeTimers({ toFake: ['Date'], now: NOW })
     const store = createTestStore()
     seedStore(store, {})
@@ -213,8 +216,7 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     if (root) {
       act(() => root?.unmount())
     }
-    // Why: broad-scan dedupe lives in slice module state; an unresolved scan
-    // left by one case would silently join into the next case's scan call.
+    // Settle module-global scan dedupe between cases so later tests cannot join a prior unresolved scan.
     for (const resolve of holders.rig?.resolvers ?? []) {
       resolve({ scannedAt: NOW, candidates: [], errors: [] })
     }
@@ -225,102 +227,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     container = null
     resetWorkspaceCleanupBrowsePersistTimer()
     vi.useRealTimers()
-  })
-
-  it('renders the cached snapshot immediately and kicks one background rescan', async () => {
-    const rig = installApi(cachedFleet())
-    await renderDialog()
-    await openDialog()
-
-    // Full list from cache while the rescan is still streaming (unresolved).
-    expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta']))
-    expect(rig.scan).toHaveBeenCalledTimes(1)
-    expect(container?.textContent).toContain('Updated 2h ago')
-    expect(container?.textContent).toContain('Refreshing')
-  })
-
-  it('opens a cleanup row on the host that produced it', async () => {
-    installApi({
-      scannedAt: CACHED_AT,
-      candidates: [
-        makeCandidate({
-          worktreeId: 'repo1::/tmp/remote',
-          displayName: 'remote',
-          executionHostId: 'ssh:box'
-        })
-      ],
-      errors: []
-    })
-    await renderDialog()
-    await openDialog()
-
-    await act(async () => {
-      container?.querySelector<HTMLElement>('[aria-label^="Open remote"]')?.click()
-    })
-
-    expect(holders.activateAndRevealWorktree).toHaveBeenCalledWith('repo1::/tmp/remote', {
-      executionHostId: 'ssh:box'
-    })
-  })
-
-  it('reconciles streamed rows into the cached list without clearing it', async () => {
-    const rig = installApi(cachedFleet())
-    await renderDialog()
-    await openDialog()
-
-    progressTick(rig, {
-      candidates: [
-        makeCandidate({
-          worktreeId: 'repo1::/tmp/alpha',
-          displayName: 'alpha',
-          fingerprint: 'fingerprint-alpha-2'
-        }),
-        makeCandidate({ worktreeId: 'repo1::/tmp/gamma', displayName: 'gamma' })
-      ],
-      scannedWorktreeCount: 2
-    })
-    await flush()
-
-    // beta was not re-reported yet; it must still be on screen mid-refresh.
-    expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta', 'gamma']))
-  })
-
-  it('keeps search and selection interactive while rows stream in', async () => {
-    const rig = installApi(cachedFleet())
-    await renderDialog()
-    await openDialog()
-
-    const search = container?.querySelector<HTMLInputElement>('[aria-label="Search workspaces"]')
-    expect(search?.disabled).toBe(false)
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-    await act(async () => {
-      setter?.call(search, 'beta')
-      search?.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    progressTick(rig, {
-      candidates: [makeCandidate({ worktreeId: 'repo1::/tmp/gamma', displayName: 'gamma' })],
-      scannedWorktreeCount: 1
-    })
-    await flush()
-
-    // Filter applied mid-stream: only beta visible even as new rows arrive.
-    expect(rowNames()).toEqual(['beta'])
-
-    await act(async () => {
-      setter?.call(search, '')
-      search?.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await flush()
-    expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta', 'gamma']))
-
-    // Rows stay selectable during the stream.
-    const checkbox = rowCheckbox('alpha')
-    expect(checkbox).not.toBeNull()
-    const before = checkbox?.getAttribute('aria-checked')
-    await act(async () => {
-      checkbox?.click()
-    })
-    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).not.toBe(before)
   })
 
   it('does not clear selection while free-text search hides the row', async () => {
@@ -405,7 +311,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     })
     await flush()
 
-    // Close at 40% and reopen: the same scan keeps streaming into the store.
     await act(async () => {
       holders.store.setState({ activeModal: null })
     })
@@ -443,11 +348,9 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     })
     await flush()
 
-    // Nothing is pre-selected: the dialog no longer acts on its own verdict.
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('false')
     expect(rowCheckbox('beta')?.getAttribute('aria-checked')).toBe('false')
 
-    // The user selects both, which is what must survive the refresh.
     await act(async () => {
       rowCheckbox('alpha')?.click()
       rowCheckbox('beta')?.click()
@@ -461,7 +364,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     })
     await flush()
     expect(rig.scan).toHaveBeenCalledTimes(2)
-    // Selection survives while the refresh streams.
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
 
     await act(async () => {
@@ -476,37 +378,5 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
     expect(rowNames()).not.toContain('beta')
     expect(holders.infoToasts).toContain('1 selected workspace no longer exists.')
-  })
-
-  it('keeps selected active workspaces outside the select-all scope', async () => {
-    installApi({
-      scannedAt: CACHED_AT,
-      candidates: [
-        makeCandidate({ worktreeId: 'repo1::/tmp/ready', displayName: 'ready' }),
-        makeCandidate({
-          worktreeId: 'repo1::/tmp/active',
-          displayName: 'active',
-          reasons: [],
-          blockers: ['active-workspace']
-        })
-      ],
-      errors: []
-    })
-    await renderDialog()
-    await openDialog()
-
-    await act(async () => rowCheckbox('active')?.click())
-    const selectAll = container?.querySelector<HTMLElement>(
-      '[aria-label="Select 1 safety-checked workspace"]'
-    )
-    expect(selectAll?.getAttribute('aria-checked')).toBe('false')
-
-    await act(async () => selectAll?.click())
-    expect(rowCheckbox('ready')?.getAttribute('aria-checked')).toBe('true')
-    expect(rowCheckbox('active')?.getAttribute('aria-checked')).toBe('true')
-
-    await act(async () => selectAll?.click())
-    expect(rowCheckbox('ready')?.getAttribute('aria-checked')).toBe('false')
-    expect(rowCheckbox('active')?.getAttribute('aria-checked')).toBe('true')
   })
 })

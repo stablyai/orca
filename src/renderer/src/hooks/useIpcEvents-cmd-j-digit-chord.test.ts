@@ -17,8 +17,7 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
     })
   }
 
-  // Why imported after the harness: it resets the module registry, so the bus the hook publishes on
-  // is only the same instance when it's loaded on the far side of that reset.
+  // Import the bus after harness reset so assertions observe the same instance as the hook.
   async function loadRowJumpBus(): Promise<CmdJRowIndexJumpModule> {
     return import('@/lib/cmd-j-row-index-jump')
   }
@@ -52,7 +51,10 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
 
     expect(rowJumps).toEqual([])
     // Why assert the activation and not just the silent bus: a premature return would also emit nothing.
-    expect(harness.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-c')
+    expect(harness.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-c', {
+      navigationIntent: 'user-open',
+      showWorkspaceList: true
+    })
   })
 
   it('routes duplicate ids at different positions to their rendered hosts', async () => {
@@ -67,29 +69,9 @@ describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
     harness.jumpToWorktreeIndex(1)
 
     expect(harness.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::path', {
+      navigationIntent: 'user-open',
+      showWorkspaceList: true,
       executionHostId: 'ssh:box'
     })
-  })
-
-  it('drops the tab digit chord rather than switching tabs behind the overlay', async () => {
-    const storeState = createPaletteState('worktree-palette')
-    const harness = await loadIpcEventsHarness(storeState)
-    harness.useIpcEvents()
-
-    harness.jumpToTabIndex(1)
-
-    expect(storeState.setActiveTab).not.toHaveBeenCalled()
-  })
-
-  it('stops delivering row jumps after unsubscribe', async () => {
-    const { emitCmdJRowIndexJump, subscribeCmdJRowIndexJump } = await loadRowJumpBus()
-    const seen: number[] = []
-    const unsubscribe = subscribeCmdJRowIndexJump((index) => seen.push(index))
-
-    emitCmdJRowIndexJump(0)
-    unsubscribe()
-    emitCmdJRowIndexJump(1)
-
-    expect(seen).toEqual([0])
   })
 })

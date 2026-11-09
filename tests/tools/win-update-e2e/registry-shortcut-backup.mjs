@@ -1,15 +1,6 @@
-// Snapshot and restore the per-user install state that an NSIS install hijacks.
-//
-// electron-builder's NSIS honors the /D install-dir override for FILE layout, so
-// isolated mode installs into a separate directory. But regardless of /D, the
-// installer writes InstallLocation + the uninstall entry to the SAME per-user
-// HKCU keys as the real install, and rewrites the Start Menu / Desktop shortcuts
-// (node_modules/app-builder-lib/templates/nsis/include/installer.nsh). Left
-// hijacked, a developer's next REAL update would target the test directory.
-//
-// This module snapshots those shared keys + shortcuts before an isolated run and
-// restores them at teardown, always. All registry access is via reg.exe (atomic
-// export/import/delete); discovery is read-only PowerShell.
+// NSIS /D isolates files but still overwrites real HKCU install/uninstall keys and Start Menu/Desktop shortcuts.
+// Snapshot/restore shared state around every isolated run so later real updates cannot target the test directory.
+// Use reg.exe export/import/delete and read-only PowerShell discovery.
 
 import { existsSync, mkdirSync, copyFileSync, writeFileSync, readdirSync, rmSync } from 'node:fs'
 import path from 'node:path'
@@ -19,14 +10,7 @@ import { runCommandSync } from './powershell-runner.mjs'
 const UNINSTALL_ROOT = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
 const APP_ROOT = 'HKCU\\Software'
 
-/**
- * Read-only discovery of the machine's current Orca install registry state.
- * The uninstall entry is found by DisplayName (electron-builder writes the app
- * GUID as the key name, not a fixed string); the app key that carries
- * InstallLocation is found under HKCU\Software by its ShortcutName/InstallLocation.
- * Returns concrete reg.exe key paths + the current InstallLocation value (all
- * null when no install exists).
- */
+// Discover uninstall key by DisplayName/GUID and install key by ShortcutName/InstallLocation; return concrete keys/location or null.
 export function discoverInstallRegistryState() {
   const ps = [
     `$un = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'`,
@@ -71,8 +55,7 @@ export function shortcutDirs() {
 }
 
 function resolveDesktopDir() {
-  // Desktop can be redirected (OneDrive), so resolve via the shell folder API
-  // rather than assuming %USERPROFILE%\Desktop.
+  // Resolve Desktop through shell API because OneDrive can redirect it.
   const { stdout } = runCommandSync(`[Environment]::GetFolderPath('Desktop')`)
   const line = stdout.trim()
   if (line && existsSync(line)) {
@@ -110,12 +93,7 @@ function collectOrcaLnks(dir, out) {
   }
 }
 
-/**
- * Snapshot the shared install registry keys + Orca shortcuts before an isolated
- * install writes over them. `reg export`s each existing key and copies each
- * existing shortcut into runDir, recording a manifest of what pre-existed (and
- * the pre-run InstallLocation) so restore knows what to put back vs. delete.
- */
+// Before install, export existing keys/copy shortcuts and record a manifest so restore distinguishes originals from test-created state.
 export function backupInstallState(runDir) {
   const backupDir = path.join(runDir, 'install-state-backup')
   mkdirSync(backupDir, { recursive: true })
@@ -156,14 +134,8 @@ export function backupInstallState(runDir) {
   return manifest
 }
 
-/**
- * Restore the shared install state captured by backupInstallState. Keys that
- * pre-existed are `reg import`ed back to their original values; keys that did NOT
- * pre-exist but exist now (created by the test install) are `reg delete`d.
- * Pre-existing shortcuts are copied back; test-created Orca shortcuts are removed.
- * Finally re-reads InstallLocation and, on mismatch, prints a LOUD block with the
- * exact manual `reg import` command to recover.
- */
+// Import original keys/copy shortcuts back, delete test-created state, then verify location.
+// On mismatch, print the manifest’s exact manual reg import recovery command.
 export function restoreInstallState(manifest) {
   const result = {
     imported: [],
@@ -206,8 +178,7 @@ export function restoreInstallState(manifest) {
   restoreShortcuts(manifest, result)
 
   const after = discoverInstallRegistryState()
-  // A silently-failed import/delete can leave stale keys while InstallLocation
-  // still matches, so restore isn't "verified" unless every op also succeeded.
+  // Require every restore operation too: matching InstallLocation can hide failed import/delete of other keys.
   result.verified =
     result.failures.length === 0 &&
     normLoc(manifest.installLocation) === normLoc(after.installLocation)

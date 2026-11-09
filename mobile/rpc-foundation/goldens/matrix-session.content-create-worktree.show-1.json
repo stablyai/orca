@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.content-create",
   "family": "session.content-create",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
-  "scenarioSha256": "b9ca49e401df8710924f200f92a071bac2e120ed43df7be2cfb8a325ab1cd9cb",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "0d389bb9bac8": {
       "name": "worktree.show#1",
@@ -164,6 +155,14 @@
           "id": "frame-2",
           "ok": false
         }
+      }
+    },
+    "37aff7a97a33": {
+      "createError": "The host sent a reply this app could not read (worktree.show)",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
       }
     },
     "3e7bfd4c59c3": {
@@ -341,14 +340,6 @@
         "message": "Couldn't verify the SSH connection. Reconnect the host and try again."
       }
     },
-    "7822fc8c989d": {
-      "createError": "Cannot read properties of undefined (reading 'worktree')",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
     "84c6d4a53548": {
       "name": "worktree.show#1",
       "ordinal": 3,
@@ -382,13 +373,6 @@
           "id": "frame-2",
           "ok": false
         }
-      }
-    },
-    "8bebb9b2b076": {
-      "name": "toast",
-      "ordinal": 5,
-      "value": {
-        "message": "Cannot read properties of undefined (reading 'worktree')"
       }
     },
     "9dc70bb3c6c3": {
@@ -555,12 +539,11 @@
         "$rpc": "null"
       }
     },
-    "d7217a17cb5c": {
-      "createError": "Cannot read properties of null (reading 'worktree')",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
+    "d5e6e519e4a5": {
+      "name": "toast",
+      "ordinal": 5,
+      "value": {
+        "message": "The host sent a reply this app could not read (worktree.show)"
       }
     },
     "e2ba4604deae": {
@@ -620,13 +603,6 @@
         "$rpc": "undefined"
       }
     },
-    "f02973af22c4": {
-      "name": "toast",
-      "ordinal": 5,
-      "value": {
-        "message": "Cannot read properties of null (reading 'worktree')"
-      }
-    },
     "f1279bf9f173": {
       "name": "files.createFile#1",
       "ordinal": 6,
@@ -656,8 +632,8 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "7822fc8c989d",
-          "effects": ["8bebb9b2b076"]
+          "state": "37aff7a97a33",
+          "effects": ["d5e6e519e4a5"]
         }
       },
       {
@@ -668,8 +644,8 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "d7217a17cb5c",
-          "effects": ["f02973af22c4"]
+          "state": "37aff7a97a33",
+          "effects": ["d5e6e519e4a5"]
         }
       },
       {

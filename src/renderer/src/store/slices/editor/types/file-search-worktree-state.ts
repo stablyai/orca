@@ -1,4 +1,4 @@
-import type { SearchResult } from '../../../../../../shared/code-search-types'
+import type { SearchResult } from '../../../../../../shared/file-search/code-search-types'
 import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
 
 export type FileSearchWorktreeState = {
@@ -10,6 +10,7 @@ export type FileSearchWorktreeState = {
   excludePattern: string
   results: SearchResult | null
   resultOwner: FileSearchResultOwner | null
+  error?: string | null
   loading: boolean
   collapsedFiles: Set<string>
   seedRequestId?: number

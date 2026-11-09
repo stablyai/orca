@@ -29,8 +29,7 @@ export function useCrashReportCopy(
 ): (submissionFailure?: CrashReportCopySubmissionFailure) => Promise<void> {
   const reportId = report?.id ?? null
   const notesRef = useRef({ reportId, value: notes })
-  // Why: a submission toast can outlive the render that created it while the
-  // user edits or changes reports; keep live notes scoped to that report.
+  // Toasts outlive their render; track current notes under the report they belong to.
   if (notesRef.current.reportId === reportId) {
     notesRef.current.value = notes
   } else {
@@ -59,8 +58,7 @@ export function useCrashReportCopy(
         )
       } catch (error) {
         console.error('Failed to copy crash report details:', error)
-        // Why: Sonner closes an action toast when clicked, so a sticky generic
-        // replacement keeps the failure actionable without exposing raw IPC detail.
+        // Sonner dismisses clicked action toasts; replace with a sticky recovery action without raw IPC details.
         showCopyFailure()
       }
     },

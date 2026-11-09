@@ -1,14 +1,12 @@
 import React from 'react'
-import { Loader2 } from 'lucide-react'
 import { useNow } from '@/hooks/use-now'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
 
-/**
- * Fixed-slot freshness line: "Updated 2h ago" for the data on screen plus a
- * non-blocking "Refreshing" affordance while a background rescan streams.
- */
+/** Show the displayed snapshot’s age while a nonblocking rescan indicator streams updates. */
 export function WorkspaceCleanupFreshness({
   scannedAt,
   refreshing,
@@ -18,36 +16,42 @@ export function WorkspaceCleanupFreshness({
   refreshing: boolean
   progress: WorkspaceCleanupScanProgress | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const now = useNow(30_000)
   if (scannedAt === null && !refreshing) {
     return null
   }
+  // A fixed suffix, not a ticking counter: the age stays readable and nothing reflows mid-scan.
   return (
-    <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-      {scannedAt !== null ? (
-        <span className="truncate">
-          {translate('components.workspace.cleanup.browse.updatedAgo', 'Updated {{value0}}', {
-            value0: formatWorkspaceCleanupRelativeTime(scannedAt, now).toLowerCase()
-          })}
-        </span>
-      ) : null}
+    <span className="min-w-0 truncate text-xs text-muted-foreground">
+      {scannedAt !== null
+        ? t('components.workspace.cleanup.browse.updatedAgo', 'Updated {{value0}}', {
+            value0: formatWorkspaceCleanupRelativeTime(scannedAt, now, t).toLowerCase()
+          })
+        : null}
+      {scannedAt !== null && refreshing ? ' · ' : null}
       {refreshing ? (
-        <span className="flex shrink-0 items-center gap-1">
-          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-          {formatWorkspaceCleanupRefreshingLabel(progress)}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>{t('components.workspace.cleanup.browse.refreshing', 'Refreshing…')}</span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={4}>
+            {formatWorkspaceCleanupRefreshingLabel(progress, t)}
+          </TooltipContent>
+        </Tooltip>
       ) : null}
     </span>
   )
 }
 
 function formatWorkspaceCleanupRefreshingLabel(
-  progress: WorkspaceCleanupScanProgress | null
+  progress: WorkspaceCleanupScanProgress | null,
+  t: Translate = translate
 ): string {
   if (!progress || progress.totalWorktreeCount === 0) {
-    return translate('components.workspace.cleanup.browse.refreshing', 'Refreshing…')
+    return t('components.workspace.cleanup.browse.refreshing', 'Refreshing…')
   }
-  return translate(
+  return t(
     'components.workspace.cleanup.browse.refreshingProgress',
     'Refreshing {{value0}}/{{value1}}',
     { value0: progress.scannedWorktreeCount, value1: progress.totalWorktreeCount }

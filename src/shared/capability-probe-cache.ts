@@ -1,12 +1,4 @@
-/**
- * Optimistic capability probing with a bounded retry window and in-flight
- * probe dedupe.
- *
- * Extracted from GitCapabilityCache so every host-capability cache in the tree
- * gets the same three behaviors: probe once, remember only a positive absence
- * signal, and let a concurrent caller wait on the probe already running rather
- * than starting a duplicate one.
- */
+/** Deduplicate optimistic probes; remember unsupported evidence for a bounded retry window and let concurrent callers await the same probe. */
 export type CapabilityProbeOutcome = 'supported' | 'unsupported' | 'unknown'
 
 export class CapabilityProbeCache<TCapability> {
@@ -14,7 +6,10 @@ export class CapabilityProbeCache<TCapability> {
   private readonly probesByCapability = new Map<TCapability, Promise<CapabilityProbeOutcome>>()
   private readonly supportedCapabilities = new Set<TCapability>()
 
-  constructor(private readonly retryIntervalMs: number) {}
+  constructor(
+    private readonly retryIntervalMs: number,
+    private readonly maxEntries = Number.POSITIVE_INFINITY
+  ) {}
 
   shouldTry(capability: TCapability, nowMs = Date.now()): boolean {
     const retryAfterMs = this.retryAfterByCapability.get(capability)
@@ -34,14 +29,16 @@ export class CapabilityProbeCache<TCapability> {
 
   rememberSupported(capability: TCapability): void {
     this.retryAfterByCapability.delete(capability)
+    this.supportedCapabilities.delete(capability)
     this.supportedCapabilities.add(capability)
+    this.trimSettledEntries()
   }
 
   rememberUnsupported(capability: TCapability, nowMs = Date.now()): void {
-    // Why: optimistic probes preserve newer behavior, but repeating a known
-    // failure on every poll/search wastes subprocesses and trace space.
+    // Cache known absence to avoid repeating failed subprocesses on every poll/search.
     this.supportedCapabilities.delete(capability)
     this.retryAfterByCapability.set(capability, nowMs + this.retryIntervalMs)
+    this.trimSettledEntries()
   }
 
   async runWithFallback<T>(
@@ -51,8 +48,7 @@ export class CapabilityProbeCache<TCapability> {
     isUnsupportedError: (error: unknown) => boolean
   ): Promise<T> {
     if (this.supportedCapabilities.has(capability)) {
-      // Why: supported commands are real work, not disposable probes. Let
-      // sibling repo/SSH calls retain their intended concurrency.
+      // Supported commands are real work; preserve concurrency for sibling repo/SSH calls.
       return this.runPreferredOrFallback(capability, runPreferred, runFallback, isUnsupportedError)
     }
     if (!this.shouldTry(capability)) {
@@ -85,8 +81,7 @@ export class CapabilityProbeCache<TCapability> {
       if (this.probesByCapability.get(capability) === probe) {
         this.probesByCapability.delete(capability)
       }
-      // Backstop: `isUnsupportedError` or `rememberUnsupported` can throw
-      // before the settle below them runs; waiters must not hang behind it.
+      // Settle waiters even if unsupported classification or caching throws.
       settleProbe('unknown')
     }
   }
@@ -95,6 +90,23 @@ export class CapabilityProbeCache<TCapability> {
     this.retryAfterByCapability.clear()
     this.probesByCapability.clear()
     this.supportedCapabilities.clear()
+  }
+
+  private trimSettledEntries(): void {
+    while (this.supportedCapabilities.size > this.maxEntries) {
+      const oldest = this.supportedCapabilities.values().next()
+      if (oldest.done) {
+        break
+      }
+      this.supportedCapabilities.delete(oldest.value)
+    }
+    while (this.retryAfterByCapability.size > this.maxEntries) {
+      const oldest = this.retryAfterByCapability.keys().next()
+      if (oldest.done) {
+        break
+      }
+      this.retryAfterByCapability.delete(oldest.value)
+    }
   }
 
   private async runPreferredOrFallback<T>(
@@ -106,12 +118,10 @@ export class CapabilityProbeCache<TCapability> {
   ): Promise<T> {
     try {
       const result = await runPreferred()
-      // A preferred callback can detect a weaker positive signal (old Git's
-      // exit-zero option echo) and remember it as unsupported, so do not
-      // overwrite that stronger signal.
+      // A preferred callback may detect exit-zero option echo and record unsupported; preserve that stronger evidence.
       const outcome = this.retryAfterByCapability.has(capability) ? 'unsupported' : 'supported'
       if (outcome === 'supported') {
-        this.supportedCapabilities.add(capability)
+        this.rememberSupported(capability)
       }
       settleProbe?.(outcome)
       return result

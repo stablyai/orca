@@ -1,70 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { classifyDaemonPtyCwd, classifyDaemonSpawnerPath } from './daemon-adoption-telemetry'
+
 import { eventSchemas } from './telemetry-event-registry'
 
-describe('classifyDaemonSpawnerPath', () => {
-  const alwaysExists = () => true
-
-  it('classifies the installed app, the ShipIt staging area, and everything else', () => {
-    expect(
-      classifyDaemonSpawnerPath('/Applications/Orca.app/Contents/MacOS/Orca', alwaysExists)
-    ).toBe('applications')
-    expect(
-      classifyDaemonSpawnerPath('/private/Applications/Orca.app/Contents/MacOS/Orca', alwaysExists)
-    ).toBe('applications')
-    expect(
-      classifyDaemonSpawnerPath(
-        '/Users/a/Library/Caches/com.stablyai.orca.ShipIt/update.abc/Orca.app/Contents/MacOS/Orca',
-        alwaysExists
-      )
-    ).toBe('updater-cache')
-    expect(
-      classifyDaemonSpawnerPath('/Users/a/Applications/Orca.app/Contents/MacOS/Orca', alwaysExists)
-    ).toBe('other')
-    expect(classifyDaemonSpawnerPath('/tmp/OrcaA.app/Contents/MacOS/Orca', alwaysExists)).toBe(
-      'other'
-    )
-  })
-
-  it('reports a deleted spawner as missing and an unrecorded one as unknown', () => {
-    expect(
-      classifyDaemonSpawnerPath('/Applications/Orca.app/Contents/MacOS/Orca', () => false)
-    ).toBe('missing')
-    expect(classifyDaemonSpawnerPath(null, alwaysExists)).toBe('unknown')
-  })
-})
-
-describe('classifyDaemonPtyCwd', () => {
-  it('maps the TCC-protected home folders and separates the rest of home from outside it', () => {
-    expect(classifyDaemonPtyCwd('/Users/a/Documents/repo', '/Users/a')).toBe('documents')
-    expect(classifyDaemonPtyCwd('/Users/a/Desktop', '/Users/a/')).toBe('desktop')
-    expect(classifyDaemonPtyCwd('/Users/a/Downloads/x/y', '/Users/a')).toBe('downloads')
-    expect(classifyDaemonPtyCwd('/Users/a/projects/repo', '/Users/a')).toBe('other-home')
-    expect(classifyDaemonPtyCwd('/Users/a', '/Users/a')).toBe('other-home')
-    expect(classifyDaemonPtyCwd('/Volumes/ext/repo', '/Users/a')).toBe('outside-home')
-    // A sibling home that merely shares the prefix is not inside this home.
-    expect(classifyDaemonPtyCwd('/Users/ab/Documents', '/Users/a')).toBe('outside-home')
-  })
-})
+// The reset remedy is offered for exactly these classes, so main and the fix dialog must agree.
 
 // Privacy invariant: enum-only. A raw path, version, or exact count must be rejected by .strict().
 describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
   const adopted = {
     app_version_match: 'different',
     spawner_path_class: 'updater-cache',
+    code_identity: 'unresolvable',
     tcc_attribution: 'intact',
     live_session_count_bucket: '2-5'
   }
   const denied = {
     cwd_class: 'documents',
     app_version_match: 'different',
-    spawner_path_class: 'updater-cache'
+    spawner_path_class: 'updater-cache',
+    code_identity: 'parked'
   }
-
-  it('accepts the enum payloads', () => {
-    expect(eventSchemas.daemon_adopted.safeParse(adopted).success).toBe(true)
-    expect(eventSchemas.daemon_pty_cwd_denied.safeParse(denied).success).toBe(true)
-  })
 
   it('rejects leaked paths, versions, counts, and unknown enum values', () => {
     for (const leak of [
@@ -85,5 +39,36 @@ describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
     expect(
       eventSchemas.daemon_pty_cwd_denied.safeParse({ ...denied, cwd_class: 'Documents' }).success
     ).toBe(false)
+    expect(
+      eventSchemas.daemon_adopted.safeParse({ ...adopted, code_identity: 'severed' }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.daemon_pty_cwd_readable.safeParse({ ...denied, launch_method: 'stable-copy' })
+        .success
+    ).toBe(false)
+    expect(
+      eventSchemas.daemon_pty_cwd_readable.safeParse({
+        ...denied,
+        spawner_path_class: 'stable-copy'
+      }).success
+    ).toBe(true)
+  })
+})
+
+// Match the denied-event enum-only privacy budget: no daemon scope, path or folder name.
+describe('daemon_folder_access_notice schema', () => {
+  const shown = { action: 'shown', cwd_class: 'documents' }
+
+  it('rejects an unknown action, an unknown class, and any extra field', () => {
+    for (const bad of [
+      { action: 'open_manage_sessions' },
+      { cwd_class: 'Documents' },
+      { daemon_scope: 'aaaa111122223333' },
+      { cwd: '/Users/alice/Documents' }
+    ]) {
+      expect(eventSchemas.daemon_folder_access_notice.safeParse({ ...shown, ...bad }).success).toBe(
+        false
+      )
+    }
   })
 })

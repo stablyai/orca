@@ -1,57 +1,114 @@
+import { hookMount, performHookAction } from '../hook-mount'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
-import type { PrSidebarLoadDeps } from '../../../session/mobile-pr-sidebar-state'
+import type { PrSidebarState } from '../../../source-control/review/mobile-pr-sidebar-state'
+import type { useMobilePrSidebarController as UseMobilePrSidebarController } from '../../../source-control/review/use-mobile-pr-sidebar-controller'
+import type { useMobilePrCommentActions as UseMobilePrCommentActions } from '../../../source-control/review/use-mobile-pr-comment-actions'
+import { legacyShellStatusFixture } from '../legacy-shell-status-fixture'
 
+const HOST = 'host-1'
 const WORKTREE = 'repo-9::/w'
 const BRANCH = 'feature'
 
-/**
- * Phase 1 of the PR sidebar, whose recorded state is the `PrSidebarState` it resolves to.
- *
- * `PrSidebarLoadDeps` is five client-taking functions, so the load is driven directly and needs no
- * React host. The containment is what the family holds: a checks leg the reader refuses records
- * `ready` with a `checksError`, where routing it back through `failureState` takes the whole
- * sidebar to `error` and loses the PR the user opened it for.
- */
+// What the PR panel shows, so a recording sees it stay put (or roll back) while a write settles.
+function projectPrState(state: PrSidebarState | undefined): unknown {
+  if (!state) {
+    return 'unmounted'
+  }
+  if (state.kind !== 'ready') {
+    return state
+  }
+  const { pr, details, checks, checksError } = state.data
+  return {
+    kind: state.kind,
+    refreshFailed: state.refreshFailed ?? false,
+    pr: { number: pr.number, title: pr.title, headSha: pr.headSha ?? null },
+    checks: checks.map((check) => `${check.name}:${check.conclusion ?? check.status}`),
+    checksError,
+    comments:
+      details === null
+        ? 'loading'
+        : details.comments.map((comment) => ({
+            id: comment.id,
+            body: comment.body,
+            resolved: comment.isResolved ?? false
+          }))
+  }
+}
+
+// The real PR tab reads and comment writes over one document's query cache.
 export function prSidebarMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
-    'session.pr-sidebar': ({ client }) => {
-      const reads = modules.load<typeof import('../../../session/github-pr-rpc')>(
-        'mobile/src/session/github-pr-rpc.ts'
-      )
-      const link = modules.load<typeof import('../../../source-control/mobile-pr-link')>(
-        'mobile/src/source-control/mobile-pr-link.ts'
-      )
-      const sidebar = modules.load<typeof import('../../../session/mobile-pr-sidebar-state')>(
-        'mobile/src/session/mobile-pr-sidebar-state.ts'
-      )
-      // The controller's own wiring: every dep is the product read, bound to the scripted client.
-      const deps: PrSidebarLoadDeps = {
-        fetchForBranch: (worktreeId, args) =>
-          reads.fetchHostedReviewForBranch(client, worktreeId, args),
-        fetchWorktreeLinkedPR: (worktreeId) => link.fetchWorktreeLinkedPR(client, worktreeId),
-        fetchPRForBranch: (worktreeId, args) => reads.fetchPRForBranch(client, worktreeId, args),
-        fetchWorkItemDetails: (worktreeId, args) =>
-          reads.fetchWorkItemDetails(client, worktreeId, args),
-        fetchPRChecks: (worktreeId, args) => reads.fetchPRChecks(client, worktreeId, args)
+    'session.pr-sidebar': ({ client: suppliedClient }) => {
+      const client = legacyShellStatusFixture(suppliedClient)
+      const useController = modules.load<{
+        useMobilePrSidebarController: typeof UseMobilePrSidebarController
+      }>(
+        'mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts'
+      ).useMobilePrSidebarController
+      const useCommentActions = modules.load<{
+        useMobilePrCommentActions: typeof UseMobilePrCommentActions
+      }>(
+        'mobile/src/source-control/review/use-mobile-pr-comment-actions.ts'
+      ).useMobilePrCommentActions
+      let controller: ReturnType<typeof useController> | undefined
+      let comments: ReturnType<typeof useCommentActions> | undefined
+      const hook = hookMount(() => {
+        controller = useController({
+          hostId: HOST,
+          client,
+          connState: 'connected',
+          worktreeId: WORKTREE,
+          branch: BRANCH,
+          headSha: null,
+          demand: 'details'
+        })
+        const shown = controller.prSidebarState
+        const pr = shown.kind === 'ready' ? shown.data.pr : null
+        comments = useCommentActions({
+          hostId: HOST,
+          client,
+          connState: 'connected',
+          worktreeId: WORKTREE,
+          prNumber: pr?.number ?? 0,
+          prRepo: pr?.prRepo ?? null,
+          queries: controller.prQueries
+        })
+      })
+      const firstThreadComment = () => {
+        const shown = controller?.prSidebarState
+        const found =
+          shown?.kind === 'ready'
+            ? shown.data.details?.comments.find((comment) => comment.threadId)
+            : undefined
+        if (!found) {
+          throw new Error('The PR shows no review thread to act on')
+        }
+        return found
       }
-      let state: unknown = 'unloaded'
       return {
         action(name) {
-          if (name === 'load') {
-            return sidebar
-              .loadPrSidebarData(deps, { worktreeId: WORKTREE, branch: BRANCH })
-              .then((next) => {
-                state = next
-                return next
-              })
+          if (name === 'mount' || name === 'load') {
+            return hook.mount()
+          }
+          if (name === 'post-comment') {
+            return performHookAction(() => comments!.addRootComment('recorded comment'))
+          }
+          if (name === 'resolve-thread') {
+            return performHookAction(() => comments!.toggleResolve(firstThreadComment()))
+          }
+          if (name === 'unmount') {
+            return hook.unmount()
           }
           throw new Error(`Unknown pr sidebar action: ${name}`)
         },
-        state: () => state,
-        dispose: () => {}
+        state: () => ({
+          pr: projectPrState(controller?.prSidebarState),
+          commentError: comments?.error ?? null
+        }),
+        dispose: hook.unmount
       }
     }
   }

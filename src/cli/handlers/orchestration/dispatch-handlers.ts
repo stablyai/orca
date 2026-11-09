@@ -1,18 +1,18 @@
 import type { CommandHandler } from '../../dispatch'
-import { printResult } from '../../format'
+import { printOrchestrationReceipt } from './agent-view'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
-import { orchestrationMigrationData } from '../../../shared/orchestration-rpc-contract'
+import { orchestrationMigrationData } from '../../../shared/orchestration/orchestration-rpc-contract'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { injectedSessionAddress } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 
 export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const dryRun = flags.has('dry-run') ? true : undefined
     const returnPreamble = flags.has('return-preamble') ? true : undefined
-    // Why: --to is only required for non-dry-run; the RPC handler re-enforces.
     const to = dryRun ? getOptionalStringFlag(flags, 'to') : getRequiredStringFlag(flags, 'to')
     const result = await callOrchestrationMutation<{
       dispatch: { id: string; task_id: string; status: string } | null
@@ -29,7 +29,7 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
       returnPreamble,
       devMode: isDevCliInvocation()
     })
-    printResult(result, json, (value) => {
+    printOrchestrationReceipt(result, { flags, json }, (value) => {
       if (value.dryRun) {
         return value.preamble ?? ''
       }
@@ -42,9 +42,11 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
 export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration dispatch-show': async ({ flags, client, cwd, json }) => {
     const showPreamble = flags.has('preamble') ? true : undefined
-    // Why: a preview must embed the same real coordinator handle as an actual dispatch.
+    // --from fills preview text rather than asserting caller identity, so it is intentionally unfenced.
     const from = showPreamble
-      ? await resolveCoordinatorTerminalHandle(flags, cwd, client)
+      ? (getOptionalStringFlag(flags, 'from') ??
+        injectedSessionAddress() ??
+        (await resolveCoordinatorTerminalHandle(flags, cwd, client)))
       : undefined
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string } | null
@@ -55,7 +57,7 @@ export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandH
       from,
       devMode: isDevCliInvocation()
     })
-    printResult(result, json, (value) => {
+    printOrchestrationReceipt(result, { flags, json }, (value) => {
       if (value.preamble && showPreamble) {
         return value.preamble
       }

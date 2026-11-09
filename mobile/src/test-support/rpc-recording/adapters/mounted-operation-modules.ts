@@ -23,10 +23,10 @@ import { fileInventoryMountAdapters } from './file-inventory-mount-adapters'
 import { fileTapOpenMountAdapters } from './file-tap-open-mount-adapters'
 import { fileRequestMountAdapters } from './file-request-mount-adapters'
 import { githubPrMountAdapters } from './github-pr-mount-adapters'
-import { homeAccountsMountAdapters } from './home-accounts-mount-adapters'
 import { hostScreenMountAdapters } from './host-screen-mount-adapters'
 import { hostWorktreeActionMountAdapters } from './host-worktree-action-mount-adapters'
 import { hostedReviewMountAdapters } from './hosted-review-mount-adapters'
+import { mobileWebBundleMountAdapters } from './mobile-web-bundle-mount-adapters'
 import { nativeChatPagingMountAdapters } from './native-chat-paging-mount-adapters'
 import { nativeChatWriteMountAdapters } from './native-chat-write-mount-adapters'
 import { newTabAgentMountAdapters } from './new-tab-agent-mount-adapters'
@@ -85,11 +85,7 @@ import { workspaceSettingsMounts } from './workspace-settings-mounts'
 import { worktreeCatalogMountAdapters } from './worktree-catalog-mount-adapters'
 import type { MountedOperationModule } from '../mounted-operation-module'
 
-/**
- * Every domain's mount adapters, paired with the file each one lives in. The register lives inside
- * the seam it registers, so adding a domain edits no engine file and moves no existing golden;
- * `adapter-seam.test.ts` checks each pairing names the file that declares it.
- */
+/** Keep domain registration inside its seam to avoid engine edits or golden moves; adapter-seam.test.ts checks directory parity. */
 export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   {
     source: 'agent-history-mount-adapters.ts',
@@ -122,13 +118,13 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   { source: 'file-tap-open-mount-adapters.ts', mounts: fileTapOpenMountAdapters },
   { source: 'file-request-mount-adapters.ts', mounts: fileRequestMountAdapters },
   { source: 'github-pr-mount-adapters.ts', mounts: githubPrMountAdapters },
-  { source: 'home-accounts-mount-adapters.ts', mounts: homeAccountsMountAdapters },
   { source: 'host-screen-mount-adapters.ts', mounts: hostScreenMountAdapters },
   {
     source: 'host-worktree-action-mount-adapters.ts',
     mounts: hostWorktreeActionMountAdapters
   },
   { source: 'hosted-review-mount-adapters.ts', mounts: hostedReviewMountAdapters },
+  { source: 'mobile-web-bundle-mount-adapters.ts', mounts: mobileWebBundleMountAdapters },
   { source: 'native-chat-paging-mount-adapters.ts', mounts: nativeChatPagingMountAdapters },
   { source: 'native-chat-write-mount-adapters.ts', mounts: nativeChatWriteMountAdapters },
   { source: 'new-tab-agent-mount-adapters.ts', mounts: newTabAgentMountAdapters },

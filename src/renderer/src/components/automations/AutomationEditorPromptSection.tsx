@@ -1,8 +1,9 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import React from 'react'
 import { Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationEditorPromptEditor } from './AutomationEditorPromptEditor'
 
@@ -17,23 +18,21 @@ export function AutomationEditorPromptSection({
   onDraftChange,
   onDismiss
 }: AutomationEditorPromptSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const titleRef = React.useRef<HTMLTextAreaElement>(null)
   const isShellCommand = draft.agentId === null
   const promptLabel = isShellCommand
-    ? translate(
-        'auto.components.automations.AutomationEditorPromptSection.shellCommand',
-        'Shell command'
-      )
-    : translate('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')
-  const namePlaceholder = translate(
+    ? t('auto.components.automations.AutomationEditorPromptSection.shellCommand', 'Shell command')
+    : t('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')
+  const namePlaceholder = t(
     'auto.components.automations.AutomationEditorDialogHeader.1d9826933e',
     'Weekday repo audit'
   )
-  const nameLabel = translate(
+  const nameLabel = t(
     'auto.components.automations.AutomationEditorDialogHeader.58f56b73d9',
     'Automation name'
   )
-  const editNameLabel = translate(
+  const editNameLabel = t(
     'auto.components.automations.AutomationEditorPromptSection.a7c3e91b04',
     'Edit name'
   )
@@ -46,7 +45,7 @@ export function AutomationEditorPromptSection({
         </div>
       ) : null}
       <div className="group/title mb-5 flex max-w-full items-start gap-1">
-        <textarea
+        <ImeTextarea
           ref={titleRef}
           value={draft.name}
           rows={1}
@@ -60,7 +59,7 @@ export function AutomationEditorPromptSection({
               event.preventDefault()
             }
           }}
-          className="max-w-[calc(100%-2rem)] min-w-0 resize-none overflow-hidden border-0 bg-transparent px-0 py-0 text-[28px] font-semibold leading-tight text-foreground shadow-none outline-none ring-0 [field-sizing:content] placeholder:text-muted-foreground/50"
+          className="max-w-[calc(100%-2rem)] min-w-0 resize-none overflow-hidden border-0 bg-transparent px-0 py-0 text-[28px] font-semibold leading-tight text-foreground shadow-none outline-none ring-0 [field-sizing:content] placeholder:text-muted-foreground"
         />
         <Tooltip>
           <TooltipTrigger asChild>
@@ -87,11 +86,11 @@ export function AutomationEditorPromptSection({
         value={draft.prompt}
         placeholder={
           isShellCommand
-            ? translate(
+            ? t(
                 'auto.components.automations.AutomationEditorPromptSection.shellCommandPlaceholder',
                 'echo "Hello from Orca"'
               )
-            : translate(
+            : t(
                 'auto.components.automations.AutomationEditorDialog.6d778190b7',
                 'Run the weekly dependency audit and summarize risky changes.'
               )
@@ -102,18 +101,18 @@ export function AutomationEditorPromptSection({
       />
       <p className="mt-2 text-xs text-muted-foreground">
         {isShellCommand ? (
-          translate(
+          t(
             'auto.components.automations.AutomationEditorPromptSection.shellCommandHint',
             'Runs a shell command on the selected host without an AI agent.'
           )
         ) : (
           <>
-            {translate(
+            {t(
               'auto.components.automations.AutomationEditorDialog.827b25a81e',
               'Supports skills, file paths, and built-in commands like'
             )}{' '}
             <code className="rounded bg-muted px-1 font-mono text-[11px]">
-              {translate('auto.components.automations.AutomationEditorDialog.a4ac8fcc62', '/goal')}
+              {t('auto.components.automations.AutomationEditorDialog.a4ac8fcc62', '/goal')}
             </code>
             .
           </>

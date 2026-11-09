@@ -1,5 +1,3 @@
-// Why: tick geometry is locale-free and lives in the shared timeline module;
-// only the human-readable labels need Intl, so they are formatted here.
 import type {
   RoadmapSpan,
   RoadmapTick,
@@ -9,10 +7,10 @@ import { ROADMAP_DAY_MS } from '../../../../shared/github/project-roadmap-timeli
 
 export type RoadmapTickLabel = { label: string; sublabel: string | null }
 
-// Why: Intl.DateTimeFormat construction costs ~0.1-1ms, and these run per tick
-// and per bar on every render — cache per locale; the options never vary.
+// Cache formatters per locale because ticks and bars reuse fixed options on every render.
 const monthFormatters = new Map<string, Intl.DateTimeFormat>()
 const dayFormatters = new Map<string, Intl.DateTimeFormat>()
+const MAX_FORMATTER_LOCALES = 32
 
 function cachedFormatter(
   cache: Map<string, Intl.DateTimeFormat>,
@@ -23,6 +21,13 @@ function cachedFormatter(
   if (!formatter) {
     formatter = new Intl.DateTimeFormat(locale, options)
     cache.set(locale, formatter)
+    while (cache.size > MAX_FORMATTER_LOCALES) {
+      const oldest = cache.keys().next()
+      if (oldest.done) {
+        break
+      }
+      cache.delete(oldest.value)
+    }
   }
   return formatter
 }
@@ -45,14 +50,11 @@ export function formatRoadmapTick(
     month: 'short',
     timeZone: 'UTC'
   }).format(date)
-  // Why: repeating the year on every month is noise — show it where the
-  // reader loses the thread, at the grid's start and each January.
+  // Show the year at the grid’s start and each January instead of repeating it monthly.
   return { label: month, sublabel: index === 0 || date.getUTCMonth() === 0 ? year : null }
 }
 
-/** Renders the span back as the inclusive calendar range the user typed on
- *  GitHub, so the tooltip matches the field values rather than the exclusive
- *  end the geometry uses. */
+/** Format the inclusive calendar span GitHub displays, rather than the geometry’s exclusive end. */
 export function formatRoadmapSpan(span: RoadmapSpan, locale: string): string {
   const format = cachedFormatter(dayFormatters, locale, {
     year: 'numeric',

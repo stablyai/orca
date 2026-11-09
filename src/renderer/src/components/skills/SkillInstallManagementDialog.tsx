@@ -16,7 +16,9 @@ import {
   type SkillManagedInstallGroup
 } from './skill-managed-install-groups'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SkillInstallManagementDialogContent } from './SkillInstallManagementDialogContent'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export function SkillInstallManagementDialog({
   open,
@@ -25,7 +27,8 @@ export function SkillInstallManagementDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
-  const copy = skillInstallManagementCopy()
+  const t = useTranslate()
+  const copy = skillInstallManagementCopy(t)
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
   const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
   const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
@@ -114,7 +117,7 @@ export function SkillInstallManagementDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? translate(
+            ? t(
                 'auto.components.skills.install.reconnectForVersionHistory',
                 'Reconnect your Orca account to load version history.'
               )
@@ -130,7 +133,7 @@ export function SkillInstallManagementDialog({
       }
       console.warn('[skills] package history failed:', cause)
       setError(
-        translate(
+        t(
           'auto.components.skills.install.versionHistoryUnavailable',
           'Version history is unavailable for this skill.'
         )
@@ -158,7 +161,7 @@ export function SkillInstallManagementDialog({
     setBusy(true)
     setError(null)
     setNotice(null)
-    const operationId = crypto.randomUUID()
+    const operationId = createBrowserUuid()
     installProgress.begin(operationId)
     try {
       const version = details?.versions.find((candidate) => candidate.versionId === versionId)
@@ -171,7 +174,7 @@ export function SkillInstallManagementDialog({
         )
         if (selectedSkills.length === 0) {
           setError(
-            translate(
+            t(
               'auto.components.skills.install.bundleSkillsMissing',
               'This version does not contain any of the installed bundle skills.'
             )
@@ -200,7 +203,7 @@ export function SkillInstallManagementDialog({
         if (operation.status !== 'ok') {
           setError(
             operation.status === 'reconnect-required'
-              ? translate(
+              ? t(
                   'auto.components.skills.install.reconnectBeforeVersionChange',
                   'Reconnect your Orca account before changing versions.'
                 )
@@ -229,7 +232,7 @@ export function SkillInstallManagementDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? translate(
+            ? t(
                 'auto.components.skills.install.reconnectBeforeVersionChange',
                 'Reconnect your Orca account before changing versions.'
               )
@@ -247,7 +250,7 @@ export function SkillInstallManagementDialog({
     } catch (cause) {
       console.warn('[skills] version installation failed:', cause)
       setError(
-        translate(
+        t(
           'auto.components.skills.install.versionVerificationFailed',
           'Orca could not verify the requested version.'
         )
@@ -268,7 +271,7 @@ export function SkillInstallManagementDialog({
     })
     if (!cancelled.cancelled) {
       setError(
-        translate(
+        t(
           'auto.components.skills.install.destinationAlreadyFinished',
           'The destination had already finished this installation.'
         )
@@ -318,10 +321,7 @@ export function SkillInstallManagementDialog({
     } catch (cause) {
       console.warn('[skills] managed removal failed:', cause)
       setError(
-        translate(
-          'auto.components.skills.install.removeFailed',
-          'Orca could not safely remove this skill.'
-        )
+        t('auto.components.skills.install.removeFailed', 'Orca could not safely remove this skill.')
       )
     } finally {
       setBusy(false)

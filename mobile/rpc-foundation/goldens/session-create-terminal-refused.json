@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.create-terminal",
   "family": "session.create-terminal",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "fa7d9fd6428e89282f08e04fefba4289000eb3aed1462489a2f11efed374382c",
-  "scenarioSha256": "e9c32bdf3357ca5d69ac07cb7bbc63fe279c1a23c44e5c79fa0b1db4fd1c55dd",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "023a38d473d3": {
       "name": "session.tabs.createTerminal#1",
@@ -53,31 +44,25 @@
         }
       }
     },
-    "11bf871f5dfc": {
-      "activeHandle": "terminal-0",
-      "activeSessionTabId": "tab-0",
-      "createError": "No pty slots left on the host",
-      "creating": false,
-      "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
-        "$rpc": "null"
-      },
-      "pendingActiveTerminalHandle": {
-        "$rpc": "null"
-      },
-      "sessionTabs": [],
-      "terminals": []
-    },
-    "4c528a84c114": {
+    "6275ace50da2": {
       "activeHandle": "terminal-0",
       "activeSessionTabId": "tab-0",
       "createError": "",
       "creating": true,
       "initializedHandles": ["terminal-0"],
-      "pendingActiveSessionTabId": {
+      "pendingSelection": {
         "$rpc": "null"
       },
-      "pendingActiveTerminalHandle": {
+      "sessionTabs": [],
+      "terminals": []
+    },
+    "7853d5a23971": {
+      "activeHandle": "terminal-0",
+      "activeSessionTabId": "tab-0",
+      "createError": "No pty slots left on the host",
+      "creating": false,
+      "initializedHandles": ["terminal-0"],
+      "pendingSelection": {
         "$rpc": "null"
       },
       "sessionTabs": [],
@@ -86,14 +71,6 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "b1152db10a02": {
-      "name": "toast",
-      "ordinal": 3,
-      "value": {
-        "durationMs": 1800,
-        "message": "Couldn't run Notes"
-      }
     },
     "b1d637072fc8": {
       "name": "session.tabs.createTerminal#1",
@@ -126,6 +103,14 @@
         "startedAt": 0
       }
     },
+    "bacf357ed220": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "durationMs": 1800,
+        "message": "No pty slots left on the host"
+      }
+    },
     "cce8a731064a": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 2,
@@ -152,7 +137,7 @@
             "mount": "eb79a9b3682a",
             "create": "9270aeb7d9c6"
           },
-          "state": "4c528a84c114",
+          "state": "6275ace50da2",
           "effects": []
         }
       },
@@ -165,8 +150,8 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "11bf871f5dfc",
-          "effects": ["b1152db10a02"]
+          "state": "7853d5a23971",
+          "effects": ["bacf357ed220"]
         }
       }
     ]

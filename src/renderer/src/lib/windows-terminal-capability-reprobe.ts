@@ -1,7 +1,6 @@
 import type { WindowsTerminalCapabilities } from './windows-terminal-capabilities'
 
-// Why: an absent WSL must stay re-checkable (a distro can finish provisioning while Orca runs),
-// but every re-check spawns wsl.exe/pwsh.exe, so stable answers fall back to a low-frequency poll.
+// Keep absent WSL recheckable as provisioning finishes, but back off unchanged answers because each probe spawns wsl.exe/pwsh.exe.
 const REPROBE_BASE_DELAY_MS = 30_000
 const REPROBE_MAX_DELAY_MS = 5 * 60_000
 /** Consecutive identical answers before switching to the five-minute ceiling. */
@@ -31,18 +30,14 @@ function capabilitySignature(capabilities: WindowsTerminalCapabilities): string 
     capabilities.wslDistros.join('\u0000'),
     capabilities.pwshAvailable,
     capabilities.gitBashAvailable,
-    capabilities.hostPlatform ?? '',
-    capabilities.windowsProcessStartTimeAvailable
+    capabilities.hostPlatform ?? ''
   ].join('|')
 }
 
-/** A usable WSL is settled only after Windows hosts also prove PID identity. */
+/** A usable WSL is settled once the host's platform is known. */
 function isSettled(capabilities: WindowsTerminalCapabilities): boolean {
   if (!capabilities.wslAvailable || capabilities.wslDistros.length === 0) {
     return false
-  }
-  if (capabilities.hostPlatform === 'win32') {
-    return capabilities.windowsProcessStartTimeAvailable === true
   }
   // A missing platform means the status probe may have failed; keep checking until it recovers.
   return capabilities.hostPlatform !== null
@@ -150,10 +145,7 @@ function detachFocusListenerWhenIdle(): void {
   globalThis.removeEventListener('focus', handleWindowFocus)
 }
 
-/**
- * Watch a host whose capabilities are not settled yet, and return an unregister callback.
- * Consumers of the same owner key share one backoff schedule; the last one to leave stops it.
- */
+/** Share one unsettled-capability backoff per host owner; return unregister, stopping when the final consumer leaves. */
 export function startWindowsTerminalCapabilityReprobe(options: {
   ownerKey: string
   probe: () => Promise<WindowsTerminalCapabilities>

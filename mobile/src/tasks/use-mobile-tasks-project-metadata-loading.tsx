@@ -1,10 +1,6 @@
 import type { ProjectDetailLoadingModel } from './use-mobile-tasks-project-detail-loading'
 import { useEffect } from './mobile-tasks-dependencies'
-import {
-  type GitHubAssignableUser,
-  type GitHubIssueType,
-  splitRepositorySlug
-} from './mobile-tasks-legacy-foundation'
+import { type GitHubIssueType, splitRepositorySlug } from './mobile-tasks-legacy-foundation'
 import {
   githubProjectAssignableUserListRead,
   githubProjectIssueTypeListRead,
@@ -52,10 +48,7 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectLabelListRead.interpret(response) as
-          | { ok: true; labels?: string[] }
-          | { ok: false; error?: { message?: string } }
+        const result = githubProjectLabelListRead.interpret(response)
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load labels')
         }
@@ -105,10 +98,7 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectAssignableUserListRead.interpret(response) as
-          | { ok: true; users?: GitHubAssignableUser[] }
-          | { ok: false; error?: { message?: string } }
+        const result = githubProjectAssignableUserListRead.interpret(response)
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load assignees')
         }
@@ -161,14 +151,12 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
         if (stale) {
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const result = githubProjectIssueTypeListRead.interpret(response) as
-          | { ok: true; types?: GitHubIssueType[] }
-          | { ok: false; error?: { message?: string } }
+        const result = githubProjectIssueTypeListRead.interpret(response)
         if (!result.ok) {
           throw new Error(result.error?.message ?? 'Failed to load issue types')
         }
-        setProjectIssueTypes(result.types ?? [])
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the `id` the issue-type write sends and types `name`; `color` and `description` are declared non-nullable by GitHubIssueType but absent from the recorded reply, so requiring them would drop a row main renders.
+        setProjectIssueTypes((result.types ?? []) as GitHubIssueType[])
       })
       .catch((err) => {
         if (!stale) {

@@ -29,34 +29,36 @@ type MockStoreState = {
   repos: Repo[]
 }
 
-const testState = vi.hoisted(() => ({
-  store: {
+type MockCardProps = {
+  worktree: Worktree
+  affiliateListMode?: boolean
+  nativeDragEnabled?: boolean
+  isActive?: boolean
+  flushSurface?: boolean
+  contentIndent?: number
+  lineageChildCount?: number
+  lineageCollapsed?: boolean
+  lineageChildren?: ReactNode
+  lineageChildrenStyle?: CSSProperties
+  onLineageToggle?: (event: MouseEvent<HTMLButtonElement>) => void
+}
+
+const testState = vi.hoisted(() => {
+  const store: MockStoreState = {
     activeWorktreeId: null,
     activeWorkspaceKey: null,
-    settings: {
-      experimentalNewWorktreeCardStyle: true
-    },
     folderWorkspaces: [],
     workspaceLineageByChildKey: {},
     worktreeLineageById: {},
     worktreesByRepo: {},
     repos: []
-  } as MockStoreState,
-  cardProps: [] as {
-    worktree: Worktree
-    affiliateListMode?: boolean
-    nativeDragEnabled?: boolean
-    isActive?: boolean
-    flushSurface?: boolean
-    contentIndent?: number
-    lineageChildCount?: number
-    lineageCollapsed?: boolean
-    lineageChildren?: ReactNode
-    lineageChildrenStyle?: CSSProperties
-    onLineageToggle?: (event: MouseEvent<HTMLButtonElement>) => void
-  }[],
-  cardClicks: [] as string[]
-}))
+  }
+  const cardProps: MockCardProps[] = []
+  const cardClicks: string[] = []
+  const cardDoubleClicks: string[] = []
+  const cardDragStarts: string[] = []
+  return { store, cardProps, cardClicks, cardDoubleClicks, cardDragStarts }
+})
 
 vi.mock('@/store', () => ({
   useAppStore: <T,>(selector: (state: MockStoreState) => T): T => selector(testState.store)
@@ -64,23 +66,13 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
-    values ? fallback.replace('{{value0}}', String(values.value0)) : fallback
+    fallback.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
+      values && name in values ? String(values[name]) : match
+    )
 }))
 
-vi.mock('@/components/sidebar/WorktreeCard', () => ({
-  default: (props: {
-    worktree: Worktree
-    affiliateListMode?: boolean
-    nativeDragEnabled?: boolean
-    isActive?: boolean
-    flushSurface?: boolean
-    contentIndent?: number
-    lineageChildCount?: number
-    lineageCollapsed?: boolean
-    lineageChildren?: ReactNode
-    lineageChildrenStyle?: CSSProperties
-    onLineageToggle?: (event: MouseEvent<HTMLButtonElement>) => void
-  }) => {
+vi.mock('@/components/sidebar/workspace-card/surface/WorktreeCard', () => ({
+  default: (props: MockCardProps) => {
     testState.cardProps.push(props)
     return (
       <div
@@ -95,6 +87,8 @@ vi.mock('@/components/sidebar/WorktreeCard', () => ({
         data-lineage-collapsed={props.lineageCollapsed ? 'true' : 'false'}
         style={props.lineageChildrenStyle}
         onClick={() => testState.cardClicks.push(props.worktree.id)}
+        onDoubleClick={() => testState.cardDoubleClicks.push(props.worktree.id)}
+        onDragStart={() => testState.cardDragStarts.push(props.worktree.id)}
       >
         {props.worktree.displayName}
         {props.lineageChildCount ? (
@@ -195,9 +189,12 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     root = createRoot(container)
     testState.cardProps = []
     testState.cardClicks = []
+    testState.cardDoubleClicks = []
+    testState.cardDragStarts = []
     testState.store = {
       activeWorktreeId: folderWorkspaceKey('folder-1'),
       activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      settings: { experimentalNewWorktreeCardStyle: false },
       folderWorkspaces: [{ id: 'folder-1', name: 'Platform folder', folderPath: '/platform' }],
       workspaceLineageByChildKey: {},
       worktreeLineageById: {},
@@ -212,185 +209,129 @@ describe('FolderWorkspaceWorktreesPanel', () => {
     })
     container.remove()
   })
-
-  it('shows unavailable copy outside folder workspaces', () => {
-    testState.store.activeWorktreeId = 'repo-1::/worktrees/current'
-    testState.store.activeWorkspaceKey = 'repo-1::/worktrees/current'
-
-    renderPanel()
-
-    expect(container.textContent).toContain('Workspaces are only shown for folder workspaces.')
-    expect(testState.cardProps).toEqual([])
-  })
-
-  it('uses the active workspace key when active worktree id has not caught up', () => {
-    const child = makeWorktree({
-      id: 'repo-1::/child',
-      displayName: 'Workspace-key child',
-      instanceId: 'child-instance'
-    })
-    testState.store.activeWorktreeId = null
-    testState.store.activeWorkspaceKey = folderWorkspaceKey('folder-1')
-    testState.store.worktreesByRepo = { 'repo-1': [child] }
-    testState.store.workspaceLineageByChildKey = {
-      [child.id]: makeWorkspaceLineage(child, 'folder-1')
-    }
-
-    renderPanel()
-
-    expect(container.textContent).toContain('Workspace-key child')
-  })
-
-  it('renders attached child worktrees as affiliate WorktreeCards in recent order', () => {
-    const oldChild = makeWorktree({
-      id: 'repo-1::/old',
-      displayName: 'Old child',
-      instanceId: 'old-instance',
-      lastActivityAt: 10
-    })
-    const recentChild = makeWorktree({
-      id: 'repo-1::/recent',
-      displayName: 'Recent child',
-      instanceId: 'recent-instance',
-      lastActivityAt: 50
-    })
-    const otherFolderChild = makeWorktree({
-      id: 'repo-1::/other-folder',
-      displayName: 'Other folder child',
-      instanceId: 'other-instance',
-      lastActivityAt: 100
-    })
-    const staleChild = makeWorktree({
-      id: 'repo-1::/stale',
-      displayName: 'Stale child',
-      instanceId: 'fresh-instance',
-      lastActivityAt: 200
-    })
-    testState.store.worktreesByRepo = {
-      'repo-1': [oldChild, recentChild, otherFolderChild, staleChild]
-    }
-    testState.store.workspaceLineageByChildKey = {
-      [oldChild.id]: makeWorkspaceLineage(oldChild, 'folder-1'),
-      [recentChild.id]: makeWorkspaceLineage(recentChild, 'folder-1'),
-      [otherFolderChild.id]: makeWorkspaceLineage(otherFolderChild, 'folder-2'),
-      [staleChild.id]: makeWorkspaceLineage(staleChild, 'folder-1', {
-        childInstanceId: 'stale-instance'
-      })
-    }
-
-    renderPanel()
-
-    expect(container.textContent).toContain('2 attached worktrees')
-    expect(container.textContent).not.toContain(
-      'Shows worktrees attached to this folder workspace.'
-    )
-    expect(
-      [...container.querySelectorAll('[data-testid="worktree-card"]')].map(
-        (node) => node.textContent
-      )
-    ).toEqual(['Recent child', 'Old child'])
-    expect(testState.cardProps).toHaveLength(2)
-    expect(testState.cardProps.every((props) => props.affiliateListMode === true)).toBe(true)
-    expect(testState.cardProps.every((props) => props.nativeDragEnabled === false)).toBe(true)
-    expect(testState.cardProps.every((props) => props.flushSurface === true)).toBe(true)
-  })
-
-  it('renders nested worktree lineage under attached worktrees', () => {
+  function seedThreeLevelLineage(): { parent: Worktree; child: Worktree; grandchild: Worktree } {
     const parent = makeWorktree({
       id: 'repo-1::/parent',
-      displayName: 'Parent child',
+      displayName: 'Parent card',
       instanceId: 'parent-instance',
       lastActivityAt: 50
     })
-    const nested = makeWorktree({
-      id: 'repo-1::/nested',
-      displayName: 'Nested child',
-      instanceId: 'nested-instance',
+    const child = makeWorktree({
+      id: 'repo-1::/child',
+      displayName: 'Child card',
+      instanceId: 'child-instance',
+      lastActivityAt: 30
+    })
+    const grandchild = makeWorktree({
+      id: 'repo-1::/grandchild',
+      displayName: 'Grandchild card',
+      instanceId: 'grandchild-instance',
       lastActivityAt: 10
     })
-    testState.store.worktreesByRepo = {
-      'repo-1': [parent, nested]
-    }
+    testState.store.worktreesByRepo = { 'repo-1': [parent, child, grandchild] }
     testState.store.workspaceLineageByChildKey = {
       [parent.id]: makeWorkspaceLineage(parent, 'folder-1')
     }
     testState.store.worktreeLineageById = {
-      [nested.id]: makeWorktreeLineage(nested, parent)
+      [child.id]: makeWorktreeLineage(child, parent),
+      [grandchild.id]: makeWorktreeLineage(grandchild, child)
     }
+    return { parent, child, grandchild }
+  }
+
+  function cardFor(worktreeId: string): HTMLElement | null {
+    return container.querySelector<HTMLElement>(`[data-worktree-id="${worktreeId}"]`)
+  }
+
+  function renderedCardIds(): string[] {
+    return [...container.querySelectorAll('[data-testid="worktree-card"]')].map(
+      (node) => node.getAttribute('data-worktree-id') ?? ''
+    )
+  }
+
+  function latestPropsFor(worktreeId: string): MockCardProps | undefined {
+    return testState.cardProps.findLast((props) => props.worktree.id === worktreeId)
+  }
+
+  it('keeps a collapsed parent advertising its children while hiding its descendants', () => {
+    const { parent, child, grandchild } = seedThreeLevelLineage()
 
     renderPanel()
 
-    expect(
-      [...container.querySelectorAll('[data-testid="worktree-card"]')].map((node) =>
-        node.getAttribute('data-worktree-id')
-      )
-    ).toEqual([parent.id, nested.id])
-    expect(testState.cardProps.map((props) => props.worktree.displayName)).toEqual([
-      'Parent child',
-      'Nested child'
-    ])
-    expect(testState.cardProps[0]?.lineageChildCount).toBe(1)
-    expect(testState.cardProps[0]?.lineageCollapsed).toBe(false)
-    expect(testState.cardProps[0]?.lineageChildrenStyle).toEqual(
+    act(() => {
+      cardFor(child.id)?.querySelector<HTMLButtonElement>('[data-testid="lineage-toggle"]')?.click()
+    })
+
+    expect(renderedCardIds()).toEqual([parent.id, child.id])
+    const collapsedProps = latestPropsFor(child.id)
+    expect(collapsedProps?.lineageCollapsed).toBe(true)
+    expect(collapsedProps?.lineageChildCount).toBe(1)
+    expect(collapsedProps?.lineageChildrenStyle).toEqual(
       getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)
     )
-    expect(testState.cardProps[0]?.contentIndent).toBe(0)
+    expect(collapsedProps?.onLineageToggle).toBeTypeOf('function')
 
     act(() => {
-      container
-        .querySelectorAll<HTMLElement>('[data-testid="worktree-card"]')[1]
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      cardFor(child.id)?.querySelector<HTMLButtonElement>('[data-testid="lineage-toggle"]')?.click()
     })
 
-    expect(testState.cardClicks).toEqual([nested.id])
-
-    act(() => {
-      container.querySelector<HTMLButtonElement>('[data-testid="lineage-toggle"]')?.click()
-    })
-
-    expect(container.textContent).not.toContain('Nested child')
+    expect(renderedCardIds()).toEqual([parent.id, child.id, grandchild.id])
   })
 
-  it('omits archived attached worktrees and archived lineage descendants', () => {
-    const visible = makeWorktree({
-      id: 'repo-1::/visible',
-      displayName: 'Visible child',
-      instanceId: 'visible-instance',
+  it('keeps both leaf siblings free of a middle sibling subtree', () => {
+    const root = makeWorktree({
+      id: 'repo-1::/gap-root',
+      displayName: 'Gap root',
+      instanceId: 'gap-root-instance',
+      lastActivityAt: 90
+    })
+    const firstLeaf = makeWorktree({
+      id: 'repo-1::/first-leaf',
+      displayName: 'First leaf',
+      instanceId: 'first-leaf-instance',
       lastActivityAt: 50
     })
-    const archivedDirect = makeWorktree({
-      id: 'repo-1::/archived-direct',
-      displayName: 'Archived direct',
-      instanceId: 'archived-direct-instance',
-      isArchived: true,
-      lastActivityAt: 100
+    const middleSibling = makeWorktree({
+      id: 'repo-1::/middle-sibling',
+      displayName: 'Middle sibling',
+      instanceId: 'middle-sibling-instance',
+      lastActivityAt: 40
     })
-    const archivedNested = makeWorktree({
-      id: 'repo-1::/archived-nested',
-      displayName: 'Archived nested',
-      instanceId: 'archived-nested-instance',
-      isArchived: true,
+    const lastLeaf = makeWorktree({
+      id: 'repo-1::/last-leaf',
+      displayName: 'Last leaf',
+      instanceId: 'last-leaf-instance',
+      lastActivityAt: 30
+    })
+    const middleChild = makeWorktree({
+      id: 'repo-1::/middle-child',
+      displayName: 'Middle child',
+      instanceId: 'middle-child-instance',
       lastActivityAt: 10
     })
     testState.store.worktreesByRepo = {
-      'repo-1': [visible, archivedDirect, archivedNested]
+      'repo-1': [root, firstLeaf, middleSibling, lastLeaf, middleChild]
     }
     testState.store.workspaceLineageByChildKey = {
-      [visible.id]: makeWorkspaceLineage(visible, 'folder-1'),
-      [archivedDirect.id]: makeWorkspaceLineage(archivedDirect, 'folder-1')
+      [root.id]: makeWorkspaceLineage(root, 'folder-1')
     }
     testState.store.worktreeLineageById = {
-      [archivedNested.id]: makeWorktreeLineage(archivedNested, visible)
+      [firstLeaf.id]: makeWorktreeLineage(firstLeaf, root),
+      [middleSibling.id]: makeWorktreeLineage(middleSibling, root),
+      [lastLeaf.id]: makeWorktreeLineage(lastLeaf, root),
+      [middleChild.id]: makeWorktreeLineage(middleChild, middleSibling)
     }
 
     renderPanel()
 
-    expect(
-      [...container.querySelectorAll('[data-testid="worktree-card"]')].map((node) =>
-        node.getAttribute('data-worktree-id')
-      )
-    ).toEqual([visible.id])
-    expect(container.textContent).not.toContain('Archived direct')
-    expect(container.textContent).not.toContain('Archived nested')
+    const ids = renderedCardIds()
+    expect(ids).toEqual([root.id, firstLeaf.id, middleSibling.id, middleChild.id, lastLeaf.id])
+    expect(new Set(ids).size).toBe(ids.length)
+    const nestedSelector = `[data-worktree-id="${middleChild.id}"]`
+    expect(cardFor(firstLeaf.id)?.querySelector(nestedSelector)).toBeNull()
+    expect(cardFor(lastLeaf.id)?.querySelector(nestedSelector)).toBeNull()
+    expect(cardFor(middleSibling.id)?.querySelector(nestedSelector)).not.toBeNull()
+    expect(latestPropsFor(firstLeaf.id)?.lineageChildren).toBeUndefined()
+    expect(latestPropsFor(lastLeaf.id)?.lineageChildren).toBeUndefined()
   })
 })

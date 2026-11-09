@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.diff-review-actions",
   "family": "session.diff-review-actions",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
-  "scenarioSha256": "46b720fed417d29f79dbde4cc7941579f2d6a2f920bae24234537480079e7de5",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "36787858f78b": {
       "actionError": "Cannot discard during a merge",
@@ -46,18 +37,16 @@
         "$rpc": "null"
       }
     },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
     "ccba3a78ab93": {
       "name": "git.discard#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.discard\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
     },
     "f4ea7cb3a3d2": {
       "name": "git.discard#1",
@@ -105,7 +94,7 @@
           "sender": ["f4ea7cb3a3d2"],
           "payloads": ["ccba3a78ab93"],
           "settlements": {
-            "discard": "eb79a9b3682a"
+            "discard": "7ed3d39f0607"
           },
           "state": "36787858f78b",
           "effects": []

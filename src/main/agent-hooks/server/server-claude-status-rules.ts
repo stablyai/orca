@@ -1,44 +1,72 @@
-import { claudeTeammateIdMatchesName } from '../../../shared/claude-subagent-roster'
-import { isAskUserQuestionTool } from '../../../shared/agent-question-answered-intent'
+import { mainAgentStatusEqual } from '../../../shared/agent-status/lifecycle/main-agent-status'
+import {
+  claudeTeammateIdMatchesName,
+  isClaudeChildTurnEndEvent
+} from '../../../shared/claude-subagent-roster'
+import { isAskUserQuestionTool } from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import {
+  isClaudePermissionSettledByBatch,
+  isClaudePermissionSettledByReplay
+} from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import { leadReplyOf, withAcceptedReply } from './server-accepted-reply'
+import {
+  claudePermissionNamesToolUse,
+  type ClaudeToolRequestFields
+} from '../../../shared/agent-hook-listener/claude-tool-request-identity'
 
-export function attachClaudeChildOnlyBoundary(
+/** Retain the shell-work fact only with the main-agent observation that established it. */
+export function pairedClaudeNonAgentWork(
   previous: EnrichedAgentHookEventPayload | undefined,
   next: AgentHookEventPayload
-): AgentHookEventPayload & { claudeLeadBoundaryChildOnly?: true } {
-  const establishesBoundary =
-    next.payload.agentType === 'claude' &&
-    (next.hookEventName === 'Stop' || next.hookEventName === 'StopFailure') &&
-    !next.toolAgentId &&
-    next.payload.state === 'working' &&
-    next.payload.subagents?.some((subagent) => subagent.state === 'working') === true &&
-    next.claudeRunningNonAgentTask === false
-  const carriesBoundary =
-    previous?.claudeLeadBoundaryChildOnly === true &&
-    next.payload.agentType === 'claude' &&
-    next.claudeRunningNonAgentTask === false &&
-    (next.toolAgentId !== undefined ||
-      next.hookEventName === 'SubagentStart' ||
-      next.hookEventName === 'SubagentStop' ||
-      next.hookEventName === 'TeammateIdle')
-  return establishesBoundary || carriesBoundary
-    ? { ...next, claudeLeadBoundaryChildOnly: true }
-    : next
+): boolean | undefined {
+  if (next.claudeRunningNonAgentTask !== undefined) {
+    return next.claudeRunningNonAgentTask
+  }
+  return previous && mainAgentStatusEqual(previous.payload.mainAgent, next.payload.mainAgent)
+    ? previous.claudeRunningNonAgentTask
+    : undefined
 }
 
-export function invalidateClaudeChildOnlyBoundary(
-  previous: EnrichedAgentHookEventPayload | undefined,
+/** Keep main-agent progress, and the reply the lead finished with, behind a child's permission prompt so restart cannot settle live work. */
+export function withHeldChildWaitMainAgent(
+  previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
-): EnrichedAgentHookEventPayload | undefined {
+): EnrichedAgentHookEventPayload {
+  return withAcceptedReply(heldChildWaitRow(previous, next), previous, leadReplyOf(next), true)
+}
+
+function heldChildWaitRow(
+  previous: EnrichedAgentHookEventPayload,
+  next: AgentHookEventPayload
+): EnrichedAgentHookEventPayload {
+  const mainAgent = next.payload.mainAgent
+  if (!previous.toolAgentId || !mainAgent) {
+    return previous
+  }
+  const runningNonAgentTask = pairedClaudeNonAgentWork(previous, next)
+  const mainAgentChanged = !mainAgentStatusEqual(previous.payload.mainAgent, mainAgent)
+  const pendingWakeup = next.payload.claudeTaskWakeupPending
+  const wakeupChanged = pendingWakeup !== previous.payload.claudeTaskWakeupPending
   if (
-    previous?.claudeLeadBoundaryChildOnly !== true ||
-    attachClaudeChildOnlyBoundary(previous, next).claudeLeadBoundaryChildOnly === true
+    !mainAgentChanged &&
+    !wakeupChanged &&
+    runningNonAgentTask === previous.claudeRunningNonAgentTask
   ) {
     return previous
   }
-  const { claudeLeadBoundaryChildOnly: _boundary, ...withoutBoundary } = previous
-  return withoutBoundary
+  const { claudeRunningNonAgentTask: _unpaired, ...unpaired } = previous
+  return {
+    ...unpaired,
+    ...(runningNonAgentTask !== undefined
+      ? { claudeRunningNonAgentTask: runningNonAgentTask }
+      : {}),
+    payload:
+      mainAgentChanged || wakeupChanged
+        ? { ...previous.payload, mainAgent, claudeTaskWakeupPending: pendingWakeup }
+        : previous.payload
+  }
 }
 
 export function shouldKeepClaudePermissionVisible(
@@ -63,10 +91,17 @@ export function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionOwningChildEnding(previous, next)) {
     return false
   }
+  if (isClaudePermissionSettledByReplay(previous, next)) {
+    return false
+  }
+  // Claude can deny a request itself (prompt timeout, safety check) with no Post* hook; its batch end lists it.
+  if (isClaudePermissionSettledByBatch(previous, next)) {
+    return false
+  }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
   }
-  // Why: only real permission requests stay sticky; newer Claude reports AskUserQuestion as a PermissionRequest, so tool name (not event) decides.
+  // AskUserQuestion can arrive as PermissionRequest; only actual permissions stay sticky.
   if (isAskUserQuestionTool(previous.payload.toolName)) {
     return false
   }
@@ -81,7 +116,7 @@ function isClaudePermissionOwningChildEnding(
   if (!ownerId) {
     return false
   }
-  if (next.hookEventName === 'SubagentStop') {
+  if (isClaudeChildTurnEndEvent(next.hookEventName, next.toolAgentId)) {
     return ownerId === next.toolAgentId?.trim()
   }
   return (
@@ -126,11 +161,18 @@ function isClaudePermissionResumingApprovedTool(
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
 
+  // Failure clears tool name/input; require the exact request and owner.
+  if (next.hookEventName === 'PostToolUseFailure') {
+    return (
+      hasMatchingToolUseId && previousAgentId === nextAgentId && previousAgentType === nextAgentType
+    )
+  }
+
   return (
     (next.hookEventName === 'PreToolUse' || next.hookEventName === 'PostToolUse') &&
     nextToolUseId !== undefined &&
     !hasConflictingToolUseId &&
-    // Why: subagents share agent_type, so a concrete agent id (or the preserved PostToolUse tool_use_id) is the safest resume signal.
+    // Subagents share agent_type; concrete agent or tool-use IDs distinguish them.
     (hasMatchingConcreteAgentId || hasSameExplicitAgentType || hasMatchingToolUseId) &&
     sameToolName &&
     (sameKnownToolInput || sameUnknownInputFromConcreteAgent || sameUnknownInputFromToolUseId)
@@ -155,21 +197,20 @@ export function shouldInheritClaudeToolUseIdForPermission(
   ) {
     return false
   }
-  const sameKnownToolInput =
-    previous.payload.toolInput !== undefined &&
-    previous.payload.toolInput === next.payload.toolInput
-  const sameUnknownToolInput =
-    previous.payload.toolInput === undefined && next.payload.toolInput === undefined
-  if (
-    previous.toolAgentId !== next.toolAgentId ||
-    previous.toolAgentType !== next.toolAgentType ||
-    previous.payload.toolName === undefined ||
-    previous.payload.toolName !== next.payload.toolName ||
-    (!sameKnownToolInput && !sameUnknownToolInput)
-  ) {
-    return false
+  // Older hosts send no inferred ID; apply the listener's own matching rule to their rows.
+  return claudePermissionNamesToolUse(
+    claudeRowRequestFields(previous),
+    claudeRowRequestFields(next)
+  )
+}
+
+function claudeRowRequestFields(row: AgentHookEventPayload): ClaudeToolRequestFields {
+  return {
+    toolAgentId: row.toolAgentId,
+    toolAgentType: row.toolAgentType,
+    toolName: row.payload.toolName,
+    toolInput: row.payload.toolInput
   }
-  return true
 }
 
 export function attachClaudePermissionToolUseId(
@@ -185,7 +226,7 @@ export function attachClaudePermissionToolUseId(
   }
   return {
     ...next,
-    // Why: Claude emits PermissionRequest without tool_use_id, then PostToolUse carries the original PreToolUse id.
+    // PermissionRequest omits tool_use_id; PostToolUse reuses the PreToolUse ID.
     toolUseId: inheritedToolUseId
   }
 }

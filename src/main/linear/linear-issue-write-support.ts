@@ -1,5 +1,5 @@
 import type { LinearClient } from '@linear/sdk'
-import { loadLinearSdk } from './linear-sdk'
+import { createLinearClient } from './linear-sdk'
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { isAuthError, type LinearClientForWorkspace } from './client'
@@ -117,13 +117,14 @@ export function classifyLinearWriteFailure(error: unknown): LinearWriteFailure {
 export async function runLinearWrite<T>(
   entry: LinearClientForWorkspace,
   signal: AbortSignal | undefined,
-  write: (client: LinearClient) => Promise<T>
+  write: (client: LinearClient) => Promise<T>,
+  beforeInvoke?: () => void
 ): Promise<T> {
-  await acquire()
+  await acquire(signal)
   try {
-    const client = signal
-      ? new (loadLinearSdk().LinearClient)({ apiKey: entry.apiKey, signal })
-      : entry.client
+    signal?.throwIfAborted()
+    const client = signal ? createLinearClient({ apiKey: entry.apiKey, signal }) : entry.client
+    beforeInvoke?.()
     return await write(client)
   } catch (error) {
     if (error instanceof LinearWriteFailure) {
@@ -141,10 +142,12 @@ export async function runLinearWrite<T>(
 
 export async function runLinearLookup<T>(
   entry: LinearClientForWorkspace,
-  lookup: () => Promise<T>
+  lookup: () => Promise<T>,
+  signal?: AbortSignal
 ): Promise<T | null> {
-  await acquire()
+  await acquire(signal)
   try {
+    signal?.throwIfAborted()
     return await lookup()
   } catch (error) {
     if (isAuthError(error)) {
@@ -162,8 +165,7 @@ export async function runLinearLookup<T>(
 
 export function isLinearLookupMiss(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  // Why: Linear throws for direct entity lookups that miss; write-id probes
-  // need the same null shape as GraphQL nullable data, not a failed write.
+  // Normalize SDK missing-entity throws to nullable lookup results, avoiding false write failures.
   return message.includes('Entity not found:') && message.includes('Could not find referenced')
 }
 

@@ -16,16 +16,9 @@ import {
   type AutomationHostRecoveryAction
 } from './automation-host-status-descriptors'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import { useTranslate } from '@/i18n/use-translate'
 
-/**
- * The All-hosts list: rows grouped by authority, each host anchoring its own
- * status row.
- *
- * The status sits on the host header rather than on the rows because it is a
- * fact about the host, and because a host with no rows still has to say why —
- * an unreachable host that rendered as an empty gap would read as "nothing
- * scheduled here", which is the one thing we have not established.
- */
+/** Keep status on each host header, including hosts with no rows; unreachable must never read as an empty schedule. */
 
 export type AutomationListHostGroupsProps = Omit<AutomationListLocalRowsProps, 'rows'> & {
   groups: readonly AutomationHostVisibleGroup[]
@@ -49,6 +42,7 @@ function AutomationHostGroupState({
   recovery: AutomationHostRecoveryAction | null
   onRecover: (action: AutomationHostRecoveryAction) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="px-3 pb-1 text-xs text-muted-foreground" data-empty-state={state.kind}>
       <div>{state.title}</div>
@@ -61,7 +55,7 @@ function AutomationHostGroupState({
           className="mt-1"
           onClick={() => onRecover(recovery)}
         >
-          {recoveryActionLabel(recovery)}
+          {recoveryActionLabel(recovery, t)}
         </Button>
       ) : null}
     </div>
@@ -74,6 +68,7 @@ export function AutomationListHostGroups({
   onRecover,
   ...rowProps
 }: AutomationListHostGroupsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {groups.map((group) => (
@@ -83,12 +78,15 @@ export function AutomationListHostGroups({
           </div>
           {group.hosts.map(({ entry, rows, hostRowCount }) => {
             const action = hostRecoveryAction(entry)
-            const state = resolveAutomationHostGroupEmptyState({
-              entry,
-              hostRowCount,
-              visibleRowCount: rows.length,
-              searchActive
-            })
+            const state = resolveAutomationHostGroupEmptyState(
+              {
+                entry,
+                hostRowCount,
+                visibleRowCount: rows.length,
+                searchActive
+              },
+              t
+            )
             return (
               <div key={entry.stableKey} className="mb-1" data-host-group={entry.stableKey}>
                 <div className="flex flex-wrap items-center gap-1.5 px-2 py-1">
@@ -101,7 +99,7 @@ export function AutomationListHostGroups({
                       size="xs"
                       onClick={() => onRecover(action, entry)}
                     >
-                      {recoveryActionLabel(action)}
+                      {recoveryActionLabel(action, t)}
                     </Button>
                   ) : null}
                 </div>

@@ -1,10 +1,11 @@
+import { getProviderChecksOutcome } from '../../../../../shared/source-control/checks/provider-check-summary'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import React, { useRef, useEffect } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { CheckCircle2, AlertCircle, Clock3, Minus } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { getChecksPillTone, getChecksLabel } from '@/components/task-page-checks-pill'
+import { getChecksPillTone, getChecksLabel } from '../task-page-checks-pill'
 export function PRChecksCell({
   item,
   onOpen,
@@ -14,6 +15,7 @@ export function PRChecksCell({
   onOpen: () => void
   onLoadChecks: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   useEffect(() => {
     if (item.type !== 'pr' || item.checksSummary) {
@@ -43,17 +45,17 @@ export function PRChecksCell({
   if (item.type !== 'pr') {
     return (
       <span className="text-[11px] text-muted-foreground">
-        {translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}
+        {t('auto.components.TaskPage.b1eaa18ace', 'Issue')}
       </span>
     )
   }
-  const summary = item.checksSummary
+  const outcome = getProviderChecksOutcome(item.checksSummary)
   const Icon =
-    summary?.state === 'success'
+    outcome === 'success'
       ? CheckCircle2
-      : summary?.state === 'failure'
+      : outcome === 'failure'
         ? AlertCircle
-        : summary?.state === 'pending'
+        : outcome === 'pending'
           ? Clock3
           : Minus
   return (
@@ -75,11 +77,11 @@ export function PRChecksCell({
           )}
         >
           <Icon className="size-3" />
-          <span className="truncate">{getChecksLabel(item)}</span>
+          <span className="truncate">{getChecksLabel(item, t)}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {translate('auto.components.TaskPage.995dd6af9b', 'Open PR checks')}
+        {t('auto.components.TaskPage.995dd6af9b', 'Open PR checks')}
       </TooltipContent>
     </Tooltip>
   )

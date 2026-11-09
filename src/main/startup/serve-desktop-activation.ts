@@ -11,11 +11,7 @@ export type ServeDesktopActivationGate = {
 
 export const SERVE_DESKTOP_ACTIVATION_BLOCKED_REASON = 'persistent PTY provider unavailable'
 
-/**
- * Why: promotion is only safe when serve owns daemon-backed (persistent) PTYs —
- * the desktop renderer then reattaches the surviving sessions instead of
- * cold-restoring them. Without that provider, fail closed (#8457).
- */
+/** Fail closed unless daemon-backed PTYs can survive desktop promotion and renderer reattachment (#8457). */
 export function settleServeDesktopActivation(
   gate: ServeDesktopActivationGate,
   options: { hasPersistentPtyProvider: boolean }
@@ -25,6 +21,18 @@ export function settleServeDesktopActivation(
     return
   }
   gate.markReady()
+}
+
+/** Release queued activations only after the startup opener returns, so they focus its window instead of creating a duplicate. */
+export function releaseDesktopActivationAfter<TArgs extends unknown[], TResult>(
+  gate: ServeDesktopActivationGate | null,
+  open: (...args: TArgs) => TResult
+): (...args: TArgs) => TResult {
+  return (...args) => {
+    const result = open(...args)
+    gate?.markReady()
+    return result
+  }
 }
 
 export function createServeDesktopActivationGate(options: {

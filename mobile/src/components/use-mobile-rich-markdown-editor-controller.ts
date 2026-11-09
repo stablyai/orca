@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset-script'
+import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset'
 import type {
   MobileRichMarkdownCommand,
   MobileRichMarkdownEditorMessage,
@@ -65,8 +65,7 @@ export function useMobileRichMarkdownEditorController({
     }
   }, [editable, transport])
 
-  // Clear any reported keyboard inset when the editor unmounts so a lifted
-  // Save/Discard bar settles back once the tab closes.
+  // Clear the inset on unmount so the Save/Discard bar settles after the tab closes.
   useEffect(() => {
     return () => onKeyboardInsetChange?.(0)
   }, [onKeyboardInsetChange])

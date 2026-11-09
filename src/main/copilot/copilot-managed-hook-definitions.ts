@@ -1,12 +1,10 @@
-import {
-  wrapPosixHookCommand,
-  wrapWindowsHookCommand,
-  type HookDefinition
-} from '../agent-hooks/installer-utils'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { wrapWindowsHookCommand } from '../agent-hooks/installation/commands/windows-hook-command'
+import type { HookDefinition } from '../agent-hooks/installation/configuration/hook-config-schema'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
+import { getWindowsSystem32Path } from '../agent-hooks/installation/commands/windows-powershell-hook-launcher'
 
-// Why: Copilot's user-level hook files can use VS Code-compatible PascalCase
-// names, which match the event vocabulary already normalized by Orca's hook
-// server and avoid wrapper-side event remapping.
+// VS Code-compatible PascalCase names reuse the hook server's event normalization.
 export const COPILOT_EVENTS = [
   'SessionStart',
   'SessionEnd',
@@ -14,9 +12,7 @@ export const COPILOT_EVENTS = [
   'PreToolUse',
   'PostToolUse',
   'PostToolUseFailure',
-  // Why: GitHub's current reference documents subagentStart with only the
-  // camelCase payload shape. The wrapper passes the event name separately, so
-  // Orca can normalize it without depending on a PascalCase payload.
+  // This event is documented only in camelCase; the wrapper supplies its name for normalization.
   'subagentStart',
   'SubagentStop',
   'PreCompact',
@@ -30,7 +26,12 @@ export function getManagedCommand(scriptPath: string, eventName: string): string
   if (process.platform !== 'win32') {
     return wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
   }
-  return wrapWindowsHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+  // Arguments survive runners that ignore hook env maps and keep managed commands distinct per event.
+  const direct = wrapWindowsDirectCmdHookCommand(scriptPath)
+  // /d suppresses cmd AutoRun output that would corrupt the {} response Copilot parses.
+  return direct
+    ? `${getWindowsSystem32Path('cmd.exe')} /d /c ${direct} ${eventName}`
+    : wrapWindowsHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
 }
 
 export function getManagedHookDefinition(command: string): HookDefinition {

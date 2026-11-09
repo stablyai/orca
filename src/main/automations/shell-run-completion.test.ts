@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AutomationRun } from '../../shared/automations-types'
-import type { AutomationRunTerminalHost } from './runtime-terminal-run-observer'
-import { observeShellRunCompletion } from './shell-run-completion'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
+import { observeShellRunCompletion, type ShellRunTerminalHost } from './shell-run-completion'
 
 const run: AutomationRun = {
   id: 'shell-run',
@@ -27,7 +26,7 @@ const run: AutomationRun = {
   createdAt: 1
 }
 
-type WaitResult = Awaited<ReturnType<AutomationRunTerminalHost['waitForTerminal']>>
+type WaitResult = Awaited<ReturnType<ShellRunTerminalHost['waitForTerminal']>>
 
 function exited(exitCode: number): WaitResult {
   return { satisfied: true, exitCode, exitCause: { kind: 'exited', exitCode } }
@@ -41,16 +40,16 @@ function createHost(initialTail: string[] = []) {
   const listeners = new Set<(data: string) => void>()
   const unsubscribe = vi.fn(() => listeners.clear())
   const readTerminal = vi
-    .fn<AutomationRunTerminalHost['readTerminal']>()
+    .fn<ShellRunTerminalHost['readTerminal']>()
     .mockResolvedValue({ tail: initialTail })
   const waitForTerminal = vi
-    .fn<AutomationRunTerminalHost['waitForTerminal']>()
+    .fn<ShellRunTerminalHost['waitForTerminal']>()
     .mockResolvedValue(exited(0))
   const subscribeToTerminalData = vi.fn((_ptyId: string, listener: (data: string) => void) => {
     listeners.add(listener)
     return unsubscribe
   })
-  const runtime: AutomationRunTerminalHost = {
+  const runtime: ShellRunTerminalHost = {
     getTerminalHandleForPaneKey: () => 'terminal-1',
     resolveTerminalPane: () => ({
       handle: 'terminal-1',

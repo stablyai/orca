@@ -5,13 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { runRecording } from './run-recording'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
-import {
-  compareGolden,
-  goldenBytes,
-  goldenRecording,
-  readGolden,
-  writeGolden
-} from './golden-recording'
+import { expectGoldenFile, goldenBytes, goldenRecording, writeGolden } from './golden-recording'
 import type { Recording } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 import { determinismRuns } from './determinism-runs'
@@ -31,38 +25,49 @@ describe('RPC main recordings', () => {
     const { id, scenario } = pilot
     it(pilot.title, async () => {
       let first = ''
-      for (let run = 0; run < determinismRuns(); run++) {
-        const { adapters } = pilotMountAdapters(root, { device: scenario })
-        const recording = await runRecording(
-          scenario,
-          adapters[scenario.operation],
-          vitestRecordingScheduler()
-        )
-        if (id === 'b1') {
-          expect(visibleState(recording)).toEqual({ files: ['third.ts'] })
+      const candidates = await (async () => {
+        const candidates: Recording[] = []
+        for (let run = 0; run < determinismRuns(); run++) {
+          const { adapters } = pilotMountAdapters(root, { device: scenario })
+          const recording = await runRecording(
+            scenario,
+            adapters[scenario.operation],
+            vitestRecordingScheduler({ producer: id, scenario: scenario.id, mode: 'native' })
+          )
+          if (id === 'b1') {
+            expect(visibleState(recording)).toEqual({ files: ['third.ts'] })
+          }
+          if (id === 'b2') {
+            // The checked reader must name the null reply and method instead of exposing a property-read exception.
+            expect(visibleState(recording)).toMatchObject({
+              error:
+                'The host sent a reply this app could not read (github.project.updateIssueBySlug)'
+            })
+          }
+          if (id === 'b3') {
+            expect(visibleState(recording)).toMatchObject({
+              error: 'comments transport error',
+              loading: false
+            })
+          }
+          if (id === 'settings-task-hydration-fulfilled') {
+            expect(visibleState(recording)).toMatchObject({ hydrated: true })
+          }
+          candidates.push(recording)
         }
-        if (id === 'b2') {
-          expect(visibleState(recording)).toMatchObject({
-            error: "Cannot read properties of null (reading 'ok')"
-          })
-        }
-        if (id === 'b3') {
-          expect(visibleState(recording)).toMatchObject({
-            error: 'comments transport error',
-            loading: false
-          })
-        }
-        const golden = goldenRecording(root, input.baseline, pilot.scenarios(), recording)
+        return candidates
+      })()
+      for (const [run, recording] of candidates.entries()) {
+        const golden = goldenRecording(pilot.scenarios(), recording)
         const bytes = goldenBytes(golden)
         if (run) {
           expect(bytes).toBe(first)
-        }
-        first = bytes
-        if (process.env.RPC_FOUNDATION_MODE === '--record') {
+        } else if (process.env.RPC_FOUNDATION_MODE === '--record') {
           await writeGolden(goldens, golden, '--record')
         } else {
-          compareGolden(readGolden(goldens, id), golden)
+          await expectGoldenFile(goldens, id, golden)
         }
+        first = bytes
       }
     })
   }

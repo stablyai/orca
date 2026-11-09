@@ -1,14 +1,14 @@
 import { useEffect, useMemo } from 'react'
 import {
-  listGitLabMRsForSource,
+  listGitLabWorkItemsForSource,
   lookupGitLabWorkItemByPathForSource
 } from '@/lib/gitlab-work-item-source-lookup'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
-import type { useSmartWorkspaceNameFieldFoundation } from './use-smart-workspace-name-field-foundation'
+import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
-type Foundation = ReturnType<typeof useSmartWorkspaceNameFieldFoundation>
+type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
 
 export function useSmartWorkspaceGitlabSearch({
   foundation,
@@ -22,7 +22,7 @@ export function useSmartWorkspaceGitlabSearch({
   const {
     debouncedQuery,
     disabled,
-    onGitLabItemSelect,
+    gitlabEnabled,
     mode,
     repoBackedSearchTargets,
     mrStateFilter,
@@ -36,7 +36,7 @@ export function useSmartWorkspaceGitlabSearch({
   )
 
   useEffect(() => {
-    if (!shouldQueryGitlab || disabled || !onGitLabItemSelect) {
+    if (!shouldQueryGitlab || disabled || gitlabEnabled === false) {
       // Why: the list effect below is the sole writer in GitLab mode without a URL.
       if (!shouldQueryGitlab || (parsedGlLink === null && mode !== 'gitlab')) {
         setGitlabItems([])
@@ -89,7 +89,7 @@ export function useSmartWorkspaceGitlabSearch({
   }, [
     disabled,
     mode,
-    onGitLabItemSelect,
+    gitlabEnabled,
     parsedGlLink,
     repoBackedSearchTargets,
     setGitlabItems,
@@ -97,9 +97,8 @@ export function useSmartWorkspaceGitlabSearch({
     shouldQueryGitlab
   ])
 
-  // Why: state chips mirror GitLab's default opened-MR list when no URL is pasted.
   useEffect(() => {
-    if (!shouldQueryGitlab || disabled || !onGitLabItemSelect) {
+    if (!shouldQueryGitlab || disabled || gitlabEnabled === false) {
       if (!shouldQueryGitlab) {
         setGitlabItems([])
         setGitlabLoading(false)
@@ -123,7 +122,7 @@ export function useSmartWorkspaceGitlabSearch({
     }
     void Promise.all(
       repoBackedSearchTargets.map((target) =>
-        listGitLabMRsForSource({
+        listGitLabWorkItemsForSource({
           repoPath: target.repo.path,
           repoId: target.repo.id,
           sourceContext: target.gitlabSourceContext,
@@ -163,7 +162,7 @@ export function useSmartWorkspaceGitlabSearch({
     disabled,
     mode,
     mrStateFilter,
-    onGitLabItemSelect,
+    gitlabEnabled,
     parsedGlLink,
     repoBackedSearchTargets,
     setGitlabItems,

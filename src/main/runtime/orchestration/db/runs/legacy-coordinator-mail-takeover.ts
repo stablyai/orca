@@ -15,7 +15,7 @@ export function promoteLegacyCoordinatorMailForTakeover(
        SET to_handle = ?, delivery_contract = 'current_delivery',
            read = 0, delivered_at = NULL
        WHERE run_id = ? AND delivery_contract = 'legacy_direct'
-         AND to_handle = ?
+         AND to_handle = ? AND type <> 'heartbeat'
          AND EXISTS(
            SELECT 1 FROM dispatch_contexts d
            WHERE d.run_id = messages.run_id

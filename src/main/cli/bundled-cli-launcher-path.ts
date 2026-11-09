@@ -3,9 +3,7 @@ import { join } from 'node:path'
 // Why `orca-ide` on Linux: GNOME Orca ships /usr/bin/orca, so the CLI never claims that name.
 export const LINUX_CLI_COMMAND_NAME = 'orca-ide'
 
-/** Absolute path of the CLI launcher this app ships in its own resources bundle.
- *  Lives apart from cli-installer so callers that only need the path (PTY env
- *  assembly) don't pull in the installer's `electron` dependency. */
+// Keep path-only callers independent of cli-installer's Electron dependency.
 export function getBundledLauncherPath(
   platform: NodeJS.Platform,
   resourcesPath: string

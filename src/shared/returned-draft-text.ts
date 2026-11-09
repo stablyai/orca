@@ -1,0 +1,26 @@
+import { isLoneStructuredAgentSessionConversationCommand } from './agent-session/view/structured-agent-session-composer'
+
+/** Append returned text without replacing typed drafts or duplicating an existing suffix.
+ * Replace lone /compact or /clear commands: they were unsent, and trailing text would read as their arguments. */
+export function appendReturnedDraftText(
+  draft: string,
+  text: string,
+  options?: { preserveConversationCommands?: boolean }
+): string {
+  const returned = text.trimEnd()
+  if (returned.trim() === '') {
+    return draft
+  }
+  const kept = draft.trimEnd()
+  if (
+    kept === '' ||
+    (!options?.preserveConversationCommands &&
+      isLoneStructuredAgentSessionConversationCommand(kept))
+  ) {
+    return text
+  }
+  if (kept === returned || kept.endsWith(`\n\n${returned}`)) {
+    return draft
+  }
+  return `${kept}\n\n${text}`
+}

@@ -1,16 +1,12 @@
-import { CreateHostedReviewComposer } from '../../CreateHostedReviewComposer'
+import { githubCreationImageUploadAddress } from '@/components/github/github-creation-image-upload-address'
+import { CreateHostedReviewComposer } from '../../hosted-review/creation/CreateHostedReviewComposer'
 import { CommitArea } from '../commit/commit-area'
-import { writeCommitDraftForWorktree } from '../commit/commit-drafts'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
 type SourceControlCommitSurfaceProps = SourceControlPanelReadyProps & {
   showGenericEmptyState: boolean
 }
 
-/**
- * The one action surface below the file list: the review composer when Create review is the direct
- * next step, otherwise the commit box.
- */
 export function SourceControlCommitSurface({
   activeRepo,
   model,
@@ -82,13 +78,20 @@ export function SourceControlCommitSurface({
     sourceControlAiActionsVisible,
     stackParentReview,
     unresolvedConflicts,
-    updateCommitDrafts
+    updateCommitDraft
   } = model
 
   if (directCreatePrAction) {
     return (
       <CreateHostedReviewComposer
         key={`${activeRepo.id}:${activeWorktreeId ?? worktreePath}:${branchName}`}
+        imageUploadPending={model.prImageUploadPending}
+        imageUpload={githubCreationImageUploadAddress(
+          activeRepo,
+          worktreePath,
+          hostedReviewCreateProvider,
+          model.onPrImageUploadPending
+        )}
         provider={hostedReviewCreateProvider}
         branch={branchName}
         base={prBase}
@@ -165,7 +168,7 @@ export function SourceControlCommitSurface({
         if (!activeWorktreeId) {
           return
         }
-        updateCommitDrafts((prev) => writeCommitDraftForWorktree(prev, activeWorktreeId, value))
+        updateCommitDraft(value)
       }}
       onGenerate={handleGenerateCommitMessageClick}
       onCancelGenerate={handleCancelGenerate}

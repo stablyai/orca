@@ -1,18 +1,15 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
 import { browserErrorMessage, shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
 export type BrowserPageParams = { worktree: string; page: string }
-/**
- * One command against the current page. It receives the client, the page params and the send
- * options rather than choosing them, so the page guard, the busy flag and the 15 s default live
- * here for every command instead of once per call site.
- */
-export type BrowserPageCommandSend = (
+// Centralize current-page guard, busy state and 15s default; caller supplies client/page/send options.
+export type BrowserPageCommandSend<Value = unknown> = (
   client: RpcClient,
   base: BrowserPageParams,
   options: SendRequestOptions
-) => Promise<unknown>
+) => Promise<Value>
 
 type BrowserRequestArgs = {
   busyRef: { current: boolean }
@@ -34,11 +31,13 @@ export function useMobileBrowserRequest(args: BrowserRequestArgs) {
     }
   }, [pageId, worktreeId])
 
+  // Generic reply type preserves reader’s checked value; refused/failed commands stay caller-checked null.
   const sendBrowserRequest = useCallback(
-    async (
-      send: BrowserPageCommandSend,
+    // Use named generic function: recorder transpiles with JSX runtime, where generic arrow <Value> parses as element.
+    async function sendBrowserCommand<Value>(
+      send: BrowserPageCommandSend<Value>,
       opts: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number } = {}
-    ): Promise<unknown | null> => {
+    ): Promise<Value | null> {
       const base = pageParams()
       if (!client || !base) {
         return null

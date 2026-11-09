@@ -1,6 +1,6 @@
 import { getTrackedWebSessionTabsWorktrees } from './tracking'
 import { getWebSessionTabsTrackingGeneration } from './tracking-lifecycle'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { VisibilityResumeOmission } from './state'
 import type {
   MirroredRuntimeEnvironment,
@@ -8,7 +8,6 @@ import type {
   VisibilityResumeEnvironment
 } from './visibility-resume-types'
 
-/** Build the inventory/replay state for the subscriptions restarted by a resume. */
 export function buildVisibilityResumeBatch(args: {
   visibilityGeneration: number
   restartingSpecIndexes: readonly number[]

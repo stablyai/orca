@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+
+import '../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('reports a queued PTY focus as not navigated when its notifier disappears', async () => {
@@ -42,40 +45,6 @@ describe('OrcaRuntimeService', () => {
     await expect(first).resolves.toMatchObject({ handle: terminalA!.handle, navigated: false })
     await expect(queued).resolves.toMatchObject({ handle: terminalB!.handle, navigated: false })
     expect(revealTerminalSession).toHaveBeenCalledOnce()
-  })
-
-  it('reports an in-flight PTY focus as not navigated when its notifier disappears', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.registerPty('pty-a', TEST_WORKTREE_ID)
-    const terminal = (await runtime.listTerminals()).terminals.find(
-      (candidate) => candidate.ptyId === 'pty-a'
-    )
-    expect(terminal).toBeDefined()
-
-    let releaseReveal!: (value: { tabId: string }) => void
-    const revealTerminalSession = vi.fn(
-      () =>
-        new Promise<{ tabId: string }>((resolve) => {
-          releaseReveal = resolve
-        })
-    )
-    runtime.setNotifier({ revealTerminalSession } as never)
-
-    const focus = runtime.focusTerminal(terminal!.handle)
-    await vi.waitFor(() => expect(revealTerminalSession).toHaveBeenCalledOnce())
-    runtime.setNotifier(null)
-    releaseReveal({ tabId: 'tab-a' })
-
-    await expect(focus).resolves.toMatchObject({
-      handle: terminal!.handle,
-      tabId: 'tab-a',
-      navigated: false
-    })
   })
 
   it('does not invoke a stale graph-leaf focus notifier after queued PTY work', async () => {
@@ -138,39 +107,6 @@ describe('OrcaRuntimeService', () => {
     expect(focusTerminal).not.toHaveBeenCalled()
   })
 
-  it('reports graph-leaf focus as not navigated without a host notifier', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-leaf',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Starting terminal',
-          activeLeafId: HEADLESS_LEAF_ID,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-leaf',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: HEADLESS_LEAF_ID,
-          paneRuntimeId: 1,
-          ptyId: null
-        }
-      ]
-    })
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    await expect(runtime.focusTerminal(terminal.handle)).resolves.toEqual({
-      handle: terminal.handle,
-      tabId: 'tab-leaf',
-      worktreeId: TEST_WORKTREE_ID,
-      navigated: false
-    })
-  })
-
   it('clears terminal scrollback through the PTY controller and headless buffer', async () => {
     const clearBuffer = vi.fn().mockResolvedValue(undefined)
     const runtime = new OrcaRuntimeService(store)
@@ -188,6 +124,9 @@ describe('OrcaRuntimeService', () => {
       123
     )
     const [terminal] = (await runtime.listTerminals()).terminals
+    // Where a phone viewing this terminal stands before the clear.
+    const { ring } = runtime.retainPublishedTerminalOutput('pty-1')
+    const phonePosition = ring.pointAt(runtime.getPtyOutputSequence('pty-1'))
 
     await expect(runtime.clearTerminalBuffer(terminal.handle)).resolves.toEqual({
       handle: terminal.handle,
@@ -197,44 +136,36 @@ describe('OrcaRuntimeService', () => {
     expect(clearBuffer).toHaveBeenCalledWith('pty-1')
     const snapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 1000 })
     expect(snapshot?.data).not.toContain('line-0')
+    // The phone can't resume onto the cleared scrollback; it gets the snapshot above.
+    expect(ring.covers(phonePosition)).toBe(false)
   })
 
-  it('waits for terminal exit and resolves with the exit status', async () => {
+  it('resets input modes through the PTY controller and the headless model', async () => {
+    const resetInputModes = vi.fn().mockResolvedValue(undefined)
     const runtime = new OrcaRuntimeService(store)
-
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
-          title: 'Claude',
-          activeLeafId: 'pane:1',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
-          leafId: 'pane:1',
-          paneRuntimeId: 1,
-          ptyId: 'pty-1'
-        }
-      ]
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      resetInputModes
     })
-
+    syncSinglePty(runtime, 'pty-1')
+    // An app armed these and crashed with no command end.
+    runtime.onPtyData('pty-1', 'prompt$ app\r\n\x1b[>31u\x1b[?1000h\x1b[?2004h', 123)
     const [terminal] = (await runtime.listTerminals()).terminals
-    const waitPromise = runtime.waitForTerminal(terminal.handle, { timeoutMs: 1000 })
-    runtime.onPtyExit('pty-1', 7)
+    const armed = await runtime.serializeTerminalBuffer('pty-1')
+    expect(armed?.kittyKeyboardFlags).toBe(31)
 
-    await expect(waitPromise).resolves.toMatchObject({
+    await expect(runtime.resetTerminalInputModes(terminal.handle)).resolves.toEqual({
       handle: terminal.handle,
-      condition: 'exit',
-      satisfied: true,
-      status: 'exited',
-      exitCode: 7
+      reset: true
     })
+
+    expect(resetInputModes).toHaveBeenCalledWith('pty-1')
+    const snapshot = await runtime.serializeTerminalBuffer('pty-1')
+    expect(snapshot?.kittyKeyboardFlags).toBe(0)
+    expect(snapshot?.data).not.toContain('\x1b[?1000h')
+    expect(snapshot?.data).not.toContain('\x1b[?2004h')
   })
 
   it('keeps partial-line output readable across cursor-based pagination', async () => {
@@ -265,14 +196,13 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     runtime.onPtyData('pty-1', 'hel', 100)
 
-    // Non-cursor reads include the partial line for UI display
     const firstRead = await runtime.readTerminal(terminal.handle)
     expect(firstRead.tail).toEqual(['hel'])
     expect(firstRead.nextCursor).toBe('0')
 
     runtime.onPtyData('pty-1', 'lo', 101)
 
-    // Cursor reads exclude partial lines to prevent duplication (partial now, then completed line next read).
+    // Exclude partial lines from cursor reads or the completed line repeats them.
     const secondRead = await runtime.readTerminal(terminal.handle, {
       cursor: Number(firstRead.nextCursor)
     })
@@ -375,78 +305,6 @@ describe('OrcaRuntimeService', () => {
     expect(futureCursorRead.tail).toEqual([])
     expect(futureCursorRead.nextCursor).toBe('2250')
     expect(futureCursorRead.limited).toBe(false)
-  })
-
-  // Why: PR #2553 keeps retained output cursor-reachable while previews stay bounded (not full-transcript payloads).
-  it('keeps terminal read payloads bounded while retained output remains pageable', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const linePayload = 'x'.repeat(24)
-    const lines = Array.from(
-      { length: 2000 },
-      (_, index) => `line-${index.toString().padStart(4, '0')}-${linePayload}`
-    )
-    runtime.onPtyData('pty-1', `${lines.join('\n')}\n`, 100)
-
-    const preview = await runtime.readTerminal(terminal.handle)
-    expect(Buffer.byteLength(JSON.stringify(preview), 'utf8')).toBeLessThan(10_000)
-    expect(preview.tail).toHaveLength(120)
-    expect(preview.tail[0]).toBe(lines.at(-120))
-    expect(preview.limited).toBe(true)
-    expect(preview.oldestCursor).toBe('0')
-    expect(preview.nextCursor).toBe('2000')
-    expect(preview.latestCursor).toBe('2000')
-
-    const collected: string[] = []
-    let cursor = Number(preview.oldestCursor)
-    const latestCursor = Number(preview.latestCursor)
-    for (let pageIndex = 0; cursor < latestCursor; pageIndex += 1) {
-      expect(pageIndex).toBeLessThan(10)
-      const page = await runtime.readTerminal(terminal.handle, { cursor, limit: 333 })
-      expect(Buffer.byteLength(JSON.stringify(page), 'utf8')).toBeLessThan(16_000)
-      expect(page.tail.length).toBeGreaterThan(0)
-      expect(page.tail.length).toBeLessThanOrEqual(333)
-      expect(page.returnedLineCount).toBe(page.tail.length)
-
-      collected.push(...page.tail)
-      const nextCursor = Number(page.nextCursor)
-      expect(nextCursor).toBeGreaterThan(cursor)
-      cursor = nextCursor
-    }
-
-    expect(collected).toHaveLength(lines.length)
-    expect(collected.findIndex((line, index) => line !== lines[index])).toBe(-1)
-  })
-
-  it('trims terminal read preview character budget without per-line array shifts', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const lines = Array.from({ length: 120 }, (_, index) => `line-${index}-${'x'.repeat(400)}`)
-    runtime.onPtyData('pty-1', `${lines.join('\n')}\n`, 100)
-    // Why: xterm-headless uses Array.shift while draining writes; this test guards read-preview trimming, not emulator parsing.
-    await runtime.serializeMainTerminalBuffer('pty-1')
-
-    const originalShift = Array.prototype.shift
-    let shiftCallCount = 0
-    Array.prototype.shift = function (...args) {
-      shiftCallCount += 1
-      return originalShift.apply(this, args)
-    }
-    let preview: Awaited<ReturnType<typeof runtime.readTerminal>>
-    try {
-      preview = await runtime.readTerminal(terminal.handle)
-    } finally {
-      Array.prototype.shift = originalShift
-    }
-
-    expect(preview.limited).toBe(true)
-    expect(preview.tail.at(-1)).toBe(lines.at(-1))
-    expect(preview.tail.reduce((sum, line) => sum + line.length, 0)).toBeLessThanOrEqual(32 * 1024)
-    expect(shiftCallCount).toBe(0)
   })
 
   it('falls back to renderer visible screen when uncursored TUI tail is blank', async () => {

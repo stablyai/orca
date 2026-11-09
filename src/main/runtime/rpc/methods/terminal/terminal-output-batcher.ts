@@ -1,27 +1,33 @@
 import type { TerminalOutputMeta } from '../../terminal-output-frame-chunks'
-import { TERMINAL_OUTPUT_BATCH_MAX_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
-import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-length'
 import {
-  sameTerminalOutputSourceIdentity,
-  type TerminalOutputSourceRange
-} from '../../../../../shared/terminal-output-source-range'
+  TERMINAL_OUTPUT_BATCH_MAX_BYTES,
+  type TerminalOutputCadence
+} from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
+import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-length'
 
-const TERMINAL_OUTPUT_FLUSH_MS = 5
+const TERMINAL_OUTPUT_FLUSH_MS: Record<TerminalOutputCadence, number> = {
+  focused: 5,
+  // Why: collapses several TUI repaints into one frame; ~20fps is still live for a peripheral pane.
+  background: 50
+}
 export type TerminalOutputBatcher = {
   push: (data: string, meta?: TerminalOutputMeta) => void
   flush: () => void
+  /** Switching to `focused` flushes pending output so the newly focused pane shows no lag. */
+  setCadence: (cadence: TerminalOutputCadence) => void
   dispose: () => void
 }
 
 export function createTerminalOutputBatcher(
-  onFlush: (data: string, meta?: TerminalOutputMeta) => void
+  onFlush: (data: string, meta?: TerminalOutputMeta) => void,
+  initialCadence: TerminalOutputCadence = 'focused'
 ): TerminalOutputBatcher {
+  let cadence = initialCadence
   let chunks: string[] = []
   let bytes = 0
   let lastSeq: number | undefined
   let pendingCwd: string | undefined
   let pendingRawLength = 0
-  let pendingSourceRanges: TerminalOutputSourceRange[] = []
   let timer: ReturnType<typeof setTimeout> | null = null
 
   const clearTimer = (): void => {
@@ -39,13 +45,10 @@ export function createTerminalOutputBatcher(
     }
     const data = chunks.length === 1 ? chunks[0]! : chunks.join('')
     const meta =
-      typeof lastSeq === 'number' || pendingCwd !== undefined || pendingSourceRanges.length > 0
+      typeof lastSeq === 'number' || pendingCwd !== undefined
         ? {
             ...(typeof lastSeq === 'number' ? { seq: lastSeq, rawLength: pendingRawLength } : {}),
-            ...(pendingCwd !== undefined ? { cwd: pendingCwd } : {}),
-            ...(pendingSourceRanges.length > 0
-              ? { sourceRanges: Object.freeze(pendingSourceRanges) }
-              : {})
+            ...(pendingCwd !== undefined ? { cwd: pendingCwd } : {})
           }
         : undefined
     chunks = []
@@ -53,7 +56,6 @@ export function createTerminalOutputBatcher(
     lastSeq = undefined
     pendingCwd = undefined
     pendingRawLength = 0
-    pendingSourceRanges = []
     onFlush(data, meta)
   }
 
@@ -68,26 +70,12 @@ export function createTerminalOutputBatcher(
         onFlush(data, { ...meta, rawLength, transformed: true })
         return
       }
-      const nextSourceRanges = meta?.sourceRanges ?? []
-      const lastSourceRange = pendingSourceRanges.at(-1)
-      const firstNextSourceRange = nextSourceRanges[0]
-      if (
-        chunks.length > 0 &&
-        (pendingSourceRanges.length > 0 !== nextSourceRanges.length > 0 ||
-          (lastSourceRange &&
-            firstNextSourceRange &&
-            (!sameTerminalOutputSourceIdentity(lastSourceRange, firstNextSourceRange) ||
-              lastSourceRange.displayEnd !== firstNextSourceRange.displayStart)))
-      ) {
-        flush()
-      }
       if (meta?.cwd !== undefined) {
         flush()
         pendingCwd = meta.cwd
       }
       chunks.push(data)
       pendingRawLength += rawLength
-      pendingSourceRanges.push(...nextSourceRanges)
       const remainingBudget = Math.max(1, TERMINAL_OUTPUT_BATCH_MAX_BYTES - bytes)
       const measurement = measureTerminalStreamByteLength(data, {
         stopAfterBytes: remainingBudget
@@ -101,20 +89,25 @@ export function createTerminalOutputBatcher(
         return
       }
       if (!timer) {
-        // Why: coalesce stream output before it crosses the network; desktop subscribers share the same burst boundary.
-        timer = setTimeout(flush, TERMINAL_OUTPUT_FLUSH_MS)
+        // Coalesce before network delivery; desktop subscribers share this burst boundary.
+        timer = setTimeout(flush, TERMINAL_OUTPUT_FLUSH_MS[cadence])
         if (typeof timer.unref === 'function') {
           timer.unref()
         }
       }
     },
     flush,
+    setCadence(next: TerminalOutputCadence): void {
+      cadence = next
+      if (next === 'focused') {
+        flush()
+      }
+    },
     dispose(): void {
       clearTimer()
       chunks = []
       bytes = 0
       pendingRawLength = 0
-      pendingSourceRanges = []
     }
   }
 }

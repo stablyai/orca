@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.terminal-clipboard",
   "family": "session.terminal-paste",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "e7e3718f685e3713cf1b8209d59d618741f892bd286853b79bb456c59cec8d86",
-  "scenarioSha256": "5cc67ab6df80a81be814a16cb60dcc4c703b0fc17594e409697a9fdeb0edeb76",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "26d0fe750677": {
       "name": "terminal.send#1",
@@ -130,42 +121,6 @@
           "category": "Error",
           "message": "Connection closed",
           "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "4238f455dad0": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "orchestration.workerTerminalUserInput"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "changed": 1
-          }
         }
       }
     },
@@ -299,16 +254,6 @@
           "ok": false
         }
       }
-    },
-    "7186df090c19": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
-    },
-    "7b316ba101c4": {
-      "name": "refresh-can-paste",
-      "ordinal": 8,
-      "value": {}
     },
     "83268287831a": {
       "name": "terminal.send#1",
@@ -678,15 +623,15 @@
       {
         "id": "terminal-paste-accepted.normal:pasted",
         "observation": {
-          "sender": ["3fb0e93ab6cb", "50a1efe07486", "4238f455dad0"],
-          "payloads": ["c8c77ac17e0a", "26d0fe750677", "7186df090c19"],
+          "sender": ["3fb0e93ab6cb", "50a1efe07486"],
+          "payloads": ["c8c77ac17e0a", "26d0fe750677"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
           "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "7b316ba101c4"]
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
         }
       },
       {
@@ -699,8 +644,8 @@
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       },
       {
@@ -713,8 +658,8 @@
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       },
       {
@@ -727,8 +672,8 @@
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       },
       {
@@ -741,8 +686,8 @@
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       },
       {
@@ -755,8 +700,8 @@
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       },
       {
@@ -769,8 +714,8 @@
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       },
       {
@@ -783,8 +728,8 @@
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       },
       {
@@ -797,8 +742,8 @@
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       },
       {

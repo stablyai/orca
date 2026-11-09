@@ -1,7 +1,6 @@
 import type { AttemptObservationStoreMethods } from './attempt-observation-store'
 import type { CoordinatorRunStoreMethods } from './coordinator-runs/coordinator-run-store'
 import type { DecisionGateStoreMethods } from './decision-gates/decision-gate-store'
-import type { DispatchCapabilityMethods } from './dispatch-context/dispatch-capability'
 import type { DispatchCompletionMethods } from './dispatch-context/dispatch-completion'
 import type { DispatchContextStoreMethods } from './dispatch-context/dispatch-context-store'
 import type { DispatchLookupMethods } from './dispatch-context/dispatch-lookup'
@@ -61,9 +60,10 @@ import type { WorkerDispatchStartMethods } from './worker-dispatch/worker-dispat
 import type { WorkerDispatchStopMethods } from './worker-dispatch/worker-dispatch-stop'
 import type { WorkerTerminalRecoveryMethods } from './worker-dispatch/worker-terminal-recovery'
 import type { WorkerTerminalArchiveMethods } from './worker-terminal/worker-terminal-archive'
+import type { WorkerTerminalAutoReleaseMethods } from './worker-terminal/worker-terminal-auto-release'
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
-import type { StructuredPointerOperationStoreMethods } from './messages/structured-pointer-operation-store'
+import type { StructuredMailSendStoreMethods } from './messages/structured-mail-send-store'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
@@ -120,14 +120,14 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   FederationRelayImportMethods &
   RemoteQuestionStoreMethods &
   FederationRelayItemMethods &
-  StructuredPointerOperationStoreMethods &
+  StructuredMailSendStoreMethods &
   WorkerTerminalResourceStoreMethods &
   WorkerTerminalTransferMethods &
   WorkerTerminalReleaseMethods &
   WorkerTerminalArchiveMethods &
+  WorkerTerminalAutoReleaseMethods &
   WorkerTerminalListingMethods &
   DispatchContextStoreMethods &
-  DispatchCapabilityMethods &
   DispatchLookupMethods &
   DispatchDepthMethods &
   DispatchCompletionMethods &

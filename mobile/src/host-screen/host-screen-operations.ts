@@ -1,31 +1,35 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import {
-  rpcUncheckedMemberReader,
-  rpcUncheckedPayloadReader
-} from '../transport/rpc-reader-payload'
+  hostPlatformSchema,
+  hostRepoCatalogSnapshotSchema,
+  hostScreenUnreadReplySchema,
+  hostSshTargetSummariesSchema,
+  hostViewSettingsSchema,
+  worktreeArchiveHookTrustSchema
+} from './host-screen-reply-schema'
 
-// What the host screen reads to label its rows and to mirror the desktop's workspace view store.
-// Every read here is decorative: a refusal leaves the screen on what it already has and the next
-// refresh retries, so all of them skip rather than throw.
+// Decorative reads skip refusals and retry on refresh; malformed accepted replies throw into the refresh/settings catches. Writes read no body.
 
-export const hostRepoCatalogRead = bindDeferredRpcOperation(
+// The host screen's repo poll: repeats of an unchanged catalog cost a snapshot id, not every icon.
+export const hostRepoCatalogSnapshotRead = bindDeferredRpcOperation(
   defineRpcOperation({
-    name: 'repo.host-catalog-or-skip',
+    name: 'repo.host-catalog-snapshot-or-skip',
     method: 'repo.list',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('repo-catalog')
+    read: rpcResultVariant('repo-catalog-snapshot', hostRepoCatalogSnapshotSchema)
   })
 )
 
-/** Row labels for a catalog that spans hosts. Absent on a host that predates the method. */
+// Older hosts may lack the cross-host catalog method.
 export const hostSshTargetSummariesRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'ssh.host-target-summaries-or-skip',
     method: 'ssh.listTargetSummaries',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('ssh-target-summaries')
+    read: rpcResultVariant('ssh-target-summaries', hostSshTargetSummariesSchema)
   })
 )
 
@@ -35,79 +39,103 @@ export const hostPlatformRead = bindDeferredRpcOperation(
     method: 'host.platform',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('host-platform')
+    read: rpcResultVariant('host-platform', hostPlatformSchema)
   })
 )
 
-/**
- * The desktop's shared workspace view settings, a third family on ui.get.
- *
- * It keeps the Tasks screen's property-read throw on a null result — the screen's own try/catch is
- * what that throw has always landed in — where the New Workspace drawer's reader degrades instead.
- */
+// Keep null ui.get results throwing into the host screen’s catch; New Workspace deliberately uses a different, degrading reader.
 export const hostViewSettingsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'ui.host-view-settings-or-skip',
     method: 'ui.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('ui-view-settings', 'ui')
+    read: rpcResultVariant('ui-view-settings', hostViewSettingsSchema)
   })
 )
 
-/** Patching the same store. Best-effort: the local state already moved, and no reply is read. */
+// Best-effort: local state already moved and no reply body is read.
 export const hostViewSettingsWrite = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'ui.set-host-view-settings-or-skip',
     method: 'ui.set',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('ui-view-settings-written')
+    read: rpcResultVariant('ui-view-settings-written', hostScreenUnreadReplySchema)
   })
 )
 
-/**
- * The host list's three row mutations.
- *
- * All three skip on refusal, which is not the policy `worktree.set-review-link` uses on the same
- * method in source-control: a review link throws so the composer can report it, where a pin write
- * is optimistic and its `.catch` already swallowed everything. Two policies, both named.
- */
+export const hostCardLayoutWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.update-card-layout-or-skip',
+    method: 'settings.update',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('card-layout-written', hostScreenUnreadReplySchema)
+  })
+)
+
+// Optimistic row writes skip refusals; source-control’s review-link write uses the same method but throws so the composer can report failure.
 export const worktreePinWrite = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.set-pinned-or-skip',
     method: 'worktree.set',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('pin-written')
+    read: rpcResultVariant('pin-written', hostScreenUnreadReplySchema)
   })
 )
 
-/** Deleting a row. Only acceptance is read: a refusal is what puts the row back. */
+// Rename reports refusal so the sheet can keep the text and offer Retry.
+export const worktreeDisplayNameWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.set-display-name',
+    method: 'worktree.set',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('display-name-written', hostScreenUnreadReplySchema)
+  })
+)
+
+export const worktreeSleep = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.sleep-or-skip',
+    method: 'worktree.sleep',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('worktree-slept', hostScreenUnreadReplySchema)
+  })
+)
+
+// A refused read leaves the archive hook unverified, so deletion does not run it.
+export const worktreeArchiveHookTrustRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'repo.archive-hook-trust-or-skip',
+    method: 'repo.hooks',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('archive-hook-trust', worktreeArchiveHookTrustSchema)
+  })
+)
+
+// Deletion reads acceptance only; refusal restores the row and an archive-hook refusal offers Delete Anyway.
 export const worktreeRemove = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.remove-or-skip',
     method: 'worktree.rm',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('worktree-removed')
+    read: rpcResultVariant('worktree-removed', hostScreenUnreadReplySchema)
   })
 )
 
-/**
- * Telling the host which workspace the phone opened. Best-effort; navigation does not wait.
- *
- * Two readers. The host list sends it and never looks, and the session route's startup effect reads
- * the skip verdict for one thing only: an accepted reply saying the host is headless is what raises
- * the "open Orca on the host" toast. A refusal and a dropped reply both mean "no advice", which is
- * what the skip already says.
- */
+// Navigation never waits for activation. The host list ignores its reply; session startup inspects accepted headless replies for advice and treats refusal as no advice.
 export const worktreeActivate = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'worktree.activate-or-skip',
     method: 'worktree.activate',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('worktree-activated')
+    read: rpcResultVariant('worktree-activated', hostScreenUnreadReplySchema)
   })
 )

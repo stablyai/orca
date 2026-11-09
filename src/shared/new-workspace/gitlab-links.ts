@@ -1,13 +1,7 @@
 import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
 
-// Why: GitLab project paths can include nested groups, and the host may
-// be self-hosted (gitlab.example.com), so the URL pattern uses the
-// project-internal `/-/` separator as the GitLab-specific signal rather
-// than locking to gitlab.com. Anything matching `/<path>/-/(issues|
-// work_items|merge_requests)/<digits>` is treated as a GitLab item URL
-// regardless of host. Modern GitLab emits issue URLs as
-// `/-/work_items/<iid>`; treat that as an issue work item, same as the
-// legacy `/-/issues/<iid>` form.
+// Use /-/ as the GitLab signal across self-hosted instances and nested groups. Both /issues and modern /work_items name issues;
+// /merge_requests names MRs, regardless of host.
 const GL_ITEM_PATH_RE = /\/(?:issues|work_items|merge_requests)\/(\d+)(?:\/.*)?$/i
 const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|work_items|merge_requests)\/(\d+)(?:\/.*)?$/i
 
@@ -24,22 +18,14 @@ export type GitLabLinkQuery = {
   tooLarge?: boolean
 }
 
-/**
- * Parse a GitLab issue or MR reference from plain input. Accepts:
- *   - bare numbers ("42")
- *   - hash-prefixed numbers ("#42")
- *   - exclamation-prefixed numbers ("!42") — GitLab convention for MRs
- *   - full GitLab URLs (any host) for issues or merge_requests
- */
+/** Accept bare, #issue, !MR numbers or any-host GitLab issue/work_items/merge_requests URLs. */
 export function parseGitLabIssueOrMRNumber(input: string): number | null {
   const trimmed = input.trim()
   if (!trimmed) {
     return null
   }
 
-  // Why: GitLab references issues with `#` and MRs with `!` in markdown
-  // and copy-paste contexts. Accept both prefixes so users can drop in
-  // either form.
+  // Accept GitLab’s copied #issue and !MR references.
   const numeric = trimmed.startsWith('#') || trimmed.startsWith('!') ? trimmed.slice(1) : trimmed
   if (/^\d+$/.test(numeric)) {
     return Number.parseInt(numeric, 10)
@@ -56,19 +42,14 @@ export function parseGitLabIssueOrMRNumber(input: string): number | null {
   if (!match) {
     return null
   }
-  // Why: the basic pattern matches plain GitHub URLs too (e.g.
-  // /owner/repo/issues/123). Require the `/-/` separator that's
-  // unique to GitLab to avoid mis-classifying a GitHub URL.
+  // Require GitLab’s /-/ separator or the basic issue pattern also accepts GitHub URLs.
   if (!url.pathname.includes('/-/')) {
     return null
   }
   return Number.parseInt(match[1], 10)
 }
 
-/**
- * Parse a GitLab URL into project path + iid + type. Returns null for
- * anything that isn't a recognizable GitLab issue or merge-request URL.
- */
+/** Read project host/path, iid and type from a recognizable GitLab work-item URL. */
 export function parseGitLabIssueOrMRLink(input: string): {
   slug: ProjectSlug
   number: number
@@ -92,8 +73,7 @@ export function parseGitLabIssueOrMRLink(input: string): {
   }
 
   const path = match[1]
-  // Why: a project path needs at least one slash (group/project). A
-  // single-segment path is the user/group root, not a project.
+  // Projects require group/project, unlike single-segment user/group roots.
   if (!path.includes('/')) {
     return null
   }
@@ -105,10 +85,7 @@ export function parseGitLabIssueOrMRLink(input: string): {
   }
 }
 
-/**
- * Normalize link-picker input so both raw issue/MR numbers and full
- * GitLab URLs resolve to a usable query + direct-number lookup.
- */
+/** Resolve issue/MR numbers or GitLab URLs into search query and direct-number lookup. */
 export function normalizeGitLabLinkQuery(raw: string): GitLabLinkQuery {
   if (isWorkItemLinkQueryTooLarge(raw)) {
     return { query: '', directNumber: null, tooLarge: true }
@@ -128,9 +105,7 @@ export function normalizeGitLabLinkQuery(raw: string): GitLabLinkQuery {
     return { query: trimmed, directNumber: null }
   }
 
-  // Why: any GitLab issue/MR URL is accepted by number regardless of
-  // project slug, mirroring the GitHub-side behavior — fork checkouts
-  // can legitimately target an upstream's issue numbers.
+  // Like GitHub, allow upstream numbers with differing fork/project slugs.
   return {
     query: trimmed,
     directNumber: link.number

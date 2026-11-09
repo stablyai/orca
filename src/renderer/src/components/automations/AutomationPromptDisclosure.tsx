@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function AutomationPromptDisclosure({
   prompt,
-  label = translate('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')
+  label
 }: {
   prompt: string
   label?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const contentId = useId()
   const expandedRef = useRef(false)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -56,7 +57,7 @@ export function AutomationPromptDisclosure({
     <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-2">
         <div className="text-sm font-medium">
-          {label}
+          {label ?? t('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')}
         </div>
         {overflows || expanded ? (
           <Button
@@ -70,14 +71,8 @@ export function AutomationPromptDisclosure({
             onClick={toggleExpanded}
           >
             {expanded
-              ? translate(
-                  'auto.components.automations.AutomationPromptDisclosure.showLess',
-                  'Show less'
-                )
-              : translate(
-                  'auto.components.automations.AutomationPromptDisclosure.showMore',
-                  'Show more'
-                )}
+              ? t('auto.components.automations.AutomationPromptDisclosure.showLess', 'Show less')
+              : t('auto.components.automations.AutomationPromptDisclosure.showMore', 'Show more')}
           </Button>
         ) : null}
       </div>

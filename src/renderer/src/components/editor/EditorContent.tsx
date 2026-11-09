@@ -1,18 +1,26 @@
+import { GitGraphTab } from './git-graph/git-graph-tab'
 import { useAppStore } from '@/store'
-import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
-import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
+import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
+import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
+import { CheckRunDetailsPanel } from './check-details/panel/CheckRunDetailsPanel'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
+import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
 import type { FileContent } from './editor-panel-content-types'
-import { translate } from '@/i18n/i18n'
+import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
+import { useTranslate } from '@/i18n/use-translate'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
-import { useMarkdownDocuments } from './useMarkdownDocuments'
-import type { MarkdownRenderState } from './markdown-render-mode'
+import { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
+import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
+
+// Retry is a user act: it may start a stopped WSL distro.
+const USER_RETRY = { wakeWslDistro: true }
 
 const noopCloseMarkdownTableOfContents = (): void => {}
 
@@ -45,8 +53,10 @@ export function EditorContent({
   resolvedLanguage,
   isMarkdown,
   isMermaid,
+  isSvg = false,
   isCsv,
   isNotebook,
+  customEditor = null,
   mdViewMode,
   inlineMarkdownRenderState,
   isChangesMode,
@@ -73,8 +83,10 @@ export function EditorContent({
   resolvedLanguage: string
   isMarkdown: boolean
   isMermaid: boolean
+  isSvg?: boolean
   isCsv: boolean
   isNotebook: boolean
+  customEditor?: ActivePluginCustomEditor | null
   mdViewMode: MarkdownViewMode
   inlineMarkdownRenderState: MarkdownRenderState | null
   isChangesMode: boolean
@@ -89,11 +101,12 @@ export function EditorContent({
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
-      ? activeFile.filePath
+      ? activeFile.id
       : `${activeFile.filePath}::${viewStateScopeId}`
   const diffViewStateKey =
     viewStateScopeId === activeFile.id ? activeFile.id : `${activeFile.id}::${viewStateScopeId}`
@@ -104,8 +117,10 @@ export function EditorContent({
   // Why: only the single-pane edit path gets PDF scroll memory — diff and conflict review mount several viewers on one path.
   const pdfViewStateKey =
     viewStateScopeId === activeFile.id
-      ? `${activeFile.filePath}:pdf`
+      ? `${activeFile.id}:pdf`
       : `${activeFile.filePath}::${viewStateScopeId}:pdf`
+  // Scope durable PDF zoom by owner: identical paths can belong to different worktrees or remote hosts.
+  const pdfPreferenceKey = buildPdfScalePreferenceKey(activeFile)
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
   const reloadOpenCheckRunDetailsTab = useAppStore((state) => state.reloadOpenCheckRunDetailsTab)
   const markdownDocuments = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
@@ -119,21 +134,26 @@ export function EditorContent({
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
 
+  if (activeFile.mode === 'git-graph') {
+    return <GitGraphTab key={activeFile.worktreeId} worktreeId={activeFile.worktreeId} />
+  }
+
   if (activeFile.mode === 'check-details') {
     const checkRunDetails = activeFile.checkRunDetails
     if (!checkRunDetails) {
       return (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          {translate(
-            'auto.components.editor.EditorContent.6c4f1a8d2e',
-            'Check details are unavailable.'
-          )}
+          {t('auto.components.editor.EditorContent.6c4f1a8d2e', 'Check details are unavailable.')}
         </div>
       )
     }
     const details = checkRunDetails.details
     return (
       <CheckRunDetailsPanel
+        key={JSON.stringify([activeFile.id, viewStateScopeId, checkRunDetails.contextKey])}
+        tabId={activeFile.id}
+        viewStateScopeId={viewStateScopeId}
+        contextKey={checkRunDetails.contextKey}
         check={checkRunDetails.check}
         details={details}
         loading={checkRunDetails.loading}
@@ -171,6 +191,7 @@ export function EditorContent({
         key={viewStateScopeId}
         file={activeFile}
         viewStateKey={diffViewStateKey}
+        viewStateScopeId={viewStateScopeId}
       />
     )
   }
@@ -180,7 +201,7 @@ export function EditorContent({
     if (!fileContent) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          {translate('auto.components.editor.EditorContent.37a0e81fa6', 'Loading preview...')}
+          {t('auto.components.editor.EditorContent.37a0e81fa6', 'Loading preview...')}
         </div>
       )
     }
@@ -188,14 +209,17 @@ export function EditorContent({
       return (
         <EditorFileLoadErrorView
           message={fileContent.loadError}
-          onRetry={() => reloadContent(activeFile)}
+          code={fileContent.loadErrorCode}
+          worktreeId={activeFile.worktreeId}
+          onRetry={() => reloadContent(activeFile, USER_RETRY)}
+          onHostStarted={() => reloadContent(activeFile)}
         />
       )
     }
     if (fileContent.isBinary) {
       return (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.editor.EditorContent.8608ce4cb1',
             'Markdown preview is unavailable for binary files.'
           )}
@@ -203,22 +227,26 @@ export function EditorContent({
       )
     }
     const previewSourceFileId = activeFile.markdownPreviewSourceFileId ?? activeFile.filePath
+    const previewContent = editBuffers[previewSourceFileId] ?? fileContent.content
     return (
       <div className="min-h-0 flex-1">
-        <MarkdownPreview
-          key={viewStateScopeId}
-          content={editBuffers[previewSourceFileId] ?? fileContent.content}
-          filePath={activeFile.filePath}
-          sourceFileId={previewSourceFileId}
-          sourceWorktreeId={activeFile.worktreeId}
-          sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
-          scrollCacheKey={markdownPreviewViewStateKey}
-          initialAnchor={activeFile.markdownPreviewAnchor ?? null}
-          showTableOfContents={showMarkdownTableOfContents}
-          onCloseTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-          {...markdownDocuments.previewProps}
-        />
+        <MarkdownPreviewSizeGate content={previewContent}>
+          <MarkdownPreview
+            key={`${viewStateScopeId}:${markdownPreviewViewStateKey}`}
+            content={previewContent}
+            filePath={activeFile.filePath}
+            sourceFileId={previewSourceFileId}
+            sourceWorktreeId={activeFile.worktreeId}
+            sourceRelativePath={activeFile.relativePath}
+            sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
+            scrollCacheKey={markdownPreviewViewStateKey}
+            initialAnchor={activeFile.markdownPreviewAnchor ?? null}
+            showTableOfContents={showMarkdownTableOfContents}
+            onCloseTableOfContents={onCloseMarkdownTableOfContents}
+            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+            {...markdownDocuments.previewProps}
+          />
+        </MarkdownPreviewSizeGate>
       </div>
     )
   }
@@ -231,6 +259,7 @@ export function EditorContent({
         editorViewStateKey={editorViewStateKey}
         diffViewStateKey={diffViewStateKey}
         pdfViewStateKey={pdfViewStateKey}
+        pdfPreferenceKey={pdfPreferenceKey}
         fileContent={fileContents[activeFile.id]}
         diffContent={diffContents[activeFile.id]}
         editBuffer={editBuffers[activeFile.id]}
@@ -238,8 +267,10 @@ export function EditorContent({
         monacoLanguage={monacoLanguage}
         isMarkdown={isMarkdown}
         isMermaid={isMermaid}
+        isSvg={isSvg}
         isCsv={isCsv}
         isNotebook={isNotebook}
+        customEditor={customEditor}
         mdViewMode={mdViewMode}
         inlineMarkdownRenderState={inlineMarkdownRenderState}
         isChangesMode={isChangesMode}

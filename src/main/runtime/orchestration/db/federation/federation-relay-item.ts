@@ -2,9 +2,13 @@ import type {
   WorkerReportOutcome,
   FederationRelayDirection,
   FederationRelayItemRow
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
+import {
+  isWorkerStateIn,
+  SETTLEABLE_WORKER_STATES
+} from '../../workers/reports/worker-report-admission'
 
 export function getFederationRelayItem(
   this: OrchestrationDb,
@@ -40,7 +44,7 @@ export function settleRemoteAttachmentInRelayTransaction(
   if (attachment.state === state) {
     return
   }
-  if (attachment.state !== 'ready') {
+  if (!isWorkerStateIn(SETTLEABLE_WORKER_STATES, attachment.state)) {
     throw new OrchestrationError(
       'request_mismatch',
       `Remote Dispatch ${dispatchId} cannot settle as ${state} from ${attachment.state}.`
@@ -51,9 +55,9 @@ export function settleRemoteAttachmentInRelayTransaction(
       `UPDATE remote_dispatch_attachments
        SET state = ?, stage = ?, capability_hash = NULL,
            updated_at = datetime('now')
-       WHERE dispatch_id = ? AND state = 'ready'`
+       WHERE dispatch_id = ? AND state = ?`
     )
-    .run(state, stage, dispatchId)
+    .run(state, stage, dispatchId, attachment.state)
 }
 
 export type FederationRelayItemMethods = {

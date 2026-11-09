@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function SourceControlHeaderOverflowMenu({
   sourceControlViewMode,
@@ -31,34 +31,33 @@ export function SourceControlHeaderOverflowMenu({
   diffCommentCount: number
   onExpandNotes: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const viewModeLabel =
     sourceControlViewMode === 'tree'
-      ? translate('auto.components.right.sidebar.SourceControl.a91f8e2b01', 'View as list')
-      : translate('auto.components.right.sidebar.SourceControl.b82e9f3c12', 'View as tree')
+      ? t('auto.components.right.sidebar.SourceControl.a91f8e2b01', 'View as list')
+      : t('auto.components.right.sidebar.SourceControl.b82e9f3c12', 'View as tree')
 
   return (
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="inline-flex shrink-0">
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="size-7 text-muted-foreground hover:text-foreground"
-                aria-label={translate(
-                  'auto.components.right.sidebar.SourceControl.f71c4a8d90',
-                  'More source control actions'
-                )}
-              >
-                <MoreHorizontal className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-          </span>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="size-7 text-muted-foreground hover:text-foreground"
+              aria-label={t(
+                'auto.components.right.sidebar.SourceControl.f71c4a8d90',
+                'More source control actions'
+              )}
+            >
+              <MoreHorizontal className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate(
+          {t(
             'auto.components.right.sidebar.SourceControl.f71c4a8d90',
             'More source control actions'
           )}
@@ -75,21 +74,18 @@ export function SourceControlHeaderOverflowMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onChangeBaseRef}>
           <Settings2 className="size-3.5" />
-          {translate('auto.components.right.sidebar.SourceControl.476b77745b', 'Change Base Ref')}…
+          {t('auto.components.right.sidebar.SourceControl.476b77745b', 'Change Base Ref')}…
         </DropdownMenuItem>
         <DropdownMenuItem disabled={branchCompareRefreshDisabled} onSelect={onRefreshBranchCompare}>
           <RefreshCw className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControl.ed34038d0d',
-            'Refresh branch compare'
-          )}
+          {t('auto.components.right.sidebar.SourceControl.ed34038d0d', 'Refresh branch compare')}
         </DropdownMenuItem>
         {diffCommentCount > 0 ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onExpandNotes}>
               <MessageSquare className="size-3.5" />
-              {translate('auto.components.right.sidebar.SourceControl.cc474e0b8c', 'Notes')}
+              {t('auto.components.right.sidebar.SourceControl.cc474e0b8c', 'Notes')}
               <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
                 {diffCommentCount}
               </span>

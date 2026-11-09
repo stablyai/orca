@@ -1,81 +1,95 @@
 import type { SkillCloudVersion } from '../../../../shared/skill-cloud-contract'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { groupInstallState, type SkillManagedInstallGroup } from './skill-managed-install-groups'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, {
+const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric'
-})
-
-function formatDate(value: string): string | null {
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : dateFormatter.format(parsed)
 }
 
-/** Bundles have no name until the package loads, so the row names itself after
- *  what it actually put on disk. */
-export function managedInstallTitle(group: SkillManagedInstallGroup): string {
+function formatDate(value: string, intlLocale?: string): string | null {
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime())
+    ? null
+    : uiDateTimeFormat(DATE_OPTIONS, intlLocale).format(parsed)
+}
+
+/** Before a bundle package loads, derive its title from the skills installed on disk. */
+export function managedInstallTitle(
+  group: SkillManagedInstallGroup,
+  t: Translate = translate
+): string {
   const [first, ...rest] = group.installs
   if (!first) {
     return group.packageId
   }
   return rest.length === 0
     ? first.name
-    : translate('auto.components.skills.managedInstall.titleMore', '{{name}} +{{count}}', {
+    : t('auto.components.skills.managedInstall.titleMore', '{{name}} +{{count}}', {
         name: first.name,
         count: rest.length
       })
 }
 
-export function managedInstallScopeLabel(group: SkillManagedInstallGroup): string {
+export function managedInstallScopeLabel(
+  group: SkillManagedInstallGroup,
+  t: Translate = translate
+): string {
   return group.installs[0]?.scope === 'workspace'
-    ? translate('auto.components.skills.managedInstall.scopeWorkspace', 'This workspace')
-    : translate('auto.components.skills.managedInstall.scopeGlobal', 'Everywhere')
+    ? t('auto.components.skills.managedInstall.scopeWorkspace', 'This workspace')
+    : t('auto.components.skills.managedInstall.scopeGlobal', 'Everywhere')
 }
 
-export function managedInstalledOnLabel(group: SkillManagedInstallGroup): string | null {
+export function managedInstalledOnLabel(
+  group: SkillManagedInstallGroup,
+  t: Translate = translate,
+  intlLocale?: string
+): string | null {
   const installedAt = group.installs[0]?.installedAt
-  const date = installedAt ? formatDate(installedAt) : null
+  const date = installedAt ? formatDate(installedAt, intlLocale) : null
   return date
-    ? translate('auto.components.skills.managedInstall.installedOn', 'Installed {{date}}', { date })
+    ? t('auto.components.skills.managedInstall.installedOn', 'Installed {{date}}', { date })
     : null
 }
 
-/**
- * `unchanged` is the normal case and saying so on every row is noise, so only
- * the two states a person can act on get words.
- */
-export function managedInstallStateNote(group: SkillManagedInstallGroup): string | null {
+/** Leave unchanged installs quiet; label only states the user can act on. */
+export function managedInstallStateNote(
+  group: SkillManagedInstallGroup,
+  t: Translate = translate
+): string | null {
   const state = groupInstallState(group)
   if (state === 'modified') {
-    return translate('auto.components.skills.managedInstall.stateEdited', 'Edited after installing')
+    return t('auto.components.skills.managedInstall.stateEdited', 'Edited after installing')
   }
   return state === 'missing'
-    ? translate('auto.components.skills.managedInstall.stateMissing', 'Files are missing')
+    ? t('auto.components.skills.managedInstall.stateMissing', 'Files are missing')
     : null
 }
 
-export function managedSkillStateNote(state: string): string | null {
+export function managedSkillStateNote(state: string, t: Translate = translate): string | null {
   if (state === 'modified') {
-    return translate('auto.components.skills.managedInstall.skillEdited', 'Edited')
+    return t('auto.components.skills.managedInstall.skillEdited', 'Edited')
   }
   return state === 'missing'
-    ? translate('auto.components.skills.managedInstall.skillMissing', 'Missing')
+    ? t('auto.components.skills.managedInstall.skillMissing', 'Missing')
     : null
 }
 
-/** Version ids are opaque, so the date does the identifying and the installed
- *  one is marked rather than spelled out a second time. */
+/** Identify opaque versions by date and mark the installed one without repeating its label. */
 export function managedVersionLabel(
   version: SkillCloudVersion,
-  installedVersionId: string
+  installedVersionId: string,
+  t: Translate = translate,
+  intlLocale?: string
 ): string {
   const date =
-    formatDate(version.createdAt) ??
-    translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')
+    formatDate(version.createdAt, intlLocale) ??
+    t('auto.components.skills.SkillRow.updatedUnknown', 'No date')
   return version.versionId === installedVersionId
-    ? translate('auto.components.skills.managedInstall.versionCurrent', '{{date}} (installed)', {
+    ? t('auto.components.skills.managedInstall.versionCurrent', '{{date}} (installed)', {
         date
       })
     : date

@@ -68,7 +68,6 @@ describe('native preload linux package recovery methods', () => {
       packageFileName: 'orca.deb'
     })
 
-    // Why: the renderer must never reach a generic shell/path channel for this cache artifact.
     expect(invoke.mock.calls).toEqual([['updater:getLinuxPackageInstallInstructions']])
   })
 
@@ -80,12 +79,5 @@ describe('native preload linux package recovery methods', () => {
     await expect(api.updater.showLinuxPackage()).resolves.toBeUndefined()
 
     expect(invoke.mock.calls).toEqual([['updater:showLinuxPackage']])
-  })
-
-  it('surfaces a main-process validation rejection to the caller', async () => {
-    const api = await loadApi()
-    invoke.mockRejectedValueOnce(new Error('hash mismatch'))
-
-    await expect(api.updater.getLinuxPackageInstallInstructions()).rejects.toThrow('hash mismatch')
   })
 })

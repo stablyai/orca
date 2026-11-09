@@ -1,17 +1,8 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "session.content-create",
   "family": "session.content-create",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
-  "scenarioSha256": "5100bd674509d1d83b1e2594eee036af21ea14b12226185b44070555d1d43060",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
     "049e3dd3b1db": {
       "name": "status.get#1",
@@ -94,19 +85,19 @@
         "message": "Unknown method"
       }
     },
-    "1fe9fbe7d375": {
-      "createError": "Cannot read properties of undefined (reading 'capabilities')",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
-      }
-    },
     "32afb7dc375d": {
       "name": "toast",
       "ordinal": 3,
       "value": {
         "message": "Remote file changes require a newer Orca server. Update the HUB and try again."
+      }
+    },
+    "37185d7089db": {
+      "createError": "The host sent a reply this app could not read (status.get)",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
       }
     },
     "3e7bfd4c59c3": {
@@ -363,13 +354,6 @@
         }
       }
     },
-    "bde3786de6f8": {
-      "name": "toast",
-      "ordinal": 3,
-      "value": {
-        "message": "Cannot read properties of null (reading 'capabilities')"
-      }
-    },
     "bfe4c76a5071": {
       "name": "status.get#1",
       "ordinal": 1,
@@ -403,13 +387,6 @@
           "id": "frame-1",
           "ok": false
         }
-      }
-    },
-    "c371c18b9adc": {
-      "name": "toast",
-      "ordinal": 3,
-      "value": {
-        "message": "Cannot read properties of undefined (reading 'capabilities')"
       }
     },
     "c924e7a5a7da": {
@@ -454,16 +431,15 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
-    "d574cdcd4bef": {
-      "createError": "",
-      "creatingBrowser": false,
-      "creatingMarkdown": false,
-      "pendingBrowserFocusPageId": {
-        "$rpc": "null"
+    "d25576a14c57": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "The host sent a reply this app could not read (status.get)"
       }
     },
-    "e1f916d49745": {
-      "createError": "Cannot read properties of null (reading 'capabilities')",
+    "d574cdcd4bef": {
+      "createError": "",
       "creatingBrowser": false,
       "creatingMarkdown": false,
       "pendingBrowserFocusPageId": {
@@ -656,8 +632,8 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "1fe9fbe7d375",
-          "effects": ["c371c18b9adc"]
+          "state": "37185d7089db",
+          "effects": ["d25576a14c57"]
         }
       },
       {
@@ -668,8 +644,8 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "e1f916d49745",
-          "effects": ["bde3786de6f8"]
+          "state": "37185d7089db",
+          "effects": ["d25576a14c57"]
         }
       },
       {

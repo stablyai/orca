@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 
 const request: RpcRequest = {

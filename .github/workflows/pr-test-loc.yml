@@ -6,7 +6,6 @@ on:
       - opened
       - synchronize
       - reopened
-      - ready_for_review
 
 concurrency:
   group: pr-test-loc-${{ github.event.pull_request.number }}
@@ -19,13 +18,11 @@ permissions:
 jobs:
   loc:
     name: test vs non-test LoC
-    runs-on: ubuntu-latest
+    # API calls and a small Node script fit the free single-CPU container runner.
+    runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:
-      # Why no checkout: the Files API already has per-file additions/deletions.
-      # Why the default branch and never pull/<n>/head: this job holds a write-scoped
-      # GITHUB_TOKEN, so it may only execute reviewed code. A PR that edits these
-      # scripts takes effect once merged.
+      # Read file counts through API without checkout; execute only default-branch scripts because GITHUB_TOKEN has write scope. PR edits take effect after merge.
       - name: Count test vs non-test LoC
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

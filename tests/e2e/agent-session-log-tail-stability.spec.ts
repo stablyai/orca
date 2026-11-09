@@ -8,9 +8,7 @@ const ANCHOR_TOKEN = 'E2E_LIVE_LOG_STABLE_ANCHOR'
 const INITIAL_PAYLOAD_BYTES = 9 * 1024 * 1024
 const APPEND_CADENCE_MS = 5_000
 const SETTLEMENT_MS = 500
-// Why: peak deltas are single pre-GC samples, so they swing with runner GC
-// timing on OS-level counters; allow the same ~20MB noise floor the settled
-// retention budget already tolerates before the append-vs-replace ordering fails.
+// Pre-GC peak samples vary with runner scheduling; allow the settled-retention noise floor.
 const PEAK_MEMORY_NOISE_ALLOWANCE_MB = 25
 
 type CrashProbe = { processGone: { reason: string; exitCode: number } | null }
@@ -21,7 +19,6 @@ type MemorySample = {
 }
 
 declare global {
-  // eslint-disable-next-line no-var -- main-process global probe for this spec
   var __liveLogCrashProbe: CrashProbe | undefined
 }
 
@@ -61,10 +58,7 @@ test.describe('Agent Session History live log', () => {
 
     let baseline = await restoreAnchorState(orcaPage, true)
     console.log(`[live-log-stability] geometry ${JSON.stringify(baseline)}`)
-    // Why: containment is proven by the full 9 MiB model length, which is
-    // font-independent. Word-wrap pixel geometry varies ~10% across runner font
-    // metrics (macOS baseline 2,775,880px; Linux CI ~2,498,292px), so keep only a
-    // generous content-height floor as a collapsed/truncated-render smoke check.
+    // Prove content via full 9 MiB length; font-dependent wrap height needs only a generous truncation floor.
     expect(baseline.valueLength).toBe(fixture.initialLength)
     expect(baseline.canUndo).toBe(false)
     expect(baseline.contentHeight).toBeGreaterThanOrEqual(2_000_000)
@@ -175,8 +169,7 @@ async function seedSyntheticSession(
 }
 
 async function openSessionHistory(page: Page): Promise<void> {
-  // Why: startup hydration can overwrite a direct store route; use the same
-  // activity-bar action a user takes so the Agents panel wins that race.
+  // Use the activity action because startup hydration can overwrite direct store routes.
   await page.getByRole('button', { name: 'Agents', exact: true }).click()
   await page.evaluate(async () => window.api.aiVault.listSessions({ force: true }))
   await page.getByRole('button', { name: 'Refresh Session History' }).click()
@@ -386,9 +379,7 @@ function assertMemoryBudget(
     for (const field of ['jsHeapMb', 'workingSetMb', 'privateMb'] as const) {
       const suffixPeak = sample.after[field] - sample.before[field]
       const replacementPeak = pairedReplacement.after[field] - pairedReplacement.before[field]
-      // Why: the legacy control provably allocates more (getValue plus a whole
-      // TextEncoder/Decoder round-trip and full model rebuild), so an append peak
-      // above it is GC-timing noise, not a regression; allow a noise margin.
+      // The replacement control allocates more; allow peak-sample GC noise without weakening settled retention.
       expect(suffixPeak).toBeLessThanOrEqual(replacementPeak + PEAK_MEMORY_NOISE_ALLOWANCE_MB)
     }
   }

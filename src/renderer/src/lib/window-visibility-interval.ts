@@ -1,7 +1,11 @@
+import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
+
 export type WindowVisibilityIntervalTimer = ReturnType<typeof setInterval>
 export type WindowVisibilityJitterTimer = ReturnType<typeof setTimeout>
 
 const MAX_VISIBILITY_JITTER_MS = 400
+// Visible windows behind another app slow remote/process polls instead of pausing (other displays still show them).
+const UNFOCUSED_POLL_SLOWDOWN = 4
 
 export function isWindowVisible(): boolean {
   return (
@@ -11,17 +15,21 @@ export function isWindowVisible(): boolean {
   )
 }
 
+export function windowPollSlowdown(): number {
+  return isOrcaWindowForegroundFocused() ? 1 : UNFOCUSED_POLL_SLOWDOWN
+}
+
 export function installWindowVisibilityInterval(args: {
   run: () => void
-  // Why: callers that drop refresh signals while hidden can treat the
-  // becoming-visible run as evidence-bearing (something may have been missed)
-  // instead of a bare interval tick. Defaults to `run`.
+  // Visibility transition is evidence-bearing for hidden signal-dropping callers; default it to run.
   runOnVisible?: () => void
   intervalMs: number
   setIntervalFn?: (callback: () => void, intervalMs: number) => WindowVisibilityIntervalTimer
   clearIntervalFn?: (handle: WindowVisibilityIntervalTimer) => void
   jitterOnVisible?: boolean
   jitterFn?: () => number
+  // Stretch the cadence by UNFOCUSED_POLL_SLOWDOWN while unfocused; overdue runs catch up on focus.
+  slowWhileUnfocused?: boolean
 }): () => void {
   const setIntervalFn =
     args.setIntervalFn ??
@@ -51,40 +59,77 @@ export function installWindowVisibilityInterval(args: {
       intervalId = null
     }
   }
-  const start = (jitterVisibleRun: boolean): void => {
+  let lastRunAt = -Infinity
+  const runNow = (run: () => void): void => {
+    lastRunAt = Date.now()
+    run()
+  }
+  const tick = (): void => {
+    // Read focus at fire time: window blur also fires when focus merely moves into a webview/iframe.
+    if (args.slowWhileUnfocused) {
+      const slowdown = windowPollSlowdown()
+      if (
+        slowdown > 1 &&
+        Date.now() - lastRunAt + args.intervalMs / 2 < args.intervalMs * slowdown
+      ) {
+        return
+      }
+    }
+    runNow(args.run)
+  }
+  const start = (jitterVisibleRun: boolean, visibleRun: () => void): void => {
     if (intervalId !== null || !isWindowVisible()) {
       return
     }
-    const visibleRun = args.runOnVisible ?? args.run
     if (jitterVisibleRun) {
       visibilityJitterId = setTimeout(() => {
         visibilityJitterId = null
         if (isWindowVisible()) {
-          visibleRun()
+          runNow(visibleRun)
         }
       }, visibilityJitterMs)
     } else {
-      visibleRun()
+      runNow(visibleRun)
     }
-    // Why: many callers shell out or cross IPC. Keep their interval alive only
-    // while Orca can present the refreshed data, but still refresh a visible
-    // unfocused window so status UI does not go stale on a second display.
-    intervalId = setIntervalFn(args.run, args.intervalMs)
+    /** Pause expensive IPC/process intervals only while unpresentable; visible unfocused windows still need fresh status on other displays. */
+    intervalId = setIntervalFn(tick, args.intervalMs)
+  }
+  const catchUpOnFocus = (): void => {
+    if (
+      intervalId === null ||
+      visibilityJitterId !== null ||
+      Date.now() - lastRunAt < args.intervalMs
+    ) {
+      return
+    }
+    // Restart the phase so the catch-up run is not followed by an immediate interval tick.
+    stop()
+    start(false, args.run)
   }
   const reconcile = (): void => {
     if (isWindowVisible()) {
-      start(args.jitterOnVisible === true)
+      start(args.jitterOnVisible === true, args.runOnVisible ?? args.run)
     } else {
       stop()
     }
   }
 
-  start(false)
+  start(false, args.runOnVisible ?? args.run)
+  const listensForFocus =
+    args.slowWhileUnfocused === true &&
+    typeof window !== 'undefined' &&
+    typeof window.addEventListener === 'function'
+  if (listensForFocus) {
+    window.addEventListener('focus', catchUpOnFocus)
+  }
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', reconcile)
   }
   return () => {
     stop()
+    if (listensForFocus) {
+      window.removeEventListener('focus', catchUpOnFocus)
+    }
     if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
       document.removeEventListener('visibilitychange', reconcile)
     }

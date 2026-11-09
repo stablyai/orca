@@ -1,3 +1,4 @@
+import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -11,6 +12,8 @@ const GITHUB_PR_ITEM = {
   title: 'A pull request',
   source: {
     id: 'github:pr:12',
+    url: 'https://github.com/owner/repo/pull/12',
+    prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' },
     repoId: REPO_ID,
     number: 12,
     type: 'pr',
@@ -27,6 +30,7 @@ const GITHUB_ISSUE_ITEM = {
   title: 'An issue',
   source: {
     id: 'github:issue:9',
+    url: 'https://github.com/owner/repo/issues/9',
     repoId: REPO_ID,
     number: 9,
     type: 'issue',
@@ -36,7 +40,6 @@ const GITHUB_ISSUE_ITEM = {
   }
 } as const
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -48,7 +51,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -93,7 +95,9 @@ const ISSUE_ROW = {
   content: {
     repository: 'owner/repo',
     number: 1,
-    url: 'https://github.com/owner/repo/issues/1',
+    url: 'https://github.enterprise.test/owner/repo/issues/1',
+    title: 'Project issue',
+    body: 'Project issue body',
     state: 'OPEN',
     labels: [],
     assignees: [],
@@ -108,7 +112,9 @@ const PR_ROW = {
   content: {
     repository: 'owner/repo',
     number: 2,
-    url: 'https://github.com/owner/repo/pull/2',
+    url: 'https://github.enterprise.test/owner/repo/pull/2',
+    title: 'Project pull request',
+    body: 'Project pull request body',
     state: 'OPEN',
     labels: [],
     assignees: [],
@@ -131,16 +137,11 @@ const PROJECT_TABLE = {
   rows: [ISSUE_ROW, PR_ROW]
 }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share. Copied per module rather than shared, because an adapter may not import another file
- * in this directory: a golden pins the one module it was recorded through, so plumbing reaching
- * across the seam would drive recordings its header does not cover.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
   readonly fixture: Record<string, unknown>
+  readonly observedFields?: readonly TaskActionObservedField[]
   readonly actions: (context: {
     /** A getter, not a value: an action that re-renders first needs the rebuilt callbacks. */
     readonly actions: () => Actions
@@ -151,12 +152,14 @@ type ModelHookSpec<Actions> = {
 }
 
 function mountModelHook<Actions>(
+  modules: ReturnType<typeof operationModuleLoader>,
   context: MountContext,
   spec: ModelHookSpec<Actions>
 ): MountedOperation {
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
+    useTaskActionMountOwners(modules, context, model, spec.fixture, spec.observedFields)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -184,10 +187,6 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * A board row's file list and the merge it shares a screen with, plus the issue and pull-request
- * state writes that hook exposes alongside them.
- */
 export function taskProjectRowMergeMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -206,8 +205,14 @@ export function taskProjectRowMergeMountAdapters(
     const useActions = load<
       typeof import('../../../tasks/use-mobile-tasks-project-file-merge-actions')
     >('use-mobile-tasks-project-file-merge-actions.tsx').useMobileTasksProjectFileMergeActions
-    return mountModelHook(context, {
-      useHook: (model) => useActions(model),
+    return mountModelHook(modules, context, {
+      useHook: (model: Parameters<typeof useActions>[0]) => useActions(model),
+      observedFields: [
+        'expandedPrFilePath',
+        'prFileContents',
+        'prFileLoadingPath',
+        'prFileCommentDrafts'
+      ],
       fixture: {
         ...boardFixture,
         projectRowItem: PR_ROW,
@@ -237,8 +242,7 @@ export function taskProjectRowMergeMountAdapters(
           ),
         merge: () =>
           actions().mergeProjectGitHubPullRequest(mountFixture(PR_ROW), mountFixture('squash')),
-        // The same hook also owns the item screen's open/close toggle, whose method is a local
-        // two-literal ternary over the item type rather than a project-board call.
+        // Drive item open/close too; the same hook selects its method by item type.
         'issue-state': () => actions().toggleGitHubStatus(mountFixture(GITHUB_ISSUE_ITEM)),
         'pr-state': () => actions().toggleGitHubStatus(mountFixture(GITHUB_PR_ITEM))
       }),

@@ -11,46 +11,21 @@ afterEach(() => {
 })
 
 describe('shouldIgnoreMonacoContentChange', () => {
-  it('ignores echoed shared-model changes in the sibling split pane', () => {
-    const filePath = '/repo/seed.spec.ts'
-
-    beginProgrammaticContentSync(filePath)
-    try {
-      expect(
-        shouldIgnoreMonacoContentChange({
-          filePath,
-          isApplyingProgrammaticContent: false
-        })
-      ).toBe(true)
-    } finally {
-      endProgrammaticContentSync(filePath)
-    }
-  })
-
-  it('ignores local programmatic sync even without a sibling pane', () => {
+  it('keeps nested sync suppression scoped to one model owner', () => {
+    const local = 'file:///repo/file.ts'
+    const remote = `${local}#remote-owner`
+    beginProgrammaticContentSync(local)
+    beginProgrammaticContentSync(local)
+    endProgrammaticContentSync(local)
     expect(
-      shouldIgnoreMonacoContentChange({
-        filePath: '/repo/seed.spec.ts',
-        isApplyingProgrammaticContent: true
-      })
+      shouldIgnoreMonacoContentChange({ modelKey: local, isApplyingProgrammaticContent: false })
     ).toBe(true)
-  })
-
-  it('does not ignore a real user edit once programmatic sync is finished', () => {
     expect(
-      shouldIgnoreMonacoContentChange({
-        filePath: '/repo/seed.spec.ts',
-        isApplyingProgrammaticContent: false
-      })
+      shouldIgnoreMonacoContentChange({ modelKey: remote, isApplyingProgrammaticContent: false })
     ).toBe(false)
-  })
-
-  it('does not ignore a user edit that happens to match the saved prop content', () => {
+    endProgrammaticContentSync(local)
     expect(
-      shouldIgnoreMonacoContentChange({
-        filePath: '/repo/seed.spec.ts',
-        isApplyingProgrammaticContent: false
-      })
+      shouldIgnoreMonacoContentChange({ modelKey: local, isApplyingProgrammaticContent: false })
     ).toBe(false)
   })
 })

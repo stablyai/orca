@@ -1,18 +1,24 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
+import { releaseUnreferencedEditorContent } from '../editor/tabs/editor-tab-retirement'
+import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
+import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { getActiveExecutionHostIdForWorktree } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import { buildSplitNode, replaceLeaf } from './tabs-layout'
+import { ensureGroup, findGroupForTab, updateGroup } from './tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import {
+  applyTabOrderSortValues,
+  canReplacePreviewContentType,
   dedupeTabOrder,
-  ensureGroup,
-  findGroupForTab,
-  pushRecentTabId,
-  sanitizeRecentTabIds,
-  updateGroup
-} from '../tab-group-state'
-import { canReplacePreviewContentType } from './tabs-tab-order'
+  insertTabIdIntoOrder
+} from '../../../../../shared/workspace-layout/tab-order'
+import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
+import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
+import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { createdTabPreviewFlag } from './tab-preview-flag'
+import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -21,15 +27,43 @@ export function createTabsCreateActions(
   return {
     createUnifiedTab: (worktreeId, contentType, init) => {
       const id = init?.id ?? createBrowserUuid()
+      const splitGroupId = init?.split ? createBrowserUuid() : undefined
+      let replacedEditorId: string | undefined
       let created!: Tab
-      set((state) => {
+      set((current) => {
+        init?.validatePlacement?.(current)
+        const state =
+          init?.split && splitGroupId
+            ? {
+                ...current,
+                ...insertSplitGroup(
+                  current,
+                  worktreeId,
+                  init.split,
+                  emptySplitGroup(worktreeId, splitGroupId)
+                )
+              }
+            : current
+        const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+        const placement = resolveUnifiedTabCreatePlacement({
+          groups: state.groupsByWorktree[worktreeId] ?? [],
+          tabs: existingTabs,
+          activeGroupId: state.activeGroupIdByWorktree[worktreeId],
+          targetGroupId: splitGroupId ?? init?.targetGroupId,
+          afterTabId: init?.afterTabId,
+          executionHostId: init?.executionHostId,
+          lookupWorktrees: () =>
+            [
+              ...(state.allWorktrees?.() ?? []),
+              ...(selectFolderWorkspaces(state) ?? []).map(folderWorkspaceToWorktree)
+            ].filter((worktree) => worktree.id === worktreeId)
+        })
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
           state.groupsByWorktree,
           state.activeGroupIdByWorktree,
           worktreeId,
-          init?.targetGroupId ?? state.activeGroupIdByWorktree[worktreeId]
+          placement.groupId
         )
-        const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
 
         let nextTabs = existingTabs
         let nextOrder = dedupeTabOrder(group.tabOrder)
@@ -41,15 +75,35 @@ export function createTabsCreateActions(
               canReplacePreviewContentType(contentType, tab.contentType)
           )
           if (existingPreview) {
+            if (isEditorTabContentType(existingPreview.contentType)) {
+              replacedEditorId = existingPreview.entityId
+            }
             nextTabs = existingTabs.filter((tab) => tab.id !== existingPreview.id)
             nextOrder = nextOrder.filter((tabId) => tabId !== existingPreview.id)
           }
         }
 
         const shouldActivate = init?.activate ?? true
+        const recordsFocus = shouldActivate && init?.recordFocus !== false
         const createdAt = Date.now()
         const executionHostId =
           init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
+        // Why: preview replacement may have removed the anchor; the order then appends in-partition.
+        nextOrder =
+          contentType === 'agent-session' &&
+          nextOrder.includes(id) &&
+          structuredLaunchSlotIds(worktreeId, group.id).has(id)
+            ? nextOrder
+            : insertTabIdIntoOrder(
+                nextOrder,
+                nextTabs,
+                id,
+                init?.isPinned === true,
+                placement.anchorTabId
+              )
+        const insertedIndex = nextOrder.indexOf(id)
+        // Preview replacement may leave sortOrder gaps; renumber even on append to prevent collisions.
+        nextTabs = applyTabOrderSortValues(nextTabs, nextOrder)
         created = {
           id,
           entityId: init?.entityId ?? id,
@@ -67,18 +121,18 @@ export function createTabsCreateActions(
             : {}),
           customLabel: init?.customLabel ?? null,
           color: init?.color ?? null,
-          sortOrder: nextOrder.length,
+          sortOrder: insertedIndex,
           createdAt,
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
-          ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
-          isPreview: init?.isPreview,
+          ...(recordsFocus ? { lastFocusedAt: createdAt } : {}),
+          ...createdTabPreviewFlag(init?.isPreview),
           isPinned: init?.isPinned
         }
 
-        nextOrder = dedupeTabOrder([...nextOrder, created.id])
-        const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
+        const nextActiveTabId =
+          shouldActivate || init?.showInGroup ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
-        // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.
+        // Automation-created browsers paint without stealing the visible group selection.
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent
@@ -103,8 +157,14 @@ export function createTabsCreateActions(
           }
         }
       })
+      if (replacedEditorId) {
+        releaseUnreferencedEditorContent(get, replacedEditorId)
+      }
       if (init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
+      }
+      if (splitGroupId) {
+        get().recordFeatureInteraction?.('terminal-panes')
       }
       return created
     },
@@ -124,11 +184,7 @@ export function createTabsCreateActions(
           return state
         }
         const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-        const currentGroups = state.groupsByWorktree[worktreeId] ?? []
         const shouldActivate = init?.activate ?? true
-        const currentLayout =
-          state.layoutByWorktree[worktreeId] ??
-          ({ type: 'leaf', groupId: target.sourceGroupId } as const)
         const createdAt = Date.now()
         const executionHostId =
           init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
@@ -153,7 +209,7 @@ export function createTabsCreateActions(
           createdAt,
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
           ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
-          isPreview: init?.isPreview,
+          ...createdTabPreviewFlag(init?.isPreview),
           isPinned: init?.isPinned
         }
         const newGroup: TabGroup = {
@@ -164,32 +220,15 @@ export function createTabsCreateActions(
           recentTabIds: shouldActivate ? [id] : []
         }
         created = createdTab
-        const replacement = buildSplitNode(
-          target.sourceGroupId,
-          newGroupId,
-          target.splitDirection === 'left' || target.splitDirection === 'right'
-            ? 'horizontal'
-            : 'vertical',
-          target.splitDirection === 'left' || target.splitDirection === 'up' ? 'first' : 'second'
-        )
         const nextUnifiedTabsByWorktree = {
           ...state.unifiedTabsByWorktree,
           [worktreeId]: [...existingTabs, createdTab]
         }
-        const nextGroupsByWorktree = {
-          ...state.groupsByWorktree,
-          [worktreeId]: [...currentGroups, newGroup]
-        }
-        const nextLayoutByWorktree = {
-          ...state.layoutByWorktree,
-          [worktreeId]: replaceLeaf(currentLayout, target.sourceGroupId, replacement)
-        }
-        const nextActiveGroupIdByWorktree = shouldActivate
-          ? {
-              ...state.activeGroupIdByWorktree,
-              [worktreeId]: newGroupId
-            }
-          : state.activeGroupIdByWorktree
+        const {
+          groupsByWorktree: nextGroupsByWorktree,
+          layoutByWorktree: nextLayoutByWorktree,
+          activeGroupIdByWorktree: nextActiveGroupIdByWorktree
+        } = insertSplitGroup(state, worktreeId, { ...target, activate: shouldActivate }, newGroup)
         moved = true
         return {
           unifiedTabsByWorktree: nextUnifiedTabsByWorktree,

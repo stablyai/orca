@@ -17,11 +17,7 @@ import {
   useBrowserAutomationVisibilityForAny
 } from './browser-automation-visibility'
 
-// Why: Chromium never paints inside a display:none subtree, so a browser <webview> stops
-// emitting screencast frames if ANY ancestor is parked that way — the pane-level hatch in
-// browser-page-paintability.ts cannot override one. Every container from the app shell down
-// to the guest therefore shares this predicate; if one of them keeps using `hidden`, a phone,
-// an agent, or a paired client watching that page silently receives no frames.
+// Every ancestor must avoid display:none for retained guests; a pane cannot override hidden parents to keep mobile/agent/paired screencasts producing frames.
 
 type BrowserTabPageIdSource = {
   id: string
@@ -58,10 +54,7 @@ export function useBrowserGuestPaintRetention(browserPageIds: readonly string[])
   return hasAutomationVisibleBrowser || hasMobileDrivenBrowser || hasRemotelyViewedBrowser
 }
 
-// Why one exported predicate rather than the same OR-list at each site: a hand-rolled copy stays
-// green when a term is added — nothing typechecks a site that never names the new signal — and the
-// remote-viewer term reached the panes while four copies in Terminal.tsx still had three terms.
-// browser-guest-retention-site-census.test.ts holds the sites to this function.
+// Centralize all paint-retention terms so new signals cannot silently miss a container gate.
 export function browserPageNeedsPaintRetention(browserPageId: string): boolean {
   return (
     isBrowserAutomationVisible(browserPageId) ||
@@ -84,13 +77,7 @@ export function onBrowserGuestPaintRetentionChange(listener: () => void): () => 
   }
 }
 
-// Why: `enabled` gates a scan across every worktree's tabs, which only matters while the
-// caller is hidden. Automation visibility is load-bearing and not just symmetry with the
-// per-worktree gate: a cold screencast cannot start without it. Main asks the renderer to
-// mount a hidden guest via browser:activateView, which takes an automation bootstrap lease —
-// and the mobile driver flag only flips AFTER that guest registers and streaming begins. Gate
-// on the driver alone and the guest never mounts, so the driver never flips: a deadlock that
-// leaves the page unreachable from the phone entirely.
+// Scan only for hidden callers. Include automation bootstrap: mobile driving starts after guest registration, so driver-only gating would deadlock a cold phone screencast.
 export function useAnyBrowserGuestNeedsPaint(enabled: boolean): boolean {
   const browserTabsByWorktree = useAppStore((state) =>
     enabled ? state.browserTabsByWorktree : NO_BROWSER_TABS_BY_WORKTREE

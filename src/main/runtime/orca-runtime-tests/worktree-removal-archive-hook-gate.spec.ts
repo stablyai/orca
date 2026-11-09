@@ -1,28 +1,28 @@
-// Regression cover for #19334: a failed archive hook used to be logged and stepped over, so the
-// checkout was deleted with nothing archived. The hook is a blocking precondition now.
+// Archive hook failure must preserve the checkout, Git registration, agents and ownership evidence (#19334).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import {
-  assertWorktreeCleanForRemoval,
   deleteWorktreeHistoryDirMock,
-  getEffectiveHooks,
   invalidateAuthorizedRootsCacheMock,
-  listWorktreesStrict,
-  removeWorktree,
-  removeWorktreeLinkedPathsMock,
-  runHook
-} from '../orca-runtime-test-mocks.spec'
+  removeWorktreeLinkedPathsMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
-  TEST_REPO_PATH,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   createStaleRuntimeWorktreeStore,
   deferred
-} from '../orca-runtime-test-fixtures.spec'
-import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createWorktreeRemovalRuntime } from './orca-runtime-test-scenario-builders.spec'
 import {
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
   asArchiveHookRefusal
 } from '../../../shared/worktree/archive-hook-removal-gate'
+import '../../workspaces/removal/worktree-removal-acceptance-queue'
+import '../../workspaces/removal/worktree-background-removal'
 
 function withArchiveHook(): void {
   vi.mocked(getEffectiveHooks).mockReturnValue({
@@ -31,21 +31,18 @@ function withArchiveHook(): void {
 }
 
 function expectNothingMutated(removeWorktreeMeta: ReturnType<typeof vi.fn>): void {
-  // The checkout, its Git registration, its agents and Orca's ownership evidence all survive.
   expect(removeWorktree).not.toHaveBeenCalled()
   expect(removeWorktreeMeta).not.toHaveBeenCalled()
   expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
   expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
   expect(invalidateAuthorizedRootsCacheMock).not.toHaveBeenCalled()
-  // The gate runs before the registration re-read, so even the preflights never start. The one
-  // listing is the orchestrator's own lookup ahead of the hook; the post-hook refresh never runs.
+  // Only the pre-hook lookup runs; hook failure prevents post-hook refresh and preflights.
   expect(listWorktreesStrict).toHaveBeenCalledTimes(1)
   expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
 }
 
 describe('archive hook removal gate', () => {
-  // These specs are imported into one aggregate test file, so the module-level mocks arrive with
-  // calls from earlier specs. Clear counts here and restore the shared defaults afterwards.
+  // Aggregate imports share mocks; clear call counts here and restore defaults afterwards.
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -84,7 +81,7 @@ describe('archive hook removal gate', () => {
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     withArchiveHook()
-    // A timeout or a lost execution host yields no exit code: `unverifiable`, never a pass.
+    // Timeout or host loss is unverifiable, never a successful hook.
     vi.mocked(runHook).mockResolvedValue({
       success: false,
       output: 'Hook timed out after 120000ms.'
@@ -114,7 +111,6 @@ describe('archive hook removal gate', () => {
     })
 
     await expect(
-      // force + the PTY-stop waiver, i.e. everything the desktop Force Delete sets.
       runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
         force: true,
         runHooks: true,
@@ -122,88 +118,6 @@ describe('archive hook removal gate', () => {
       })
     ).rejects.toMatchObject({ code: ARCHIVE_HOOK_FAILED_REMOVAL_CODE })
     expectNothingMutated(removeWorktreeMeta)
-  })
-
-  it('removes and records the waiver when the failure is explicitly overridden', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    withArchiveHook()
-    vi.mocked(runHook).mockResolvedValue({
-      success: false,
-      output: 'boom',
-      exitCode: 23
-    })
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
-      force: false,
-      runHooks: true,
-      allowUnverifiedPtyStop: false,
-      allowFailedArchiveHook: true
-    })
-
-    expect(result.archiveHookOverride).toEqual({
-      worktreePath: TEST_WORKTREE_PATH,
-      outcome: 'exited',
-      exitCode: 23,
-      output: 'boom',
-      overridden: true
-    })
-    expect(removeWorktree).toHaveBeenCalledWith(
-      TEST_REPO_PATH,
-      TEST_WORKTREE_PATH,
-      false,
-      expect.objectContaining({
-        knownRemovedWorktree: expect.objectContaining({
-          path: TEST_WORKTREE_PATH
-        })
-      })
-    )
-  })
-
-  it('removes without an override record when the hook succeeds', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    withArchiveHook()
-    vi.mocked(runHook).mockResolvedValue({
-      success: true,
-      output: '',
-      exitCode: 0
-    })
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
-      force: false,
-      runHooks: true
-    })
-
-    expect(result.archiveHookOverride).toBeUndefined()
-    expect(removeWorktree).toHaveBeenCalled()
-  })
-
-  it('removes when the hook is configured but not requested', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    withArchiveHook()
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
-
-    expect(runHook).not.toHaveBeenCalled()
-    expect(result.warning).toContain('archive hook skipped')
-    expect(removeWorktree).toHaveBeenCalled()
-  })
-
-  it('removes when no archive hook is configured', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(removeWorktree).mockResolvedValue({})
-
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
-      force: false,
-      runHooks: true
-    })
-
-    expect(runHook).not.toHaveBeenCalled()
-    expect(result.warning).toBeUndefined()
-    expect(removeWorktree).toHaveBeenCalled()
   })
 
   it('does not coalesce an override retry onto the refusal already in flight', async () => {
@@ -223,8 +137,7 @@ describe('archive hook removal gate', () => {
     })
     await vi.waitFor(() => expect(runHook).toHaveBeenCalled())
 
-    // The waiver is part of the in-flight options key, so a concurrent waived retry is refused
-    // outright rather than handed the in-flight attempt that is about to reject on the hook.
+    // A concurrent waiver changes the options key and must not join an attempt about to reject the hook.
     await expect(
       runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
         force: false,

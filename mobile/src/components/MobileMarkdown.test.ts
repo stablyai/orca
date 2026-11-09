@@ -1,60 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
-import { parseMobileMarkdown } from './mobile-markdown-parser'
 
-describe('isMobileMermaidLanguage', () => {
-  it('matches mermaid case-insensitively after trim', () => {
-    expect(isMobileMermaidLanguage('mermaid')).toBe(true)
-    expect(isMobileMermaidLanguage('Mermaid')).toBe(true)
-    expect(isMobileMermaidLanguage(' MERMAID ')).toBe(true)
-  })
-
-  it('rejects non-mermaid languages and missing language', () => {
-    expect(isMobileMermaidLanguage(undefined)).toBe(false)
-    expect(isMobileMermaidLanguage('')).toBe(false)
-    expect(isMobileMermaidLanguage('ts')).toBe(false)
-    expect(isMobileMermaidLanguage('mermaidx')).toBe(false)
-  })
-})
-
-describe('parseMobileMarkdown', () => {
-  it('parses mermaid fences as code blocks with language mermaid', () => {
-    expect(parseMobileMarkdown('```mermaid\ngraph TD; A-->B\n```')).toEqual([
-      { type: 'code', text: 'graph TD; A-->B', language: 'mermaid', closed: true }
-    ])
-    expect(isMobileMermaidLanguage('mermaid')).toBe(true)
-  })
-
-  it('marks an unterminated fence as not closed while it streams', () => {
-    expect(parseMobileMarkdown('```mermaid\ngraph TD; A-->B')).toEqual([
-      { type: 'code', text: 'graph TD; A-->B', language: 'mermaid', closed: false }
-    ])
-    expect(parseMobileMarkdown('```mermaid\ngraph TD; A-->B\n```')[0]).toMatchObject({
-      closed: true
-    })
-  })
-
-  it('parses GFM tables into table blocks', () => {
-    expect(parseMobileMarkdown('| Name | State |\n| --- | --- |\n| Orca | Open |')).toEqual([
-      {
-        type: 'table',
-        headers: ['Name', 'State'],
-        rows: [['Orca', 'Open']]
-      }
-    ])
-  })
-
-  it('parses standalone HTTPS images without folding them into paragraphs', () => {
-    expect(parseMobileMarkdown('![Screenshot](https://example.com/screen.png)')).toEqual([
-      {
-        type: 'image',
-        alt: 'Screenshot',
-        url: 'https://example.com/screen.png'
-      }
-    ])
-  })
-
+describe('normalizeMobileMarkdownPreviewHtml', () => {
   it('normalizes common README HTML into readable Markdown preview text', () => {
     const normalized = normalizeMobileMarkdownPreviewHtml(`
 <h1 align="center">

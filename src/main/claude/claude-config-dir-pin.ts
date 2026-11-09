@@ -1,7 +1,23 @@
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-/** The config dir the Claude CLI resolves for itself when nothing pins one. */
+// Strip inherited account pins so only the session record selects the Keychain identity.
+export function withoutInheritedClaudeConfigDir(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform
+): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (
+      value !== undefined &&
+      (platform === 'win32' ? key.toUpperCase() : key) !== 'CLAUDE_CONFIG_DIR'
+    ) {
+      next[key] = value
+    }
+  }
+  return next
+}
+
 export function defaultClaudeConfigDir(env: NodeJS.ProcessEnv = process.env): string {
   return env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
 }
@@ -12,17 +28,8 @@ function samePath(a: string, b: string, platform: NodeJS.Platform): boolean {
   return platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
-/**
- * An explicit CLAUDE_CONFIG_DIR moves the Claude CLI off the default Keychain item onto
- * one derived from the pinned path, so a claude.ai OAuth login stops working even when
- * the pin names the CLI's own default. Pin only a home the CLI would not find on its
- * own — the same rule the legacy PTY path applies via `ClaudeRuntimePathResolver`.
- *
- * The pinned value is the account home verbatim: the CLI keys its credential lookup on
- * the literal string, so re-spelling an equivalent path (absolute vs `~`, trailing
- * separator) selects a different identity. Normalization here is for the equality test
- * only and must never reach the env.
- */
+// Pin only nondefault homes: even an explicit default changes the CLI's Keychain identity.
+// Preserve the trimmed path's spelling; normalization is only for comparison.
 export function claudeConfigDirEnvPatch(
   accountHome: string,
   options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform } = {}

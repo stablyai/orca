@@ -1,3 +1,4 @@
+import { ImeInput } from '@/lib/ime-text-field'
 import React, { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -89,7 +90,7 @@ export function ProjectDateCell({
     return <span className="text-xs">{value}</span>
   }
   return (
-    <input
+    <ImeInput
       type="date"
       aria-label={label}
       value={draft}

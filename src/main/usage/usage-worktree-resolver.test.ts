@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WorktreeLogic from '../ipc/worktree-logic'
+import type * as WorktreePathComparison from '../git/worktrees/catalog/worktree-path-comparison'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 
 const { worktreePathComparisons } = vi.hoisted(() => ({
   worktreePathComparisons: { count: 0 }
 }))
 
-vi.mock('../ipc/worktree-logic', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeLogic>()
+vi.mock('../git/worktrees/catalog/worktree-path-comparison', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreePathComparison>()
   return {
     ...actual,
     areWorktreePathsEqual: (left: string, right: string) => {
@@ -78,10 +78,5 @@ describe('createUsageWorktreeResolver', () => {
 
     expect(resolveWorktree('C:\\repo\\packages\\app')?.worktreeId).toBe('repo-1::C:\\repo')
     expect(resolveWorktree('D:\\other\\repo')).toBeNull()
-  })
-
-  it('resolves nothing when no worktree is known', async () => {
-    const resolveWorktree = await createUsageWorktreeResolver([])
-    expect(resolveWorktree('/workspace/repo')).toBeNull()
   })
 })

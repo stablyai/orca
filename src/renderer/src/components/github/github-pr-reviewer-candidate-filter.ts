@@ -8,7 +8,7 @@ export type GitHubPRReviewerQueryState = {
 
 export const GITHUB_PR_REVIEWER_QUERY_MAX_BYTES = 2 * 1024
 
-export function isGitHubPRReviewerQueryTooLarge(
+function isGitHubPRReviewerQueryTooLarge(
   query: string,
   maxBytes = GITHUB_PR_REVIEWER_QUERY_MAX_BYTES
 ): boolean {

@@ -1,29 +1,29 @@
-/**
- * Turns a saved record back into the editor's draft shape.
- *
- * Both builders are total: a schedule the editor cannot represent produces a
- * warning rather than a silently rewritten one, because saving would otherwise
- * replace a working cron the user never chose to change.
- */
-
-import type { Automation, ExternalAutomationJob } from '../../../../shared/automations-types'
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
+import { automationCanonicalLaunchSetup } from '../../../../shared/automations/launch/automation-canonical-launch-setup'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import { translate } from '@/i18n/i18n'
+import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
 import {
-  isRunnableAutomationCronSchedule,
   isRunnableAutomationSchedule,
   tryParseAutomationRrule
-} from '../../../../shared/automation-schedule-parsing'
+} from '../../../../shared/automations/scheduling/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AUTOMATION_DEFAULT_TIME, formatTimeInput } from './automation-draft-model'
 import { getAutomationSetupDecisionDraftValue } from './automation-setup-decision'
 
 export function buildAutomationEditDraft(automation: Automation): AutomationDraft {
+  const setup = automationCanonicalLaunchSetup(automation)
   const schedule = tryParseAutomationRrule(automation.rrule)
   const hasCustomSchedule = !schedule && isRunnableAutomationSchedule(automation.rrule)
   return {
     name: automation.name,
     prompt: automation.prompt,
     agentId: automation.agentId,
+    surface: automation.launchSetup?.surface ?? automation.surface ?? 'terminal',
+    extraAgentArgs: setup.extraAgentArgs ?? '',
+    ...(setup.launchPreferences !== undefined
+      ? { launchPreferences: setup.launchPreferences }
+      : {}),
+    ...(setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}),
     projectId: getAutomationRunRepoId(automation),
     workspaceMode: automation.workspaceMode,
     workspaceId: automation.workspaceId ?? '',
@@ -44,36 +44,9 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     scheduleWarning:
       schedule || hasCustomSchedule
         ? null
-        : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
-  }
-}
-
-export function buildExternalAutomationEditDraft(
-  job: ExternalAutomationJob,
-  placement: { projectId: string; workspaceId: string }
-): AutomationDraft {
-  const rawSchedule = job.rawSchedule?.trim() ?? ''
-  const hasCustomSchedule = isRunnableAutomationCronSchedule(rawSchedule)
-  return {
-    name: job.name,
-    prompt: job.prompt ?? job.promptPreview,
-    agentId: 'hermes',
-    projectId: placement.projectId,
-    workspaceMode: 'existing',
-    workspaceId: placement.workspaceId,
-    baseBranch: '',
-    setupDecision: undefined,
-    reuseSession: false,
-    precheckCommand: '',
-    precheckTimeoutSeconds: '60',
-    preset: hasCustomSchedule ? 'custom' : 'weekdays',
-    time: AUTOMATION_DEFAULT_TIME,
-    dayOfWeek: '1',
-    customSchedule: hasCustomSchedule ? rawSchedule : '',
-    savedSchedule: rawSchedule || null,
-    missedRunGraceMinutes: '720',
-    scheduleWarning: hasCustomSchedule
-      ? null
-      : 'This Hermes automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+        : translate(
+            'auto.components.automations.editDraft.unsupportedSchedule',
+            'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+          )
   }
 }

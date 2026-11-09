@@ -1,4 +1,4 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   buildWorkspaceCleanupFacetList,
   type WorkspaceCleanupFacetSources,
@@ -20,7 +20,7 @@ import { sortWorkspaceCleanupFacets } from './workspace-cleanup-facet-sort'
 import type {
   WorkspaceCleanupFilterState,
   WorkspaceCleanupSortState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
 export type WorkspaceCleanupQuery = {
   filters: WorkspaceCleanupFilterState
@@ -28,7 +28,6 @@ export type WorkspaceCleanupQuery = {
 }
 
 export type WorkspaceCleanupQueryResult = {
-  /** Sorted rows that passed every facet. */
   rows: WorkspaceCleanupFacets[]
   /** Host-qualified keys of rows the user could queue, for the select-all affordance. */
   selectableIdentities: string[]
@@ -94,7 +93,6 @@ export function runWorkspaceCleanupQuery(
   }
 }
 
-/** One-shot convenience for callers holding raw scan candidates. */
 export function queryWorkspaceCleanupCandidates(
   candidates: readonly WorkspaceCleanupCandidate[],
   query: WorkspaceCleanupQuery,
@@ -104,11 +102,7 @@ export function queryWorkspaceCleanupCandidates(
   return runWorkspaceCleanupQuery(buildWorkspaceCleanupFacetList(candidates, sources), query, now)
 }
 
-/**
- * Per-facet-group match counts for badge/count rendering. Each entry counts the
- * rows that would survive if only that group were applied, so a UI can show how
- * much each facet is costing without re-running the whole pipeline per group.
- */
+/** Count each facet group independently so badges explain its restriction without rerunning the full pipeline per group. */
 export function countWorkspaceCleanupFacetMatches(
   facets: readonly WorkspaceCleanupFacets[],
   filters: WorkspaceCleanupFilterState,

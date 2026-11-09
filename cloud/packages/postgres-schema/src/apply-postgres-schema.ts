@@ -25,7 +25,7 @@ export type SchemaStartupOptions = {
   wait?: (delayMs: number) => Promise<void>
 }
 
-export type SchemaApplySummary = { ran: number; skipped: number }
+export type SchemaApplySummary = { ran: number; skipped: number; deferred: number }
 
 function retryDelayMs(attempt: number, random: () => number): number {
   const ceiling = Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS)
@@ -39,11 +39,17 @@ function wait(delayMs: number): Promise<void> {
 const CREATE_TABLE_IF_NOT_EXISTS = /^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\b/i
 const CREATE_INDEX_IF_NOT_EXISTS = /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\b/i
 const ALTER_TABLE_ADD_CONSTRAINT = /^ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\b/i
+const DROP_INDEX_IF_EXISTS = /^DROP\s+INDEX\s+(?:CONCURRENTLY\s+)?IF\s+EXISTS\b/i
 
-// `IF NOT EXISTS` only checks the name before the catalog inserts, so the loser of a concurrent
-// CREATE can fail on the catalog unique index (23505) or, when the winner has already committed by
-// the time the loser reaches TypeCreate/heap_create_with_catalog, on the name check those routines
-// repeat (42710 duplicate type, 42P07 duplicate relation). Each is a no-op on the next attempt.
+// Leading schema-deferrable marker permits deferral only for idempotent DDL with no later boot dependency.
+// Read raw text because classification strips comments; next boot retries unapplied work.
+const DEFERRABLE = /^\s*--[^\n]*\bschema-deferrable\b/
+
+export function schemaDeferrable(statement: string): boolean {
+  return DEFERRABLE.test(statement)
+}
+
+// Concurrent CREATE losers can hit catalog 23505 or repeated name-check 42710/42P07; the next attempt is a no-op.
 function concurrentCreateCollision(
   value: { code?: unknown; constraint?: unknown },
   sql: string
@@ -70,13 +76,17 @@ function constraintAlreadyApplied(error: unknown, sql: string): boolean {
   )
 }
 
+// IF EXISTS resolves before locking; another director’s DROP can commit between them and produce benign 42704.
+function dropAlreadyApplied(error: unknown, sql: string): boolean {
+  return DROP_INDEX_IF_EXISTS.test(sql) && (error as { code?: unknown } | null)?.code === '42704'
+}
+
 function retryableSchemaError(error: unknown, sql: string): boolean {
   const value = (error as { code?: unknown; constraint?: unknown } | null) ?? {}
   return RETRYABLE_SCHEMA_CODES.has(String(value.code)) || concurrentCreateCollision(value, sql)
 }
 
-// Evaluated immediately before each statement, so a pre-check still sees the objects the statements
-// ahead of it created in this same boot.
+// Precheck immediately before each statement so prior creates in this boot are visible.
 async function nothingToDo(
   target: SchemaLockTarget | undefined,
   options: SchemaStartupOptions,
@@ -90,7 +100,7 @@ async function nothingToDo(
     JSON.stringify({
       event: `${eventPrefix}_object_${target.skipWhen}`,
       kind: target.kind,
-      table: target.table,
+      table: target.kind === 'index-by-name' ? undefined : target.table,
       name: target.name,
       indisvalid: presence.indisvalid
     })
@@ -108,7 +118,7 @@ export async function applyPostgresSchema(
   const random = options.random ?? Math.random
   const pause = options.wait ?? wait
   const deadlineAt = now() + (options.retryDeadlineMs ?? DEFAULT_RETRY_DEADLINE_MS)
-  const summary: SchemaApplySummary = { ran: 0, skipped: 0 }
+  const summary: SchemaApplySummary = { ran: 0, skipped: 0, deferred: 0 }
 
   for (const statement of statements) {
     // Throws when an index or column statement's target cannot be read, rather than sending it
@@ -126,15 +136,28 @@ export async function applyPostgresSchema(
         summary.ran += 1
         break
       } catch (error) {
-        if (constraintAlreadyApplied(error, sql)) {
+        if (constraintAlreadyApplied(error, sql) || dropAlreadyApplied(error, sql)) {
           summary.skipped += 1
           break
         }
         const code = String((error as { code?: unknown } | null)?.code)
-        // With the pre-check ahead of it a lock timeout means the object is genuinely missing and
-        // this boot lost the queue. Relation locks are granted in queue order, so each retry parks
-        // every writer behind it again for another timeout. Fail once, loudly.
+        // Prechecked missing objects lost the lock queue; retries would park writers for another timeout, so fail once.
         if (code === LOCK_NOT_AVAILABLE && !options.retryLockTimeout) {
+          // Deferrable DDL yields instead of restarting every director into the same continuously written table’s lock queue.
+          if (schemaDeferrable(statement)) {
+            console.warn(
+              JSON.stringify({
+                event: `${eventPrefix}_object_deferred`,
+                code,
+                kind: target?.kind,
+                name: target?.name,
+                statement: sql.split('\n')[0],
+                detail: 'could not take its lock; left unapplied for the next boot to retry'
+              })
+            )
+            summary.deferred += 1
+            break
+          }
           console.error(
             JSON.stringify({
               event: `${eventPrefix}_lock_timeout`,
@@ -145,9 +168,7 @@ export async function applyPostgresSchema(
           )
           throw error
         }
-        // The object was created between the pre-check and this statement. Re-asking the catalog
-        // is the cheap answer; retrying the CREATE INDEX would take SHARE on the table again for
-        // an object that is already there.
+        // Re-ask catalog after concurrent creation; retrying CREATE INDEX re-takes SHARE for an existing object.
         if (
           concurrentCreateCollision((error as { code?: unknown; constraint?: unknown }) ?? {}, sql) &&
           (await nothingToDo(target, options, eventPrefix))

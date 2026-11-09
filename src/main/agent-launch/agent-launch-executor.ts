@@ -1,290 +1,323 @@
-/**
- * The one place an agent is actually started — for the surfaces moved onto it, which today is
- * `agent.launch` alone. Orchestration dispatch, mobile create, CLI create and the desktop agent
- * tab each still start agents their own way; moving them here is later stack work.
- *
- * The mode decision is shared, not copied: `agent-launch-mode` owns it, and
- * `orchestration-worker-start-mode` is a thin adapter over it supplying orchestration's receipt
- * vocabulary. What this module adds is the *sequencing*, and the sequencing is where the bug
- * was:
- *
- *   create the worktree agent-first  ->  its startup terminal IS the agent
- *                                    ->  the structured branch below it is unreachable
- *
- * so every new-worktree launch was a PTY no matter what the user's default said. The order here is
- * the inverse, and it is the whole point of the module: when the preference is structured the
- * worktree is created with NO startup agent, the executing host is then asked whether it can host
- * a session for the workspace that now exists, and only then is a surface created. A refusal
- * becomes a terminal agent in the worktree just created, never a failed launch.
- *
- * The host verdict cannot be hoisted above creation: `agentSession.createSupport` can only answer
- * for a workspace it can resolve. That is why the decision is in two halves rather than one.
- *
- * What genuinely differs per surface is only how a surface is *built* — an orchestration worker's
- * session takes a dispatch hold and a mailbox that a plain launch must not take — so that is
- * injected as a factory instead of branched on here.
- */
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
+/** Structured launches create the workspace without an agent, then ask its host for chat support.
+ * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
-import type {
-  AgentLaunchIntent,
-  AgentLaunchResult,
-  AgentLaunchTarget
-} from '../../shared/agent-launch-intent'
-import { withoutReservedAgentCreateFields } from '../../shared/agent-launch-intent'
-import type { TuiAgent } from '../../shared/tui-agent'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session-definitive-refusal'
+import { assertAgentPromptRequestActive } from '../runtime/terminal/input/agent-prompt-signals'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
-  decideAgentLaunchMode,
-  readAgentLaunchModeSettings,
+  type AgentLaunchResult,
+  withoutReservedAgentCreateFields,
+  type AgentLaunchModeReceipt
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
+import {
+  combineLaunchWarnings,
+  ignoredStructuredLaunchInputsWarning
+} from './agent-launch-warnings'
+import {
+  argvLaunchPrompt,
+  launchPromptCreateInputs,
+  deliverTerminalLaunchPrompt,
+  HANDED_TO_TERMINAL,
+  promptReceipt,
+  settledAtCreation,
+  settleLaunchPromptDisposal
+} from './agent-launch-prompt-delivery'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../shared/agent-session/failures/agent-session-definitive-refusal'
+import {
   resolveAgentLaunchModeOnHost,
-  type AgentLaunchModeReceipt,
-  type AgentLaunchModeVocabulary,
-  DEFAULT_LAUNCH_VOCABULARY
+  type AgentLaunchModeSettlement,
+  DEFAULT_LAUNCH_VOCABULARY,
+  downgradeAgentLaunchModeForStructuredRefusal,
+  warnStructuredLaunchDowngrade
 } from './agent-launch-mode'
 
-/** How a surface is built once the executor has decided which one. Injected because an
- *  orchestration worker's session carries a dispatch hold and a mailbox a plain launch must not
- *  take, while the decision and ordering above it are identical. */
-export type AgentLaunchSurfaceFactory = {
-  createStructuredSession(args: {
-    worktreeId: string
-    agent: 'claude' | 'codex'
-    options?: Readonly<Record<string, unknown>>
-  }): Promise<{ sessionId: string; handle: string }>
-  createTerminalAgent(args: {
-    worktreeId: string
-    agent: TuiAgent
-    options?: Readonly<Record<string, unknown>>
-  }): Promise<{ handle: string; warning?: string }>
-}
+import {
+  assertLegacyHostTarget,
+  createLaunchPromptInputs,
+  legacyHostCreateResult
+} from './agent-launch-legacy-host'
+import {
+  AgentLaunchStructuredSessionRefusedError,
+  assertTerminalLaunchAdmissible,
+  terminalLaunchInputs,
+  type AgentLaunchStructuredSurface,
+  type AgentLaunchWorkspaceFactory
+} from './agent-launch-surface-factories'
+import type { AgentLaunchExecution, AgentLaunchSurfaceExecution } from './agent-launch-execution'
+import {
+  beginCreatedWorkspaceLaunch,
+  recoverCreatedWorkspace
+} from './agent-launch-created-workspace'
 
-/** A structured create refusal that proves no session was committed, so the launch may downgrade. */
-export class AgentLaunchStructuredSessionRefusedError extends Error {
-  readonly code: string
+import { opening, type AgentLaunchOpening } from './agent-launch-opening'
 
-  constructor(code: string, message: string) {
-    super(message)
-    this.name = 'AgentLaunchStructuredSessionRefusedError'
-    this.code = code
-  }
-}
-
-/** Creating the workspace, when the intent asks for one. Injected so orchestration keeps recording
- *  its own worktree stages and residual-resource effects around the same call. */
-export type AgentLaunchWorkspaceFactory = {
-  createWorktree(args: {
-    create: Readonly<Record<string, unknown>>
-    /** Set only when the settled mode is a terminal agent: agent-first creation sequences the
-     *  agent's startup command behind the setup runner, which is how a PTY launch gets its
-     *  wait-for-setup gate for free. A structured launch has no startup command to sequence and
-     *  must await that gate explicitly instead. */
-    startupAgent: TuiAgent | undefined
-  }): Promise<{
-    worktreeId: string
-    startupTerminalHandle: string | undefined
-    /** Created, but incomplete — surfaced on the launch result rather than dropped. */
-    warning?: string
-  }>
-}
-
-export type AgentLaunchExecution = {
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport' | 'getClientSettings'>
-  intent: AgentLaunchIntent
-  surfaces: AgentLaunchSurfaceFactory
-  workspaces?: AgentLaunchWorkspaceFactory
-  vocabulary?: AgentLaunchModeVocabulary
-  /** Attributes a throw to the step that was running, the way a dispatch's own stages do. */
-  onStage?: (stage: 'worktree_create' | 'mode_settle' | 'surface_create') => void
-}
+export type { AgentLaunchExecution } from './agent-launch-execution'
 
 export async function executeAgentLaunch(
   execution: AgentLaunchExecution
 ): Promise<AgentLaunchResult> {
+  const settled = await (await openAgentLaunch(execution)).settlement
+  if (settled.status === 'rejected') {
+    throw settled.reason
+  }
+  return settled.value
+}
+
+/** Resolve once the surface is published; prompt delivery continues in `settlement`. */
+export async function openAgentLaunch(
+  execution: AgentLaunchExecution
+): Promise<AgentLaunchOpening> {
   const { intent, runtime } = execution
   const vocabulary = execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  const settings = readAgentLaunchModeSettings(runtime)
-  const preflight = decideAgentLaunchMode({
-    placement: {
-      agent: intent.agent,
-      ...(intent.reuseTerminal ? { terminal: intent.reuseTerminal.handle } : {})
-    },
-    settings,
-    vocabulary
-  })
+  const preflight = execution.decidedMode ?? decideAgentLaunchIntentMode(execution)
+  assertTerminalLaunchAdmissible(intent, preflight.mode)
+  // A caller's own preparation (intent resolution) may have outlived its request.
+  assertAgentPromptRequestActive(execution.signal)
+  if (execution.promptPolicy === 'legacy-host') {
+    assertLegacyHostTarget(execution)
+    const placed = await resolveWorkspace(execution, preflight)
+    const surface = published(execution, legacyHostCreateResult(execution, placed, preflight))
+    return opening(surface, async () => surface)
+  }
 
-  // A reused terminal already downgraded in the pre-flight; there is nothing to create.
+  // A reused process cannot accept new argv; deliver through its PTY.
   if (intent.reuseTerminal) {
-    return {
+    const reused = published(execution, {
       outcome: { kind: 'terminal', handle: intent.reuseTerminal.handle },
-      worktreeId: existingWorktreeId(intent.target),
+      worktreeId: intent.target.kind === 'existing' ? intent.target.worktree : '',
       receipt: preflight,
-      ...promptReceipt(intent)
-    }
+      ...promptReceipt(intent, settledAtCreation(intent, {}))
+    })
+    const { handle } = intent.reuseTerminal
+    return opening(reused, async () => ({
+      ...reused,
+      ...promptReceipt(
+        intent,
+        await deliverTerminalLaunchPrompt(execution, handle, { freshLaunch: false })
+      )
+    }))
   }
 
-  const placed = await resolveWorkspace(execution, preflight)
-  // Agent-first creation already produced the agent, so the pre-flight verdict is final.
-  if (placed.startupTerminalHandle) {
-    return {
-      outcome: { kind: 'terminal', handle: placed.startupTerminalHandle },
-      worktreeId: placed.worktreeId,
-      receipt: preflight,
-      ...(placed.warning ? { warning: placed.warning } : {}),
-      ...promptReceipt(intent)
-    }
-  }
-
-  execution.onStage?.('mode_settle')
-  let settled = await resolveAgentLaunchModeOnHost(
-    runtime,
-    preflight,
-    placed.worktreeId,
-    intent.agent,
-    vocabulary
-  )
-
-  execution.onStage?.('surface_create')
-  let created: { outcome: AgentLaunchResult['outcome']; warning?: string }
+  const launch =
+    intent.target.kind === 'create-worktree' && preflight.mode === 'structured'
+      ? beginCreatedWorkspaceLaunch(runtime, intent.agent)
+      : undefined
+  let placed: Awaited<ReturnType<typeof resolveWorkspace>> | undefined
+  let surfacePublished = false
+  let recoverableWorktreeId: string | undefined
   try {
-    created = await createSurface(execution, placed.worktreeId, settled)
-  } catch (error) {
-    // The structured create path distinguishes a definitive pre-commit refusal from an unknown
-    // outcome. Only the former is safe to replace with a terminal in the same workspace; retrying
-    // after an unknown attach outcome could create two agents.
-    if (
-      settled.mode !== 'structured' ||
-      !(error instanceof AgentLaunchStructuredSessionRefusedError) ||
-      !isDefinitiveAgentSessionCreateRefusal(error.code)
-    ) {
-      throw error
-    }
-    settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary)
-    created = await execution.surfaces
-      .createTerminalAgent({
+    placed = await resolveWorkspace(execution, preflight, launch?.onWorkspaceCreated)
+    if (placed.startupTerminalHandle) {
+      const startup = published(execution, {
+        outcome: {
+          kind: 'terminal',
+          handle: placed.startupTerminalHandle,
+          ...(placed.startupTerminalPaneKey ? { paneKey: placed.startupTerminalPaneKey } : {})
+        },
         worktreeId: placed.worktreeId,
-        agent: intent.agent,
-        ...(intent.sessionOptions ? { options: intent.sessionOptions } : {})
+        receipt: preflight,
+        ...(placed.warning ? { warning: placed.warning } : {}),
+        ...promptReceipt(intent, settledAtCreation(intent, placed))
       })
-      .then((terminal) => ({
-        outcome: { kind: 'terminal' as const, handle: terminal.handle },
-        ...(terminal.warning ? { warning: terminal.warning } : {})
-      }))
-  }
-  // Both CAN be set, so neither may be dropped. The create warns precisely when it produced no
-  // startup terminal — `didSpawnStartup` stays false when that spawn throws — and that is the same
-  // condition which skips the early return above, so the launch goes on to build a second surface,
-  // and that one can warn too. The other path is an untracked-copy warning followed by a structured
-  // refusal downgrading to a terminal that warns. `??` kept the first and lost the second silently.
-  //
-  // KNOWN GAP, deliberately not fixed here: a create warning about a FAILED startup terminal is
-  // stale once the launch recovers by building a working one, so the user can be told the agent did
-  // not start while looking at it. Telling those apart needs `createManagedWorktree` to stop
-  // multiplexing "couldn't copy untracked files" and "startup terminal failed" into one string.
-  const warning = combineLaunchWarnings(placed.warning, created.warning)
-  return {
-    outcome: created.outcome,
-    worktreeId: placed.worktreeId,
-    receipt: settled,
-    ...(warning ? { warning } : {}),
-    ...promptReceipt(intent)
+      surfacePublished = true
+      launch?.release()
+      const { startupTerminalHandle, startupTerminalCreation, promptRodeLaunchCommand } = placed
+      return opening(
+        startup,
+        async () => ({
+          ...startup,
+          ...promptReceipt(
+            intent,
+            promptRodeLaunchCommand
+              ? HANDED_TO_TERMINAL
+              : await deliverTerminalLaunchPrompt(execution, startupTerminalHandle, {
+                  freshLaunch: true,
+                  terminalCreation: startupTerminalCreation
+                })
+          )
+        }),
+        startupTerminalCreation
+      )
+    }
+
+    // Recover a created workspace on cancellation before an agent exists.
+    recoverableWorktreeId = execution.signal?.aborted ? placed.worktreeId : undefined
+    assertAgentPromptRequestActive(execution.signal)
+    const settlement: AgentLaunchModeSettlement = {
+      phase: intent.target.kind === 'existing' ? 'before-effects' : 'created-workspace',
+      agent: intent.agent,
+      workspacePath: placed.workspacePath,
+      cwd: intent.cwd
+    }
+    execution.onStage?.('mode_settle')
+    let settled =
+      execution.decidedMode && intent.target.kind === 'existing'
+        ? preflight
+        : await resolveAgentLaunchModeOnHost(
+            runtime,
+            preflight,
+            placed.worktreeId,
+            intent.agent,
+            vocabulary,
+            settlement
+          )
+
+    execution.onStage?.('surface_create')
+    recoverableWorktreeId = placed.worktreeId
+    assertAgentPromptRequestActive(execution.signal)
+    let created: CreatedSurface
+    try {
+      created = await createSurface(execution, placed, settled)
+    } catch (error) {
+      if (
+        settled.mode !== 'structured' ||
+        !(error instanceof AgentLaunchStructuredSessionRefusedError) ||
+        !isDefinitiveAgentSessionCreateRefusal(error.code)
+      ) {
+        throw error
+      }
+      // Cancellation must prevent a fallback from starting a new agent and argv prompt.
+      assertAgentPromptRequestActive(execution.signal)
+      settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary, settlement)
+      created = await createTerminalSurface(execution, placed)
+    }
+    // Create warnings are untyped strings, so startup-failure warnings may remain stale after recovery.
+    const warning = combineLaunchWarnings(placed.warning, created.warning)
+    const surface = published(execution, {
+      outcome: created.outcome,
+      worktreeId: placed.worktreeId,
+      receipt: settled,
+      ...(warning ? { warning } : {}),
+      ...promptReceipt(intent, settledAtCreation(intent, created))
+    })
+    surfacePublished = true
+    launch?.release()
+    return opening(
+      surface,
+      async () => ({
+        ...surface,
+        ...promptReceipt(intent, await settleLaunchPromptDisposal(execution, created))
+      }),
+      created.terminalCreation
+    )
+  } catch (error) {
+    const createdWorktreeId = recoverableWorktreeId ?? launch?.createdWorktreeId()
+    if (!surfacePublished && intent.target.kind !== 'existing' && createdWorktreeId) {
+      await recoverCreatedWorkspace(execution.workspaces, createdWorktreeId)
+    }
+    throw error
+  } finally {
+    launch?.release()
   }
 }
 
-function downgradeAgentLaunchModeForStructuredRefusal(
-  receipt: AgentLaunchModeReceipt,
-  vocabulary: AgentLaunchModeVocabulary
-): AgentLaunchModeReceipt {
-  return {
-    mode: 'terminal',
-    preferred: receipt.preferred,
-    reason: 'structured_unsupported_on_host',
-    detail: `Your default is a structured chat session, but the host refused to create one here; started ${vocabulary.terminal} instead.`
-  }
+function published(execution: AgentLaunchExecution, surface: AgentLaunchResult): AgentLaunchResult {
+  warnStructuredLaunchDowngrade(execution.intent.agent, surface.receipt)
+  execution.onSurfacePublished?.(surface)
+  return surface
 }
 
 async function resolveWorkspace(
   execution: AgentLaunchExecution,
-  preflight: AgentLaunchModeReceipt
-): Promise<{
-  worktreeId: string
-  startupTerminalHandle: string | undefined
-  warning?: string
-}> {
+  preflight: AgentLaunchModeReceipt,
+  onWorkspaceCreated?: (worktreeId: string) => void
+): Promise<Awaited<ReturnType<AgentLaunchWorkspaceFactory['createWorktree']>>> {
   const { intent } = execution
   if (intent.target.kind === 'existing') {
-    // Nothing was created, so there is no create warning to carry.
-    return { worktreeId: intent.target.worktree, startupTerminalHandle: undefined }
+    const { worktree: worktreeId, connectionId, workspacePath } = intent.target
+    return { worktreeId, connectionId, workspacePath, startupTerminalHandle: undefined }
   }
   const workspaces = execution.workspaces
   if (!workspaces) {
     throw new Error('agent_launch_workspace_factory_required')
   }
   execution.onStage?.('worktree_create')
-  return workspaces.createWorktree({
-    // A caller migrating from `worktree.create` passes its existing params; a stale `startupAgent`
-    // in there would re-create the agent-first path this executor exists to replace.
+  if (intent.target.kind === 'create-folder-workspace') {
+    if (!workspaces.createFolderWorkspace) {
+      throw new Error('agent_launch_workspace_factory_required')
+    }
+    const created = await workspaces.createFolderWorkspace({ create: intent.target.create })
+    return { ...created, startupTerminalHandle: undefined }
+  }
+  const created = await workspaces.createWorktree({
+    // Reserved fields must come from the launch intent, not a stale create payload.
     create: withoutReservedAgentCreateFields(intent.target.create),
-    startupAgent: preflight.mode === 'structured' ? undefined : intent.agent
+    ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
+    ...(preflight.mode === 'structured' ? { promisedAgentChat: true } : {}),
+    startupAgent: preflight.mode === 'structured' ? undefined : intent.agent,
+    ...createLaunchPromptInputs(execution, preflight.mode),
+    ...(preflight.mode === 'structured' ? {} : terminalLaunchInputs(intent))
   })
+  // Without a startup terminal, no command carried the prompt; delivery is still owed.
+  const { promptRodeLaunchCommand, ...rest } = created
+  return rest.startupTerminalHandle && promptRodeLaunchCommand
+    ? { ...rest, promptRodeLaunchCommand: true }
+    : rest
+}
+
+/** Keep the structured create receipt for prompt settlement. */
+export type CreatedSurface = {
+  outcome: AgentLaunchResult['outcome']
+  warning?: string
+  terminalCreation?: RuntimeTerminalCreate
+  structured?: AgentLaunchStructuredSurface
+  promptRodeLaunchCommand?: boolean
 }
 
 async function createSurface(
-  execution: AgentLaunchExecution,
-  worktreeId: string,
+  execution: AgentLaunchSurfaceExecution,
+  workspace: { worktreeId: string; connectionId?: string | null },
   settled: AgentLaunchModeReceipt
-): Promise<{ outcome: AgentLaunchResult['outcome']; warning?: string }> {
+): Promise<CreatedSurface> {
   const { intent, surfaces } = execution
-  if (settled.mode === 'structured' && isStructuredProvider(intent.agent)) {
+  if (settled.mode === 'structured') {
+    const reservedTabId = intent.paneKey ? parsePaneKey(intent.paneKey)?.tabId : undefined
     const session = await surfaces.createStructuredSession({
-      worktreeId,
+      worktreeId: workspace.worktreeId,
       agent: intent.agent,
-      ...(intent.sessionOptions ? { options: intent.sessionOptions } : {})
+      ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
+      ...(intent.chatOptions ? { chatOptions: intent.chatOptions } : {}),
+      ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
+      ...(reservedTabId ? { tabId: reservedTabId } : {}),
+      ...launchPromptCreateInputs(intent, execution.signal),
+      ...(intent.prompt ? {} : { withoutPrompt: true as const })
     })
-    return { outcome: { kind: 'structured', sessionId: session.sessionId, handle: session.handle } }
+    return {
+      outcome: {
+        kind: 'structured',
+        sessionId: session.sessionId,
+        handle: session.handle,
+        ...(session.tabId ? { tabId: session.tabId } : {})
+      },
+      structured: session,
+      ...ignoredStructuredLaunchInputsWarning(intent)
+    }
   }
+  return createTerminalSurface(execution, workspace)
+}
+
+async function createTerminalSurface(
+  execution: AgentLaunchSurfaceExecution,
+  workspace: { worktreeId: string; connectionId?: string | null }
+): Promise<CreatedSurface> {
+  const { intent, surfaces } = execution
+  const startupPrompt = argvLaunchPrompt(intent)
   const terminal = await surfaces.createTerminalAgent({
-    worktreeId,
+    worktreeId: workspace.worktreeId,
     agent: intent.agent,
-    ...(intent.sessionOptions ? { options: intent.sessionOptions } : {})
+    ...(startupPrompt ? { startupPrompt } : {}),
+    ...terminalLaunchInputs(intent),
+    viewMode: 'terminal'
   })
   return {
-    outcome: { kind: 'terminal', handle: terminal.handle },
-    ...(terminal.warning ? { warning: terminal.warning } : {})
+    outcome: {
+      kind: 'terminal',
+      handle: terminal.handle,
+      ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
+    },
+    terminalCreation: terminal.terminalCreation,
+    ...(terminal.warning ? { warning: terminal.warning } : {}),
+    ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
   }
-}
-
-/**
- * Two warnings, both true, neither droppable.
- *
- * Mirrors how the create combines its own failures — `appendFailure` in
- * runtime-local-worktree-terminal-startup.ts, and the startup-terminal catch in
- * runtime-remote-managed-worktree-create.ts — which append rather than replace.
- */
-function combineLaunchWarnings(
-  create: string | undefined,
-  surface: string | undefined
-): string | undefined {
-  if (!create || !surface) {
-    return create ?? surface
-  }
-  return `${create} Also ${surface[0].toLowerCase()}${surface.slice(1)}`
-}
-
-function isStructuredProvider(agent: TuiAgent): agent is 'claude' | 'codex' {
-  return agent === 'claude' || agent === 'codex'
-}
-
-function existingWorktreeId(target: AgentLaunchTarget): string {
-  return target.kind === 'existing' ? target.worktree : ''
-}
-
-/** Prompt delivery is the caller's, not the executor's: a PTY paste is observed by whoever owns
- *  the pane, and a structured first turn is sent through the session. The executor reports the
- *  requested delivery back as not delivered so a caller cannot mistake silence for delivery. */
-function promptReceipt(intent: AgentLaunchIntent): Pick<AgentLaunchResult, 'prompt'> {
-  if (!intent.prompt) {
-    return {}
-  }
-  return { prompt: { delivery: intent.prompt.delivery, outcome: 'not-delivered' } }
 }

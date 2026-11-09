@@ -1,18 +1,13 @@
-// Enums for the `daemon_adopted` and `daemon_pty_cwd_denied` telemetry events (#17696).
-// Both exist to measure how often a macOS app runs on a daemon left behind by an earlier app
-// bundle, and how often such a daemon actually spawns a terminal whose cwd it cannot read.
-// Enum-only: no paths, versions, or exact counts ever reach the wire.
+// Measure macOS adoption of prior-bundle daemons and cwd denials (#17696). Enum-only: never send paths, versions or exact counts.
 
 /** How the adopted daemon's recorded app version compares to the running app. */
 export const DAEMON_ADOPTED_APP_VERSION_MATCH = ['same', 'different', 'unknown'] as const
 export type DaemonAdoptedAppVersionMatch = (typeof DAEMON_ADOPTED_APP_VERSION_MATCH)[number]
 
-/**
- * Where the binary that forked the adopted daemon lives now. `updater-cache` is the Squirrel
- * ShipIt staging area — a daemon attributed there is the reported #17696 shape.
- */
+/** Spawner location: updater-cache is Squirrel ShipIt staging (#17696); stable-copy is Orca’s signed launchd bundle (#25848). */
 export const DAEMON_SPAWNER_PATH_CLASSES = [
   'applications',
+  'stable-copy',
   'updater-cache',
   'other',
   'missing',
@@ -21,6 +16,15 @@ export const DAEMON_SPAWNER_PATH_CLASSES = [
 export type DaemonSpawnerPathClass = (typeof DAEMON_SPAWNER_PATH_CLASSES)[number]
 
 export const DAEMON_TCC_ATTRIBUTION_VALUES = ['intact', 'severed', 'unknown'] as const
+
+/** Measure executable identity (#21826): resolved means an existing non-ShipIt file, not necessarily installed app; parked means outgoing ShipIt bundle; unresolvable loses tccd identity; probe-failed means unsupported/missing/failed evidence. */
+export const DAEMON_CODE_IDENTITY_VALUES = [
+  'resolved',
+  'parked',
+  'unresolvable',
+  'probe-failed'
+] as const
+export type DaemonCodeIdentity = (typeof DAEMON_CODE_IDENTITY_VALUES)[number]
 
 /** Which macOS-protected folder class the denied cwd falls under. */
 export const DAEMON_PTY_CWD_CLASSES = [
@@ -32,15 +36,34 @@ export const DAEMON_PTY_CWD_CLASSES = [
 ] as const
 export type DaemonPtyCwdClass = (typeof DAEMON_PTY_CWD_CLASSES)[number]
 
+/** Offer tccutil reset only for classes with per-app TCC rows; other denial classes have no row to reset. */
+export const MAC_TCC_FOLDER_CLASSES = ['documents', 'desktop', 'downloads'] as const
+export type MacTccFolderClass = (typeof MAC_TCC_FOLDER_CLASSES)[number]
+
+export function isMacTccFolderClass(cwdClass: DaemonPtyCwdClass): cwdClass is MacTccFolderClass {
+  return MAC_TCC_FOLDER_CLASSES.some((name) => name === cwdClass)
+}
+
+export function classifyDaemonAppVersionMatch(
+  daemonAppVersion: string | null | undefined,
+  appVersion: string
+): DaemonAdoptedAppVersionMatch {
+  return !daemonAppVersion ? 'unknown' : daemonAppVersion === appVersion ? 'same' : 'different'
+}
+
 export function classifyDaemonSpawnerPath(
   spawnerExecPath: string | null,
-  exists: (path: string) => boolean
+  exists: (path: string) => boolean,
+  stableCopyPrefix: string | null
 ): DaemonSpawnerPathClass {
   if (!spawnerExecPath) {
     return 'unknown'
   }
   if (!exists(spawnerExecPath)) {
     return 'missing'
+  }
+  if (stableCopyPrefix && spawnerExecPath.startsWith(stableCopyPrefix)) {
+    return 'stable-copy'
   }
   if (/\/Library\/Caches\/[^/]*ShipIt\//.test(spawnerExecPath)) {
     return 'updater-cache'

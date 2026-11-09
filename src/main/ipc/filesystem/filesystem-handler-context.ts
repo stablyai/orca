@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import type { FileHandle } from 'node:fs/promises'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
 import type { SenderScopedRequestCancellations } from '../sender-scoped-request-cancellation'
 import { cleanupLocalTransferPath } from './filesystem-download-promotion'
@@ -11,7 +11,7 @@ export type DownloadSession = {
   destinationExisted: boolean
   handle: FileHandle
   cleanupTimer: ReturnType<typeof setTimeout>
-  senderId: number
+  disposeRendererLifetime: () => void
 }
 
 export type FilesystemHandlerContext = {
@@ -25,7 +25,6 @@ export type FilesystemHandlerContext = {
     transferId: string,
     cleanupTemp: boolean
   ) => Promise<DownloadSession | null>
-  cleanupDownloadSessionsForSender: (senderId: number) => void
 }
 
 export function createFilesystemHandlerContext(
@@ -46,20 +45,13 @@ export function createFilesystemHandlerContext(
       return null
     }
     downloadSessions.delete(transferId)
+    session.disposeRendererLifetime()
     clearTimeout(session.cleanupTimer)
     await session.handle.close().catch(() => {})
     if (cleanupTemp) {
       await cleanupLocalTransferPath(session.tempPath)
     }
     return session
-  }
-
-  const cleanupDownloadSessionsForSender = (senderId: number): void => {
-    for (const [transferId, session] of Array.from(downloadSessions)) {
-      if (session.senderId === senderId) {
-        void closeDownloadSession(transferId, true)
-      }
-    }
   }
 
   return {
@@ -69,7 +61,6 @@ export function createFilesystemHandlerContext(
     downloadSessions,
     listFilesCancellations,
     gitStatusCancellations,
-    closeDownloadSession,
-    cleanupDownloadSessionsForSender
+    closeDownloadSession
   }
 }

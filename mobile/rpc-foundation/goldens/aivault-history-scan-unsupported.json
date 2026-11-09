@@ -1,32 +1,36 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "aiVault.history-scan",
   "family": "aiVault.history",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "7add46922ba5486e56c8acd99a53d083b605f5d98f3cc44ee3cb350ec0406080",
-  "scenarioSha256": "e97c6db772a70ee1912419ac67835b6074aaf9a341d4360389a11465f08092c5",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "053ddb72973f": {
+    "111e9a5009ba": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 4,
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
+    },
+    "213a998b248c": {
       "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "capabilities": ["mobile.tasks.v1"]
-      },
       "refreshing": false,
       "scope": "workspace",
       "screenState": {
         "kind": "unsupported"
       }
     },
-    "a3b75b607f63": {
+    "44a27dbf05e2": {
       "name": "status.get#1",
-      "ordinal": 1,
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "c2c3c4a599ef": {
+      "name": "status.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -35,13 +39,13 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -50,7 +54,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "capabilities": ["mobile.tasks.v1"]
@@ -58,10 +62,10 @@
         }
       }
     },
-    "d08f74d65ee6": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -78,13 +82,25 @@
       {
         "id": "unsupported",
         "observation": {
-          "sender": ["a3b75b607f63"],
-          "payloads": ["d08f74d65ee6"],
+          "sender": ["c2c3c4a599ef"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "053ddb72973f",
+          "state": "213a998b248c",
           "effects": []
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": ["c2c3c4a599ef"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "213a998b248c",
+          "effects": ["111e9a5009ba"]
         }
       }
     ]

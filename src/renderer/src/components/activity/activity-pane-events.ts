@@ -1,16 +1,14 @@
 import { isHistoricalActivityState } from './activity-event-state'
+import type { AgentStateHistoryEntry } from '../../../../shared/agent-status/lifecycle/agent-state-history'
 import type {
-  AgentStateHistoryEntry,
-  AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+  AgentStatusEntry,
+  AgentStatusState as ActivityEventState
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type {
-  ActivityEvent,
-  ActivityEventState,
-  ActivityLiveAgentState
-} from './activity-thread-types'
+import type { ActivityEvent, ActivityLiveAgentState } from './activity-thread-types'
+
 import { EVENTS_PER_PANE_CAP } from './activity-event-cap'
 
 function historyEntrySnapshot(
@@ -27,7 +25,9 @@ function historyEntrySnapshot(
     toolName: undefined,
     toolInput: undefined,
     lastAssistantMessage: undefined,
-    interrupted: history.interrupted
+    interrupted: history.interrupted,
+    // The live row's main agent belongs to its current state, not to this snapshot.
+    mainAgent: history.mainAgent
   }
 }
 
@@ -62,8 +62,14 @@ type PaneEventInputs = {
 export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] {
   const events: ActivityEvent[] = []
   const seenIds = new Set<string>()
-  const append = (state: ActivityEventState, timestamp: number, entry: AgentStatusEntry): void => {
-    const id = `agent:${entry.paneKey}:${state}:${timestamp}`
+  const append = (
+    state: ActivityEventState,
+    timestamp: number,
+    observedAt: number,
+    entry: AgentStatusEntry
+  ): void => {
+    // Why observedAt: an answered ask returns done to its turn's end, repeating that done's time.
+    const id = `agent:${entry.paneKey}:${state}:${observedAt}`
     if (seenIds.has(id)) {
       return
     }
@@ -72,6 +78,7 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
       id,
       state,
       timestamp,
+      observedAt,
       worktree: args.worktree,
       repo: args.repo,
       entry,
@@ -93,6 +100,7 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
     append(
       history.state as ActivityEventState,
       history.startedAt,
+      history.observedAt ?? history.startedAt,
       historyEntrySnapshot(args.entry, history)
     )
   }
@@ -108,6 +116,11 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
   if (args.entry.stateStartedAt <= args.clearedAt) {
     return events
   }
-  append(currentState, args.entry.stateStartedAt, args.entry)
+  append(
+    currentState,
+    args.entry.stateStartedAt,
+    args.entry.stateObservedAt ?? args.entry.stateStartedAt,
+    args.entry
+  )
   return events
 }

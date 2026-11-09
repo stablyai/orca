@@ -26,8 +26,7 @@ export const NESTED_TOGGLE_MARKDOWN = [
   ''
 ].join('\n')
 
-// An inner toggle carrying unsupported attributes cannot become an editable
-// node, so the whole block must still fall back to byte-preserving passthrough.
+// Unsupported nested attributes require byte-preserving passthrough for the whole block.
 export const UNSUPPORTED_NESTED_TOGGLE_MARKDOWN = [
   '<details class="orca-details" open>',
   '<summary>outer</summary>',

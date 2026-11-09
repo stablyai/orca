@@ -1,102 +1,35 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "nativeChat.image-paste",
   "family": "nativeChat.image-paste",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
-  "scenarioSha256": "b6595de485ed071674051ce0d2b44a604ec21d2614b646d8917a9130a58a48cf",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "098c51e345e3": {
+    "0f02c1a90f93": {
       "name": "terminal.send#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
-    "368fb0f0499a": {
-      "name": "terminal.send#3",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/b.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
-    },
-    "47a22f9d0047": {
-      "failure": {
-        "$rpc": "null"
-      },
-      "pasted": true
-    },
-    "621466fd4dc8": {
-      "name": "terminal.send#2",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/a.png\u001b[201~"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "send": {
-              "accepted": true
-            }
-          }
-        }
-      }
-    },
-    "7e7356ce5972": {
-      "name": "terminal.send#1",
+    "15a9fbee07a2": {
+      "name": "terminal.read#1",
       "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "terminal.send"
+          "value": "terminal.read"
         },
         {
           "name": "params",
           "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "enter": false,
-            "terminal": "terminal-1",
-            "text": "\u0015"
+            "limit": 1,
+            "screen": true,
+            "terminal": "terminal-1"
           }
         },
         {
           "name": "options",
           "value": {
             "budgetSpansConnect": true,
-            "timeoutMs": 15000
+            "timeoutMs": 2000
           }
         }
       ],
@@ -108,6 +41,63 @@
           "id": "frame-1",
           "ok": true,
           "result": {
+            "terminal": {}
+          }
+        }
+      }
+    },
+    "403ff49eee8b": {
+      "name": "terminal.send#3",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/b.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "40c4c5738c96": {
+      "name": "terminal.send#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~@/tmp/a.png\\u001b[201~ \",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "47a22f9d0047": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "pasted": true
+    },
+    "53c4e1d074f0": {
+      "name": "terminal.send#3",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[200~@/tmp/b.png\u001b[201~ "
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
             "send": {
               "accepted": true
             }
@@ -115,14 +105,8 @@
         }
       }
     },
-    "84e5ca07cb7a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": true
-    },
-    "adec5d8f0ba6": {
-      "name": "terminal.send#3",
+    "703c117d5bca": {
+      "name": "terminal.send#2",
       "ordinal": 5,
       "args": [
         {
@@ -138,7 +122,7 @@
             },
             "enter": false,
             "terminal": "terminal-1",
-            "text": "\u001b[200~/tmp/b.png\u001b[201~ "
+            "text": "\u001b[200~@/tmp/a.png\u001b[201~ "
           }
         },
         {
@@ -164,10 +148,59 @@
         }
       }
     },
-    "f5002f9f5616": {
-      "name": "terminal.send#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~/tmp/a.png\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "a3e305c984c6": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "abebd0f45ba2": {
+      "name": "terminal.read#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.read\",\"params\":{\"terminal\":\"terminal-1\",\"screen\":true,\"limit\":1}}"
     }
   },
   "recording": {
@@ -176,8 +209,8 @@
       {
         "id": "pasted-both",
         "observation": {
-          "sender": ["7e7356ce5972", "621466fd4dc8", "adec5d8f0ba6"],
-          "payloads": ["098c51e345e3", "f5002f9f5616", "368fb0f0499a"],
+          "sender": ["15a9fbee07a2", "a3e305c984c6", "703c117d5bca", "53c4e1d074f0"],
+          "payloads": ["abebd0f45ba2", "0f02c1a90f93", "40c4c5738c96", "403ff49eee8b"],
           "settlements": {
             "two": "84e5ca07cb7a"
           },

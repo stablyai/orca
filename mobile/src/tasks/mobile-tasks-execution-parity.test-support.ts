@@ -1,4 +1,4 @@
-import ts from 'typescript'
+import ts from 'typescript-api'
 import {
   MOBILE_TASKS_SOURCE_FILES,
   readMobileTasksSource
@@ -9,7 +9,7 @@ type FunctionDefinition = {
   sourceFile: ts.SourceFile
 }
 
-const TASKS_ROUTE = '../../app/h/[hostId]/tasks.tsx'
+const TASKS_ROUTE = './MobileTasksScreen.tsx'
 const FOUNDATION_SOURCE = 'mobile-tasks-legacy-foundation.tsx'
 const LEGACY_STYLE_SOURCE = 'mobile-tasks-legacy-styles.ts'
 

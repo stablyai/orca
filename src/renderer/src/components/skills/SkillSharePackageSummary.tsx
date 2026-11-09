@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SkillSharePreview } from '../../../../shared/skill-sharing-contract'
 import { fileCountLabel, skillCountLabel } from './skill-display-labels'
 import { byteLabel, sensitiveShareFiles, summarizeShareRisk } from './skill-share-preview-summary'
@@ -9,6 +9,7 @@ import { SkillDescriptionDisclosure } from './SkillDescriptionDisclosure'
 import { SkillDisclosureTrigger } from './SkillDisclosureTrigger'
 
 function SensitiveFileList({ preview }: { preview: SkillSharePreview }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ul className="scrollbar-sleek mt-2 max-h-40 space-y-1 overflow-y-auto rounded-md border border-border p-2">
       {sensitiveShareFiles(preview).map((file) => (
@@ -18,8 +19,8 @@ function SensitiveFileList({ preview }: { preview: SkillSharePreview }): React.J
           </span>
           <span className="shrink-0 text-muted-foreground">
             {file.executable
-              ? translate('auto.components.skills.share.fileExecutable', 'executable')
-              : translate('auto.components.skills.share.fileScript', 'script')}
+              ? t('auto.components.skills.share.fileExecutable', 'executable')
+              : t('auto.components.skills.share.fileScript', 'script')}
           </span>
         </li>
       ))}
@@ -28,6 +29,7 @@ function SensitiveFileList({ preview }: { preview: SkillSharePreview }): React.J
 }
 
 function BundleSkillList({ preview }: { preview: SkillSharePreview }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="scrollbar-sleek mt-2 max-h-56 space-y-2 overflow-y-auto rounded-md border border-border p-2">
       {(preview.skills ?? []).map((skill) => (
@@ -37,7 +39,7 @@ function BundleSkillList({ preview }: { preview: SkillSharePreview }): React.JSX
             <p className="truncate text-muted-foreground">{skill.description}</p>
           </div>
           <span className="shrink-0 text-[11px] text-muted-foreground">
-            {fileCountLabel(skill.fileCount)} · {byteLabel(skill.totalBytes)}
+            {fileCountLabel(skill.fileCount, t)} · {byteLabel(skill.totalBytes)}
           </span>
         </div>
       ))}
@@ -50,20 +52,20 @@ export function SkillSharePackageSummary({
 }: {
   preview: SkillSharePreview
 }): React.JSX.Element {
+  const t = useTranslate()
   const skillCount = preview.skillCount ?? preview.skills?.length ?? 1
   const bundle = skillCount > 1
-  const risk = summarizeShareRisk(preview)
+  const risk = summarizeShareRisk(preview, t)
   return (
     <section className="space-y-2">
       <div className="min-w-0">
-        {/* Why: a bundle's package name is synthesized ("shared-skills"), so the
-            count is the only honest heading; the list below names the members. */}
+        {/* Bundle names are synthesized; use the member count as the heading and name members below. */}
         <h3 className="truncate text-sm font-semibold">
-          {bundle ? skillCountLabel(skillCount) : preview.name}
+          {bundle ? skillCountLabel(skillCount, t) : preview.name}
         </h3>
         {bundle ? null : <SkillDescriptionDisclosure description={preview.description} />}
         <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-          <span>{fileCountLabel(preview.fileCount)}</span>
+          <span>{fileCountLabel(preview.fileCount, t)}</span>
           <span aria-hidden>·</span>
           <span>{byteLabel(preview.totalBytes)}</span>
           <span aria-hidden>·</span>
@@ -77,10 +79,7 @@ export function SkillSharePackageSummary({
       {risk.risky ? (
         <Collapsible>
           <SkillDisclosureTrigger
-            label={translate(
-              'auto.components.skills.share.reviewFiles',
-              'Review files that can run'
-            )}
+            label={t('auto.components.skills.share.reviewFiles', 'Review files that can run')}
           />
           <CollapsibleContent className="collapsible-height-content">
             <SensitiveFileList preview={preview} />
@@ -91,7 +90,7 @@ export function SkillSharePackageSummary({
       {bundle && (preview.skills?.length ?? 0) > 0 ? (
         <Collapsible defaultOpen>
           <SkillDisclosureTrigger
-            label={translate('auto.components.skills.share.reviewSkills', 'Review included skills')}
+            label={t('auto.components.skills.share.reviewSkills', 'Review included skills')}
           />
           <CollapsibleContent className="collapsible-height-content">
             <BundleSkillList preview={preview} />

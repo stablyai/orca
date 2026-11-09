@@ -1,0 +1,14 @@
+{
+  "capturedAt": "2026-09-27T20:00:34.230Z",
+  "platform": "darwin",
+  "command": [
+    "codex",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "-c",
+    "model_reasoning_effort=high"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.1 with only -c model_reasoning_effort. Same embedded-warning cell-diff header repaint as the -m/-c launch (STA-8628). Worktree-path leaf redacted by the recorder scan.",
+  "exitCode": 0
+}

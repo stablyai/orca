@@ -62,6 +62,7 @@ const CODEX_GLOBAL_BOOLEAN_FLAGS = new Set([
   '--dangerously-bypass-approvals-and-sandbox',
   '--search',
   '--no-alt-screen',
+  '--no-daemon',
   '--help',
   '-h',
   '--version',
@@ -230,8 +231,7 @@ function isNonInteractiveCodexSubcommand(tokens: string[]): boolean {
 
   const normalizedSubcommand = subcommand.value.toLowerCase()
   if (normalizedSubcommand === 'login') {
-    // Why: bare `codex login` displays an auth flow; only explicit status/help
-    // or stdin-fed token modes are safe to leave in a background PTY.
+    // Bare codex login opens an auth flow; only status/help or stdin-token modes are background-safe.
     const loginStartIndex = subcommand.index + 1
     const loginSubcommand = findCodexSubcommand(
       tokens,
@@ -249,8 +249,7 @@ function isNonInteractiveCodexSubcommand(tokens: string[]): boolean {
     )
   }
   if (normalizedSubcommand === 'cloud') {
-    // Why: bare `codex cloud` opens the interactive cloud browser, while its
-    // named child commands are plain one-shot commands.
+    // Bare codex cloud is interactive; named subcommands are one-shot commands.
     const cloudStartIndex = subcommand.index + 1
     const cloudSubcommand = findCodexSubcommand(
       tokens,

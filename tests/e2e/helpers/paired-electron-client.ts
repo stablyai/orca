@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
@@ -9,6 +9,7 @@ import {
   type TestInfo
 } from '@stablyai/playwright-test'
 
+import type { ContextualTourId } from '../../../src/shared/contextual-tours'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
@@ -34,7 +35,10 @@ export type PairedElectronClient = {
   page: Page
   environmentId: string
   captureDirectSshAttempts: () => Promise<void>
+  /** Closes the app AND deletes the profile. For a restart, use `quitPreservingProfile`. */
   dispose: () => Promise<void>
+  // Keep the profile and bounded shutdown path for restart; dispose deletes persistence and bare app.close can hang.
+  quitPreservingProfile: () => Promise<void>
   getDirectSshAttemptTargetIds: () => Promise<string[]>
   installDirectSshAttemptProbe: () => Promise<void>
   replacePairingInPlace: (offer: RuntimeDesktopPairingOffer) => Promise<SameIdPairingReplacement>
@@ -97,6 +101,22 @@ export async function createRuntimeDesktopPairingOffer(
   })
 }
 
+/** The phone QR a desktop shows in Settings, minted LAN-only so no Relay is involved. */
+export async function createDesktopMobilePairingOffer(
+  desktopPage: Page
+): Promise<RuntimeDesktopPairingOffer> {
+  return desktopPage.evaluate(async () => {
+    const offer = await window.api.mobile.getPairingQR({
+      address: '127.0.0.1',
+      connectionMode: 'local-only'
+    })
+    if (!offer.available) {
+      throw new Error(`Desktop did not mint a mobile pairing offer: ${JSON.stringify(offer)}`)
+    }
+    return { pairingUrl: offer.pairingUrl }
+  })
+}
+
 export async function launchPairedWebClient(
   hubApp: ElectronApplication,
   offer: RuntimeDesktopPairingOffer,
@@ -148,19 +168,29 @@ export async function launchPairedElectronClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
   name: string,
-  // reuseUserDataDir relaunches on an existing profile, so its stored pairing credential — and
-  // therefore its pairedDeviceId — survives the restart, as it does for a real force-quit reopen.
-  options: { extraEnv?: Record<string, string>; reuseUserDataDir?: string } = {}
+  // Reuse the stored pairing credential/device id across relaunch, matching a real reopen.
+  options: {
+    extraEnv?: Record<string, string>
+    reuseUserDataDir?: string
+    // One-time tours that would otherwise overlay the controls a spec drives.
+    seenContextualTourIds?: readonly ContextualTourId[]
+  } = {}
 ): Promise<PairedElectronClient> {
   const reusedProfile = options.reuseUserDataDir !== undefined
   const userDataDir =
     options.reuseUserDataDir ?? mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
   const directSshProbePath = path.join(userDataDir, 'forbidden-local-ssh-connects.jsonl')
   if (!reusedProfile) {
-    writeFileSync(
-      path.join(userDataDir, 'orca-data.json'),
-      `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
-    )
+    const completed = getE2ECompletedOnboardingProfile()
+    const seenContextualTourIds: readonly ContextualTourId[] = [
+      ...completed.ui.contextualToursSeenIds,
+      ...(options.seenContextualTourIds ?? [])
+    ]
+    const profile = {
+      ...completed,
+      ui: { ...completed.ui, contextualToursSeenIds: seenContextualTourIds }
+    }
+    writeFileSync(path.join(userDataDir, 'orca-data.json'), `${JSON.stringify(profile, null, 2)}\n`)
   }
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
@@ -171,8 +201,15 @@ export async function launchPairedElectronClient(
     userDataDir
   })
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+  const recordVideoDir = process.env.ORCA_E2E_RECORD_VIDEO === '1' ? testInfo.outputDir : null
+  if (recordVideoDir) {
+    mkdirSync(recordVideoDir, { recursive: true })
+  }
   const app = await electron.launch({
     args: getOrcaElectronLaunchArgs(mainPath, false),
+    ...(recordVideoDir
+      ? { recordVideo: { dir: recordVideoDir, size: { width: 1920, height: 1080 } } }
+      : {}),
     env: {
       ...homeIsolation.env,
       NODE_ENV: 'development',
@@ -181,8 +218,7 @@ export async function launchPairedElectronClient(
     }
   })
 
-  // Why before the home assert: forwarding starts here, so a client that fails during startup
-  // otherwise reaches CI as a bare Playwright error with none of its own output attached.
+  // Forward logs before the home assertion so startup failures retain app diagnostics.
   forwardElectronProcessLogs(app, testInfo)
   try {
     assertElectronResolvedIsolatedHome(
@@ -239,6 +275,10 @@ export async function launchPairedElectronClient(
         await closeElectronAppForE2E(app)
         await cleanupE2EDaemons(userDataDir)
         await removeProfile(userDataDir)
+      },
+      quitPreservingProfile: async () => {
+        await closeElectronAppForE2E(app)
+        await cleanupE2EDaemons(userDataDir)
       },
       getDirectSshAttemptTargetIds: async () => {
         return readDirectSshAttemptTargetIds(directSshProbePath).filter(

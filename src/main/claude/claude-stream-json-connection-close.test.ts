@@ -2,95 +2,78 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
+import type * as ManagedProviderProcessModule from '../provider-process/managed-provider-process'
 import type { query } from '@anthropic-ai/claude-agent-sdk'
 import {
-  openClaudeStreamJsonConnection,
-  type ClaudeStreamJsonLaunch
+  CLAUDE_READER_DRAIN_AFTER_EXIT_MS,
+  openClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
 
 const mocks = vi.hoisted(() => {
   const refresh = vi.fn()
-  const proveClaudeChildExit = vi.fn()
+  const closeWriter = vi.fn()
   const tree = {
     capture: vi.fn(async () => {}),
     refresh: (...args: unknown[]) => refresh(...args),
     reap: vi.fn(async () => 'exited' as const),
-    treeVerdict: 'unverifiable' as const
+    treeVerdict: 'unverifiable' as const,
+    forcedReapAttempted: false
   }
-  return { proveClaudeChildExit, refresh, tree }
+  return { closeWriter, refresh, tree }
 })
 
 vi.mock('./claude-agent-sdk-exit-proof', () => ({
-  createClaudeChildTreeReaper: vi.fn(() => mocks.tree),
-  proveClaudeChildExit: (...args: unknown[]) => mocks.proveClaudeChildExit(...args)
+  createClaudeChildTreeReaper: vi.fn(() => mocks.tree)
 }))
 
-function fakeChild(): ChildProcessWithoutNullStreams {
+vi.mock('../provider-process/managed-provider-process', async (importOriginal) => {
+  const original = await importOriginal<typeof ManagedProviderProcessModule>()
+  return {
+    ...original,
+    spawnManagedProviderProcess: (
+      ...args: Parameters<typeof original.spawnManagedProviderProcess>
+    ) => {
+      const managed = original.spawnManagedProviderProcess(...args)
+      managed.closeWriter = async () =>
+        (await mocks.closeWriter())
+          ? { root: 'exited', tree: 'exited' }
+          : { root: 'live', tree: 'unverifiable' }
+      return managed
+    }
+  }
+})
+
+function fakeChild(
+  streams: { stdout: PassThrough; stderr: PassThrough } = {
+    stdout: new PassThrough(),
+    stderr: new PassThrough()
+  }
+): ChildProcessWithoutNullStreams {
   const child = new EventEmitter()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The connection reads only pid, the three pipes and kill, which this fake carries.
   return Object.assign(child, {
     pid: 424242,
     stdin: new PassThrough(),
-    stdout: new PassThrough(),
-    stderr: new PassThrough(),
+    stdout: streams.stdout,
+    stderr: streams.stderr,
     kill: vi.fn()
   }) as unknown as ChildProcessWithoutNullStreams
 }
 
 describe('Claude stream-json close ordering', () => {
-  it('waits for the live tree refresh before ending stdin', async () => {
-    const refreshDone = Promise.withResolvers<void>()
-    mocks.refresh.mockReturnValueOnce(refreshDone.promise)
-    mocks.proveClaudeChildExit.mockResolvedValueOnce(true)
-    const child = fakeChild()
-    const launch: ClaudeStreamJsonLaunch = {
-      pathToClaudeCodeExecutable: 'claude',
-      options: {},
-      cwd: '/work/repo'
-    }
-    const queryImpl = ((params: Parameters<typeof query>[0]) => {
-      if (!params.options) {
-        throw new Error('missing SDK options')
-      }
-      params.options.spawnClaudeCodeProcess?.({
-        command: 'claude',
-        args: [],
-        env: {},
-        signal: new AbortController().signal
-      })
-      void (async () => {
-        for await (const _message of params.prompt) {
-          // The SDK owns the transport write; the close test only needs its EOF boundary.
-        }
-        child.stdin.end()
-      })()
-      return (async function* () {})()
-    }) as typeof query
-    const connection = await openClaudeStreamJsonConnection(launch, {}, () => child, queryImpl)
-
-    const closing = connection.close()
-    await new Promise((resolve) => setImmediate(resolve))
-    expect(child.stdin.writableEnded).toBe(false)
-
-    refreshDone.resolve()
-    await expect(closing).resolves.toBe(true)
-    expect(child.stdin.writableEnded).toBe(true)
-  })
-
-  it('requests a fresh close boundary after an output capture starts', async () => {
+  it('stops pulling SDK messages until reading resumes', async () => {
     mocks.refresh.mockReset()
-    mocks.proveClaudeChildExit.mockReset()
-    const outputCapture = Promise.withResolvers<void>()
-    const closeCapture = Promise.withResolvers<void>()
-    mocks.refresh
-      .mockReturnValueOnce(outputCapture.promise)
-      .mockReturnValueOnce(closeCapture.promise)
-    mocks.proveClaudeChildExit.mockResolvedValueOnce(true)
+    mocks.closeWriter.mockReset()
+    mocks.refresh.mockResolvedValue(undefined)
+    mocks.closeWriter.mockResolvedValue(true)
     const child = fakeChild()
-    const launch: ClaudeStreamJsonLaunch = {
-      pathToClaudeCodeExecutable: 'claude',
-      options: {},
-      cwd: '/work/repo'
-    }
+    const first = Promise.withResolvers<Record<string, unknown>>()
+    const next = vi
+      .fn<() => Promise<IteratorResult<Record<string, unknown>>>>()
+      .mockImplementationOnce(async () => ({ value: await first.promise, done: false }))
+      .mockResolvedValueOnce({ value: { type: 'second' }, done: false })
+      .mockResolvedValue({ value: undefined, done: true })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This injected query exercises only the async iterator used by the connection.
     const queryImpl = ((params: Parameters<typeof query>[0]) => {
       params.options?.spawnClaudeCodeProcess?.({
         command: 'claude',
@@ -98,29 +81,125 @@ describe('Claude stream-json close ordering', () => {
         env: {},
         signal: new AbortController().signal
       })
-      void (async () => {
-        for await (const _message of params.prompt) {
-          // The SDK owns the transport write; the close test only needs its EOF boundary.
+      return {
+        [Symbol.asyncIterator]: () => ({ next })
+      }
+    }) as unknown as typeof query
+    const seen: string[] = []
+    let connection: Awaited<ReturnType<typeof openClaudeStreamJsonConnection>>
+    connection = await openClaudeStreamJsonConnection(
+      { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
+      {
+        onMessage: (message) => {
+          seen.push(String(message.type))
+          if (message.type === 'first') {
+            connection.pauseReading?.()
+          }
         }
-        child.stdin.end()
-      })()
-      return (async function* () {})()
-    }) as typeof query
-    const connection = await openClaudeStreamJsonConnection(launch, {}, () => child, queryImpl)
+      },
+      () => child,
+      queryImpl
+    )
 
-    child.stderr.emit('data', 'output')
-    await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1))
-    const closing = connection.close()
-    await Promise.resolve()
+    first.resolve({ type: 'first' })
+    await vi.waitFor(() => expect(seen).toEqual(['first']))
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(next).toHaveBeenCalledOnce()
 
-    expect(mocks.refresh).toHaveBeenCalledTimes(2)
-    expect(child.stdin.writableEnded).toBe(false)
+    connection.resumeReading?.()
+    await vi.waitFor(() => expect(seen).toEqual(['first', 'second']))
+    expect(next).toHaveBeenCalledTimes(3)
+    await expect(connection.close()).resolves.toBe(true)
+  })
 
-    outputCapture.resolve()
-    await Promise.resolve()
-    expect(child.stdin.writableEnded).toBe(false)
-    closeCapture.resolve()
-    await expect(closing).resolves.toBe(true)
-    expect(child.stdin.writableEnded).toBe(true)
+  it('releases a pulled frame when provider exit is reported', async () => {
+    mocks.refresh.mockReset()
+    mocks.closeWriter.mockReset()
+    mocks.refresh.mockResolvedValue(undefined)
+    mocks.closeWriter.mockResolvedValue(true)
+    const child = fakeChild()
+    const first = Promise.withResolvers<Record<string, unknown>>()
+    const next = vi
+      .fn<() => Promise<IteratorResult<Record<string, unknown>>>>()
+      .mockImplementationOnce(async () => ({ value: await first.promise, done: false }))
+      .mockResolvedValue({ value: undefined, done: true })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This injected query exercises only the async iterator used by the connection.
+    const queryImpl = ((params: Parameters<typeof query>[0]) => {
+      params.options?.spawnClaudeCodeProcess?.({
+        command: 'claude',
+        args: [],
+        env: {},
+        signal: new AbortController().signal
+      })
+      return {
+        [Symbol.asyncIterator]: () => ({ next })
+      }
+    }) as unknown as typeof query
+    const events: string[] = []
+    const connection = await openClaudeStreamJsonConnection(
+      { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
+      {
+        onMessage: (message) => events.push(`message:${String(message.type)}`),
+        onExit: () => events.push('exit')
+      },
+      () => child,
+      queryImpl
+    )
+
+    connection.pauseReading?.()
+    first.resolve({ type: 'task_notification' })
+    await vi.waitFor(() => expect(next).toHaveBeenCalledOnce())
+    expect(events).toEqual([])
+
+    child.emit('exit', 1, null)
+    await vi.waitFor(() => expect(events).toEqual(['exit', 'message:task_notification']))
+    await expect(connection.close()).resolves.toBe(true)
+  })
+
+  // Inherited pipes must not keep sends and Stops waiting after proven exit.
+  it('resolves a proven close though the output never ends', async () => {
+    mocks.refresh.mockReset()
+    mocks.closeWriter.mockReset()
+    mocks.refresh.mockResolvedValue(undefined)
+    mocks.closeWriter.mockResolvedValue(true)
+    const child = fakeChild()
+    const next = vi.fn(() => new Promise<IteratorResult<Record<string, unknown>>>(() => {}))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This injected query exercises only the async iterator used by the connection.
+    const queryImpl = ((params: Parameters<typeof query>[0]) => {
+      params.options?.spawnClaudeCodeProcess?.({
+        command: 'claude',
+        args: [],
+        env: {},
+        signal: new AbortController().signal
+      })
+      return {
+        [Symbol.asyncIterator]: () => ({ next })
+      }
+    }) as unknown as typeof query
+    const connection = await openClaudeStreamJsonConnection(
+      { pathToClaudeCodeExecutable: 'claude', options: {}, cwd: '/work/repo' },
+      {},
+      () => child,
+      queryImpl
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.useFakeTimers()
+    try {
+      let closed: boolean | undefined
+      void connection.close().then((value) => {
+        closed = value
+      })
+      await vi.advanceTimersByTimeAsync(CLAUDE_READER_DRAIN_AFTER_EXIT_MS - 1)
+      expect(closed).toBeUndefined()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(closed).toBe(true)
+      expect(warn).toHaveBeenCalledWith(
+        '[claude-stream-json] output still open after the proven exit:',
+        expect.anything()
+      )
+    } finally {
+      vi.useRealTimers()
+      warn.mockRestore()
+    }
   })
 })

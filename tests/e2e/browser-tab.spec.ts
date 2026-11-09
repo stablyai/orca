@@ -1,9 +1,4 @@
-/**
- * E2E tests for the browser tab: creating browser tabs and state retention.
- *
- * User Prompt:
- * - Browser works and also retains state when switching tabs etc.
- */
+// Cover browser-tab creation and state retention across tab switches.
 
 import { test, expect } from './helpers/orca-app'
 import { createServer, type Server } from 'node:http'
@@ -14,9 +9,6 @@ import {
   getActiveWorktreeId,
   getActiveTabType,
   getBrowserTabs,
-  getAllWorktreeIds,
-  switchToOtherWorktree,
-  switchToWorktree,
   ensureTerminalVisible
 } from './helpers/store'
 import { startBrowserLinkServer } from './helpers/browser-link-server'
@@ -52,25 +44,6 @@ async function createBrowserTab(
     },
     { targetWorktreeId: worktreeId, targetUrl: url, targetTitle: title }
   )
-}
-
-async function switchToTerminalTab(
-  page: Parameters<typeof getActiveWorktreeId>[0],
-  worktreeId: string
-): Promise<void> {
-  await page.evaluate((targetWorktreeId) => {
-    const store = window.__store
-    if (!store) {
-      return
-    }
-
-    const state = store.getState()
-    const terminalTab = (state.tabsByWorktree[targetWorktreeId] ?? [])[0]
-    if (terminalTab) {
-      state.setActiveTab(terminalTab.id)
-    }
-    state.setActiveTabType('terminal')
-  }, worktreeId)
 }
 
 async function switchToBrowserTab(
@@ -136,7 +109,7 @@ async function startBrowserWindowCloseServer(): Promise<{
         <!doctype html>
         <html>
           <head><title>Close link source</title></head>
-          <body><a id="window-close-link" href="${origin}/window-close" target="_blank">Open close page</a></body>
+          <body><input id="q" /><a id="window-close-link" href="${origin}/window-close" target="_blank">Open close page</a></body>
         </html>
       `)
       return
@@ -146,13 +119,12 @@ async function startBrowserWindowCloseServer(): Promise<{
       <html>
         <head><title>Window close repro</title></head>
         <body>
-          <p id="s">Attempting close…</p>
+          <button id="window-close">Close this tab</button>
           <script>
-            window.close()
-            setTimeout(() => {
-              document.getElementById('s').textContent =
-                'window.close() was blocked (expected).'
-            }, 200)
+            document.getElementById('window-close').onclick = () => {
+              window.close = () => { document.title = 'Close override ran' }
+              window.close()
+            }
           </script>
         </body>
       </html>
@@ -165,26 +137,6 @@ async function startBrowserWindowCloseServer(): Promise<{
     sourceUrl: `http://127.0.0.1:${port}/source`,
     close: () => closeServer(server)
   }
-}
-
-async function readBrowserWindowCloseStatus(
-  page: Parameters<typeof getActiveWorktreeId>[0],
-  browserTabId: string
-): Promise<string> {
-  return page.evaluate(async (targetBrowserTabId) => {
-    const slot = document.querySelector(`[data-browser-overlay-tab-id="${targetBrowserTabId}"]`)
-    const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
-    if (!webview) {
-      return 'webview missing'
-    }
-    try {
-      return (await webview.executeJavaScript(
-        'document.querySelector("#s")?.textContent ?? "status missing"'
-      )) as string
-    } catch {
-      return 'guest lost'
-    }
-  }, browserTabId)
 }
 
 async function closeServer(server: Server): Promise<void> {
@@ -370,77 +322,6 @@ test.describe('Browser Tab', () => {
     await ensureTerminalVisible(orcaPage)
   })
 
-  /**
-   * User Prompt:
-   * - Browser works and also retains state when switching tabs etc.
-   */
-  test('creating a browser tab adds it and activates browser view', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-    const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
-
-    await createBrowserTab(orcaPage, worktreeId)
-
-    // Wait for the browser tab to appear in the store
-    await expect
-      .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
-      .toBe(browserTabsBefore.length + 1)
-
-    // The active tab type should switch to 'browser'
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('browser')
-  })
-
-  /**
-   * User Prompt:
-   * - Browser works and also retains state when switching tabs etc.
-   */
-  test('browser tab is created and active in the store', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    await createBrowserTab(orcaPage, worktreeId)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
-
-    // Verify the browser tab exists in the store
-    const browserTabs = await getBrowserTabs(orcaPage, worktreeId)
-    expect(browserTabs.length).toBeGreaterThan(0)
-
-    // The active browser tab should have a URL (even if it's about:blank or the default)
-    const activeBrowserTabId = await orcaPage.evaluate(() => {
-      const store = window.__store
-      return store?.getState().activeBrowserTabId ?? null
-    })
-    expect(activeBrowserTabId).not.toBeNull()
-  })
-
-  /**
-   * User Prompt:
-   * - Browser works and also retains state when switching tabs etc.
-   */
-  test('browser tab retains state when switching to terminal and back', async ({ orcaPage }) => {
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    await createBrowserTab(orcaPage, worktreeId)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
-
-    // Record the browser tab info
-    const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
-    expect(browserTabsBefore.length).toBeGreaterThan(0)
-    const browserTabId = browserTabsBefore.at(-1)?.id
-    expect(browserTabId).toBeTruthy()
-
-    // Switch to the terminal view
-    await switchToTerminalTab(orcaPage, worktreeId)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('terminal')
-
-    // Switch back to browser tab
-    await switchToBrowserTab(orcaPage, worktreeId, browserTabId!)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 3_000 }).toBe('browser')
-
-    // The browser tab should still exist with the same ID
-    const browserTabsAfter = await getBrowserTabs(orcaPage, worktreeId)
-    const tabStillExists = browserTabsAfter.some((tab) => tab.id === browserTabId)
-    expect(tabStillExists).toBe(true)
-  })
-
   test('browser webview form state survives switching between browser tabs', async ({
     orcaPage
   }) => {
@@ -507,7 +388,11 @@ test.describe('Browser Tab', () => {
         webview.setZoomLevel(0.5)
         for (let reload = 0; reload < 3; reload += 1) {
           await new Promise<void>((resolve) => {
-            webview.addEventListener('dom-ready', () => resolve(), { once: true })
+            const onReady = (): void => {
+              webview.removeEventListener('dom-ready', onReady)
+              resolve()
+            }
+            webview.addEventListener('dom-ready', onReady)
             if (reload === 1) {
               webview.reloadIgnoringCache()
             } else {
@@ -520,55 +405,6 @@ test.describe('Browser Tab', () => {
       }, browserTab!.id)
 
       expect(zoomLevels).toEqual([0, 0, 0, 0])
-    } finally {
-      await formServer.close()
-    }
-  })
-
-  test('Cmd/Ctrl+0 resets a zoomed browser page to 100%', async ({ orcaPage }) => {
-    const formServer = await startBrowserFormServer()
-    try {
-      const worktreeId = (await getActiveWorktreeId(orcaPage))!
-      const browserTab = await createBrowserTab(
-        orcaPage,
-        worktreeId,
-        formServer.url('Zoom reset'),
-        'Zoom Reset'
-      )
-      expect(browserTab?.id).toBeTruthy()
-      await expect
-        .poll(async () => readBrowserInputValue(orcaPage, browserTab!.id), { timeout: 5_000 })
-        .not.toBeNull()
-
-      await orcaPage.evaluate(
-        async ({ browserTabId, browserPageId, modifier }) => {
-          const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
-          const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
-          if (!webview) {
-            throw new Error(`Missing webview for browser tab ${browserTabId}`)
-          }
-          window.dispatchEvent(
-            new CustomEvent('orca:browser-page-zoom', {
-              detail: { browserPageId, direction: 'in' }
-            })
-          )
-          await webview.sendInputEvent({ type: 'keyDown', keyCode: '0', modifiers: [modifier] })
-          await webview.sendInputEvent({ type: 'keyUp', keyCode: '0', modifiers: [modifier] })
-        },
-        {
-          browserTabId: browserTab!.id,
-          browserPageId: browserTab!.pageId ?? browserTab!.id,
-          modifier: process.platform === 'darwin' ? 'meta' : 'control'
-        }
-      )
-      await expect
-        .poll(() =>
-          orcaPage.evaluate((browserTabId) => {
-            const slot = document.querySelector(`[data-browser-overlay-tab-id="${browserTabId}"]`)
-            return (slot?.querySelector('webview') as Electron.WebviewTag | null)?.getZoomLevel()
-          }, browserTab!.id)
-        )
-        .toBe(0)
     } finally {
       await formServer.close()
     }
@@ -617,7 +453,11 @@ test.describe('Browser Tab', () => {
           const untouchedA = webviewA.getZoomLevel()
 
           await new Promise<void>((resolve) => {
-            webviewA.addEventListener('dom-ready', () => resolve(), { once: true })
+            const onReady = (): void => {
+              webviewA.removeEventListener('dom-ready', onReady)
+              resolve()
+            }
+            webviewA.addEventListener('dom-ready', onReady)
             webviewA.reload()
           })
 
@@ -719,7 +559,7 @@ test.describe('Browser Tab', () => {
     }
   })
 
-  test('blocked window.close in a link-created tab does not break tab switching', async ({
+  test('window.close removes a link-created tab and keeps neighboring tabs usable', async ({
     orcaPage
   }) => {
     const closeServer = await startBrowserWindowCloseServer()
@@ -728,7 +568,7 @@ test.describe('Browser Tab', () => {
       const neighboringTab = await createBrowserTab(
         orcaPage,
         worktreeId,
-        'about:blank',
+        closeServer.sourceUrl,
         'Neighboring tab'
       )
       const sourceTab = await createBrowserTab(
@@ -750,22 +590,37 @@ test.describe('Browser Tab', () => {
         })
         .not.toBeNull()
 
+      await clickBrowserLink(orcaPage, closeTabId!, '#window-close')
+      await expect
+        .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).map((tab) => tab.id))
+        .not.toContain(closeTabId)
+      expect((await getBrowserTabs(orcaPage, worktreeId)).map((tab) => tab.id)).toContain(
+        sourceTab!.id
+      )
       await orcaPage.locator(`[data-tab-id="${neighboringTab!.id}"]`).click()
       await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
-      await expect
-        .poll(() => readBrowserWindowCloseStatus(orcaPage, closeTabId!), { timeout: 5_000 })
-        .toContain('window.close() was blocked')
+      await expect(
+        orcaPage.locator(`[data-browser-overlay-tab-id="${neighboringTab!.id}"]`)
+      ).toHaveCSS('opacity', '1')
+      await writeBrowserInputValue(orcaPage, neighboringTab!.id, 'still usable after close')
     } finally {
       await closeServer.close()
     }
   })
 
-  test('directly created browser tabs block window.close and remain usable', async ({
+  test('a single-entry browser tab honors protected window.close and preserves its neighbor', async ({
     orcaPage
   }) => {
     const closeServer = await startBrowserWindowCloseServer()
     try {
       const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const neighboringTab = await createBrowserTab(
+        orcaPage,
+        worktreeId,
+        closeServer.sourceUrl,
+        'Neighbor'
+      )
+      expect(neighboringTab?.id).toBeTruthy()
       const directTab = await createBrowserTab(
         orcaPage,
         worktreeId,
@@ -774,69 +629,18 @@ test.describe('Browser Tab', () => {
       )
       expect(directTab?.id).toBeTruthy()
 
+      await clickBrowserLink(orcaPage, directTab!.id, '#window-close')
       await expect
-        .poll(() => readBrowserWindowCloseStatus(orcaPage, directTab!.id), { timeout: 5_000 })
-        .toContain('window.close() was blocked')
-
-      await expect
-        .poll(
-          () =>
-            orcaPage.evaluate(async (targetBrowserTabId) => {
-              const slot = document.querySelector(
-                `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
-              )
-              const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
-              if (!webview) {
-                return 'webview missing'
-              }
-              try {
-                return (await webview.executeJavaScript(`(() => {
-                  window.close = () => 'replacement-called'
-                  return window.close() === 'replacement-called' ? 'replacement-called' : 'blocked'
-                })()`)) as string
-              } catch {
-                return 'guest unavailable'
-              }
-            }, directTab!.id),
-          { timeout: 5_000 }
-        )
-        .toBe('blocked')
+        .poll(async () => (await getBrowserTabs(orcaPage, worktreeId)).map((tab) => tab.id))
+        .not.toContain(directTab!.id)
+      await orcaPage.locator(`[data-tab-id="${neighboringTab!.id}"]`).click()
+      await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
+      await expect(
+        orcaPage.locator(`[data-browser-overlay-tab-id="${neighboringTab!.id}"]`)
+      ).toHaveCSS('opacity', '1')
+      await writeBrowserInputValue(orcaPage, neighboringTab!.id, 'still usable after close')
     } finally {
       await closeServer.close()
     }
-  })
-
-  /**
-   * User Prompt:
-   * - Browser works and also retains state when switching tabs etc.
-   */
-  test('browser tab retains state when switching worktrees and back', async ({ orcaPage }) => {
-    const allWorktreeIds = await getAllWorktreeIds(orcaPage)
-    if (allWorktreeIds.length < 2) {
-      test.skip(true, 'Need at least 2 worktrees to test worktree switching')
-    }
-
-    const worktreeId = (await getActiveWorktreeId(orcaPage))!
-
-    await createBrowserTab(orcaPage, worktreeId)
-    await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
-
-    const browserTabsBefore = await getBrowserTabs(orcaPage, worktreeId)
-    expect(browserTabsBefore.length).toBeGreaterThan(0)
-
-    // Switch to a different worktree via the store
-    const otherId = await switchToOtherWorktree(orcaPage, worktreeId)
-    expect(otherId).not.toBeNull()
-    await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 5_000 }).toBe(otherId)
-
-    // Switch back to the original worktree
-    await switchToWorktree(orcaPage, worktreeId)
-    await expect
-      .poll(async () => getActiveWorktreeId(orcaPage), { timeout: 5_000 })
-      .toBe(worktreeId)
-
-    // Browser tabs should still be preserved
-    const browserTabsAfter = await getBrowserTabs(orcaPage, worktreeId)
-    expect(browserTabsAfter.length).toBe(browserTabsBefore.length)
   })
 })

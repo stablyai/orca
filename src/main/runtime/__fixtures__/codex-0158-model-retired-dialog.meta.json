@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-29T03:31:56.000Z",
+  "platform": "darwin",
+  "command": ["codex", "--dangerously-bypass-approvals-and-sandbox"],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.158.0, plain launch on a fresh CODEX_HOME whose config.toml sets model_provider = \"amazon-bedrock\" and model = \"openai.gpt-5.4\" (0.158 keeps the notice for a model missing from its catalog only on the OpenAI and Bedrock providers, and the OpenAI provider asks for a sign-in first, which the rig does not have). Codex shows the notice without choices: `GPT-5.4 on Amazon Bedrock is no longer offered in Codex`, `Switch to GPT-6 Sol on Amazon Bedrock to continue.` and the key row `enter/esc continue · ctrl+c quit`. Enter or Esc switches the model. No key was sent (only automatic terminal-query replies). Cut 6 s after spawn. Home-directory user name redacted by hand, same length.",
+  "exitCode": null
+}

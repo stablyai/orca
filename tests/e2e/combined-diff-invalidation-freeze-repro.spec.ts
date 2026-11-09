@@ -174,8 +174,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
   }) => {
     test.setTimeout(240_000)
     await waitForSessionReady(orcaPage)
-    // Why: few but very large sections — the reported freeze is a *large* diff view,
-    // where every remount re-runs Monaco's diff over thousands of changed lines.
+    // Use large sections so remounting redoes Monaco diff work over thousands of changed lines.
     const fixture = createIsolatedManyFileStagedDiffRepo(8, 15_000)
 
     try {
@@ -235,8 +234,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
             }
           }
 
-          // Why: opening 8 huge Monaco diffs is itself expensive. Wait for the main thread to go
-          // quiet first, so the burst window reports invalidation cost and not open cost.
+          // Let initial Monaco mounts settle before measuring invalidation cost.
           const stopSettle = startLagMeter()
           const settleStartedAt = performance.now()
           let settleWindows = 0
@@ -249,17 +247,14 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
           }
           const settle = { ...stopSettle(), settleWindows }
 
-          // Why: settling still leaves occasional multi-hundred-ms stalls from the 8 mounted
-          // 15k-line Monaco editors. Measure an identical idle window so the burst is judged
-          // against this machine's floor rather than a fixed number.
+          // Measure an identical idle window so mounted-editor stalls establish this runner’s baseline.
           const stopBaseline = startLagMeter()
           await new Promise((resolve) => window.setTimeout(resolve, burstDurationMs))
           const baseline = stopBaseline()
 
           const stopBurst = startLagMeter()
           const startedAt = performance.now()
-          // Why: a rebase rewrites the worktree in bursts. The watcher debounces per
-          // path, so each notification lands in its OWN task — never batched together.
+          // Deliver each watcher notification in its own task, matching per-path debounce during rebase.
           for (let round = 0; round < 3; round += 1) {
             for (const relativePath of relativePaths) {
               window.setTimeout(() => {
@@ -299,17 +294,15 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
       )
 
       console.log(`external-change burst measurement ${JSON.stringify(measurement)}`)
+      expect(measurement.sectionRowCount).toBe(1)
       expect(measurement.stuckLoadingRowCount).toBe(0)
       expect(measurement.editorCount).toBeGreaterThan(0)
-      // Why: before the fix this window blocked continuously — p95 3963ms, 16 samples in 23s.
-      // Every limit rides the identical idle window so a slow machine's floor can't fail the test;
-      // the allowances on top are what the burst itself is permitted to add.
+      // Compare burst cost against the same idle fixture; fixed budgets confuse machine floor with invalidation regressions.
       expect(measurement.burst.p95LagMs).toBeLessThanOrEqual(measurement.baseline.p95LagMs + 100)
       expect(measurement.burst.sampleCount).toBeGreaterThanOrEqual(
         Math.min(measurement.baseline.sampleCount, measurement.expectedSampleCount) * 0.85
       )
-      // Why: peak lag tracks the idle floor of this fixture, not invalidation; only a regression
-      // that adds a full extra second of blocking on top of that floor is this bug returning.
+      // Peak lag follows idle fixture cost; gate only an added second of blocking above that floor.
       expect(measurement.burst.maxLagMs).toBeLessThanOrEqual(
         Math.max(measurement.baseline.maxLagMs, 100) + 1_000
       )

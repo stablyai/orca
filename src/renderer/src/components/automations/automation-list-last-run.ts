@@ -1,10 +1,11 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type {
-  Automation,
   AutomationRun,
-  AutomationRunStatus,
-  ExternalAutomationJob
-} from '../../../../shared/automations-types'
+  AutomationRunStatus
+} from '../../../../shared/automations/history/automation-run'
+import type { ExternalAutomationJob } from '../../../../shared/automations/external/external-automation'
 import {
   formatAutomationDateTime,
   formatAutomationRelativeTime,
@@ -68,35 +69,35 @@ export function getToneForAutomationRunStatus(status: AutomationRunStatus): Auto
   return 'unknown'
 }
 
-/**
- * Last-run picture for a catalog row without any run-history fetch: the owning
- * authority projects its newest retained run into the usage summary, and a row
- * from an older server falls back to the stored `lastRunAt` timestamp alone.
- */
-export function getAutomationRowLastRunSnapshot(row: {
-  automation: Automation
-  usageSummary: { lastRunStatus?: AutomationRunStatus | null; lastRunAt?: number | null } | null
-}): AutomationLastRunSnapshot {
+/** Use the authority-projected newest retained run without fetching history; legacy servers fall back to stored lastRunAt alone. */
+export function getAutomationRowLastRunSnapshot(
+  row: {
+    automation: Automation
+    usageSummary: { lastRunStatus?: AutomationRunStatus | null; lastRunAt?: number | null } | null
+  },
+  t?: Translate
+): AutomationLastRunSnapshot {
   const status = row.usageSummary?.lastRunStatus
   if (status) {
     return {
       at: row.usageSummary?.lastRunAt ?? row.automation.lastRunAt ?? null,
       tone: getToneForAutomationRunStatus(status),
-      statusLabel: getAutomationRunStatusLabel(status)
+      statusLabel: getAutomationRunStatusLabel(status, t)
     }
   }
-  return getLocalAutomationLastRunSnapshot(row.automation, undefined)
+  return getLocalAutomationLastRunSnapshot(row.automation, undefined, t)
 }
 
 export function getLocalAutomationLastRunSnapshot(
   automation: Automation,
-  lastRun: AutomationRun | undefined
+  lastRun: AutomationRun | undefined,
+  t?: Translate
 ): AutomationLastRunSnapshot {
   if (lastRun) {
     return {
       at: getAutomationRunLastRunAt(lastRun),
       tone: getToneForAutomationRunStatus(lastRun.status),
-      statusLabel: getAutomationRunStatusLabel(lastRun.status)
+      statusLabel: getAutomationRunStatusLabel(lastRun.status, t)
     }
   }
   if (automation.lastRunAt) {
@@ -118,7 +119,8 @@ function parseExternalLastRunAt(value: string | null): number | null {
 }
 
 export function getExternalAutomationLastRunSnapshot(
-  job: ExternalAutomationJob
+  job: ExternalAutomationJob,
+  t: Translate = translate
 ): AutomationLastRunSnapshot {
   const at = parseExternalLastRunAt(job.lastRunAt)
   const raw = job.lastStatus?.trim() ?? ''
@@ -130,17 +132,14 @@ export function getExternalAutomationLastRunSnapshot(
     return {
       at,
       tone: 'succeeded',
-      statusLabel: translate('auto.components.automations.automation.list.last.run.done', 'Done')
+      statusLabel: t('auto.components.automations.automation.list.last.run.done', 'Done')
     }
   }
   if (EXTERNAL_FAILED_STATUSES.has(normalized) || Boolean(job.lastError)) {
     return {
       at,
       tone: 'failed',
-      statusLabel: translate(
-        'auto.components.automations.automation.list.last.run.failed',
-        'Failed'
-      )
+      statusLabel: t('auto.components.automations.automation.list.last.run.failed', 'Failed')
     }
   }
   if (raw) {
@@ -151,19 +150,32 @@ export function getExternalAutomationLastRunSnapshot(
 
 export function formatAutomationLastRunCell(
   snapshot: AutomationLastRunSnapshot,
-  now: number
+  now: number,
+  t: Translate = translate,
+  intlLocale?: string
 ): { text: string; title: string; tone: AutomationLastRunTone } {
   const status = snapshot.statusLabel.trim()
   if (snapshot.tone === 'never') {
-    const never = formatAutomationDateTime(null)
+    const never = formatAutomationDateTime(null, t, intlLocale)
     return { text: never, title: never, tone: 'never' }
   }
   if (snapshot.at == null) {
-    return { text: status || formatAutomationDateTime(null), title: status, tone: snapshot.tone }
+    return {
+      text: status || formatAutomationDateTime(null, t, intlLocale),
+      title: status,
+      tone: snapshot.tone
+    }
   }
-  const relative = formatAutomationRelativeTime(snapshot.at, now)
-  const absolute = formatAutomationDateTime(snapshot.at)
-  const text = status && relative ? `${status} ${relative}` : status || relative || absolute
+  const relative = formatAutomationRelativeTime(snapshot.at, now, t, intlLocale)
+  const absolute = formatAutomationDateTime(snapshot.at, t, intlLocale)
+  const text =
+    status && relative
+      ? t(
+          'auto.components.automations.automation.list.last.run.statusWithRelative',
+          '{{status}} {{relative}}',
+          { status, relative }
+        )
+      : status || relative || absolute
   return {
     text,
     title: status ? `${status} · ${absolute}` : absolute,

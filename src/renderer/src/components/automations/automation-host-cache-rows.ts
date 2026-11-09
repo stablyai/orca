@@ -1,23 +1,17 @@
-/**
- * Turns an authority's answer into cache rows.
- *
- * Scoped rows keep the owner they were fetched under so every later action can
- * fence on it. Legacy rows keep no owner and no usage: the old response proves
- * neither, and the design forbids compensating with run-history downloads.
- */
+/** Scoped rows retain their captured owner for later fences. Legacy responses prove neither owner nor usage; never compensate with run-history downloads. */
 
-import type { Automation } from '../../../../shared/automations-types'
-import type { AutomationListItem } from '../../../../shared/automation-list-scope'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationListItem } from '../../../../shared/automations/ownership/automation-list-scope'
 import {
   partitionLegacyAutomationList,
   type LegacyAutomationPartitionContext,
   type LegacyAutomationSelector
-} from '../../../../shared/automation-legacy-list-partition'
+} from '../../../../shared/automations/ownership/automation-legacy-list-partition'
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import type { ScopedAutomationList } from './automation-scoped-list-client'
 import type { AutomationHostRow } from './automation-host-cache-types'
 
@@ -55,6 +49,7 @@ export function toScopedAutomationHostRows(
     rows.push({
       automation,
       owner: ownerForItem(authority, item),
+      authority,
       selector: item.selector,
       usageSummary,
       // An absent or unreadable projection reads as unavailable rather than as zero usage.
@@ -81,10 +76,7 @@ function legacySelectorMatches(
     : true
 }
 
-/**
- * Fans one unscoped response out to every entry that asked for it, so an old
- * runtime is queried once per cycle rather than once per selector.
- */
+/** Partition one legacy response across its requested hosts so old runtimes cost one call per cycle. */
 export function partitionLegacyAutomationHostRows(
   automations: readonly Automation[],
   refs: readonly StableAutomationCatalogRef[],

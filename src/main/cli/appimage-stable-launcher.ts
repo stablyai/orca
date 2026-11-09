@@ -16,7 +16,7 @@ import {
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { LINUX_CLI_COMMAND_NAME } from './bundled-cli-launcher-path'
-import { quoteShell } from './cli-install-path-format'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 
 const LAUNCHER_DIRECTORY_NAME = 'launcher'
 const LIVE_ENDPOINT_NAME = 'live'
@@ -210,7 +210,11 @@ function readLauncherFile(launcherPath: string): { content: string; executable: 
     return null
   } finally {
     if (fd !== undefined) {
-      closeSync(fd)
+      try {
+        closeSync(fd)
+      } catch {
+        // Advisory cleanup must not override the verified launcher read.
+      }
     }
   }
 }
@@ -226,7 +230,7 @@ function buildStableLauncherScript(cacheRootPath: string): string {
   return `#!/usr/bin/env bash
 ${LAUNCHER_MARKER}
 shopt -s execfail
-launcher_dir=${quoteShell(launcherDirectory)}
+launcher_dir=${quotePosixShellDoubleQuotedApostrophe(launcherDirectory)}
 deadline=$((SECONDS + ${LAUNCHER_WAIT_SECONDS}))
 while (( SECONDS <= deadline )); do
   launcher="$launcher_dir/${INSTALLED_ENDPOINT_NAME}"

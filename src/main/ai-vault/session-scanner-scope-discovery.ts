@@ -5,41 +5,49 @@ import {
   wslGatedReaddir,
   wslGatedStat
 } from '../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { encodeClaudeProjectPaths, isClaudeProjectDirInScope } from './claude-project-dir-encoding'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { recordSessionScanIssue } from './session-scan-issues'
+import type { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
+import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
+import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { parseWslUncPath, toWindowsWslUncPathSpellings } from '../../shared/wsl-paths'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import type { FileWithMtime } from './session-scanner-types'
-import { errorMessage, extractString, parseJsonObject } from './session-scanner-values'
+import { extractString, parseJsonObject } from './session-scanner-values'
+import { scanIssueTextFromError } from './session-scan-issues'
+import { isMissingTranscriptPathError } from './session-scanner-discovery'
+import { noteAiVaultScanFileFound } from './ai-vault-scan-progress'
 
-// Reading a few lines of one transcript per project dir is enough to learn that
-// dir's cwd; cap both so a giant or cwd-less transcript can't stall the scan.
+// Limit representative probing when a bucket contains transcripts without cwd records.
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
 const REPRESENTATIVE_FILE_LIMIT = 3
-const CLAUDE_EXTENSIONS = new Set(['.jsonl'])
+const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
 
-// A Claude project dir encodes exactly one cwd, so a resolved cwd never
-// changes; caching it spares each rescan the transcript-head reads.
+// Bucket encodings are lossy; retain Claude’s cache and verify other transcripts individually.
 const PROJECT_DIR_CWD_CACHE_MAX = 2048
 const projectDirCwdCache = new Map<string, string>()
+export type IssueSink = (issue: AiVaultScanIssue, error?: unknown) => void
 
 export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
 }
 
-// A gate refusal is a stalled WSL root, not an empty one: keep the existing
-// degrade-to-empty containment but make the gap visible in the scan issues.
-function recordRefusal(issues: AiVaultScanIssue[], path: string, error: unknown): void {
-  if (error instanceof WslTranscriptFsError) {
-    recordSessionScanIssue(issues, { agent: 'claude', path, message: error.message })
+// Report refusals (WSL, permissions) so an unreadable folder or transcript is not mistaken for an empty one.
+export function recordRefusal(
+  issues: IssueSink,
+  path: string,
+  error: unknown,
+  agent: AiVaultAgent
+): void {
+  if (!isMissingTranscriptPathError(error)) {
+    issues({ agent, path, ...scanIssueTextFromError(error) }, error)
   }
 }
 
-async function cachedProjectDirCwd(
+export async function cachedProjectDirCwd(
   projectDir: string,
-  issues: AiVaultScanIssue[]
+  issues: IssueSink,
+  agent: AiVaultAgent,
+  signal?: AbortSignal
 ): Promise<string | null> {
   const cached = projectDirCwdCache.get(projectDir)
   if (cached !== undefined) {
@@ -48,7 +56,7 @@ async function cachedProjectDirCwd(
     projectDirCwdCache.set(projectDir, cached)
     return cached
   }
-  const cwd = await readProjectDirCwd(projectDir, issues)
+  const cwd = await readProjectDirCwd(projectDir, issues, agent, signal)
   if (cwd) {
     if (projectDirCwdCache.size >= PROJECT_DIR_CWD_CACHE_MAX) {
       const oldest = projectDirCwdCache.keys().next()
@@ -61,104 +69,70 @@ async function cachedProjectDirCwd(
   return cwd
 }
 
-/**
- * Fully include the transcripts of Claude project directories whose cwd falls
- * inside the active workspace/project paths.
- *
- * Why: Claude organizes `~/.claude/projects/<cwd-encoded>/` one directory per
- * cwd. The global scan is recency-capped, so a project the user hasn't touched
- * recently can drop off the list entirely even though `claude --resume` still
- * finds it. For scoped panel views we resolve each project dir's cwd cheaply and
- * bypass the cap for the ones that belong to the active scope.
- */
-export async function discoverInScopeClaudeFiles(args: {
-  rootDirs: readonly string[]
+export function cwdBucketScopePrefixes(
+  layout: CwdBucketLayout,
   scopePaths: readonly string[]
-  limit: number
-  excludedFilePaths: ReadonlySet<string>
-  issues: AiVaultScanIssue[]
-}): Promise<FileWithMtime[]> {
-  if (args.scopePaths.length === 0 || args.limit <= 0) {
-    return []
-  }
-  const scopeProjectPrefixes = claudeProjectScopePrefixes(args.scopePaths)
-  const collected = new Map<string, FileWithMtime>()
-  for (const rootDir of args.rootDirs) {
-    for (const projectDir of await listProjectDirs(rootDir, scopeProjectPrefixes, args.issues)) {
-      const cwd = await cachedProjectDirCwd(projectDir, args.issues)
-      if (!cwd || !args.scopePaths.some((scopePath) => isCwdInsideScopePath(scopePath, cwd))) {
-        continue
-      }
-      await collectClaudeFiles({
-        projectDir,
-        issues: args.issues,
-        collected,
-        limit: args.limit,
-        excludedFilePaths: args.excludedFilePaths
-      })
-    }
-  }
-  return [...collected.values()].sort((left, right) => right.mtimeMs - left.mtimeMs)
-}
-
-function claudeProjectScopePrefixes(scopePaths: readonly string[]): Set<string> {
+): Set<string> {
   const prefixes = new Set<string>()
   for (const scopePath of scopePaths) {
-    for (const candidate of scopePathCandidates(scopePath)) {
-      for (const prefix of encodeClaudeProjectPaths(candidate)) {
-        prefixes.add(prefix)
+    // Encoders add the NFC spelling; a cwd recorded in NFD names its bucket differently.
+    for (const candidate of scopePathCandidates(scopePath).flatMap((path) => [
+      path,
+      path.normalize('NFD')
+    ])) {
+      for (const prefix of layout.encodeScopePrefixes(candidate)) {
+        prefixes.add(prefix.toLowerCase())
       }
     }
   }
   return prefixes
 }
 
+// A WSL share has two UNC spellings, and a transcript may record either one.
 function scopePathCandidates(scopePath: string): string[] {
-  const wslScopePath = parseWslUncPath(scopePath)
-  return wslScopePath ? [scopePath, wslScopePath.linuxPath] : [scopePath]
+  const wsl = parseWslUncPath(scopePath)
+  if (!wsl) {
+    return [scopePath]
+  }
+  return [scopePath, wsl.linuxPath, ...toWindowsWslUncPathSpellings(wsl.linuxPath, wsl.distro)]
 }
 
-function isCwdInsideScopePath(scopePath: string, cwd: string): boolean {
-  if (isPathInsideOrEqual(scopePath, cwd)) {
-    return true
-  }
-
-  const wslScopePath = parseWslUncPath(scopePath)
-  if (!wslScopePath) {
-    return false
-  }
-
-  // WSL transcripts record Linux cwd values even when the renderer sends the
-  // active worktree as a Windows UNC path.
-  return isPathInsideOrEqual(wslScopePath.linuxPath, cwd)
-}
-
-async function listProjectDirs(
+export async function listProjectDirs(
+  layout: CwdBucketLayout,
   rootDir: string,
   scopeProjectPrefixes: ReadonlySet<string>,
-  issues: AiVaultScanIssue[]
+  issues: IssueSink,
+  signal?: AbortSignal,
+  listed?: () => void
 ): Promise<string[]> {
   let entries
   try {
-    entries = await wslGatedReaddir(rootDir, 'scan')
+    entries = await wslGatedReaddir(rootDir, 'scan', signal)
+    throwIfAiVaultScanCancelled(signal)
+    listed?.()
   } catch (err) {
-    recordRefusal(issues, rootDir, err)
+    throwIfAiVaultScanCancelled(signal)
+    recordRefusal(issues, rootDir, err, layout.agent)
     return []
   }
+  // Case-folded: Windows cwds differ in case, and each bucket's cwd is still checked afterwards.
   return entries
     .filter(
-      (entry) => entry.isDirectory() && isClaudeProjectDirInScope(entry.name, scopeProjectPrefixes)
+      (entry) =>
+        entry.isDirectory() && layout.isDirInScope(entry.name.toLowerCase(), scopeProjectPrefixes)
     )
     .map((entry) => join(rootDir, entry.name))
 }
 
 async function readProjectDirCwd(
   projectDir: string,
-  issues: AiVaultScanIssue[]
+  issues: IssueSink,
+  agent: AiVaultAgent,
+  signal?: AbortSignal
 ): Promise<string | null> {
-  const files = await newestClaudeFilesInDir(projectDir, issues)
+  const files = await newestTranscriptsInDir(projectDir, issues, agent, signal)
   for (const file of files.slice(0, REPRESENTATIVE_FILE_LIMIT)) {
-    const cwd = await readFirstCwd(file, issues)
+    const cwd = await readFirstCwd(file, issues, agent, signal)
     if (cwd) {
       return cwd
     }
@@ -166,43 +140,57 @@ async function readProjectDirCwd(
   return null
 }
 
-async function newestClaudeFilesInDir(
+async function newestTranscriptsInDir(
   projectDir: string,
-  issues: AiVaultScanIssue[]
+  issues: IssueSink,
+  agent: AiVaultAgent,
+  signal?: AbortSignal
 ): Promise<string[]> {
   let entries
   try {
-    entries = await wslGatedReaddir(projectDir, 'scan')
+    entries = await wslGatedReaddir(projectDir, 'scan', signal)
+    throwIfAiVaultScanCancelled(signal)
   } catch (err) {
-    recordRefusal(issues, projectDir, err)
+    throwIfAiVaultScanCancelled(signal)
+    recordRefusal(issues, projectDir, err, agent)
     return []
   }
   const newest: { path: string; mtimeMs: number }[] = []
-  for (const entry of entries) {
-    if (!entry.isFile() || !CLAUDE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+  for (const [index, entry] of entries.entries()) {
+    if (index % 256 === 0) {
+      await yieldToEventLoop()
+    }
+    throwIfAiVaultScanCancelled(signal)
+    if (!entry.isFile() || !TRANSCRIPT_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
       continue
     }
     const path = join(projectDir, entry.name)
     try {
       addBoundedPath(newest, REPRESENTATIVE_FILE_LIMIT, {
         path,
-        mtimeMs: (await wslGatedStat(path, 'scan')).mtimeMs
+        mtimeMs: (await wslGatedStat(path, 'scan', signal)).mtimeMs
       })
     } catch (err) {
-      // Best effort: unreadable candidates are ignored here and reported during
-      // full collection if the project directory proves in-scope.
-      recordRefusal(issues, path, err)
+      throwIfAiVaultScanCancelled(signal)
+      recordRefusal(issues, path, err, agent)
     }
   }
   return newest.sort((left, right) => right.mtimeMs - left.mtimeMs).map((value) => value.path)
 }
 
-async function readFirstCwd(filePath: string, issues: AiVaultScanIssue[]): Promise<string | null> {
-  const input = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'scan')
+async function readFirstCwd(
+  filePath: string,
+  issues: IssueSink,
+  agent: AiVaultAgent,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const input = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'scan', signal)
   const lines = createInterface({ input, crlfDelay: Infinity })
   let read = 0
   try {
+    throwIfAiVaultScanCancelled(signal)
     for await (const line of lines) {
+      throwIfAiVaultScanCancelled(signal)
       if (read++ >= REPRESENTATIVE_CWD_LINE_LIMIT) {
         break
       }
@@ -212,49 +200,64 @@ async function readFirstCwd(filePath: string, issues: AiVaultScanIssue[]): Promi
       }
     }
   } catch (err) {
-    recordRefusal(issues, filePath, err)
+    throwIfAiVaultScanCancelled(signal)
+    recordRefusal(issues, filePath, err, agent)
     return null
   } finally {
-    // readline.close() leaves the underlying stream open; destroy it so the early
-    // break/catch paths don't leak a file descriptor (this runs per project dir).
+    // readline.close() leaves its input open; destroy the stream after early exits and read failures.
     lines.close()
     input.destroy()
   }
   return null
 }
 
-async function collectClaudeFiles(args: {
-  projectDir: string
-  issues: AiVaultScanIssue[]
+export async function collectBucketFiles(args: {
+  paths: readonly string[]
+  agent: AiVaultAgent
+  inScope?: ReturnType<typeof createAiVaultScopeCwdMatcher>
+  issues: IssueSink
   collected: Map<string, FileWithMtime>
+  // Files whose first lines name no cwd go here, bounded on their own, instead of being dropped.
+  unknown?: Map<string, FileWithMtime>
   limit: number
   excludedFilePaths: ReadonlySet<string>
+  signal?: AbortSignal
 }): Promise<void> {
-  let entries
-  try {
-    entries = await wslGatedReaddir(args.projectDir, 'scan')
-  } catch (err) {
-    recordRefusal(args.issues, args.projectDir, err)
-    return
-  }
-  for (const entry of entries) {
-    if (!entry.isFile() || !CLAUDE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
-      continue
+  for (const [index, path] of args.paths.entries()) {
+    if (index % 256 === 0) {
+      await yieldToEventLoop()
     }
-    const path = join(args.projectDir, entry.name)
-    if (args.collected.has(path) || args.excludedFilePaths.has(path)) {
+    throwIfAiVaultScanCancelled(args.signal)
+    if (args.collected.has(path) || args.unknown?.has(path) || args.excludedFilePaths.has(path)) {
       continue
     }
     try {
-      const fileStat = await wslGatedStat(path, 'scan')
-      addBoundedFile(args.collected, args.limit, {
+      let collected = args.collected
+      if (args.inScope) {
+        const cwd = await readFirstCwd(path, args.issues, args.agent, args.signal)
+        if (cwd === null && args.unknown) {
+          collected = args.unknown
+        } else if (!args.inScope(cwd, path)) {
+          continue
+        }
+      }
+      const fileStat = await wslGatedStat(path, 'scan', args.signal)
+      throwIfAiVaultScanCancelled(args.signal)
+      // Scope-only scans don't list cwd-bucket agents recursively, so their file count comes from here.
+      noteAiVaultScanFileFound(args.signal, args.agent, {
+        path,
+        dev: fileStat.dev,
+        ino: fileStat.ino
+      })
+      addBoundedFile(collected, args.limit, {
         path,
         mtimeMs: fileStat.mtimeMs,
         modifiedAt: fileStat.mtime.toISOString(),
         sizeBytes: fileStat.size
       })
     } catch (err) {
-      recordSessionScanIssue(args.issues, { agent: 'claude', path, message: errorMessage(err) })
+      throwIfAiVaultScanCancelled(args.signal)
+      args.issues({ agent: args.agent, path, ...scanIssueTextFromError(err) })
     }
   }
 }

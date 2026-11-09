@@ -36,7 +36,7 @@ function getPlainTextFromPasteEvent(event: ClipboardEvent): string {
   return event.clipboardData?.getData('text/plain') ?? ''
 }
 
-export function findLargeTextControlPasteTarget(
+function findLargeTextControlPasteTarget(
   eventTarget: EventTarget | null,
   activeElement: Element | null = document.activeElement
 ): HTMLInputElement | HTMLTextAreaElement | null {
@@ -88,8 +88,7 @@ export function handleLargeTextControlPasteEvent(
     )
     return { status: 'rejected', reason: 'too-large' }
   }
-  // Why: browser-native insertion is one synchronous value mutation; large
-  // text controls need Orca-owned chunking so the renderer can keep yielding.
+  // Chunk large control pastes so the renderer can yield instead of one synchronous native insertion.
   void pasteTextIntoTextControl(target, text, {
     source: 'clipboard',
     chunkMaxBytes: options.chunkMaxBytes,
@@ -111,8 +110,7 @@ export function addLargeTextControlPasteListener(
   const onPaste = (event: Event): void => {
     handleLargeTextControlPasteEvent(event as ClipboardEvent, options)
   }
-  // Why: claim large input/textarea paste before component handlers synchronously
-  // inspect the same clipboard payload or schedule stale target-specific work.
+  // Claim large paste before component handlers synchronously read clipboard text or schedule stale-target work.
   target.addEventListener('paste', onPaste, { capture: true })
   return () => target.removeEventListener('paste', onPaste, { capture: true })
 }

@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-24T04:11:42.610Z",
+  "platform": "darwin",
+  "command": ["nano", "sample.ts"],
+  "cols": 80,
+  "rows": 24,
+  "note": "macOS /usr/bin/nano is UW PICO 5.09; file: a copy of src/main/daemon/headless-emulator.ts plus CJK/emoji lines",
+  "exitCode": 1
+}

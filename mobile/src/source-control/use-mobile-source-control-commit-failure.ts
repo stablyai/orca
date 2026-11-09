@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { ConnectionState } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileCommitFailureRecovery,
   RecordMobileCommitFailure
@@ -11,9 +11,15 @@ type Params = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
+  worktreeLabel: string | null
 }
 
-export function useMobileSourceControlCommitFailure({ client, connState, worktreeId }: Params): {
+export function useMobileSourceControlCommitFailure({
+  client,
+  connState,
+  worktreeId,
+  worktreeLabel
+}: Params): {
   commitFailureRecovery: MobileCommitFailureRecovery | null
   commitFailureRecoveryAction: ReturnType<typeof useMobileCommitFailureRecovery>
   recordCommitFailure: RecordMobileCommitFailure
@@ -25,6 +31,7 @@ export function useMobileSourceControlCommitFailure({ client, connState, worktre
     client,
     connState,
     worktreeId,
+    workspaceLabel: worktreeLabel,
     failure: commitFailureRecovery
   })
   return { commitFailureRecovery, commitFailureRecoveryAction, recordCommitFailure }

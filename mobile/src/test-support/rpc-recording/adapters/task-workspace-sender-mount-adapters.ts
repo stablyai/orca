@@ -4,12 +4,6 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const REPO = 'repo-1'
 const REPO_SELECTOR = `id:${REPO}`
 
-/**
- * The task workspace-creation senders that are exported async functions taking a client: create and
- * its retry loop, the create-time capability probe, hosted-base resolution, the setup-hook trust
- * write and the Smart source picker's provider reads. No React host is needed, so the recorded
- * state is the function's own answer.
- */
 export function taskWorkspaceSenderMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -26,10 +20,13 @@ export function taskWorkspaceSenderMountAdapters(
             client,
             baseName: String(args.name ?? 'kestrel'),
             buildParams: (candidate: string) => ({ repo: REPO_SELECTOR, name: candidate }),
-            // A resolved probe, because the create path awaits it before the first send.
             worktreeCreateIdempotency: Promise.resolve(
               args.idempotency === false ? false : { dedupeTtlMs: 60_000 }
             ),
+            // Scenario input selects the launch route; replay:false pins agent.launch, while replay-required launch needs a separate scenario.
+            ...(args.agentLaunch === true
+              ? { agentLaunch: { agent: 'codex' as const, supported: { replay: false } } }
+              : {}),
             ...(args.maxAttempts === undefined ? {} : { maxAttempts: Number(args.maxAttempts) }),
             mintMutationId: () => `mutation-${++minted}`
           }).then((value: unknown) => {

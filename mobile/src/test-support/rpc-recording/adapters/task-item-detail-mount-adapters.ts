@@ -1,15 +1,20 @@
+import { useTaskDetailMountOwners } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as TaskDetailLoading from '../../../tasks/use-mobile-tasks-item-detail-loading'
 
 const REPO_ID = 'repo-1'
 
 const GITHUB_PR_ITEM = {
+  key: 'github:repo-1:pr:12',
   provider: 'github',
   title: 'A pull request',
   source: {
     id: 'github:pr:12',
+    url: 'https://github.com/owner/repo/pull/12',
+    prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' },
     repoId: REPO_ID,
     number: 12,
     type: 'pr',
@@ -22,20 +27,23 @@ const GITHUB_PR_ITEM = {
 } as const
 
 const GITLAB_ISSUE_ITEM = {
+  key: 'gitlab:repo-1:issue:4',
   provider: 'gitlab',
   title: 'A GitLab issue',
   source: {
     id: 'gitlab:issue:4',
+    url: 'https://gitlab.com/group/project/-/issues/4',
     repoId: REPO_ID,
     number: 4,
     type: 'issue',
     state: 'opened',
     labels: ['bug'],
-    projectRef: 'group/project'
+    projectRef: { host: 'gitlab.com', path: 'group/project' }
   }
 } as const
 
 const LINEAR_ITEM = {
+  key: 'linear:linear-workspace:issue-1',
   provider: 'linear',
   title: 'A Linear issue',
   source: {
@@ -55,12 +63,6 @@ const LINEAR_ITEM = {
   }
 } as const
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share. Copied per module rather than shared, because an adapter may not import another file
- * in this directory: a golden pins the one module it was recorded through, so plumbing reaching
- * across the seam would drive recordings its header does not cover.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -75,12 +77,14 @@ type ModelHookSpec<Actions> = {
 }
 
 function mountModelHook<Actions>(
+  modules: ReturnType<typeof operationModuleLoader>,
   context: MountContext,
   spec: ModelHookSpec<Actions>
 ): MountedOperation {
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
+    useTaskDetailMountOwners(modules, context, model, spec.fixture)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -108,33 +112,49 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * One task item's provider details. The hook keeps a `stale` guard between the request and the
- * state commit, so these families record that the guard still sits there rather than asserting it.
- */
+// Drive stale-response guards through the detail hook’s published state.
 export function taskItemDetailMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   function itemDetail(item: Record<string, unknown>) {
-    // Loaded on mount, not while the table is built: `task-mount-adapters.ts` mounts this same hook,
-    // and a mutant anchored in it would otherwise be applied by both modules' loaders at once.
+    // Load on mount so this and task-mount-adapters cannot both apply a mutant to the same module.
     return (context: Parameters<MountAdapter>[0]) =>
-      mountModelHook(context, {
-        useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-item-detail-loading')>(
+      mountModelHook(modules, context, {
+        useHook: (model) => {
+          return load<typeof TaskDetailLoading>(
             'use-mobile-tasks-item-detail-loading.tsx'
-          ).useMobileTasksItemDetailLoading(model),
+          ).useMobileTasksItemDetailLoading(model)
+        },
         fixture: {
           actionItem: item,
+          detailRequestItem: item,
           detailRefreshSeq: 0,
+          detailRefreshRequested: { current: false },
           tasksSupported: true,
           detailLoading: false,
           detailError: '',
           detailPayload: null,
           items: [item]
         },
-        actions: () => ({}),
+        actions: ({ model, update }) => ({
+          'replace-client': ({ client }) => {
+            model.client = client
+            return update()
+          },
+          select: ({ selected }) => {
+            if (typeof model.setActionItem !== 'function') {
+              throw new Error('Missing actual selection owner')
+            }
+            model.setActionItem(selected === undefined ? item : selected)
+          },
+          refresh: () => {
+            if (typeof model.setDetailRefreshSeq !== 'function') {
+              throw new Error('Missing actual detail refresh owner')
+            }
+            model.setDetailRefreshSeq((sequence: number) => sequence + 1)
+          }
+        }),
         state: (model) => ({
           loading: model.detailLoading,
           error: model.detailError,
@@ -147,8 +167,7 @@ export function taskItemDetailMountAdapters(
   return {
     'tasks.item-detail-github': itemDetail(GITHUB_PR_ITEM),
     'tasks.item-detail-gitlab': itemDetail(GITLAB_ISSUE_ITEM),
-    // The Linear arm with its issue leg answered. The b3 seed refuses that leg, so its matrix
-    // never reaches the comment leg's acceptance: the issue error is raised first either way.
+    // Answer the Linear issue leg so the matrix can reach comment acceptance; the b3 seed refuses that prerequisite.
     'tasks.item-detail-linear': itemDetail(LINEAR_ITEM)
   }
 }

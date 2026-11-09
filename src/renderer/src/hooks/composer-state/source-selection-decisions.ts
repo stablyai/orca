@@ -1,11 +1,13 @@
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { getLinkedWorkItemProvider, type LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import { getLinkedWorkItemProvider } from '@/lib/linked-work-item-provider'
+import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { SmartGitHubSubmitResolution } from '@/lib/smart-github-submit'
 import {
   resolveGitHubWorkItemIdentity,
   type GitHubWorkItemIdentity
-} from '@/lib/github-work-item-identity'
+} from '../../../../shared/new-workspace/github-work-item-identity'
 
 export type PendingSmartGitHubSubmitResolution =
   | { kind: 'none' }
@@ -19,10 +21,16 @@ export type PendingSmartGitHubSubmitResolution =
     })
 
 export type SmartGitHubPrStartPointSelection = {
+  kind: 'github-pr'
   repoId: string
   item: GitHubWorkItem
   resolved?: GitHubPrStartPoint
 }
+
+export type SmartSourceSelection =
+  | SmartGitHubPrStartPointSelection
+  | { kind: 'gitlab-mr'; repoId: string; item: GitLabWorkItem }
+  | { kind: 'github-submit-lookup'; query: string }
 
 export function getGitHubLinkedWorkItemIdentity(
   item: LinkedWorkItemSummary | null | undefined

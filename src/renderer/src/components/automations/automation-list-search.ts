@@ -1,8 +1,3 @@
-import {
-  getActiveAutomationListSearchQuery,
-  resolveAutomationListSearchQuery
-} from './automation-list-search-query'
-
 export {
   AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES,
   clampAutomationListSearchQueryInput,
@@ -12,8 +7,7 @@ export {
   type AutomationListSearchQueryResolution
 } from './automation-list-search-query'
 
-// Why: prompts can be multi-MB agent instructions. Index only a fixed prefix so
-// lowercasing/includes stay O(bound) per automation rather than O(prompt size).
+// Bound indexed fields so lowercasing/includes cannot scale with multi-MB prompts.
 export const AUTOMATION_LIST_SEARCH_NAME_MAX_CODE_UNITS = 512
 export const AUTOMATION_LIST_SEARCH_PROJECT_MAX_CODE_UNITS = 1_024
 export const AUTOMATION_LIST_SEARCH_WORKSPACE_MAX_CODE_UNITS = 512
@@ -61,7 +55,7 @@ export function truncateAutomationListSearchField(value: string, maxCodeUnits: n
   }
   let end = maxCodeUnits
   const last = value.charCodeAt(end - 1)
-  // High surrogate at the cut would leave an orphan low surrogate.
+  // Avoid leaving an unmatched high surrogate at the end of the prefix.
   if (last >= 0xd800 && last <= 0xdbff) {
     end -= 1
   }
@@ -111,87 +105,7 @@ export function automationListSearchIndexMatches(
   return false
 }
 
-export function automationListSearchFieldsMatch(
-  fields: AutomationListSearchFields,
-  rawQuery: string
-): boolean {
-  const resolved = resolveAutomationListSearchQuery(rawQuery)
-  if (resolved.status === 'too_large') {
-    return false
-  }
-  if (resolved.status === 'inactive') {
-    return true
-  }
-  return automationListSearchIndexMatches(buildAutomationListSearchIndex(fields), resolved.query)
-}
-
-/**
- * Filters with an already-resolved active query. Callers must pass null/skip
- * when search is inactive or too large so this never runs "for free".
- */
-export function filterByActiveAutomationListSearchQuery<T>(
-  items: readonly T[],
-  indexes: readonly AutomationListSearchIndex[],
-  activeQuery: string
-): T[] {
-  if (indexes.length !== items.length) {
-    return [...items]
-  }
-  const matches: T[] = []
-  for (let i = 0; i < items.length; i += 1) {
-    const item = items[i]
-    const index = indexes[i]
-    if (item !== undefined && index && automationListSearchIndexMatches(index, activeQuery)) {
-      matches.push(item)
-    }
-  }
-  return matches
-}
-
-/**
- * Filters items by a prebuilt index. Empty and oversized queries leave the
- * original array reference untouched so the list stays unfiltered and search
- * work is skipped entirely.
- */
-export function filterByAutomationListSearchIndex<T>(
-  items: readonly T[],
-  indexes: readonly AutomationListSearchIndex[],
-  rawQuery: string
-): readonly T[] {
-  const activeQuery = getActiveAutomationListSearchQuery(rawQuery)
-  if (activeQuery === null) {
-    return items
-  }
-  return filterByActiveAutomationListSearchQuery(items, indexes, activeQuery)
-}
-
-/** Builds indexes then filters. Prefer prebuilt indexes when filtering often. */
-export function filterByAutomationListSearch<T>(
-  items: readonly T[],
-  rawQuery: string,
-  getFields: (item: T) => AutomationListSearchFields
-): readonly T[] {
-  const activeQuery = getActiveAutomationListSearchQuery(rawQuery)
-  if (activeQuery === null) {
-    return items
-  }
-  const matches: T[] = []
-  for (const item of items) {
-    if (
-      automationListSearchIndexMatches(buildAutomationListSearchIndex(getFields(item)), activeQuery)
-    ) {
-      matches.push(item)
-    }
-  }
-  return matches
-}
-
-/**
- * Content fingerprint for search-relevant fields only. Used so list refresh
- * ticks that replace arrays with equivalent search content do not rebuild
- * indexes or re-run filtering. Fields are capped first so fingerprinting a
- * multi-MB prompt costs the same as indexing it.
- */
+/** Fingerprint only capped search fields so equivalent refreshes reuse indexes and large prompts keep bounded cost. */
 export function buildAutomationListSearchFingerprint(
   sources: readonly AutomationListSearchFields[],
   keys?: readonly string[]

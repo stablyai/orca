@@ -43,8 +43,8 @@ for (const workspaceMode of ['existing', 'new_per_run'] as const) {
     })
     await orcaPage.getByRole('button', { name: 'Add new', exact: true }).click()
     const dialog = orcaPage.getByRole('dialog', { name: /^(Create|Edit) automation$/ })
-    await dialog.locator('button[data-agent-combobox-root="true"]').click()
-    await orcaPage.getByRole('option', { name: 'Blank Terminal', exact: true }).click()
+    await dialog.locator('button[data-agent-launch-picker-trigger="true"]').click()
+    await orcaPage.getByRole('menuitem', { name: 'Blank Terminal', exact: true }).click()
     const name = `Shell reload ${workspaceMode}`
     await dialog.getByRole('textbox', { name: 'Automation name' }).fill(name)
     if (workspaceMode === 'new_per_run') {

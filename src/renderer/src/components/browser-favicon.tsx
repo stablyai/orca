@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { displayableFaviconUrl } from './browser-pane/describe-page/browser-favicon-url'
+import { displayableFaviconUrl } from '../../../shared/browser/browser-favicon-url'
 
 export function BrowserFavicon({
   faviconUrl,
@@ -26,8 +26,7 @@ export function BrowserFavicon({
     }
   }
 
-  // Why: reset during render on any favicon identity change — including a clear to null while
-  // a page loads — so navigating back to the same url retries instead of keeping the fallback.
+  // Reset on identity changes, including null, so returning to a previously failed URL retries.
   if (failedUrl !== null && failedUrl !== displayUrl) {
     setFailedUrl(null)
   }
@@ -51,10 +50,7 @@ export function BrowserFavicon({
         decoding="async"
         loading="lazy"
         fetchPriority="low"
-        className={cn(
-          'shrink-0 rounded-sm object-contain drop-shadow-[0_0_1px_var(--foreground)]',
-          className
-        )}
+        className={cn('shrink-0 rounded-sm object-contain', className)}
         onError={() => setFailedUrl(displayUrl)}
       />
     )

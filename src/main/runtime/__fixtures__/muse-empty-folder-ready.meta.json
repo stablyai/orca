@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-22T09:55:35.466Z",
+  "platform": "darwin",
+  "command": ["muse", "--provider", "echo", "--trust-workspace"],
+  "cols": 120,
+  "rows": 32,
+  "note": "Muse 1.3.0 empty folder ready; echo provider",
+  "exitCode": 0
+}

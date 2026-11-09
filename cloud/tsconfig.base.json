@@ -13,7 +13,8 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "ES2024"
+    "target": "ES2024",
+    "types": ["node"]
   }
 }
 

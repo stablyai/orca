@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { writeDurableSecureJsonFile, writeSecureJsonFile } from '../../shared/secure-file'
+import {
+  writeDurableSecureJsonFile,
+  writeSecureJsonFile
+} from '../../shared/secure-storage/secure-file'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 
 export type ArtifactShareScope = {
@@ -94,7 +97,7 @@ function pruneRecords(
       ? unexpired.sort(compareRecordsNewestFirst).slice(0, MAX_ARTIFACT_SHARE_RECORDS)
       : unexpired
   return {
-    shares: Object.fromEntries(retained),
+    shares: retained.length === currentEntries.length ? shares : Object.fromEntries(retained),
     changed: retained.length !== currentEntries.length
   }
 }

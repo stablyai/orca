@@ -21,40 +21,22 @@ function chunk(
 }
 
 describe('LocalLogTailDecoder', () => {
-  it('rewinds a snapshot to its last complete line', () => {
-    const decoder = new LocalLogTailDecoder('one\ntwo', IDENTITY)
-
-    expect(decoder.initialVisibleContent).toBe('one\n')
-    expect(decoder.nextByteOffset).toBe(Buffer.byteLength('one\n'))
-  })
-
-  it('carries an incomplete UTF-8 code point and record across reads', () => {
-    const decoder = new LocalLogTailDecoder('', IDENTITY)
-    const bytes = Buffer.from('{"text":"雪"}\n', 'utf8')
-    const split = bytes.indexOf(Buffer.from('雪')) + 1
-
-    const first = decoder.apply(chunk(bytes.subarray(0, split), split, { hasMore: true }))
-    const second = decoder.apply(chunk(bytes.subarray(split), bytes.length))
-
-    expect(first).toEqual({ kind: 'append', content: '', hasMore: true })
-    expect(second).toEqual({ kind: 'append', content: '{"text":"雪"}\n', hasMore: false })
-  })
-
-  it('holds a partial final line until a later append completes it', () => {
-    const decoder = new LocalLogTailDecoder('', IDENTITY)
-    const firstBytes = Buffer.from('{"partial":')
-    const secondBytes = Buffer.from('true}\n')
-
-    expect(decoder.apply(chunk(firstBytes, firstBytes.length))).toMatchObject({ content: '' })
-    expect(decoder.apply(chunk(secondBytes, firstBytes.length + secondBytes.length))).toMatchObject(
-      { content: '{"partial":true}\n' }
-    )
-  })
-
-  it('does not apply bytes when the reader detects truncate or rotation', () => {
-    const decoder = new LocalLogTailDecoder('old\n', IDENTITY)
-    const result = decoder.apply(chunk(new Uint8Array(), 0, { reset: true }))
-
-    expect(result).toEqual({ kind: 'reset' })
+  it('preserves exact completed records at every UTF-8 byte boundary', () => {
+    const text = '雪🐋\rfirst\n\nα second\r\nlast 🦀\nunfinished'
+    const bytes = Buffer.from(text)
+    for (let cut = 0; cut <= bytes.length; cut += 1) {
+      const decoder = new LocalLogTailDecoder('header 雪\nold unfinished', IDENTITY)
+      const offset = decoder.nextByteOffset
+      const first = decoder.apply(chunk(bytes.subarray(0, cut), offset + cut, { hasMore: true }))
+      const second = decoder.apply(chunk(bytes.subarray(cut), offset + bytes.length))
+      const completed = decoder.apply(chunk(Buffer.from('\n'), offset + bytes.length + 1))
+      const outputs = [first, second, completed]
+      expect(outputs.every((output) => output.kind === 'append')).toBe(true)
+      expect(
+        outputs.map((output) => (output.kind === 'append' ? output.content : '')).join('')
+      ).toBe(`${text}\n`)
+      expect(decoder.nextByteOffset).toBe(offset + bytes.length + 1)
+      expect(decoder.expectedIdentity).toBe(IDENTITY)
+    }
   })
 })

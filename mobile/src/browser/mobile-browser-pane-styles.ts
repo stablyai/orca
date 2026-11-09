@@ -1,7 +1,9 @@
 import { StyleSheet } from 'react-native'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileBrowserPaneStyles = StyleSheet.create({
+export const mobileBrowserPaneStyles = themedStyleSheet(() => ({
   root: {
     flex: 1,
     minHeight: 0,
@@ -67,7 +69,7 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     backgroundColor: colors.bgPanel,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: 13,
@@ -85,7 +87,7 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
   dialogCard: {
     width: '100%',
     maxWidth: 360,
-    borderRadius: radii.card,
+    borderRadius: radii.floating,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
@@ -102,6 +104,15 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
     lineHeight: 20,
     marginTop: spacing.sm
   },
+  dialogButtonDisabled: {
+    opacity: 0.5
+  },
+  dialogError: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    lineHeight: 18,
+    marginTop: spacing.sm
+  },
   dialogActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -110,7 +121,7 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
   },
   dialogButton: {
     minHeight: 34,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.md,
     alignItems: 'center',
@@ -146,18 +157,16 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
   keyboardInput: {
     flex: 1,
     height: 34,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    fontSize: 14,
+    // Use text-input seam: native keeps body size; web floor 16px prevents focus zoom that keyboard seam mistakes for no keyboard.
+    fontSize: TEXT_INPUT_FONT_SIZE,
     fontFamily: typography.monoFamily,
     marginRight: spacing.sm
   },
   sendButton: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised
@@ -168,4 +177,4 @@ export const mobileBrowserPaneStyles = StyleSheet.create({
   disabledText: {
     color: colors.textMuted
   }
-})
+}))

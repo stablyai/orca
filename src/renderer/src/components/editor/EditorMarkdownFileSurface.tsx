@@ -1,14 +1,18 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import { Button } from '@/components/ui/button'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { formatBytes } from '../status-bar/workspace-space-format'
 import { MarkdownPreview, RichMarkdownEditor } from './editor-lazy-views'
-import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
-import type { MarkdownRenderState } from './markdown-render-mode'
-import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
-import type { useMarkdownDocuments } from './useMarkdownDocuments'
+import {
+  extractFrontMatter,
+  prependFrontMatter
+} from './markdown/source-scanning/markdown-frontmatter'
+import { exceedsMarkdownRenderOverrideSizeLimit } from './markdown/render-mode/markdown-rich-size-limit'
+import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
+import { RichMarkdownErrorBoundary } from './rich-markdown/instance/RichMarkdownErrorBoundary'
+import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 
 type MarkdownDocumentsController = ReturnType<typeof useMarkdownDocuments>
 
@@ -45,6 +49,7 @@ export function EditorMarkdownFileSurface({
   handleDirtyStateHint: (dirty: boolean) => void
   monacoEditor: React.JSX.Element
 }): React.JSX.Element {
+  const t = useTranslate()
   const setSizeOverride = useAppStore((s) => s.setMarkdownRichModeSizeOverride)
 
   if (activeFile.conflict?.conflictStatus === 'unresolved') {
@@ -55,11 +60,13 @@ export function EditorMarkdownFileSurface({
   }
   const { renderMode, richModeUnsupportedMessage } = inlineMarkdownRenderState
   if (renderMode === 'source' && mdViewMode === 'rich') {
-    // Why: only a size fallback is recoverable — unsupported syntax would round-trip badly, so it gets no override.
+    // Only size fallbacks allow override; unsupported syntax cannot safely round-trip.
     const isSizeFallback = richModeUnsupportedMessage === null
+    const canOverrideSize =
+      isSizeFallback && !exceedsMarkdownRenderOverrideSizeLimit(currentContent)
     const richFallbackMessage =
       richModeUnsupportedMessage ??
-      translate(
+      t(
         'editor.richMarkdown.tooLarge',
         'File is larger than the {{limit}} rich editing limit. Showing source mode instead.',
         { limit: formatBytes(RICH_MARKDOWN_MAX_SIZE_BYTES) }
@@ -68,7 +75,7 @@ export function EditorMarkdownFileSurface({
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center gap-3 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1">{richFallbackMessage}</span>
-          {isSizeFallback ? (
+          {canOverrideSize ? (
             <Button
               type="button"
               variant="outline"
@@ -76,7 +83,7 @@ export function EditorMarkdownFileSurface({
               className="shrink-0"
               onClick={() => setSizeOverride(activeFile.id, true)}
             >
-              {translate('editor.richMarkdown.openAnyway', 'Open anyway')}
+              {t('editor.richMarkdown.openAnyway', 'Open anyway')}
             </Button>
           ) : null}
         </div>
@@ -98,7 +105,7 @@ export function EditorMarkdownFileSurface({
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="min-h-0 flex-1">
-          {/* Why: keyed for remount like MonacoEditor; boundary contains a TipTap render crash (issue #826) to this pane. */}
+          {/* Remount per pane and contain TipTap render failures to this editor. */}
           <RichMarkdownErrorBoundary key={viewStateScopeId} fileId={activeFile.id}>
             <RichMarkdownEditor
               fileId={activeFile.id}
@@ -108,6 +115,7 @@ export function EditorMarkdownFileSurface({
               worktreeId={activeFile.worktreeId}
               externalSshTargetId={activeFile.externalSshTargetId}
               runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
+              operationProvenance={activeFile.operationProvenance}
               scrollCacheKey={`${editorViewStateKey}:rich`}
               onContentChange={onContentChange}
               onDirtyStateHint={handleDirtyStateHint}
@@ -122,7 +130,7 @@ export function EditorMarkdownFileSurface({
                 frontMatter ? getMarkdownSourceLineOffset(frontMatter.raw) : 0
               }
               markdownReviewContent={currentContent}
-              // Why: banner goes below the toolbar (inside the editor shell) so formatting controls stay at the top of the pane.
+              // Place frontmatter below the toolbar to keep formatting controls at the top.
               headerSlot={
                 frontMatter && showMarkdownFrontmatter ? (
                   <FrontMatterBanner raw={frontMatter.raw} />
@@ -139,18 +147,19 @@ export function EditorMarkdownFileSurface({
     return (
       <div className="flex h-full min-h-0 flex-col">
         {shouldExplainRichFallback ? (
-          <div className="border-b border-border/60 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+          <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             {richModeUnsupportedMessage}
           </div>
         ) : null}
-        {/* Why: fall back to the stable preview renderer when Tiptap can't safely own the document. */}
+        {/* Use preview when TipTap cannot safely own the document. */}
         <div className="min-h-0 flex-1">
           <MarkdownPreview
-            key={viewStateScopeId}
+            key={`${viewStateScopeId}:${editorViewStateKey}`}
             content={currentContent}
             filePath={activeFile.filePath}
             sourceFileId={activeFile.id}
             sourceWorktreeId={activeFile.worktreeId}
+            sourceRelativePath={activeFile.relativePath}
             sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
             scrollCacheKey={`${editorViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
@@ -166,6 +175,7 @@ export function EditorMarkdownFileSurface({
 }
 
 function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
+  const t = useTranslate()
   const inner = raw
     .replace(/^(?:---|\+\+\+)\r?\n/, '')
     .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
@@ -174,9 +184,9 @@ function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
   return (
     <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
       <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        {translate('auto.components.editor.EditorContent.e4b074749d', 'Front Matter')}
+        {t('auto.components.editor.EditorContent.e4b074749d', 'Front Matter')}
         <span className="ml-2 font-normal normal-case tracking-normal opacity-70">
-          {translate('auto.components.editor.EditorContent.56dba34e1a', '(edit in source mode)')}
+          {t('auto.components.editor.EditorContent.56dba34e1a', '(edit in source mode)')}
         </span>
       </div>
       <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">

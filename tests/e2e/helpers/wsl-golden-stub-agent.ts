@@ -152,8 +152,12 @@ export async function useWslRuntimeForActiveProject(page: Page, distro: string):
     if (!activeProject) {
       throw new Error('No active project')
     }
-    await state.updateProject(activeProject.id, {
-      localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
-    })
+    await state.updateProject(
+      activeProject.id,
+      {
+        localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
+      },
+      'local'
+    )
   }, distro)
 }

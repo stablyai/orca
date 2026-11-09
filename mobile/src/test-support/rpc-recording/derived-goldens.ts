@@ -1,5 +1,6 @@
+import { materializeScenario } from './scenario-execution-mode'
 import { hoistPreludeCheckpoints } from './prelude-checkpoints'
-import { driveReplyMatrix, replyMatrixGoldenId, replyMatrixSites } from './reply-matrix'
+import { driveReplyMatrix, replyMatrixGoldenId, matrixSites } from './reply-matrix'
 import { replyMatrixNormalResult } from './reply-matrix-normal-result'
 import {
   bindCompletions,
@@ -7,18 +8,15 @@ import {
   lifecycleSchedules,
   siblingSchedules
 } from './schedule-driver'
-import type { RecordingScenario } from './recording-scenario'
+import type { RecordingScenario, ExecutionMode, ScenarioLineage } from './recording-scenario'
 
-/**
- * One frozen golden and the scenarios it is recorded from. Derived here rather than inside the
- * suites so `scenarioSha256` is a function of the same derivation that records the file: a test
- * that restated how a matrix or schedule expands could agree with itself while disagreeing with
- * what was recorded.
- */
+// Share derivation with census/pruning so all consumers enumerate the recordings actually written.
+// Prefix titles with golden ids so rpc:record can select by test name.
 export type DerivedGolden = {
   id: string
   title: string
   family: string
+  lineage: ScenarioLineage
   /** The matrix site this golden drives; absent for a pilot or schedule golden. */
   site?: string
   /** Lazy, so a family with no replayable success fails its own test instead of collection. */
@@ -29,7 +27,6 @@ export type DerivedGolden = {
 const SIBLING_SCHEDULE_BASES = [
   'b3',
   'settings-new-tab-ssh',
-  'settings-home-providers-fulfilled',
   'settings-workspace-context-fulfilled',
   'settings-resume-metadata-fulfilled',
   'settings-task-hydration-fulfilled',
@@ -52,22 +49,50 @@ function baseScenario(manifest: readonly RecordingScenario[], id: string): Recor
   return found
 }
 
-/** The manifest scenario a pilot golden expands from, which its suite also mounts and mutates. */
-export type PilotGolden = DerivedGolden & { scenario: RecordingScenario }
-
-/** One golden per manifest scenario: frozen main parity for the scenario as written. */
-export function pilotGoldens(manifest: readonly RecordingScenario[]): PilotGolden[] {
-  return manifest.map((scenario) => ({
-    id: scenario.id,
-    title: `${scenario.id}: frozen main parity and determinism`,
-    family: scenario.family,
-    scenario,
-    scenarios: () => [scenario]
-  }))
+function omitRetiredInventoryAdmission(scenario: RecordingScenario): RecordingScenario {
+  if (
+    scenario.id !== 'inventory-lifecycle.unmount-before-1' &&
+    scenario.id !== 'inventory-lifecycle.reset-before-1'
+  ) {
+    return scenario
+  }
+  // A late search refusal cannot start an inventory after its owner retires.
+  return {
+    ...scenario,
+    steps: scenario.steps.filter(
+      (step) =>
+        !(
+          ('bind' in step &&
+            (step.bind === 'old-inventory' || step.bind === 'lifecycle-old-inventory')) ||
+          ('complete' in step && step.complete === 'lifecycle-old-inventory')
+        )
+    )
+  }
 }
 
-/** Every golden generated from a family's base scenario: reply matrices and owned schedules. */
-export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGolden[] {
+export type PilotGolden = DerivedGolden & { scenario: RecordingScenario }
+
+export function pilotGoldens(
+  manifest: readonly RecordingScenario[],
+  mode: ExecutionMode = 'native'
+): PilotGolden[] {
+  return manifest
+    .map((source) => materializeScenario(source, mode))
+    .map((scenario) => ({
+      id: scenario.id,
+      title: `${scenario.id}: replays its recording deterministically`,
+      family: scenario.family,
+      lineage: scenario.lineage!,
+      scenario,
+      scenarios: () => [scenario]
+    }))
+}
+
+export function familyGoldens(
+  input: readonly RecordingScenario[],
+  mode: ExecutionMode = 'native'
+): DerivedGolden[] {
+  const manifest = input.map((scenario) => materializeScenario(scenario, mode))
   const families = new Map<string, RecordingScenario[]>()
   for (const scenario of manifest) {
     families.set(scenario.family, [...(families.get(scenario.family) ?? []), scenario])
@@ -79,16 +104,18 @@ export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGo
     if (!base) {
       throw new Error(`Family has no scenario: ${family}`)
     }
-    for (const site of replyMatrixSites(base)) {
-      const id = replyMatrixGoldenId(family, site)
+    // No-demand producers still have a pilot recording, but no RPC replies to partition.
+    for (const { id: site, bridgeOnly } of matrixSites(base)) {
+      const id = `${bridgeOnly ? 'bridge-' : ''}${replyMatrixGoldenId(family, site)}`
       if (ids.has(id)) {
         throw new Error(`Two matrix sites share a golden: ${id}`)
       }
       ids.add(id)
       goldens.push({
         id,
-        title: `${family}: reply partitions at ${site}`,
+        title: `${id}: ${family} reply partitions at ${site}`,
         family,
+        lineage: { ...base.lineage!, site, domain: bridgeOnly ? 'bridge-only' : 'paired' },
         site,
         timeoutMs: 30_000,
         scenarios: () =>
@@ -112,8 +139,9 @@ export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGo
     }
     goldens.push({
       id: `schedules-${id}`,
-      title: `${id}: completion orders and correlated faults`,
+      title: `schedules-${id}: completion orders and correlated faults`,
       family: base.family,
+      lineage: { ...base.lineage!, schedule: 'siblings' },
       scenarios: () => siblingSchedules(base, first, second)
     })
   }
@@ -121,8 +149,9 @@ export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGo
     const base = baseScenario(manifest, id)
     goldens.push({
       id: `interruptions-${id}`,
-      title: `${id}: timeout, disconnect and stable-client cutover`,
+      title: `interruptions-${id}: timeout, disconnect and stable-client cutover`,
       family: base.family,
+      lineage: { ...base.lineage!, schedule: 'interruptions' },
       scenarios: () => interruptionSchedules(base)
     })
   }
@@ -135,21 +164,24 @@ export function familyGoldens(manifest: readonly RecordingScenario[]): DerivedGo
         : ['reset', 'unmount', 'blur']
     goldens.push({
       id: `lifecycle-${id}`,
-      title: `${id}: lifecycle boundaries`,
+      title: `lifecycle-${id}: lifecycle boundaries`,
       family: base.family,
+      lineage: { ...base.lineage!, schedule: 'lifecycle' },
       scenarios: () =>
         hoistPreludeCheckpoints(
           { ...base, steps: bindCompletions(base.steps) },
           actions
             .flatMap((action) => lifecycleSchedules(base, action))
             .filter(({ scenario }) => !id.includes('hydration') || !scenario.id.endsWith('-1'))
-        )
+        ).map(omitRetiredInventoryAdmission)
     })
   }
   return goldens
 }
 
-/** Every golden the oracle freezes, pilot and family alike. */
-export function derivedGoldens(manifest: readonly RecordingScenario[]): DerivedGolden[] {
-  return [...pilotGoldens(manifest), ...familyGoldens(manifest)]
+export function derivedGoldens(
+  manifest: readonly RecordingScenario[],
+  mode: ExecutionMode = 'native'
+): DerivedGolden[] {
+  return [...pilotGoldens(manifest, mode), ...familyGoldens(manifest, mode)]
 }

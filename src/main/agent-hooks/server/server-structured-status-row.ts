@@ -1,7 +1,5 @@
-import {
-  pickParsedAgentStatusPayload,
-  type AgentStatusIpcPayload
-} from '../../../shared/agent-status-types'
+import { pickParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
 /** Canonical rows supply legacy fanout without retaining a writable pane copy. */
@@ -17,6 +15,9 @@ export function structuredStatusLegacyEvent(
     stateStartedAt: row.stateStartedAt,
     evidenceObservedAt: row.evidenceObservedAt,
     structuredHost: row.structuredHost,
+    launchToken: row.launchToken,
+    terminalHandle: row.terminalHandle,
+    promptInteractionKey: row.promptInteractionKey,
     ...(row.providerSession ? { providerSession: row.providerSession } : {}),
     ...(row.observation ? { observation: row.observation } : {}),
     payload: pickParsedAgentStatusPayload(row)

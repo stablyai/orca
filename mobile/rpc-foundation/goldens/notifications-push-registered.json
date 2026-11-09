@@ -1,24 +1,15 @@
 {
+  "goldenFormatVersion": 6,
   "operation": "notifications.push-registration",
   "family": "notifications.push-registration",
   "namedDeltas": [],
-  "runnerVersion": 1,
-  "baseline": "01a1b6b024f6664c110e9ae50717ef4880fd8d82",
-  "lockfileSha256": "4568633356187895ccda8e2ff83245c37d5621832c69e268733733b6947971e3",
-  "recorderSha256": "d4fa125899cd863c03dbf96657d46b8c7d6c0ccf522b342bc4f164ed1e3becfe",
-  "adapterSha256": "2e3d939dc162dbc5a38d8a7207111688204a825fd70348721917b3016e1c9470",
-  "scenarioSha256": "90f49e430518bfc6e662da1d0c55b0084f30ab54dabdd15293b1f8ad9d2fa592",
-  "platform": "darwin",
-  "scenarioVersion": 1,
-  "projectionVersion": 2,
-  "goldenFormatVersion": 5,
   "values": {
-    "70a555b8bb94": {
+    "692c015040bb": {
       "name": "notifications.registerPush#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.registerPush\",\"params\":{\"platform\":\"ios\",\"token\":\"apns-token-1\",\"apnsEnvironment\":\"production\",\"filter\":{\"onlyWhenDesktopAway\":true,\"sound\":true}}}"
     },
-    "79ed32a5bb02": {
+    "810a020dae97": {
       "name": "notifications.registerPush#1",
       "ordinal": 1,
       "args": [
@@ -29,6 +20,7 @@
         {
           "name": "params",
           "value": {
+            "apnsEnvironment": "production",
             "filter": {
               "onlyWhenDesktopAway": true,
               "sound": true
@@ -116,8 +108,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["79ed32a5bb02", "caff83b6525e"],
-          "payloads": ["70a555b8bb94", "d92e80fc55a0"],
+          "sender": ["810a020dae97", "caff83b6525e"],
+          "payloads": ["692c015040bb", "d92e80fc55a0"],
           "settlements": {
             "register": "84e5ca07cb7a",
             "unregister": "84e5ca07cb7a"

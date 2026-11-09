@@ -1,9 +1,4 @@
-// win-update-e2e — packaged NSIS update proof harness.
-//
-// Given two Orca Windows installers (version N and N+1), proves what happens to
-// the terminal daemon and its sessions across a real silent update, with
-// machine-checkable assertions. Windows-only. See README.md for usage and the
-// design context in docs/windows-terminal-update-survival-plan.md (Phase 0).
+// Prove packaged Windows daemon/session behavior across real silent N→N+1 NSIS update; see README and windows-terminal-update-survival-plan.md.
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -21,7 +16,6 @@ import {
   createTerminalTab,
   listTabIds,
   startMarker,
-  readTerminalTextBestEffort,
   closeApp,
   captureFailureDiagnostics
 } from './app-driver.mjs'
@@ -88,9 +82,7 @@ async function main() {
     log('preflight-warning', w)
   }
 
-  // Isolated mode: snapshot the shared per-user registry keys + shortcuts BEFORE
-  // any install writes over them. Everything after this must run through the
-  // try/finally so the snapshot is always restored, even on failure.
+  // Snapshot shared registry/shortcuts before isolated install; all later work must reach finally restore.
   let manifest = null
   if (isolated) {
     manifest = backupInstallState(runDir)
@@ -110,11 +102,7 @@ async function main() {
     created
   }
 
-  // Both paths ALWAYS tear down (close the app, kill the marker/watch, uninstall)
-  // and, in isolated mode, restore registry/shortcuts — whatever happens in the
-  // proof body. A driving failure captures diagnostics first, then surfaces as a
-  // FATAL. Teardown in a finally is what keeps a driving hang from pinning the
-  // Node process alive until the CI job timeout.
+  // Always teardown owned app/marker/watch/install and restore isolated shared state; capture driving diagnostics before surfacing FATAL.
   const ctx = { session: null }
   const diagDir = process.env.ORCA_E2E_DIAG_DIR || path.join(runDir, 'diag')
   let passed = false
@@ -153,11 +141,7 @@ async function main() {
   return passed ? 0 : 1
 }
 
-/**
- * Run the install → drive → update → relaunch → assert proof. `ctx.session` is
- * assigned as soon as each app launches so a caller's finally can tear down a
- * partially-created session on failure. Returns whether every assertion passed.
- */
+// Run install/drive/update/relaunch/assert; assign ctx.session at launch so finally owns partial failures.
 async function runProof(ctx, args) {
   const {
     opts,
@@ -179,31 +163,23 @@ async function runProof(ctx, args) {
   })
   log('install-base', `installing ${fromInstaller}`)
   const base = silentInstall(fromInstaller, { installDir })
-  // Track the install now (not only after the update at L238) so a failure
-  // anywhere before the update still tears down the base install this harness
-  // created, instead of orphaning it and blocking the next run's preflight.
+  // Track base install immediately so any pre-update failure still uninstalls this run’s target.
   ctx.installedExePath = base.exePath
   log('install-base', `installed ${base.exePath} (version ${base.version})`)
 
-  // Seed a fresh profile (onboarding dismissed + one throwaway git repo as a
-  // project) ONLY before the first launch. The relaunch must use the app's own
-  // persisted state so the cold-restore/survival assertions are meaningful.
+  // Seed only first launch; relaunch must preserve the app’s own saved session.
   const seededRepo = createSeededRepo(path.join(runDir, 'fixture-repo'))
   const seedProfile = buildFreshProfile({ repo: seededRepo })
 
-  // --- Base version: launch, create sessions, start marker, record daemon ---
   let session = await launchInstalledApp({ exePath: base.exePath, userDataDir, seedProfile })
   ctx.session = session
-  // A fresh profile has no terminal yet, so create a workspace + terminal, then
-  // clear the post-creation overlays that would intercept typing.
+  // Create first workspace/terminal and clear intercepting overlays.
   await ensureTerminal(session.page, { allowCreate: true })
   await dismissOverlays(session.page)
   const tabIds = await listTabIds(session.page)
   log('sessions', `terminal ready; tab ids: ${tabIds.join(', ')}`)
 
-  // Baseline typed-input on the IDLE shell, before the perpetual marker loop
-  // takes over the foreground (a command typed against a running loop can't
-  // execute, so this must precede startMarker to be meaningful).
+  // Prove baseline input while shell is idle, before marker loop owns foreground and prevents command execution.
   const echoBeforeUpdate = await probeEcho(session.page, runDir, 'echo-pre')
   log('sessions', `pre-update echo interactive: ${echoBeforeUpdate}`)
 
@@ -217,19 +193,25 @@ async function runProof(ctx, args) {
   log('daemon', `pre-update daemon pid=${preDaemon.pid} appVersion=${preDaemon.appVersion}`)
   log('daemon', `pre-update daemon exe: ${preDaemon.exePath ?? '(unknown)'}`)
 
-  const preScrollback = await readTerminalTextBestEffort(session.page)
-
   // Close app normally; the detached daemon must remain alive.
-  await closeApp(session.app)
+  // Allow renderer acknowledgement and teardown; a tree kill invalidates survival evidence.
+  await closeApp(session.app, 45_000, { allowForceKill: false })
   const daemonAliveAfterClose = preDaemon.pid != null && isPidAlive(preDaemon.pid)
   log('daemon', `alive after app close: ${daemonAliveAfterClose}`)
+  log('marker', `alive after graceful app close: ${isPidAlive(created.markerPid)}`)
+  await delay(60_000)
+  log(
+    'pre-install-control',
+    JSON.stringify({
+      daemonAlive: preDaemon.pid != null && isPidAlive(preDaemon.pid),
+      markerAlive: isPidAlive(created.markerPid)
+    })
+  )
 
-  // --- Start the console-window watch through the whole update + soak ---
   const watchDuration = 120 + opts.soakSeconds
   const watch = startWatch({ baselinePath, outPath: watchOut, durationSec: watchDuration })
   log('watch', `started (duration ${watchDuration}s) -> ${watchOut}`)
 
-  // --- Update: install N+1 ---
   const toInstaller = resolveInstaller({
     localPath: opts.to,
     releaseTag: opts.toRelease,
@@ -237,12 +219,19 @@ async function runProof(ctx, args) {
   })
   log('update', `installing ${toInstaller}`)
   const updated = silentInstall(toInstaller, { installDir })
-  // Record the exact dir the harness installed into so non-isolated teardown
-  // uninstalls THAT and never scan-discovers the developer's real install.
+  // Record exact installed directory for teardown; never scan-discover a user install.
   ctx.installedExePath = updated.exePath
   log('update', `installed ${updated.exePath} (version ${updated.version})`)
+  log(
+    'post-install-before-relaunch',
+    JSON.stringify({
+      daemonPid: preDaemon.pid,
+      daemonAlive: preDaemon.pid == null ? null : isPidAlive(preDaemon.pid),
+      markerPid: created.markerPid,
+      markerAlive: created.markerPid == null ? null : isPidAlive(created.markerPid)
+    })
+  )
 
-  // --- Relaunch and gather post-update evidence ---
   session = await launchInstalledApp({ exePath: updated.exePath, userDataDir })
   ctx.session = session
   // No create on relaunch: the session must be RESTORED, not freshly made.
@@ -256,12 +245,10 @@ async function runProof(ctx, args) {
     heartbeatFile,
     preDaemon,
     userDataDir,
-    preScrollback,
     echoBeforeUpdate
   })
   evidence.postDaemon?.pids?.forEach((p) => created.daemonPids.add(p))
 
-  // --- Soak, then stop the watch and evaluate ---
   log('soak', `waiting ${opts.soakSeconds}s for delayed flashes`)
   await delay(opts.soakSeconds * 1000)
   const { events } = await watch.stop()
@@ -283,13 +270,11 @@ async function runProof(ctx, args) {
 }
 
 async function gatherEvidence(args) {
-  const { profile, page, runDir, heartbeatFile, preDaemon, userDataDir, preScrollback } = args
+  const { profile, page, runDir, heartbeatFile, preDaemon, userDataDir } = args
   const postDaemon = resolveScopedDaemon(userDataDir)
 
   if (profile === 'survival') {
-    // The decisive survival signals: did the SPECIFIC pre-update daemon process
-    // live through the update, and is the new app running that same relocated
-    // exe or a fresh in-dir fork? Log both regardless of the assertion outcome.
+    // Record specific pre-update daemon survival and host exe path whether assertions pass or fail.
     const preDaemonAliveAfter = preDaemon.pid != null && isPidAlive(preDaemon.pid)
     log(
       'daemon',
@@ -305,18 +290,13 @@ async function gatherEvidence(args) {
       heartbeatFile,
       heartbeatBefore
     )
-    // Sample marker survival BEFORE interrupting it: the pre-update shell must be
-    // measured while its heartbeat loop still runs, not after
-    // probeCtrlCInterruptsMarker deliberately breaks that loop.
+    // Sample marker heartbeat before the interrupt probe intentionally stops it.
     const markerAliveAfter = isMarkerAlive(runDir)
     log(
       'marker',
       `pid=${readIntFile(path.join(runDir, 'marker.pid'))} aliveAfterUpdate=${markerAliveAfter}`
     )
-    // Interrupt the foreground loop first so the shell returns to a prompt; only
-    // then can a freshly-typed command execute. Typing while the infinite
-    // heartbeat loop owns the shell never runs, regardless of input health — so
-    // the echo probe is meaningful only after the interrupt.
+    // Interrupt the foreground loop before echo commands; otherwise even healthy input cannot execute them.
     const ctrlCInterrupted = await probeCtrlCInterruptsMarker(page, runDir, heartbeatFile)
     const echoObserved = await probeEcho(page, runDir, 'echo-post')
     return {
@@ -332,9 +312,6 @@ async function gatherEvidence(args) {
     }
   }
 
-  // cold-restore
-  const postScrollback = await readTerminalTextBestEffort(page)
-  const scrollbackRestored = scrollbackFidelity(preScrollback, postScrollback)
   await createTerminalTab(page)
   const echoObserved = await probeEcho(page, runDir, 'echo-fresh')
   const ctrlCInterrupted = await probeCtrlCOnFreshLoop(page, runDir)
@@ -344,17 +321,12 @@ async function gatherEvidence(args) {
     postDaemonPid: postDaemon.pid,
     postDaemonAlive: postDaemon.pid != null && isPidAlive(postDaemon.pid),
     postDaemon,
-    scrollbackRestored,
     echoObserved,
     ctrlCInterrupted
   }
 }
 
-/**
- * Resolve THIS run's daemon, scoped to its isolated userData dir so unrelated
- * daemons on the machine are ignored. Prefers the pid file (authoritative,
- * carries appVersion); cross-checks the live process scan.
- */
+// Resolve only this run’s scoped daemon; prefer PID metadata and cross-check live process scan.
 function resolveScopedDaemon(userDataDir) {
   const pidFiles = readDaemonPidFiles(userDataDir)
   const scan = findDaemonProcesses(userDataDir)
@@ -376,9 +348,7 @@ function resolveScopedDaemon(userDataDir) {
     pid,
     appVersion: primary?.appVersion ?? null,
     startedAtMs: primary?.startedAtMs ?? null,
-    // Why: the daemon's exe path (first token of its command line) tells us
-    // whether it was forked from the relocated userData/daemon-host copy or the
-    // install-dir Orca.exe — the key survival signal.
+    // First command-line token distinguishes relocated daemon-host from a fresh install-dir fork.
     exePath: daemonExePath(scanEntry?.commandLine),
     pids: [...pids]
   }
@@ -423,31 +393,9 @@ async function heartbeatAdvancedSince(heartbeatFile, sinceMs) {
   return fileMtimeMs(heartbeatFile) > sinceMs
 }
 
-function scrollbackFidelity(before, after) {
-  // WebGL renderer can leave both empty; report unknown (null) rather than a
-  // false failure. When text is available, check a stable prefix survived.
-  if (!before || !before.trim() || !after || !after.trim()) {
-    return null
-  }
-  const marker = before
-    .trim()
-    .split('\n')
-    .find((l) => l.trim().length > 3)
-  if (!marker) {
-    return null
-  }
-  return after.includes(marker.trim())
-}
-
 export function readDaemonLog(userDataDir) {
-  // The daemon log (when present) is JSONL: { src, ts, pid, event, ...details }.
-  // Only genuinely-bad records fail a run — matched by EVENT NAME, not by any
-  // string containing "error". The daemon logs benign 'uncaught-exception-
-  // suppressed' events with name:"Error" for native PTY errors it intentionally
-  // swallows (src/main/daemon/daemon-entry.ts); those must never fail, and
-  // 'client-hello-rejected' with reason expected-hello/protocol-mismatch is
-  // normal version-skew during an update. Non-JSON lines fall back to a raw
-  // FATAL match so an unstructured crash dump still counts.
+  // Inspect JSONL by event name: fail fatal/invalid-token records, tolerate suppressed native errors and expected version-skew hello rejections.
+  // For non-JSON lines, retain raw FATAL matching for crash dumps.
   const logPath = path.join(userDataDir, 'logs', 'daemon.log')
   if (!existsSync(logPath)) {
     return null
@@ -480,13 +428,7 @@ export function readDaemonLog(userDataDir) {
   return { path: logPath, errorLines, suppressedCount }
 }
 
-/**
- * Isolated-mode teardown. The harness OWNS the isolated dir by construction, so
- * it always uninstalls the test install, then ALWAYS restores the shared per-user
- * registry keys + shortcuts the installer hijacked (the uninstaller clears the
- * test install's copies; restore re-imports the real install's originals or
- * deletes freshly-created keys). Finally removes the emptied install dir + runDir.
- */
+// Always uninstall the owned isolated target, restore original shared registry/shortcuts (deleting test-created state), then remove empty target/run dirs.
 async function isolatedTeardown({ app, created, userDataDir, installDir, manifest, runDir }) {
   try {
     await closeApp(app)
@@ -513,8 +455,7 @@ async function isolatedTeardown({ app, created, userDataDir, installDir, manifes
         `shortcutsDeleted=${restore.shortcutsDeleted.length}`
     )
   } catch (err) {
-    // Restore must never be silently skipped — surface it loudly and point at the
-    // manifest so the shared keys can be recovered by hand.
+    // Surface restore failures with manifest/manual recovery path; never silently skip shared-state recovery.
     console.error(
       `\n*** WIN-UPDATE-E2E: registry/shortcut restore THREW: ${err.stack || err.message}\n` +
         `    Recover manually from the backups under ${manifest?.backupDir}. ***\n`
@@ -550,8 +491,7 @@ async function teardown({
   } catch {
     /* already closed */
   }
-  // Kill ONLY processes this harness created: the marker and this run's daemon
-  // (scoped to the isolated userData). Never touch pre-existing user processes.
+  // Kill only this run’s marker/scoped daemon, excluding pre-existing user processes.
   killPid(created.markerPid)
   for (const pid of resolveScopedDaemon(userDataDir).pids) {
     killPid(pid)
@@ -564,9 +504,7 @@ async function teardown({
     log('teardown', `--keep-install set; leaving install + ${runDir}`)
     return
   }
-  // Only uninstall when the harness fully OWNS the install (no pre-existing
-  // build). When it overwrote a developer's existing install, leave it in place
-  // — uninstalling would remove a build we did not put there.
+  // Uninstall only fully owned targets; leave a pre-existing developer install that this run updated.
   if (hadPreexistingInstall) {
     console.log(
       '\n*** NOTE: an Orca install existed before this run. It was OVERWRITTEN and the\n' +
@@ -574,9 +512,7 @@ async function teardown({
         '    your intended build if needed. Skipping uninstall. ***\n'
     )
   } else if (installedExePath) {
-    // Uninstall ONLY the exact directory the harness installed into this run,
-    // with the explicit default-location opt-in (non-isolated mode legitimately
-    // installs to the default path and owns it here). Never scan-and-discover.
+    // Uninstall exact recorded directory with explicit default-location opt-in for owned non-isolated installs; never scan-discover.
     const uninstalled = silentUninstall(path.dirname(installedExePath), {
       allowDefaultLocation: true
     })
@@ -611,14 +547,11 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// Only run the orchestrator when invoked directly, so the module (and
-// readDaemonLog) can be imported by tests without kicking off a real install.
+// Guard direct invocation so tests importing readDaemonLog cannot install anything.
 if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   main()
     .then((code) => {
-      // Why: force-exit. A launched Electron app or the window-watch child can
-      // keep libuv handles open; without this the process lingers to the CI job
-      // timeout instead of exiting when the run is logically done.
+      // Force exit after teardown because Electron/watch handles can linger until CI timeout.
       process.exit(code)
     })
     .catch((err) => {

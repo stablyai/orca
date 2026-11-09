@@ -1,7 +1,5 @@
-// Pure helpers for the branch-card conflict Abort control. Kept free of React so
-// the busy-label rule (abort-in-flight only) is unit-testable.
+import { translate } from '../i18n/mobile-i18n'
 
-/** True while git.abortMerge / git.abortRebase is the active serial action. */
 export function isMobileConflictAborting(
   busyAction: string | null,
   conflictOperation: string | null
@@ -12,7 +10,18 @@ export function isMobileConflictAborting(
   return busyAction === `abort-${conflictOperation}`
 }
 
-/** Label for the Abort control — never says "Aborting…" for unrelated busy work. */
 export function mobileConflictAbortLabel(conflictOperation: string, aborting: boolean): string {
-  return aborting ? 'Aborting…' : `Abort ${conflictOperation}`
+  if (aborting) {
+    return translate('sourceControl.conflictAbort.aborting', 'Aborting…')
+  }
+  switch (conflictOperation) {
+    case 'merge':
+      return translate('sourceControl.conflictAbort.abortMerge', 'Abort merge')
+    case 'rebase':
+      return translate('sourceControl.conflictAbort.abortRebase', 'Abort rebase')
+    default:
+      return translate('sourceControl.conflictAbort.abortOperation', 'Abort {{operation}}', {
+        operation: conflictOperation
+      })
+  }
 }

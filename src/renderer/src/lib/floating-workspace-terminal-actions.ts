@@ -1,15 +1,22 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { BrowserTab } from '../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
+  getNextTerminalCycleTab,
   getNextTabWithinActiveType,
+  getPreviousRecentTab,
   type TabCycleType,
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
 import type { AppState } from '@/store/types'
-import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolution'
+import {
+  selectEmptyFloatingWorkspacePanelVisible,
+  selectFloatingVisibleTabCount,
+  type EmptyFloatingWorkspacePanelState
+} from '@/store/workspaces/floating/floating-workspace-panel-selector'
+import { resolveBrowserWorkspaceOwner } from './browser/workspace/browser-workspace-source-resolution'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'
@@ -40,8 +47,6 @@ type FloatingWorkspaceTabSwitchStore = Pick<
 >
 
 const FLOATING_WORKSPACE_PANEL_SELECTOR = '[data-floating-terminal-panel]'
-const EMPTY_FLOATING_WORKSPACE_PANEL_SELECTOR =
-  '[data-floating-terminal-panel][aria-hidden="false"] [data-floating-terminal-empty-state]'
 
 type EmptyFloatingWorkspaceCloseShortcutEvent = Pick<
   KeyboardEvent,
@@ -85,16 +90,18 @@ function getFloatingWorkspaceVisibleTabs(
         .filter((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
         .map((file) => file.id)
     ),
-    new Set((store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id))
+    new Set(
+      (store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
+    ),
+    new Set(groupTabs.filter((tab) => tab.contentType === 'simulator').map((tab) => tab.id))
   )
 }
 
-// Live count of visible floating tabs from store state — lets close handlers re-derive "did this
-// actually empty the panel?" at the moment the close resolves, instead of trusting a frozen
-// pre-close render snapshot that a concurrent create/no-op close can invalidate.
-export function countVisibleFloatingWorkspaceItems(store: FloatingWorkspaceTabSwitchStore): number {
-  const group = getActiveFloatingWorkspaceGroup(store)
-  return group ? getFloatingWorkspaceVisibleTabs(store, group).length : 0
+/** Recount when async close resolves; concurrent creates/no-op closes can invalidate render-time empty-panel predictions. */
+export function countVisibleFloatingWorkspaceItems(
+  store: Parameters<typeof selectFloatingVisibleTabCount>[0]
+): number {
+  return selectFloatingVisibleTabCount(store)
 }
 
 function getFloatingWorkspaceActiveEntry(
@@ -127,7 +134,7 @@ function getActiveIdsForFloatingEntry(entry: TypeCyclableTab): {
 function getFloatingWorkspaceBrowserTab(
   store: FloatingWorkspaceTabSwitchStore,
   browserTabId: string
-): BrowserTab | null {
+): BrowserWorkspace | null {
   return (
     (store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).find(
       (tab) => tab.id === browserTabId
@@ -135,11 +142,7 @@ function getFloatingWorkspaceBrowserTab(
   )
 }
 
-// The guest IPC receiver maps a forwarded close's source id back to the live floating browser
-// workspace that owns it, so a stale/reordered/closed id is an idempotent no-op. Main forwards the
-// guest's *page* id (BrowserManager keys guests by browserPageId), while the panel closes by
-// workspace id, so resolve pages → workspace here; a workspace id is accepted too for callers that
-// already speak that id space.
+/** Resolve guest page IDs to live floating workspaces; stale/reordered closes are no-ops. Accept workspace IDs for callers already using that namespace. */
 export function resolveFloatingWorkspaceBrowserWorkspaceId(
   store: Pick<AppState, 'browserTabsByWorktree' | 'browserPagesByWorkspace'>,
   sourceId: string
@@ -150,7 +153,7 @@ export function resolveFloatingWorkspaceBrowserWorkspaceId(
   )
 }
 
-function activateFloatingWorkspaceCyclableTab(
+export function activateFloatingWorkspaceCyclableTab(
   store: FloatingWorkspaceTabSwitchStore,
   next: TypeCyclableTab
 ): void {
@@ -172,38 +175,6 @@ function activateFloatingWorkspaceCyclableTab(
   }
 }
 
-function getNextFloatingWorkspaceTerminalTab(
-  visibleTabs: readonly TypeCyclableTab[],
-  active: TypeCyclableTab,
-  direction: number
-): TypeCyclableTab | null {
-  const terminalTabs = visibleTabs.filter((tab) => tab.type === 'terminal')
-  if (terminalTabs.length === 0) {
-    return null
-  }
-  const currentIndex = terminalTabs.findIndex((tab) => tab.id === active.id)
-  if (terminalTabs.length === 1 && currentIndex === 0 && active.type === 'terminal') {
-    return null
-  }
-  const normalizedCurrentIndex =
-    currentIndex === -1 && direction > 0 ? -1 : currentIndex === -1 ? 0 : currentIndex
-  return terminalTabs[
-    (normalizedCurrentIndex + direction + terminalTabs.length) % terminalTabs.length
-  ]
-}
-
-export function isFloatingWorkspacePanelVisible(
-  doc: Pick<Document, 'querySelector'> = document
-): boolean {
-  return Boolean(doc.querySelector('[data-floating-terminal-panel][aria-hidden="false"]'))
-}
-
-export function isEmptyFloatingWorkspacePanelVisible(
-  doc: Pick<Document, 'querySelector'> | null = typeof document === 'undefined' ? null : document
-): boolean {
-  return Boolean(doc?.querySelector(EMPTY_FLOATING_WORKSPACE_PANEL_SELECTOR))
-}
-
 export function isFloatingWorkspacePanelFocused(
   doc: Pick<Document, 'activeElement'> | null = typeof document === 'undefined' ? null : document
 ): boolean {
@@ -211,10 +182,18 @@ export function isFloatingWorkspacePanelFocused(
   return active instanceof HTMLElement && active.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
 }
 
-// Event-target-aware panel membership (vs isFloatingWorkspacePanelFocused which reads only activeElement).
-// Used for routing ownership when activeElement is transiently body/null during blur/IME churn (F6/F7).
+// Use event-target membership when blur/IME churn leaves activeElement transiently body/null (F6/F7).
 export function isEventTargetInsideFloatingWorkspacePanel(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.closest(FLOATING_WORKSPACE_PANEL_SELECTOR) !== null
+}
+
+export function resolveKeyboardWorkspaceId(
+  target: EventTarget | null,
+  activeWorktreeId: string | null
+): string | null {
+  return isEventTargetInsideFloatingWorkspacePanel(target)
+    ? FLOATING_TERMINAL_WORKTREE_ID
+    : activeWorktreeId
 }
 
 export function isFloatingWorkspaceTerminalInputTarget(target: EventTarget | null): boolean {
@@ -241,13 +220,14 @@ export function shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
 }
 
 export function handleEmptyFloatingWorkspacePanelCloseShortcut(
+  state: EmptyFloatingWorkspacePanelState,
   event: EmptyFloatingWorkspaceCloseShortcutEvent,
   platform: NodeJS.Platform,
   keybindings?: KeybindingOverrides
 ): boolean {
   if (
     event.repeat ||
-    !isEmptyFloatingWorkspacePanelVisible() ||
+    !selectEmptyFloatingWorkspacePanelVisible(state) ||
     !keybindingMatchesAction('tab.close', event, platform, keybindings, { context: 'app' })
   ) {
     return false
@@ -284,7 +264,7 @@ export function switchFloatingWorkspaceTab(
 
   const next =
     mode === 'terminal'
-      ? getNextFloatingWorkspaceTerminalTab(visibleTabs, active, direction)
+      ? getNextTerminalCycleTab(visibleTabs, active, direction)
       : mode === 'all-types'
         ? getNextTabAcrossAllTypes({
             tabs: visibleTabs,
@@ -303,6 +283,22 @@ export function switchFloatingWorkspaceTab(
     return false
   }
 
+  activateFloatingWorkspaceCyclableTab(store, next)
+  return true
+}
+
+export function switchFloatingWorkspaceRecentTab(store: FloatingWorkspaceTabSwitchStore): boolean {
+  const group = getActiveFloatingWorkspaceGroup(store)
+  const next = group
+    ? getPreviousRecentTab(
+        getFloatingWorkspaceVisibleTabs(store, group),
+        group.recentTabIds,
+        group.activeTabId
+      )
+    : null
+  if (!next) {
+    return false
+  }
   activateFloatingWorkspaceCyclableTab(store, next)
   return true
 }

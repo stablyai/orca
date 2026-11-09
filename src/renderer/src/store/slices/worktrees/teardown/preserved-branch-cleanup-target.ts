@@ -1,7 +1,7 @@
-import type { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
-import type { PreservedBranchCleanup } from '../../../../../../shared/preserved-branch-cleanup'
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 
 export const preservedBranchRuntimeTargetByCleanupKey = new Map<
   string,
-  { cleanup: PreservedBranchCleanup; target: ReturnType<typeof getActiveRuntimeTarget> }
+  { cleanup: PreservedBranchCleanup; target: RuntimeClientTarget }
 >()

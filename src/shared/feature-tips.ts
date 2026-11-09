@@ -3,12 +3,34 @@ import {
   type FeatureInteractionId,
   type FeatureInteractionState
 } from './feature-interactions'
+import type { TelemetrySettings } from './telemetry-settings-types'
 
-export type FeatureTipId = 'voice-dictation' | 'orca-cli' | 'cmd-j-palette'
+export type FeatureTipId =
+  | 'chat-ui-here'
+  | 'voice-dictation'
+  | 'orca-cli'
+  | 'cmd-j-palette'
+  | 'agent-session-search'
+
+export type FeatureTipSeenId = FeatureTipId | 'chat-ui-here-rollout-v1'
+
+export function getFeatureTipSeenId(
+  id: FeatureTipId,
+  telemetry: Pick<TelemetrySettings, 'chatUiLaunchTipRolloutCohort'> | undefined
+): FeatureTipSeenId {
+  return id === 'chat-ui-here' && telemetry?.chatUiLaunchTipRolloutCohort
+    ? 'chat-ui-here-rollout-v1'
+    : id
+}
 
 export type FeatureTipPriority = 'new' | 'unseen'
 
-export type FeatureTipAction = 'enable-voice' | 'setup-cli' | 'learn-cmd-j-palette'
+export type FeatureTipAction =
+  | 'use-chat-ui'
+  | 'enable-voice'
+  | 'setup-cli'
+  | 'learn-cmd-j-palette'
+  | 'enable-session-search'
 
 export type FeatureTip = {
   id: FeatureTipId
@@ -18,17 +40,42 @@ export type FeatureTip = {
   description: string
   action: FeatureTipAction
   ctaLabel: string
-  /** Feature interactions that mean this tip is no longer useful to show. */
   completedByFeatureInteractions?: readonly FeatureInteractionId[]
 }
 
 export type CompletedFeatureTipState = {
   cliInstalled: boolean
   voiceDictationEnabled: boolean
+  /** Search is on, or this client cannot turn it on. */
+  sessionSearchTipCompleted: boolean
+  /** Main's once-decided record leaves this profile out, or this client has no such profile. */
+  chatUiLaunchTipCompleted: boolean
   featureInteractions?: FeatureInteractionState
 }
 
 export const FEATURE_TIPS = [
+  {
+    // First, so upgraded profiles meet it on their first launch after Chat UI left Experimental.
+    id: 'chat-ui-here',
+    priority: 'new',
+    eyebrow: 'New',
+    title: 'Chat UI is here',
+    description: 'Agents can now open as a chat, with rich messages, visuals and images.',
+    action: 'use-chat-ui',
+    ctaLabel: 'Use Chat UI',
+    completedByFeatureInteractions: []
+  },
+  {
+    id: 'agent-session-search',
+    priority: 'new',
+    eyebrow: 'New',
+    title: 'Search every agent session',
+    description:
+      'Find any past conversation by what was said in it, then pick up where the agent left off.',
+    action: 'enable-session-search',
+    ctaLabel: 'Turn on session search',
+    completedByFeatureInteractions: []
+  },
   {
     id: 'orca-cli',
     priority: 'new',
@@ -43,8 +90,7 @@ export const FEATURE_TIPS = [
     id: 'cmd-j-palette',
     priority: 'new',
     eyebrow: 'Tip',
-    // Why: "<shortcut>" is a placeholder token; the cmd-j dialog splits the
-    // title on it and inlines the live, platform-correct keybinding as a <kbd>.
+    // The dialog replaces <shortcut> with a live platform-aware <kbd>.
     title: 'Jump to a worktree with <shortcut>',
     description:
       'Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.',
@@ -65,19 +111,27 @@ export const FEATURE_TIPS = [
 ] as const satisfies readonly FeatureTip[]
 
 export const FEATURE_TIP_IDS = FEATURE_TIPS.map((tip) => tip.id)
+export const FEATURE_TIP_SEEN_IDS: readonly FeatureTipSeenId[] = [
+  ...FEATURE_TIP_IDS,
+  'chat-ui-here-rollout-v1'
+]
 
 export function isFeatureTipId(value: unknown): value is FeatureTipId {
   return typeof value === 'string' && FEATURE_TIP_IDS.includes(value as FeatureTipId)
 }
 
-export function normalizeFeatureTipIds(value: unknown): FeatureTipId[] {
+export function isFeatureTipSeenId(value: unknown): value is FeatureTipSeenId {
+  return value === 'chat-ui-here-rollout-v1' || isFeatureTipId(value)
+}
+
+export function normalizeFeatureTipIds(value: unknown): FeatureTipSeenId[] {
   if (!Array.isArray(value)) {
     return []
   }
 
-  const seen = new Set<FeatureTipId>()
+  const seen = new Set<FeatureTipSeenId>()
   for (const item of value) {
-    if (isFeatureTipId(item)) {
+    if (isFeatureTipSeenId(item)) {
       seen.add(item)
     }
   }
@@ -92,6 +146,12 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   if (state.voiceDictationEnabled) {
     completedIds.add('voice-dictation')
   }
+  if (state.sessionSearchTipCompleted) {
+    completedIds.add('agent-session-search')
+  }
+  if (state.chatUiLaunchTipCompleted) {
+    completedIds.add('chat-ui-here')
+  }
   for (const tip of FEATURE_TIPS) {
     if (
       tip.completedByFeatureInteractions?.some((id) =>
@@ -105,12 +165,15 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
 }
 
 export function getOrderedUnseenFeatureTips(args: {
-  seenTipIds: ReadonlySet<FeatureTipId>
+  seenTipIds: ReadonlySet<FeatureTipSeenId>
   completedTipIds?: ReadonlySet<FeatureTipId>
+  telemetry?: Pick<TelemetrySettings, 'chatUiLaunchTipRolloutCohort'>
 }): FeatureTip[] {
   const completedTipIds = args.completedTipIds ?? new Set<FeatureTipId>()
   const unseenTips = FEATURE_TIPS.filter(
-    (tip) => !args.seenTipIds.has(tip.id) && !completedTipIds.has(tip.id)
+    (tip) =>
+      !args.seenTipIds.has(getFeatureTipSeenId(tip.id, args.telemetry)) &&
+      !completedTipIds.has(tip.id)
   )
   return [
     ...unseenTips.filter((tip) => tip.priority === 'new'),

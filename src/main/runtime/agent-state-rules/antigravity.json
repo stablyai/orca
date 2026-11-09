@@ -1,0 +1,99 @@
+{
+  "id": "antigravity",
+  "engineVersion": 1,
+  "profile": { "screenProbeBanner": "antigravity cli", "screenSource": "trusted" },
+  "anchors": [
+    {
+      "id": "text_composer",
+      "why": "Without a trusted grid, the folded text tail is all there is; a trailing caret there also belongs to trust, sign-in and model menus, which the named scan rules out.",
+      "when": { "region": "text", "find": { "predicate": "antigravity-text-composer" } },
+      "answer": { "state": "idle" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "composer_ready",
+      "why": "The bottom four rows at an idle composer. The hint row decides: the caret stays painted through a turn and behind the /model picker, but the hint reads `esc to cancel` mid-turn and in the palette, and the picker covers it. The caret row may carry the edit mode (`> Accept-edits mode: ...`), but never other text: menus prefix their highlighted row with `> ` too. Quiet because a submit repaints the composer for a moment mid-turn.",
+      "priority": 500,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "regex": "^─{8,}$" },
+          { "regex": "^>$|^>\\s+[a-z][a-z-]*\\s+mode:\\s", "ignoreCase": true },
+          { "regex": "^─{8,}$" },
+          { "regex": "^\\? for shortcuts", "ignoreCase": true }
+        ]
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
+    },
+    {
+      "id": "composer_ready_background_tasks",
+      "why": "agy 1.4 lists running background tasks (`● [14:12:56] sleep 900 running`) under the composer, closed by another rule above the hint row, so the composer is no longer in the bottom four rows. The hint row still decides as in composer_ready: a turn's own foreground command is listed the same way, but the hint then reads `esc to cancel`. One task row is required so the rule cannot collapse onto composer_ready's rows; more than six tasks reads as not shown.",
+      "priority": 490,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "regex": "^─{8,}$" },
+          { "regex": "^>$|^>\\s+[a-z][a-z-]*\\s+mode:\\s", "ignoreCase": true },
+          { "regex": "^─{8,}$" },
+          { "optional": { "regex": "^●\\s+\\[\\d{1,2}:\\d{2}:\\d{2}\\]\\s+\\S" } },
+          { "optional": { "regex": "^●\\s+\\[\\d{1,2}:\\d{2}:\\d{2}\\]\\s+\\S" } },
+          { "optional": { "regex": "^●\\s+\\[\\d{1,2}:\\d{2}:\\d{2}\\]\\s+\\S" } },
+          { "optional": { "regex": "^●\\s+\\[\\d{1,2}:\\d{2}:\\d{2}\\]\\s+\\S" } },
+          { "optional": { "regex": "^●\\s+\\[\\d{1,2}:\\d{2}:\\d{2}\\]\\s+\\S" } },
+          { "regex": "^●\\s+\\[\\d{1,2}:\\d{2}:\\d{2}\\]\\s+\\S" },
+          { "regex": "^─{8,}$" },
+          { "regex": "^\\? for shortcuts", "ignoreCase": true }
+        ]
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
+    },
+    {
+      "id": "composer_ready_custom_status_line",
+      "why": "A custom statusLine replaces the hint row, so `esc to cancel` never shows; agy 1.5.2 then marks a turn only with a braille spinner row above the composer. Status rows may not hold a rule run, a hint, or agy's own `[mode · ]model · effort` footer, which drops its hint while the composer holds a draft. Pickers between the composer and status rows break the run. A custom row shaped like that footer holds; a mode-shaped draft above a custom statusLine still reads idle.",
+      "priority": 400,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "none": [{ "regex": "^[\\u2800-\\u28ff]" }] },
+          { "regex": "^─{8,}$" },
+          { "regex": "^>$|^>\\s+[a-z][a-z-]*\\s+mode:\\s", "ignoreCase": true },
+          { "regex": "^─{8,}$" },
+          {
+            "optional": {
+              "none": [
+                { "regex": "──" },
+                { "regex": "esc to cancel|for shortcuts", "ignoreCase": true },
+                { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high)$" }
+              ]
+            }
+          },
+          {
+            "optional": {
+              "none": [
+                { "regex": "──" },
+                { "regex": "esc to cancel|for shortcuts", "ignoreCase": true },
+                { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high)$" }
+              ]
+            }
+          },
+          {
+            "none": [
+              { "regex": "──" },
+              { "regex": "esc to cancel|for shortcuts", "ignoreCase": true },
+              { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high)$" }
+            ]
+          }
+        ]
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
+    },
+    {
+      "id": "composer_not_shown",
+      "why": "A readable screen that is not the idle composer may be a picker, dialog or busy turn, which a name-only title or a quiet process cannot see.",
+      "priority": 100,
+      "when": { "region": "screen" },
+      "answer": { "state": "hold" }
+    }
+  ]
+}

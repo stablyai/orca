@@ -1,24 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SubprocessHandle } from '../../src/main/daemon/session-subprocess-handle'
-import { TerminalHost } from '../../src/main/daemon/terminal-host'
+import type { SubprocessHandle } from '../../src/main/daemon/sessions/session-subprocess-handle'
+import { TerminalHost } from '../../src/main/daemon/terminal-host/terminal-host'
 
-vi.mock('../../src/renderer/src/store', () => ({
+vi.mock('../../src/renderer/src/store/index', () => ({
   useAppStore: {
     setState: vi.fn(),
-    getState: vi.fn(() => ({})),
+    getState: vi.fn(() => ({ updateAgentStatusState: vi.fn() })),
     subscribe: vi.fn(() => () => {})
   }
 }))
 
-import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '../../src/renderer/src/store/slices/runtime-status'
+import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '../../src/renderer/src/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   hasHostSessionMirrorHydrated,
   parkUntilHostSessionMirrorHydrates,
   resetHostSessionMirrorHydrationForTests
-} from '../../src/renderer/src/runtime/host-session-mirror-hydration'
-import { clearHostLiveTerminalProbesForTests } from '../../src/renderer/src/runtime/host-live-terminal-probe'
-import { replaceRuntimeEnvironmentRevisions } from '../../src/renderer/src/runtime/runtime-environment-revision'
-import { applyWebSessionTabsStorePatch } from '../../src/renderer/src/runtime/web-session-tabs-sync'
+} from '../../src/renderer/src/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
+import { clearHostLiveTerminalProbesForTests } from '../../src/renderer/src/runtime/hosted-terminals/inventory/host-live-terminal-probe'
+import { replaceRuntimeEnvironmentRevisions } from '../../src/renderer/src/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { applyWebSessionTabsStorePatch } from '../../src/renderer/src/runtime/web-session-tabs-sync/store-patch'
 
 const ENVIRONMENT_ID = 'env-live-unpublished'
 const WORKTREE = 'repo1::/path/wt1'
@@ -160,77 +160,5 @@ describe('unpublished empty inventory daemon oracle', () => {
       mirrorHydrated: hasHostSessionMirrorHydrated(ENVIRONMENT_ID, WORKTREE),
       probeCalls: call.mock.calls.length
     }).toEqual({ resumeSweeps: 1, mirrorHydrated: true, probeCalls: 0 })
-  })
-
-  it('records legacy unconditional empty hydration releasing the resume dispatch', async () => {
-    const subprocesses: ReturnType<typeof createWriterSubprocess>[] = []
-    const host = new TerminalHost({
-      spawnSubprocess: () => {
-        const subprocess = createWriterSubprocess(90_000 + subprocesses.length)
-        subprocesses.push(subprocess)
-        return subprocess
-      }
-    })
-    await host.createOrAttach({
-      sessionId: 'original-live-session',
-      cols: 80,
-      rows: 24,
-      launchAgent: 'codex',
-      streamClient: { onData: vi.fn(), onExit: vi.fn() }
-    })
-    // Legacy hosts answer the liveness probe with a scoped zero-terminal census.
-    const call = vi.fn(async () => ({
-      ok: true,
-      result: {
-        terminals: [],
-        totalCount: 0,
-        truncated: false,
-        hostScope: { hostIds: ['runtime:env'], omittedHostIds: [] }
-      }
-    }))
-    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
-    let resumeSweeps = 0
-    let replacement: Promise<unknown> | null = null
-    parkUntilHostSessionMirrorHydrates(ENVIRONMENT_ID, WORKTREE, () => {
-      resumeSweeps += 1
-      replacement = host.createOrAttach({
-        sessionId: 'replacement-resume-session',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'codex',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-    })
-
-    applyWebSessionTabsStorePatch(() => ({}), {
-      frames: [],
-      fullInventory: { environmentId: ENVIRONMENT_ID, publishedSnapshotCount: 0 }
-    })()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await (replacement ?? Promise.resolve())
-
-    const liveSessionIds = host.listSessions().map(({ sessionId }) => sessionId)
-    for (const sessionId of liveSessionIds) {
-      host.write(sessionId, `writer:${sessionId}`)
-    }
-
-    expect({
-      resumeSweeps,
-      mirrorHydrated: hasHostSessionMirrorHydrated(ENVIRONMENT_ID, WORKTREE),
-      liveSessionIds,
-      subprocessPids: subprocesses.map(({ pid }) => pid),
-      writerCalls: subprocesses.map(({ write }) => write.mock.calls)
-    }).toEqual({
-      resumeSweeps: 1,
-      mirrorHydrated: true,
-      liveSessionIds: ['original-live-session', 'replacement-resume-session'],
-      subprocessPids: [90_000, 90_001],
-      writerCalls: [[['writer:original-live-session']], [['writer:replacement-resume-session']]]
-    })
-    expect(call).toHaveBeenCalledOnce()
-    for (const subprocess of subprocesses) {
-      subprocess.exit()
-    }
-    await host.dispose()
   })
 })

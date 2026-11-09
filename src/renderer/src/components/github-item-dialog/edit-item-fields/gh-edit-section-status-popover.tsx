@@ -15,9 +15,9 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskPageGitHubCloseAction } from '@/components/task-page-github-status-actions'
+import type { TaskPageGitHubCloseAction } from '@/components/task-page/github/task-page-github-status-actions'
 import { getStateLabel } from '@/components/github/work-item-state-presentation'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getStateTone } from '../load-item-details/work-item-state-badge'
 
 export function GHEditSectionStatusPopover({
@@ -59,6 +59,7 @@ export function GHEditSectionStatusPopover({
   onBackFromDuplicate: () => void
   onOpenDuplicatePicker: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const isSidebar = variant === 'sidebar'
   return (
     <Popover open={statusPopoverOpen} onOpenChange={onOpenChange}>
@@ -81,7 +82,7 @@ export function GHEditSectionStatusPopover({
             ) : (
               <CircleDot className={cn(isSidebar ? 'size-3.5' : 'size-3', 'text-emerald-500')} />
             )}
-            {getStateLabel({ ...item, state: localState })}
+            {getStateLabel({ ...item, state: localState }, t)}
           </span>
           <ChevronDown className={isSidebar ? 'size-3 opacity-60' : 'size-2.5 opacity-50'} />
         </button>
@@ -99,7 +100,7 @@ export function GHEditSectionStatusPopover({
                 size="icon-xs"
                 className="size-7"
                 onClick={onBackFromDuplicate}
-                aria-label={translate('auto.components.TaskPage.backToCloseReasons', 'Back')}
+                aria-label={t('auto.components.TaskPage.backToCloseReasons', 'Back')}
               >
                 <ChevronLeft className="size-4" />
               </Button>
@@ -119,7 +120,7 @@ export function GHEditSectionStatusPopover({
                     onDuplicateSearchSubmit()
                   }
                 }}
-                placeholder={translate('auto.components.TaskPage.searchIssues', 'Search issues')}
+                placeholder={t('auto.components.TaskPage.searchIssues', 'Search issues')}
                 className="h-9 pl-8 text-[12px]"
                 aria-invalid={duplicateError ? true : undefined}
               />
@@ -136,7 +137,7 @@ export function GHEditSectionStatusPopover({
                 >
                   <Copy className="size-4 text-primary" />
                   <span className="min-w-0 flex-1 text-[12px] font-medium">
-                    {translate('auto.components.TaskPage.useIssueNumber', 'Use issue #{{value0}}', {
+                    {t('auto.components.TaskPage.useIssueNumber', 'Use issue #{{value0}}', {
                       value0: directDuplicateTarget
                     })}
                   </span>
@@ -166,7 +167,7 @@ export function GHEditSectionStatusPopover({
               ))}
               {!directDuplicateTarget && filteredDuplicateCandidates.length === 0 ? (
                 <p className="px-2 py-3 text-[12px] text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.TaskPage.noMatchingIssuesLoaded',
                     'No matching issues loaded.'
                   )}
@@ -188,7 +189,7 @@ export function GHEditSectionStatusPopover({
               )}
             >
               <CircleDot className="size-4 text-muted-foreground" />
-              {translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
+              {t('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
             </button>
             <button
               type="button"
@@ -202,7 +203,7 @@ export function GHEditSectionStatusPopover({
               )}
             >
               <Check className="size-4 text-muted-foreground" />
-              {translate('auto.components.TaskPage.closeAsCompleted', 'Close as completed')}
+              {t('auto.components.TaskPage.closeAsCompleted', 'Close as completed')}
             </button>
             <button
               type="button"
@@ -213,7 +214,7 @@ export function GHEditSectionStatusPopover({
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
             >
               <Ban className="size-4 text-muted-foreground" />
-              {translate('auto.components.TaskPage.closeAsNotPlanned', 'Close as not planned')}
+              {t('auto.components.TaskPage.closeAsNotPlanned', 'Close as not planned')}
             </button>
             <button
               type="button"
@@ -222,7 +223,7 @@ export function GHEditSectionStatusPopover({
             >
               <Copy className="size-4 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate">
-                {translate('auto.components.TaskPage.closeAsDuplicate', 'Close as duplicate')}
+                {t('auto.components.TaskPage.closeAsDuplicate', 'Close as duplicate')}
               </span>
               <ChevronRight className="size-3.5 text-muted-foreground" />
             </button>
