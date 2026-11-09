@@ -31,7 +31,8 @@ type Phase =
   /** Created, or possibly created: kept until the folder's members show it. */
   | 'held'
 
-type Operation = FolderRepoTarget & { id: number; phase: Phase; busy: boolean }
+/** `name` is the exact name it was sent as, so an unresolved create is retried as itself. */
+type Operation = FolderRepoTarget & { id: number; phase: Phase; busy: boolean; name: string }
 
 // In memory and shared across screens, so a remount or a reopened composer can't send a second create.
 const operations = new Map<string, Operation>()
@@ -64,8 +65,8 @@ export function isFolderRepoCreateBusy(target: FolderRepoTarget): boolean {
   return operations.get(folderRepoCreateKey(target))?.busy === true
 }
 
-function start(target: FolderRepoTarget, phase: Phase): Operation {
-  const operation = { ...target, id: nextId++, phase, busy: true }
+function start(target: FolderRepoTarget, phase: Phase, name: string): Operation {
+  const operation = { ...target, id: nextId++, phase, busy: true, name }
   operations.set(folderRepoCreateKey(target), operation)
   notify()
   return operation
@@ -149,9 +150,10 @@ export async function createFolderRepoWorktree(args: {
   if (existing && (existing.phase !== 'held' || existing.busy)) {
     return { kind: 'already-running' }
   }
-  // An unconfirmed create is retried as the same exact name: a taken name may be its own.
+  // An unconfirmed create is retried as the same exact name, even after a rename: a taken name may be its own.
   const unresolved = existing !== undefined
-  const operation = start(args.target, 'creating')
+  const name = existing?.name ?? args.name
+  const operation = start(args.target, 'creating', name)
   const settleUnresolved = (outcome: FolderRepoCreateOutcome): FolderRepoCreateOutcome => {
     hold(operation)
     return outcome
@@ -159,7 +161,7 @@ export async function createFolderRepoWorktree(args: {
   try {
     const result = await createWorktreeWithNameRetry({
       client: args.client,
-      baseName: args.name,
+      baseName: name,
       // One exact name: a numbered suffix would be a worktree the user didn't ask for.
       maxAttempts: 1,
       branchIntentSupported: true,
@@ -232,7 +234,7 @@ export type FolderComposerSubmission = {
  */
 export function beginFolderComposerSubmission(
   target: FolderRepoTarget,
-  launch: { target: FolderRepoTarget; reservation: number },
+  launch: { target: FolderRepoTarget; reservation: number; name: string },
   /** Whether the composer is still open to retry a refused create. */
   formOpen: () => boolean
 ): FolderComposerSubmission | null {
@@ -245,7 +247,7 @@ export function beginFolderComposerSubmission(
   if (existing && !ownsReservation) {
     return null
   }
-  const operation = start(target, 'submitting')
+  const operation = start(target, 'submitting', launch.name)
   return {
     settle: (outcome) => {
       if (outcome === 'created' || outcome === 'uncertain') {

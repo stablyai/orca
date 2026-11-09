@@ -130,6 +130,17 @@ describe('createFolderRepoWorktree', () => {
     await expect(create(repo, retry)).resolves.toEqual({ kind: 'maybe-created' })
     expect(retry.sendRequest).toHaveBeenCalledTimes(1)
   })
+
+  it('retries an unconfirmed create as the name it was sent as, even after the folder is renamed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const repo = target()
+    await create(repo, host(markRpcDeliveryUnknown(new Error('connection lost'))))
+    vi.advanceTimersByTime(60_000)
+
+    const retry = host(refused(TAKEN))
+    await createFolderRepoWorktree({ target: repo, client: retry, name: 'billing' })
+    expect(retry.sendRequest.mock.calls[0]?.[1]).toMatchObject({ name: 'payments' })
+  })
 })
 
 describe('createFolderRepoWorktree after a lost reply on a host that dedupes', () => {
@@ -205,7 +216,7 @@ describe('beginFolderComposerSubmission', () => {
     if (outcome.kind !== 'needs-composer') {
       throw new Error('expected the composer')
     }
-    return { repo, launch: { target: repo, reservation: outcome.reservation } }
+    return { repo, launch: { target: repo, reservation: outcome.reservation, name: 'payments' } }
   }
 
   it('admits one create per repository while it is out, even after the form closes', async () => {

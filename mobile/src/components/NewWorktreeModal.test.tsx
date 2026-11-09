@@ -227,6 +227,57 @@ describe('NewWorktreeModal project targets', () => {
     expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1')
   })
 
+  it('creates from a folder attached to that folder, on its host', async () => {
+    const serverRepo = { ...repos[0]!, path: '/srv/orca' }
+    const server = requestsOnly(
+      vi.fn((method: string) =>
+        method === 'repo.list'
+          ? replied({ repos: [serverRepo] })
+          : method === 'worktree.create'
+            ? replied({ worktree: { id: 'repo-1::/srv/w/payments', displayName: 'payments' } })
+            : Promise.reject(new Error(`unexpected ${method}`))
+      )
+    )
+    const settle = vi.fn()
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client: requestsOnly(() => new Promise<never>(() => {})),
+          serverClients: new Map<ExecutionHostId, RpcClient>([['runtime:env-1', server]]),
+          hostId: 'host-1',
+          onCreated: () => {},
+          onClose: () => {},
+          openExternalUrl: () => {},
+          folderLaunch: {
+            repoId: 'repo-1',
+            executionHostId: 'runtime:env-1',
+            name: 'payments',
+            parentWorkspace: 'folder:f-1',
+            submit: { begin: () => ({ settle }), presenting: () => true }
+          }
+        })
+      )
+    })
+    await flushUpdates()
+    const form = renderer.root.find((node) => typeof node.props.onCreate === 'function')
+    await act(async () => form.props.onCreate())
+    await flushUpdates()
+
+    const creates = vi
+      .mocked(server.sendRequest)
+      .mock.calls.filter(([method]) => method === 'worktree.create')
+    expect(creates.map(([, params]) => params)).toEqual([
+      expect.objectContaining({
+        repo: 'id:repo-1',
+        parentWorkspace: 'folder:f-1',
+        parentWorkspaceOrigin: 'manual'
+      })
+    ])
+    expect(settle).toHaveBeenCalledWith('created')
+  })
+
   it('ignores a stale repo list after the client changes', async () => {
     let resolveOldList: ((value: unknown) => void) | undefined
     const oldList = new Promise((resolve) => {

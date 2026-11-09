@@ -5,7 +5,7 @@ import { FakeSession } from '../../transport/connection/mobile-endpoint-supervis
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { NewWorktreeModalProps } from '../../components/new-worktree-modal-types'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
-import type { FolderRepoTarget } from './folder-repo-worktree-create'
+import { isFolderRepoCreateBusy, type FolderRepoTarget } from './folder-repo-worktree-create'
 import { useFolderCreateFlow, type FolderCreateRepo } from './use-folder-create-flow'
 
 const seen = vi.hoisted(() => {
@@ -165,16 +165,17 @@ describe('useFolderCreateFlow', () => {
     expect(seen.haptics).toBe(0)
   })
 
+  async function openComposer(flow: { current: Flow | null }, repo = repoIn()) {
+    const refusal = replying({ id: '1', ok: false, error: { code: 'x', message: TAKEN } })
+    const opening = flow.current!.onCreate(repo.repo, repo.target, refusal.client, 'payments')
+    refusal.answer()
+    await act(() => opening)
+    return composer()
+  }
+
   it("doesn't let an earlier form's close end a newer one", async () => {
     const { flow } = mountFlow(() => {})
-    const open = async () => {
-      const repo = repoIn()
-      const refusal = replying({ id: '1', ok: false, error: { code: 'x', message: TAKEN } })
-      const opening = flow.current!.onCreate(repo.repo, repo.target, refusal.client, 'payments')
-      refusal.answer()
-      await act(() => opening)
-      return composer()
-    }
+    const open = () => openComposer(flow)
     const first = await open()
     act(() => first.onClose())
     const second = await open()
@@ -182,5 +183,27 @@ describe('useFolderCreateFlow', () => {
     act(() => first.onClose())
     expect(composer().visible).toBe(true)
     expect(composer().folderLaunch?.repoId).toBe(second.folderLaunch?.repoId)
+  })
+  it("shows nothing for an earlier form's create once a newer form is open", async () => {
+    const { flow } = mountFlow(() => {})
+    const first = await openComposer(flow)
+    act(() => first.onClose())
+    const second = await openComposer(flow)
+
+    expect(first.folderLaunch?.submit.presenting()).toBe(false)
+    act(() => first.onCreated('repo::/w/payments-2', 'payments-2'))
+    expect(seen.toasts).toEqual([])
+    expect(second.folderLaunch?.submit.presenting()).toBe(true)
+  })
+
+  it('gives the repository back when the screen is left with an unsent form', async () => {
+    const { flow } = mountFlow(() => {})
+    const repo = repoIn()
+    await openComposer(flow, repo)
+    expect(isFolderRepoCreateBusy(repo.target)).toBe(true)
+
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(isFolderRepoCreateBusy(repo.target)).toBe(false)
   })
 })

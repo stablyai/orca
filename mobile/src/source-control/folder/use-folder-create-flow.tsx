@@ -52,18 +52,28 @@ export function useFolderCreateFlow(args: {
   const { client: desktopClient } = useHostClient(hostId)
   const { message, showToast } = useTransientToast()
   const [composer, setComposer] = useState<ComposerLaunch | null>(null)
-  const composerRef = useRef(composer)
-  useEffect(() => {
-    composerRef.current = composer
-  }, [composer])
+  // Set as forms open and close, not after render, so two refusals landing together can't both open one.
+  const composerRef = useRef<ComposerLaunch | null>(null)
+  // The newest opening: an older form's late answer shows nothing over it.
+  const latestLaunchRef = useRef<ComposerLaunch | null>(null)
   // Late answers show nothing once this screen is left or covered; the create itself still settles.
   const presentingRef = useRef(observing)
   useEffect(() => {
     presentingRef.current = observing
-    return () => {
-      presentingRef.current = false
-    }
   }, [observing])
+  useEffect(
+    () => () => {
+      presentingRef.current = false
+      latestLaunchRef.current = null
+      const open = composerRef.current
+      composerRef.current = null
+      // Left without sending from the form: its repository takes taps again.
+      if (open) {
+        releaseFolderComposerReservation(open.target, open.reservation)
+      }
+    },
+    []
+  )
   const presenting = useCallback(() => presentingRef.current, [])
 
   // A created or unconfirmed create is done once the folder lists a worktree from its repository.
@@ -99,12 +109,15 @@ export function useFolderCreateFlow(args: {
             })
         )
       } else if (outcome.kind === 'needs-composer') {
-        setComposer({
+        const launch = {
           target,
           reservation: outcome.reservation,
           executionHostId: getRepoExecutionHostId(repo),
           name
-        })
+        }
+        composerRef.current = launch
+        latestLaunchRef.current = launch
+        setComposer(launch)
       } else if (outcome.kind === 'failed') {
         triggerError()
         showToast(
@@ -119,6 +132,8 @@ export function useFolderCreateFlow(args: {
   )
 
   const launch = composer
+  const presentingLaunch = (opened: ComposerLaunch | null) =>
+    presenting() && opened !== null && latestLaunchRef.current === opened
   const composerElement = (
     <NewWorktreeModalController
       visible={launch !== null}
@@ -138,17 +153,17 @@ export function useFolderCreateFlow(args: {
                 begin: (repo: MobileWorkspaceRepo) =>
                   beginFolderComposerSubmission(
                     { ...launch.target, repoId: repo.id },
-                    { target: launch.target, reservation: launch.reservation },
+                    launch,
                     () => composerRef.current === launch
                   ),
-                presenting
+                presenting: () => presentingLaunch(launch)
               }
             }
           }
         : {})}
       onCreated={(_worktreeId, createdName, warning) => {
         refetch()
-        if (presenting()) {
+        if (presentingLaunch(launch)) {
           showToast(
             warning ??
               t('sourceControl.folder.createdNamed', 'Created worktree {{name}}', {
@@ -161,6 +176,9 @@ export function useFolderCreateFlow(args: {
         // Only this opening's close: an older submission settling can't close a newer form.
         if (launch) {
           releaseFolderComposerReservation(launch.target, launch.reservation)
+          if (composerRef.current === launch) {
+            composerRef.current = null
+          }
         }
         setComposer((current) => (current === launch ? null : current))
       }}
