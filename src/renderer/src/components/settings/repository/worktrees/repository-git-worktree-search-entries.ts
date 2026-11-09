@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { searchKeywordTranslator } from '../../search/settings-search-keywords'
 
-export function getRepositoryGitWorktreeSearchMetadata(repo: Repo, t: Translate = translate) {
+function getRepositoryGitWorktreeSearchParts(repo: Repo, t: Translate = translate) {
   const translateSearchKeyword = searchKeywordTranslator(t)
   const entries = {
     externalWorktrees: {
@@ -148,17 +148,28 @@ export function getRepositoryGitWorktreeSearchMetadata(repo: Repo, t: Translate 
       ]
     }
   } satisfies Record<string, SettingsSearchEntry>
-  return {
-    entries: Object.values(entries),
-    identity: [entries.externalWorktrees, entries.base, entries.location],
-    sparsePresets: [entries.sparsePresets],
-    sharedPaths: [entries.sharedPaths]
-  }
+  return entries
 }
 
 export function getRepositoryGitWorktreeSearchEntries(
   repo: Repo,
   t: Translate = translate
 ): SettingsSearchEntry[] {
-  return getRepositoryGitWorktreeSearchMetadata(repo, t).entries
+  const entries = getRepositoryGitWorktreeSearchParts(repo, t)
+  return [
+    entries.externalWorktrees,
+    entries.base,
+    entries.location,
+    entries.sparsePresets,
+    entries.sharedPaths
+  ]
+}
+
+export function getRepositoryGitWorktreeSearchMetadata(repo: Repo, t: Translate = translate) {
+  const entries = getRepositoryGitWorktreeSearchParts(repo, t)
+  return {
+    identity: [entries.externalWorktrees, entries.base, entries.location],
+    sparsePresets: [entries.sparsePresets],
+    sharedPaths: [entries.sharedPaths]
+  }
 }
