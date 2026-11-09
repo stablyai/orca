@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -32,20 +32,21 @@ function formatElapsed(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
 
-/** Seconds since the pill appeared; holds still once `running` turns off. */
+/** Seconds since `running` first turned on; holds still once it turns off. */
 function useElapsedSeconds(running: boolean): number {
-  const [startedAt] = useState(() => performance.now())
+  const startedAtRef = useRef<number | null>(null)
   const [seconds, setSeconds] = useState(0)
   useEffect(() => {
     if (!running) {
       return
     }
+    const startedAt = (startedAtRef.current ??= performance.now())
     const id = window.setInterval(
       () => setSeconds(Math.floor((performance.now() - startedAt) / 1000)),
       250
     )
     return () => window.clearInterval(id)
-  }, [running, startedAt])
+  }, [running])
   return seconds
 }
 
@@ -78,7 +79,8 @@ function DictationPill({ captureLive, anchor }: DictationIndicatorProps) {
   const finishing = dictationState === 'stopping'
   const recording = dictationState === 'listening' || (dictationState === 'starting' && captureLive)
   const clipping = recording && meter.isClipping
-  const seconds = useElapsedSeconds(!finishing)
+  // Counts recorded time, so it waits for the mic to open.
+  const seconds = useElapsedSeconds(recording)
   const showSpinner = useDelayedFlag(finishing, FINISH_SPINNER_DELAY_MS)
   const transcript = partialTranscript.trim()
   const status = finishing
