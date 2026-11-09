@@ -28,6 +28,7 @@ export type SectionHeaderRowContext = {
   toggleGroupWithScrollAnchor: (groupKey: string) => void
   toggleAllProjects?: () => void
   projectActions: RepoHeaderProjectActions
+  onTogglePinProjectGroup?: (groupId: string, nextPinned: boolean, hostId?: ExecutionHostId) => void
   onCreateProjectSubgroup?: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
   onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void

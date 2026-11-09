@@ -344,11 +344,11 @@ describe('computeCombinedProjectHeaderDropTarget', () => {
 })
 
 describe('commitProjectHeaderDragDrop cross-group moves', () => {
-  it('moves a project into a group header when dropped on a group-header target', () => {
+  it('moves a project into a group header when dropped on a group-header target', async () => {
     const r1 = makeRepo('r1')
     const onMoveToGroupHeader = vi.fn()
 
-    commitProjectHeaderDragDrop({
+    await commitProjectHeaderDragDrop({
       session: {
         repo: r1,
         bucketKey: 'ungrouped',
@@ -368,13 +368,13 @@ describe('commitProjectHeaderDragDrop cross-group moves', () => {
     expect(onMoveToGroupHeader).toHaveBeenCalledWith(r1, 'g1')
   })
 
-  it('computes midpoint order when inserting a project into another open group slot', () => {
+  it('computes midpoint order when inserting a project into another open group slot', async () => {
     const dragged = makeRepo('r-drag')
     const s1 = makeRepo('s1', { projectGroupId: 'g2', projectGroupOrder: 0 })
     const s2 = makeRepo('s2', { projectGroupId: 'g2', projectGroupOrder: 10 })
     const onCommitProjectGroupOrder = vi.fn()
 
-    commitProjectHeaderDragDrop({
+    await commitProjectHeaderDragDrop({
       session: {
         repo: dragged,
         bucketKey: 'ungrouped',
@@ -406,11 +406,11 @@ describe('commitProjectHeaderDragDrop cross-group moves', () => {
     expect(onCommitProjectGroupOrder).toHaveBeenCalledWith(dragged, 'g2', 5)
   })
 
-  it('moves a lone grouped project back to ungrouped root when dropped on the empty ungrouped slot', () => {
+  it('moves a lone grouped project back to ungrouped root when dropped on the empty ungrouped slot', async () => {
     const r1 = makeRepo('r1', { projectGroupId: 'g1', projectGroupOrder: 0 })
     const onCommitProjectGroupOrder = vi.fn()
 
-    commitProjectHeaderDragDrop({
+    await commitProjectHeaderDragDrop({
       session: {
         repo: r1,
         bucketKey: 'group:g1',
@@ -435,12 +435,12 @@ describe('commitProjectHeaderDragDrop cross-group moves', () => {
     expect(onCommitProjectGroupOrder).toHaveBeenCalledWith(r1, null, 0)
   })
 
-  it('mutates the localized host registration (groupRepo) rather than the ordering anchor twin on group moves', () => {
+  it('mutates the localized host registration (groupRepo) rather than the ordering anchor twin on group moves', async () => {
     const localAnchor = makeRepo('twin', { executionHostId: 'local' })
     const remoteTwin = makeRepo('twin', { executionHostId: 'runtime:env-1' })
     const onMoveToGroupHeader = vi.fn()
 
-    commitProjectHeaderDragDrop({
+    await commitProjectHeaderDragDrop({
       session: {
         repo: localAnchor,
         groupRepo: remoteTwin,

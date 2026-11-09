@@ -60,6 +60,7 @@ export type RepoUpdate = Partial<
     | 'customWorktreeVisibilitySources'
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
+    | 'isPinned'
   >
 > & {
   projectGroupOrder?: number | null

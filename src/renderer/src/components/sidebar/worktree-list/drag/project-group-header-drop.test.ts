@@ -572,4 +572,282 @@ describe('project-group-header-reparent-drop', () => {
       1
     )
   })
+
+  it('isolates group drag start, same-bucket slot preview, and same-bucket mutations by pin tier', () => {
+    const p1 = group('p1', { tabOrder: 0, isPinned: true })
+    const p2 = group('p2', { tabOrder: 1, isPinned: true })
+    const u1 = group('u1', { tabOrder: 2, isPinned: false })
+    const u2 = group('u2', { tabOrder: 3, isPinned: false })
+
+    // Sole pinned + sole unpinned without reparentable targets cannot reorder across pin boundary
+    const twoAcrossBoundary = new Map([
+      [p1.id, p1],
+      [u1.id, u1]
+    ])
+    expect(
+      canProjectGroupStartHeaderDrag({
+        group: p1,
+        projectGroupById: twoAcrossBoundary,
+        sidebarBucketHeaderIds: ['p1', 'u1'],
+        reparentableGroupIds: new Set()
+      })
+    ).toBe(false)
+
+    const allFour = [p1, p2, u1, u2]
+    const byId = new Map(allFour.map((entry) => [entry.id, entry]))
+    const rects = [
+      { groupId: 'p1', bucketKey: 'root', headerIndex: 0, top: 0, bottom: 28, sectionBottom: 28 },
+      { groupId: 'p2', bucketKey: 'root', headerIndex: 1, top: 32, bottom: 60, sectionBottom: 60 },
+      { groupId: 'u1', bucketKey: 'root', headerIndex: 2, top: 64, bottom: 92, sectionBottom: 92 },
+      { groupId: 'u2', bucketKey: 'root', headerIndex: 3, top: 96, bottom: 124, sectionBottom: 124 }
+    ]
+    const buckets = new Map<string, readonly string[]>([['root', ['p1', 'p2', 'u1', 'u2']]])
+
+    // Dragging unpinned u2 slightly above u1 (y = 61) snaps to dropIndex 0 of unpinned tier (u1.top - 4 = 60)
+    const unpinnedTarget = computeCombinedProjectGroupHeaderDropTarget({
+      pointerY: 61,
+      containerTop: 0,
+      scrollTop: 0,
+      draggedGroup: u2,
+      projectGroupById: byId,
+      reparentableGroupIds: new Set(),
+      groupHeaderRects: rects,
+      sidebarProjectGroupHeaderIdsByBucket: buckets,
+      contentBottom: 124
+    })
+    expect(unpinnedTarget).toEqual({
+      kind: 'slot',
+      targetBucketKey: 'root',
+      dropIndex: 0,
+      dropIndicatorY: 60
+    })
+
+    expect(
+      getProjectGroupMutationsForDrop({
+        draggedGroup: u2,
+        sourceBucketKey: 'root',
+        dropTarget: unpinnedTarget!,
+        projectGroupById: byId,
+        sidebarProjectGroupHeaderIdsByBucket: buckets
+      })
+    ).toEqual([
+      { groupId: 'u2', updates: { tabOrder: 2 } },
+      { groupId: 'u1', updates: { tabOrder: 3 } }
+    ])
+  })
+
+  it('targets the destination parent unpinned tier on cross-parent group drops, including pinned-only destinations', () => {
+    const p1 = group('p1', { tabOrder: 0, isPinned: true })
+    const subPinned = group('sub-pinned', {
+      parentGroupId: 'p1',
+      tabOrder: 0,
+      isPinned: true
+    })
+    const u1 = group('u1', { tabOrder: 1, isPinned: false })
+    const groups = [p1, subPinned, u1]
+    const byId = new Map(groups.map((entry) => [entry.id, entry]))
+    const rects = [
+      { groupId: 'p1', bucketKey: 'root', headerIndex: 0, top: 0, bottom: 28, sectionBottom: 100 },
+      {
+        groupId: 'sub-pinned',
+        bucketKey: 'parent:p1',
+        headerIndex: 0,
+        top: 60,
+        bottom: 88,
+        sectionBottom: 100
+      },
+      {
+        groupId: 'u1',
+        bucketKey: 'root',
+        headerIndex: 1,
+        top: 108,
+        bottom: 136,
+        sectionBottom: 136
+      }
+    ]
+    const buckets = new Map<string, readonly string[]>([
+      ['root', ['p1', 'u1']],
+      ['parent:p1', ['sub-pinned']]
+    ])
+
+    // 1. Dragging pinned subgroup sub-pinned out to root right above u1 (y = 104) lands in root's unpinned tier (after p1, before u1)
+    const promoteTarget = computeCombinedProjectGroupHeaderDropTarget({
+      pointerY: 104,
+      containerTop: 0,
+      scrollTop: 0,
+      draggedGroup: subPinned,
+      projectGroupById: byId,
+      reparentableGroupIds: getReparentableTargetGroupIdsForGroup(subPinned, groups),
+      groupHeaderRects: rects,
+      sidebarProjectGroupHeaderIdsByBucket: buckets,
+      contentBottom: 136
+    })
+    expect(promoteTarget).toEqual({
+      kind: 'slot',
+      targetBucketKey: 'root',
+      dropIndex: 0,
+      dropIndicatorY: 104
+    })
+    expect(
+      getProjectGroupMutationsForDrop({
+        draggedGroup: subPinned,
+        sourceBucketKey: 'parent:p1',
+        dropTarget: promoteTarget!,
+        projectGroupById: byId,
+        sidebarProjectGroupHeaderIdsByBucket: buckets
+      })
+    ).toEqual([
+      { groupId: 'sub-pinned', updates: { parentGroupId: null, tabOrder: 1 } },
+      { groupId: 'u1', updates: { tabOrder: 2 } }
+    ])
+
+    // 2. Dragging root group u1 into p1's direct body (y = 42, above sub-pinned) when p1 only has pinned subgroup sub-pinned anchors BELOW sub-pinned (100 + 4 = 104)
+    const intoPinnedOnlyParent = computeCombinedProjectGroupHeaderDropTarget({
+      pointerY: 42,
+      containerTop: 0,
+      scrollTop: 0,
+      draggedGroup: u1,
+      projectGroupById: byId,
+      reparentableGroupIds: getReparentableTargetGroupIdsForGroup(u1, groups),
+      groupHeaderRects: rects,
+      sidebarProjectGroupHeaderIdsByBucket: buckets,
+      contentBottom: 136
+    })
+    expect(intoPinnedOnlyParent).toEqual({
+      kind: 'slot',
+      targetBucketKey: 'parent:p1',
+      dropIndex: 0,
+      dropIndicatorY: 104
+    })
+    expect(
+      getProjectGroupMutationsForDrop({
+        draggedGroup: u1,
+        sourceBucketKey: 'root',
+        dropTarget: intoPinnedOnlyParent!,
+        projectGroupById: byId,
+        sidebarProjectGroupHeaderIdsByBucket: buckets
+      })
+    ).toEqual([{ groupId: 'u1', updates: { parentGroupId: 'p1', tabOrder: 1 } }])
+
+    // 3. Promoting a subgroup out to root over a >56px multi-group pinned root prefix (between p1 and p2) snaps to root unpinned slot 0
+    const p2 = group('p2', { tabOrder: 1, isPinned: true })
+    const uRoot = group('u-root', { tabOrder: 2, isPinned: false })
+    const tallGroups = [p1, p2, subPinned, uRoot]
+    const tallById = new Map(tallGroups.map((entry) => [entry.id, entry]))
+    const overTallPinnedRootPrefix = computeCombinedProjectGroupHeaderDropTarget({
+      pointerY: 210,
+      containerTop: 0,
+      scrollTop: 0,
+      draggedGroup: subPinned,
+      projectGroupById: tallById,
+      reparentableGroupIds: getReparentableTargetGroupIdsForGroup(subPinned, tallGroups),
+      groupHeaderRects: [
+        {
+          groupId: 'p1',
+          bucketKey: 'root',
+          headerIndex: 0,
+          top: 0,
+          bottom: 28,
+          sectionBottom: 100
+        },
+        {
+          groupId: 'sub-pinned',
+          bucketKey: 'parent:p1',
+          headerIndex: 0,
+          top: 60,
+          bottom: 88,
+          sectionBottom: 100
+        },
+        {
+          groupId: 'p2',
+          bucketKey: 'root',
+          headerIndex: 1,
+          top: 220,
+          bottom: 248,
+          sectionBottom: 300
+        },
+        {
+          groupId: 'u-root',
+          bucketKey: 'root',
+          headerIndex: 2,
+          top: 340,
+          bottom: 368,
+          sectionBottom: 368
+        }
+      ],
+      sidebarProjectGroupHeaderIdsByBucket: new Map([
+        ['root', ['p1', 'p2', 'u-root']],
+        ['parent:p1', ['sub-pinned']]
+      ]),
+      contentBottom: 380
+    })
+    expect(overTallPinnedRootPrefix).toEqual({
+      kind: 'slot',
+      targetBucketKey: 'root',
+      dropIndex: 0,
+      dropIndicatorY: 336
+    })
+  })
+
+  it('anchors the drop indicator right above the first unpinned project when dropping a group into a subgroup-less group in recent mode', () => {
+    const targetParent = group('g-parent', { tabOrder: 0 })
+    const draggedRoot = group('g-drag', { tabOrder: 1 })
+    const groups = [targetParent, draggedRoot]
+    const byId = new Map(groups.map((entry) => [entry.id, entry]))
+
+    const target = computeCombinedProjectGroupHeaderDropTarget({
+      pointerY: 110,
+      containerTop: 0,
+      scrollTop: 0,
+      draggedGroup: draggedRoot,
+      projectGroupById: byId,
+      reparentableGroupIds: getReparentableTargetGroupIdsForGroup(draggedRoot, groups),
+      groupHeaderRects: [
+        {
+          groupId: 'g-parent',
+          bucketKey: 'root',
+          headerIndex: 0,
+          top: 0,
+          bottom: 28,
+          sectionBottom: 152
+        },
+        {
+          groupId: 'g-drag',
+          bucketKey: 'root',
+          headerIndex: 1,
+          top: 156,
+          bottom: 184,
+          sectionBottom: 184
+        }
+      ],
+      repoHeaderRects: [
+        {
+          repoId: 'r-pinned',
+          bucketKey: 'group:g-parent',
+          headerIndex: 0,
+          top: 32,
+          bottom: 60,
+          sectionBottom: 88
+        },
+        {
+          repoId: 'r-unpinned',
+          bucketKey: 'group:g-parent',
+          headerIndex: 1,
+          top: 92,
+          bottom: 120,
+          sectionBottom: 152
+        }
+      ],
+      pinnedRepoHeaderIds: new Set(['r-pinned']),
+      sidebarProjectGroupHeaderIdsByBucket: new Map([['root', ['g-parent', 'g-drag']]]),
+      contentBottom: 184
+    })
+
+    expect(target).toEqual({
+      kind: 'slot',
+      targetBucketKey: 'parent:g-parent',
+      dropIndex: 0,
+      dropIndicatorY: 88
+    })
+  })
 })

@@ -8,8 +8,13 @@ import {
   type RootProjectEntry
 } from '../../../../../../shared/root-project-order'
 import { getCatalogHostIdForExecutionHost } from './group-header-hit-geometry'
+import { isRepoHeaderIdPinned } from './header-drag-pin-tier'
 import { ROOT_INTERLEAVED_GROUP_BUCKET_KEY } from './project-group-header-drag-contract'
-import type { ProjectGroupHeaderDropTarget } from './project-group-header-reparent-drop'
+import type { ProjectGroupHeaderDragBucketKey } from './project-group-header-drop'
+import {
+  filterProjectGroupIdsByCatalogHost,
+  type ProjectGroupHeaderDropTarget
+} from './project-group-header-reparent-drop'
 
 export type RootPromotionPlacement = {
   groupInsertIndex: number
@@ -21,10 +26,11 @@ export type RootPromotionPlacement = {
 
 export function resolveRootPromotionPlacement(args: {
   draggedGroup: ProjectGroup
-  existingSiblingIds: readonly string[]
+  existingUnpinnedSiblingIds: readonly string[]
   dropTarget: ProjectGroupHeaderDropTarget
   projectGroupById: ReadonlyMap<string, ProjectGroup>
   repos?: readonly Repo[]
+  pinnedRepoHeaderIds?: ReadonlySet<string>
   rootProjectHeaderKeys?: readonly string[]
   nextRootProjectOrder?: number
 }): RootPromotionPlacement {
@@ -33,14 +39,18 @@ export function resolveRootPromotionPlacement(args: {
   )
   const repoOrder = getLogicalRepoOrderRankById((args.repos ?? []).map((repo) => repo.id))
   const anyRepoById = new Map<string, Repo>()
-  const sameHostUngroupedRepoById = new Map<string, Repo>()
+  const sameHostUnpinnedUngroupedRepoById = new Map<string, Repo>()
   for (const repo of args.repos ?? []) {
     anyRepoById.set(repo.id, repo)
+  }
+  for (const repo of args.repos ?? []) {
     if (
       getCatalogHostIdForExecutionHost(getRepoExecutionHostId(repo)) === draggedCatalogHostId &&
-      (!repo.projectGroupId || !args.projectGroupById.has(repo.projectGroupId))
+      (!repo.projectGroupId || !args.projectGroupById.has(repo.projectGroupId)) &&
+      !isRepoHeaderIdPinned(repo.id, args.pinnedRepoHeaderIds, anyRepoById) &&
+      repo.isPinned !== true
     ) {
-      sameHostUngroupedRepoById.set(repo.id, repo)
+      sameHostUnpinnedUngroupedRepoById.set(repo.id, repo)
     }
   }
 
@@ -63,7 +73,7 @@ export function resolveRootPromotionPlacement(args: {
       Math.min(interleavedKeys.length, args.dropTarget.dropIndex)
     )
     interleavedDropIndex = clampedDropIndex
-    const siblingSet = new Set(args.existingSiblingIds)
+    const siblingSet = new Set(args.existingUnpinnedSiblingIds)
     for (const [keyIndex, key] of interleavedKeys.entries()) {
       if (keyIndex === clampedDropIndex) {
         rootInsertIndex = entries.length
@@ -79,7 +89,7 @@ export function resolveRootPromotionPlacement(args: {
         }
       } else if (key.startsWith('repo:')) {
         const repoId = key.slice('repo:'.length)
-        const repo = sameHostUngroupedRepoById.get(repoId) ?? anyRepoById.get(repoId)
+        const repo = sameHostUnpinnedUngroupedRepoById.get(repoId) ?? anyRepoById.get(repoId)
         if (repo) {
           entries.push({ kind: 'repo', repo })
         }
@@ -91,20 +101,20 @@ export function resolveRootPromotionPlacement(args: {
   } else {
     groupInsertIndex =
       args.dropTarget.kind === 'group-header'
-        ? args.existingSiblingIds.length
-        : Math.max(0, Math.min(args.existingSiblingIds.length, args.dropTarget.dropIndex))
+        ? args.existingUnpinnedSiblingIds.length
+        : Math.max(0, Math.min(args.existingUnpinnedSiblingIds.length, args.dropTarget.dropIndex))
     entries = [
-      ...args.existingSiblingIds
+      ...args.existingUnpinnedSiblingIds
         .map((id) => args.projectGroupById.get(id))
         .filter((group): group is ProjectGroup => group !== undefined)
         .map((group): RootProjectEntry => ({ kind: 'group', group })),
-      ...[...sameHostUngroupedRepoById.values()].map((repo): RootProjectEntry => ({
+      ...[...sameHostUnpinnedUngroupedRepoById.values()].map((repo): RootProjectEntry => ({
         kind: 'repo',
         repo
       }))
     ].sort((left, right) => compareRootProjectEntries(left, right, repoOrder))
     if (groupInsertIndex > 0) {
-      const prevSiblingId = args.existingSiblingIds[groupInsertIndex - 1]
+      const prevSiblingId = args.existingUnpinnedSiblingIds[groupInsertIndex - 1]
       const prevIdx = entries.findIndex(
         (entry) => entry.kind === 'group' && entry.group.id === prevSiblingId
       )
@@ -170,5 +180,80 @@ export function resolveRootPromotionPlacement(args: {
       args.draggedGroup.rootProjectOrder !== undefined ? { rootProjectOrder: null } : {},
     interleavedDropIndex,
     needsInterleavedRespace: false
+  }
+}
+
+export function maybeRespacePromotedRootOrder(args: {
+  draggedGroup: ProjectGroup
+  dropTarget: ProjectGroupHeaderDropTarget
+  projectGroupById: ReadonlyMap<string, ProjectGroup>
+  repos?: readonly Repo[]
+  pinnedRepoHeaderIds?: ReadonlySet<string>
+  rootProjectHeaderKeys?: readonly string[]
+  rootProjectHeaderHostId?: string
+  sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
+    ProjectGroupHeaderDragBucketKey,
+    readonly string[]
+  >
+  nextRootProjectOrder?: number
+  onCommitRootProjectOrder?: (
+    keys: readonly string[],
+    draggedKey: string,
+    sidebarDropIndex: number,
+    hostId?: string
+  ) => void
+}): void {
+  if (
+    args.dropTarget.kind !== 'slot' ||
+    (args.dropTarget.targetBucketKey !== ROOT_INTERLEAVED_GROUP_BUCKET_KEY &&
+      args.dropTarget.targetBucketKey !== 'root') ||
+    !args.onCommitRootProjectOrder
+  ) {
+    return
+  }
+  const existingUnpinnedSiblingIds = filterProjectGroupIdsByCatalogHost(
+    args.sidebarProjectGroupHeaderIdsByBucket.get('root') ?? [],
+    getRepoExecutionHostId(args.draggedGroup),
+    args.projectGroupById
+  ).filter(
+    (groupId) =>
+      groupId !== args.draggedGroup.id && args.projectGroupById.get(groupId)?.isPinned !== true
+  )
+  const placement = resolveRootPromotionPlacement({
+    draggedGroup: args.draggedGroup,
+    existingUnpinnedSiblingIds,
+    dropTarget: args.dropTarget,
+    projectGroupById: args.projectGroupById,
+    repos: args.repos,
+    pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+    rootProjectHeaderKeys: args.rootProjectHeaderKeys,
+    nextRootProjectOrder: args.nextRootProjectOrder
+  })
+  const baseKeys =
+    args.dropTarget.targetBucketKey === ROOT_INTERLEAVED_GROUP_BUCKET_KEY &&
+    args.rootProjectHeaderKeys
+      ? args.rootProjectHeaderKeys
+      : placement.respaceKeys
+  if (
+    placement.needsInterleavedRespace &&
+    placement.interleavedDropIndex !== undefined &&
+    baseKeys
+  ) {
+    const interleavedKeys = baseKeys.filter((key) => key !== `group:${args.draggedGroup.id}`)
+    interleavedKeys.splice(placement.interleavedDropIndex, 0, `group:${args.draggedGroup.id}`)
+    if (args.rootProjectHeaderHostId !== undefined) {
+      args.onCommitRootProjectOrder(
+        interleavedKeys,
+        `group:${args.draggedGroup.id}`,
+        placement.interleavedDropIndex,
+        args.rootProjectHeaderHostId
+      )
+    } else {
+      args.onCommitRootProjectOrder(
+        interleavedKeys,
+        `group:${args.draggedGroup.id}`,
+        placement.interleavedDropIndex
+      )
+    }
   }
 }

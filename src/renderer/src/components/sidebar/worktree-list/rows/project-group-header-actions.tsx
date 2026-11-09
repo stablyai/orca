@@ -1,5 +1,14 @@
 import React from 'react'
-import { CornerLeftUp, Ellipsis, FolderInput, FolderTree, Plus, RefreshCw } from 'lucide-react'
+import {
+  CornerLeftUp,
+  Ellipsis,
+  FolderInput,
+  FolderTree,
+  Pin,
+  PinOff,
+  Plus,
+  RefreshCw
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -37,7 +46,9 @@ export function ProjectGroupHeaderMenu({
   hostId,
   label,
   projectGroup,
+  isPinned,
   projectGroups = EMPTY_PROJECT_GROUPS,
+  onTogglePinGroup,
   onRefreshProjectGroup,
   onCreateSubgroup,
   onMoveGroup,
@@ -49,7 +60,9 @@ export function ProjectGroupHeaderMenu({
   hostId?: ExecutionHostId
   label: string
   projectGroup: ProjectGroup | null
+  isPinned?: boolean
   projectGroups?: readonly ProjectGroup[]
+  onTogglePinGroup?: (groupId: string, nextPinned: boolean, hostId?: ExecutionHostId) => void
   onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
   onCreateSubgroup?: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
   onMoveGroup?: (groupId: string, parentGroupId: string | null, hostId?: ExecutionHostId) => void
@@ -57,6 +70,7 @@ export function ProjectGroupHeaderMenu({
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const effectiveIsPinned = isPinned ?? projectGroup?.isPinned === true
   const onRefresh = getFolderProjectGroupRefreshHandler(projectGroup, onRefreshProjectGroup)
   const reparentableEntries = React.useMemo(
     () =>
@@ -103,6 +117,14 @@ export function ProjectGroupHeaderMenu({
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
+        {onTogglePinGroup ? (
+          <DropdownMenuItem onSelect={() => onTogglePinGroup(groupId, !effectiveIsPinned, hostId)}>
+            {effectiveIsPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+            {effectiveIsPinned
+              ? t('auto.components.sidebar.WorktreeList.unpinGroup', 'Unpin group')
+              : t('auto.components.sidebar.WorktreeList.pinGroup', 'Pin group')}
+          </DropdownMenuItem>
+        ) : null}
         {onRefresh ? (
           <DropdownMenuItem onSelect={onRefresh}>
             <RefreshCw className="size-3.5" />

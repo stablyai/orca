@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type React from 'react'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
@@ -12,19 +12,11 @@ import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-
 import type { RenderRow } from '../listing/render-row'
 import { useHostHeaderDrag } from './host-header-drag'
 import { useRepoHeaderDrag } from './project-header-drag'
-import { getProjectHeaderDragBucketKey } from './project-header-drop'
-import { canRepoStartHeaderDrag, getJoinableGroupIdsForRepo } from './project-header-group-drop'
 import { useProjectGroupHeaderDrag } from './project-group-header-drag'
-import { getProjectGroupHeaderDragBucketKey } from './project-group-header-drop'
-import {
-  canProjectGroupStartHeaderDrag,
-  getReparentableTargetGroupIdsForGroup
-} from './project-group-header-reparent-drop'
 import { readLiveRepos, useHeaderDragCommitActions } from './use-header-drag-commit-actions'
 import { useHeaderDragIndexing } from './use-header-drag-indexing'
 import {
   getRootProjectHeaderCountByOccurrenceKey,
-  getRootProjectHeaderDragKeys,
   getSidebarRootProjectHeaderKeys
 } from './root-project-header-drop'
 
@@ -81,11 +73,24 @@ export function useWorktreeSidebarHeaderDrag(args: {
     () => getRootProjectHeaderCountByOccurrenceKey(rootProjectHeaderKeys),
     [rootProjectHeaderKeys]
   )
-  const indexing = useHeaderDragIndexing({ rows, renderRows, firstHeaderIndex, projectGroups })
+  const indexing = useHeaderDragIndexing({
+    rows,
+    renderRows,
+    firstHeaderIndex,
+    projectGroups,
+    repoMap,
+    rootProjectHeaderKeys,
+    canDragRepoHeaders,
+    canReorderRepoHeaders,
+    canReorderProjectGroupHeaders
+  })
   const commitActions = useHeaderDragCommitActions({
+    allRepoIds,
+    repoMap,
     projectGroupByIdForHeaderDrag: indexing.projectGroupByIdForHeaderDrag,
     projectGroupOwnerHostIdByGroupId: indexing.projectGroupOwnerHostIdByGroupId,
     sidebarProjectGroupHeaderIdsByBucket: indexing.sidebarProjectGroupHeaderIdsByBucket,
+    sidebarGroupChildItemIdsByGroupId: indexing.sidebarGroupChildItemIdsByGroupId,
     suppressMeasurementAdjustmentUntilRef,
     directScrollInputUntilRef
   })
@@ -107,82 +112,21 @@ export function useWorktreeSidebarHeaderDrag(args: {
   }, [hostDrag.state.draggingHostId, onHostDragActiveChange])
   useEffect(() => () => onHostDragActiveChange(false), [onHostDragActiveChange])
 
-  const canDragProjectHeader = useCallback(
-    (repo: Repo, groupRepo?: Repo | null) => {
-      if (!canDragRepoHeaders) {
-        return false
-      }
-      const effectiveGroupRepo = groupRepo === undefined ? repo : groupRepo
-      const bucketOwnerRepo = effectiveGroupRepo ?? repo
-      const bucketKey = getProjectHeaderDragBucketKey(bucketOwnerRepo)
-      const bucketItemCount = indexing.sidebarRepoHeaderIdsByBucket.get(bucketKey)?.length ?? 0
-      return canRepoStartHeaderDrag({
-        repo: bucketOwnerRepo,
-        allowSlotReorder: canReorderRepoHeaders,
-        bucketItemCount,
-        joinableGroupIds: effectiveGroupRepo
-          ? getJoinableGroupIdsForRepo(effectiveGroupRepo, projectGroups)
-          : new Set<string>()
-      })
-    },
-    [
-      canDragRepoHeaders,
-      canReorderRepoHeaders,
-      indexing.sidebarRepoHeaderIdsByBucket,
-      projectGroups
-    ]
-  )
-  const canDragProjectGroupHeader = useCallback(
-    (groupId: string) => {
-      if (!canReorderProjectGroupHeaders) {
-        return false
-      }
-      const ownerHostId = indexing.projectGroupOwnerHostIdByGroupId.get(groupId)
-      if (!ownerHostId) {
-        return false
-      }
-      const group = indexing.projectGroupByIdForHeaderDrag.get(groupId)
-      if (!group) {
-        return false
-      }
-      const bucketKey = getProjectGroupHeaderDragBucketKey(
-        group,
-        indexing.projectGroupByIdForHeaderDrag
-      )
-      const rootProjectHeaderCount =
-        bucketKey === 'root' && rootProjectHeaderKeys
-          ? getRootProjectHeaderDragKeys(rootProjectHeaderKeys, `group:${groupId}`, ownerHostId)
-              ?.length
-          : undefined
-      return canProjectGroupStartHeaderDrag({
-        group,
-        projectGroupById: indexing.projectGroupByIdForHeaderDrag,
-        sidebarBucketHeaderIds: indexing.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? [],
-        rootProjectHeaderCount,
-        reparentableGroupIds: getReparentableTargetGroupIdsForGroup(group, projectGroups)
-      })
-    },
-    [
-      canReorderProjectGroupHeaders,
-      indexing.projectGroupByIdForHeaderDrag,
-      indexing.projectGroupOwnerHostIdByGroupId,
-      indexing.sidebarProjectGroupHeaderIdsByBucket,
-      projectGroups,
-      rootProjectHeaderKeys
-    ]
-  )
-
   // Drag applies only in manual order; still construct the controller inert for stable hook order.
   const repoDrag = useRepoHeaderDrag({
     orderedRepoIds: allRepoIds,
     sidebarRepoHeaderIdsByBucket: indexing.sidebarRepoHeaderIdsByBucket,
+    sidebarGroupChildItemIdsByGroupId: indexing.sidebarGroupChildItemIdsByGroupId,
+    pinnedRepoHeaderIds: indexing.pinnedRepoHeaderIds,
     repoById: repoMap,
+    projectGroupById: indexing.projectGroupByIdForHeaderDrag,
     projectGroups,
     getLiveRepos: readLiveRepos,
     allowSlotReorder: canReorderRepoHeaders,
     usesProjectGroupOrdering: hasProjectGroups,
     onCommitRepoOrder: commitActions.commitRepoReorder,
     onCommitProjectGroupOrder: commitActions.commitProjectGroupOrder,
+    onCommitProjectGroupUpdate: commitActions.commitProjectGroupHeaderUpdate,
     onMoveToGroupHeader: commitActions.moveRepoToGroupHeader,
     rootProjectHeaderKeys,
     onCommitRootProjectOrder: commitActions.commitRootProjectOrder,
@@ -190,12 +134,18 @@ export function useWorktreeSidebarHeaderDrag(args: {
   })
   const projectGroupDrag = useProjectGroupHeaderDrag({
     sidebarProjectGroupHeaderIdsByBucket: indexing.sidebarProjectGroupHeaderIdsByBucket,
+    sidebarGroupChildItemIdsByGroupId: indexing.sidebarGroupChildItemIdsByGroupId,
+    allowMixedProjectReorder: canReorderRepoHeaders,
     projectGroupById: indexing.projectGroupByIdForHeaderDrag,
+    repoById: repoMap,
+    pinnedRepoHeaderIds: indexing.pinnedRepoHeaderIds,
+    orderedRepoIds: allRepoIds,
     projectGroupOwnerHostIdByGroupId: indexing.projectGroupOwnerHostIdByGroupId,
     getLiveRepos: readLiveRepos,
     rootProjectHeaderKeys,
     onCommitRootProjectOrder: commitActions.commitRootProjectOrder,
     onCommitProjectGroupUpdate: commitActions.commitProjectGroupHeaderUpdate,
+    onCommitProjectGroupOrder: commitActions.commitProjectGroupOrder,
     getScrollContainer: () => scrollRef.current
   })
   return {
@@ -203,10 +153,10 @@ export function useWorktreeSidebarHeaderDrag(args: {
     rootProjectHeaderSectionEndByKey: indexing.rootProjectHeaderSectionEndByKey,
     canReorderRepoHeaders,
     canDragRepoHeaders,
-    canDragProjectHeader,
+    canDragProjectHeader: indexing.canDragProjectHeader,
     canReorderProjectGroupHeaders,
     rootProjectHeaderKeys,
-    canDragProjectGroupHeader,
+    canDragProjectGroupHeader: indexing.canDragProjectGroupHeader,
     moveProjectGroupToParent: commitActions.moveProjectGroupToParent,
     orderedHostIds,
     hostDrag,

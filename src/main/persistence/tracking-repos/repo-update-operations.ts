@@ -113,6 +113,7 @@ export class RepoUpdatePersistenceOperations {
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
+        | 'isPinned'
         | 'projectHostSetupMethod'
       >
     > & {
@@ -161,6 +162,9 @@ export class RepoUpdatePersistenceOperations {
         sanitizedUpdates.worktreeVisibilitySourcePreferences = preferences
       }
     }
+    if ('isPinned' in sanitizedUpdates && typeof sanitizedUpdates.isPinned !== 'boolean') {
+      delete sanitizedUpdates.isPinned
+    }
     if ('projectGroupId' in sanitizedUpdates) {
       const nextGroupId = sanitizedUpdates.projectGroupId
       if (
@@ -169,6 +173,12 @@ export class RepoUpdatePersistenceOperations {
         !this.state.projectGroups.some((group) => group.id === nextGroupId)
       ) {
         sanitizedUpdates.projectGroupId = null
+      }
+      if (
+        (sanitizedUpdates.projectGroupId ?? null) !== (repo.projectGroupId ?? null) &&
+        sanitizedUpdates.isPinned === undefined
+      ) {
+        sanitizedUpdates.isPinned = false
       }
     }
     if (sanitizedUpdates.projectGroupOrder === null) {

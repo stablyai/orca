@@ -1,8 +1,9 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { computeProjectGroupChildDropMutations } from './project-group-child-drop-commit'
+import type { ProjectGroupChildItemId } from './project-group-child-slot-order'
 import {
   getProjectGroupHeaderDragBucketKey,
-  getProjectGroupTabOrderUpdatesForSidebarDrop,
+  mapSidebarProjectGroupDropIndexToSiblingInsertIndex,
   type ProjectGroupHeaderDragBucketKey
 } from './project-group-header-drop'
 import {
@@ -16,14 +17,17 @@ import {
   type ProjectGroupHeaderDragSession,
   type ProjectGroupHeaderUpdatePatch
 } from './project-group-header-drag-contract'
-import { resolveRootPromotionPlacement } from './project-group-root-promotion-order'
+import {
+  maybeRespacePromotedRootOrder,
+  resolveRootPromotionPlacement
+} from './project-group-root-promotion-order'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
 
-export type ProjectGroupDropMutation = {
-  groupId: string
-  updates: ProjectGroupHeaderUpdatePatch
-}
+export type ProjectGroupDropMutation =
+  | { groupId: string; updates: ProjectGroupHeaderUpdatePatch }
+  | { kind: 'repo'; repo: Repo; projectGroupId: string; order: number }
 
 export function getProjectGroupMutationsForDrop(args: {
   draggedGroup: ProjectGroup
@@ -32,6 +36,11 @@ export function getProjectGroupMutationsForDrop(args: {
   projectGroupById: ReadonlyMap<string, ProjectGroup>
   repos?: readonly Repo[]
   rootProjectHeaderKeys?: readonly string[]
+  allowMixedProjectReorder?: boolean
+  sidebarGroupChildItemIdsByGroupId?: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
+  repoById?: ReadonlyMap<string, Repo>
+  pinnedRepoHeaderIds?: ReadonlySet<string>
+  orderedRepoIds?: readonly string[]
   sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
@@ -43,6 +52,56 @@ export function getProjectGroupMutationsForDrop(args: {
     return []
   }
   const draggedHostId = getRepoExecutionHostId(args.draggedGroup)
+  const targetParentGroupId =
+    args.dropTarget.kind === 'group-header'
+      ? args.dropTarget.groupId
+      : parseParentGroupIdFromBucketKey(args.dropTarget.targetBucketKey)
+  const currentParentGroupId = parseParentGroupIdFromBucketKey(liveBucketKey)
+
+  if (args.dropTarget.kind === 'group-header' && targetParentGroupId === currentParentGroupId) {
+    return []
+  }
+  if (targetParentGroupId !== null && targetParentGroupId !== currentParentGroupId) {
+    const reparentableIds = getReparentableTargetGroupIdsForGroup(args.draggedGroup, [
+      ...args.projectGroupById.values()
+    ])
+    if (!reparentableIds.has(targetParentGroupId)) {
+      return []
+    }
+  }
+
+  if (
+    targetParentGroupId !== null &&
+    args.allowMixedProjectReorder &&
+    args.sidebarGroupChildItemIdsByGroupId
+  ) {
+    const isCrossBucket =
+      args.dropTarget.kind === 'group-header' ||
+      args.dropTarget.targetBucketKey !== args.sourceBucketKey
+    const childMutations = computeProjectGroupChildDropMutations({
+      parentGroupId: targetParentGroupId,
+      draggedItem: { kind: 'group', group: args.draggedGroup },
+      isCrossBucket,
+      dropIndex: args.dropTarget.kind === 'group-header' ? 'append' : args.dropTarget.dropIndex,
+      dragHostId: draggedHostId,
+      allChildItemIds: args.sidebarGroupChildItemIdsByGroupId.get(targetParentGroupId) ?? [],
+      projectGroupById: args.projectGroupById,
+      liveRepos: args.repos,
+      repoById: args.repoById,
+      pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+      orderedRepoIds: args.orderedRepoIds
+    })
+    return childMutations.map((mutation) =>
+      mutation.kind === 'group'
+        ? { groupId: mutation.groupId, updates: mutation.updates }
+        : mutation
+    )
+  }
+
+  const partitionGroupIdsByPin = (ids: readonly string[]) => ({
+    pinned: ids.filter((id) => args.projectGroupById.get(id)?.isPinned === true),
+    unpinned: ids.filter((id) => args.projectGroupById.get(id)?.isPinned !== true)
+  })
 
   if (args.dropTarget.kind === 'slot' && args.dropTarget.targetBucketKey === args.sourceBucketKey) {
     const sameHostHeaderIds = filterProjectGroupIdsByCatalogHost(
@@ -50,32 +109,36 @@ export function getProjectGroupMutationsForDrop(args: {
       draggedHostId,
       args.projectGroupById
     )
-    return getProjectGroupTabOrderUpdatesForSidebarDrop({
-      sidebarProjectGroupHeaderIds: sameHostHeaderIds,
-      draggedGroupId: args.draggedGroup.id,
-      sidebarDropIndex: args.dropTarget.dropIndex,
-      projectGroupById: args.projectGroupById
-    }).map((update) => ({
-      groupId: update.groupId,
-      updates: { tabOrder: update.tabOrder }
-    }))
-  }
-
-  const targetParentGroupId =
-    args.dropTarget.kind === 'group-header'
-      ? args.dropTarget.groupId
-      : parseParentGroupIdFromBucketKey(args.dropTarget.targetBucketKey)
-  const currentParentGroupId = parseParentGroupIdFromBucketKey(liveBucketKey)
-  if (args.dropTarget.kind === 'group-header' && targetParentGroupId === currentParentGroupId) {
-    return []
-  }
-  if (targetParentGroupId !== null) {
-    const reparentableIds = getReparentableTargetGroupIdsForGroup(args.draggedGroup, [
-      ...args.projectGroupById.values()
-    ])
-    if (!reparentableIds.has(targetParentGroupId)) {
+    const draggedPinned = args.draggedGroup.isPinned === true
+    const { pinned: pinnedIds, unpinned: unpinnedIds } = partitionGroupIdsByPin(sameHostHeaderIds)
+    const tierIds = draggedPinned ? pinnedIds : unpinnedIds
+    const sourceIndex = tierIds.indexOf(args.draggedGroup.id)
+    if (sourceIndex === -1) {
       return []
     }
+    const tierSiblingIds = tierIds.filter((id) => id !== args.draggedGroup.id)
+    const siblingDropIndex = mapSidebarProjectGroupDropIndexToSiblingInsertIndex({
+      sidebarDropIndex: args.dropTarget.dropIndex,
+      sourceIndex,
+      siblingCount: tierSiblingIds.length
+    })
+    if (siblingDropIndex === Math.min(sourceIndex, tierSiblingIds.length)) {
+      return []
+    }
+    const reorderedTierIds = tierSiblingIds.slice()
+    reorderedTierIds.splice(siblingDropIndex, 0, args.draggedGroup.id)
+    const orderedIds = draggedPinned
+      ? [...reorderedTierIds, ...unpinnedIds]
+      : [...pinnedIds, ...reorderedTierIds]
+
+    const mutations: ProjectGroupDropMutation[] = []
+    for (const [index, groupId] of orderedIds.entries()) {
+      const group = args.projectGroupById.get(groupId)
+      if (group && group.tabOrder !== index) {
+        mutations.push({ groupId, updates: { tabOrder: index } })
+      }
+    }
+    return mutations
   }
 
   const targetBucketKey: ProjectGroupHeaderDragBucketKey = targetParentGroupId
@@ -86,14 +149,17 @@ export function getProjectGroupMutationsForDrop(args: {
     draggedHostId,
     args.projectGroupById
   ).filter((groupId) => groupId !== args.draggedGroup.id)
+  const { pinned: pinnedSiblingIds, unpinned: unpinnedSiblingIds } =
+    partitionGroupIdsByPin(existingSiblingIds)
   const rootPlacement =
     targetParentGroupId === null
       ? resolveRootPromotionPlacement({
           draggedGroup: args.draggedGroup,
-          existingSiblingIds,
+          existingUnpinnedSiblingIds: unpinnedSiblingIds,
           dropTarget: args.dropTarget,
           projectGroupById: args.projectGroupById,
           repos: args.repos,
+          pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
           rootProjectHeaderKeys: args.rootProjectHeaderKeys,
           nextRootProjectOrder: args.nextRootProjectOrder
         })
@@ -101,10 +167,11 @@ export function getProjectGroupMutationsForDrop(args: {
   const insertIndex = rootPlacement
     ? rootPlacement.groupInsertIndex
     : args.dropTarget.kind === 'group-header'
-      ? existingSiblingIds.length
-      : Math.max(0, Math.min(existingSiblingIds.length, args.dropTarget.dropIndex))
-  const orderedIds = existingSiblingIds.slice()
-  orderedIds.splice(insertIndex, 0, args.draggedGroup.id)
+      ? unpinnedSiblingIds.length
+      : Math.max(0, Math.min(unpinnedSiblingIds.length, args.dropTarget.dropIndex))
+  const nextUnpinnedIds = unpinnedSiblingIds.slice()
+  nextUnpinnedIds.splice(insertIndex, 0, args.draggedGroup.id)
+  const orderedIds = [...pinnedSiblingIds, ...nextUnpinnedIds]
   const rootOrderPatch = rootPlacement
     ? rootPlacement.rootOrderPatch
     : args.draggedGroup.rootProjectOrder !== undefined
@@ -122,10 +189,7 @@ export function getProjectGroupMutationsForDrop(args: {
     }
     const sibling = args.projectGroupById.get(groupId)
     if (sibling && sibling.tabOrder !== index) {
-      mutations.push({
-        groupId,
-        updates: { tabOrder: index }
-      })
+      mutations.push({ groupId, updates: { tabOrder: index } })
     }
   }
   return mutations
@@ -133,10 +197,18 @@ export function getProjectGroupMutationsForDrop(args: {
 
 export async function commitProjectGroupHeaderDragDrop(
   args: RootProjectHeaderDrag & {
-    session: Pick<ProjectGroupHeaderDragSession, 'groupId' | 'bucketKey' | 'rootProjectHeaderKeys'>
+    session: Pick<
+      ProjectGroupHeaderDragSession,
+      'groupId' | 'bucketKey' | 'rootProjectHeaderKeys' | 'rootProjectHeaderHostId'
+    >
     dropTarget: ProjectGroupHeaderDropTarget
     projectGroupById: ReadonlyMap<string, ProjectGroup>
     repos?: readonly Repo[]
+    allowMixedProjectReorder?: boolean
+    sidebarGroupChildItemIdsByGroupId?: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
+    repoById?: ReadonlyMap<string, Repo>
+    pinnedRepoHeaderIds?: ReadonlySet<string>
+    orderedRepoIds?: readonly string[]
     sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
       ProjectGroupHeaderDragBucketKey,
       readonly string[]
@@ -145,6 +217,11 @@ export async function commitProjectGroupHeaderDragDrop(
     onCommitProjectGroupUpdate: (
       groupId: string,
       updates: ProjectGroupHeaderUpdatePatch
+    ) => Promise<boolean> | boolean | void
+    onCommitProjectGroupOrder?: (
+      project: Repo,
+      projectGroupId: string | null,
+      order: number
     ) => Promise<boolean> | boolean | void
   }
 ): Promise<void> {
@@ -157,7 +234,8 @@ export async function commitProjectGroupHeaderDragDrop(
     args.onCommitRootProjectOrder?.(
       args.session.rootProjectHeaderKeys,
       `group:${args.session.groupId}`,
-      args.dropTarget.dropIndex
+      args.dropTarget.dropIndex,
+      args.session.rootProjectHeaderHostId
     )
     return
   }
@@ -172,11 +250,17 @@ export async function commitProjectGroupHeaderDragDrop(
     projectGroupById: args.projectGroupById,
     repos: args.repos,
     rootProjectHeaderKeys: args.session.rootProjectHeaderKeys,
+    allowMixedProjectReorder: args.allowMixedProjectReorder,
+    sidebarGroupChildItemIdsByGroupId: args.sidebarGroupChildItemIdsByGroupId,
+    repoById: args.repoById,
+    pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+    orderedRepoIds: args.orderedRepoIds,
     sidebarProjectGroupHeaderIdsByBucket: args.sidebarProjectGroupHeaderIdsByBucket,
     nextRootProjectOrder: args.nextRootProjectOrder
   })
   const reparentMutation = mutations.find(
-    (mutation) => mutation.updates.parentGroupId !== undefined
+    (mutation): mutation is { groupId: string; updates: ProjectGroupHeaderUpdatePatch } =>
+      !('kind' in mutation) && mutation.updates.parentGroupId !== undefined
   )
   if (reparentMutation) {
     const accepted = await args.onCommitProjectGroupUpdate(
@@ -191,46 +275,34 @@ export async function commitProjectGroupHeaderDragDrop(
     if (mutation === reparentMutation) {
       continue
     }
-    await args.onCommitProjectGroupUpdate(mutation.groupId, mutation.updates)
+    if ('kind' in mutation) {
+      const orderAccepted = await args.onCommitProjectGroupOrder?.(
+        mutation.repo,
+        mutation.projectGroupId,
+        mutation.order
+      )
+      if (orderAccepted === false) {
+        return
+      }
+      continue
+    }
+    const groupAccepted = await args.onCommitProjectGroupUpdate(mutation.groupId, mutation.updates)
+    if (groupAccepted === false) {
+      return
+    }
   }
-  if (
-    reparentMutation?.updates.parentGroupId === null &&
-    args.dropTarget.kind === 'slot' &&
-    (args.dropTarget.targetBucketKey === ROOT_INTERLEAVED_GROUP_BUCKET_KEY ||
-      args.dropTarget.targetBucketKey === 'root') &&
-    args.onCommitRootProjectOrder
-  ) {
-    const existingSiblingIds = filterProjectGroupIdsByCatalogHost(
-      args.sidebarProjectGroupHeaderIdsByBucket.get('root') ?? [],
-      getRepoExecutionHostId(draggedGroup),
-      args.projectGroupById
-    ).filter((groupId) => groupId !== draggedGroup.id)
-    const placement = resolveRootPromotionPlacement({
+  if (reparentMutation?.updates.parentGroupId === null) {
+    maybeRespacePromotedRootOrder({
       draggedGroup,
-      existingSiblingIds,
       dropTarget: args.dropTarget,
       projectGroupById: args.projectGroupById,
       repos: args.repos,
+      pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
       rootProjectHeaderKeys: args.session.rootProjectHeaderKeys,
-      nextRootProjectOrder: args.nextRootProjectOrder
+      rootProjectHeaderHostId: args.session.rootProjectHeaderHostId,
+      sidebarProjectGroupHeaderIdsByBucket: args.sidebarProjectGroupHeaderIdsByBucket,
+      nextRootProjectOrder: args.nextRootProjectOrder,
+      onCommitRootProjectOrder: args.onCommitRootProjectOrder
     })
-    const baseKeys =
-      args.dropTarget.targetBucketKey === ROOT_INTERLEAVED_GROUP_BUCKET_KEY &&
-      args.session.rootProjectHeaderKeys
-        ? args.session.rootProjectHeaderKeys
-        : placement.respaceKeys
-    if (
-      placement.needsInterleavedRespace &&
-      placement.interleavedDropIndex !== undefined &&
-      baseKeys
-    ) {
-      const interleavedKeys = baseKeys.filter((key) => key !== `group:${args.session.groupId}`)
-      interleavedKeys.splice(placement.interleavedDropIndex, 0, `group:${args.session.groupId}`)
-      args.onCommitRootProjectOrder(
-        interleavedKeys,
-        `group:${args.session.groupId}`,
-        placement.interleavedDropIndex
-      )
-    }
   }
 }

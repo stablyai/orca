@@ -91,21 +91,58 @@ function manualRankForEntry(
   return rank
 }
 
+export function isProjectSectionEntryPinned<R extends ProjectSectionRepo>(
+  entry: readonly [string, ProjectSectionEntry<unknown, R>],
+  repoMap?: ReadonlyMap<string, R>,
+  pinnedRepoIds?: ReadonlySet<string>
+): boolean {
+  if (entry[1].repo?.isPinned === true) {
+    return true
+  }
+  if (pinnedRepoIds) {
+    if (entry[1].repo && pinnedRepoIds.has(entry[1].repo.id)) {
+      return true
+    }
+    for (const repoId of entry[1].repoIds) {
+      if (pinnedRepoIds.has(repoId)) {
+        return true
+      }
+    }
+  }
+  if (repoMap) {
+    for (const repoId of entry[1].repoIds) {
+      if (repoMap.get(repoId)?.isPinned === true) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 export function getManualOrderAnchorRepo<R extends ProjectSectionRepo>(
   group: ProjectSectionEntry<unknown, R>,
   repoMap: ReadonlyMap<string, R>,
-  repoOrder: ReadonlyMap<string, number> | undefined
+  repoOrder: ReadonlyMap<string, number> | undefined,
+  pinnedRepoIds?: ReadonlySet<string>
 ): R | undefined {
+  const isPinned = (candidate: R | undefined): boolean =>
+    Boolean(candidate && (candidate.isPinned === true || pinnedRepoIds?.has(candidate.id)))
   let anchor = group.repo
+  let anchorPinned = isPinned(anchor)
   let anchorRank = anchor ? (repoOrder?.get(anchor.id) ?? Number.POSITIVE_INFINITY) : undefined
   for (const repoId of group.repoIds) {
     const repo = repoMap.get(repoId)
     if (!repo) {
       continue
     }
+    const pinned = isPinned(repo)
     const rank = repoOrder?.get(repoId) ?? Number.POSITIVE_INFINITY
-    if (!anchor || rank < (anchorRank ?? Number.POSITIVE_INFINITY)) {
+    const beatsAnchor =
+      !anchor ||
+      (pinned !== anchorPinned ? pinned : rank < (anchorRank ?? Number.POSITIVE_INFINITY))
+    if (beatsAnchor) {
       anchor = repo
+      anchorPinned = pinned
       anchorRank = rank
     }
   }
@@ -118,7 +155,9 @@ export function sortProjectEntries<
 >(
   entries: T[],
   projectOrderBy: ProjectOrderBy,
-  repoOrder: ReadonlyMap<string, number> | undefined
+  repoOrder: ReadonlyMap<string, number> | undefined,
+  repoMap?: ReadonlyMap<string, ProjectSectionRepo>,
+  pinnedRepoIds?: ReadonlySet<string>
 ): T[] {
   if (projectOrderBy === 'recent') {
     if (entries.length < 2) {
@@ -126,6 +165,12 @@ export function sortProjectEntries<
     }
     const getRecentRank = createRecentRankLookup<T>()
     return [...entries].sort((a, b) => {
+      const byPin =
+        (isProjectSectionEntryPinned(b, repoMap, pinnedRepoIds) ? 1 : 0) -
+        (isProjectSectionEntryPinned(a, repoMap, pinnedRepoIds) ? 1 : 0)
+      if (byPin !== 0) {
+        return byPin
+      }
       const byRecent = compareRecentRank(getRecentRank(a), getRecentRank(b))
       if (byRecent !== 0) {
         return byRecent
@@ -139,9 +184,22 @@ export function sortProjectEntries<
     })
   }
   if (!repoOrder) {
-    return entries
+    if (!entries.some((entry) => isProjectSectionEntryPinned(entry, repoMap, pinnedRepoIds))) {
+      return entries
+    }
+    return [...entries].sort(
+      (a, b) =>
+        (isProjectSectionEntryPinned(b, repoMap, pinnedRepoIds) ? 1 : 0) -
+        (isProjectSectionEntryPinned(a, repoMap, pinnedRepoIds) ? 1 : 0)
+    )
   }
   return [...entries].sort((a, b) => {
+    const byPin =
+      (isProjectSectionEntryPinned(b, repoMap, pinnedRepoIds) ? 1 : 0) -
+      (isProjectSectionEntryPinned(a, repoMap, pinnedRepoIds) ? 1 : 0)
+    if (byPin !== 0) {
+      return byPin
+    }
     const ra = manualRankForEntry(a, repoOrder)
     const rb = manualRankForEntry(b, repoOrder)
     if (ra !== rb) {
@@ -159,13 +217,20 @@ export function orderProjectSections<
   sections: ReadonlyMap<string, E>,
   repoMap: ReadonlyMap<string, R>,
   repoOrder: ReadonlyMap<string, number> | undefined,
-  projectOrderBy: ProjectOrderBy
+  projectOrderBy: ProjectOrderBy,
+  pinnedRepoIds?: ReadonlySet<string>
 ): [string, E][] {
   for (const section of sections.values()) {
-    section.repo = getManualOrderAnchorRepo(section, repoMap, repoOrder)
+    section.repo = getManualOrderAnchorRepo(section, repoMap, repoOrder, pinnedRepoIds)
   }
   // Project header order is independent of workspace sortBy.
-  return sortProjectEntries(Array.from(sections.entries()), projectOrderBy, repoOrder)
+  return sortProjectEntries(
+    Array.from(sections.entries()),
+    projectOrderBy,
+    repoOrder,
+    repoMap,
+    pinnedRepoIds
+  )
 }
 
 /** Each repo id's rank in catalog order; the first occurrence wins across hosts. */

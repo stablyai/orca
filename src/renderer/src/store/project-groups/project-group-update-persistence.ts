@@ -22,6 +22,7 @@ function groupOrderMatchesUpdate(
 
 type PersistProjectGroupUpdateOptions = {
   onParentGroupMoveRejected?: () => void
+  onPinRejected?: () => void
   onStageCommitted?: (group: ProjectGroup) => void
 }
 
@@ -35,6 +36,10 @@ function verifyProjectGroupMatchesUpdate(
     (group.parentGroupId ?? null) !== updates.parentGroupId
   ) {
     options?.onParentGroupMoveRejected?.()
+    return false
+  }
+  if (updates.isPinned !== undefined && group.isPinned !== updates.isPinned) {
+    options?.onPinRejected?.()
     return false
   }
   return groupOrderMatchesUpdate(group, updates)
@@ -93,6 +98,9 @@ export async function persistProjectGroupUpdate(
   ) {
     if (updates.parentGroupId !== undefined) {
       options?.onParentGroupMoveRejected?.()
+    }
+    if (updates.isPinned !== undefined) {
+      options?.onPinRejected?.()
     }
     return null
   }
@@ -164,6 +172,7 @@ export async function persistProjectGroupUpdates(
     return []
   }
   let notifiedParentMoveRejected = false
+  let notifiedPinRejected = false
   const dedupedOptions: PersistProjectGroupUpdateOptions | undefined = options
     ? {
         onParentGroupMoveRejected: options.onParentGroupMoveRejected
@@ -171,6 +180,14 @@ export async function persistProjectGroupUpdates(
               if (!notifiedParentMoveRejected) {
                 notifiedParentMoveRejected = true
                 options.onParentGroupMoveRejected?.()
+              }
+            }
+          : undefined,
+        onPinRejected: options.onPinRejected
+          ? () => {
+              if (!notifiedPinRejected) {
+                notifiedPinRejected = true
+                options.onPinRejected?.()
               }
             }
           : undefined,
@@ -187,6 +204,9 @@ export async function persistProjectGroupUpdates(
   ) {
     if (mutations.some(({ updates }) => updates.parentGroupId !== undefined)) {
       dedupedOptions?.onParentGroupMoveRejected?.()
+    }
+    if (mutations.some(({ updates }) => updates.isPinned !== undefined)) {
+      dedupedOptions?.onPinRejected?.()
     }
     return mutations.map(() => null)
   }

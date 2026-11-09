@@ -36,3 +36,27 @@ export function notifyProjectMoveFailed(): void {
     translate('auto.store.slices.repos.moveToGroupOtherHost', 'Could not move project to group')
   )
 }
+
+export function notifyProjectGroupPinRejected(): void {
+  toast.error(
+    translate('auto.store.slices.repos.pinProjectGroupFailed', 'Could not update group pin'),
+    {
+      description: translate(
+        'auto.store.slices.repos.pinProjectGroupFailedDesc',
+        "The group's host did not apply the pin setting. Update Orca on that computer and try again."
+      )
+    }
+  )
+}
+
+export function notifyProjectPinRejected(): void {
+  toast.error(
+    translate('auto.store.slices.repos.pinProjectFailed', 'Could not update project pin'),
+    {
+      description: translate(
+        'auto.store.slices.repos.pinProjectFailedDesc',
+        "The project's host did not apply the pin setting. Update Orca on that computer and try again."
+      )
+    }
+  )
+}

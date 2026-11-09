@@ -4,31 +4,33 @@ import {
 } from '../../../../../../shared/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { readHostHeaderRects, type HostHeaderRect } from './host-header-drag-dom'
+import type { HostHeaderRect } from './host-header-drag-dom'
 import {
   findInnermostEnclosingGroupRect,
   getCatalogHostIdForExecutionHost,
   isGroupHeaderBandHit,
   resolveHostSectionBounds
 } from './group-header-hit-geometry'
+import { isRepoHeaderIdPinned } from './header-drag-pin-tier'
+import { filterRepoHeaderIdsByCatalogHost } from './project-group-child-catalog'
 import {
-  measureProjectGroupHeaderDragRects,
-  type ProjectGroupHeaderDragRect
-} from './project-group-header-drop'
+  resolveTrailingSubgroupReorderEnclosure,
+  type ProjectGroupChildItemId
+} from './project-group-child-slot-order'
+import type { ProjectGroupHeaderDragRect } from './project-group-header-drop'
 import {
   ROOT_INTERLEAVED_PROJECT_BUCKET_KEY,
   type ProjectHeaderDragSession,
   type RepoDragState
 } from './project-header-drag-contract'
-import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
 import {
   computeProjectHeaderDropPreview,
-  measureProjectHeaderDragRects,
   type ProjectHeaderDragBucketKey,
   type ProjectHeaderDragRect
 } from './project-header-drop'
+import { resolveNonInterleavedRepoBucketSlot } from './project-header-bucket-slot-drop'
 import {
-  resolveEmptyGroupInteriorSlot,
+  resolveMixedParentGroupRepoSlot,
   resolveSubgroupExitToParentSlot
 } from './project-header-subgroup-exit-drop'
 
@@ -45,7 +47,6 @@ export type ProjectHeaderDropTarget =
 
 const EMPTY_ROOT_TAIL_SLOP_PX = 32
 const EMPTY_ROOT_DROP_RANGE_PX = 96
-const INDICATOR_GAP_PX = 4
 
 export function parseGroupIdFromBucketKey(bucketKey: ProjectHeaderDragBucketKey): string | null {
   return bucketKey.startsWith('group:') ? bucketKey.slice('group:'.length) : null
@@ -59,29 +60,34 @@ export function getJoinableGroupIdsForRepo(
   if (!catalogHostId) {
     return new Set()
   }
-  const ids = new Set<string>()
-  for (const group of projectGroups) {
-    if (getCatalogHostIdForExecutionHost(getRepoExecutionHostId(group)) === catalogHostId) {
-      ids.add(group.id)
-    }
-  }
-  return ids
+  return new Set(
+    projectGroups
+      .filter((g) => getCatalogHostIdForExecutionHost(getRepoExecutionHostId(g)) === catalogHostId)
+      .map((g) => g.id)
+  )
 }
 
 export function canRepoStartHeaderDrag(args: {
   repo: Repo
   allowSlotReorder: boolean
   bucketItemCount: number
+  bucketHeaderIds?: readonly string[]
+  pinnedRepoHeaderIds?: ReadonlySet<string>
+  repoById?: ReadonlyMap<string, Repo>
   joinableGroupIds: ReadonlySet<string>
 }): boolean {
-  const currentGroupId = args.repo.projectGroupId ?? null
-  if (currentGroupId !== null) {
+  if ((args.repo.projectGroupId ?? null) !== null || args.joinableGroupIds.size > 0) {
     return true
   }
-  if (args.joinableGroupIds.size > 0) {
-    return true
-  }
-  return args.allowSlotReorder && args.bucketItemCount > 1
+  const draggedPinned =
+    isRepoHeaderIdPinned(args.repo.id, args.pinnedRepoHeaderIds, args.repoById) ||
+    args.repo.isPinned === true
+  const sameTierCount = args.bucketHeaderIds
+    ? args.bucketHeaderIds.filter(
+        (id) => isRepoHeaderIdPinned(id, args.pinnedRepoHeaderIds, args.repoById) === draggedPinned
+      ).length
+    : args.bucketItemCount
+  return args.allowSlotReorder && sameTierCount > 1
 }
 
 export function computeCombinedProjectHeaderDropTarget(args: {
@@ -91,6 +97,12 @@ export function computeCombinedProjectHeaderDropTarget(args: {
   dragHostId?: ExecutionHostId
   currentGroupId: string | null
   currentParentGroupId?: string | null
+  draggedRepoPinned?: boolean
+  pinnedRepoHeaderIds?: ReadonlySet<string>
+  repoById?: ReadonlyMap<string, Repo>
+  liveRepos?: readonly Repo[]
+  projectGroupById?: ReadonlyMap<string, ProjectGroup>
+  sidebarGroupChildItemIdsByGroupId?: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
   allowSlotReorder: boolean
   joinableGroupIds: ReadonlySet<string>
   hostHeaderRects?: readonly HostHeaderRect[]
@@ -102,9 +114,17 @@ export function computeCombinedProjectHeaderDropTarget(args: {
   contentBottom?: number
 }): ProjectHeaderDropTarget | null {
   const localY = args.pointerY - args.containerTop + args.scrollTop
+  const hostUngroupedHeaderIds = filterRepoHeaderIdsByCatalogHost(
+    args.sidebarRepoHeaderIdsByBucket.get('ungrouped') ?? [],
+    args.dragHostId,
+    args.liveRepos,
+    args.repoById
+  )
   const hasEmptyRootDropZone =
     args.currentGroupId !== null &&
-    (args.sidebarRepoHeaderIdsByBucket.get('ungrouped')?.length ?? 0) === 0
+    hostUngroupedHeaderIds.every((repoId) =>
+      isRepoHeaderIdPinned(repoId, args.pinnedRepoHeaderIds, args.repoById)
+    )
   const tailAllowancePx = hasEmptyRootDropZone ? EMPTY_ROOT_DROP_RANGE_PX : EMPTY_ROOT_TAIL_SLOP_PX
   const maxContentY =
     args.contentBottom !== undefined ? args.contentBottom + tailAllowancePx : undefined
@@ -121,10 +141,10 @@ export function computeCombinedProjectHeaderDropTarget(args: {
     if (localY < groupRect.top || localY > groupRect.bottom) {
       continue
     }
-    if (groupRect.groupId === args.currentGroupId) {
-      return null
-    }
-    if (!args.joinableGroupIds.has(groupRect.groupId)) {
+    if (
+      groupRect.groupId === args.currentGroupId ||
+      !args.joinableGroupIds.has(groupRect.groupId)
+    ) {
       return null
     }
     if (isGroupHeaderBandHit(localY, groupRect)) {
@@ -132,7 +152,17 @@ export function computeCombinedProjectHeaderDropTarget(args: {
     }
   }
 
-  const enclosingGroup = findInnermostEnclosingGroupRect(localY, args.groupHeaderRects)
+  const innerEnclosingGroup = findInnermostEnclosingGroupRect(localY, args.groupHeaderRects)
+  const enclosingGroup = args.allowSlotReorder
+    ? resolveTrailingSubgroupReorderEnclosure({
+        localY,
+        currentParentGroupId: args.currentGroupId,
+        enclosingGroup: innerEnclosingGroup,
+        groupHeaderRects: args.groupHeaderRects,
+        repoHeaderRects: args.repoHeaderRects,
+        hostSectionBottom: hostSectionBounds?.bottom
+      })
+    : innerEnclosingGroup
   if (enclosingGroup && !args.joinableGroupIds.has(enclosingGroup.groupId)) {
     return null
   }
@@ -143,27 +173,24 @@ export function computeCombinedProjectHeaderDropTarget(args: {
   const targetBucketKey: ProjectHeaderDragBucketKey = enclosingGroup
     ? `group:${enclosingGroup.groupId}`
     : 'ungrouped'
-  const bucketHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(targetBucketKey) ?? []
-  const bucketRects = args.repoHeaderRects.filter((rect) => {
-    if (rect.bucketKey !== targetBucketKey) {
-      return false
-    }
-    if (!hostSectionBounds) {
-      return true
-    }
-    return rect.top >= hostSectionBounds.top && rect.top < hostSectionBounds.bottom
-  })
+  const isCrossBucket = targetBucketKey !== currentBucketKey
 
   if (!enclosingGroup) {
     const parentExitSlot = resolveSubgroupExitToParentSlot({
       localY,
       scrollTop: args.scrollTop,
+      dragHostId: args.dragHostId,
       currentGroupId: args.currentGroupId,
       currentParentGroupId: args.currentParentGroupId,
       joinableGroupIds: args.joinableGroupIds,
       groupHeaderRects: args.groupHeaderRects,
       repoHeaderRects: args.repoHeaderRects,
       sidebarRepoHeaderIdsByBucket: args.sidebarRepoHeaderIdsByBucket,
+      sidebarGroupChildItemIdsByGroupId: args.sidebarGroupChildItemIdsByGroupId,
+      projectGroupById: args.projectGroupById,
+      pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+      repoById: args.repoById,
+      liveRepos: args.liveRepos,
       hostSectionBottom: hostSectionBounds?.bottom
     })
     if (parentExitSlot) {
@@ -171,9 +198,9 @@ export function computeCombinedProjectHeaderDropTarget(args: {
     }
     if (
       args.allowSlotReorder &&
-      args.currentGroupId === null &&
       args.rootProjectHeaderKeys &&
-      args.rootHeaderRects
+      args.rootHeaderRects &&
+      (args.currentGroupId === null || args.rootProjectHeaderKeys.length > 0)
     ) {
       const rootPreview = computeProjectHeaderDropPreview({
         pointerY: args.pointerY,
@@ -181,108 +208,68 @@ export function computeCombinedProjectHeaderDropTarget(args: {
         scrollTop: args.scrollTop,
         rects: args.rootHeaderRects,
         sidebarRepoHeaderIds: args.rootProjectHeaderKeys,
-        contentBottom: args.contentBottom
+        contentBottom: args.currentGroupId !== null ? maxContentY : args.contentBottom
       })
-      if (!rootPreview) {
-        return null
-      }
-      return {
-        kind: 'slot',
-        targetBucketKey: ROOT_INTERLEAVED_PROJECT_BUCKET_KEY,
-        dropIndex: rootPreview.dropIndex,
-        dropIndicatorY: rootPreview.dropIndicatorY
-      }
+      return rootPreview
+        ? {
+            kind: 'slot',
+            targetBucketKey: ROOT_INTERLEAVED_PROJECT_BUCKET_KEY,
+            ...rootPreview
+          }
+        : null
     }
   }
 
-  if (!args.allowSlotReorder && targetBucketKey === currentBucketKey) {
+  if (!args.allowSlotReorder && !isCrossBucket) {
     return null
   }
 
-  if (
-    enclosingGroup &&
-    (bucketHeaderIds.length === 0 || (hostSectionBounds !== null && bucketRects.length === 0))
-  ) {
-    return resolveEmptyGroupInteriorSlot({
+  if (enclosingGroup && args.allowSlotReorder && args.sidebarGroupChildItemIdsByGroupId) {
+    return resolveMixedParentGroupRepoSlot({
       enclosingGroup,
+      targetBucketKey,
       currentGroupId: args.currentGroupId,
-      scrollTop: args.scrollTop
+      pointerY: args.pointerY,
+      containerTop: args.containerTop,
+      scrollTop: args.scrollTop,
+      localY,
+      isCrossBucket,
+      draggedRepoPinned: args.draggedRepoPinned,
+      dragHostId: args.dragHostId,
+      maxContentY,
+      hostSectionBounds,
+      allChildItemIds: args.sidebarGroupChildItemIdsByGroupId.get(enclosingGroup.groupId) ?? [],
+      groupHeaderRects: args.groupHeaderRects,
+      repoHeaderRects: args.repoHeaderRects,
+      projectGroupById: args.projectGroupById,
+      pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+      repoById: args.repoById,
+      liveRepos: args.liveRepos
     })
   }
 
-  if (
-    targetBucketKey === 'ungrouped' &&
-    (bucketHeaderIds.length === 0 || (hostSectionBounds !== null && bucketRects.length === 0))
-  ) {
-    if (args.currentGroupId === null) {
-      return null
-    }
-    let maxGroupBottom = 0
-    let joinableGroupCount = 0
-    for (const groupRect of args.groupHeaderRects) {
-      if (!args.joinableGroupIds.has(groupRect.groupId)) {
-        continue
-      }
-      joinableGroupCount++
-      maxGroupBottom = Math.max(maxGroupBottom, groupRect.sectionBottom ?? groupRect.bottom)
-    }
-    if (joinableGroupCount === 0) {
-      return null
-    }
-    const maxEmptyRootY = Math.min(
-      maxGroupBottom + EMPTY_ROOT_DROP_RANGE_PX,
-      hostSectionBounds?.bottom ?? Number.POSITIVE_INFINITY
-    )
-    if (localY > maxGroupBottom && localY <= maxEmptyRootY) {
-      return {
-        kind: 'slot',
-        targetBucketKey: 'ungrouped',
-        dropIndex: 0,
-        dropIndicatorY: Math.max(args.scrollTop, maxGroupBottom + INDICATOR_GAP_PX)
-      }
-    }
-    return null
-  }
-  const preview = computeProjectHeaderDropPreview({
+  return resolveNonInterleavedRepoBucketSlot({
     pointerY: args.pointerY,
     containerTop: args.containerTop,
     scrollTop: args.scrollTop,
-    rects: bucketRects,
-    sidebarRepoHeaderIds: bucketHeaderIds,
+    localY,
+    dragHostId: args.dragHostId,
+    currentGroupId: args.currentGroupId,
+    targetBucketKey,
+    isCrossBucket,
+    hasEmptyRootDropZone,
+    draggedRepoPinned: args.draggedRepoPinned,
+    pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+    repoById: args.repoById,
+    liveRepos: args.liveRepos,
+    enclosingGroup,
+    joinableGroupIds: args.joinableGroupIds,
+    hostSectionBounds,
+    groupHeaderRects: args.groupHeaderRects,
+    repoHeaderRects: args.repoHeaderRects,
+    sidebarRepoHeaderIdsByBucket: args.sidebarRepoHeaderIdsByBucket,
     contentBottom: args.contentBottom
   })
-  if (!preview) {
-    return null
-  }
-  return {
-    kind: 'slot',
-    targetBucketKey,
-    dropIndex: preview.dropIndex,
-    dropIndicatorY: preview.dropIndicatorY
-  }
-}
-
-export function refreshProjectHeaderDragSessionRects(
-  container: HTMLElement | null,
-  session: ProjectHeaderDragSession | null
-): void {
-  if (!container || !session) {
-    return
-  }
-  session.headerRects = measureProjectHeaderDragRects(container)
-  session.rootHeaderRects = session.rootProjectHeaderKeys
-    ? measureRootProjectHeaderDragRects(
-        container,
-        session.rootProjectHeaderKeys,
-        session.rootProjectHeaderHostId
-      ).map((rect) => ({
-        ...rect,
-        repoId: rect.key,
-        bucketKey: ROOT_INTERLEAVED_PROJECT_BUCKET_KEY
-      }))
-    : undefined
-  session.groupHeaderRects = measureProjectGroupHeaderDragRects(container)
-  session.hostHeaderRects = readHostHeaderRects(container)
 }
 
 export function getSessionGroupRepo(session: ProjectHeaderDragSession): Repo | null {

@@ -99,6 +99,8 @@ export type Repo = {
   projectGroupId?: string | null
   /** User-authored ordering inside the project group or ungrouped bucket. */
   projectGroupOrder?: number
+  /** Pins the project to the top of its current group or ungrouped bucket. */
+  isPinned?: boolean
   /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
   sourceControlAi?: RepoSourceControlAiOverrides
   /** Project override of the host's cleanup rules; absent inherits them. */

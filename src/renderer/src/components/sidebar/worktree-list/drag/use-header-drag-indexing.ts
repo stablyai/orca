@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
@@ -16,8 +17,26 @@ import {
   getRepoHeaderSectionEndIndexByRepoId,
   getRootProjectHeaderSectionEndByKey
 } from '../viewport/worktree-header-section-boundaries'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
-import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
+import {
+  filterRootProjectHeaderKeysByPinTier,
+  getSidebarPinnedRepoHeaderIds,
+  isRepoHeaderIdPinned
+} from './header-drag-pin-tier'
+import { getSidebarOrderedGroupChildItemIdsByGroupId } from './project-group-child-slot-order'
+import {
+  getProjectHeaderDragBucketKey,
+  getSidebarOrderedRepoHeaderIdsByBucket
+} from './project-header-drop'
+import { canRepoStartHeaderDrag, getJoinableGroupIdsForRepo } from './project-header-group-drop'
+import {
+  getProjectGroupHeaderDragBucketKey,
+  getSidebarOrderedProjectGroupHeaderIdsByBucket
+} from './project-group-header-drop'
+import {
+  canProjectGroupStartHeaderDrag,
+  getReparentableTargetGroupIdsForGroup
+} from './project-group-header-reparent-drop'
+import { getRootProjectHeaderDragKeys } from './root-project-header-drop'
 
 function indexById(byBucket: ReadonlyMap<string, readonly string[]>): Map<string, number> {
   const map = new Map<string, number>()
@@ -44,8 +63,23 @@ export function useHeaderDragIndexing(args: {
   renderRows: readonly RenderRow[]
   firstHeaderIndex: number
   projectGroups: readonly ProjectGroup[]
+  repoMap: ReadonlyMap<string, Repo>
+  rootProjectHeaderKeys?: readonly string[]
+  canDragRepoHeaders: boolean
+  canReorderRepoHeaders: boolean
+  canReorderProjectGroupHeaders: boolean
 }) {
-  const { rows, renderRows, firstHeaderIndex, projectGroups } = args
+  const {
+    rows,
+    renderRows,
+    firstHeaderIndex,
+    projectGroups,
+    repoMap,
+    rootProjectHeaderKeys,
+    canDragRepoHeaders,
+    canReorderRepoHeaders,
+    canReorderProjectGroupHeaders
+  } = args
   const projectGroupByIdForHeaderDrag = useMemo(
     () => new Map(projectGroups.map((group) => [group.id, group])),
     [projectGroups]
@@ -68,9 +102,22 @@ export function useHeaderDragIndexing(args: {
       ),
     [rows]
   )
+  const pinnedRepoHeaderIds = useMemo(
+    () =>
+      getSidebarPinnedRepoHeaderIds(rows.filter((row): row is Row => row.type !== 'host-header')),
+    [rows]
+  )
   const sidebarProjectGroupHeaderIdsByBucket = useMemo(
     () =>
       getSidebarOrderedProjectGroupHeaderIdsByBucket(
+        rows.filter((row): row is Row => row.type !== 'host-header'),
+        projectGroupByIdForHeaderDrag
+      ),
+    [projectGroupByIdForHeaderDrag, rows]
+  )
+  const sidebarGroupChildItemIdsByGroupId = useMemo(
+    () =>
+      getSidebarOrderedGroupChildItemIdsByGroupId(
         rows.filter((row): row is Row => row.type !== 'host-header'),
         projectGroupByIdForHeaderDrag
       ),
@@ -101,19 +148,11 @@ export function useHeaderDragIndexing(args: {
     [renderRows]
   )
   const repoHeaderSectionEndByRepoId = useMemo(
-    () =>
-      getRepoHeaderSectionEndByRepoId({
-        rows: renderRows,
-        firstHeaderIndex
-      }),
+    () => getRepoHeaderSectionEndByRepoId({ rows: renderRows, firstHeaderIndex }),
     [firstHeaderIndex, renderRows]
   )
   const projectGroupHeaderSectionEndByGroupId = useMemo(
-    () =>
-      getProjectGroupHeaderSectionEndByGroupId({
-        rows: renderRows,
-        firstHeaderIndex
-      }),
+    () => getProjectGroupHeaderSectionEndByGroupId({ rows: renderRows, firstHeaderIndex }),
     [firstHeaderIndex, renderRows]
   )
   const headerSectionEndIndexByRowIndex = useMemo(
@@ -129,11 +168,111 @@ export function useHeaderDragIndexing(args: {
     [firstHeaderIndex, renderRows]
   )
 
+  const canDragProjectHeader = useCallback(
+    (repo: Repo, groupRepo?: Repo | null, hostId?: string) => {
+      if (!canDragRepoHeaders) {
+        return false
+      }
+      const effectiveGroupRepo = groupRepo === undefined ? repo : groupRepo
+      const bucketOwnerRepo = effectiveGroupRepo ?? repo
+      const bucketKey = getProjectHeaderDragBucketKey(bucketOwnerRepo)
+      const bucketHeaderIds = sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
+      const draggedPinned =
+        isRepoHeaderIdPinned(repo.id, pinnedRepoHeaderIds, repoMap) ||
+        bucketOwnerRepo.isPinned === true
+      const rootHeaderKeys =
+        bucketKey === 'ungrouped' && rootProjectHeaderKeys
+          ? filterRootProjectHeaderKeysByPinTier({
+              keys: getRootProjectHeaderDragKeys(rootProjectHeaderKeys, `repo:${repo.id}`, hostId),
+              isPinned: draggedPinned,
+              projectGroupById: projectGroupByIdForHeaderDrag,
+              pinnedRepoHeaderIds,
+              repoById: repoMap
+            })
+          : undefined
+      if (canReorderRepoHeaders && (rootHeaderKeys?.length ?? 0) > 1) {
+        return true
+      }
+      return canRepoStartHeaderDrag({
+        repo: bucketOwnerRepo,
+        allowSlotReorder: canReorderRepoHeaders,
+        bucketItemCount: bucketHeaderIds.length,
+        bucketHeaderIds,
+        pinnedRepoHeaderIds,
+        repoById: repoMap,
+        joinableGroupIds: effectiveGroupRepo
+          ? getJoinableGroupIdsForRepo(effectiveGroupRepo, projectGroups)
+          : new Set<string>()
+      })
+    },
+    [
+      canDragRepoHeaders,
+      canReorderRepoHeaders,
+      pinnedRepoHeaderIds,
+      projectGroupByIdForHeaderDrag,
+      projectGroups,
+      repoMap,
+      rootProjectHeaderKeys,
+      sidebarRepoHeaderIdsByBucket
+    ]
+  )
+  const canDragProjectGroupHeader = useCallback(
+    (groupId: string, hostId?: string) => {
+      if (!canReorderProjectGroupHeaders) {
+        return false
+      }
+      const ownerHostId = projectGroupOwnerHostIdByGroupId.get(groupId)
+      if (!ownerHostId) {
+        return false
+      }
+      const group = projectGroupByIdForHeaderDrag.get(groupId)
+      if (!group) {
+        return false
+      }
+      const bucketKey = getProjectGroupHeaderDragBucketKey(group, projectGroupByIdForHeaderDrag)
+      const rootProjectHeaderCount =
+        bucketKey === 'root' && rootProjectHeaderKeys
+          ? filterRootProjectHeaderKeysByPinTier({
+              keys: getRootProjectHeaderDragKeys(
+                rootProjectHeaderKeys,
+                `group:${groupId}`,
+                hostId ?? ownerHostId
+              ),
+              isPinned: group.isPinned === true,
+              projectGroupById: projectGroupByIdForHeaderDrag,
+              pinnedRepoHeaderIds,
+              repoById: repoMap
+            })?.length
+          : undefined
+      return canProjectGroupStartHeaderDrag({
+        group,
+        projectGroupById: projectGroupByIdForHeaderDrag,
+        sidebarBucketHeaderIds: sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? [],
+        rootProjectHeaderCount,
+        reparentableGroupIds: getReparentableTargetGroupIdsForGroup(group, projectGroups)
+      })
+    },
+    [
+      canReorderProjectGroupHeaders,
+      pinnedRepoHeaderIds,
+      projectGroupByIdForHeaderDrag,
+      projectGroupOwnerHostIdByGroupId,
+      projectGroups,
+      repoMap,
+      rootProjectHeaderKeys,
+      sidebarProjectGroupHeaderIdsByBucket
+    ]
+  )
+
   return {
+    canDragProjectHeader,
+    canDragProjectGroupHeader,
     projectGroupByIdForHeaderDrag,
     projectGroupOwnerHostIdByGroupId,
     sidebarRepoHeaderIdsByBucket,
+    pinnedRepoHeaderIds,
     sidebarProjectGroupHeaderIdsByBucket,
+    sidebarGroupChildItemIdsByGroupId,
     repoHeaderIndexByRepoId,
     repoHeaderBucketByRepoId,
     projectGroupHeaderIndexByGroupId,

@@ -13,7 +13,8 @@ import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import {
   notifyProjectGroupMoveFailed,
-  notifyProjectGroupParentMoveRejected
+  notifyProjectGroupParentMoveRejected,
+  notifyProjectGroupPinRejected
 } from './project-group-mutation-toasts'
 import { persistProjectGroupUpdates } from './project-group-update-persistence'
 
@@ -60,6 +61,10 @@ export function createProjectGroupBatchUpdateAction(
             onParentGroupMoveRejected: () => {
               notifiedSpecificRejection = true
               notifyProjectGroupParentMoveRejected()
+            },
+            onPinRejected: () => {
+              notifiedSpecificRejection = true
+              notifyProjectGroupPinRejected()
             },
             onStageCommitted: (group) => {
               stagedByGroupId.set(

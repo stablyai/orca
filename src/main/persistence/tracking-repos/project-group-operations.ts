@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/project-group-types'
 import {
   createProjectGroup,
+  getNextProjectGroupOrder,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
 } from '../../../shared/project-groups'
@@ -75,6 +76,16 @@ export class ProjectGroupPersistenceOperations {
     // Large persisted lists can exceed spread argument limits.
     for (const existingGroup of this.state.projectGroups ?? []) {
       maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
+    }
+    if (normalizedParentGroupId) {
+      maxOrder = Math.max(
+        maxOrder,
+        getNextProjectGroupOrder(
+          this.state.repos,
+          normalizedParentGroupId,
+          this.state.projectGroups
+        ) - 1
+      )
     }
     const group = createProjectGroup({
       ...input,
@@ -191,7 +202,19 @@ export class ProjectGroupPersistenceOperations {
       group.color = typeof updates.color === 'string' ? updates.color : null
     }
     if (normalizedParentGroupId !== undefined) {
+      if (
+        normalizedParentGroupId !== (group.parentGroupId ?? null) &&
+        updates.isPinned === undefined
+      ) {
+        group.isPinned = false
+      }
+      if (normalizedParentGroupId !== null && updates.rootProjectOrder === undefined) {
+        delete group.rootProjectOrder
+      }
       group.parentGroupId = normalizedParentGroupId
+    }
+    if (typeof updates.isPinned === 'boolean') {
+      group.isPinned = updates.isPinned
     }
     group.updatedAt = Date.now()
   }
@@ -208,7 +231,7 @@ export class ProjectGroupPersistenceOperations {
     // Sidebar grouping does not own repos; ungroup them rather than delete them.
     this.state.repos = this.state.repos.map((repo) =>
       repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
-        ? { ...repo, projectGroupId: null }
+        ? { ...repo, projectGroupId: null, isPinned: false }
         : repo
     )
     const removedFolderWorkspaceKeys = new Set<string>()

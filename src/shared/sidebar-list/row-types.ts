@@ -45,6 +45,8 @@ export type GroupHeaderRow = {
   hostRepos?: ReadonlyMap<ExecutionHostId, Repo>
   /** On a host copy: the project's anchor registration, which project order keys on; `repo` is this host's. */
   anchorRepo?: Repo
+  /** All deduplicated Repo registrations backing this project section across hosts, retained across host localization. */
+  pinTargetRepos?: readonly Repo[]
   /** An earlier host section already drew this header; order and drag key on that first copy. */
   repeated?: true
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
@@ -142,6 +144,24 @@ export type Row =
 /** The registration a project header reorders by, or none for a repeated copy. */
 export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
   return row.repeated ? undefined : (row.anchorRepo ?? row.repo)
+}
+
+/** True when any registration backing a project header row is pinned. */
+export function isProjectHeaderRowPinned(row: GroupHeaderRow): boolean {
+  if (row.pinTargetRepos) {
+    return row.pinTargetRepos.some((repo) => repo.isPinned === true)
+  }
+  if (row.anchorRepo?.isPinned === true || row.repo?.isPinned === true) {
+    return true
+  }
+  if (row.hostRepos) {
+    for (const hostRepo of row.hostRepos.values()) {
+      if (hostRepo.isPinned === true) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 /** A project header whose rows all sit on its own repo's host; one spanning hosts still lists them in hostRepos.

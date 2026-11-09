@@ -14,27 +14,34 @@ import { getNextRootProjectOrder } from '../../../../../../shared/root-project-o
 import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
 import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
 import { getCatalogHostIdForExecutionHost } from './group-header-hit-geometry'
+import { computeAppendedProjectGroupTabOrder } from './project-group-child-drop-commit'
+import type { ProjectGroupChildItemId } from './project-group-child-slot-order'
 import type { ProjectGroupHeaderUpdatePatch } from './project-group-header-drag-contract'
 import type { ProjectGroupHeaderDragBucketKey } from './project-group-header-drop'
-import { filterProjectGroupIdsByCatalogHost } from './project-group-header-reparent-drop'
 import { enqueueRootProjectOrderForSidebarDrop } from './root-project-order-commit'
 
 export const readLiveRepos = (): readonly Repo[] => useAppStore.getState().repos
 
 export function useHeaderDragCommitActions(args: {
+  allRepoIds: readonly string[]
+  repoMap: ReadonlyMap<string, Repo>
   projectGroupByIdForHeaderDrag: ReadonlyMap<string, ProjectGroup>
   projectGroupOwnerHostIdByGroupId: ReadonlyMap<string, ExecutionHostId | null>
   sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  sidebarGroupChildItemIdsByGroupId: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
   suppressMeasurementAdjustmentUntilRef: React.MutableRefObject<number>
   directScrollInputUntilRef: React.MutableRefObject<number>
 }) {
   const {
+    allRepoIds,
+    repoMap,
     projectGroupByIdForHeaderDrag,
     projectGroupOwnerHostIdByGroupId,
     sidebarProjectGroupHeaderIdsByBucket,
+    sidebarGroupChildItemIdsByGroupId,
     suppressMeasurementAdjustmentUntilRef,
     directScrollInputUntilRef
   } = args
@@ -69,12 +76,12 @@ export function useHeaderDragCommitActions(args: {
   }, [])
 
   const commitProjectGroupOrder = useCallback(
-    (project: Repo, projectGroupId: string | null, order: number) => {
+    (project: Repo, projectGroupId: string | null, order: number): Promise<boolean> => {
       suppressScrollCorrectionForHeaderCommit()
       if (projectGroupId) {
         expandProjectGroupIfCollapsed(projectGroupId)
       }
-      void moveProjectToGroup(project, projectGroupId, order)
+      return moveProjectToGroup(project, projectGroupId, order)
     },
     [expandProjectGroupIfCollapsed, moveProjectToGroup, suppressScrollCorrectionForHeaderCommit]
   )
@@ -144,16 +151,17 @@ export function useHeaderDragCommitActions(args: {
               getCatalogHostIdForExecutionHost(getRepoExecutionHostId(repo)) === catalogHostId
           )
         : readLiveRepos()
-      const targetBucketKey = parentGroupId ? `parent:${parentGroupId}` : 'root'
-      const siblingIds = filterProjectGroupIdsByCatalogHost(
-        sidebarProjectGroupHeaderIdsByBucket.get(targetBucketKey) ?? [],
+      const tabOrder = computeAppendedProjectGroupTabOrder({
+        groupId,
+        parentGroupId,
         ownerHostId,
-        effectiveGroupById
-      ).filter((id) => id !== groupId)
-      const maxSiblingTabOrder = siblingIds.reduce((maxOrder, id) => {
-        const order = effectiveGroupById.get(id)?.tabOrder ?? 0
-        return Math.max(maxOrder, order)
-      }, -1)
+        sidebarProjectGroupHeaderIdsByBucket,
+        sidebarGroupChildItemIdsByGroupId,
+        projectGroupById: effectiveGroupById,
+        repoById: repoMap,
+        liveRepos: hostRepos,
+        orderedRepoIds: allRepoIds
+      })
       const group = effectiveGroupById.get(groupId)
       const nextRootOrder =
         parentGroupId === null ? getNextRootProjectOrder(hostRepos, hostProjectGroups) : undefined
@@ -161,7 +169,7 @@ export function useHeaderDragCommitActions(args: {
         groupId,
         {
           parentGroupId,
-          tabOrder: maxSiblingTabOrder + 1,
+          tabOrder,
           ...(parentGroupId !== null && group?.rootProjectOrder !== undefined
             ? { rootProjectOrder: null }
             : nextRootOrder !== undefined
@@ -172,9 +180,12 @@ export function useHeaderDragCommitActions(args: {
       )
     },
     [
+      allRepoIds,
       expandProjectGroupIfCollapsed,
       projectGroupByIdForHeaderDrag,
       projectGroupOwnerHostIdByGroupId,
+      repoMap,
+      sidebarGroupChildItemIdsByGroupId,
       sidebarProjectGroupHeaderIdsByBucket,
       suppressScrollCorrectionForHeaderCommit,
       updateProjectGroup
@@ -182,13 +193,14 @@ export function useHeaderDragCommitActions(args: {
   )
 
   const commitRootProjectOrder = useCallback(
-    (visibleKeys: readonly string[], draggedKey: string, dropIndex: number) => {
+    (visibleKeys: readonly string[], draggedKey: string, dropIndex: number, hostId?: string) => {
       const save = () =>
         enqueueRootProjectOrderForSidebarDrop({
           getState: useAppStore.getState,
           visibleKeys,
           draggedKey,
           dropIndex,
+          hostId,
           onCommit: suppressScrollCorrectionForHeaderCommit
         })
       void save()

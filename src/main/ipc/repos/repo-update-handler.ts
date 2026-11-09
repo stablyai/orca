@@ -62,6 +62,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'customWorktreeVisibilitySources'
             | 'worktreeVisibilitySourcePreferences'
             | 'projectGroupId'
+            | 'isPinned'
           >
         > & {
           projectGroupOrder?: number | null
@@ -81,6 +82,13 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       }
       // Invalid preferences would silently resolve to auto; discard only the malformed field.
       const updates = { ...args.updates }
+      if (
+        'isPinned' in updates &&
+        updates.isPinned !== undefined &&
+        typeof updates.isPinned !== 'boolean'
+      ) {
+        delete updates.isPinned
+      }
       if (
         'issueSourcePreference' in updates &&
         updates.issueSourcePreference !== undefined &&

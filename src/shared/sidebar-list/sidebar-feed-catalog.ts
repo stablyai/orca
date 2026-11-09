@@ -18,7 +18,8 @@ function catalogRepo(repo: SidebarCatalogRepo): Repo {
     ...(repo.connectionId !== undefined ? { connectionId: repo.connectionId } : {}),
     ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {}),
     ...(repo.projectGroupId ? { projectGroupId: repo.projectGroupId } : {}),
-    ...(repo.projectGroupOrder !== undefined ? { projectGroupOrder: repo.projectGroupOrder } : {})
+    ...(repo.projectGroupOrder !== undefined ? { projectGroupOrder: repo.projectGroupOrder } : {}),
+    ...(repo.isPinned ? { isPinned: true } : {})
   }
 }
 

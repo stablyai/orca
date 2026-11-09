@@ -7,13 +7,13 @@ import type { ProjectGroup } from '../project-group-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import { getDistinctProjectGroups, getEffectiveProjectGroupManualRank } from '../project-groups'
 import { getProjectGroupHeaderKey } from './group-keys'
-import { appendOrderedGroups } from './group-sections'
+import { appendOrderedGroups, type SectionAppendContext } from './group-sections'
 import { compareCodePoints, compareSidebarText } from './text-order'
-import type { SectionAppendContext } from './group-sections'
 import type { OrderedGroupEntry } from './worktree-group-entry'
 import {
   compareRecentRank,
   createRecentRankLookup,
+  isProjectSectionEntryPinned,
   withRepoSectionDisplayLabels
 } from '../project-section-order'
 import { appendWorktreeRows } from './row-builders'
@@ -42,18 +42,38 @@ export function appendProjectGroupSections(
     groupByProjectGroupId.set(projectGroupId, list)
   }
 
+  const isOrderedGroupEntryPinned = (entry: OrderedGroupEntry): boolean =>
+    isProjectSectionEntryPinned(entry, ctx.repoMap, ctx.pinnedRepoIds) ||
+    entry[1].items.some((worktree) => ctx.repoOf(worktree)?.isPinned === true)
+
   const sortRepoEntriesWithinGroup = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
+    if (entries.length < 2) {
+      return [...entries]
+    }
     if (projectOrderBy === 'recent') {
-      if (entries.length < 2) {
-        return [...entries]
-      }
       const getRecentRank = createRecentRankLookup()
-      return [...entries].sort((left, right) =>
-        compareRecentRank(getRecentRank(left), getRecentRank(right))
-      )
+      return [...entries].sort((left, right) => {
+        const byPin =
+          (isOrderedGroupEntryPinned(right) ? 1 : 0) - (isOrderedGroupEntryPinned(left) ? 1 : 0)
+        if (byPin !== 0) {
+          return byPin
+        }
+        return (
+          compareRecentRank(getRecentRank(left), getRecentRank(right)) ||
+          getEffectiveProjectGroupManualRank(left[1].repo, repoOrder) -
+            getEffectiveProjectGroupManualRank(right[1].repo, repoOrder) ||
+          compareSidebarText(left[1].label, right[1].label) ||
+          compareCodePoints(left[0], right[0])
+        )
+      })
     }
     // Use projectGroupOrder with repoOrder fallback so drag midpoint ranks match rendered order.
     return [...entries].sort((left, right) => {
+      const byPin =
+        (isOrderedGroupEntryPinned(right) ? 1 : 0) - (isOrderedGroupEntryPinned(left) ? 1 : 0)
+      if (byPin !== 0) {
+        return byPin
+      }
       const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
       const rightRank = getEffectiveProjectGroupManualRank(right[1].repo, repoOrder)
       return leftRank - rightRank
@@ -86,6 +106,7 @@ export function appendProjectGroupSections(
   for (const groups of childGroupsByParentId.values()) {
     groups.sort(
       (left, right) =>
+        (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0) ||
         left.tabOrder - right.tabOrder ||
         compareSidebarText(left.name, right.name) ||
         compareCodePoints(left.executionHostId ?? '', right.executionHostId ?? '') ||
@@ -104,7 +125,9 @@ export function appendProjectGroupSections(
   }
 
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
-    const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
+    const repoEntries = withRepoSectionDisplayLabels(
+      sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
+    )
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
     const key = getProjectGroupHeaderKey(projectGroup.id)
     result.push({
@@ -126,9 +149,79 @@ export function appendProjectGroupSections(
         hostContextLabelByWorktreeIdentity: ctx.mixedWorktreeHostContextLabels,
         folderPairByIdentity: ctx.folderPairByIdentity
       })
-      appendOrderedGroups(ctx, withRepoSectionDisplayLabels(repoEntries), depth + 1)
-      for (const childGroup of childGroups) {
-        appendProjectGroup(childGroup, depth + 1)
+      if (childGroups.length === 0) {
+        appendOrderedGroups(ctx, repoEntries, depth + 1)
+      } else if (repoEntries.length === 0) {
+        for (const childGroup of childGroups) {
+          appendProjectGroup(childGroup, depth + 1)
+        }
+      } else if (projectOrderBy === 'recent') {
+        for (const childGroup of childGroups) {
+          if (childGroup.isPinned) {
+            appendProjectGroup(childGroup, depth + 1)
+          }
+        }
+        appendOrderedGroups(
+          ctx,
+          repoEntries.filter((entry) => isOrderedGroupEntryPinned(entry)),
+          depth + 1
+        )
+        for (const childGroup of childGroups) {
+          if (!childGroup.isPinned) {
+            appendProjectGroup(childGroup, depth + 1)
+          }
+        }
+        appendOrderedGroups(
+          ctx,
+          repoEntries.filter((entry) => !isOrderedGroupEntryPinned(entry)),
+          depth + 1
+        )
+      } else {
+        const hasExplicitRepoOrder = repoEntries.some(
+          (entry) =>
+            typeof entry[1].repo?.projectGroupOrder === 'number' &&
+            Number.isFinite(entry[1].repo.projectGroupOrder)
+        )
+        const children = [
+          ...childGroups.map((childGroup) => ({
+            kind: 'group' as const,
+            group: childGroup,
+            isPinned: childGroup.isPinned === true,
+            rank: childGroup.tabOrder,
+            label: childGroup.name,
+            id: childGroup.id
+          })),
+          ...repoEntries.map((entry) => ({
+            kind: 'repo' as const,
+            entry,
+            isPinned: isOrderedGroupEntryPinned(entry),
+            rank: getEffectiveProjectGroupManualRank(entry[1].repo, repoOrder),
+            label: entry[1].label,
+            id: entry[0]
+          }))
+        ].sort((left, right) => {
+          const byPin = (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0)
+          if (byPin !== 0) {
+            return byPin
+          }
+          if (!hasExplicitRepoOrder && left.kind !== right.kind) {
+            return left.kind === 'repo' ? -1 : 1
+          }
+          if (left.rank !== right.rank) {
+            return left.rank - right.rank
+          }
+          if (left.kind !== right.kind) {
+            return left.kind === 'group' ? -1 : 1
+          }
+          return compareSidebarText(left.label, right.label) || compareCodePoints(left.id, right.id)
+        })
+        for (const child of children) {
+          if (child.kind === 'group') {
+            appendProjectGroup(child.group, depth + 1)
+          } else {
+            appendOrderedGroups(ctx, [child.entry], depth + 1)
+          }
+        }
       }
     }
     groupByProjectGroupId.delete(projectGroup.id)
@@ -149,23 +242,37 @@ export function appendProjectGroupSections(
     )
   ]
   if (projectOrderBy === 'manual') {
+    const toRootSortEntry = (entry: (typeof rootEntries)[number]) =>
+      'projectGroup' in entry
+        ? {
+            kind: 'group' as const,
+            group: entry.projectGroup,
+            isPinned: entry.projectGroup.isPinned === true
+          }
+        : entry.repoEntry[1].repo
+          ? {
+              kind: 'repo' as const,
+              repo: entry.repoEntry[1].repo,
+              isPinned: isOrderedGroupEntryPinned(entry.repoEntry)
+            }
+          : null
     rootEntries.sort((left, right) => {
-      const leftEntry =
-        'projectGroup' in left
-          ? { kind: 'group' as const, group: left.projectGroup }
-          : left.repoEntry[1].repo
-            ? { kind: 'repo' as const, repo: left.repoEntry[1].repo }
-            : null
-      const rightEntry =
-        'projectGroup' in right
-          ? { kind: 'group' as const, group: right.projectGroup }
-          : right.repoEntry[1].repo
-            ? { kind: 'repo' as const, repo: right.repoEntry[1].repo }
-            : null
+      const leftEntry = toRootSortEntry(left)
+      const rightEntry = toRootSortEntry(right)
       return leftEntry && rightEntry
         ? compareRootProjectEntries(leftEntry, rightEntry, repoOrder)
         : 0
     })
+  } else {
+    const isRootEntryPinned = (
+      entry: { projectGroup: ProjectGroup } | { repoEntry: OrderedGroupEntry }
+    ): boolean =>
+      'projectGroup' in entry
+        ? entry.projectGroup.isPinned === true
+        : isOrderedGroupEntryPinned(entry.repoEntry)
+    rootEntries.sort(
+      (left, right) => Number(isRootEntryPinned(right)) - Number(isRootEntryPinned(left))
+    )
   }
   for (const entry of rootEntries) {
     if ('projectGroup' in entry) {
