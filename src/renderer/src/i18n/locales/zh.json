@@ -3190,7 +3190,6 @@
             "a3346fc6ed": "取消工作树创建",
             "532aea14ce": "取消",
             "767951265d": "创建工作树时出现问题。",
-            "vmProvisioningTitle": "正在预配虚拟机",
             "cancelProvisioning": "取消",
             "vmProvisioningLogEmpty": "正在等待环境模板输出…"
           }
