@@ -8,7 +8,7 @@ export type CloudAgentSetupFailure = { error: CloudSecretsErrorCode; field?: str
 /** Each preset is just secrets: the control plane derives base URLs and tokens for the VM. */
 export type CloudAgentSetupChoice =
   | { kind: 'api-key'; provider: 'anthropic' | 'openai'; key: string }
-  | { kind: 'gateway'; key: string; model: string }
+  | { kind: 'gateway'; key: string; model: string; codexModel: string }
   | { kind: 'custom'; baseUrl: string; token: string; model: string }
 
 export type CloudAgentSetupWrite = {
@@ -25,12 +25,14 @@ export function cloudAgentSetupWrite(choice: CloudAgentSetupChoice): CloudAgentS
     }
     case 'gateway': {
       const model = choice.model.trim()
+      const codexModel = choice.codexModel.trim()
       return {
         set: {
           AI_GATEWAY_API_KEY: choice.key.trim(),
-          ...(model ? { ANTHROPIC_MODEL: model } : {})
+          ...(model ? { ANTHROPIC_MODEL: model } : {}),
+          ...(codexModel ? { OPENAI_MODEL: codexModel } : {})
         },
-        field: { AI_GATEWAY_API_KEY: 'key', ANTHROPIC_MODEL: 'model' }
+        field: { AI_GATEWAY_API_KEY: 'key', ANTHROPIC_MODEL: 'model', OPENAI_MODEL: 'codexModel' }
       }
     }
     case 'custom': {

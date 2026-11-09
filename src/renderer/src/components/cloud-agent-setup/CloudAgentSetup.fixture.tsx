@@ -3,16 +3,17 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { VmBuildSheet } from '../worktree-creation/VmBuildSheet'
 import type { CloudAgentReadiness } from './cloud-agent-readiness'
-import { CloudAgentSetupView, type CloudAgentSetupViewProps } from './CloudAgentSetupView'
-import { VmBuildCloudAgentStepView, type VmBuildCloudAgentStepModel } from './VmBuildCloudAgentStep'
+import type { CloudAgentSetupFailure, CloudAgentSetupOption } from './cloud-agent-setup-choices'
+import { CloudAgentSetupSavedNotice, CloudAgentSetupView } from './CloudAgentSetupView'
+import {
+  VmBuildCloudAgentStepView,
+  type VmBuildCloudAgentStepMode,
+  type VmBuildCloudAgentStepModel
+} from './VmBuildCloudAgentStep'
 
 const NONE: CloudAgentReadiness = { claude: null, codex: null }
 const noop = (): void => {}
-const setup = {
-  onSave: async () => null,
-  onSignIn: noop,
-  onLater: noop
-}
+const actions = { onSave: async () => null, onDone: noop, onSignIn: noop, onLater: noop }
 
 const ENTRY: PendingWorktreeCreation = {
   creationId: 'fixture',
@@ -31,7 +32,8 @@ const ENTRY: PendingWorktreeCreation = {
 
 function sheet(
   model: VmBuildCloudAgentStepModel,
-  overrides: Partial<typeof setup> & Partial<CloudAgentSetupViewProps> = {}
+  initialMode?: VmBuildCloudAgentStepMode,
+  interact?: (frame: HTMLElement) => Promise<void>
 ) {
   return defineFixture({
     width: 760,
@@ -46,108 +48,128 @@ function sheet(
           onRetry={noop}
           onDismiss={noop}
           onEditRecipe={noop}
-          agentSignInRow={null}
           cloudAgentStep={
-            <VmBuildCloudAgentStepView model={model} setup={{ ...setup, ...overrides }} />
+            <VmBuildCloudAgentStepView model={model} actions={actions} initialMode={initialMode} />
           }
         />
       </div>
-    )
+    ),
+    interact
   })
 }
 
-export const buildChoose = sheet({ kind: 'setup', readiness: NONE, canShare: false })
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 50))
 
-export const buildApiKeyAdmin = sheet(
-  { kind: 'setup', readiness: NONE, canShare: true },
-  { initialOption: 'api-key' }
-)
-
-export const buildGateway = sheet(
-  { kind: 'setup', readiness: NONE, canShare: false },
-  { initialOption: 'gateway' }
-)
-
-export const buildCustom = sheet(
-  { kind: 'setup', readiness: NONE, canShare: false },
-  { initialOption: 'custom', initialFailure: { error: 'invalid_base_url', field: 'baseUrl' } }
-)
-
-export const buildSubscriptionRefused = sheet(
-  { kind: 'setup', readiness: NONE, canShare: false },
-  {
-    initialOption: 'api-key',
-    initialFailure: { error: 'subscription_token_refused', field: 'key' }
+function typeInto(input: HTMLInputElement | null, value: string): void {
+  if (!input) {
+    return
   }
-)
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+export const buildOffer = sheet({ readiness: NONE, canShare: false })
+
+export const buildKeysAdmin = sheet({ readiness: NONE, canShare: true }, { kind: 'keys' })
+
+export const buildSignInPending = sheet({ readiness: NONE, canShare: false }, { kind: 'signIn' })
 
 export const buildSaved = sheet(
-  { kind: 'setup', readiness: NONE, canShare: true },
-  { initialSaved: { agents: ['claude'], scope: 'org' } }
+  { readiness: NONE, canShare: true },
+  { kind: 'saved', saved: { agents: ['claude'], scope: 'org' } }
 )
 
 export const buildReadyDesktopKey = sheet({
-  kind: 'ready',
-  readiness: { claude: 'desktop-key', codex: null }
+  readiness: { claude: 'desktop-key', codex: null },
+  canShare: false
 })
 
 export const buildReadyTeam = sheet({
-  kind: 'ready',
-  readiness: { claude: 'team', codex: 'team' }
+  readiness: { claude: 'team', codex: 'team' },
+  canShare: false
 })
 
 function Dialogish({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <div className="bg-background p-6">
-      <div className="max-w-xl rounded-xl border border-border bg-popover p-6 shadow-floating">
-        <p className="mb-2 text-base font-semibold">Add an agent</p>
+      <div className="max-w-xl space-y-4 rounded-xl border border-border bg-popover p-6 shadow-floating">
+        <div className="space-y-1.5">
+          <p className="text-base font-semibold">Add an agent</p>
+          <p className="text-sm text-muted-foreground">
+            Choose how Claude Code or Codex gets access in your Orca Cloud workspaces.
+          </p>
+        </div>
         {children}
       </div>
     </div>
   )
 }
 
-export const settingsDialog = defineFixture({
+function dialog(
+  option: CloudAgentSetupOption,
+  options: {
+    readiness?: CloudAgentReadiness
+    canShare?: boolean
+    failure?: CloudAgentSetupFailure
+    pendingSave?: boolean
+    interact?: (frame: HTMLElement) => Promise<void>
+  } = {}
+) {
+  return defineFixture({
+    width: 640,
+    render: () => (
+      <Dialogish>
+        <CloudAgentSetupView
+          readiness={options.readiness ?? NONE}
+          canShare={options.canShare ?? false}
+          includeSignIn
+          onSave={options.pendingSave ? () => new Promise(() => {}) : async () => null}
+          onSaved={noop}
+          onCancel={noop}
+          initialOption={option}
+          initialFailure={options.failure ?? null}
+        />
+      </Dialogish>
+    ),
+    interact: options.interact
+  })
+}
+
+export const dialogSubscription = dialog('sign-in', { readiness: { claude: 'team', codex: null } })
+
+export const dialogApiKeyAdmin = dialog('api-key', { canShare: true })
+
+export const dialogApiKeySaving = dialog('api-key', {
+  pendingSave: true,
+  interact: async (frame) => {
+    typeInto(frame.querySelector('input[type="password"]'), 'sk-ant-api03-Zq9xR2mVt8LwPcA1')
+    await settle()
+    frame.querySelector<HTMLButtonElement>('button[aria-pressed]')?.click()
+    frame.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+    await settle()
+  }
+})
+
+export const dialogSubscriptionRefused = dialog('api-key', {
+  failure: { error: 'subscription_token_refused', field: 'key' }
+})
+
+export const dialogGateway = dialog('gateway')
+
+export const dialogCustomInvalid = dialog('custom', {
+  failure: { error: 'invalid_base_url', field: 'baseUrl' }
+})
+
+export const dialogServerError = dialog('gateway', { failure: { error: 'unavailable' } })
+
+export const dialogSaved = defineFixture({
   width: 640,
   render: () => (
     <Dialogish>
-      <CloudAgentSetupView
-        readiness={{ claude: 'team', codex: null }}
-        canShare
-        surface="dialog"
-        onSave={async () => null}
-        onLater={noop}
+      <CloudAgentSetupSavedNotice
+        saved={{ agents: ['claude', 'codex'], scope: 'personal' }}
+        onClose={noop}
       />
     </Dialogish>
   )
-})
-
-export const settingsDialogApiKey = defineFixture({
-  width: 640,
-  render: () => (
-    <Dialogish>
-      <CloudAgentSetupView
-        readiness={NONE}
-        canShare={false}
-        surface="dialog"
-        onSave={() => new Promise(() => {})}
-        onLater={noop}
-        initialOption="api-key"
-      />
-    </Dialogish>
-  ),
-  interact: async (frame) => {
-    const input = frame.querySelector<HTMLInputElement>('input[type="password"]')
-    if (input) {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
-        input,
-        'sk-ant-api03-Zq9xR2mVt8LwPcA1'
-      )
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-    await new Promise((resolve) => setTimeout(resolve, 30))
-    frame.querySelector<HTMLButtonElement>('button[aria-pressed]')?.click()
-    frame.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
 })

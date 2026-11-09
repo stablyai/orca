@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   cloudSecretNameError,
@@ -21,9 +22,14 @@ export function CloudSecretEditor({
   target,
   onSave,
   onCancel,
+  inline = false,
+  onSetUpAgent,
   initialError = null
 }: {
   target: CloudSecretEditorTarget
+  /** Inside a list row: no frame of its own. */
+  inline?: boolean
+  onSetUpAgent?: () => void
   onSave: (name: string, value: string) => Promise<CloudSecretsErrorCode | null>
   onCancel: () => void
   /** Fixtures only. */
@@ -66,7 +72,7 @@ export function CloudSecretEditor({
           onCancel()
         }
       }}
-      className="space-y-3 rounded-lg border border-border bg-background/60 p-3"
+      className={cn('space-y-3', !inline && 'rounded-lg border border-border bg-background/60 p-3')}
       aria-label={
         target.kind === 'add'
           ? t('cloudSecrets.editor.addLabel', 'Add a secret')
@@ -85,11 +91,16 @@ export function CloudSecretEditor({
             disabled={target.kind === 'replace'}
             autoFocus={target.kind === 'add'}
             onChange={(event) => {
-              setName(event.target.value.toUpperCase().replace(/[\s-]/g, '_'))
+              const input = event.target
+              const caret = input.selectionStart
+              setName(input.value.toUpperCase().replace(/[\s-]/g, '_'))
               setError(null)
+              // The rewrite keeps length, so the caret can go back where it was.
+              requestAnimationFrame(() => input.setSelectionRange(caret, caret))
             }}
             placeholder="DATABASE_URL"
             aria-invalid={errorIsName || undefined}
+            aria-describedby={`${formId}-status`}
             spellCheck={false}
             autoComplete="off"
             className="h-8"
@@ -110,7 +121,7 @@ export function CloudSecretEditor({
             }}
             autoFocus={target.kind === 'replace'}
             invalid={error !== null && !errorIsName}
-            describedBy={`${formId}-status`}
+            describedBy={`${formId}-status ${formId}-help`}
             placeholder={
               target.kind === 'replace' && target.hint
                 ? t('cloudSecrets.editor.replacePlaceholder', 'Replaces ••••{{hint}}', {
@@ -119,11 +130,25 @@ export function CloudSecretEditor({
                 : undefined
             }
           />
+          <p id={`${formId}-help`} className="text-2xs text-muted-foreground">
+            {t(
+              'cloudSecrets.editor.help',
+              'Hidden once saved. New terminals and agents get it within seconds, no rebuild.'
+            )}
+          </p>
         </div>
       </div>
       <div className="flex items-start justify-between gap-3">
         <p id={`${formId}-status`} role="alert" className="min-h-4 text-xs text-destructive">
           {error ? cloudSecretsErrorCopy(error, t) : null}
+          {error === 'subscription_token_refused' && onSetUpAgent ? (
+            <>
+              {' '}
+              <Button type="button" variant="link" size="inline" onClick={onSetUpAgent}>
+                {t('cloudSecrets.editor.signInInstead', 'Sign in instead')}
+              </Button>
+            </>
+          ) : null}
         </p>
         <div className="flex shrink-0 gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>

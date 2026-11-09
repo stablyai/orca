@@ -7,7 +7,11 @@ import type {
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
-import { cloudSecretScopeLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
+import {
+  cloudSecretKindLabel,
+  cloudSecretScopeLabel,
+  cloudSecretsErrorCopy
+} from './cloud-secrets-copy'
 import { maskedHint } from './CloudSecretList'
 import type { Loadable } from './use-cloud-secrets'
 
@@ -55,10 +59,7 @@ export function CloudSecretsPrecedence({
         <Order scopes={precedence.agent_key} t={t} />
       </div>
       <p className="leading-5 text-muted-foreground">
-        {t(
-          'cloudSecrets.precedence.detail',
-          'When a name is set in more than one place, the leftmost wins. Team agent keys come first so everyone on the team runs on the same account.'
-        )}
+        {t('cloudSecrets.precedence.detail', 'Leftmost wins.')}
       </p>
     </div>
   )
@@ -132,10 +133,10 @@ export function CloudSecretsEffectiveView({
                     <span className="flex min-w-0 items-center gap-2">
                       <code className="truncate font-mono">{secret.name}</code>
                       {secret.kind === 'agent_key' ? (
-                        <KeyRound
-                          aria-label={t('cloudSecrets.list.agentKey', 'Agent key')}
-                          className="size-3 shrink-0 text-muted-foreground"
-                        />
+                        <Badge variant="referenceLabel">
+                          <KeyRound />
+                          {cloudSecretKindLabel(secret.name, t)}
+                        </Badge>
                       ) : null}
                     </span>
                   </td>

@@ -21,7 +21,10 @@ import {
 
 const Repo = z.string().trim().min(3).max(256)
 const Target = z.object({ scope: z.enum(CLOUD_SECRET_SCOPES), repo: Repo.optional() })
-const Name = z.string().min(1).max(128)
+const Name = z
+  .string()
+  .max(128)
+  .regex(/^[A-Z_][A-Z0-9_]*$/)
 const Value = z
   .string()
   .min(1)
@@ -91,7 +94,8 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
   for (const channel of CHANNELS) {
     ipcMain.removeHandler(channel)
   }
-  const invalid = { ok: false, error: 'invalid_value' } as const
+  // A malformed request is a renderer bug, not something the user typed.
+  const invalid = { ok: false, error: 'unknown' } as const
 
   ipcMain.handle('cloudSecrets:status', async (): Promise<CloudSecretsStatus> => ({
     available: client !== null && (await getOrcaCloudAvailability()) === 'offered'

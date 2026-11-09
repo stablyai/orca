@@ -16,6 +16,15 @@ export function cloudSecretScopeLabel(scope: CloudSecretScope, t: Translate): st
   }
 }
 
+/** Model and endpoint names are settings, not credentials, even though team values win for them too. */
+export function cloudSecretKindLabel(name: string, t: Translate): string {
+  return name.endsWith('_MODEL') ||
+    name.endsWith('_BASE_URL') ||
+    name.startsWith('CLAUDE_CODE_USE_')
+    ? t('cloudSecrets.list.agentSetting', 'Agent setting')
+    : t('cloudSecrets.list.agentKey', 'Agent key')
+}
+
 /** Friendly copy for a server reason or transport failure. Never quotes a value. */
 export function cloudSecretsErrorCopy(
   code: CloudSecretsErrorCode | DotenvPasteIssue,
@@ -35,7 +44,7 @@ export function cloudSecretsErrorCopy(
     case 'subscription_token_refused':
       return t(
         'cloudSecrets.error.subscriptionToken',
-        'This is a Claude or ChatGPT subscription token. Use Sign in instead; Orca never stores those.'
+        'This is a Claude or ChatGPT subscription token, which can’t be stored. Sign the agent in instead.'
       )
     case 'value_too_large':
       return t('cloudSecrets.error.valueTooLarge', 'Values can be up to 8 KB.')

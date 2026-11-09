@@ -85,7 +85,8 @@ function ScopeTab({
   readOnlyNotice,
   description,
   emptyTitle,
-  emptyDetail
+  emptyDetail,
+  onSetUpAgent
 }: {
   api: CloudSecretsApi
   scope: CloudSecretScope
@@ -96,6 +97,7 @@ function ScopeTab({
   description: string
   emptyTitle: string
   emptyDetail: string
+  onSetUpAgent?: () => void
 }): React.JSX.Element {
   const model = useCloudSecretList(api, scope, repo)
   return (
@@ -110,6 +112,7 @@ function ScopeTab({
         people={people}
         emptyTitle={emptyTitle}
         emptyDetail={emptyDetail}
+        onSetUpAgent={onSetUpAgent}
       />
     </div>
   )
@@ -142,14 +145,18 @@ export function CloudSecretsPane({
 }): React.JSX.Element {
   const t = useTranslate()
   const [tab, setTab] = useState<Tab>(initialTab)
-  const [repo, setRepo] = useState<string | null>(repos[0]?.key ?? null)
+  // Undefined until the user picks, so a repo list that loads after mount still preselects its first entry.
+  const [pickedRepo, setRepo] = useState<string | null | undefined>(undefined)
+  const repo = pickedRepo === undefined ? (repos[0]?.key ?? null) : pickedRepo
+  const repoTabRepo = repo ?? repos[0]?.key ?? null
   const { effective: callerView } = useCloudSecretsEffective(api, null)
   const caller = callerView.status === 'ready' ? callerView.value.caller : null
-  const inTeam = caller ? caller.orgId !== null : false
+  // Until the caller is known, keep the Shared tab so the tab row does not shift when it loads.
+  const inTeam = callerView.status === 'loading' || (caller !== null && caller.orgId !== null)
   const withViewer: CloudSecretPeople = { ...people, viewerUserId: caller?.userId ?? null }
   const adminNotice = t(
     'cloudSecrets.readOnly.shared',
-    'You can see which names your team shares. Only owners and admins can add or change them, so ask an admin.'
+    'Only owners and admins can change shared secrets. Ask an admin.'
   )
 
   return (
@@ -162,7 +169,7 @@ export function CloudSecretsPane({
           <p className="max-w-xl text-xs leading-5 text-muted-foreground">
             {t(
               'cloudSecrets.description',
-              'Environment variables and agent keys for Orca Cloud workspaces. Values are hidden once saved. Changes reach new terminals and agents in running workspaces within seconds, with no rebuild.'
+              'Environment variables and agent keys for Orca Cloud workspaces.'
             )}
           </p>
         </div>
@@ -200,6 +207,7 @@ export function CloudSecretsPane({
               canWrite
               people={withViewer}
               readOnlyNotice={null}
+              onSetUpAgent={onSetUpAgent}
               description={t(
                 'cloudSecrets.personal.description',
                 'Only you get these, in every Orca Cloud workspace you start.'
@@ -223,6 +231,7 @@ export function CloudSecretsPane({
                 canWrite={caller?.canWrite.org === true}
                 people={withViewer}
                 readOnlyNotice={adminNotice}
+                onSetUpAgent={onSetUpAgent}
                 description={t(
                   'cloudSecrets.org.description',
                   'Everyone on your team gets these in their Orca Cloud workspaces.'
@@ -260,17 +269,23 @@ export function CloudSecretsPane({
               </div>
             ) : (
               <>
-                <RepoPicker repos={repos} value={repo} onChange={setRepo} allowNone={false} />
-                {repo ? (
+                <RepoPicker
+                  repos={repos}
+                  value={repoTabRepo}
+                  onChange={setRepo}
+                  allowNone={false}
+                />
+                {repoTabRepo ? (
                   <ScopeTab
                     api={api}
                     scope="repo"
-                    repo={repo}
+                    repo={repoTabRepo}
                     canWrite={caller?.canWrite.repo === true}
+                    onSetUpAgent={onSetUpAgent}
                     people={withViewer}
                     readOnlyNotice={t(
                       'cloudSecrets.readOnly.repo',
-                      'Your team owns this repository’s secrets. Only owners and admins can change them, so ask an admin.'
+                      'Only owners and admins can change this repository’s secrets. Ask an admin.'
                     )}
                     description={t(
                       'cloudSecrets.repo.description',

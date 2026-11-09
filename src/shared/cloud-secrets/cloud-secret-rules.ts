@@ -111,8 +111,13 @@ export function cloudSecretValueError(name: string, value: string): CloudSecrets
   if ((name === 'ANTHROPIC_API_KEY' || name === 'OPENAI_API_KEY') && JWT_SHAPE.test(trimmed)) {
     return 'subscription_token_refused'
   }
-  if (BASE_URL_NAMES.has(name) && !isPublicHttpsUrl(trimmed)) {
+  // The VM reads these unquoted, so the server takes only printable ASCII without spaces.
+  const bare = /^[\x21-\x7e]+$/.test(value)
+  if (BASE_URL_NAMES.has(name) && (!bare || !isPublicHttpsUrl(value))) {
     return 'invalid_base_url'
+  }
+  if (name.endsWith('_MODEL') && !bare) {
+    return 'invalid_value'
   }
   return null
 }

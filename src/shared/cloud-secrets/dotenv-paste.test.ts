@@ -37,7 +37,8 @@ describe('parseDotenvPaste', () => {
         'EMPTY=',
         'TOKEN=first',
         'TOKEN=second',
-        'OPEN="never closed'
+        'OPEN="never closed',
+        'AFTER=still read'
       ].join('\n')
     )
     expect(entries.map((entry) => entry.issue)).toEqual([
@@ -50,9 +51,10 @@ describe('parseDotenvPaste', () => {
       'invalid_value',
       'overridden',
       null,
-      'unterminated_quote'
+      'unterminated_quote',
+      null
     ])
     expect(entries.find((entry) => entry.name === 'ANTHROPIC_API_KEY')?.kind).toBe('agent_key')
-    expect(dotenvPasteToBatch(entries)).toEqual({ TOKEN: 'second' })
+    expect(dotenvPasteToBatch(entries)).toEqual({ TOKEN: 'second', AFTER: 'still read' })
   })
 })

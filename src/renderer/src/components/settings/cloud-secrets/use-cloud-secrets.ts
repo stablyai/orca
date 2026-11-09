@@ -18,7 +18,7 @@ export type Loadable<T> =
 function useLoad<T>(
   key: string | null,
   read: () => Promise<{ ok: true; value: T } | { ok: false; error: CloudSecretsErrorCode }>
-): [Loadable<T>, (update: (value: T) => T) => void, () => void] {
+): [Loadable<T>, (forKey: string, update: (value: T) => T) => void, () => void] {
   const [state, setState] = useState<{ key: string | null; loaded: Loadable<T> }>({
     key,
     loaded: { status: 'loading' }
@@ -53,9 +53,10 @@ function useLoad<T>(
     }
   }, [key, read, generation])
 
-  const update = useCallback((apply: (value: T) => T) => {
+  // Keyed so a write that lands after the user switched repo cannot patch the other repo's list.
+  const update = useCallback((forKey: string, apply: (value: T) => T) => {
     setState((current) =>
-      current.loaded.status === 'ready'
+      current.key === forKey && current.loaded.status === 'ready'
         ? { ...current, loaded: { status: 'ready', value: apply(current.loaded.value) } }
         : current
     )
@@ -106,6 +107,7 @@ export function useCloudSecretList(
       if (!target) {
         return 'repo_required'
       }
+      const writeKey = cloudSecretTargetKey(target)
       const result = await api.put({ target, name, value }).catch(() => null)
       if (!result) {
         return 'unknown'
@@ -113,7 +115,7 @@ export function useCloudSecretList(
       if (!result.ok) {
         return result.error
       }
-      update((current) => upsert(current, result.value))
+      update(writeKey, (current) => upsert(current, result.value))
       onChanged?.()
       return null
     },
@@ -125,6 +127,7 @@ export function useCloudSecretList(
       if (!target) {
         return 'repo_required'
       }
+      const writeKey = cloudSecretTargetKey(target)
       const result = await api.remove({ target, name }).catch(() => null)
       if (!result) {
         return 'unknown'
@@ -132,7 +135,7 @@ export function useCloudSecretList(
       if (!result.ok) {
         return result.error
       }
-      update((current) => current.filter((entry) => entry.name !== name))
+      update(writeKey, (current) => current.filter((entry) => entry.name !== name))
       onChanged?.()
       return null
     },
@@ -146,6 +149,7 @@ export function useCloudSecretList(
       if (!target) {
         return 'repo_required'
       }
+      const writeKey = cloudSecretTargetKey(target)
       const result = await api.batch({ target, set }).catch(() => null)
       if (!result) {
         return 'unknown'
@@ -153,7 +157,7 @@ export function useCloudSecretList(
       if (!result.ok) {
         return result.error
       }
-      update((current) => result.value.secrets.reduce(upsert, current))
+      update(writeKey, (current) => result.value.secrets.reduce(upsert, current))
       onChanged?.()
       return result.value
     },

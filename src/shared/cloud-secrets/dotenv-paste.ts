@@ -44,7 +44,10 @@ function closingQuote(text: string, start: number, quote: string): number {
 }
 
 export function parseDotenvPaste(text: string): DotenvPasteEntry[] {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  const lines = text
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
   const entries: DotenvPasteEntry[] = []
   for (let index = 0; index < lines.length; index++) {
     const raw = lines[index]
@@ -72,6 +75,8 @@ export function parseDotenvPaste(text: string): DotenvPasteEntry[] {
         close = closingQuote(rest, 1, quote)
       }
       if (close === -1) {
+        // Flag only this line and read on, so one stray quote cannot swallow the rest of the file.
+        index = lineNumber - 1
         issue = 'unterminated_quote'
         value = ''
       } else {
@@ -80,7 +85,7 @@ export function parseDotenvPaste(text: string): DotenvPasteEntry[] {
       }
     } else {
       // Unquoted: an inline comment starts at whitespace followed by #.
-      value = rest.replace(/\s+#.*$/, '').trim()
+      value = rest.startsWith('#') ? '' : rest.replace(/\s+#.*$/, '').trim()
     }
     issue ??= cloudSecretNameError(name) ?? cloudSecretValueError(name, value)
     entries.push({

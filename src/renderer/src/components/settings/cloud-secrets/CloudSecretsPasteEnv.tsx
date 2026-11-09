@@ -17,7 +17,7 @@ import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Textarea } from '../../ui/textarea'
 import { cn } from '@/lib/utils'
-import { cloudSecretsErrorCopy } from './cloud-secrets-copy'
+import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
 
 function PreviewLine({
   entry,
@@ -47,7 +47,7 @@ function PreviewLine({
             {entry.name || t('cloudSecrets.paste.unreadable', 'Unreadable line')}
           </code>
           {entry.kind === 'agent_key' && entry.name ? (
-            <Badge variant="referenceLabel">{t('cloudSecrets.list.agentKey', 'Agent key')}</Badge>
+            <Badge variant="referenceLabel">{cloudSecretKindLabel(entry.name, t)}</Badge>
           ) : null}
         </div>
         {issue ? (
@@ -93,6 +93,7 @@ export function CloudSecretsPasteEnv({
   const batch = useMemo(() => dotenvPasteToBatch(entries), [entries])
   const count = Object.keys(batch).length
   const blocked = entries.filter((entry) => entry.issue && entry.issue !== 'overridden').length
+  const duplicates = entries.filter((entry) => entry.issue === 'overridden').length
   const existing = useMemo(() => new Set(existingNames), [existingNames])
   const tooMany = count > MAX_CLOUD_SECRET_BATCH
 
@@ -128,7 +129,8 @@ export function CloudSecretsPasteEnv({
     <div
       className="space-y-3 rounded-lg border border-border bg-background/60 p-3"
       onKeyDown={(event) => {
-        if (event.key === 'Escape' && !saving) {
+        // A big paste is not thrown away by a stray Escape; Cancel still discards it.
+        if (event.key === 'Escape' && !saving && text.trim() === '') {
           event.stopPropagation()
           onCancel()
         }
@@ -216,15 +218,25 @@ export function CloudSecretsPasteEnv({
                   )
                 : entries.length === 0
                   ? null
-                  : blocked > 0
-                    ? t(
-                        'cloudSecrets.paste.summaryBlocked',
-                        '{{count}} ready · {{blocked}} need a fix and will be skipped',
-                        { count, blocked: String(blocked) }
-                      )
-                    : t('cloudSecrets.paste.summary', '{{count}} ready to save', {
-                        count
-                      })}
+                  : [
+                      t('cloudSecrets.paste.ready', '{{count}} ready', { count }),
+                      blocked > 0
+                        ? t(
+                            'cloudSecrets.paste.blocked',
+                            '{{blocked}} need a fix and will be skipped',
+                            {
+                              blocked: String(blocked)
+                            }
+                          )
+                        : null,
+                      duplicates > 0
+                        ? t('cloudSecrets.paste.duplicates', '{{duplicates}} duplicate ignored', {
+                            duplicates: String(duplicates)
+                          })
+                        : null
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
         </p>
         <div className="flex shrink-0 gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
