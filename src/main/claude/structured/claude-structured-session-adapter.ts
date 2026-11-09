@@ -9,6 +9,7 @@ import type {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { stopCurrentClaudeBackgroundTasks } from './claude-structured-control-actions'
 import { claudeHeldSends, claudeHoldsDispatch } from '../claude-command-lifecycle'
+import { claudeCanSetOptionWhileIdle } from './claude-structured-idle-option'
 import {
   releaseClaudeAcquisition,
   type ClaudeReleaseRequest
@@ -219,6 +220,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       input,
       this.deps.requestTimeoutMs
     )
+  canSetOptionWhileIdle: StructuredAgentSessionAdapter['canSetOptionWhileIdle'] = (input) =>
+    claudeCanSetOptionWhileIdle(this.sessions, input)
   open: NonNullable<StructuredAgentSessionAdapter['open']> = (request) =>
     openClaudeStart({
       request,
