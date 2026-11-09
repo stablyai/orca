@@ -92,8 +92,8 @@ export type TerminalWebViewProps = {
   terminalTheme?: MobileTerminalTheme
   // Persistent font-size preset; transient CSS pinch zoom is committed into it on release.
   textScale?: number
-  // Only initially shown views build pre-ready engines, limiting WebGL context use.
-  shownAtMount?: boolean
+  // Hidden views hold no WebGL context, and only views shown at mount build pre-ready engines.
+  shown?: boolean
   interactionActive?: boolean
   onWebReady?: () => void
   onEngineError?: (message: string) => void

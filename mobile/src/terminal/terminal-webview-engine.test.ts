@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { TERMINAL_NERD_FONT_CSS, XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
 import { XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { createTerminalDocumentScope } from './document/document-scope'
-import { attachWebglAddon, startWebglRecovery } from './document/webgl-recovery'
+import { attachWebglAddon, setWebglShown, startWebglRecovery } from './document/webgl-recovery'
 import { XTERM_HTML } from './terminal-webview-html'
 import { applyTerminalTheme } from './document/terminal-theme'
 
@@ -225,6 +225,21 @@ describe('terminal WebView bundled engine', () => {
     expect(addons).toHaveLength(2)
     expect(addons[1]?.dispose).toHaveBeenCalledTimes(1)
     expect(term.refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('gives up its WebGL context while hidden and takes a new one when shown again', () => {
+    const { addons, scope } = createWebglRecoveryHarness()
+
+    setWebglShown(scope, false)
+    expect(addons[0]?.dispose).toHaveBeenCalledTimes(1)
+    expect(scope.webglAddon).toBeNull()
+    // The dispose's own context loss is not a GPU failure to recover from.
+    addons[0]?.fireContextLoss()
+    expect(addons).toHaveLength(1)
+
+    setWebglShown(scope, true)
+    expect(addons).toHaveLength(2)
+    expect(scope.webglAddon).toBe(addons[1])
   })
 
   it('reapplies theme, clears the active atlas, and refreshes when visible', () => {

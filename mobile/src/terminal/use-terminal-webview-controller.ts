@@ -1,5 +1,5 @@
 import { parseTerminalKittyKeyboardFlags } from '../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readTerminalCellBox, type TerminalCellBox } from './terminal-cell-box'
 import { fitDimensionsFromCell } from './terminal-grid-fit'
 import type {
@@ -33,6 +33,7 @@ export function useTerminalWebViewController(
 ) {
   const {
     terminalTheme,
+    shown = true,
     interactionActive = true,
     textScale = 1,
     onWebReady,
@@ -116,11 +117,13 @@ export function useTerminalWebViewController(
         onWebReady?.()
       }
       // Reload drops commands; readiness must restore the selected theme even if its React value did not change.
+      sendToDocument({ type: 'set-shown', shown })
       sendToDocument({ type: 'set-interaction-active', active: interactionActive })
       sendToDocument({ type: 'set-theme', terminalTheme })
       flushPendingMessages()
     },
     [
+      shown,
       interactionActive,
       clearEngineError,
       clearWebReadyWatchdog,
@@ -130,6 +133,9 @@ export function useTerminalWebViewController(
       terminalTheme
     ]
   )
+
+  // Before paint, so a pane shown again draws its first frame with WebGL.
+  useLayoutEffect(() => postMessage({ type: 'set-shown', shown }), [postMessage, shown])
 
   useEffect(() => {
     if (isWebReadyRef.current) {

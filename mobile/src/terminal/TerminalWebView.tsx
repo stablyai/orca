@@ -38,7 +38,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     useImperativeHandle(ref, () => handle, [handle])
     // Seed scale in page source before document startup; Android injected scripts may run too late.
     const [source] = useState(() =>
-      xtermWebViewSource({ textScale: props.textScale ?? 1, shown: props.shownAtMount ?? true })
+      xtermWebViewSource({ textScale: props.textScale ?? 1, shown: props.shown ?? true })
     )
 
     const handleMessage = useCallback(

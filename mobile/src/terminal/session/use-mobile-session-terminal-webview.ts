@@ -42,6 +42,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     pendingSelectionRef,
     activeSessionTab,
     unsubscribeTerminal,
+    unsubscribeTerminalRef,
     subscribeToTerminal,
     nativeChatStream,
     readMarkdownTab,
@@ -106,6 +107,18 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       terminalGestureInputInFlightRef.current.delete(handle)
     }
   }, [])
+
+  // An unmounted pane took its xterm with it; the next mount is a new document that needs a snapshot.
+  const releaseTerminalDocument = useCallback(
+    (handle: string) => {
+      if (terminalUnsubsRef.current.has(handle)) {
+        unsubscribeTerminalRef.current(handle)
+      }
+      webReadyHandlesRef.current.delete(handle)
+      terminalResume.forget(handle)
+    },
+    [terminalResume, terminalUnsubsRef, unsubscribeTerminalRef, webReadyHandlesRef]
+  )
 
   useEffect(() => {
     // Imperative handles change without layout events; inventory removal owns geometry cleanup.
@@ -293,6 +306,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     sendTerminalUserInput,
     sendTerminalOrderedInput,
     setTerminalWebViewRef,
+    releaseTerminalDocument,
     handleTerminalWebReady,
     notifyTerminalFrame,
     notifyTerminalPaneFrame,

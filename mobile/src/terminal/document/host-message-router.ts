@@ -12,10 +12,12 @@ import { resetEvictionCounter } from './selection-state-and-eviction'
 import { applyTerminalTheme } from './terminal-theme'
 import { init, resize, write } from './terminal-init'
 import { applyTextScale } from './text-scaling'
+import { setWebglShown } from './webgl-recovery'
 import { afterQueuedWrites, resetWriteQueue } from './write-queue'
 
 export type TerminalHostMessage = {
   active?: boolean
+  shown?: boolean
   id?: number
   type?: string
   cols?: number
@@ -133,6 +135,10 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       if (!msg.active) {
         suspendSurfaceTouchGestures(scope)
       }
+    }
+  } else if (msg.type === 'set-shown') {
+    if (typeof msg.shown === 'boolean') {
+      setWebglShown(scope, msg.shown)
     }
   } else if (msg.type === 'set-theme') {
     applyTerminalTheme(scope, msg.terminalTheme)

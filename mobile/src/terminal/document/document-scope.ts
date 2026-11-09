@@ -41,6 +41,8 @@ export type TerminalDocumentState = {
   terminalGeneration: number
   termObserverDisposables: TerminalDocumentDisposable[]
   initRows: number
+  // Hidden documents hold no WebGL context: WebKit caps live contexts per page and drops the oldest.
+  shown: boolean
   webglAddon: TerminalDocumentWebglAddon | null
   webglRecoveryTimer: ReturnType<typeof setTimeout> | null
   terminalThemeInput: TerminalDocumentThemeMessage
@@ -162,6 +164,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     terminalGeneration: 0,
     termObserverDisposables: [],
     initRows: 24,
+    shown: true,
     webglAddon: null,
     webglRecoveryTimer: null,
     terminalThemeInput: null,

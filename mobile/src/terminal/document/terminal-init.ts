@@ -57,7 +57,9 @@ function openTerminal(scope: TerminalDocumentScope, cols: number, rows: number) 
   attachOsc52ClipboardBridge(scope, term)
   attachProgramStatusQueryReplies(scope, term)
   term.open(scope.surface!)
-  attachWebglAddon(scope, true)
+  if (scope.shown) {
+    attachWebglAddon(scope, true)
+  }
   try {
     const unicodeAddon = scope.createUnicode11Addon()
     if (unicodeAddon) {

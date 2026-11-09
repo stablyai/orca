@@ -97,7 +97,29 @@ function onDocumentVisibilityChange(scope: TerminalDocumentScope) {
   refreshTerminalSurface(scope)
 }
 
+// Release the context while the host hides this document and take a fresh one on show; xterm draws with its DOM renderer in between.
+export function setWebglShown(scope: TerminalDocumentScope, shown: boolean) {
+  if (scope.shown === shown) {
+    return
+  }
+  scope.shown = shown
+  if (shown) {
+    if (!scope.webglAddon) {
+      attachWebglAddon(scope, true)
+    }
+    return
+  }
+  cancelWebglContextRecovery(scope)
+  const addon = scope.webglAddon
+  // Clear first so the context loss this dispose raises is not taken for a GPU failure.
+  scope.webglAddon = null
+  try {
+    addon?.dispose()
+  } catch {}
+}
+
 export function startWebglRecovery(scope: TerminalDocumentScope) {
+  scope.shown = scope.start().shown
   const onVisibilityChange = () => onDocumentVisibilityChange(scope)
   document.addEventListener('visibilitychange', onVisibilityChange)
   scope.removeWebglRecovery = () => {

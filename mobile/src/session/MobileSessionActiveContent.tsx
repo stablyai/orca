@@ -8,6 +8,7 @@ import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from '../terminal/session/TerminalPaneView'
+import { useMountedTerminalHandles } from '../terminal/session/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
 import { mobileSessionNativeChatHostOutage } from './native-chat/mobile-native-chat-host-outage'
 import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
@@ -87,6 +88,7 @@ export function MobileSessionActiveContent({
     discardMarkdownLocalContent,
     saveMarkdownTab,
     setTerminalWebViewRef,
+    releaseTerminalDocument,
     handleTerminalWebReady,
     notifyTerminalFrame,
     notifyTerminalCellBoxChange,
@@ -114,6 +116,13 @@ export function MobileSessionActiveContent({
     showEmptyState,
     createTabBusy
   } = controller
+  const mountedTerminalHandles = useMountedTerminalHandles(
+    visibleTerminalHandles,
+    terminals.map((terminal) => terminal.handle)
+  )
+  const mountedTerminals = terminals.filter((terminal) =>
+    mountedTerminalHandles.includes(terminal.handle)
+  )
   const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
     useMobileSessionContentKeyboardLift(controller)
   const openUrlInOrca = useOpenUrlInOrca(controller)
@@ -258,14 +267,12 @@ export function MobileSessionActiveContent({
       </View>
     ) : (
       <View style={styles.terminalFrame}>
-        {terminals.map((terminal) => (
+        {mountedTerminals.map((terminal) => (
           <TerminalPaneView
             key={terminal.handle}
             handle={terminal.handle}
             active={terminal.handle === activeHandle}
-            visible={
-              visibleTerminalHandles?.includes(terminal.handle) ?? terminal.handle === activeHandle
-            }
+            visible={visibleTerminalHandles.includes(terminal.handle)}
             splitIndex={
               terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
                 ? visibleTerminalHandles.indexOf(terminal.handle)
@@ -304,6 +311,7 @@ export function MobileSessionActiveContent({
               void saveTerminalTextScale(scale)
             }}
             onRef={setTerminalWebViewRef}
+            onDocumentReleased={releaseTerminalDocument}
             onWebReady={handleTerminalWebReady}
             onCellBoxChange={notifyTerminalCellBoxChange}
             onSelectionMode={handleSelectionMode}
