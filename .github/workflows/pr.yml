@@ -485,6 +485,10 @@ jobs:
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/plugin-authoring/rpc-catalog/generate-rpc-params-catalog.mjs --check
 
+      - name: Check orchestration parity declarations
+        if: needs.code_paths.outputs.static_analysis == 'true'
+        run: node config/scripts/static-analysis/orchestration-parity/check-orchestration-parity-declarations.mjs
+
       - name: Verify the generated ACP protocol schema
         if: needs.code_paths.outputs.static_analysis == 'true'
         run: node config/scripts/acp/generate-protocol.mjs --check

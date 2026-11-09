@@ -1,0 +1,11 @@
+id: orchestration-agent-kind-branch
+valid:
+  - const party = resolveOrchestrationParty(address, db)
+  - if (party.terminalHandle === undefined) { return }
+  - const local = target.startsWith('run:')
+invalid:
+  - if (to.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) { return }
+  - const session = parseOrcaSessionAddress(to)
+  - if (party.orcaSessionId !== null) { notify() }
+  - if (agent.kind === 'structured') { inject() }
+  - const chat = !isTuiAgent(agent)

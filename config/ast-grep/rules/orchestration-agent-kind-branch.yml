@@ -1,0 +1,39 @@
+# Ratcheted by config/scripts/static-analysis/ratchets/orchestration/check-orchestration-agent-kind-ratchet.mjs;
+# info severity keeps `pnpm lint:ast-grep` quiet about the grandfathered baseline.
+# The addressing owners resolve an address or caller to its party; everything else should use that party.
+id: orchestration-agent-kind-branch
+language: typescript
+severity: info
+message: Branching on agent kind (terminal or chat) in an orchestration command splits their behaviour per command. Use the party the addressing owners resolve, and declare any per-kind refusal in src/main/runtime/orchestration/orchestration-parity.md.
+note: 'A deliberate exception takes `// ast-grep-ignore: orchestration-agent-kind-branch -- <reason>` above the line.'
+files:
+  - src/main/runtime/rpc/methods/orchestration/**
+  - src/main/runtime/orchestration/**
+  - src/main/runtime/rpc/orchestration-*.ts
+  - src/cli/handlers/orchestration/**
+ignores:
+  - '**/*.test.*'
+  - '**/*test-support*'
+  - '**/*test-fixture*'
+  - src/main/runtime/orchestration/addressing/**
+  - src/main/runtime/rpc/orchestration-session-caller.ts
+rule:
+  any:
+    # Address shape
+    - pattern: $X.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
+    - pattern: $X.startsWith('orca_session_id:')
+    - pattern: isOrcaSessionId($$$)
+    - pattern: parseOrcaSessionAddress($$$)
+    - pattern: mayNameSession($$$)
+    # Party shape
+    - pattern: $P.orcaSessionId !== null
+    - pattern: $P.orcaSessionId === null
+    - pattern: $P.terminalHandle === null
+    - pattern: $P.terminalHandle !== null
+    # Kind and mode literals
+    - pattern: $K.kind === 'structured'
+    - pattern: $K.mode === 'structured'
+    - pattern: isTuiAgent($$$)
+    # Caller kind read from the environment
+    - pattern: readInjectedAgentSessionId($$$)
+    - pattern: hasStructuredSessionMarker($$$)
