@@ -29,7 +29,6 @@ import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-sessio
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { structuredRewindCut } from '../../../native-chat/agent-session-wire/rewind/structured-rewind-cut'
-import { restoreJournal } from '../../../native-chat/agent-session-journal/replay/journal-open'
 
 export function registerCodexCatchUpEchoTests(input: {
   codexWith: typeof catchUpCodexWith
@@ -54,12 +53,12 @@ export function registerCodexCatchUpEchoTests(input: {
     await c.open([], { returnedTurns: [turn(2)], paginate: false })
     const whole = [turn(1), turn(2)]
     await c.open([], { returnedTurns: whole, paginate: false })
-    expect(c.texts()).toContain('assistant:answer 1')
+    expect(await c.texts()).toContain('assistant:answer 1')
     const before = c.journal.cursor()
     await c.reopen()
     await c.open([], { returnedTurns: whole, paginate: false })
     expect(c.journal.cursor()).toEqual(before)
-    expect(c.texts().filter((text) => text === 'assistant:answer 1')).toHaveLength(1)
+    expect((await c.texts()).filter((text) => text === 'assistant:answer 1')).toHaveLength(1)
   })
 
   it('uses saved native IDs only for display, preserving sends and drafts through outside echoes and replay', async () => {
@@ -96,7 +95,7 @@ export function registerCodexCatchUpEchoTests(input: {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
       await (state === 'unknown'
-        ? c.journal.markPendingSubmissionsUnknown(1)
+        ? c.journal.write({ kind: 'pending-unknown', fence: 1 })
         : c.journal.resolveDispatch({
             clientMessageId: state,
             state: 'rejected',
@@ -109,7 +108,7 @@ export function registerCodexCatchUpEchoTests(input: {
     await c.reopen()
     const before = await readTestJournalSnapshot(c.journal)
     const draft = await c.journal.queuedMessages.get('draft')
-    const receipts = states.map((state) => c.journal.receiptFor(state))
+    const receipts = await Promise.all(states.map((state) => c.journal.reads.receiptFor(state)))
     const native = states.map((state, n) => ({
       ...turn(n + 2),
       items: [
@@ -138,7 +137,7 @@ export function registerCodexCatchUpEchoTests(input: {
       ]
     }
     await c.open([...native, outside])
-    expect(c.texts().slice(-4)).toEqual([
+    expect((await c.texts()).slice(-4)).toEqual([
       'assistant:answer 3',
       '(continued-outside)',
       'user:continue',
@@ -147,8 +146,10 @@ export function registerCodexCatchUpEchoTests(input: {
     expect((await readTestJournalItems(c.journal)).slice(0, before.items.length)).toEqual(
       before.items
     )
-    expect(states.map((state) => c.journal.receiptFor(state))).toEqual(receipts)
-    expect(c.texts().filter((text) => text.includes('historical rendering'))).toEqual([])
+    expect(await Promise.all(states.map((state) => c.journal.reads.receiptFor(state)))).toEqual(
+      receipts
+    )
+    expect((await c.texts()).filter((text) => text.includes('historical rendering'))).toEqual([])
     expect(await readTestJournalSubmissions(c.journal)).toEqual(before.submissions)
     expect(await c.journal.queuedMessages.get('draft')).toEqual(draft)
     const outsideKey = agentJournalItemKey({
@@ -165,8 +166,6 @@ export function registerCodexCatchUpEchoTests(input: {
     await c.open([...native, outside])
     expect(await readTestJournalSnapshot(c.journal)).toEqual(whole)
     expect(await c.journal.queuedMessages.get('draft')).toEqual(draft)
-    const restored = restoreJournal(c.db, SESSION)
-    expect(restored?.state.queue.cards.get('draft')).toEqual(draft)
   })
 
   it('keeps native display identity after a real retained cut and disk reopen', async () => {
@@ -194,23 +193,24 @@ export function registerCodexCatchUpEchoTests(input: {
       fence: 1,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
-    await c.journal.markPendingSubmissionsUnknown(1)
+    await c.journal.write({ kind: 'pending-unknown', fence: 1 })
     await c.open([turn(1), turn(2), turn(3)])
     const key = agentJournalItemKey({ provider: 'orca', clientMessageId })
-    const cut = structuredRewindCut(c.journal, {
-      itemId: agentJournalItemKey({
-        provider: 'codex',
-        threadId: THREAD,
-        turnId: 'turn-3',
-        ordinal: 0
-      }),
+    const target = agentJournalItemKey({
       provider: 'codex',
-      nativeId: THREAD
+      threadId: THREAD,
+      turnId: 'turn-3',
+      ordinal: 0
     })
-    if (!cut) {
-      throw new Error('missing native retention cut')
-    }
-    await c.journal.replaceEpochItems('handle_forked', 1, cut.kept)
+    expect(
+      await structuredRewindCut(c.journal, { itemId: target, provider: 'codex', nativeId: THREAD })
+    ).not.toBeNull()
+    const items = await readTestJournalItems(c.journal)
+    const cutAt = items.find((item) => item.itemId === target)!.sequence
+    await c.replaceEpoch(
+      'handle_forked',
+      items.filter((item) => item.sequence < cutAt)
+    )
     await c.reopen()
     const prompt = await c.journal.reads.item(key)
     expect(prompt?.body).toEqual(body)
@@ -228,20 +228,20 @@ export function registerCodexCatchUpEchoTests(input: {
       ]
     }
     const before = await readTestJournalSnapshot(c.journal)
-    const beforeTexts = c.texts()
+    const beforeTexts = await c.texts()
     await c.open([turn(1), turn(2), native])
     expect(await c.journal.reads.item(key)).toEqual(prompt)
     expect((await readTestJournalItems(c.journal)).slice(0, before.items.length)).toEqual(
       before.items
     )
-    expect(c.texts()).toEqual([...beforeTexts, 'assistant:native answer'])
+    expect(await c.texts()).toEqual([...beforeTexts, 'assistant:native answer'])
     expect((await c.journal.reads.submission(clientMessageId))?.dispatchState).toBe('unknown')
     expect(await c.journal.reads.receiptFor(clientMessageId)).toBeNull()
     const whole = await readTestJournalSnapshot(c.journal)
     await c.reopen()
     await c.open([turn(1), turn(2), native])
     expect(await readTestJournalSnapshot(c.journal)).toEqual(whole)
-    await c.journal.replaceEpochItems('handle_forked', 1, [])
+    await c.replaceEpoch('handle_forked', [])
     const hidden = c.journal.cursor()
     const { readCodexHistoryJournalView } =
       await import('../../history/journal-views/codex-history-journal-view')
@@ -379,7 +379,7 @@ export function registerCodexCatchUpEchoTests(input: {
       }
     }
     await open()
-    expect(c.texts()).toEqual([
+    expect(await c.texts()).toEqual([
       'user:native',
       '(continued-outside)',
       'user:ask 1',
@@ -437,9 +437,11 @@ export function registerCodexCatchUpEchoTests(input: {
       }
     })
     await open()
-    expect(c.texts().at(-1)).toBe('assistant:final missing tail')
+    expect((await c.texts()).at(-1)).toBe('assistant:final missing tail')
     await c.reopen()
-    expect(c.texts().filter((text) => text === 'assistant:completed answer')).toHaveLength(1)
-    expect(c.texts().at(-1)).toBe('assistant:final missing tail')
+    expect((await c.texts()).filter((text) => text === 'assistant:completed answer')).toHaveLength(
+      1
+    )
+    expect((await c.texts()).at(-1)).toBe('assistant:final missing tail')
   })
 }

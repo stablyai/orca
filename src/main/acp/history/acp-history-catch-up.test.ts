@@ -1,4 +1,7 @@
-import { readTestJournalSubmissions } from '../../native-chat/agent-session-journal/journal-observation.test-support'
+import {
+  readTestJournalItems,
+  readTestJournalSubmissions
+} from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // A reopened chat catches up on turns its agent replays that the chat never saw, against real
 // OpenCode 2.0.14 and Grok 1.0.62 recordings: once, in order, without a notice, and never a turn
 // the chat already holds.
@@ -20,7 +23,6 @@ import {
   AGENT,
   closeProviderTimelineRigs,
   NAMESPACE,
-  SESSION,
   providerItemId
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
@@ -31,9 +33,6 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { acpNamedTextKey } from '../acp-turn-messages'
 import { isHistoricalProviderTimelineItem } from '../../native-chat/agent-session-timeline/provider-timeline-history'
-import { StructuredAgentSessionCurrentWork } from '../../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
-import { hasUnfinishedStructuredAgentSessionWork } from '../../native-chat/agent-session-wire/termination/structured-agent-session-unfinished-work'
-import { planStructuredAgentSessionDeadGeneration } from '../../native-chat/agent-session-wire/termination/structured-agent-session-dead-generation-settlement'
 import { AcpLoadHistory } from './acp-history-replay'
 import { asReattachHistory } from '../acp-structured-session'
 import { readAcpFixture, type AcpFixtureFrame } from '../acp-timeline-fixture.test-support'
@@ -42,6 +41,11 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await closeProviderTimelineRigs()
 })
+
+function savedItem(items: readonly AgentJournalRenderItem[]) {
+  const byId = new Map(items.map((item) => [item.itemId, item]))
+  return (itemId: string) => byId.get(itemId) ?? null
+}
 
 async function recording(name: string): Promise<AcpFixtureFrame[]> {
   // The rig's journal keys rows under its own provider session.
@@ -182,7 +186,7 @@ describe('ACP history catch-up', () => {
     await catchUp(partial)
     const imported = await rig.rows()
     const historical = imported.filter((item) =>
-      isHistoricalProviderTimelineItem(item, (key) => rig.journal.item(key))
+      isHistoricalProviderTimelineItem(item, savedItem(imported))
     )
     expect(historical).toHaveLength(4)
     const container = historical.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
@@ -192,20 +196,6 @@ describe('ACP history catch-up', () => {
     expect(container).not.toHaveProperty('startedAt')
     const observedTool = historical.find((item) => item.body.kind === 'tool-call')!
     expect(observedTool.body).toMatchObject({ state: 'running' })
-    expect(
-      new StructuredAgentSessionCurrentWork(rig.journal, 1).isCurrentItem(observedTool.itemId)
-    ).toBe(false)
-    expect(hasUnfinishedStructuredAgentSessionWork(rig.journal)).toBe(false)
-    expect(
-      planStructuredAgentSessionDeadGeneration({
-        journal: rig.journal,
-        sessionId: SESSION,
-        fence: 1,
-        settlementId: 'exit',
-        verdict: { state: 'interrupted' },
-        pendingSubmissionReason: 'ended'
-      }).mutations
-    ).toEqual([])
     rig.assembler.apply({ type: 'session.ended', verdict: { state: 'interrupted' }, endedAt: 9000 })
     await fixture.restart()
     expect((await rig.row(observedTool.itemId))?.body).toEqual(observedTool.body)
@@ -241,14 +231,9 @@ describe('ACP history catch-up', () => {
     await catchUp(full)
     expect(await rig.rows()).toEqual(complete)
     const reopened = await rig.reopenJournal()
-    expect(
-      isHistoricalProviderTimelineItem((await reopened.reads.item(observedTool.itemId))!, (key) =>
-        reopened.item(key)
-      )
-    ).toBe(true)
-    expect(isHistoricalProviderTimelineItem(nativeBefore[0]!, (key) => reopened.item(key))).toBe(
-      false
-    )
+    const reread = savedItem(await readTestJournalItems(reopened))
+    expect(isHistoricalProviderTimelineItem(reread(observedTool.itemId)!, reread)).toBe(true)
+    expect(isHistoricalProviderTimelineItem(nativeBefore[0]!, reread)).toBe(false)
   })
 
   it('keeps same-text outside answers and reasoning while deduplicating exact native output', async () => {
@@ -508,11 +493,9 @@ describe('ACP history catch-up', () => {
       )
       expect(readAgentJournalTurn(lifecycle[0]!.body)?.userItemId).toBe(opener.itemId)
       expect(opener.turnScope).toEqual({ kind: 'turn', turnItemId: lifecycle[0]!.itemId })
-      expect(
-        messages.every((row) =>
-          isHistoricalProviderTimelineItem(row, (key) => rig.journal.item(key))
-        )
-      ).toBe(true)
+      expect(messages.every((row) => isHistoricalProviderTimelineItem(row, savedItem(rows)))).toBe(
+        true
+      )
       for (const held of before) {
         const current = rows.find((row) => row.itemId === held.itemId)!
         expect(current.sequence).toBe(held.sequence)

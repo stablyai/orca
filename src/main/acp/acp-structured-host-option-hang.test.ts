@@ -43,7 +43,7 @@ describe('a Grok model pick Grok never answers during send', () => {
     expect(
       (
         await readTestJournalSubmissions(
-          host.collaboratorsForTests().sessions.get(SESSION)?.journal
+          host.collaboratorsForTests().sessions.get(SESSION)!.journal
         )
       )[0]?.dispatchState
     ).toBe('rejected')
@@ -84,7 +84,7 @@ describe('a Grok model pick Grok never answers during send', () => {
     rig.child().agent.reply(frame!, { configOptions: GROK_CONFIG_OPTIONS })
     await rig.settle()
     await host.flushStreamedEvents(SESSION)
-    await journal['queue'].drain()
+    await journal.readInOrder(() => undefined)
     expect(framesOf(rig.child(), 'session/prompt')).toEqual([])
     expect(original).toBeDefined()
     expect(structuredAgentSessionHandingOver(journal).has(id)).toBe(false)
@@ -112,9 +112,13 @@ describe('a Grok model pick Grok never answers during send', () => {
     const child = rig.child()
     const [old] = framesOf(child, 'session/set_config_option')
     await vi.advanceTimersByTimeAsync(100)
-    await waitFor(() =>
+    await waitFor(async () =>
       expect(
-        host.collaboratorsForTests().sessions.get(SESSION)?.journal.submissions()[0]?.dispatchState
+        (
+          await readTestJournalSubmissions(
+            host.collaboratorsForTests().sessions.get(SESSION)!.journal
+          )
+        )[0]?.dispatchState
       ).toBe('rejected')
     )
     vi.useRealTimers()
@@ -133,7 +137,7 @@ describe('a Grok model pick Grok never answers during send', () => {
     expect(
       (
         await readTestJournalSubmissions(
-          host.collaboratorsForTests().sessions.get(SESSION)?.journal
+          host.collaboratorsForTests().sessions.get(SESSION)!.journal
         )
       )[0]?.dispatchState
     ).toBe('rejected')

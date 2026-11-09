@@ -3,12 +3,14 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect } from 'vitest'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { JournalWriterOperation } from '../../../native-chat/agent-session-journal/journal-writer-command'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   closeTestJournalHostDatabase,
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase
+  createTrackedJournalOpener
 } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
@@ -95,14 +97,12 @@ export async function chat(clock: { now: number }) {
       return deferred
     },
     root,
-    get db() {
-      return openTestJournalHostDatabase(root).db
-    },
     reopen: async () => {
       deferred.close()
       await journal.close()
       await closeTestJournalHostDatabase(root)
-      journal = await journals.open(journalOptions)
+      // A reopen recovers interrupted sends, as the host's conversation open does.
+      journal = await journals.open({ ...journalOptions, recover: { fence: 1 } })
       deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
       bind()
     },
@@ -118,6 +118,23 @@ export async function chat(clock: { now: number }) {
         ...options
       })
       return deferred.drained()
+    },
+    /** Replace the live epoch with these saved items, as a retained cut or fork commits it. */
+    replaceEpoch: async (
+      reason: Extract<JournalWriterOperation, { kind: 'epoch-replace' }>['reason'],
+      kept: readonly AgentJournalRenderItem[]
+    ) => {
+      const items = await Promise.all(
+        kept.map(async (item) => ({
+          identity: parseAgentJournalItemKey(item.itemId)!,
+          body: item.body,
+          observedAt: item.observedAt,
+          ...(item.turnScope ? { turnScope: item.turnScope } : {}),
+          ...(item.agentId ? { agentId: item.agentId } : {}),
+          ownerFence: (await journal.reads.itemFence(item.itemId)) ?? 1
+        }))
+      )
+      await journal.write({ kind: 'epoch-replace', reason, fence: 1, items })
     },
     texts: async () =>
       (await readTestJournalItems(journal)).flatMap((item) => {

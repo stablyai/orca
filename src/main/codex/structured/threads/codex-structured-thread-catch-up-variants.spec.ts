@@ -285,7 +285,7 @@ export function registerCodexHistoryVariantsTests(input: {
         })
       }
     })
-    expect(c.texts().filter((text) => !text.startsWith('('))).toEqual([
+    expect((await c.texts()).filter((text) => !text.startsWith('('))).toEqual([
       'user:Captured original',
       'user:Original question',
       'assistant:Independent final',
@@ -298,16 +298,16 @@ export function registerCodexHistoryVariantsTests(input: {
     expect((await c.journal.reads.submission('proof'))?.dispatchState).toBe('accepted')
     expect(helpers.find('wrong-helper')).toBeUndefined()
     const row = (ordinal: number) =>
-      c.journal.item(
+      c.journal.reads.item(
         agentJournalItemKey({ provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal })
       )
-    expect(row(0)).toBeNull()
-    expect(row(1)?.body).toMatchObject({
+    expect(await row(0)).toBeNull()
+    expect((await row(1))?.body).toMatchObject({
       role: 'user',
       blocks: [{ type: 'text', text: 'Original question' }]
     })
-    expect(row(3)).toBeNull()
-    expect(row(4)?.body).toMatchObject({
+    expect(await row(3)).toBeNull()
+    expect((await row(4))?.body).toMatchObject({
       role: 'assistant',
       blocks: [{ type: 'text', text: 'Good after refused slot' }]
     })

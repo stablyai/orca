@@ -158,10 +158,8 @@ async function expectDeliveredAfterStop(
   })
   rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
   const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  await waitFor(() =>
-    expect(
-      journal.submissions().find((entry) => entry.clientMessageId === secondId)?.dispatchState
-    ).toBe('accepted')
+  await waitFor(async () =>
+    expect((await journal.reads.submission(secondId))?.dispatchState).toBe('accepted')
   )
   expect(
     (await readTestJournalSubmissions(journal)).map((entry) => entry.rejection?.kind ?? null)

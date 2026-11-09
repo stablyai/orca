@@ -108,7 +108,7 @@ export function registerCodexHistorySourcesTests(input: {
         }
       }
       await open()
-      expect(c.texts()).toEqual(['user:ask 1', 'assistant:A different final answer'])
+      expect(await c.texts()).toEqual(['user:ask 1', 'assistant:A different final answer'])
       const rows = await readTestJournalItems(c.journal)
       expect(new Set(rows.map((row) => row.itemId)).size).toBe(rows.length)
       expect(rows.find((row) => row.body.kind === 'turn')?.body).toMatchObject({
@@ -365,8 +365,9 @@ export function registerCodexHistorySourcesTests(input: {
       ]
     }
     await open([source])
+    const items = await readTestJournalItems(c.journal)
     const saved = collisions.map(({ id }) =>
-      c.journal.snapshot().items.find(({ body }) => body.kind === 'tool-call' && body.callId === id)
+      items.find(({ body }) => body.kind === 'tool-call' && body.callId === id)
     )
     expect(saved).toHaveLength(collisions.length)
     for (const row of saved) {
@@ -428,7 +429,7 @@ export function registerCodexHistorySourcesTests(input: {
       path: 'a',
       patch: journalPayload('+a')
     })
-    expect(c.texts()).toEqual([
+    expect(await c.texts()).toEqual([
       '(continued-outside)',
       '(plan-document)',
       'user:ask 2',
@@ -480,7 +481,7 @@ export function registerCodexHistorySourcesTests(input: {
     expect((await readTestJournalItems(c.journal)).slice(0, before.items.length)).toEqual(
       before.items
     )
-    expect(c.texts().slice(-2)).toEqual(['user:ask 31', 'assistant:answer 31'])
+    expect((await c.texts()).slice(-2)).toEqual(['user:ask 31', 'assistant:answer 31'])
     const imports = commits.mock.calls.flatMap(([call]) =>
       call.steps.filter(
         (step) =>

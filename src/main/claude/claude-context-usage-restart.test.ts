@@ -142,8 +142,8 @@ function acquire(journal: AgentSessionJournal) {
   return { translator, answers, settle, detach, reattach, release }
 }
 
-const ring = (journal: AgentSessionJournal) =>
-  selectStructuredAgentContextUsage(journal.snapshot().items)
+const ring = async (journal: AgentSessionJournal) =>
+  selectStructuredAgentContextUsage(await readTestJournalItems(journal))
 
 describe('context usage across a restart', () => {
   it('resets the ring at a /compact that is the first thing after a restart, then reads the fresh report', async () => {
@@ -154,20 +154,20 @@ describe('context usage across a restart', () => {
     before.translator.handle(assistantFrame('reply-a', 2_000, 150_000))
     before.translator.handle(resultFrame(3_000))
     await before.settle()
-    expect(ring(journal)).toMatchObject({ usedTokens: 150_000, windowTokens: 1_000_000 })
+    expect(await ring(journal)).toMatchObject({ usedTokens: 150_000, windowTokens: 1_000_000 })
     before.release()
 
     const after = acquire(journal)
     after.translator.handle(compactBoundary(10_000))
     await after.settle()
-    expect(ring(journal)).toBeNull()
+    expect(await ring(journal)).toBeNull()
 
     after.translator.handle(resultFrame(11_000))
     await after.settle()
-    expect(ring(journal)).toBeNull()
+    expect(await ring(journal)).toBeNull()
     after.answers.at(-1)?.(postCompactionReport)
     await after.settle()
-    expect(ring(journal)).toMatchObject({
+    expect(await ring(journal)).toMatchObject({
       usedTokens: 40_000,
       windowTokens: 1_000_000,
       estimated: false,

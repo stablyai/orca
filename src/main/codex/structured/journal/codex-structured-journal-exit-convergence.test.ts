@@ -1,4 +1,5 @@
 import {
+  readTestJournalItems,
   readTestJournalSnapshot,
   readTestJournalSubmissions
 } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
@@ -26,7 +27,9 @@ import {
   type StructuredAgentSessionChildExitSession
 } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-child-exit'
 import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { StructuredAgentSessionCurrentWork } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
+import { structuredAgentSessionHandoverAuthority } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-handing-over'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { applyAgentSessionRecordCommand } from '../../../runtime/agent-session/records/agent-session-record-command'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { handleCodexSessionExit } from '../session-lifecycle/codex-structured-session-close'
 import type {
@@ -55,12 +58,27 @@ afterEach(async () => {
   }
 })
 
-function userVisible(journal: AgentSessionJournal, liveFence: number | null) {
-  const items = journal.snapshot().items
-  const work = new StructuredAgentSessionCurrentWork(journal, liveFence)
+async function userVisible(
+  journal: AgentSessionJournal,
+  session: StructuredAgentSessionChildExitSession,
+  record: AgentSessionRecord
+) {
+  const items = await readTestJournalItems(journal)
+  const { state: work } = await journal.readWork(
+    () => ({
+      handle: journal.observationHandle(),
+      record: agentSessionConversationView(record),
+      ended: session.lastEndedChild,
+      child: session.child && { fence: session.child.fence, heldSends: [] },
+      ...structuredAgentSessionHandoverAuthority(journal),
+      openedThrough: journal.openingCursor(),
+      operationalRevision: 0
+    }),
+    { kind: 'state' }
+  )
   return {
-    working: work.working(),
-    prompt: work.hasActionablePrompt(),
+    working: work.working,
+    prompt: work.actionablePrompts.length > 0,
     turnStates: items.flatMap((item) => readAgentJournalTurn(item.body)?.state ?? []),
     runningCalls: items.filter(
       (item) => item.body.kind === 'tool-call' && item.body.state === 'running'
@@ -68,7 +86,7 @@ function userVisible(journal: AgentSessionJournal, liveFence: number | null) {
     endedCalls: items.filter(
       (item) => item.body.kind === 'tool-call' && item.body.state !== 'running'
     ).length,
-    send: journal.submission('send-1')?.dispatchState
+    send: (await journal.reads.submission('send-1'))?.dispatchState
   }
 }
 
@@ -153,7 +171,14 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   ).toEqual({ accepted: true })
   await expect(deferred.drained()).resolves.toEqual({ ok: true })
   expect(deferred.state().queuedBytes).toBe(0)
-  expect(userVisible(journal, 7)).toEqual({
+  let record: AgentSessionRecord = agentSessionRecordFixture(
+    agentSessionLeaseFixture({ sessionId: SESSION })
+  )
+  const hostSession: StructuredAgentSessionChildExitSession = {
+    child: { generation: 'generation', fence: 7, phase: 'ready' },
+    journal
+  }
+  expect(await userVisible(journal, hostSession, record)).toEqual({
     working: true,
     prompt: true,
     turnStates: ['running'],
@@ -216,13 +241,6 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   expect(onFailed).not.toHaveBeenCalled()
   expect(await readTestJournalSnapshot(journal)).toEqual(before)
   expect(commits).not.toHaveBeenCalled()
-  let record: AgentSessionRecord = agentSessionRecordFixture(
-    agentSessionLeaseFixture({ sessionId: SESSION })
-  )
-  const hostSession: StructuredAgentSessionChildExitSession = {
-    child: { generation: 'generation', fence: 7, phase: 'ready' },
-    journal
-  }
   const [event] = events
   if (!event) {
     throw new Error('Codex did not report its observed exit')
@@ -232,10 +250,12 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
       logger: recording.logger,
       store: {
         getRecord: () => record,
-        transitionHandoff: async (
-          _sessionId: string,
-          transition: (current: AgentSessionRecord) => AgentSessionRecord
-        ) => (record = transition(record))
+        updateRecord: async (_sessionId, command) => {
+          const applied = applyAgentSessionRecordCommand(record, command)
+          record = applied.record
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store answers each command with its own result.
+          return applied.result as never
+        }
       },
       sessions: new Map([[SESSION, hostSession]]),
       flushLifecycle: () => deferred.lifecycleBarrier(),
@@ -245,7 +265,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
     },
     event
   )
-  expect(userVisible(journal, null)).toEqual({
+  expect(await userVisible(journal, hostSession, record)).toEqual({
     working: false,
     prompt: false,
     turnStates: ['interrupted'],
