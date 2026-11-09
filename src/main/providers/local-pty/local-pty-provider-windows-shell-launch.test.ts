@@ -1,3 +1,4 @@
+import { createLocalPtyLaunchPlan, DeferredLocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type * as WslPathOwner from '../../../shared/wsl-paths'
 import type * as WslAvailabilityTypes from '../../wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -163,6 +164,49 @@ describe('LocalPtyProvider', () => {
     spawnMock.mockReturnValue(mockProc)
 
     provider = new LocalPtyProvider()
+  })
+
+  it.each([
+    { shell: 'powershell.exe', distro: 'Ubuntu', guest: false },
+    { shell: 'wsl.exe', distro: undefined, guest: true },
+    {
+      shell: 'powershell.exe',
+      distro: 'Debian',
+      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me',
+      guest: true
+    },
+    {
+      shell: 'powershell.exe',
+      distro: 'Debian',
+      worktreeId:
+        'repo::\\\\wsl.localhost\\Ubuntu\\home\\me::workspace:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      guest: true
+    }
+  ])('plans the physical local PTY in its effective context: $shell $cwd $worktreeId', (input) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    let plan = createLocalPtyLaunchPlan(
+      {
+        cols: 80,
+        rows: 24,
+        cwd: input.cwd ?? 'C:\\plain',
+        shellOverride: input.shell,
+        terminalWindowsWslDistro: input.distro,
+        worktreeId: input.worktreeId
+      },
+      () => ({})
+    )
+    if (plan instanceof DeferredLocalPtyLaunchPlan) {
+      plan = plan.finish(false)
+    }
+    if (input.guest) {
+      expect(plan.shellPath).toBe('wsl.exe')
+      expect(plan.shellArgs).toContain('Ubuntu')
+      expect(plan.launchWslDistro).toBe('Ubuntu')
+    } else {
+      expect(plan.shellPath).toMatch(/powershell\.exe$/)
+      expect(plan.shellArgs).not.toContain('Ubuntu')
+      expect(plan.launchWslDistro).toBeNull()
+    }
   })
 
   describe('spawn', () => {

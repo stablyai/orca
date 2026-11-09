@@ -1,3 +1,4 @@
+import { createPtyShellLaunchPlan } from '../shell-launch-plan'
 import type * as PtySpawnValidationTypes from '../../../providers/working-directory-validation'
 import { describe, expect, it, vi } from 'vitest'
 import { setImmediate as nextNativeTurn } from 'node:timers/promises'
@@ -76,6 +77,8 @@ vi.mock('../../../providers/windows-pty-job-membership', () => ({
   isWindowsPtyJobReadable: () => true
 }))
 
+vi.mock('../../../wsl/discovery/distro-catalog', () => ({ getDefaultWslDistro: () => 'Ubuntu' }))
+
 import { createPtySubprocess } from '../pty-subprocess'
 import {
   createPtyProcessEventEmitter,
@@ -90,6 +93,49 @@ describe('createPtySubprocess', () => {
     resolveUnixShellPathMock,
     resolveAgentForegroundProcessMock,
     validateWorkingDirectoryMock
+  })
+
+  it.each([
+    { shell: 'powershell.exe', distro: 'Ubuntu', guest: false },
+    { shell: 'wsl.exe', distro: undefined, guest: true },
+    {
+      shell: 'powershell.exe',
+      distro: 'Debian',
+      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me',
+      guest: true
+    },
+    {
+      shell: 'powershell.exe',
+      distro: 'Debian',
+      sessionId:
+        'repo::\\\\wsl.localhost\\Ubuntu\\home\\me::workspace:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb@@pty',
+      guest: true
+    }
+  ])('plans the physical daemon PTY in its effective context: $shell $cwd $sessionId', (input) => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const plan = createPtyShellLaunchPlan(
+        {
+          sessionId: input.sessionId ?? 'pty',
+          cols: 80,
+          rows: 24,
+          cwd: input.cwd ?? 'C:\\plain',
+          shellOverride: input.shell,
+          terminalWindowsWslDistro: input.distro
+        },
+        {}
+      )
+      if (input.guest) {
+        expect(plan.shellPath).toBe('wsl.exe')
+        expect(plan.shellArgs).toContain('Ubuntu')
+      } else {
+        expect(plan.shellPath).toBe(WINDOWS_POWERSHELL_ABS)
+        expect(plan.shellArgs).not.toContain('Ubuntu')
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
   })
 
   it('delivers output and exit that land while ConPTY startup is still being confirmed', async () => {
