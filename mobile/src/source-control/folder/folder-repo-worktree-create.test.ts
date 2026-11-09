@@ -11,8 +11,14 @@ import {
   type FolderRepoTarget
 } from './folder-repo-worktree-create'
 
+const idempotency = vi.hoisted(() => {
+  const state: { support: { dedupeTtlMs: number } | false } = { support: false }
+  return state
+})
 vi.mock('../../tasks/worktree-create-capability', () => ({
-  readNewWorktreeRuntimeCapabilities: async () => ({ worktreeCreateIdempotency: false })
+  readNewWorktreeRuntimeCapabilities: async () => ({
+    worktreeCreateIdempotency: idempotency.support
+  })
 }))
 
 const FOLDER = 'folder:f-1'
@@ -20,6 +26,7 @@ const TAKEN = 'Branch payments already exists\nworktree_create_exact_name_taken'
 
 afterEach(() => {
   vi.useRealTimers()
+  idempotency.support = false
 })
 
 let repoCount = 0
@@ -122,6 +129,29 @@ describe('createFolderRepoWorktree', () => {
     const retry = host(refused(TAKEN))
     await expect(create(repo, retry)).resolves.toEqual({ kind: 'maybe-created' })
     expect(retry.sendRequest).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('createFolderRepoWorktree after a lost reply on a host that dedupes', () => {
+  it.each([
+    ['answers with the worktree', CREATED, { kind: 'created', name: 'payments' }],
+    ['refuses the name as taken', refused(TAKEN), { kind: 'maybe-created' }]
+  ])('resends the same create once reconnected; the host %s', async (_case, replay, expected) => {
+    idempotency.support = { dedupeTtlMs: 60_000 }
+    const repo = target()
+    const client = new FakeSession('connected')
+    client.sendRequest
+      .mockImplementationOnce(async () => {
+        client.publishState('reconnecting')
+        setTimeout(() => client.publishState('connected'), 0)
+        throw markRpcDeliveryUnknown(new Error('connection lost'))
+      })
+      .mockResolvedValueOnce(replay)
+
+    await expect(create(repo, client)).resolves.toEqual(expected)
+    const [first, second] = client.sendRequest.mock.calls.map(([, params]) => params)
+    expect(second).toEqual(first)
+    expect(first).toHaveProperty('clientMutationId')
   })
 })
 
