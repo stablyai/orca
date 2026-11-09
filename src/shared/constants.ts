@@ -239,6 +239,7 @@ export function getDefaultUIState(): PersistedUIState {
     osc52ClipboardDefaultOnNoticePending: false,
     mobileEmulatorTabIntroDismissed: false,
     mobileEmulatorAgentSetupDismissed: false,
+    cloudAgentSetupDone: false,
     pluginsAlphaNoticeDismissed: false,
     // Why: only upgraded profiles saw the old ordering, so only they get the one-time notice.
     projectOrderManualDefaultNoticeDismissed: true,
