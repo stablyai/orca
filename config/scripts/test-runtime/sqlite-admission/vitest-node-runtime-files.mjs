@@ -58,7 +58,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/acp/session/acp-structured-sign-in.test.ts',
   'src/main/acp/session/acp-structured-session-adapter.test.ts',
   'src/main/acp/session/acp-structured-session-adapter-resume.test.ts',
-  'src/main/acp/history/acp-history-scaling.test.ts',
   'src/main/pi/rpc-turn-races.test.ts',
   'src/main/acp/session/children/acp-structured-child-session-end.test.ts',
   'src/main/acp/session/children/acp-structured-child-stop.test.ts',
