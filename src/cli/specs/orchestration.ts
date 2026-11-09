@@ -127,7 +127,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'reply'],
     summary: 'Reply to a message',
     usage:
-      'orca orchestration reply --id <msg_id> --body <text> [--run <run_id>] [--from <handle>] [--on <server>] [--retry-request <id>] [--json]',
+      'orca orchestration reply --id <msg_id> --body <text> [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    // --on is accepted only to refuse it with the fix; a reply finds its server by itself.
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'body', 'run', 'from', 'on', 'retry-request'],
     identityFlagRoles: { from: 'caller' },
     notes: [
