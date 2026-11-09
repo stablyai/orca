@@ -2,6 +2,7 @@
 # setters, plus assignments, deletes and object keys that edit session partitions directly.
 # This is a RATCHET: counts may only go DOWN. Layout moves to one runtime owner; do not add
 # writers. Prune after removing writers: pnpm check:layout-writer-ratchets --prune
+# Read-only inactive-profile claim projection/reader keys are counted conservatively (6); no layout is written.
 1 src/main/ipc/pty/ipc/leaf-move.ts
 1 src/main/ipc/pty/pane/pane-owner-replacement.ts
 3 src/main/ipc/pty/pane/stable-owner.ts
@@ -42,6 +43,8 @@
 4 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session-subtraction.ts
 1 src/main/persistence/migrating-orcad-catalog/orcad-source-workspace-session.ts
 2 src/main/persistence/moving-wsl-projects/wsl-move-main-rewrite-stores.ts
+4 src/main/persistence/profile-state/profile-state-terminal-claim-projection.ts
+2 src/main/persistence/profile-state/profile-state-terminal-claims-reader.ts
 1 src/main/persistence/restoring-sessions/folder-workspace-operations.ts
 1 src/main/persistence/restoring-sessions/invalid-workspace-layout-purge.ts
 5 src/main/persistence/restoring-sessions/session-owner-fields.ts
