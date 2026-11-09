@@ -316,5 +316,7 @@ export function SubscribedAgentLaunchPickerMenu({
   inventory: AgentPickerInventorySource
 }) {
   const entries = useAgentPickerInventoryEntries(inventory)
-  return <AgentLaunchPickerMenu {...props} entries={entries} />
+  return (
+    <AgentLaunchPickerMenu {...props} entries={entries} catalogDemand={inventory.observeSurface} />
+  )
 }
