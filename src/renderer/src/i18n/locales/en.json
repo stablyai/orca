@@ -19537,7 +19537,6 @@
           "revoked": "Invite revoked.",
           "roleChanged": "Role updated.",
           "removeTitle": "Remove {{value0}}?",
-          "removeDescription": "They lose access to the org right away. Their seat is removed and the unused time is credited on your next invoice.",
           "removeConfirm": "Remove member",
           "removed": "Member removed.",
           "title": "Team",
@@ -19565,7 +19564,9 @@
           "cannotChangeOwnRole": "You cannot change your own role.",
           "forbidden": "Only owners and admins can manage members, and only owners can manage owners.",
           "notFound": "That member or invite no longer exists.",
-          "failed": "Could not update the team. Try again."
+          "failed": "Could not update the team. Try again.",
+          "seatsDrop": "Seats paid this period stay until {{value0}}, then drop to {{value1}}.",
+          "removeDescription2": "They lose access to the org right away. Their seat stays paid until your plan renews, then drops off."
         },
         "manageBilling": "Manage billing",
         "choosePlan": "Choose a plan",
@@ -19596,7 +19597,6 @@
           "totalYear": "{{value0}} / year",
           "totalMonth": "{{value0}} / month",
           "checkout": "Continue to checkout",
-          "seatsFollow": "Seats follow your team: new members add a seat, removals credit your next invoice.",
           "entLead": "Everything in Team, plus:",
           "entHint": "Tell us about your team and where you run.",
           "titleSubscribed": "Your Orca Cloud plan",
@@ -19619,7 +19619,8 @@
           "waiting": "Waiting for checkout…",
           "fixPaymentAbove": "Update your payment method above to keep your plan active.",
           "manageHint": "Switch monthly or annual, update payment, or cancel.",
-          "lockedBody": "Only an owner or admin of your org can choose a plan. Ask one of them to open Plan & billing in Orca."
+          "lockedBody": "Only an owner or admin of your org can choose a plan. Ask one of them to open Plan & billing in Orca.",
+          "seatsFollow2": "Seats follow your team: new members add a seat now; removed seats drop off at renewal."
         },
         "teamFrom": "Team starts at {{value0}} per seat per month, billed annually."
       }

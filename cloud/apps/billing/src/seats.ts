@@ -1,20 +1,23 @@
-// Team seats follow org membership: seats = members (pending invites excluded), minimum 1.
-// Membership is owned by Orca Cloud auth, which reports it either by pushing
-// (POST /v1/internal/seats) or in the billing token's `orgMembers` claim.
+// Team seats follow org membership, billed by the period's PEAK (the GitHub model, with peak
+// protection against remove/re-add churn):
 //
-// Proration (Stripe's model, documented in cloud/docs/accounts-billing-design.md):
-// - Adding seats: `always_invoice` - the prorated amount for the rest of the period is invoiced and
-//   charged now (on annual plans this avoids a seat being free until renewal).
-// - Removing seats: `create_prorations` - Stripe's default; the unused time becomes a credit on
-//   the next invoice. Nothing is refunded to the card.
+// - Adding members above the seats already paid this period: the extra seats are invoiced and
+//   charged now, prorated (`always_invoice`).
+// - Removing members: nothing changes mid-period (no credit). Seats come down to the current
+//   member count only at renewal: inside `seatTrueDownHours` of the period end, billing lowers the
+//   quantity with `proration_behavior: none`, so the renewal invoice bills the smaller team.
+// - Re-adding someone removed earlier in the same period costs nothing: the period's seats are
+//   never lowered mid-period, so membership up to the peak is already paid.
+//
+// Membership is owned by Orca Cloud auth (pull: /v1/internal/billing/org-members; push:
+// /v1/internal/seats). Seats are never below 1. See cloud/docs/accounts-billing-design.md.
 import { z } from 'zod'
-import { OPEN_STATUSES } from './checkout'
+import { MAX_TEAM_SEATS, OPEN_STATUSES } from './checkout'
 import type { Env } from './env'
-import { MAX_TEAM_SEATS } from './checkout'
-import { planForPrice } from './plans'
-import type { StripeClient } from './stripe'
-import { currentSubscription, openOrgAccounts } from './store'
 import { orgIdOf, type MembershipSource } from './membership'
+import { planCatalog, planForPrice } from './plans'
+import type { StripeClient } from './stripe'
+import { currentSubscription, openOrgAccounts, setMemberCount } from './store'
 import { syncSubscription } from './webhook'
 
 export const SeatSyncSchema = z
@@ -26,7 +29,11 @@ export const SeatSyncSchema = z
 
 export type SeatSyncOutcome =
   | { status: 'unchanged'; seats: number }
-  | { status: 'updated'; seats: number; previous: number }
+  | { status: 'increased'; seats: number; previous: number }
+  /** Fewer members than paid seats: the paid seats stay until renewal. */
+  | { status: 'deferred'; seats: number; members: number; effectiveAt: number }
+  /** Lowered for the renewal invoice (no credit for the current period). */
+  | { status: 'reduced_at_renewal'; seats: number; previous: number; effectiveAt: number }
   | { status: 'no_subscription' }
   | { status: 'too_many_seats' }
 
@@ -37,7 +44,8 @@ export async function syncSeats(
   members: number,
   now: number
 ): Promise<SeatSyncOutcome> {
-  const subscription = await currentSubscription(env.BILLING_DB, accountId)
+  const db = env.BILLING_DB
+  const subscription = await currentSubscription(db, accountId)
   if (!subscription || !OPEN_STATUSES.has(subscription.status)) {
     return { status: 'no_subscription' }
   }
@@ -45,9 +53,17 @@ export async function syncSeats(
   if (desired > MAX_TEAM_SEATS) {
     return { status: 'too_many_seats' }
   }
+  // Remembered so the reconcile cron can apply a deferred decrease without a fresh push.
+  await setMemberCount(db, subscription.stripe_subscription_id, members, now)
   if (desired === subscription.seats) {
     return { status: 'unchanged', seats: desired }
   }
+  const periodEnd = subscription.current_period_end
+  const trueDownFrom = periodEnd - planCatalog(env).team.seatTrueDownHours * 3600_000
+  if (desired < subscription.seats && now < trueDownFrom) {
+    return { status: 'deferred', seats: subscription.seats, members: desired, effectiveAt: periodEnd }
+  }
+
   // Read the live item: the mirror can lag a webhook, and the item id is not stored.
   const live = await stripe.retrieveSubscription(subscription.stripe_subscription_id)
   const seatItem = live.items.data.find((item) => planForPrice(env, item.price.id))
@@ -59,43 +75,49 @@ export async function syncSeats(
     await stripe.setSubscriptionItemQuantity({
       item: seatItem.id,
       quantity: desired,
-      prorationBehavior: desired > current ? 'always_invoice' : 'create_prorations',
+      prorationBehavior: desired > current ? 'always_invoice' : 'none',
       // Same change retried within Stripe's idempotency window is applied once.
-      idempotencyKey: `seats:${seatItem.id}:${current}->${desired}`
+      idempotencyKey: `seats:${seatItem.id}:${periodEnd}:${current}->${desired}`
     })
   }
   await syncSubscription(env, stripe, subscription.stripe_subscription_id, now)
-  return { status: 'updated', seats: desired, previous: current }
+  return desired > current
+    ? { status: 'increased', seats: desired, previous: current }
+    : { status: 'reduced_at_renewal', seats: desired, previous: current, effectiveAt: periodEnd }
 }
 
-/** Cron: re-read every open org's member count from auth and fix any drift (a missed push). */
+/**
+ * Cron: brings every open org's seats in line with membership. Re-reads the count from auth when
+ * configured (catching invites accepted at the provider); otherwise uses the last pushed count.
+ * Also where deferred decreases land, once a subscription is inside its true-down window.
+ */
 export async function reconcileSeats(
   env: Env,
   stripe: StripeClient,
   membership: MembershipSource,
   now: number
-): Promise<{ checked: number; updated: number; failed: number }> {
+): Promise<{ checked: number; changed: number; failed: number }> {
   let checked = 0
-  let updated = 0
+  let changed = 0
   let failed = 0
-  for (const accountId of await openOrgAccounts(env.BILLING_DB, 200)) {
+  for (const { account_id: accountId, member_count: stored } of await openOrgAccounts(env.BILLING_DB, 200)) {
     const orgId = orgIdOf(accountId)
     if (!orgId) {
       continue
     }
     try {
-      const members = await membership(orgId)
+      const members = (await membership(orgId)) ?? stored
       if (members === null) {
-        return { checked, updated, failed }
+        continue
       }
       checked++
       const outcome = await syncSeats(env, stripe, accountId, members, now)
-      if (outcome.status === 'updated') {
-        updated++
+      if (outcome.status === 'increased' || outcome.status === 'reduced_at_renewal') {
+        changed++
       }
     } catch {
       failed++
     }
   }
-  return { checked, updated, failed }
+  return { checked, changed, failed }
 }

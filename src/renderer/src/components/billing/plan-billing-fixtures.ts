@@ -30,6 +30,7 @@ export const sampleTeam: OrcaBillingEntitlement = {
   status: 'active',
   interval: 'month',
   seats: 2,
+  seatChange: null,
   period: { start: Date.UTC(2026, 10, 3), end: Date.UTC(2026, 11, 3) },
   usageWindow: { start: Date.UTC(2026, 10, 3), end: Date.UTC(2026, 11, 3) },
   cancelAtPeriodEnd: false,

@@ -17,6 +17,7 @@ export type SubscriptionRow = {
   billing_interval: BillingInterval
   overage_item_id: string | null
   past_due_since: number | null
+  member_count: number | null
 }
 
 export type AccountSettings = { overage_opt_in: number; spend_cap_cents: number | null }
@@ -81,8 +82,8 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
     .prepare(
       `INSERT INTO subscriptions (stripe_subscription_id, account_id, stripe_customer_id, status, plan, seats,
          overage_enabled, current_period_start, current_period_end, cancel_at_period_end, updated_at,
-         billing_interval, overage_item_id, past_due_since)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+         billing_interval, overage_item_id, past_due_since, member_count)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
        ON CONFLICT (stripe_subscription_id) DO UPDATE SET
          status = excluded.status, plan = excluded.plan, seats = excluded.seats,
          overage_enabled = excluded.overage_enabled, current_period_start = excluded.current_period_start,
@@ -91,7 +92,8 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
          overage_item_id = excluded.overage_item_id,
          -- Keep the first time it went past due; clear it once paid.
          past_due_since = CASE WHEN excluded.past_due_since IS NULL THEN NULL
-                               ELSE COALESCE(subscriptions.past_due_since, excluded.past_due_since) END`
+                               ELSE COALESCE(subscriptions.past_due_since, excluded.past_due_since) END,
+         member_count = COALESCE(excluded.member_count, subscriptions.member_count)`
     )
     .bind(
       row.stripe_subscription_id,
@@ -107,7 +109,8 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
       row.updated_at,
       row.billing_interval,
       row.overage_item_id,
-      row.past_due_since
+      row.past_due_since,
+      row.member_count
     )
     .run()
 }
@@ -158,6 +161,8 @@ export type UsageInsert = {
   periodStart: number | null
   includedSeconds: number
   now: number
+  // The member who started the sandbox, when the control plane reports it.
+  userId: string | null
   // Set when overage is billable: queues a meter report in the same transaction, for at most
   // what is left of the window's spend cap (meterCapSeconds).
   meterCustomer: string | null
@@ -173,11 +178,11 @@ export async function insertUsage(db: D1Database, usage: UsageInsert): Promise<b
   const insert = db
     .prepare(
       `INSERT OR IGNORE INTO usage_events (usage_id, account_id, sandbox_id, machine_size, started_at, ended_at,
-         weighted_seconds, period_start, overage_seconds, created_at)
+         weighted_seconds, period_start, overage_seconds, created_at, user_id)
        SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
          CASE WHEN ?8 IS NULL THEN 0
               ELSE MAX(0, MIN(?7, COALESCE(SUM(weighted_seconds), 0) + ?7 - ?9)) END,
-         ?10
+         ?10, ?11
        FROM usage_events WHERE account_id = ?2 AND period_start IS ?8`
     )
     .bind(
@@ -190,7 +195,8 @@ export async function insertUsage(db: D1Database, usage: UsageInsert): Promise<b
       usage.weightedSeconds,
       usage.periodStart,
       usage.includedSeconds,
-      usage.now
+      usage.now,
+      usage.userId
     )
   const statements = [insert]
   if (usage.meterCustomer) {
@@ -241,18 +247,33 @@ export async function graceExpiredAccounts(db: D1Database, cutoff: number): Prom
   ).results
 }
 
-/** Org accounts with an open subscription, for the seat reconcile cron. */
-export async function openOrgAccounts(db: D1Database, limit: number): Promise<string[]> {
+/** Org accounts with an open subscription (and the last member count seen), for the seat cron. */
+export async function openOrgAccounts(
+  db: D1Database,
+  limit: number
+): Promise<Array<{ account_id: string; member_count: number | null }>> {
   return (
     await db
       .prepare(
-        `SELECT DISTINCT account_id FROM subscriptions
+        `SELECT account_id, MAX(member_count) AS member_count FROM subscriptions
          WHERE account_id LIKE 'org:%' AND status IN ('active', 'trialing', 'past_due', 'unpaid')
-         ORDER BY updated_at LIMIT ?1`
+         GROUP BY account_id ORDER BY MIN(updated_at) LIMIT ?1`
       )
       .bind(limit)
-      .all<{ account_id: string }>()
-  ).results.map((row) => row.account_id)
+      .all<{ account_id: string; member_count: number | null }>()
+  ).results
+}
+
+export async function setMemberCount(
+  db: D1Database,
+  subscriptionId: string,
+  members: number,
+  now: number
+): Promise<void> {
+  await db
+    .prepare('UPDATE subscriptions SET member_count = ?2, updated_at = ?3 WHERE stripe_subscription_id = ?1')
+    .bind(subscriptionId, members, now)
+    .run()
 }
 
 export async function usageOverage(db: D1Database, usageId: string): Promise<number> {

@@ -23,6 +23,7 @@ export type DenyReason =
   | 'overage_cap_reached'
   | 'machine_size_not_in_plan'
   | 'concurrency_limit'
+  | 'member_concurrency_limit'
 
 export type Entitlement = {
   accountId: string
@@ -31,6 +32,10 @@ export type Entitlement = {
   status: string
   interval: BillingInterval | null
   seats: number
+  /** Latest org member count from auth; seats stay at the period's peak until renewal. */
+  members: number | null
+  /** When seats will come down to the member count at renewal. */
+  seatChange: { seatsAtRenewal: number; effectiveAt: number } | null
   /** Billing period (a year for annual plans). */
   period: { start: number; end: number } | null
   /** Monthly allowance window the hours below count against. */
@@ -50,7 +55,13 @@ export type Entitlement = {
     spentCents: number
     centsPerHour: number
   }
-  limits: { maxConcurrentSandboxes: number; machineSizes: readonly MachineSize[]; idleSleepMinutes: number }
+  limits: {
+    maxConcurrentSandboxes: number
+    /** Per member, so one seat cannot run the whole team's sandboxes. */
+    maxConcurrentSandboxesPerMember: number
+    machineSizes: readonly MachineSize[]
+    idleSleepMinutes: number
+  }
   /** Failed payment: new starts stop at once; running sandboxes must be suspended after the grace. */
   payment: { pastDueSince: number | null; graceEndsAt: number | null; suspendRunning: boolean }
   canStartSandbox: boolean
@@ -81,6 +92,8 @@ export async function computeEntitlement(
       status: 'none',
       interval: null,
       seats: 0,
+      members: null,
+      seatChange: null,
       period: null,
       usageWindow: null,
       cancelAtPeriodEnd: false,
@@ -90,7 +103,12 @@ export async function computeEntitlement(
       usageWarningPercent: null,
       overageSeconds: 0,
       overage: { ...overageBase, active: false, spentCents: 0 },
-      limits: { maxConcurrentSandboxes: 0, machineSizes: [], idleSleepMinutes: team.idleSleepMinutes },
+      limits: {
+        maxConcurrentSandboxes: 0,
+        maxConcurrentSandboxesPerMember: 0,
+        machineSizes: [],
+        idleSleepMinutes: team.idleSleepMinutes
+      },
       payment: { pastDueSince: null, graceEndsAt: null, suspendRunning: false },
       canStartSandbox: false,
       reason: 'no_subscription'
@@ -132,6 +150,11 @@ export async function computeEntitlement(
     status: subscription.status,
     interval: subscription.billing_interval,
     seats: subscription.seats,
+    members: subscription.member_count,
+    seatChange:
+      subscription.member_count !== null && Math.max(1, subscription.member_count) < subscription.seats
+        ? { seatsAtRenewal: Math.max(1, subscription.member_count), effectiveAt: subscription.current_period_end }
+        : null,
     period: { start: subscription.current_period_start, end: subscription.current_period_end },
     usageWindow: window,
     cancelAtPeriodEnd: subscription.cancel_at_period_end === 1,
@@ -147,6 +170,7 @@ export async function computeEntitlement(
     },
     limits: {
       maxConcurrentSandboxes: team.concurrentSandboxesPerSeat * Math.max(1, subscription.seats),
+      maxConcurrentSandboxesPerMember: team.concurrentSandboxesPerSeat,
       machineSizes: team.machineSizes,
       idleSleepMinutes: team.idleSleepMinutes
     },
@@ -163,7 +187,7 @@ export function isMachineSize(value: unknown): value is MachineSize {
 /** The control plane's start gate: the account-level answer plus size and concurrency. */
 export function checkStart(
   entitlement: Entitlement,
-  request: { machineSize: MachineSize; runningSandboxes: number }
+  request: { machineSize: MachineSize; runningSandboxes: number; runningSandboxesForUser?: number }
 ): { allow: boolean; reason: DenyReason | null; suspendRunning: boolean } {
   const suspendRunning = entitlement.payment.suspendRunning
   if (!entitlement.canStartSandbox) {
@@ -174,6 +198,12 @@ export function checkStart(
   }
   if (request.runningSandboxes >= entitlement.limits.maxConcurrentSandboxes) {
     return { allow: false, reason: 'concurrency_limit', suspendRunning }
+  }
+  if (
+    request.runningSandboxesForUser !== undefined &&
+    request.runningSandboxesForUser >= entitlement.limits.maxConcurrentSandboxesPerMember
+  ) {
+    return { allow: false, reason: 'member_concurrency_limit', suspendRunning }
   }
   return { allow: true, reason: null, suspendRunning }
 }

@@ -38,7 +38,10 @@ const StartCheckSchema = z
   .object({
     accountId: z.string().min(1).max(128),
     machineSize: z.enum(MACHINE_SIZES),
-    runningSandboxes: z.number().int().min(0).max(10_000)
+    runningSandboxes: z.number().int().min(0).max(10_000),
+    // The member starting it and how many they already run (per-member cap; attribution).
+    userId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/).optional(),
+    runningSandboxesForUser: z.number().int().min(0).max(10_000).optional()
   })
   .strict()
 
@@ -160,7 +163,15 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
           return json({ error: 'invalid_request' }, 400)
         }
         const entitlement = await computeEntitlement(env, body.data.accountId, now)
-        return json({ ...checkStart(entitlement, body.data), entitlement })
+        return json({
+          ...checkStart(entitlement, body.data),
+          // Billed seats: the period's peak (never raw membership), so caps can't be inflated by
+          // adding members the org hasn't paid for, nor shrunk by mid-period removals.
+          seats: entitlement.seats,
+          maxConcurrentSandboxes: entitlement.limits.maxConcurrentSandboxes,
+          maxConcurrentSandboxesPerMember: entitlement.limits.maxConcurrentSandboxesPerMember,
+          entitlement
+        })
       }
 
       case 'POST /v1/internal/usage': {

@@ -43,6 +43,8 @@ export type OrcaBillingEntitlement = {
   status: string
   interval: OrcaBillingInterval | null
   seats: number
+  /** Seats stay at the period's peak; they come down to the member count at renewal. */
+  seatChange: { seatsAtRenewal: number; effectiveAt: number } | null
   period: { start: number; end: number } | null
   /** Monthly window the hours count against (a slice of the year on annual plans). */
   usageWindow: { start: number; end: number } | null

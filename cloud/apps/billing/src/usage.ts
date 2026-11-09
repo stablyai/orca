@@ -34,7 +34,9 @@ export const UsageReportSchema = z
     sandboxId: ID,
     machineSize: z.enum(MACHINE_SIZES),
     startedAt: z.number().int().positive(),
-    endedAt: z.number().int().positive()
+    endedAt: z.number().int().positive(),
+    // The member who started the sandbox (attribution and per-member caps).
+    userId: ID.optional()
   })
   .strict()
 
@@ -84,6 +86,7 @@ export async function recordUsage(
     periodStart: window?.start ?? null,
     includedSeconds: subscription ? includedSeconds(team, subscription.seats) : 0,
     now,
+    userId: report.userId ?? null,
     meterCustomer: customer,
     meterCapSeconds: capSeconds(team, settings.spend_cap_cents ?? team.defaultSpendCapCents)
   })

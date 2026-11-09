@@ -315,7 +315,7 @@ describe('entitlements, overage and usage', () => {
   it('gates starts by machine size and per-seat concurrency for the control plane', async () => {
     const { h } = await subscribedTeam()
     const check = (body: Record<string, unknown>) => h.controlPlane('/v1/internal/entitlements/check', { accountId: 'org:o1', ...body })
-    expect((await check({ machineSize: 'large', runningSandboxes: 5 })).body).toMatchObject({ allow: true, reason: null })
+    expect((await check({ machineSize: 'large', runningSandboxes: 5 })).body).toMatchObject({ allow: true, reason: null, seats: 2, maxConcurrentSandboxes: 6, maxConcurrentSandboxesPerMember: 3 })
     expect((await check({ machineSize: 'standard', runningSandboxes: 6 })).body).toMatchObject({ allow: false, reason: 'concurrency_limit' })
     expect((await check({ machineSize: 'xlarge', runningSandboxes: 0 })).status).toBe(400)
     const unknown = await h.controlPlane('/v1/internal/entitlements/check', { accountId: 'org:nobody', machineSize: 'standard', runningSandboxes: 0 })

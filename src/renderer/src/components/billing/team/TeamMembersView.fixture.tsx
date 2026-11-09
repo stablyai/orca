@@ -32,7 +32,8 @@ export const ownerView = defineFixture({
     <TeamMembersView
       {...handlers}
       notice={null}
-      billedSeats={4}
+      billedSeats={5}
+      seatChange={{ seatsAtRenewal: 4, effectiveAt: Date.UTC(2026, 11, 3) }}
       viewerUserId="u1"
       result={{ status: 'ok', roster }}
     />
@@ -46,6 +47,7 @@ export const memberView = defineFixture({
       {...handlers}
       notice={null}
       billedSeats={null}
+      seatChange={null}
       viewerUserId="u3"
       result={{
         status: 'ok',

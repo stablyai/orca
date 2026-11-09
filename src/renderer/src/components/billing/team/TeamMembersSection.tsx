@@ -54,6 +54,7 @@ export function TeamMembersSection({
       busy={busy}
       notice={notice}
       billedSeats={billedSeats}
+      seatChange={entitlement?.seatChange ?? null}
       viewerUserId={viewerUserId}
       onRefresh={() => {
         roster.refresh()
@@ -94,8 +95,8 @@ export function TeamMembersSection({
             value0: member.displayName ?? member.email
           }),
           description: t(
-            'auto.components.billing.team.removeDescription',
-            'They lose access to the org right away. Their seat is removed and the unused time is credited on your next invoice.'
+            'auto.components.billing.team.removeDescription2',
+            'They lose access to the org right away. Their seat stays paid until your plan renews, then drops off.'
           ),
           confirmLabel: t('auto.components.billing.team.removeConfirm', 'Remove member'),
           confirmVariant: 'destructive'

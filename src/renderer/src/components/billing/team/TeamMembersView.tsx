@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type {
   OrcaOrgMember,
@@ -26,6 +26,8 @@ export type TeamMembersViewProps = {
   notice: string | null
   /** Seats Team bills (from billing), or null when there is no plan or billing is off. */
   billedSeats: number | null
+  /** Seats paid this period stay until renewal, then drop to the member count. */
+  seatChange: { seatsAtRenewal: number; effectiveAt: number } | null
   viewerUserId: string | null
   onRefresh: () => void
   onInvite: (email: string, role: OrcaOrgRole) => void
@@ -78,6 +80,7 @@ function RoleSelect({
 export function TeamMembersView(props: TeamMembersViewProps): React.JSX.Element {
   const t = useTranslate()
   const { result, loading, busy, notice, billedSeats } = props
+  const locale = useIntlLocale()
   const [email, setEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<OrcaOrgRole>('member')
 
@@ -130,6 +133,18 @@ export function TeamMembersView(props: TeamMembersViewProps): React.JSX.Element 
               '{{value0}} members · {{value1}} seats billed. Seats follow membership; pending invites are free until accepted.',
               { value0: String(roster.members.length), value1: String(billedSeats) }
             )}
+        {props.seatChange
+          ? ` ${t(
+              'auto.components.billing.team.seatsDrop',
+              'Seats paid this period stay until {{value0}}, then drop to {{value1}}.',
+              {
+                value0: new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(
+                  props.seatChange.effectiveAt
+                ),
+                value1: String(props.seatChange.seatsAtRenewal)
+              }
+            )}`
+          : null}
       </p>
 
       <ul className="divide-y divide-border/60 rounded-md border border-border/60">

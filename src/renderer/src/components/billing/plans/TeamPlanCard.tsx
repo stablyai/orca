@@ -144,8 +144,8 @@ export function TeamPlanCard({
         <p role="status" className="text-center text-xs text-muted-foreground text-pretty">
           {notice ??
             t(
-              'auto.components.billing.plans.seatsFollow',
-              'Seats follow your team: new members add a seat, removals credit your next invoice.'
+              'auto.components.billing.plans.seatsFollow2',
+              'Seats follow your team: new members add a seat now; removed seats drop off at renewal.'
             )}
         </p>
       </>

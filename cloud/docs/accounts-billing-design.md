@@ -39,13 +39,45 @@ and registrations first).
 - **Push:** auth calls `POST /v1/internal/seats {accountId, members}` after Orca-side removals (best effort).
 - **Fail closed:** if auth is configured but unreachable, Checkout answers 503 `membership_unavailable`; malformed or
   missing counts are 400; nothing ever bills 0 seats. No token claim carries a count (tokens can be stale).
-- **Proration:** adding seats uses `always_invoice` (the prorated rest-of-period amount is invoiced and charged now,
-  so annual plans don't get free seats until renewal); removing seats uses Stripe's default `create_prorations`
-  (unused time becomes a credit on the next invoice; no card refund). The Customer Portal no longer edits
-  quantity; it only switches monthly↔annual and cancels.
+- **Proration:** see "Seat fairness" below (peak seats; adds charged now, removals at renewal).
 - Desktop: Settings → Orca account → Team (also "Team" in the account menu): members with roles, invite by email
   (accepted at the sign-in provider), change role, remove (with confirm), revoke invites; owners/admins only,
   mirroring auth's role rules.
+
+## Seat fairness and abuse resistance (decision)
+
+How others bill seats: GitHub charges added seats immediately, prorated, and applies removals at the
+next billing cycle with no refund (docs: "Impact of changing your plan on billing"). Cursor charges
+adds prorated but treats remove-then-re-add as a brand-new seat, which customers report as
+double-charging. Slack's Fair Billing Policy credits inactive members automatically. Linear charges
+everyone not suspended at renewal and prorates later additions.
+
+**Decision: seats billed = the period's peak membership** (GitHub model plus churn protection):
+- **Adds** above the seats already paid this period are invoiced and charged now (`always_invoice`).
+- **Removals** never credit mid-period. Seats drop to the member count only at renewal: within
+  `seatTrueDownHours` (6 h, config) of the period end, billing lowers the quantity with
+  `proration_behavior: none` (cron every 10 min, or the next membership push), so the renewal
+  invoice bills the smaller team. If the cron misses the window, the org renews at the peak and is
+  corrected at the following renewal (errs toward charging what was used).
+- **Re-adding** someone removed earlier in the period is free. Membership up to the peak is already
+  paid, so remove/re-add churn can neither dodge charges nor double-charge honest teams.
+- **Included hours and caps derive from billed seats**, not raw membership. Adding members never
+  grants hours or concurrency the org hasn't paid for, and the paid peak keeps its hours until renewal.
+- **Per-member concurrency:** at most 3 running sandboxes per member (`member_concurrency_limit`), on
+  top of the org cap of 3 × billed seats. One seat can't run the whole team's sandboxes.
+- **Attribution:** usage segments carry the `userId` that started the sandbox (`usage_events.user_id`)
+  for per-member caps, reporting and abuse review.
+- **Membership changes are rate-limited** in auth: 10 per actor and 30 per org per minute
+  (stablyai/orca-cloud#692). **The last owner is protected:** owners can't remove or demote
+  themselves and admins can't act on owners, so an org always keeps an owner (pinned by tests there).
+- **Org switching can't double-dip:** hours belong to the org account the sandbox was started under
+  (the control plane's token names it). A person in two orgs is a seat in both and each pays, and a
+  personal account is its own one-seat plan.
+- **No free trial or free plan**, and Checkout always collects a card, so throwaway orgs get nothing
+  for free.
+- **Seat counts never come from the client:** Checkout and reconcile read auth's live count
+  (pull-only in production for now, stablyai/orca-cloud#691). Missing or malformed counts are
+  rejected, and seats are never below 1.
 
 ## Payment failure
 
@@ -142,7 +174,7 @@ never followed with the key; JWT max age 15 min.
 | billing Worker (dev/prod) secret | `MEMBERSHIP_SYNC_TOKEN` | random ≥32 chars; same value as auth's `ORCA_CLOUD_BILLING_MEMBERSHIP_TOKEN` |
 | billing Worker var | `AUTH_INTERNAL_URL` | auth origin, e.g. `https://login.onorca.dev` (after orca-cloud#690 deploys) |
 | auth (Cloud Run) secret | `ORCA_CLOUD_BILLING_MEMBERSHIP_TOKEN` | same value as above |
-| auth (Cloud Run) env | `ORCA_CLOUD_BILLING_INTERNAL_URL` | billing URL, e.g. `https://orca-billing-dev.lovecast.workers.dev` |
+| auth (Cloud Run) env | `ORCA_CLOUD_BILLING_INTERNAL_URL` | unset for now (pull-only, orca-cloud#691); `https://billing.onorca.dev` once production billing exists |
 | sandbox-control-dev secret | `CONTROL_PLANE_TOKEN` | same value as billing dev's `CONTROL_PLANE_TOKEN` |
 | sandbox-control-dev var | `BILLING_URL` | `https://orca-billing-dev.lovecast.workers.dev` (and drop `ENTITLEMENTS_MODE=stub`) |
 | Stripe dashboard (test, then live) | Billing → Revenue recovery | Smart Retries on; "Send emails when card payments fail" on; after retries → mark subscription unpaid |

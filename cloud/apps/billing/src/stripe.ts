@@ -140,7 +140,7 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
     setSubscriptionItemQuantity(args: {
       item: string
       quantity: number
-      prorationBehavior: 'always_invoice' | 'create_prorations'
+      prorationBehavior: 'always_invoice' | 'none'
       idempotencyKey: string
     }) {
       return request<{ id: string; quantity: number }>(

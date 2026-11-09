@@ -37,7 +37,9 @@ const TeamSchema = z
     // Included-hours usage levels (percent) the desktop warns at.
     warnAtPercent: z.array(z.number().int().min(1).max(100)).max(4),
     // After a failed payment: new starts stop at once; running sandboxes are suspended after this.
-    paymentGraceHours: z.number().nonnegative()
+    paymentGraceHours: z.number().nonnegative(),
+    // Seats only come down to the member count this close to renewal (never mid-period).
+    seatTrueDownHours: z.number().positive()
   })
   .strict()
 
@@ -68,7 +70,8 @@ export const DEFAULT_PLANS: PlanCatalog = {
     defaultSpendCapCents: 2500,
     maxSpendCapCents: 500_000,
     warnAtPercent: [80, 100],
-    paymentGraceHours: 96
+    paymentGraceHours: 96,
+    seatTrueDownHours: 6
   },
   enterprise: {
     label: 'Enterprise',

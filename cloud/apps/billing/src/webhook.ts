@@ -108,7 +108,9 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     billing_interval: match.interval,
     overage_item_id: overageItemId,
     // The upsert keeps the earliest value while it stays unpaid and clears it once paid.
-    past_due_since: PAYMENT_FAILED_STATUSES.has(subscription.status) ? now : null
+    past_due_since: PAYMENT_FAILED_STATUSES.has(subscription.status) ? now : null,
+    // Membership comes from auth, not Stripe: keep the stored count.
+    member_count: null
   })
 }
 

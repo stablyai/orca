@@ -30,23 +30,37 @@ const seatUpdates = (h: Awaited<ReturnType<typeof team>>['h']) =>
     .map((call) => ({ quantity: call.form.get('quantity'), proration: call.form.get('proration_behavior') }))
 
 describe('seats follow membership', () => {
-  it('auth pushes member counts: adds invoice now, removals credit next invoice, min 1 seat', async () => {
+  it('adds are charged now; removals wait for renewal; re-adding within the period is free', async () => {
     const { h } = await team(2)
     const push = (members: number, token = MEMBERSHIP_TOKEN) =>
       h.call('POST', '/v1/internal/seats', { body: { accountId: 'org:o1', members }, headers: { authorization: `Bearer ${token}` } })
+    const owner = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner' })
+    const entitlement = async () =>
+      (await h.call('GET', '/v1/billing/entitlements', { headers: { authorization: `Bearer ${owner}` } })).body
 
     expect((await push(3, CONTROL_TOKEN)).status).toBe(401)
-    expect((await push(3)).body).toEqual({ status: 'updated', seats: 3, previous: 2 })
+    expect((await push(3)).body).toEqual({ status: 'increased', seats: 3, previous: 2 })
     expect((await push(3)).body).toEqual({ status: 'unchanged', seats: 3 })
-    expect((await push(1)).body).toEqual({ status: 'updated', seats: 1, previous: 3 })
-    expect((await push(0)).body).toEqual({ status: 'unchanged', seats: 1 })
+    // Two members leave mid-period: still billed (and entitled) for the 3 seats paid this period.
+    expect((await push(1)).body).toEqual({ status: 'deferred', seats: 3, members: 1, effectiveAt: PERIOD_END * 1000 })
+    expect(await entitlement()).toMatchObject({
+      seats: 3,
+      members: 1,
+      seatChange: { seatsAtRenewal: 1, effectiveAt: PERIOD_END * 1000 },
+      includedSeconds: 180 * HOUR
+    })
+    // Churn: they come back the same period. Already paid for, so no new charge.
+    expect((await push(3)).body).toEqual({ status: 'unchanged', seats: 3 })
+    expect(seatUpdates(h)).toEqual([{ quantity: '3', proration: 'always_invoice' }])
+
+    // Near renewal, seats come down to the team (no credit for the current period). Min 1 seat.
+    h.setNow(PERIOD_END * 1000 - 3600_000)
+    expect((await push(0)).body).toEqual({ status: 'reduced_at_renewal', seats: 1, previous: 3, effectiveAt: PERIOD_END * 1000 })
     expect(seatUpdates(h)).toEqual([
       { quantity: '3', proration: 'always_invoice' },
-      { quantity: '1', proration: 'create_prorations' }
+      { quantity: '1', proration: 'none' }
     ])
-    const owner = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner' })
-    const entitlement = await h.call('GET', '/v1/billing/entitlements', { headers: { authorization: `Bearer ${owner}` } })
-    expect(entitlement.body).toMatchObject({ seats: 1, includedSeconds: 60 * HOUR, limits: { maxConcurrentSandboxes: 3 } })
+    expect(await entitlement()).toMatchObject({ seats: 1, includedSeconds: 60 * HOUR, limits: { maxConcurrentSandboxes: 3 } })
   })
 
   it('Checkout bills the live member count from auth, never fewer than 1 seat', async () => {
@@ -81,9 +95,28 @@ describe('seats follow membership', () => {
     const { reconcileSeats } = await import('../src/seats')
     const { createStripeClient } = await import('../src/stripe')
     const stripe = createStripeClient(h.env, h.stripe.fetchImpl)
-    expect(await reconcileSeats(h.env, stripe, async () => 5, Date.now())).toEqual({ checked: 1, updated: 1, failed: 0 })
-    expect(await reconcileSeats(h.env, stripe, async () => 5, Date.now())).toEqual({ checked: 1, updated: 0, failed: 0 })
+    expect(await reconcileSeats(h.env, stripe, async () => 5, Date.now())).toEqual({ checked: 1, changed: 1, failed: 0 })
+    expect(await reconcileSeats(h.env, stripe, async () => 5, Date.now())).toEqual({ checked: 1, changed: 0, failed: 0 })
     expect(seatUpdates(h)).toEqual([{ quantity: '5', proration: 'always_invoice' }])
+  })
+
+  it('the cron applies a deferred decrease in the true-down window from the last pushed count', async () => {
+    const { h } = await team(4)
+    await h.call('POST', '/v1/internal/seats', {
+      body: { accountId: 'org:o1', members: 2 },
+      headers: { authorization: `Bearer ${MEMBERSHIP_TOKEN}` }
+    })
+    const { reconcileSeats } = await import('../src/seats')
+    const { createStripeClient } = await import('../src/stripe')
+    const stripe = createStripeClient(h.env, h.stripe.fetchImpl)
+    // Mid-period: nothing changes. Without an auth pull, the stored count is used.
+    expect(await reconcileSeats(h.env, stripe, async () => null, Date.now())).toEqual({ checked: 1, changed: 0, failed: 0 })
+    expect(await reconcileSeats(h.env, stripe, async () => null, PERIOD_END * 1000 - 60_000)).toEqual({
+      checked: 1,
+      changed: 1,
+      failed: 0
+    })
+    expect(seatUpdates(h)).toEqual([{ quantity: '2', proration: 'none' }])
   })
 
   it('billing admin actions need a freshly minted token (role re-read by auth at mint)', async () => {
@@ -179,5 +212,38 @@ describe('payment failure grace', () => {
     await h.webhook(stripeEvent('customer.subscription.updated', subscription))
     const entitlement = await h.call('GET', '/v1/billing/entitlements', { headers: { authorization: `Bearer ${owner}` } })
     expect(entitlement.body).toMatchObject({ reason: 'payment_grace_expired', payment: { suspendRunning: true } })
+  })
+})
+
+describe('per-member limits and attribution', () => {
+  it('caps concurrent sandboxes per member so one seat cannot run the team', async () => {
+    const { h } = await team(3)
+    const check = (runningSandboxes: number, runningSandboxesForUser?: number) =>
+      h.controlPlane('/v1/internal/entitlements/check', {
+        accountId: 'org:o1',
+        machineSize: 'standard',
+        runningSandboxes,
+        userId: 'u2',
+        ...(runningSandboxesForUser === undefined ? {} : { runningSandboxesForUser })
+      })
+    expect((await check(2, 2)).body).toMatchObject({ allow: true })
+    expect((await check(3, 3)).body).toMatchObject({ allow: false, reason: 'member_concurrency_limit' })
+    // The org-wide cap (3 per seat x 3 seats) still applies.
+    expect((await check(9, 0)).body).toMatchObject({ allow: false, reason: 'concurrency_limit' })
+  })
+
+  it('records which member used the hours', async () => {
+    const { h } = await team(2)
+    const endedAt = Date.now() - 60_000
+    await h.controlPlane('/v1/internal/usage', {
+      usageId: 'u-attr',
+      accountId: 'org:o1',
+      sandboxId: 's1',
+      machineSize: 'standard',
+      startedAt: endedAt - 3600_000,
+      endedAt,
+      userId: 'usr_alice'
+    })
+    expect(h.raw.prepare('SELECT user_id FROM usage_events WHERE usage_id = ?').get('u-attr')).toEqual({ user_id: 'usr_alice' })
   })
 })
