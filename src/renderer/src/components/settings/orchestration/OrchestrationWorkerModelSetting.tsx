@@ -17,7 +17,7 @@ import type { CatalogModel } from '../../../../../shared/agent-session/options/a
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import {
@@ -103,6 +103,7 @@ export function OrchestrationWorkerModelSetting(props: {
   onDefaultAgentChange: (agent: TuiAgent | null) => void
   onChange: (models: OrchestrationWorkerModels, efforts: OrchestrationWorkerEfforts) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const defaultWorkerAgents = useMemo(
     () => getAgentCatalog().filter((agent) => isTuiAgentEnabled(agent.id, props.disabledAgents)),
     [props.disabledAgents]
@@ -114,7 +115,7 @@ export function OrchestrationWorkerModelSetting(props: {
   const modelAgents = useMemo(() => getWorkerModelAgents(discoveredModels), [discoveredModels])
   const selectedAgentLabel =
     defaultWorkerAgents.find((agent) => agent.id === selectedAgent)?.label ??
-    translate('auto.components.settings.OrchestrationWorkerModelSetting.workerLabel', 'Worker')
+    t('auto.components.settings.OrchestrationWorkerModelSetting.workerLabel', 'Worker')
 
   // Why: only the selected worker's own catalog is reachable, so model and effort
   // narrow from the agent above them instead of listing every agent at once.
@@ -137,30 +138,30 @@ export function OrchestrationWorkerModelSetting(props: {
   const modelSelectValue = modelAgent ? (selectedModel ?? AGENT_DEFAULT_MODEL) : undefined
   const effortSelectEnabled = modelAgent !== undefined && effortChoices.length > 0
   const modelPlaceholder = selectedAgent
-    ? translate(
+    ? t(
         'auto.components.settings.OrchestrationWorkerModelSetting.modelUnavailable',
         'Not available'
       )
-    : translate(
+    : t(
         'auto.components.settings.OrchestrationWorkerModelSetting.modelPlaceholder',
         'Pick provider'
       )
   const effortPlaceholder = !selectedAgent
-    ? translate(
+    ? t(
         'auto.components.settings.OrchestrationWorkerModelSetting.effortPlaceholderNoProvider',
         'Pick provider'
       )
     : !modelAgent
-      ? translate(
+      ? t(
           'auto.components.settings.OrchestrationWorkerModelSetting.effortUnavailable',
           'Not available'
         )
       : selectedModel
-        ? translate(
+        ? t(
             'auto.components.settings.OrchestrationWorkerModelSetting.effortUnavailable',
             'Not available'
           )
-        : translate(
+        : t(
             'auto.components.settings.OrchestrationWorkerModelSetting.effortPlaceholder',
             'Select model'
           )
@@ -177,11 +178,11 @@ export function OrchestrationWorkerModelSetting(props: {
   return (
     <section className="space-y-2 rounded-md border border-border px-4 py-3">
       <SettingsSubsectionHeader
-        title={translate(
+        title={t(
           'auto.components.settings.OrchestrationWorkerModelSetting.workerDefaultsTitle',
           'Worker defaults'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.OrchestrationWorkerModelSetting.workerDefaultsDescription',
           'Choose the provider, model, and reasoning effort to store as your orchestration worker preference.'
         )}
@@ -194,7 +195,7 @@ export function OrchestrationWorkerModelSetting(props: {
           <SelectTrigger
             size="sm"
             className="w-fit min-w-[min(13rem,100%)] max-w-full"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.OrchestrationWorkerModelSetting.defaultWorkerSelectLabel',
               'Default worker provider'
             )}
@@ -203,7 +204,7 @@ export function OrchestrationWorkerModelSetting(props: {
           </SelectTrigger>
           <SelectContent position="popper" align="start">
             <SelectItem value={REQUIRE_EXPLICIT_AGENT}>
-              {translate(
+              {t(
                 'auto.components.settings.OrchestrationWorkerModelSetting.requireAgent',
                 'No default worker'
               )}
@@ -239,7 +240,7 @@ export function OrchestrationWorkerModelSetting(props: {
           <SelectTrigger
             size="sm"
             className="min-w-0 w-48 max-w-full"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.OrchestrationWorkerModelSetting.modelSelectLabel',
               '{{value0}} model',
               { value0: selectedAgentLabel }
@@ -250,7 +251,7 @@ export function OrchestrationWorkerModelSetting(props: {
           </SelectTrigger>
           <SelectContent position="popper" align="start">
             <SelectItem value={AGENT_DEFAULT_MODEL}>
-              {translate(
+              {t(
                 'auto.components.settings.OrchestrationWorkerModelSetting.agentDefault',
                 'Agent default'
               )}
@@ -282,7 +283,7 @@ export function OrchestrationWorkerModelSetting(props: {
           <SelectTrigger
             size="sm"
             className="min-w-0 w-36 max-w-full"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.OrchestrationWorkerModelSetting.effortSelectLabel',
               '{{value0}} effort',
               { value0: selectedAgentLabel }
@@ -292,7 +293,7 @@ export function OrchestrationWorkerModelSetting(props: {
           </SelectTrigger>
           <SelectContent position="popper" align="start">
             <SelectItem value={AGENT_DEFAULT_EFFORT}>
-              {translate(
+              {t(
                 'auto.components.settings.OrchestrationWorkerModelSetting.effortDefault',
                 'Agent default'
               )}
@@ -306,7 +307,7 @@ export function OrchestrationWorkerModelSetting(props: {
         </Select>
       </div>
       <p className="text-[11px] text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.OrchestrationWorkerModelSetting.defaultHint',
           'Agent default stores no model or effort override. Available effort levels follow the selected model.'
         )}
