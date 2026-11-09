@@ -19,7 +19,7 @@ import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
 
 type GroupedProjectEntry = ProjectSectionEntry<
   ActivityItem,
-  ProjectSectionRepo & Partial<Pick<Repo, 'projectGroupId' | 'projectGroupOrder'>>
+  ProjectSectionRepo & Partial<Pick<Repo, 'projectGroupId' | 'projectGroupOrder' | 'isPinned'>>
 >
 
 export type ProjectGroupTreeVisitor<V extends GroupedProjectEntry> = {
@@ -36,10 +36,13 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
     folderCountByGroupId: ReadonlyMap<string, number>
     projectOrderBy: ProjectOrderBy
     repoOrder: ReadonlyMap<string, number> | undefined
+    isRepoEntryPinned?: (entry: [string, V]) => boolean
   },
   visit: ProjectGroupTreeVisitor<V>
 ): void {
   const { entries, projectGroups, folderCountByGroupId, projectOrderBy, repoOrder } = args
+  const isPinnedRepoEntry =
+    args.isRepoEntryPinned ?? ((entry: [string, V]) => entry[1].repo?.isPinned === true)
 
   const groupByProjectGroupId = new Map<string | null, [string, V][]>()
   for (const entry of entries) {
@@ -50,17 +53,31 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
   }
 
   const sortRepoEntriesWithinGroup = (list: [string, V][]): [string, V][] => {
+    if (list.length < 2) {
+      return [...list]
+    }
     if (projectOrderBy === 'recent') {
-      if (list.length < 2) {
-        return [...list]
-      }
       const getRecentRank = createRecentRankLookup<[string, V]>()
-      return [...list].sort((left, right) =>
-        compareRecentRank(getRecentRank(left), getRecentRank(right))
-      )
+      return [...list].sort((left, right) => {
+        const byPin = (isPinnedRepoEntry(right) ? 1 : 0) - (isPinnedRepoEntry(left) ? 1 : 0)
+        if (byPin !== 0) {
+          return byPin
+        }
+        return (
+          compareRecentRank(getRecentRank(left), getRecentRank(right)) ||
+          getEffectiveProjectGroupManualRank(left[1].repo, repoOrder) -
+            getEffectiveProjectGroupManualRank(right[1].repo, repoOrder) ||
+          compareSidebarText(left[1].label, right[1].label) ||
+          compareCodePoints(left[0], right[0])
+        )
+      })
     }
     // Use projectGroupOrder with repoOrder fallback so drag midpoint ranks match rendered order.
     return [...list].sort((left, right) => {
+      const byPin = (isPinnedRepoEntry(right) ? 1 : 0) - (isPinnedRepoEntry(left) ? 1 : 0)
+      if (byPin !== 0) {
+        return byPin
+      }
       const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
       const rightRank = getEffectiveProjectGroupManualRank(right[1].repo, repoOrder)
       return leftRank - rightRank
@@ -80,6 +97,7 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
   for (const groups of childGroupsByParentId.values()) {
     groups.sort(
       (left, right) =>
+        (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0) ||
         left.tabOrder - right.tabOrder ||
         compareSidebarText(left.name, right.name) ||
         compareCodePoints(left.executionHostId ?? '', right.executionHostId ?? '') ||
@@ -99,7 +117,9 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
 
   const walkProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
-    const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
+    const repoEntries = withRepoSectionDisplayLabels(
+      sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
+    )
     if (
       visit.group(
         projectGroup,
@@ -108,9 +128,77 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
         childGroups.length > 0
       )
     ) {
-      visit.projects(withRepoSectionDisplayLabels(repoEntries), depth + 1)
-      for (const childGroup of childGroups) {
-        walkProjectGroup(childGroup, depth + 1)
+      if (childGroups.length === 0) {
+        visit.projects(repoEntries, depth + 1)
+      } else if (repoEntries.length === 0) {
+        for (const childGroup of childGroups) {
+          walkProjectGroup(childGroup, depth + 1)
+        }
+      } else if (projectOrderBy === 'recent') {
+        for (const childGroup of childGroups) {
+          if (childGroup.isPinned) {
+            walkProjectGroup(childGroup, depth + 1)
+          }
+        }
+        const pinnedRepos = repoEntries.filter(isPinnedRepoEntry)
+        if (pinnedRepos.length > 0) {
+          visit.projects(pinnedRepos, depth + 1)
+        }
+        for (const childGroup of childGroups) {
+          if (!childGroup.isPinned) {
+            walkProjectGroup(childGroup, depth + 1)
+          }
+        }
+        const unpinnedRepos = repoEntries.filter((entry) => !isPinnedRepoEntry(entry))
+        if (unpinnedRepos.length > 0) {
+          visit.projects(unpinnedRepos, depth + 1)
+        }
+      } else {
+        const hasExplicitRepoOrder = repoEntries.some(
+          (entry) =>
+            typeof entry[1].repo?.projectGroupOrder === 'number' &&
+            Number.isFinite(entry[1].repo.projectGroupOrder)
+        )
+        const children = [
+          ...childGroups.map((childGroup) => ({
+            kind: 'group' as const,
+            group: childGroup,
+            isPinned: childGroup.isPinned === true,
+            rank: childGroup.tabOrder,
+            label: childGroup.name,
+            id: childGroup.id
+          })),
+          ...repoEntries.map((entry) => ({
+            kind: 'repo' as const,
+            entry,
+            isPinned: isPinnedRepoEntry(entry),
+            rank: getEffectiveProjectGroupManualRank(entry[1].repo, repoOrder),
+            label: entry[1].label,
+            id: entry[0]
+          }))
+        ].sort((left, right) => {
+          const byPin = (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0)
+          if (byPin !== 0) {
+            return byPin
+          }
+          if (!hasExplicitRepoOrder && left.kind !== right.kind) {
+            return left.kind === 'repo' ? -1 : 1
+          }
+          if (left.rank !== right.rank) {
+            return left.rank - right.rank
+          }
+          if (left.kind !== right.kind) {
+            return left.kind === 'group' ? -1 : 1
+          }
+          return compareSidebarText(left.label, right.label) || compareCodePoints(left.id, right.id)
+        })
+        for (const child of children) {
+          if (child.kind === 'group') {
+            walkProjectGroup(child.group, depth + 1)
+          } else {
+            visit.projects([child.entry], depth + 1)
+          }
+        }
       }
     }
     groupByProjectGroupId.delete(projectGroup.id)
@@ -131,23 +219,35 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
     )
   ]
   if (projectOrderBy === 'manual') {
+    const toRootSortEntry = (entry: (typeof rootEntries)[number]) =>
+      'projectGroup' in entry
+        ? {
+            kind: 'group' as const,
+            group: entry.projectGroup,
+            isPinned: entry.projectGroup.isPinned === true
+          }
+        : entry.repoEntry[1].repo
+          ? {
+              kind: 'repo' as const,
+              repo: entry.repoEntry[1].repo,
+              isPinned: isPinnedRepoEntry(entry.repoEntry)
+            }
+          : null
     rootEntries.sort((left, right) => {
-      const leftEntry =
-        'projectGroup' in left
-          ? { kind: 'group' as const, group: left.projectGroup }
-          : left.repoEntry[1].repo
-            ? { kind: 'repo' as const, repo: left.repoEntry[1].repo }
-            : null
-      const rightEntry =
-        'projectGroup' in right
-          ? { kind: 'group' as const, group: right.projectGroup }
-          : right.repoEntry[1].repo
-            ? { kind: 'repo' as const, repo: right.repoEntry[1].repo }
-            : null
+      const leftEntry = toRootSortEntry(left)
+      const rightEntry = toRootSortEntry(right)
       return leftEntry && rightEntry
         ? compareRootProjectEntries(leftEntry, rightEntry, repoOrder)
         : 0
     })
+  } else {
+    const isRootEntryPinned = (entry: (typeof rootEntries)[number]): boolean =>
+      'projectGroup' in entry
+        ? entry.projectGroup.isPinned === true
+        : isPinnedRepoEntry(entry.repoEntry)
+    rootEntries.sort(
+      (left, right) => Number(isRootEntryPinned(right)) - Number(isRootEntryPinned(left))
+    )
   }
   for (const entry of rootEntries) {
     if ('projectGroup' in entry) {

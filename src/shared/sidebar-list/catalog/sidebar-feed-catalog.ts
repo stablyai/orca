@@ -6,7 +6,9 @@ import type { SidebarFeedCatalog } from '../feed/sidebar-feed-rows'
 
 /** A repo as a served catalog or a host's repo.list names it, before the builder reads it. */
 export type SidebarCatalogRepo = ProjectSectionRepo &
-  Partial<Pick<Repo, 'badgeColor' | 'projectGroupId' | 'projectGroupOrder' | 'hiddenAt'>>
+  Partial<
+    Pick<Repo, 'badgeColor' | 'projectGroupId' | 'projectGroupOrder' | 'hiddenAt' | 'isPinned'>
+  >
 
 function catalogRepo(repo: SidebarCatalogRepo): Repo {
   return {
@@ -19,7 +21,8 @@ function catalogRepo(repo: SidebarCatalogRepo): Repo {
     ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {}),
     ...(repo.projectGroupId ? { projectGroupId: repo.projectGroupId } : {}),
     ...(repo.projectGroupOrder !== undefined ? { projectGroupOrder: repo.projectGroupOrder } : {}),
-    ...(typeof repo.hiddenAt === 'number' ? { hiddenAt: repo.hiddenAt } : {})
+    ...(typeof repo.hiddenAt === 'number' ? { hiddenAt: repo.hiddenAt } : {}),
+    ...(repo.isPinned ? { isPinned: true } : {})
   }
 }
 

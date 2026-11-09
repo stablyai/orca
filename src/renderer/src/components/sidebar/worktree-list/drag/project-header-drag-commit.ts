@@ -2,8 +2,20 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
-import { getNextRootProjectOrder } from '../../../../../../shared/sidebar-list/sections/root-project-order'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { isSameRepoRow } from '@/store/repos/repo-host-identity'
+import { isRepoHeaderIdPinned } from './header-drag-pin-tier'
+import { computeProjectGroupChildDropMutations } from './project-group-child-drop-commit'
+import type { ProjectGroupChildItemId } from './project-group-child-slot-order'
+import type { ProjectGroupHeaderUpdatePatch } from './project-group-header-drag-contract'
+import { executeOrderedDropMutations } from './project-group-header-drag-rollback'
+import { computeCrossBucketProjectGroupMutations } from './project-header-bucket-slot-drop'
+import {
+  ROOT_INTERLEAVED_PROJECT_BUCKET_KEY,
+  type ProjectHeaderDragSession
+} from './project-header-drag-contract'
 import {
   applyAllRepoInsertAt,
   getProjectHeaderDragBucketKey,
@@ -16,18 +28,11 @@ import {
   type ProjectHeaderDropTarget
 } from './project-header-group-drop'
 import {
-  ROOT_INTERLEAVED_PROJECT_BUCKET_KEY,
-  type ProjectHeaderDragSession
-} from './project-header-drag-contract'
-import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
-import type { Repo } from '../../../../../../shared/repository/repo-types'
-import { isSameRepoRow } from '@/store/repos/repo-host-identity'
-import type { RootProjectHeaderDrag } from './root-project-header-drop'
-import { invokeBoolCallback } from './project-group-header-drag-rollback'
-import {
   commitInterleavedRootProjectHeaderDrop,
+  commitProjectGroupOrderStep,
   resolveSiblingRepoForDraggedHost
 } from './project-header-root-drop-commit'
+import type { RootProjectHeaderDrag } from './root-project-header-drop'
 
 export async function commitProjectHeaderDragDrop(
   args: RootProjectHeaderDrag & {
@@ -42,18 +47,26 @@ export async function commitProjectHeaderDragDrop(
     >
     dropTarget: ProjectHeaderDropTarget
     sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+    sidebarGroupChildItemIdsByGroupId?: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
+    projectGroupById?: ReadonlyMap<string, ProjectGroup>
+    pinnedRepoHeaderIds?: ReadonlySet<string>
     orderedRepoIds: readonly string[]
     repoById: ReadonlyMap<string, Repo>
     liveRepos: readonly Repo[]
     getLiveRepos?: () => readonly Repo[]
+    getLiveProjectGroups?: () => readonly ProjectGroup[]
     projectGroups?: readonly ProjectGroup[]
-    projectGroupById?: ReadonlyMap<string, ProjectGroup>
     usesProjectGroupOrdering: boolean
     onCommitRepoOrder: (orderedIds: string[]) => void
     onCommitProjectGroupOrder: (
       project: Repo,
       projectGroupId: string | null,
-      order: number | null
+      order: number | null,
+      options?: { isPinned?: boolean }
+    ) => Promise<boolean> | boolean | void
+    onCommitProjectGroupUpdate?: (
+      groupId: string,
+      updates: ProjectGroupHeaderUpdatePatch
     ) => Promise<boolean> | boolean | void
     onReconcileHostProjectGroups?: (ownerHostId: ExecutionHostId) => Promise<void> | void
     onDropFailed?: () => void
@@ -91,6 +104,53 @@ export async function commitProjectHeaderDragDrop(
     })
   }
 
+  const targetGroupId = parseGroupIdFromBucketKey(args.dropTarget.targetBucketKey)
+  if (
+    targetGroupId !== null &&
+    draggedGroupRepo &&
+    args.sidebarGroupChildItemIdsByGroupId &&
+    args.projectGroupById
+  ) {
+    if (getProjectHeaderDragBucketKey(draggedGroupRepo) !== args.session.bucketKey) {
+      return false
+    }
+    const isCrossBucket = args.dropTarget.targetBucketKey !== args.session.bucketKey
+    const mutations = computeProjectGroupChildDropMutations({
+      parentGroupId: targetGroupId,
+      draggedItem: {
+        kind: 'repo',
+        repo: draggedGroupRepo,
+        headerRepoId: args.session.repo.id
+      },
+      isCrossBucket,
+      dropIndex: args.dropTarget.dropIndex,
+      dragHostId: getRepoExecutionHostId(draggedGroupRepo),
+      allChildItemIds: args.sidebarGroupChildItemIdsByGroupId.get(targetGroupId) ?? [],
+      projectGroupById: args.projectGroupById,
+      repoById: args.repoById,
+      liveRepos: args.liveRepos,
+      pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+      orderedRepoIds: args.orderedRepoIds
+    })
+    const primaryMutation = isCrossBucket
+      ? mutations.find((m) => m.kind === 'repo' && m.repo === draggedGroupRepo)
+      : undefined
+    return executeOrderedDropMutations({
+      primaryMutation,
+      mutations,
+      expectedParentGroupId: targetGroupId,
+      ownerHostId: getRepoExecutionHostId(draggedGroupRepo),
+      projectGroupById: args.projectGroupById,
+      repoById: args.repoById,
+      getLiveProjectGroups: args.getLiveProjectGroups,
+      getLiveRepos: args.getLiveRepos,
+      onCommitProjectGroupUpdate: args.onCommitProjectGroupUpdate ?? (async () => false),
+      onCommitProjectGroupOrder: args.onCommitProjectGroupOrder,
+      onReconcileHostProjectGroups: args.onReconcileHostProjectGroups,
+      onDropFailed: args.onDropFailed
+    })
+  }
+
   if (args.dropTarget.targetBucketKey !== args.session.bucketKey) {
     if (
       !draggedGroupRepo ||
@@ -98,44 +158,32 @@ export async function commitProjectHeaderDragDrop(
     ) {
       return false
     }
-    const targetGroupId = parseGroupIdFromBucketKey(args.dropTarget.targetBucketKey)
-    const targetHeaderIds =
-      args.sidebarRepoHeaderIdsByBucket.get(args.dropTarget.targetBucketKey) ?? []
-    const draggedHostId = getRepoExecutionHostId(draggedGroupRepo)
-    const siblings: Repo[] = []
-    let siblingDropIndex = 0
-    const sidebarDropIndex = args.dropTarget.dropIndex
-    // dropIndex is a slot in the full destination bucket; count only resolvable siblings before it.
-    targetHeaderIds.forEach((repoId, index) => {
-      if (repoId === draggedGroupRepo.id) {
-        return
-      }
-      const sibling = resolveSiblingRepoForDraggedHost(
-        repoId,
-        draggedHostId,
-        args.liveRepos,
-        args.repoById
-      )
-      if (!sibling) {
-        return
-      }
-      if (index < sidebarDropIndex) {
-        siblingDropIndex++
-      }
-      siblings.push(sibling)
+    const crossMutations = computeCrossBucketProjectGroupMutations({
+      draggedGroupRepo,
+      targetBucketHeaderIds:
+        args.sidebarRepoHeaderIdsByBucket.get(args.dropTarget.targetBucketKey) ?? [],
+      targetGroupId,
+      dropIndex: args.dropTarget.dropIndex,
+      pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+      repoById: args.repoById,
+      liveRepos: args.liveRepos,
+      orderedRepoIds: args.orderedRepoIds,
+      projectGroups: args.projectGroups
     })
-    const repoOrderRankById = getLogicalRepoOrderRankById(args.orderedRepoIds)
-    const order =
-      targetGroupId === null && siblings.length === 0 && args.projectGroups
-        ? (getNextRootProjectOrder(args.liveRepos, args.projectGroups) ?? 0)
-        : getProjectGroupOrderForSidebarDrop({
-            siblings,
-            dropIndex: siblingDropIndex,
-            repoOrderRankById
-          })
-    return invokeBoolCallback(() =>
-      args.onCommitProjectGroupOrder(draggedGroupRepo, targetGroupId, order)
-    )
+    return executeOrderedDropMutations({
+      primaryMutation: crossMutations[0],
+      mutations: crossMutations,
+      expectedParentGroupId: targetGroupId,
+      ownerHostId: getRepoExecutionHostId(draggedGroupRepo),
+      projectGroupById: args.projectGroupById ?? new Map(),
+      repoById: args.repoById,
+      getLiveProjectGroups: args.getLiveProjectGroups,
+      getLiveRepos: args.getLiveRepos,
+      onCommitProjectGroupUpdate: args.onCommitProjectGroupUpdate ?? (async () => false),
+      onCommitProjectGroupOrder: args.onCommitProjectGroupOrder,
+      onReconcileHostProjectGroups: args.onReconcileHostProjectGroups,
+      onDropFailed: args.onDropFailed
+    })
   }
 
   // Why: a group change mid-drag (another window or client) moved the row out of this bucket.
@@ -149,7 +197,25 @@ export async function commitProjectHeaderDragDrop(
   }
 
   const sidebarDropIndex = args.dropTarget.dropIndex
-  const sidebarRepoHeaderIds = args.session.sidebarRepoHeaderIds
+  const fallbackHostId = getRepoExecutionHostId(bucketLiveRepo)
+  const draggedPinned =
+    isRepoHeaderIdPinned(
+      draggedOrderRepo.id,
+      args.pinnedRepoHeaderIds,
+      args.repoById,
+      fallbackHostId,
+      args.liveRepos
+    ) || bucketLiveRepo.isPinned === true
+  const sidebarRepoHeaderIds = args.session.sidebarRepoHeaderIds.filter(
+    (repoId) =>
+      isRepoHeaderIdPinned(
+        repoId,
+        args.pinnedRepoHeaderIds,
+        args.repoById,
+        fallbackHostId,
+        args.liveRepos
+      ) === draggedPinned
+  )
   const sourceIndex = sidebarRepoHeaderIds.indexOf(draggedOrderRepo.id)
   // Both slots beside the dragged header are no-ops; do not compact paired-host occurrences.
   if (
@@ -196,12 +262,11 @@ export async function commitProjectHeaderDragDrop(
       dropIndex: siblingDropIndex,
       repoOrderRankById
     })
-    return invokeBoolCallback(() =>
-      args.onCommitProjectGroupOrder(
-        draggedGroupRepo,
-        draggedGroupRepo.projectGroupId ?? null,
-        order
-      )
+    return commitProjectGroupOrderStep(
+      args.onCommitProjectGroupOrder,
+      draggedGroupRepo,
+      draggedGroupRepo.projectGroupId ?? null,
+      order
     )
   }
 

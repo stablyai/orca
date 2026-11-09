@@ -4,9 +4,7 @@ import {
 } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import { findJoinableParentGroupForRepo } from '../rows/project-group-menu-tree'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import {
   INITIAL_REPO_DRAG_STATE,
@@ -16,15 +14,12 @@ import {
   type RepoHeaderDragController,
   type UseRepoHeaderDragArgs
 } from './project-header-drag-contract'
+import { toRepoDragState, type ProjectHeaderDropTarget } from './project-header-group-drop'
 import {
-  computeCombinedProjectHeaderDropTarget,
-  getSessionGroupRepo,
-  refreshProjectHeaderDragSessionRects,
-  toRepoDragState,
-  type ProjectHeaderDropTarget
-} from './project-header-group-drop'
-import { createProjectHeaderDragSession } from './project-header-drag-start'
-import { measureSidebarVirtualContentBottom } from './header-drag-dom-measurement'
+  computeSessionProjectHeaderDropTarget,
+  createProjectHeaderDragSession,
+  refreshProjectHeaderDragSessionRects
+} from './project-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
@@ -52,35 +47,15 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
     )
   }, [])
 
-  const computeDrop = useCallback((pointerY: number): ProjectHeaderDropTarget | null => {
-    const session = dragSessionRef.current
-    const container = latestInputsRef.current.getScrollContainer()
-    if (!session || !container) {
-      return null
-    }
-    const bucketOwnerRepo = getSessionGroupRepo(session) ?? session.repo
-    const currentGroupId = bucketOwnerRepo.projectGroupId ?? null
-    const currentParentGroupId =
-      findJoinableParentGroupForRepo(bucketOwnerRepo, latestInputsRef.current.projectGroups)?.id ??
-      null
-    return computeCombinedProjectHeaderDropTarget({
-      pointerY,
-      containerTop: container.getBoundingClientRect().top,
-      scrollTop: container.scrollTop,
-      dragHostId: getRepoExecutionHostId(bucketOwnerRepo),
-      currentGroupId,
-      currentParentGroupId,
-      allowSlotReorder: latestInputsRef.current.allowSlotReorder,
-      joinableGroupIds: session.joinableGroupIds,
-      hostHeaderRects: session.hostHeaderRects,
-      groupHeaderRects: session.groupHeaderRects,
-      repoHeaderRects: session.headerRects,
-      rootProjectHeaderKeys: session.rootProjectHeaderKeys,
-      rootHeaderRects: session.rootHeaderRects,
-      sidebarRepoHeaderIdsByBucket: latestInputsRef.current.sidebarRepoHeaderIdsByBucket,
-      contentBottom: measureSidebarVirtualContentBottom(container)
-    })
-  }, [])
+  const computeDrop = useCallback(
+    (pointerY: number): ProjectHeaderDropTarget | null =>
+      computeSessionProjectHeaderDropTarget(
+        pointerY,
+        dragSessionRef.current,
+        latestInputsRef.current
+      ),
+    []
+  )
 
   const applyDrop = useCallback(
     (session: ProjectHeaderDragSession, drop: ProjectHeaderDropTarget | null) => {
@@ -142,15 +117,19 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
         dropTarget,
         onCommitRootProjectOrder: inputs.onCommitRootProjectOrder,
         sidebarRepoHeaderIdsByBucket: inputs.sidebarRepoHeaderIdsByBucket,
+        sidebarGroupChildItemIdsByGroupId: inputs.sidebarGroupChildItemIdsByGroupId,
+        pinnedRepoHeaderIds: inputs.pinnedRepoHeaderIds,
         orderedRepoIds: inputs.orderedRepoIds,
         repoById: inputs.repoById,
         liveRepos: inputs.getLiveRepos(),
         getLiveRepos: inputs.getLiveRepos,
+        getLiveProjectGroups: inputs.getLiveProjectGroups,
         projectGroups: inputs.projectGroups,
         projectGroupById: inputs.projectGroupById,
         usesProjectGroupOrdering: inputs.usesProjectGroupOrdering,
         onCommitRepoOrder: inputs.onCommitRepoOrder,
         onCommitProjectGroupOrder: inputs.onCommitProjectGroupOrder,
+        onCommitProjectGroupUpdate: inputs.onCommitProjectGroupUpdate,
         onReconcileHostProjectGroups: inputs.onReconcileHostProjectGroups,
         onDropFailed: inputs.onDropFailed,
         onMoveToGroupHeader: inputs.onMoveToGroupHeader
@@ -301,9 +280,13 @@ export function useRepoHeaderDrag(args: UseRepoHeaderDragArgs): RepoHeaderDragCo
         repo,
         groupRepo,
         projectGroups: inputs.projectGroups,
+        projectGroupById: inputs.projectGroupById,
         allowSlotReorder: inputs.allowSlotReorder,
         sidebarRepoHeaderIdsByBucket: inputs.sidebarRepoHeaderIdsByBucket,
         rootProjectHeaderKeys: inputs.rootProjectHeaderKeys,
+        pinnedRepoHeaderIds: inputs.pinnedRepoHeaderIds,
+        repoById: inputs.repoById,
+        liveRepos: inputs.getLiveRepos(),
         getScrollContainer: inputs.getScrollContainer
       })
       if (!session) {

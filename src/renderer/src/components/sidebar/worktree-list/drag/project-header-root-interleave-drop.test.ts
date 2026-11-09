@@ -226,8 +226,11 @@ describe('project header foreign-host sibling indexing & grouped root-interleave
     expect(rollbackCalls).toEqual([{ id: 'r-src', groupId: null, order: 1 }])
   })
 
-  it('counts resolved destination siblings before dropIndex on cross-bucket drops when foreign headers precede', async () => {
-    const foreign0 = makeRepo('f0', { executionHostId: 'ssh:other', projectGroupOrder: 0 })
+  it('counts resolved destination siblings before drop slot on cross-bucket drops when foreign headers precede', async () => {
+    const foreign0 = makeRepo('f0', {
+      executionHostId: 'runtime:env-other',
+      projectGroupOrder: 999
+    })
     const dragged = makeRepo('dragged', {
       executionHostId: 'local',
       projectGroupId: 'g-src',
@@ -236,6 +239,51 @@ describe('project header foreign-host sibling indexing & grouped root-interleave
     const siblingA = makeRepo('sib-a', { executionHostId: 'local', projectGroupOrder: 0 })
     const siblingB = makeRepo('sib-b', { executionHostId: 'local', projectGroupOrder: 10 })
     const onCommitProjectGroupOrder = vi.fn()
+    const repoById = new Map([
+      ['f0', foreign0],
+      ['dragged', dragged],
+      ['sib-a', siblingA],
+      ['sib-b', siblingB]
+    ])
+    const liveRepos = [foreign0, dragged, siblingA, siblingB]
+    const sidebarRepoHeaderIdsByBucket = new Map([
+      ['group:g-src', ['dragged']],
+      ['ungrouped', ['f0', 'sib-a', 'sib-b']]
+    ])
+    const gSrc = makeGroup('g-src', { tabOrder: 0 })
+    const target = computeCombinedProjectHeaderDropTarget({
+      pointerY: 186,
+      containerTop: 0,
+      scrollTop: 0,
+      dragHostId: 'local',
+      currentGroupId: 'g-src',
+      allowSlotReorder: true,
+      joinableGroupIds: new Set(['g-src']),
+      hostHeaderRects: [
+        { hostId: 'runtime:env-other', top: 0, bottom: 20 },
+        { hostId: 'local', top: 50, bottom: 70 }
+      ],
+      groupHeaderRects: [
+        {
+          groupId: 'g-src',
+          bucketKey: 'root',
+          headerIndex: 0,
+          top: 70,
+          bottom: 98,
+          sectionBottom: 130
+        }
+      ],
+      repoHeaderRects: [
+        { repoId: 'f0', bucketKey: 'ungrouped', headerIndex: 0, top: 20, bottom: 48 },
+        { repoId: 'dragged', bucketKey: 'group:g-src', headerIndex: 0, top: 98, bottom: 126 },
+        { repoId: 'sib-a', bucketKey: 'ungrouped', headerIndex: 1, top: 140, bottom: 168 },
+        { repoId: 'sib-b', bucketKey: 'ungrouped', headerIndex: 2, top: 176, bottom: 204 }
+      ],
+      sidebarRepoHeaderIdsByBucket,
+      repoById,
+      liveRepos
+    })
+    expect(target).not.toBeNull()
 
     await commitProjectHeaderDragDrop({
       session: {
@@ -244,24 +292,13 @@ describe('project header foreign-host sibling indexing & grouped root-interleave
         bucketKey: 'group:g-src',
         sidebarRepoHeaderIds: ['dragged']
       },
-      dropTarget: {
-        kind: 'slot',
-        targetBucketKey: 'ungrouped',
-        dropIndex: 2,
-        dropIndicatorY: 60
-      },
-      sidebarRepoHeaderIdsByBucket: new Map([
-        ['group:g-src', ['dragged']],
-        ['ungrouped', ['f0', 'sib-a', 'sib-b']]
-      ]),
+      dropTarget: target!,
+      sidebarRepoHeaderIdsByBucket,
       orderedRepoIds: ['f0', 'dragged', 'sib-a', 'sib-b'],
-      repoById: new Map([
-        ['f0', foreign0],
-        ['dragged', dragged],
-        ['sib-a', siblingA],
-        ['sib-b', siblingB]
-      ]),
-      liveRepos: [dragged, siblingA, siblingB],
+      repoById,
+      liveRepos,
+      projectGroups: [gSrc],
+      projectGroupById: new Map([['g-src', gSrc]]),
       usesProjectGroupOrdering: true,
       onCommitRepoOrder: vi.fn(),
       onCommitProjectGroupOrder,

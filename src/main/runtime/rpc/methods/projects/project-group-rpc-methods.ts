@@ -65,7 +65,8 @@ export const PROJECT_GROUP_METHODS = [
           params.repo,
           params.groupId ?? null,
           params.order,
-          params.connectionId
+          params.connectionId,
+          ...(typeof params.isPinned === 'boolean' ? [{ isPinned: params.isPinned }] : [])
         ),
         context
       )

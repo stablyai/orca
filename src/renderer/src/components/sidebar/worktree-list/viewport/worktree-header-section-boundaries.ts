@@ -32,16 +32,17 @@ function findNextHeaderRenderRowIndex(rows: readonly RenderRow[], startIndex: nu
 
 export function getRepoHeaderSectionEndIndexByRepoId(args: {
   rows: readonly RenderRow[]
+  sidebarRepoHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
+  repoHeaderBucketByRepoId?: ReadonlyMap<string, string>
 }): Map<string, number> {
   const sectionEndIndexByRepoId = new Map<string, number>()
   for (let index = 0; index < args.rows.length; index++) {
     const row = args.rows[index]
     const repoId = row?.type === 'header' ? getHeaderDragRepo(row)?.id : undefined
-    if (!repoId) {
+    if (!repoId || sectionEndIndexByRepoId.has(repoId)) {
       continue
     }
-    const endIndex = findNextHeaderRenderRowIndex(args.rows, index + 1)
-    sectionEndIndexByRepoId.set(repoId, endIndex >= 0 ? endIndex : args.rows.length)
+    sectionEndIndexByRepoId.set(repoId, findNextHeaderRenderRowIndex(args.rows, index + 1))
   }
   return sectionEndIndexByRepoId
 }
@@ -49,6 +50,8 @@ export function getRepoHeaderSectionEndIndexByRepoId(args: {
 export function getRepoHeaderSectionEndByRepoId(args: {
   rows: readonly RenderRow[]
   firstHeaderIndex: number
+  sidebarRepoHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
+  repoHeaderBucketByRepoId?: ReadonlyMap<string, string>
 }): Map<string, number> {
   const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
   const endIndexes = getRepoHeaderSectionEndIndexByRepoId(args)
@@ -61,6 +64,8 @@ export function getRepoHeaderSectionEndByRepoId(args: {
 
 export function getProjectGroupHeaderSectionEndIndexByGroupId(args: {
   rows: readonly RenderRow[]
+  sidebarProjectGroupHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
+  projectGroupHeaderBucketByGroupId?: ReadonlyMap<string, string>
 }): Map<string, number> {
   const sectionEndIndexByGroupId = new Map<string, number>()
   const pendingGroups: { groupId: string; depth: number }[] = []
@@ -93,6 +98,8 @@ export function getProjectGroupHeaderSectionEndIndexByGroupId(args: {
 export function getProjectGroupHeaderSectionEndByGroupId(args: {
   rows: readonly RenderRow[]
   firstHeaderIndex: number
+  sidebarProjectGroupHeaderIdsByBucket?: ReadonlyMap<string, readonly string[]>
+  projectGroupHeaderBucketByGroupId?: ReadonlyMap<string, string>
 }): Map<string, number> {
   const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
   const endIndexes = getProjectGroupHeaderSectionEndIndexByGroupId(args)

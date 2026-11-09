@@ -12,6 +12,7 @@ import {
 } from '../persistence-test-harness'
 
 import { normalizeRuntimePathSeparators } from '../../../shared/file-access/cross-platform-path'
+import { clearMissingProjectGroupMemberships } from '../../../shared/project/groups/project-groups'
 
 vi.mock('electron', () => ({
   app: {
@@ -271,5 +272,177 @@ describe('Flat folder-scan project groups adaptation', () => {
         createdFrom: 'manual'
       })
     ).toThrow('project_group_parent_not_found')
+  })
+
+  it('persists isPinned on groups and repos, clears rootProjectOrder on nesting, and resets pin on container moves or deletion', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({
+          id: 'repo-a',
+          path: join(testState.dir, 'repo-a'),
+          projectGroupId: 'child',
+          projectGroupOrder: 0
+        })
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'root',
+          name: 'Root',
+          parentPath: null,
+          parentGroupId: null,
+          createdFrom: 'manual',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: 'child',
+          name: 'Child',
+          parentPath: null,
+          parentGroupId: 'root',
+          createdFrom: 'manual',
+          tabOrder: 1,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: 'other',
+          name: 'Other',
+          parentPath: null,
+          parentGroupId: null,
+          rootProjectOrder: 2000,
+          createdFrom: 'manual',
+          tabOrder: 2,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = createStore()
+    expect(
+      store.updateProjectGroup('other', { parentGroupId: 'child', tabOrder: 5 })?.rootProjectOrder
+    ).toBeUndefined()
+    expect(store.updateProjectGroup('child', { isPinned: true })?.isPinned).toBe(true)
+    expect(store.updateProjectGroup('child', { tabOrder: 9 })?.isPinned).toBe(true)
+    expect(
+      store.updateProjectGroup('child', { parentGroupId: 'root', tabOrder: 2 })?.isPinned
+    ).toBe(true)
+    expect(store.updateProjectGroup('child', { parentGroupId: null })?.isPinned).toBe(false)
+
+    expect(
+      store.moveProjectToGroup(store.getRepo('repo-a')!, 'child', 2, { isPinned: true })?.isPinned
+    ).toBe(true)
+    expect(store.moveProjectToGroup(store.getRepo('repo-a')!, 'other', 0)?.isPinned).toBe(false)
+
+    store.updateRepo(store.getRepo('repo-a')!, { isPinned: true })
+    expect(store.updateRepo(store.getRepo('repo-a')!, { projectGroupId: 'child' })?.isPinned).toBe(
+      false
+    )
+
+    store.updateProjectGroup('child', { parentGroupId: 'root' })
+    store.updateRepo(store.getRepo('repo-a')!, { isPinned: true })
+    expect(store.deleteProjectGroup('root')).toBe(true)
+    expect(store.getRepo('repo-a')).toMatchObject({ projectGroupId: null, isPinned: false })
+
+    expect(
+      clearMissingProjectGroupMemberships(
+        [{ ...store.getRepo('repo-a')!, projectGroupId: 'gone', isPinned: true }],
+        store.getProjectGroups()
+      )[0]
+    ).toMatchObject({ projectGroupId: null, isPinned: false })
+  })
+
+  it('appends new subgroups and moved projects after explicit-order and undefined-order sibling repos', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [
+        makeRepo({
+          id: 'repo-existing',
+          path: join(testState.dir, 'repo-existing'),
+          projectGroupId: 'explicit-parent',
+          projectGroupOrder: 10
+        }),
+        makeRepo({
+          id: 'repo-incoming-1',
+          path: join(testState.dir, 'repo-incoming-1'),
+          projectGroupId: null
+        }),
+        makeRepo({
+          id: 'repo-incoming-2',
+          path: join(testState.dir, 'repo-incoming-2'),
+          projectGroupId: null
+        }),
+        makeRepo({
+          id: 'repo-fallback',
+          path: join(testState.dir, 'repo-fallback'),
+          projectGroupId: 'fallback-parent'
+        })
+      ],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups: [
+        {
+          id: 'explicit-parent',
+          name: 'Explicit',
+          parentPath: null,
+          parentGroupId: null,
+          createdFrom: 'manual',
+          tabOrder: 0,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        },
+        {
+          id: 'fallback-parent',
+          name: 'Fallback',
+          parentPath: null,
+          parentGroupId: null,
+          createdFrom: 'manual',
+          tabOrder: 1,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = createStore()
+    const explicitSub = store.createProjectGroup({
+      name: 'Sub After 10',
+      parentGroupId: 'explicit-parent',
+      createdFrom: 'manual'
+    })
+    expect(explicitSub.tabOrder).toBe(11)
+    expect(
+      store.moveProjectToGroup(store.getRepo('repo-incoming-1')!, 'explicit-parent')
+        ?.projectGroupOrder
+    ).toBe(12)
+
+    const fallbackSub = store.createProjectGroup({
+      name: 'Sub After Fallback',
+      parentGroupId: 'fallback-parent',
+      createdFrom: 'manual'
+    })
+    expect(fallbackSub.tabOrder).toBe(3001)
+    expect(
+      store.moveProjectToGroup(store.getRepo('repo-incoming-2')!, 'fallback-parent')
+        ?.projectGroupOrder
+    ).toBe(3002)
   })
 })

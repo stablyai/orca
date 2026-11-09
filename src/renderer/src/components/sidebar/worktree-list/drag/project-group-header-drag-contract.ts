@@ -3,6 +3,7 @@ import type { PointerEvent } from 'react'
 
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { HostHeaderRect } from './host-header-drag-dom'
+import type { ProjectGroupChildItemId } from './project-group-child-slot-order'
 import type {
   ProjectGroupHeaderDragBucketKey,
   ProjectGroupHeaderDragRect
@@ -10,6 +11,7 @@ import type {
 import { REPO_HEADER_ACTION_SELECTOR } from './project-header-drag-contract'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { ProjectHeaderDragRect } from './project-header-drop'
 
 export const ROOT_INTERLEAVED_GROUP_BUCKET_KEY = 'root-interleaved'
 
@@ -33,6 +35,7 @@ export type ProjectGroupHeaderUpdatePatch = {
   tabOrder?: number
   parentGroupId?: string | null
   rootProjectOrder?: number | null
+  isPinned?: boolean
 }
 
 export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
@@ -40,7 +43,12 @@ export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  sidebarGroupChildItemIdsByGroupId?: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
+  allowMixedProjectReorder?: boolean
   projectGroupById: ReadonlyMap<string, ProjectGroup>
+  repoById?: ReadonlyMap<string, Repo>
+  pinnedRepoHeaderIds?: ReadonlySet<string>
+  orderedRepoIds?: readonly string[]
   projectGroupOwnerHostIdByGroupId?: ReadonlyMap<string, ExecutionHostId | null>
   getLiveRepos?: () => readonly Repo[]
   getLiveProjectGroups?: () => readonly ProjectGroup[]
@@ -50,6 +58,12 @@ export type UseProjectGroupHeaderDragArgs = RootProjectHeaderDrag & {
   ) => Promise<boolean> | boolean | void
   onReconcileHostProjectGroups?: (ownerHostId: ExecutionHostId) => Promise<void> | void
   onDropFailed?: () => void
+  onCommitProjectGroupOrder?: (
+    project: Repo,
+    projectGroupId: string | null,
+    order: number | null,
+    options?: { isPinned?: boolean }
+  ) => Promise<boolean> | boolean | void
   getScrollContainer: () => HTMLElement | null
 }
 
@@ -68,6 +82,7 @@ export type ProjectGroupHeaderDragSession = {
   reparentableGroupIds: ReadonlySet<string>
   pointerId: number
   headerRects: ProjectGroupHeaderDragRect[]
+  repoHeaderRects?: ProjectHeaderDragRect[]
   hostHeaderRects: HostHeaderRect[]
   handleEl: HTMLElement
   startX: number

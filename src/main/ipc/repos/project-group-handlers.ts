@@ -112,7 +112,10 @@ export function registerProjectGroupHandlers(
     }
     // Fence the selected host only; a WSL move must not block its SSH sibling.
     assertWslMoveRepoWritable(store, target)
-    const moved = store.moveProjectToGroup(target, args.groupId, args.order)
+    const moved =
+      typeof args.isPinned === 'boolean'
+        ? store.moveProjectToGroup(target, args.groupId, args.order, { isPinned: args.isPinned })
+        : store.moveProjectToGroup(target, args.groupId, args.order)
     if (moved) {
       notifyReposChanged(mainWindow)
     }

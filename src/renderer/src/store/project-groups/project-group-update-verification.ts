@@ -5,6 +5,8 @@ import type {
 
 export type PersistProjectGroupUpdateOptions = {
   onParentGroupMoveRejected?: () => void
+  onPinRejected?: () => void
+  onPinFailed?: () => void
   allocateCommitSeq?: () => number
   onStageCommitted?: (group: ProjectGroup, commitSeq: number) => boolean | void
   onFinalCommitSeq?: (groupId: string, commitSeq: number) => void
@@ -16,15 +18,25 @@ export type SequencedProjectGroupResult = {
 }
 
 export function verifyProjectGroupMatchesUpdate(
-  group: ProjectGroup,
+  group: ProjectGroup | null | undefined,
   updates: ProjectGroupMutation['updates'],
   options?: PersistProjectGroupUpdateOptions
-): boolean {
+): group is ProjectGroup {
+  if (!group) {
+    if (updates.isPinned !== undefined) {
+      options?.onPinFailed?.()
+    }
+    return false
+  }
   if (
     updates.parentGroupId !== undefined &&
     (group.parentGroupId ?? null) !== updates.parentGroupId
   ) {
     options?.onParentGroupMoveRejected?.()
+    return false
+  }
+  if (updates.isPinned !== undefined && group.isPinned !== updates.isPinned) {
+    options?.onPinRejected?.()
     return false
   }
   return (

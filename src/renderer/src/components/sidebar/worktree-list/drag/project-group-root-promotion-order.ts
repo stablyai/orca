@@ -11,8 +11,9 @@ import {
   collectTargetProjectGroupSiblingIds,
   getCatalogHostIdForExecutionHost
 } from './group-header-hit-geometry'
-import type { ProjectGroupHeaderDragBucketKey } from './project-group-header-drop'
+import { isRepoHeaderIdPinned } from './header-drag-pin-tier'
 import { ROOT_INTERLEAVED_GROUP_BUCKET_KEY } from './project-group-header-drag-contract'
+import type { ProjectGroupHeaderDragBucketKey } from './project-group-header-drop'
 import type { ProjectGroupHeaderDropTarget } from './project-group-header-reparent-drop'
 import { invokeBoolCallback } from './project-group-header-drag-rollback'
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
@@ -27,26 +28,36 @@ export type RootPromotionPlacement = {
 
 export function resolveRootPromotionPlacement(args: {
   draggedGroup: ProjectGroup
-  existingSiblingIds: readonly string[]
+  existingUnpinnedSiblingIds: readonly string[]
   dropTarget: ProjectGroupHeaderDropTarget
   projectGroupById: ReadonlyMap<string, ProjectGroup>
   repos?: readonly Repo[]
+  pinnedRepoHeaderIds?: ReadonlySet<string>
   rootProjectHeaderKeys?: readonly string[]
   nextRootProjectOrder?: number
 }): RootPromotionPlacement {
-  const draggedCatalogHostId = getCatalogHostIdForExecutionHost(
-    getRepoExecutionHostId(args.draggedGroup)
-  )
+  const draggedOwnerHostId = getRepoExecutionHostId(args.draggedGroup)
+  const draggedCatalogHostId = getCatalogHostIdForExecutionHost(draggedOwnerHostId)
   const repoOrder = getLogicalRepoOrderRankById((args.repos ?? []).map((repo) => repo.id))
   const anyRepoById = new Map<string, Repo>()
-  const sameHostUngroupedRepoById = new Map<string, Repo>()
+  const sameHostUnpinnedUngroupedRepoById = new Map<string, Repo>()
   for (const repo of args.repos ?? []) {
     anyRepoById.set(repo.id, repo)
+  }
+  for (const repo of args.repos ?? []) {
     if (
       getCatalogHostIdForExecutionHost(getRepoExecutionHostId(repo)) === draggedCatalogHostId &&
-      (!repo.projectGroupId || !args.projectGroupById.has(repo.projectGroupId))
+      (!repo.projectGroupId || !args.projectGroupById.has(repo.projectGroupId)) &&
+      !isRepoHeaderIdPinned(
+        repo.id,
+        args.pinnedRepoHeaderIds,
+        anyRepoById,
+        draggedOwnerHostId,
+        args.repos
+      ) &&
+      repo.isPinned !== true
     ) {
-      sameHostUngroupedRepoById.set(repo.id, repo)
+      sameHostUnpinnedUngroupedRepoById.set(repo.id, repo)
     }
   }
 
@@ -69,7 +80,7 @@ export function resolveRootPromotionPlacement(args: {
       Math.min(interleavedKeys.length, args.dropTarget.dropIndex)
     )
     interleavedDropIndex = clampedDropIndex
-    const siblingSet = new Set(args.existingSiblingIds)
+    const siblingSet = new Set(args.existingUnpinnedSiblingIds)
     for (const [keyIndex, key] of interleavedKeys.entries()) {
       if (keyIndex === clampedDropIndex) {
         rootInsertIndex = entries.length
@@ -85,7 +96,7 @@ export function resolveRootPromotionPlacement(args: {
         }
       } else if (key.startsWith('repo:')) {
         const repoId = key.slice('repo:'.length)
-        const repo = sameHostUngroupedRepoById.get(repoId) ?? anyRepoById.get(repoId)
+        const repo = sameHostUnpinnedUngroupedRepoById.get(repoId) ?? anyRepoById.get(repoId)
         if (repo) {
           entries.push({ kind: 'repo', repo })
         }
@@ -98,20 +109,20 @@ export function resolveRootPromotionPlacement(args: {
   } else {
     groupInsertIndex =
       args.dropTarget.kind === 'group-header'
-        ? args.existingSiblingIds.length
-        : Math.max(0, Math.min(args.existingSiblingIds.length, args.dropTarget.dropIndex))
+        ? args.existingUnpinnedSiblingIds.length
+        : Math.max(0, Math.min(args.existingUnpinnedSiblingIds.length, args.dropTarget.dropIndex))
     entries = [
-      ...args.existingSiblingIds
+      ...args.existingUnpinnedSiblingIds
         .map((id) => args.projectGroupById.get(id))
         .filter((group): group is ProjectGroup => group !== undefined)
         .map((group): RootProjectEntry => ({ kind: 'group', group })),
-      ...[...sameHostUngroupedRepoById.values()].map((repo): RootProjectEntry => ({
+      ...[...sameHostUnpinnedUngroupedRepoById.values()].map((repo): RootProjectEntry => ({
         kind: 'repo',
         repo
       }))
     ].sort((left, right) => compareRootProjectEntries(left, right, repoOrder))
     if (groupInsertIndex > 0) {
-      const prevSiblingId = args.existingSiblingIds[groupInsertIndex - 1]
+      const prevSiblingId = args.existingUnpinnedSiblingIds[groupInsertIndex - 1]
       const prevIdx = entries.findIndex(
         (entry) => entry.kind === 'group' && entry.group.id === prevSiblingId
       )
@@ -128,44 +139,31 @@ export function resolveRootPromotionPlacement(args: {
   const prevRank = prevEntry ? getRootProjectEntryRank(prevEntry, repoOrder) : undefined
   const nextRank = nextEntry ? getRootProjectEntryRank(nextEntry, repoOrder) : undefined
 
+  const makePlacement = (
+    order: number | null | undefined,
+    needsRespace: boolean
+  ): RootPromotionPlacement => ({
+    groupInsertIndex,
+    rootOrderPatch: order === undefined ? {} : { rootProjectOrder: order },
+    interleavedDropIndex,
+    ...(needsRespace ? { respaceKeys } : {}),
+    needsInterleavedRespace: needsRespace
+  })
+
   if (prevRank !== undefined && Number.isFinite(prevRank)) {
     if (nextRank !== undefined && Number.isFinite(nextRank)) {
       if (nextRank > prevRank) {
         const midpoint = (prevRank + nextRank) / 2
         if (Number.isFinite(midpoint) && midpoint > prevRank && midpoint < nextRank) {
-          return {
-            groupInsertIndex,
-            rootOrderPatch: { rootProjectOrder: midpoint },
-            interleavedDropIndex,
-            respaceKeys,
-            needsInterleavedRespace: false
-          }
+          return { ...makePlacement(midpoint, false), respaceKeys }
         }
       }
-      return {
-        groupInsertIndex,
-        rootOrderPatch: { rootProjectOrder: prevRank },
-        interleavedDropIndex,
-        respaceKeys,
-        needsInterleavedRespace: true
-      }
+      return makePlacement(prevRank, true)
     }
     const afterCandidate = Math.max(prevRank + 1000, args.nextRootProjectOrder ?? prevRank + 1000)
-    if (Number.isFinite(afterCandidate) && afterCandidate > prevRank) {
-      return {
-        groupInsertIndex,
-        rootOrderPatch: { rootProjectOrder: afterCandidate },
-        interleavedDropIndex,
-        needsInterleavedRespace: false
-      }
-    }
-    return {
-      groupInsertIndex,
-      rootOrderPatch: { rootProjectOrder: prevRank },
-      interleavedDropIndex,
-      respaceKeys,
-      needsInterleavedRespace: true
-    }
+    return Number.isFinite(afterCandidate) && afterCandidate > prevRank
+      ? makePlacement(afterCandidate, false)
+      : makePlacement(prevRank, true)
   }
 
   if (
@@ -175,30 +173,12 @@ export function resolveRootPromotionPlacement(args: {
     entries.some((entry) => entry.kind === 'group' && entry.group.rootProjectOrder !== undefined)
   ) {
     const beforeCandidate = nextRank - 1000
-    if (Number.isFinite(beforeCandidate) && beforeCandidate < nextRank) {
-      return {
-        groupInsertIndex,
-        rootOrderPatch: { rootProjectOrder: beforeCandidate },
-        interleavedDropIndex,
-        needsInterleavedRespace: false
-      }
-    }
-    return {
-      groupInsertIndex,
-      rootOrderPatch: { rootProjectOrder: nextRank },
-      interleavedDropIndex,
-      respaceKeys,
-      needsInterleavedRespace: true
-    }
+    return Number.isFinite(beforeCandidate) && beforeCandidate < nextRank
+      ? makePlacement(beforeCandidate, false)
+      : makePlacement(nextRank, true)
   }
 
-  return {
-    groupInsertIndex,
-    rootOrderPatch:
-      args.draggedGroup.rootProjectOrder !== undefined ? { rootProjectOrder: null } : {},
-    interleavedDropIndex,
-    needsInterleavedRespace: false
-  }
+  return makePlacement(args.draggedGroup.rootProjectOrder !== undefined ? null : undefined, false)
 }
 
 export function buildSyntheticRootRespaceDrop(
@@ -216,15 +196,16 @@ export function buildSyntheticRootRespaceDrop(
   return { visibleKeys: [draggedKey, ...otherKeys], dropIndex: otherKeys.length + 1 }
 }
 
-export function resolvePromotedRootOrderRespaceDrop(args: {
+function resolvePromotedRootOrderRespaceDrop(args: {
   draggedGroup: ProjectGroup
   existingSiblingIds: readonly string[]
   dropTarget: ProjectGroupHeaderDropTarget
   projectGroupById: ReadonlyMap<string, ProjectGroup>
   repos?: readonly Repo[]
+  pinnedRepoHeaderIds?: ReadonlySet<string>
   rootProjectHeaderKeys?: readonly string[]
   nextRootProjectOrder?: number
-}): { visibleKeys: string[]; draggedKey: string; dropIndex: number } | null {
+}): { visibleKeys: string[]; dropIndex: number; draggedKey: string } | null {
   if (
     args.dropTarget.kind !== 'slot' ||
     (args.dropTarget.targetBucketKey !== ROOT_INTERLEAVED_GROUP_BUCKET_KEY &&
@@ -232,7 +213,19 @@ export function resolvePromotedRootOrderRespaceDrop(args: {
   ) {
     return null
   }
-  const placement = resolveRootPromotionPlacement(args)
+  const existingUnpinnedSiblingIds = args.existingSiblingIds.filter(
+    (groupId) => args.projectGroupById.get(groupId)?.isPinned !== true
+  )
+  const placement = resolveRootPromotionPlacement({
+    draggedGroup: args.draggedGroup,
+    existingUnpinnedSiblingIds,
+    dropTarget: args.dropTarget,
+    projectGroupById: args.projectGroupById,
+    repos: args.repos,
+    pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+    rootProjectHeaderKeys: args.rootProjectHeaderKeys,
+    nextRootProjectOrder: args.nextRootProjectOrder
+  })
   const baseKeys =
     args.dropTarget.targetBucketKey === ROOT_INTERLEAVED_GROUP_BUCKET_KEY &&
     args.rootProjectHeaderKeys
@@ -259,7 +252,9 @@ export async function maybeRespacePromotedRootOrder(args: {
   dropTarget: ProjectGroupHeaderDropTarget
   projectGroupById: ReadonlyMap<string, ProjectGroup>
   repos?: readonly Repo[]
+  pinnedRepoHeaderIds?: ReadonlySet<string>
   rootProjectHeaderKeys?: readonly string[]
+  rootProjectHeaderHostId?: string
   sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
@@ -280,6 +275,7 @@ export async function maybeRespacePromotedRootOrder(args: {
     dropTarget: args.dropTarget,
     projectGroupById: args.projectGroupById,
     repos: args.repos,
+    pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
     rootProjectHeaderKeys: args.rootProjectHeaderKeys,
     nextRootProjectOrder: args.nextRootProjectOrder
   })
@@ -291,6 +287,13 @@ export async function maybeRespacePromotedRootOrder(args: {
     return false
   }
   return invokeBoolCallback(() =>
-    commitRootOrder(respaceDrop.visibleKeys, respaceDrop.draggedKey, respaceDrop.dropIndex)
+    args.rootProjectHeaderHostId !== undefined
+      ? commitRootOrder(
+          respaceDrop.visibleKeys,
+          respaceDrop.draggedKey,
+          respaceDrop.dropIndex,
+          args.rootProjectHeaderHostId
+        )
+      : commitRootOrder(respaceDrop.visibleKeys, respaceDrop.draggedKey, respaceDrop.dropIndex)
   )
 }

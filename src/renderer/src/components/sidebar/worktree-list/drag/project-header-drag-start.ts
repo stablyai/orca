@@ -9,32 +9,117 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
-
+import { findJoinableParentGroupForRepo } from '../rows/project-group-menu-tree'
+import { measureSidebarVirtualContentBottom } from './header-drag-dom-measurement'
 import { readHostHeaderRects } from './host-header-drag-dom'
+import { filterRootProjectHeaderKeysByPinTier, isRepoHeaderIdPinned } from './header-drag-pin-tier'
+import { filterRepoHeaderIdsByCatalogHost } from './project-group-child-catalog'
 import { measureProjectGroupHeaderDragRects } from './project-group-header-drop'
 import {
   getProjectHeaderDragBucketKey,
   measureProjectHeaderDragRects,
   type ProjectHeaderDragBucketKey
 } from './project-header-drop'
-import { canRepoStartHeaderDrag, getJoinableGroupIdsForRepo } from './project-header-group-drop'
+import {
+  canRepoStartHeaderDrag,
+  computeCombinedProjectHeaderDropTarget,
+  getJoinableGroupIdsForRepo,
+  getSessionGroupRepo,
+  type ProjectHeaderDropTarget
+} from './project-header-group-drop'
 import {
   ROOT_INTERLEAVED_PROJECT_BUCKET_KEY,
   isProjectHeaderDragHandleTarget,
   isRepoHeaderActionTarget,
-  type ProjectHeaderDragSession
+  type ProjectHeaderDragSession,
+  type UseRepoHeaderDragArgs
 } from './project-header-drag-contract'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+
+export function refreshProjectHeaderDragSessionRects(
+  container: HTMLElement | null,
+  session: ProjectHeaderDragSession | null
+): void {
+  if (!container || !session) {
+    return
+  }
+  session.headerRects = measureProjectHeaderDragRects(container)
+  session.rootHeaderRects = session.rootProjectHeaderKeys
+    ? measureRootProjectHeaderDragRects(
+        container,
+        session.rootProjectHeaderKeys,
+        session.rootProjectHeaderHostId
+      ).map((rect) => ({
+        ...rect,
+        repoId: rect.key,
+        bucketKey: ROOT_INTERLEAVED_PROJECT_BUCKET_KEY
+      }))
+    : undefined
+  session.groupHeaderRects = measureProjectGroupHeaderDragRects(container)
+  session.hostHeaderRects = readHostHeaderRects(container)
+}
+
+export function computeSessionProjectHeaderDropTarget(
+  pointerY: number,
+  session: ProjectHeaderDragSession | null,
+  inputs: UseRepoHeaderDragArgs
+): ProjectHeaderDropTarget | null {
+  const container = inputs.getScrollContainer()
+  if (!session || !container) {
+    return null
+  }
+  const bucketOwnerRepo = getSessionGroupRepo(session) ?? session.repo
+  const dragHostId = getRepoExecutionHostId(bucketOwnerRepo)
+  const liveRepos = inputs.getLiveRepos()
+  const currentGroupId = bucketOwnerRepo.projectGroupId ?? null
+  const currentParentGroupId =
+    findJoinableParentGroupForRepo(bucketOwnerRepo, inputs.projectGroups)?.id ?? null
+  const draggedRepoPinned =
+    isRepoHeaderIdPinned(
+      session.repo.id,
+      inputs.pinnedRepoHeaderIds,
+      inputs.repoById,
+      dragHostId,
+      liveRepos
+    ) || bucketOwnerRepo.isPinned === true
+  return computeCombinedProjectHeaderDropTarget({
+    pointerY,
+    containerTop: container.getBoundingClientRect().top,
+    scrollTop: container.scrollTop,
+    dragHostId,
+    currentGroupId,
+    currentParentGroupId,
+    draggedRepoPinned,
+    pinnedRepoHeaderIds: inputs.pinnedRepoHeaderIds,
+    repoById: inputs.repoById,
+    liveRepos,
+    projectGroupById: inputs.projectGroupById,
+    sidebarGroupChildItemIdsByGroupId: inputs.sidebarGroupChildItemIdsByGroupId,
+    allowSlotReorder: inputs.allowSlotReorder,
+    joinableGroupIds: session.joinableGroupIds,
+    hostHeaderRects: session.hostHeaderRects,
+    groupHeaderRects: session.groupHeaderRects,
+    repoHeaderRects: session.headerRects,
+    rootProjectHeaderKeys: session.rootProjectHeaderKeys,
+    rootHeaderRects: session.rootHeaderRects,
+    sidebarRepoHeaderIdsByBucket: inputs.sidebarRepoHeaderIdsByBucket,
+    contentBottom: measureSidebarVirtualContentBottom(container)
+  })
+}
 
 export function createProjectHeaderDragSession(args: {
   event: PointerEvent<HTMLElement>
   repo: Repo
   groupRepo?: Repo | null
   projectGroups: readonly ProjectGroup[]
+  projectGroupById?: ReadonlyMap<string, ProjectGroup>
   allowSlotReorder: boolean
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   rootProjectHeaderKeys?: readonly string[]
+  pinnedRepoHeaderIds?: ReadonlySet<string>
+  repoById?: ReadonlyMap<string, Repo>
+  liveRepos?: readonly Repo[]
   getScrollContainer: () => HTMLElement | null
 }): ProjectHeaderDragSession | null {
   if (args.event.button !== 0) {
@@ -48,27 +133,67 @@ export function createProjectHeaderDragSession(args: {
   }
   const effectiveGroupRepo = args.groupRepo === undefined ? args.repo : args.groupRepo
   const bucketOwnerRepo = effectiveGroupRepo ?? args.repo
+  const ownerHostId = getRepoExecutionHostId(bucketOwnerRepo)
   const bucketKey = getProjectHeaderDragBucketKey(bucketOwnerRepo)
+  const rawBucketHeaderIds = filterRepoHeaderIdsByCatalogHost(
+    args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? [],
+    ownerHostId,
+    args.liveRepos,
+    args.repoById
+  )
+  const draggedPinned =
+    isRepoHeaderIdPinned(
+      args.repo.id,
+      args.pinnedRepoHeaderIds,
+      args.repoById,
+      ownerHostId,
+      args.liveRepos
+    ) || bucketOwnerRepo.isPinned === true
+  const sidebarRepoHeaderIds = rawBucketHeaderIds.filter(
+    (id) =>
+      isRepoHeaderIdPinned(
+        id,
+        args.pinnedRepoHeaderIds,
+        args.repoById,
+        ownerHostId,
+        args.liveRepos
+      ) === draggedPinned
+  )
   const rootProjectHeaderHostId = args.rootProjectHeaderKeys?.some((key) => key.startsWith('host:'))
     ? bucketKey === 'ungrouped'
       ? parseExecutionHostId(args.event.currentTarget.dataset.rootProjectHeaderHost)?.id
       : (parseExecutionHostId(args.event.currentTarget.dataset.rootProjectHeaderHost)?.id ??
-        getRepoExecutionHostId(bucketOwnerRepo))
+        ownerHostId)
     : undefined
   const rootProjectHeaderKeys =
     bucketKey === 'ungrouped'
-      ? getRootProjectHeaderDragKeys(
-          args.rootProjectHeaderKeys,
-          `repo:${args.repo.id}`,
-          rootProjectHeaderHostId
-        )
-      : args.allowSlotReorder && effectiveGroupRepo
-        ? getRootProjectHeaderSectionKeysForHost(
+      ? filterRootProjectHeaderKeysByPinTier({
+          keys: getRootProjectHeaderDragKeys(
             args.rootProjectHeaderKeys,
+            `repo:${args.repo.id}`,
             rootProjectHeaderHostId
-          )
+          ),
+          isPinned: draggedPinned,
+          projectGroupById: args.projectGroupById,
+          pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+          repoById: args.repoById,
+          ownerHostId: rootProjectHeaderHostId ?? ownerHostId,
+          liveRepos: args.liveRepos
+        })
+      : args.allowSlotReorder && effectiveGroupRepo
+        ? filterRootProjectHeaderKeysByPinTier({
+            keys: getRootProjectHeaderSectionKeysForHost(
+              args.rootProjectHeaderKeys,
+              rootProjectHeaderHostId
+            ),
+            isPinned: false,
+            projectGroupById: args.projectGroupById,
+            pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+            repoById: args.repoById,
+            ownerHostId: rootProjectHeaderHostId ?? ownerHostId,
+            liveRepos: args.liveRepos
+          })
         : undefined
-  const sidebarRepoHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
   const effectiveBucketItemCount =
     bucketKey === 'ungrouped' && rootProjectHeaderKeys
       ? Math.max(sidebarRepoHeaderIds.length, rootProjectHeaderKeys.length)
@@ -81,6 +206,12 @@ export function createProjectHeaderDragSession(args: {
       repo: bucketOwnerRepo,
       allowSlotReorder: args.allowSlotReorder,
       bucketItemCount: effectiveBucketItemCount,
+      bucketHeaderIds:
+        bucketKey === 'ungrouped' && rootProjectHeaderKeys ? undefined : rawBucketHeaderIds,
+      pinnedRepoHeaderIds: args.pinnedRepoHeaderIds,
+      repoById: args.repoById,
+      liveRepos: args.liveRepos,
+      ownerHostId,
       joinableGroupIds
     })
   ) {

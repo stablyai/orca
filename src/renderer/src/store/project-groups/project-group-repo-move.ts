@@ -19,7 +19,8 @@ export async function executeMoveProjectToGroup(
   get: Parameters<StateCreator<AppState>>[1],
   project: Parameters<RepoSlice['moveProjectToGroup']>[0],
   groupId: Parameters<RepoSlice['moveProjectToGroup']>[1],
-  order: Parameters<RepoSlice['moveProjectToGroup']>[2]
+  order: Parameters<RepoSlice['moveProjectToGroup']>[2],
+  options?: Parameters<RepoSlice['moveProjectToGroup']>[3]
 ): ReturnType<RepoSlice['moveProjectToGroup']> {
   try {
     const repo = get().repos.find((candidate) => isSameRepoRow(candidate, project))
@@ -33,20 +34,28 @@ export async function executeMoveProjectToGroup(
       notifyProjectGroupOnOtherHost()
       return false
     }
+    const pinOverride = typeof options?.isPinned === 'boolean' ? { isPinned: options.isPinned } : {}
     const moved =
       target.kind === 'local'
         ? await window.api.projectGroups.moveProject({
             projectId: repo.id,
             groupId,
             order,
-            hostId: repoHostId
+            hostId: repoHostId,
+            ...pinOverride
           })
         : (
             await callRuntimeRpc<{ repo: Repo | null }>(
               target,
               'projectGroup.moveProject',
               // Why connectionId: the server's own twins differ only by their SSH target there.
-              { repo: repo.id, groupId, order, connectionId: repo.connectionId ?? null },
+              {
+                repo: repo.id,
+                groupId,
+                order,
+                connectionId: repo.connectionId ?? null,
+                ...pinOverride
+              },
               { timeoutMs: 15_000 }
             )
           ).repo
@@ -74,6 +83,13 @@ export async function executeMoveProjectToGroup(
     if (groupId && (moved.projectGroupId ?? null) !== groupId) {
       notifyProjectGroupOnOtherHost()
       return false
+    }
+    if (typeof options?.isPinned === 'boolean' && ownedMoved.isPinned !== options.isPinned) {
+      return await get().updateRepo(
+        repo.id,
+        { isPinned: options.isPinned },
+        { hostId: movedHostId }
+      )
     }
     return true
   } catch (err) {

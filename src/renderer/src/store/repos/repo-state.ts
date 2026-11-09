@@ -64,6 +64,7 @@ export type RepoUpdate = Partial<
     | 'customWorktreeVisibilitySources'
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
+    | 'isPinned'
   >
 > & {
   projectGroupOrder?: number | null
@@ -287,7 +288,8 @@ export type RepoSlice = {
   moveProjectToGroup: (
     project: RepoHostTarget,
     groupId: string | null,
-    order?: number
+    order?: number,
+    options?: { isPinned?: boolean }
   ) => Promise<boolean>
   // options.hostId is required: a bare id can resolve to another host's row (#13071). Removes nothing when that host has no row.
   // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.

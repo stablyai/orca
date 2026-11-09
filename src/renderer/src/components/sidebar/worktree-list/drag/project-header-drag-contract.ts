@@ -5,6 +5,8 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host/ex
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { HostHeaderRect } from './host-header-drag-dom'
+import type { ProjectGroupChildItemId } from './project-group-child-slot-order'
+import type { ProjectGroupHeaderUpdatePatch } from './project-group-header-drag-contract'
 import type { ProjectGroupHeaderDragRect } from './project-group-header-drop'
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
 
@@ -29,17 +31,25 @@ export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
 export type UseRepoHeaderDragArgs = RootProjectHeaderDrag & {
   orderedRepoIds: string[]
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+  sidebarGroupChildItemIdsByGroupId?: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
+  pinnedRepoHeaderIds?: ReadonlySet<string>
   repoById: ReadonlyMap<string, Repo>
   projectGroups: readonly ProjectGroup[]
   projectGroupById?: ReadonlyMap<string, ProjectGroup>
   getLiveRepos: () => readonly Repo[]
+  getLiveProjectGroups?: () => readonly ProjectGroup[]
   allowSlotReorder: boolean
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
   onCommitProjectGroupOrder: (
     project: Repo,
     projectGroupId: string | null,
-    order: number | null
+    order: number | null,
+    options?: { isPinned?: boolean }
+  ) => Promise<boolean> | boolean | void
+  onCommitProjectGroupUpdate?: (
+    groupId: string,
+    updates: ProjectGroupHeaderUpdatePatch
   ) => Promise<boolean> | boolean | void
   onReconcileHostProjectGroups?: (ownerHostId: ExecutionHostId) => Promise<void> | void
   onDropFailed?: () => void

@@ -38,6 +38,7 @@ export function buildOrderedGroups(args: {
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   repoOrder: Map<string, number> | undefined
   projectOrderBy: ProjectOrderBy
+  pinnedRepoIds?: ReadonlySet<string>
   folderWorkspaces?: readonly RenderableFolderWorkspace[]
 }): OrderedGroupEntry[] {
   const {
@@ -54,6 +55,7 @@ export function buildOrderedGroups(args: {
     pendingByRepo,
     repoOrder,
     projectOrderBy,
+    pinnedRepoIds,
     folderWorkspaces = []
   } = args
 
@@ -77,7 +79,8 @@ export function buildOrderedGroups(args: {
       ],
       pendingRepoIds: pendingByRepo.keys(),
       repoOrder,
-      projectOrderBy
+      projectOrderBy,
+      pinnedRepoIds
     })
   }
 

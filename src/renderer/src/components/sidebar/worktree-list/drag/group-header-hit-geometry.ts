@@ -3,6 +3,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   compareCodePoints,
   compareSidebarText
@@ -11,6 +12,7 @@ import {
   getRuntimeTargetHostId,
   ipcOrRuntimeTargetForHostId
 } from '@/runtime/rpc/targets/runtime-client-target'
+import { isSameRepoRow } from '@/store/repos/repo-host-identity'
 import type { HostHeaderRect } from './host-header-drag-dom'
 import type { ProjectGroupHeaderDragRect } from './project-group-header-drop'
 
@@ -103,6 +105,24 @@ export function filterProjectGroupIdsByExactOwnerHost(
   })
 }
 
+function isParentPresentForOwner(
+  projectGroupById: ReadonlyMap<string, ProjectGroup>,
+  parentGroupId: string,
+  ownerHostId: ExecutionHostId | null | undefined
+): boolean {
+  const parent = projectGroupById.get(parentGroupId)
+  return Boolean(parent && (!ownerHostId || getRepoExecutionHostId(parent) === ownerHostId))
+}
+
+function compareProjectGroupsInBucket(left: ProjectGroup, right: ProjectGroup): number {
+  return (
+    (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0) ||
+    left.tabOrder - right.tabOrder ||
+    compareSidebarText(left.name, right.name) ||
+    compareCodePoints(left.id, right.id)
+  )
+}
+
 export function collectTargetProjectGroupSiblingIds(args: {
   draggedGroupId: string
   targetParentGroupId: string | null
@@ -124,14 +144,14 @@ export function collectTargetProjectGroupSiblingIds(args: {
         }
         return args.targetParentGroupId !== null
           ? candidate.parentGroupId === args.targetParentGroupId
-          : !candidate.parentGroupId || !args.projectGroupById.has(candidate.parentGroupId)
+          : !candidate.parentGroupId ||
+              !isParentPresentForOwner(
+                args.projectGroupById,
+                candidate.parentGroupId,
+                args.ownerHostId
+              )
       })
-      .sort(
-        (left, right) =>
-          left.tabOrder - right.tabOrder ||
-          compareSidebarText(left.name, right.name) ||
-          compareCodePoints(left.id, right.id)
-      )
+      .sort(compareProjectGroupsInBucket)
       .map((candidate) => candidate.id),
     args.ownerHostId,
     args.projectGroupById
@@ -145,11 +165,7 @@ export function collectTargetProjectGroupSiblingIds(args: {
     const left = args.projectGroupById.get(leftId)
     const right = args.projectGroupById.get(rightId)
     if (left && right) {
-      return (
-        left.tabOrder - right.tabOrder ||
-        compareSidebarText(left.name, right.name) ||
-        compareCodePoints(left.id, right.id)
-      )
+      return compareProjectGroupsInBucket(left, right)
     }
     const leftSeededIndex = seededIndexById.get(leftId)
     const rightSeededIndex = seededIndexById.get(rightId)
@@ -193,8 +209,26 @@ export function isProjectGroupStillInExpectedParent(args: {
     return false
   }
   const effectiveParentId =
-    target.parentGroupId && args.fallbackProjectGroupById.has(target.parentGroupId)
+    target.parentGroupId &&
+    isParentPresentForOwner(args.fallbackProjectGroupById, target.parentGroupId, args.ownerHostId)
       ? target.parentGroupId
       : null
   return effectiveParentId === args.expectedParentGroupId
+}
+
+export function isRepoStillInExpectedProjectGroup(args: {
+  repo: Repo
+  expectedProjectGroupId: string | null
+  liveRepos: readonly Repo[] | undefined
+  fallbackRepoById: ReadonlyMap<string, Repo> | undefined
+}): boolean {
+  if (args.liveRepos) {
+    const liveMatch = args.liveRepos.find((candidate) => isSameRepoRow(candidate, args.repo))
+    return (
+      liveMatch !== undefined && (liveMatch.projectGroupId ?? null) === args.expectedProjectGroupId
+    )
+  }
+  const fallback = args.fallbackRepoById?.get(args.repo.id)
+  const target = fallback && isSameRepoRow(fallback, args.repo) ? fallback : args.repo
+  return (target.projectGroupId ?? null) === args.expectedProjectGroupId
 }

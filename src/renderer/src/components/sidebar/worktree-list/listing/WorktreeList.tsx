@@ -27,6 +27,7 @@ import { EMPTY_PROJECT_GROUPS } from '../viewport/viewport-props'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from '../drag/drop-commit-context'
 import { useAgentSendTargetWorktreeId } from './use-agent-send-target'
 import { useProjectGroupDialogs } from '../rows/use-project-group-dialogs'
+import { useHeaderPinActions } from '../rows/use-header-pin-actions'
 import { useSidebarRevealRequests } from '../navigation/use-reveal-requests'
 import { useSidebarWorktreeFilters } from './use-filters'
 import { useSidebarWorktreeSelection } from '../navigation/use-selection'
@@ -201,6 +202,7 @@ const WorktreeList = React.memo(function WorktreeList({
     defaultHostId: rootCreationHostId,
     onExpandGroupKey: handleExpandGroupKey
   })
+  const { handleTogglePinProject, handleTogglePinProjectGroup } = useHeaderPinActions()
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
     // Update the active row directly on pointer input to avoid virtualized rerender latency; store state reconciles afterward.
@@ -326,6 +328,8 @@ const WorktreeList = React.memo(function WorktreeList({
             externalWorktreeCards.newExternalWorktreeInboxActionState
           }
           handleRemoveProject={handleRemoveProject}
+          handleTogglePinProject={handleTogglePinProject}
+          handleTogglePinProjectGroup={handleTogglePinProjectGroup}
           handleCreateGroupFromRepo={projectGroupDialogs.handleCreateGroupFromRepo}
           handleCreateProjectSubgroup={projectGroupDialogs.handleCreateProjectSubgroup}
           handleMoveProjectToGroup={projectGroupDialogs.handleMoveProjectToGroup}

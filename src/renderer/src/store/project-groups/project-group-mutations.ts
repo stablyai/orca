@@ -249,7 +249,7 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    moveProjectToGroup: async (project, groupId, order) =>
-      executeMoveProjectToGroup(set, get, project, groupId, order)
+    moveProjectToGroup: async (project, groupId, order, options) =>
+      executeMoveProjectToGroup(set, get, project, groupId, order, options)
   }
 }

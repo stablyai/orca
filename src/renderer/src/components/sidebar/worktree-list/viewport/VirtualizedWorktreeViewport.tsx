@@ -80,6 +80,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   })
   const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
   const {
+    handleTogglePinProject,
     handleOpenRepoSettings,
     handleOpenWorktreeVisibility,
     handleCreateGroupFromRepo,
@@ -93,6 +94,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     () => ({
       getWorktreeVisibilityDefaults: (repo) =>
         getRepoOwnerWorktreeVisibilityDefaults(repo, settings, worktreeVisibilityDefaultsByHost),
+      onTogglePinProject: handleTogglePinProject,
       onOpenRepoSettings: handleOpenRepoSettings,
       onOpenWorktreeVisibility: handleOpenWorktreeVisibility,
       onCreateGroupFromRepo: handleCreateGroupFromRepo,
@@ -104,6 +106,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     [
       settings,
       worktreeVisibilityDefaultsByHost,
+      handleTogglePinProject,
       handleOpenRepoSettings,
       handleOpenWorktreeVisibility,
       handleCreateGroupFromRepo,

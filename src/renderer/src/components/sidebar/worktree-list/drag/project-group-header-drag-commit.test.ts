@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isProjectGroupStillInExpectedParent } from './group-header-hit-geometry'
 import {
   collectTargetProjectGroupSiblingIds,
@@ -10,8 +11,21 @@ import {
 } from './project-group-header-drag-commit'
 import {
   buildProjectGroupRollbackPatch,
-  revertAppliedProjectGroupRollbacks
+  revertAppliedMixedChildRollbacks
 } from './project-group-header-drag-rollback'
+
+function repo(id: string, overrides: Partial<Repo> = {}): Repo {
+  return {
+    id,
+    path: `/repos/${id}`,
+    displayName: id,
+    badgeColor: '#000',
+    addedAt: 1,
+    executionHostId: 'local',
+    projectGroupOrder: 0,
+    ...overrides
+  }
+}
 
 function group(id: string, overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {
@@ -62,7 +76,9 @@ describe('project-group-header-drag-commit', () => {
         ['parent:local-parent', ['local-child']]
       ])
     })
-    expect(mutations.map((entry) => entry.groupId)).not.toContain('ssh-root')
+    expect(
+      mutations.map((entry) => ('groupId' in entry ? entry.groupId : entry.repo.id))
+    ).not.toContain('ssh-root')
 
     expect(
       isProjectGroupStillInExpectedParent({
@@ -181,38 +197,65 @@ describe('project-group-header-drag-commit', () => {
     ])
   })
 
-  it('refreshes live project groups between rollback steps', async () => {
+  it('refreshes live project groups and repos between rollback steps', async () => {
     const parentP = group('p', { tabOrder: 0, executionHostId: 'local' })
     const parentQ = group('q', { tabOrder: 1, executionHostId: 'local' })
     const sibA = group('sib-a', { parentGroupId: 'p', tabOrder: 0, executionHostId: 'local' })
     const groupD = group('d', { parentGroupId: 'p', tabOrder: 1, executionHostId: 'local' })
+    const repoE = repo('repo-e', { projectGroupId: 'p', projectGroupOrder: 1 })
     let liveGroups = [parentP, parentQ, sibA, groupD]
-    const fallbackById = new Map(liveGroups.map((entry) => [entry.id, entry]))
-    const rollbackCalls: string[] = []
+    let liveRepos = [repoE]
+    const fallbackGroupById = new Map(liveGroups.map((entry) => [entry.id, entry]))
+    const fallbackRepoById = new Map(liveRepos.map((entry) => [entry.id, entry]))
+    const rollbackGroupCalls: string[] = []
+    const rollbackRepoCalls: string[] = []
 
-    const reverted = await revertAppliedProjectGroupRollbacks({
+    const reverted = await revertAppliedMixedChildRollbacks({
       appliedRollbacks: [
         {
+          kind: 'group',
           groupId: 'd',
           patch: { parentGroupId: null, tabOrder: 1 },
           expectedLiveParentGroupId: 'p'
         },
-        { groupId: 'sib-a', patch: { tabOrder: 2 }, expectedLiveParentGroupId: 'p' }
+        {
+          kind: 'repo',
+          repo: repoE,
+          previousProjectGroupId: null,
+          previousOrder: 0,
+          previousIsPinned: false,
+          expectedLiveProjectGroupId: 'p',
+          expectedLiveOrder: 1
+        },
+        {
+          kind: 'group',
+          groupId: 'sib-a',
+          patch: { tabOrder: 2 },
+          expectedLiveParentGroupId: 'p'
+        }
       ],
       ownerHostId: 'local',
       getLiveProjectGroups: () => liveGroups,
-      fallbackProjectGroupById: fallbackById,
+      getLiveRepos: () => liveRepos,
+      fallbackProjectGroupById: fallbackGroupById,
+      fallbackRepoById,
       onCommitProjectGroupUpdate: async (groupId) => {
-        rollbackCalls.push(groupId)
+        rollbackGroupCalls.push(groupId)
         if (groupId === 'sib-a') {
           liveGroups = [parentP, parentQ, sibA, { ...groupD, parentGroupId: 'q' }]
+          liveRepos = [{ ...repoE, projectGroupId: 'q' }]
         }
+        return true
+      },
+      onCommitProjectGroupOrder: async (targetRepo) => {
+        rollbackRepoCalls.push(targetRepo.id)
         return true
       }
     })
 
     expect(reverted).toBe(true)
-    expect(rollbackCalls).toEqual(['sib-a'])
+    expect(rollbackGroupCalls).toEqual(['sib-a'])
+    expect(rollbackRepoCalls).toEqual([])
   })
 
   it('stops rollback, reconciles host groups, and returns false when a rollback step rejects', async () => {
@@ -236,7 +279,7 @@ describe('project-group-header-drag-commit', () => {
       tabOrder: 8,
       executionHostId: 'local'
     })
-    const dragged = group('dragged-root', { tabOrder: 1, executionHostId: 'local' })
+    const dragged = group('dragged-root', { tabOrder: 1, isPinned: true, executionHostId: 'local' })
     const byId = new Map([parent, sibA, sibB, sibC, dragged].map((entry) => [entry.id, entry]))
     const liveGroups = [parent, sibA, sibB, sibC, dragged].map((entry) => ({ ...entry }))
     const calls: { groupId: string; updates: Record<string, unknown> }[] = []
@@ -323,6 +366,54 @@ describe('project-group-header-drag-commit', () => {
     expect(mutations).toEqual([
       { groupId: 'dragged', updates: { parentGroupId: 'parent', tabOrder: 2 } },
       { groupId: 'visible-second', updates: { tabOrder: 3 } }
+    ])
+  })
+
+  it('maps visible non-root unpinned dropIndex past pinned siblings when hidden unpinned siblings exist', () => {
+    const parent = group('parent', { tabOrder: 0, executionHostId: 'local' })
+    const pinnedSib = group('pinned-sib', {
+      parentGroupId: 'parent',
+      tabOrder: 0,
+      isPinned: true,
+      executionHostId: 'local'
+    })
+    const hiddenUnpinned = group('hidden-unpinned', {
+      parentGroupId: 'parent',
+      tabOrder: 1,
+      executionHostId: 'local'
+    })
+    const visibleUnpinned = group('visible-unpinned', {
+      parentGroupId: 'parent',
+      tabOrder: 2,
+      executionHostId: 'local'
+    })
+    const dragged = group('dragged', { tabOrder: 5, executionHostId: 'local' })
+    const byId = new Map(
+      [parent, pinnedSib, hiddenUnpinned, visibleUnpinned, dragged].map((entry) => [
+        entry.id,
+        entry
+      ])
+    )
+
+    const mutations = getProjectGroupMutationsForDrop({
+      draggedGroup: dragged,
+      sourceBucketKey: 'root',
+      dropTarget: {
+        kind: 'slot',
+        targetBucketKey: 'parent:parent',
+        dropIndex: 0,
+        dropIndicatorY: 42
+      },
+      projectGroupById: byId,
+      sidebarProjectGroupHeaderIdsByBucket: new Map([
+        ['root', ['parent', 'dragged']],
+        ['parent:parent', ['pinned-sib', 'visible-unpinned']]
+      ])
+    })
+
+    expect(mutations).toEqual([
+      { groupId: 'dragged', updates: { parentGroupId: 'parent', tabOrder: 2 } },
+      { groupId: 'visible-unpinned', updates: { tabOrder: 3 } }
     ])
   })
 
@@ -590,36 +681,127 @@ describe('project-group-header-drag-commit', () => {
     expect(onDropFailed).toHaveBeenCalledTimes(1)
   })
 
-  it('aborts and rolls back before overwriting a sibling whose live tabOrder changed concurrently', async () => {
-    const parent = group('p', { tabOrder: 0, executionHostId: 'local' })
-    const sibA = group('sib-a', { parentGroupId: 'p', tabOrder: 0, executionHostId: 'local' })
-    const dragged = group('dragged', { tabOrder: 1, executionHostId: 'local' })
+  it('awaits onCommitRootProjectOrder and forwards rootProjectHeaderHostId for root interleaved group drops', async () => {
+    const g1 = group('g1', { tabOrder: 0, executionHostId: 'runtime:env-1' })
+    const g2 = group('g2', { tabOrder: 1, executionHostId: 'runtime:env-1' })
+    const calls: {
+      keys: readonly string[]
+      draggedKey: string
+      dropIndex: number
+      hostId?: string
+    }[] = []
+
+    const committed = await commitProjectGroupHeaderDragDrop({
+      session: {
+        groupId: 'g1',
+        bucketKey: 'root',
+        rootProjectHeaderKeys: ['group:g1', 'group:g2'],
+        rootProjectHeaderHostId: 'runtime:env-1'
+      },
+      dropTarget: {
+        kind: 'slot',
+        targetBucketKey: 'root-interleaved',
+        dropIndex: 2,
+        dropIndicatorY: 60
+      },
+      projectGroupById: new Map([
+        ['g1', g1],
+        ['g2', g2]
+      ]),
+      sidebarProjectGroupHeaderIdsByBucket: new Map([['root', ['g1', 'g2']]]),
+      onCommitProjectGroupUpdate: async () => true,
+      onCommitRootProjectOrder: async (keys, draggedKey, dropIndex, hostId) => {
+        calls.push({ keys, draggedKey, dropIndex, hostId })
+        return false
+      }
+    })
+
+    expect(committed).toBe(false)
+    expect(calls).toEqual([
+      {
+        keys: ['group:g1', 'group:g2'],
+        draggedKey: 'group:g1',
+        dropIndex: 2,
+        hostId: 'runtime:env-1'
+      }
+    ])
+  })
+
+  it('treats a parentGroupId referencing another host group as missing in fallback parent checks', () => {
+    const foreignParent = group('shared-parent', { tabOrder: 0, executionHostId: 'runtime:remote' })
+    const localChild = group('local-child', {
+      parentGroupId: 'shared-parent',
+      tabOrder: 1,
+      executionHostId: 'local'
+    })
+    const dragged = group('local-dragged', { tabOrder: 2, executionHostId: 'local' })
+    const byId = new Map<string, ProjectGroup>([
+      [foreignParent.id, foreignParent],
+      [localChild.id, localChild],
+      [dragged.id, dragged]
+    ])
+
+    expect(
+      collectTargetProjectGroupSiblingIds({
+        draggedGroupId: 'local-dragged',
+        targetParentGroupId: null,
+        ownerHostId: 'local',
+        seededSiblingIds: ['local-dragged'],
+        projectGroupById: byId
+      })
+    ).toEqual(['local-child'])
+
+    expect(
+      isProjectGroupStillInExpectedParent({
+        groupId: 'local-child',
+        expectedParentGroupId: null,
+        ownerHostId: 'local',
+        liveProjectGroups: undefined,
+        fallbackProjectGroupById: byId
+      })
+    ).toBe(true)
+  })
+
+  it('restores group pin state when rolling back a failed parent change', async () => {
+    const parent = group('collapsed-parent', {
+      tabOrder: 0,
+      isCollapsed: true,
+      executionHostId: 'local'
+    })
+    const sibA = group('sib-a', {
+      parentGroupId: 'collapsed-parent',
+      tabOrder: 5,
+      executionHostId: 'local'
+    })
+    const dragged = group('pinned-dragged', {
+      tabOrder: 1,
+      isPinned: true,
+      executionHostId: 'local'
+    })
+    const byId = new Map([parent, sibA, dragged].map((entry) => [entry.id, entry]))
     const liveGroups = [parent, sibA, dragged].map((entry) => ({ ...entry }))
     const calls: { groupId: string; updates: Record<string, unknown> }[] = []
     const onDropFailed = vi.fn()
 
     const committed = await commitProjectGroupHeaderDragDrop({
-      session: { groupId: 'dragged', bucketKey: 'root' },
-      dropTarget: {
-        kind: 'slot',
-        targetBucketKey: 'parent:p',
-        dropIndex: 0,
-        dropIndicatorY: 20
-      },
-      projectGroupById: new Map(liveGroups.map((entry) => [entry.id, { ...entry }])),
+      session: { groupId: 'pinned-dragged', bucketKey: 'root' },
+      dropTarget: { kind: 'group-header', groupId: 'collapsed-parent' },
+      projectGroupById: byId,
       getLiveProjectGroups: () => liveGroups,
       sidebarProjectGroupHeaderIdsByBucket: new Map([
-        ['root', ['p', 'dragged']],
-        ['parent:p', ['sib-a']]
+        ['root', ['pinned-dragged', 'collapsed-parent']]
       ]),
       onCommitProjectGroupUpdate: async (groupId, updates) => {
         calls.push({ groupId, updates })
+        if (groupId === 'sib-a') {
+          return false
+        }
         const target = liveGroups.find((entry) => entry.id === groupId)
         if (target) {
           Object.assign(target, updates)
-        }
-        if (groupId === 'dragged' && updates.parentGroupId === 'p') {
-          liveGroups.find((entry) => entry.id === 'sib-a')!.tabOrder = 7
+          if (updates.parentGroupId !== undefined && updates.isPinned === undefined) {
+            target.isPinned = false
+          }
         }
         return true
       },
@@ -628,10 +810,14 @@ describe('project-group-header-drag-commit', () => {
 
     expect(committed).toBe(false)
     expect(calls).toEqual([
-      { groupId: 'dragged', updates: { parentGroupId: 'p', tabOrder: 0 } },
-      { groupId: 'dragged', updates: { parentGroupId: null, rootProjectOrder: null, tabOrder: 1 } }
+      { groupId: 'pinned-dragged', updates: { parentGroupId: 'collapsed-parent', tabOrder: 1 } },
+      { groupId: 'sib-a', updates: { tabOrder: 0 } },
+      {
+        groupId: 'pinned-dragged',
+        updates: { parentGroupId: null, rootProjectOrder: null, tabOrder: 1, isPinned: true }
+      }
     ])
-    expect(liveGroups.find((entry) => entry.id === 'sib-a')?.tabOrder).toBe(7)
+    expect(liveGroups.find((entry) => entry.id === 'pinned-dragged')?.isPinned).toBe(true)
     expect(onDropFailed).toHaveBeenCalledTimes(1)
   })
 })

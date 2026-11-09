@@ -7,14 +7,64 @@ import type {
   ProjectGroupMutation,
   ProjectGroupUpdate
 } from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
 import {
   createProjectGroup,
+  getNextProjectGroupOrder,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
 } from '../../../shared/project/groups/project-groups'
+import { assignMoveProjectGroupOrder } from '../../../shared/project/groups/legacy-group-child-order'
 import { getNextRootProjectOrder } from '../../../shared/sidebar-list/sections/root-project-order'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
+import { findRepoRowForHostScopedWrite } from './repo-update-operations'
+
+export function moveProjectToGroupInState(
+  operations: {
+    state: PersistedState
+    scheduleSave: (domains: ProfileSaveDomains) => void
+    hydrateRepo: (repo: Repo) => Repo
+  },
+  target: RepoHostTarget,
+  groupId: string | null,
+  order?: number,
+  options?: { isPinned?: boolean }
+): Repo | null {
+  const repo = findRepoRowForHostScopedWrite(
+    operations.state.repos,
+    target.id,
+    getRepoExecutionHostId(target)
+  )
+  if (!repo) {
+    return null
+  }
+  const isValidGroup = Boolean(
+    groupId &&
+    (operations.state.projectGroups ?? []).some(
+      (group) =>
+        group.id === groupId && getRepoExecutionHostId(group) === getRepoExecutionHostId(repo)
+    )
+  )
+  const normalizedGroupId = isValidGroup ? groupId : null
+  if ((repo.projectGroupId ?? null) !== normalizedGroupId) {
+    repo.isPinned = false
+  }
+  if (typeof options?.isPinned === 'boolean' && (groupId === null || isValidGroup)) {
+    repo.isPinned = options.isPinned
+  }
+  repo.projectGroupId = normalizedGroupId
+  const initializedLegacySubgroups = assignMoveProjectGroupOrder(
+    operations.state.repos,
+    operations.state.projectGroups,
+    repo,
+    normalizedGroupId,
+    order
+  )
+  operations.scheduleSave(initializedLegacySubgroups ? ['repos', 'projectGroups'] : ['repos'])
+  return operations.hydrateRepo(repo)
+}
 
 export type ProjectGroupMutationOperations = {
   state: PersistedState
@@ -75,6 +125,16 @@ export class ProjectGroupPersistenceOperations {
     // Large persisted lists can exceed spread argument limits.
     for (const existingGroup of this.state.projectGroups ?? []) {
       maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
+    }
+    if (normalizedParentGroupId) {
+      maxOrder = Math.max(
+        maxOrder,
+        getNextProjectGroupOrder(
+          this.state.repos,
+          normalizedParentGroupId,
+          this.state.projectGroups
+        ) - 1
+      )
     }
     const group = createProjectGroup({
       ...input,
@@ -194,7 +254,19 @@ export class ProjectGroupPersistenceOperations {
       group.hookSettings = updates.hookSettings
     }
     if (normalizedParentGroupId !== undefined) {
+      if (
+        normalizedParentGroupId !== (group.parentGroupId ?? null) &&
+        updates.isPinned === undefined
+      ) {
+        group.isPinned = false
+      }
+      if (normalizedParentGroupId !== null && updates.rootProjectOrder === undefined) {
+        delete group.rootProjectOrder
+      }
       group.parentGroupId = normalizedParentGroupId
+    }
+    if (typeof updates.isPinned === 'boolean') {
+      group.isPinned = updates.isPinned
     }
     group.updatedAt = Date.now()
   }
@@ -211,7 +283,7 @@ export class ProjectGroupPersistenceOperations {
     // Sidebar grouping does not own repos; ungroup them rather than delete them.
     this.state.repos = this.state.repos.map((repo) =>
       repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
-        ? { ...repo, projectGroupId: null }
+        ? { ...repo, projectGroupId: null, isPinned: false }
         : repo
     )
     const removedFolderWorkspaceKeys = new Set<string>()

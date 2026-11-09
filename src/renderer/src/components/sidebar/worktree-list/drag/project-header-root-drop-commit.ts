@@ -16,6 +16,25 @@ import type { RootProjectHeaderDrag } from './root-project-header-drop'
 
 export { resolveSiblingRepoForDraggedHost }
 
+export async function commitProjectGroupOrderStep(
+  onCommitProjectGroupOrder: (
+    project: Repo,
+    projectGroupId: string | null,
+    order: number | null,
+    options?: { isPinned?: boolean }
+  ) => Promise<boolean> | boolean | void,
+  project: Repo,
+  projectGroupId: string | null,
+  order: number | null,
+  options?: { isPinned?: boolean }
+): Promise<boolean> {
+  return invokeBoolCallback(() =>
+    options
+      ? onCommitProjectGroupOrder(project, projectGroupId, order, options)
+      : onCommitProjectGroupOrder(project, projectGroupId, order)
+  )
+}
+
 export async function commitInterleavedRootProjectHeaderDrop(
   args: RootProjectHeaderDrag & {
     draggedGroupRepo: Repo | undefined
@@ -33,7 +52,8 @@ export async function commitInterleavedRootProjectHeaderDrop(
     onCommitProjectGroupOrder: (
       project: Repo,
       projectGroupId: string | null,
-      order: number | null
+      order: number | null,
+      options?: { isPinned?: boolean }
     ) => Promise<boolean> | boolean | void
     onReconcileHostProjectGroups?: (ownerHostId: ExecutionHostId) => Promise<void> | void
     onDropFailed?: () => void
@@ -48,7 +68,8 @@ export async function commitInterleavedRootProjectHeaderDrop(
       commitRootOrder(
         args.session.rootProjectHeaderKeys!,
         `repo:${args.session.repo.id}`,
-        args.dropIndex
+        args.dropIndex,
+        args.session.rootProjectHeaderHostId
       )
     )
   }
@@ -71,8 +92,12 @@ export async function commitInterleavedRootProjectHeaderDrop(
   })
   const previousGroupId = draggedGroupRepo.projectGroupId ?? null
   const previousOrder = draggedGroupRepo.projectGroupOrder ?? null
-  const accepted = await invokeBoolCallback(() =>
-    args.onCommitProjectGroupOrder(draggedGroupRepo, null, placement.order)
+  const previousPinned = draggedGroupRepo.isPinned === true
+  const accepted = await commitProjectGroupOrderStep(
+    args.onCommitProjectGroupOrder,
+    draggedGroupRepo,
+    null,
+    placement.order
   )
   if (!accepted) {
     return false
@@ -83,7 +108,8 @@ export async function commitInterleavedRootProjectHeaderDrop(
       commitRootOrder(
         placement.interleavedKeysWithRepo,
         `repo:${draggedGroupRepo.id}`,
-        placement.clampedDropIndex
+        placement.clampedDropIndex,
+        args.session.rootProjectHeaderHostId
       )
     )
     if (!respaceAccepted) {
@@ -93,12 +119,17 @@ export async function commitInterleavedRootProjectHeaderDrop(
         liveRepos === undefined ||
         (liveRepo !== undefined &&
           (liveRepo.projectGroupId ?? null) === null &&
-          (liveRepo.projectGroupOrder ?? null) === placement.order)
+          (liveRepo.projectGroupOrder ?? null) === placement.order &&
+          liveRepo.isPinned !== true)
       if (!stillMatchesDrop) {
         return false
       }
-      const reverted = await invokeBoolCallback(() =>
-        args.onCommitProjectGroupOrder(draggedGroupRepo, previousGroupId, previousOrder)
+      const reverted = await commitProjectGroupOrderStep(
+        args.onCommitProjectGroupOrder,
+        draggedGroupRepo,
+        previousGroupId,
+        previousOrder,
+        previousPinned ? { isPinned: true } : undefined
       )
       if (!reverted) {
         await reconcileHostSafely(

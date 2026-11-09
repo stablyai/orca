@@ -15,6 +15,7 @@ export type ProjectGroup = {
   tabOrder: number
   rootProjectOrder?: number
   isCollapsed: boolean
+  isPinned?: boolean
   color: string | null
   createdAt: number
   updatedAt: number
@@ -23,7 +24,7 @@ export type ProjectGroup = {
 export type ProjectGroupUpdate = Partial<
   Pick<
     ProjectGroup,
-    'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'hookSettings' | 'parentGroupId'
+    'name' | 'isCollapsed' | 'isPinned' | 'tabOrder' | 'color' | 'hookSettings' | 'parentGroupId'
   >
 > & { rootProjectOrder?: number | null }
 

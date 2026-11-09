@@ -4,16 +4,14 @@ import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-w
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces/folder-workspaces'
-import { getNextProjectGroupOrder } from '../../../shared/project/groups/project-groups'
 import { normalizeStoredTaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-attachments/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { retireAtRestCommandContext } from '../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
-import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
+import { moveProjectToGroupInState } from '../tracking-repos/project-group-operations'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
@@ -43,10 +41,6 @@ export class FolderWorkspacePersistenceOperations {
 
   private pruneMobileClientTabSelections(matchesWorktreeId: (worktreeId: string) => boolean): void {
     this.operations.pruneMobileClientTabSelections(matchesWorktreeId)
-  }
-
-  private hydrateRepo(repo: Repo): Repo {
-    return this.operations.hydrateRepo(repo)
   }
 
   getFolderWorkspaces(): FolderWorkspace[] {
@@ -286,26 +280,12 @@ export class FolderWorkspacePersistenceOperations {
     return true
   }
 
-  moveProjectToGroup(target: RepoHostTarget, groupId: string | null, order?: number): Repo | null {
-    const repo = findRepoRowForHostScopedWrite(
-      this.state.repos,
-      target.id,
-      getRepoExecutionHostId(target)
-    )
-    if (!repo) {
-      return null
-    }
-    const normalizedGroupId =
-      groupId && (this.state.projectGroups ?? []).some((group) => group.id === groupId)
-        ? groupId
-        : null
-    const siblingRepos = this.state.repos.filter((entry) => entry !== repo)
-    repo.projectGroupId = normalizedGroupId
-    repo.projectGroupOrder =
-      typeof order === 'number' && Number.isFinite(order)
-        ? order
-        : getNextProjectGroupOrder(siblingRepos, normalizedGroupId)
-    this.scheduleSave(['repos'])
-    return this.hydrateRepo(repo)
+  moveProjectToGroup(
+    target: RepoHostTarget,
+    groupId: string | null,
+    order?: number,
+    options?: { isPinned?: boolean }
+  ): Repo | null {
+    return moveProjectToGroupInState(this.operations, target, groupId, order, options)
   }
 }

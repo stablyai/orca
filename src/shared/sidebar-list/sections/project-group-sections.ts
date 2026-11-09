@@ -10,6 +10,7 @@ import type { OrderedGroupEntry } from './worktree-group-entry'
 import { appendWorktreeRows } from './row-builders'
 import { getFolderLaneSectionKey } from '../folders/folder-workspace-occurrences'
 import { walkProjectGroupTree } from './project-group-tree'
+import { isProjectSectionEntryPinned } from './project-section-order'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -34,7 +35,15 @@ export function appendProjectGroupSections(
       projectGroups: args.projectGroups,
       folderCountByGroupId,
       projectOrderBy: args.projectOrderBy,
-      repoOrder: args.repoOrder
+      repoOrder: args.repoOrder,
+      isRepoEntryPinned: (entry) =>
+        isProjectSectionEntryPinned(entry, ctx.repoMap, ctx.pinnedRepoIds) ||
+        entry[1].items.some(
+          (worktree) =>
+            (entry[1].repoIds.size > 0
+              ? entry[1].repoIds.has(worktree.repoId)
+              : entry[1].repo?.id === worktree.repoId) && ctx.repoOf(worktree)?.isPinned === true
+        )
     },
     {
       group: (projectGroup, depth, count, hasChildGroups) => {

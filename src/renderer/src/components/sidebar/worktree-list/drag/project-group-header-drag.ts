@@ -17,13 +17,14 @@ import {
   type UseProjectGroupHeaderDragArgs
 } from './project-group-header-drag-contract'
 import {
-  computeCombinedProjectGroupHeaderDropTarget,
-  refreshProjectGroupHeaderDragSessionRects,
   toProjectGroupDragState,
   type ProjectGroupHeaderDropTarget
 } from './project-group-header-reparent-drop'
-import { createProjectGroupHeaderDragSession } from './project-group-header-drag-start'
-import { measureSidebarVirtualContentBottom } from './header-drag-dom-measurement'
+import {
+  computeSessionProjectGroupHeaderDropTarget,
+  createProjectGroupHeaderDragSession,
+  refreshProjectGroupHeaderDragSessionRects
+} from './project-group-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
@@ -53,32 +54,15 @@ export function useProjectGroupHeaderDrag(
     )
   }, [])
 
-  const computeDrop = useCallback((pointerY: number): ProjectGroupHeaderDropTarget | null => {
-    const session = dragSessionRef.current
-    const container = latestInputsRef.current.getScrollContainer()
-    const draggedGroup = session
-      ? latestInputsRef.current.projectGroupById.get(session.groupId)
-      : undefined
-    if (!session || !container || !draggedGroup) {
-      return null
-    }
-    return computeCombinedProjectGroupHeaderDropTarget({
-      pointerY,
-      containerTop: container.getBoundingClientRect().top,
-      scrollTop: container.scrollTop,
-      dragHostId: getRepoExecutionHostId(draggedGroup),
-      draggedGroup,
-      projectGroupById: latestInputsRef.current.projectGroupById,
-      reparentableGroupIds: session.reparentableGroupIds,
-      hostHeaderRects: session.hostHeaderRects,
-      groupHeaderRects: session.headerRects,
-      rootProjectHeaderKeys: session.rootProjectHeaderKeys,
-      rootHeaderRects: session.rootHeaderRects,
-      sidebarProjectGroupHeaderIdsByBucket:
-        latestInputsRef.current.sidebarProjectGroupHeaderIdsByBucket,
-      contentBottom: measureSidebarVirtualContentBottom(container)
-    })
-  }, [])
+  const computeDrop = useCallback(
+    (pointerY: number): ProjectGroupHeaderDropTarget | null =>
+      computeSessionProjectGroupHeaderDropTarget(
+        pointerY,
+        dragSessionRef.current,
+        latestInputsRef.current
+      ),
+    []
+  )
 
   const applyDrop = useCallback(
     (session: ProjectGroupHeaderDragSession, drop: ProjectGroupHeaderDropTarget | null) => {
@@ -145,7 +129,13 @@ export function useProjectGroupHeaderDrag(
         dropTarget,
         projectGroupById: inputs.projectGroupById,
         getLiveProjectGroups: inputs.getLiveProjectGroups,
+        getLiveRepos: inputs.getLiveRepos,
         repos: liveRepos,
+        allowMixedProjectReorder: inputs.allowMixedProjectReorder,
+        sidebarGroupChildItemIdsByGroupId: inputs.sidebarGroupChildItemIdsByGroupId,
+        repoById: inputs.repoById,
+        pinnedRepoHeaderIds: inputs.pinnedRepoHeaderIds,
+        orderedRepoIds: inputs.orderedRepoIds,
         sidebarProjectGroupHeaderIdsByBucket: inputs.sidebarProjectGroupHeaderIdsByBucket,
         onCommitRootProjectOrder: inputs.onCommitRootProjectOrder,
         nextRootProjectOrder: getNextRootProjectOrder(liveRepos, [
@@ -153,7 +143,8 @@ export function useProjectGroupHeaderDrag(
         ]),
         onCommitProjectGroupUpdate: inputs.onCommitProjectGroupUpdate,
         onReconcileHostProjectGroups: inputs.onReconcileHostProjectGroups,
-        onDropFailed: inputs.onDropFailed
+        onDropFailed: inputs.onDropFailed,
+        onCommitProjectGroupOrder: inputs.onCommitProjectGroupOrder
       })
     },
     [cancelAutoscroll]
@@ -304,6 +295,9 @@ export function useProjectGroupHeaderDrag(
         groupId,
         rootProjectHeaderKeys: inputs.rootProjectHeaderKeys,
         projectGroupById: inputs.projectGroupById,
+        pinnedRepoHeaderIds: inputs.pinnedRepoHeaderIds,
+        repoById: inputs.repoById,
+        liveRepos: inputs.getLiveRepos?.(),
         projectGroupOwnerHostIdByGroupId: inputs.projectGroupOwnerHostIdByGroupId,
         sidebarProjectGroupHeaderIdsByBucket: inputs.sidebarProjectGroupHeaderIdsByBucket,
         getScrollContainer: inputs.getScrollContainer

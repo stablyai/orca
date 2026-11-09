@@ -37,10 +37,9 @@ async function persistSingleProjectGroupUpdate(
             { timeoutMs: 15_000 }
           )
         ).group
-  if (!updated || !verifyProjectGroupMatchesUpdate(updated, updates, options)) {
-    return { row: null, commitSeq }
-  }
-  return { row: updated, commitSeq }
+  return verifyProjectGroupMatchesUpdate(updated, updates, options)
+    ? { row: updated, commitSeq }
+    : { row: null, commitSeq }
 }
 
 async function persistProjectGroupUpdateSequenced(
@@ -59,6 +58,9 @@ async function persistProjectGroupUpdateSequenced(
   ) {
     if (updates.parentGroupId !== undefined) {
       options?.onParentGroupMoveRejected?.()
+    }
+    if (updates.isPinned !== undefined) {
+      options?.onPinRejected?.()
     }
     return { row: null, commitSeq: 0 }
   }
@@ -113,6 +115,9 @@ async function persistProjectGroupUpdatesBatch(
       mutations.map(({ groupId, updates }) =>
         persistProjectGroupUpdateSequenced(target, groupId, updates, options).catch((err) => {
           console.error('Failed to update project group:', err)
+          if (updates.isPinned !== undefined) {
+            options?.onPinFailed?.()
+          }
           return { row: null, commitSeq: 0 }
         })
       )
@@ -134,7 +139,7 @@ async function persistProjectGroupUpdatesBatch(
   return mutations.map(({ groupId, updates }) => {
     const group = byId.get(groupId)
     return {
-      row: group && verifyProjectGroupMatchesUpdate(group, updates, options) ? group : null,
+      row: verifyProjectGroupMatchesUpdate(group, updates, options) ? group : null,
       commitSeq
     }
   })
@@ -148,18 +153,32 @@ export async function persistProjectGroupUpdates(
   if (mutations.length === 0) {
     return []
   }
-  let notifiedParentMoveRejected = false
-  const dedupedOptions: PersistProjectGroupUpdateOptions | undefined = options && {
-    ...options,
-    onParentGroupMoveRejected: options.onParentGroupMoveRejected
+  let notifiedPinRejected = false
+  const once = (fn?: () => void, skip?: () => boolean): (() => void) | undefined => {
+    let called = false
+    return fn
       ? () => {
-          if (!notifiedParentMoveRejected) {
-            notifiedParentMoveRejected = true
-            options.onParentGroupMoveRejected?.()
+          if (!called && !skip?.()) {
+            called = true
+            fn()
           }
         }
       : undefined
   }
+  const dedupedOptions: PersistProjectGroupUpdateOptions | undefined = options
+    ? {
+        ...options,
+        onParentGroupMoveRejected: once(options.onParentGroupMoveRejected),
+        onPinRejected: once(
+          () => {
+            notifiedPinRejected = true
+            options.onPinRejected?.()
+          },
+          () => !options.onPinRejected
+        ),
+        onPinFailed: once(options.onPinFailed, () => notifiedPinRejected)
+      }
+    : undefined
   if (
     target.kind === 'environment' &&
     mutations.some(({ updates }) => updates.rootProjectOrder !== undefined) &&
@@ -170,6 +189,9 @@ export async function persistProjectGroupUpdates(
   ) {
     if (mutations.some(({ updates }) => updates.parentGroupId !== undefined)) {
       dedupedOptions?.onParentGroupMoveRejected?.()
+    }
+    if (mutations.some(({ updates }) => updates.isPinned !== undefined)) {
+      dedupedOptions?.onPinRejected?.()
     }
     return mutations.map(() => null)
   }

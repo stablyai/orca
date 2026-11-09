@@ -1,10 +1,21 @@
-import {
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
-import { isProjectGroupStillInExpectedParent } from './group-header-hit-geometry'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import {
+  isProjectGroupStillInExpectedParent,
+  isRepoStillInExpectedProjectGroup
+} from './group-header-hit-geometry'
+import {
+  buildProjectGroupRollbackPatch,
+  captureGroupRollback,
+  captureRepoRollback,
+  isGroupRollbackEntryStillLive,
+  isRepoRollbackEntryStillLive,
+  resolvePartialPrimaryRepoSnapshot
+} from './project-group-drag-rollback-snapshots'
 import type { ProjectGroupHeaderUpdatePatch } from './project-group-header-drag-contract'
+
+export { buildProjectGroupRollbackPatch }
 
 export async function invokeBoolCallback(
   fn: () => Promise<boolean> | boolean | void
@@ -32,77 +43,73 @@ export async function reconcileHostSafely(
   }
 }
 
-export type AppliedProjectGroupRollback = {
-  groupId: string
-  patch: ProjectGroupHeaderUpdatePatch
-  expectedLiveParentGroupId: string | null
-  expectedLiveTabOrder?: number
-  expectedLiveRootProjectOrder?: number | null
-}
+export type MixedChildDropMutation =
+  | { kind?: 'group'; groupId: string; updates: ProjectGroupHeaderUpdatePatch }
+  | { kind: 'repo'; repo: Repo; projectGroupId: string | null; order: number }
 
-export function buildProjectGroupRollbackPatch(
-  group: ProjectGroup | undefined,
+export type RollbackGroupUpdateFn = (
+  groupId: string,
   updates: ProjectGroupHeaderUpdatePatch
-): ProjectGroupHeaderUpdatePatch | null {
-  if (!group) {
-    return null
-  }
-  const patch: ProjectGroupHeaderUpdatePatch = {}
-  if (updates.parentGroupId !== undefined) {
-    patch.parentGroupId = group.parentGroupId ?? null
-    patch.rootProjectOrder = group.rootProjectOrder ?? null
-  }
-  if (updates.tabOrder !== undefined) {
-    patch.tabOrder = group.tabOrder
-  }
-  if (updates.rootProjectOrder !== undefined) {
-    patch.rootProjectOrder = group.rootProjectOrder ?? null
-  }
-  return Object.keys(patch).length > 0 ? patch : null
+) => Promise<boolean> | boolean | void
+
+export type RollbackRepoOrderFn = (
+  project: Repo,
+  projectGroupId: string | null,
+  order: number | null,
+  options?: { isPinned?: boolean }
+) => Promise<boolean> | boolean | void
+
+function isRepoDropMutation(
+  mutation: MixedChildDropMutation
+): mutation is { kind: 'repo'; repo: Repo; projectGroupId: string | null; order: number } {
+  return mutation.kind === 'repo'
 }
 
-export function captureProjectGroupMutationRollbacks(args: {
-  mutations: readonly { groupId: string; updates: ProjectGroupHeaderUpdatePatch }[]
-  ownerHostId: ExecutionHostId | null | undefined
-  liveProjectGroups: readonly ProjectGroup[] | undefined
-  fallbackProjectGroupById: ReadonlyMap<string, ProjectGroup>
-}): Map<string, ProjectGroupHeaderUpdatePatch> {
-  const rollbacks = new Map<string, ProjectGroupHeaderUpdatePatch>()
-  for (const mutation of args.mutations) {
-    if (rollbacks.has(mutation.groupId)) {
-      continue
+export type MixedChildRollbackEntry =
+  | {
+      kind: 'group'
+      groupId: string
+      patch: ProjectGroupHeaderUpdatePatch
+      expectedLiveParentGroupId: string | null
+      expectedLiveTabOrder?: number
+      expectedLiveRootProjectOrder?: number | null
+      expectedLiveIsPinned?: boolean
     }
-    const preDropGroup =
-      args.liveProjectGroups?.find(
-        (candidate) =>
-          candidate.id === mutation.groupId &&
-          (!args.ownerHostId || getRepoExecutionHostId(candidate) === args.ownerHostId)
-      ) ?? args.fallbackProjectGroupById.get(mutation.groupId)
-    const patch = buildProjectGroupRollbackPatch(preDropGroup, mutation.updates)
-    if (patch) {
-      rollbacks.set(mutation.groupId, patch)
+  | {
+      kind: 'repo'
+      repo: Repo
+      previousProjectGroupId: string | null
+      previousOrder: number | null
+      previousIsPinned: boolean
+      expectedLiveProjectGroupId: string | null
+      expectedLiveOrder: number | null
+      expectedLiveIsPinned?: boolean
     }
-  }
-  return rollbacks
-}
 
-export async function revertAppliedProjectGroupRollbacks(args: {
-  appliedRollbacks: readonly AppliedProjectGroupRollback[]
+export async function revertAppliedMixedChildRollbacks(args: {
+  appliedRollbacks: readonly MixedChildRollbackEntry[]
   ownerHostId: ExecutionHostId | null | undefined
   getLiveProjectGroups: (() => readonly ProjectGroup[]) | undefined
+  getLiveRepos: (() => readonly Repo[]) | undefined
   fallbackProjectGroupById: ReadonlyMap<string, ProjectGroup>
-  onCommitProjectGroupUpdate: (
-    groupId: string,
-    updates: ProjectGroupHeaderUpdatePatch
-  ) => Promise<boolean> | boolean | void
+  fallbackRepoById: ReadonlyMap<string, Repo> | undefined
+  onCommitProjectGroupUpdate: RollbackGroupUpdateFn
+  onCommitProjectGroupOrder?: RollbackRepoOrderFn
 }): Promise<boolean> {
   for (const entry of args.appliedRollbacks.toReversed()) {
     const liveGroups = args.getLiveProjectGroups?.()
-    if (liveGroups) {
+    const liveRepos = args.getLiveRepos?.()
+    if (entry.kind === 'group') {
       if (
-        !isProjectGroupStillInExpectedParent({
+        liveGroups &&
+        !isGroupRollbackEntryStillLive({
           groupId: entry.groupId,
-          expectedParentGroupId: entry.expectedLiveParentGroupId,
+          expectedLiveParentGroupId: entry.expectedLiveParentGroupId,
+          expectedLiveTabOrder: entry.expectedLiveTabOrder,
+          expectedLiveRootProjectOrder: entry.expectedLiveRootProjectOrder,
+          expectedLiveIsPinned: entry.expectedLiveIsPinned,
+          hasExpectedLiveRootProjectOrder: 'expectedLiveRootProjectOrder' in entry,
+          hasExpectedLiveIsPinned: 'expectedLiveIsPinned' in entry,
           ownerHostId: args.ownerHostId,
           liveProjectGroups: liveGroups,
           fallbackProjectGroupById: args.fallbackProjectGroupById
@@ -110,23 +117,45 @@ export async function revertAppliedProjectGroupRollbacks(args: {
       ) {
         continue
       }
-      const liveGroup = liveGroups.find(
-        (candidate) =>
-          candidate.id === entry.groupId &&
-          (!args.ownerHostId || getRepoExecutionHostId(candidate) === args.ownerHostId)
-      )
       if (
-        !liveGroup ||
-        (entry.expectedLiveTabOrder !== undefined &&
-          liveGroup.tabOrder !== entry.expectedLiveTabOrder) ||
-        ('expectedLiveRootProjectOrder' in entry &&
-          (liveGroup.rootProjectOrder ?? null) !== entry.expectedLiveRootProjectOrder)
+        !(await invokeBoolCallback(() =>
+          args.onCommitProjectGroupUpdate(entry.groupId, entry.patch)
+        ))
       ) {
+        return false
+      }
+      continue
+    }
+    const commitOrder = args.onCommitProjectGroupOrder
+    if (!commitOrder) {
+      return false
+    }
+    let livePinned = false
+    if (liveRepos) {
+      const check = isRepoRollbackEntryStillLive({
+        repo: entry.repo,
+        expectedLiveProjectGroupId: entry.expectedLiveProjectGroupId,
+        expectedLiveOrder: entry.expectedLiveOrder,
+        expectedLiveIsPinned: entry.expectedLiveIsPinned,
+        hasExpectedLiveIsPinned: 'expectedLiveIsPinned' in entry,
+        liveRepos,
+        fallbackRepoById: args.fallbackRepoById
+      })
+      if (!check.stillLive) {
         continue
       }
+      livePinned = check.livePinned
     }
+    const restorePin =
+      entry.previousIsPinned &&
+      ((entry.previousProjectGroupId ?? null) !== entry.expectedLiveProjectGroupId ||
+        (liveRepos !== undefined && !livePinned))
     const reverted = await invokeBoolCallback(() =>
-      args.onCommitProjectGroupUpdate(entry.groupId, entry.patch)
+      restorePin
+        ? commitOrder(entry.repo, entry.previousProjectGroupId, entry.previousOrder, {
+            isPinned: true
+          })
+        : commitOrder(entry.repo, entry.previousProjectGroupId, entry.previousOrder)
     )
     if (!reverted) {
       return false
@@ -135,146 +164,151 @@ export async function revertAppliedProjectGroupRollbacks(args: {
   return true
 }
 
-export function buildAppliedGroupRollbackEntry(args: {
-  groupId: string
-  patch: ProjectGroupHeaderUpdatePatch
-  expectedParentGroupId: string | null
-  updates: ProjectGroupHeaderUpdatePatch
-}): AppliedProjectGroupRollback {
-  return {
-    groupId: args.groupId,
-    patch: args.patch,
-    expectedLiveParentGroupId: args.expectedParentGroupId,
-    ...(args.updates.tabOrder !== undefined ? { expectedLiveTabOrder: args.updates.tabOrder } : {}),
-    ...('rootProjectOrder' in args.updates
-      ? { expectedLiveRootProjectOrder: args.updates.rootProjectOrder ?? null }
-      : {})
-  }
-}
-
-export async function abortGroupDropWithRollback(args: {
-  appliedRollbacks: readonly AppliedProjectGroupRollback[]
-  ownerHostId: ExecutionHostId | null | undefined
-  getLiveProjectGroups: (() => readonly ProjectGroup[]) | undefined
-  fallbackProjectGroupById: ReadonlyMap<string, ProjectGroup>
-  onCommitProjectGroupUpdate: (
-    groupId: string,
-    updates: ProjectGroupHeaderUpdatePatch
-  ) => Promise<boolean> | boolean | void
-  onReconcileHostProjectGroups?: (ownerHostId: ExecutionHostId) => Promise<void> | void
-  onDropFailed?: () => void
-}): Promise<false> {
-  const rollbackSucceeded = await revertAppliedProjectGroupRollbacks(args)
-  if (!rollbackSucceeded) {
-    await reconcileHostSafely(args.onReconcileHostProjectGroups, args.ownerHostId)
-  }
-  args.onDropFailed?.()
-  return false
-}
-
-export async function executeProjectGroupDropUpdates(args: {
-  mutations: readonly { groupId: string; updates: ProjectGroupHeaderUpdatePatch }[]
-  reparentMutation: { groupId: string; updates: ProjectGroupHeaderUpdatePatch } | undefined
+export async function executeOrderedDropMutations(args: {
+  primaryMutation?: MixedChildDropMutation
+  mutations: readonly MixedChildDropMutation[]
   expectedParentGroupId: string | null
   ownerHostId: ExecutionHostId | null | undefined
   projectGroupById: ReadonlyMap<string, ProjectGroup>
+  repoById?: ReadonlyMap<string, Repo>
   getLiveProjectGroups?: () => readonly ProjectGroup[]
-  onCommitProjectGroupUpdate: (
-    groupId: string,
-    updates: ProjectGroupHeaderUpdatePatch
-  ) => Promise<boolean> | boolean | void
+  getLiveRepos?: () => readonly Repo[]
+  onCommitProjectGroupUpdate: RollbackGroupUpdateFn
+  onCommitProjectGroupOrder?: RollbackRepoOrderFn
   onReconcileHostProjectGroups?: (ownerHostId: ExecutionHostId) => Promise<void> | void
   onDropFailed?: () => void
-}): Promise<{ ok: true; appliedRollbacks: AppliedProjectGroupRollback[] } | { ok: false }> {
-  const preDropRollbacks = captureProjectGroupMutationRollbacks({
-    mutations: args.mutations,
-    ownerHostId: args.ownerHostId,
-    liveProjectGroups: args.getLiveProjectGroups?.(),
-    fallbackProjectGroupById: args.projectGroupById
-  })
-  const appliedRollbacks: AppliedProjectGroupRollback[] = []
-  if (args.reparentMutation) {
-    const { groupId, updates } = args.reparentMutation
-    const reparentRollback = preDropRollbacks.get(groupId)
-    if (!(await invokeBoolCallback(() => args.onCommitProjectGroupUpdate(groupId, updates)))) {
-      return { ok: false }
+  onAfterMutations?: () => Promise<boolean>
+}): Promise<boolean> {
+  const orderedMutations = args.primaryMutation
+    ? [args.primaryMutation, ...args.mutations.filter((m) => m !== args.primaryMutation)]
+    : [...args.mutations]
+
+  const appliedRollbacks: MixedChildRollbackEntry[] = []
+  let reconcileUncertainPrimary = false
+  const applySingle = (mutation: MixedChildDropMutation): Promise<boolean> =>
+    invokeBoolCallback(() =>
+      isRepoDropMutation(mutation)
+        ? args.onCommitProjectGroupOrder?.(mutation.repo, mutation.projectGroupId, mutation.order)
+        : args.onCommitProjectGroupUpdate(mutation.groupId, mutation.updates)
+    )
+  const rollbackApplied = async (notifyDropFailed: boolean): Promise<false> => {
+    const rollbackSucceeded = await revertAppliedMixedChildRollbacks({
+      appliedRollbacks,
+      ownerHostId: args.ownerHostId,
+      getLiveProjectGroups: args.getLiveProjectGroups,
+      getLiveRepos: args.getLiveRepos,
+      fallbackProjectGroupById: args.projectGroupById,
+      fallbackRepoById: args.repoById,
+      onCommitProjectGroupUpdate: args.onCommitProjectGroupUpdate,
+      onCommitProjectGroupOrder: args.onCommitProjectGroupOrder
+    })
+    if (!rollbackSucceeded || reconcileUncertainPrimary) {
+      await reconcileHostSafely(args.onReconcileHostProjectGroups, args.ownerHostId)
     }
-    if (reparentRollback) {
-      appliedRollbacks.push(
-        buildAppliedGroupRollbackEntry({
-          groupId,
-          patch: reparentRollback,
-          expectedParentGroupId: args.expectedParentGroupId,
-          updates
-        })
-      )
+    if (notifyDropFailed) {
+      args.onDropFailed?.()
     }
+    return false
   }
-  for (const mutation of args.mutations) {
-    if (mutation === args.reparentMutation) {
-      continue
+
+  for (const mutation of orderedMutations) {
+    if (mutation !== args.primaryMutation) {
+      const stillValid = isRepoDropMutation(mutation)
+        ? isRepoStillInExpectedProjectGroup({
+            repo: mutation.repo,
+            expectedProjectGroupId: mutation.projectGroupId,
+            liveRepos: args.getLiveRepos?.(),
+            fallbackRepoById: args.repoById
+          })
+        : isProjectGroupStillInExpectedParent({
+            groupId: mutation.groupId,
+            expectedParentGroupId: args.expectedParentGroupId,
+            ownerHostId: args.ownerHostId,
+            liveProjectGroups: args.getLiveProjectGroups?.(),
+            fallbackProjectGroupById: args.projectGroupById
+          })
+      if (!stillValid) {
+        continue
+      }
     }
-    const liveGroups = args.getLiveProjectGroups?.()
-    if (
-      !isProjectGroupStillInExpectedParent({
-        groupId: mutation.groupId,
-        expectedParentGroupId: args.expectedParentGroupId,
-        ownerHostId: args.ownerHostId,
-        liveProjectGroups: liveGroups,
-        fallbackProjectGroupById: args.projectGroupById
-      })
-    ) {
-      continue
-    }
-    const plannedSibling = args.projectGroupById.get(mutation.groupId)
-    const liveSibling = liveGroups?.find(
-      (candidate) =>
-        candidate.id === mutation.groupId &&
-        (!args.ownerHostId || getRepoExecutionHostId(candidate) === args.ownerHostId)
-    )
-    if (
-      liveSibling &&
-      plannedSibling &&
-      (liveSibling.tabOrder !== plannedSibling.tabOrder ||
-        (liveSibling.rootProjectOrder ?? null) !== (plannedSibling.rootProjectOrder ?? null))
-    ) {
-      await abortGroupDropWithRollback({
-        appliedRollbacks,
-        ownerHostId: args.ownerHostId,
-        getLiveProjectGroups: args.getLiveProjectGroups,
-        fallbackProjectGroupById: args.projectGroupById,
-        onCommitProjectGroupUpdate: args.onCommitProjectGroupUpdate,
-        onReconcileHostProjectGroups: args.onReconcileHostProjectGroups,
-        onDropFailed: args.onDropFailed
-      })
-      return { ok: false }
-    }
-    const siblingRollback = preDropRollbacks.get(mutation.groupId)
-    const accepted = await invokeBoolCallback(() =>
-      args.onCommitProjectGroupUpdate(mutation.groupId, mutation.updates)
-    )
-    if (!accepted) {
-      await abortGroupDropWithRollback({
-        appliedRollbacks,
-        ownerHostId: args.ownerHostId,
-        getLiveProjectGroups: args.getLiveProjectGroups,
-        fallbackProjectGroupById: args.projectGroupById,
-        onCommitProjectGroupUpdate: args.onCommitProjectGroupUpdate,
-        onReconcileHostProjectGroups: args.onReconcileHostProjectGroups,
-        onDropFailed: args.onDropFailed
-      })
-      return { ok: false }
-    }
-    if (siblingRollback) {
-      appliedRollbacks.push(
-        buildAppliedGroupRollbackEntry({
+
+    const capturedRepo = isRepoDropMutation(mutation)
+      ? captureRepoRollback({
+          repo: mutation.repo,
+          liveRepos: args.getLiveRepos?.(),
+          fallbackRepoById: args.repoById
+        })
+      : null
+    const capturedGroup = isRepoDropMutation(mutation)
+      ? null
+      : captureGroupRollback({
           groupId: mutation.groupId,
-          patch: siblingRollback,
-          expectedParentGroupId: args.expectedParentGroupId,
-          updates: mutation.updates
+          updates: mutation.updates,
+          ownerHostId: args.ownerHostId,
+          liveProjectGroups: args.getLiveProjectGroups?.(),
+          fallbackProjectGroupById: args.projectGroupById
         })
+
+    if (!(await applySingle(mutation))) {
+      if (mutation === args.primaryMutation && isRepoDropMutation(mutation) && capturedRepo) {
+        const resolution = resolvePartialPrimaryRepoSnapshot({
+          mutation,
+          capturedRepo,
+          liveRepos: args.getLiveRepos?.()
+        })
+        if (resolution.kind === 'rollback') {
+          appliedRollbacks.push({
+            kind: 'repo',
+            ...capturedRepo,
+            expectedLiveProjectGroupId: resolution.expectedLiveProjectGroupId,
+            expectedLiveOrder: resolution.expectedLiveOrder,
+            expectedLiveIsPinned: resolution.expectedLiveIsPinned
+          })
+        } else if (resolution.kind === 'reconcile') {
+          reconcileUncertainPrimary = true
+        }
+      }
+      return rollbackApplied(
+        !isRepoDropMutation(mutation) && mutation.updates.parentGroupId === undefined
       )
     }
+
+    if (isRepoDropMutation(mutation)) {
+      if (capturedRepo) {
+        appliedRollbacks.push({
+          kind: 'repo',
+          ...capturedRepo,
+          expectedLiveProjectGroupId: mutation.projectGroupId,
+          expectedLiveOrder: mutation.order,
+          expectedLiveIsPinned:
+            mutation.projectGroupId !== capturedRepo.previousProjectGroupId
+              ? false
+              : capturedRepo.previousIsPinned
+        })
+      }
+      continue
+    }
+    if (capturedGroup?.patch) {
+      appliedRollbacks.push({
+        kind: 'group',
+        groupId: mutation.groupId,
+        patch: capturedGroup.patch,
+        expectedLiveParentGroupId: args.expectedParentGroupId,
+        expectedLiveIsPinned:
+          mutation.updates.parentGroupId !== undefined
+            ? mutation.updates.isPinned === true
+            : capturedGroup.previousIsPinned,
+        ...(mutation.updates.tabOrder !== undefined
+          ? { expectedLiveTabOrder: mutation.updates.tabOrder }
+          : {}),
+        ...('rootProjectOrder' in mutation.updates
+          ? { expectedLiveRootProjectOrder: mutation.updates.rootProjectOrder ?? null }
+          : {})
+      })
+    }
   }
-  return { ok: true, appliedRollbacks }
+  if (args.onAfterMutations && !(await args.onAfterMutations())) {
+    return rollbackApplied(true)
+  }
+  return true
 }

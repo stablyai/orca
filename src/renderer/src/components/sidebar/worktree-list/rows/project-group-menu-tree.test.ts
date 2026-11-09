@@ -69,6 +69,53 @@ describe('buildJoinableProjectGroupMenuEntries', () => {
     ])
   })
 
+  it('orders pinned groups first within each level and respects rootProjectOrder for root groups', () => {
+    const groups: ProjectGroup[] = [
+      makeGroup('root-early-tab', {
+        name: 'Early Tab',
+        tabOrder: 0,
+        rootProjectOrder: 2000,
+        executionHostId: 'local'
+      }),
+      makeGroup('root-earlier-root-rank', {
+        name: 'Earlier Root Rank',
+        tabOrder: 5,
+        rootProjectOrder: 500,
+        executionHostId: 'local'
+      }),
+      makeGroup('root-pinned', {
+        name: 'Pinned Root',
+        tabOrder: 9,
+        rootProjectOrder: 9000,
+        isPinned: true,
+        executionHostId: 'local'
+      }),
+      makeGroup('sub-unpinned', {
+        name: 'Sub Unpinned',
+        parentGroupId: 'root-pinned',
+        tabOrder: 0,
+        executionHostId: 'local'
+      }),
+      makeGroup('sub-pinned', {
+        name: 'Sub Pinned',
+        parentGroupId: 'root-pinned',
+        tabOrder: 3,
+        isPinned: true,
+        executionHostId: 'local'
+      })
+    ]
+
+    expect(
+      buildJoinableProjectGroupMenuEntries(localRepo, groups).map((entry) => entry.group.id)
+    ).toEqual([
+      'root-pinned',
+      'sub-pinned',
+      'sub-unpinned',
+      'root-earlier-root-rank',
+      'root-early-tab'
+    ])
+  })
+
   it('picks the repo catalog copy when a colliding group id exists on multiple hosts', () => {
     const remoteRepo: Repo = {
       ...localRepo,

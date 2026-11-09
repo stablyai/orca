@@ -54,13 +54,25 @@ function buildOrderedGroupMenuTree(
     list.push(group)
     childrenByParent.set(parentId, list)
   }
-  for (const list of childrenByParent.values()) {
-    list.sort(
-      (left, right) =>
+  for (const [parentId, list] of childrenByParent) {
+    list.sort((left, right) => {
+      const byPin = (right.isPinned ? 1 : 0) - (left.isPinned ? 1 : 0)
+      if (byPin !== 0) {
+        return byPin
+      }
+      if (parentId === null) {
+        const leftRootOrder = left.rootProjectOrder ?? Number.NEGATIVE_INFINITY
+        const rightRootOrder = right.rootProjectOrder ?? Number.NEGATIVE_INFINITY
+        if (leftRootOrder !== rightRootOrder) {
+          return leftRootOrder < rightRootOrder ? -1 : 1
+        }
+      }
+      return (
         left.tabOrder - right.tabOrder ||
         compareSidebarText(left.name, right.name) ||
         compareCodePoints(left.id, right.id)
-    )
+      )
+    })
   }
 
   const selectableSubtreeById = new Map<string, boolean>()

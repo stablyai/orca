@@ -90,6 +90,7 @@ export const ProjectGroupUpdate = z.object({
     hookSettings: WorkspaceHookSettingsSchema.optional(),
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
+    isPinned: OptionalBoolean,
     tabOrder: OptionalFiniteNumber,
     rootProjectOrder: z.number().finite().nullable().optional(),
     color: OptionalString.nullable().optional(),
@@ -114,7 +115,8 @@ export const ProjectGroupMoveProject = z.object({
   repo: requiredString('Missing repo selector'),
   groupId: OptionalString.nullable(),
   order: OptionalFiniteNumber,
-  connectionId: z.string().nullable().optional()
+  connectionId: z.string().nullable().optional(),
+  isPinned: OptionalBoolean
 })
 
 export const ProjectGroupScanNested = z.object({
