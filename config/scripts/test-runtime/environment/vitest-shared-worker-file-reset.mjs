@@ -91,6 +91,11 @@ function installOnce(mocker) {
     mockPath(originalId, id, ...rest)
     resetImportersOf(mocker.evaluatedModules, id)
   }
+  const unmockPath = mocker.unmockPath.bind(mocker)
+  mocker.unmockPath = (id) => {
+    unmockPath(id)
+    resetImportersOf(mocker.evaluatedModules, id)
+  }
   const reset = mocker.reset.bind(mocker)
   // And re-run them against the real module before the next file imports them.
   mocker.reset = () => {
@@ -101,7 +106,8 @@ function installOnce(mocker) {
     }
     reset()
   }
-  const state = { pendingTimers: new Set(), clearTimer: () => {} }
+  // A file that assigns `process.env` swaps out the object Vitest's env stubs write to.
+  const state = { pendingTimers: new Set(), clearTimer: () => {}, env: process.env }
   trackTimers(state)
   mocker.orcaSharedWorkerState = state
   return state
@@ -110,6 +116,19 @@ function installOnce(mocker) {
 const mocker = globalThis.__vitest_mocker__
 const state = mocker ? installOnce(mocker) : undefined
 state?.pendingTimers.clear()
+if (state) {
+  // Async work from an earlier file can install globals after its reset ran; drop them before this file.
+  state.baselineGlobals ??= new Set(Reflect.ownKeys(globalThis))
+  const lateGlobals = Reflect.ownKeys(globalThis).filter(
+    (key) => !state.baselineGlobals.has(key) && !LAZY_GLOBAL_REGISTRY.test(String(key))
+  )
+  for (const key of lateGlobals) {
+    Reflect.deleteProperty(globalThis, key)
+  }
+  if (lateGlobals.length > 0) {
+    resetAllModules(mocker.evaluatedModules)
+  }
+}
 
 const initialGlobals = Object.getOwnPropertyDescriptors(globalThis)
 const initialProcess = Object.fromEntries(
@@ -135,10 +154,11 @@ function restoreProcessState() {
       Reflect.deleteProperty(globalThis, key)
     }
   }
-  for (const [key, descriptor] of Object.entries(initialGlobals)) {
+  for (const key of Reflect.ownKeys(initialGlobals)) {
+    const descriptor = initialGlobals[key]
     const current = Object.getOwnPropertyDescriptor(globalThis, key)
     if (!Object.is(current?.value, descriptor.value) || current?.get !== descriptor.get) {
-      leaks.globals.push(key)
+      leaks.globals.push(String(key))
       try {
         Object.defineProperty(globalThis, key, descriptor)
       } catch {
@@ -168,6 +188,10 @@ function restoreProcessState() {
     state.clearTimer(handle)
   }
   state?.pendingTimers.clear()
+  if (state && process.env !== state.env) {
+    leaks.process.push('process.env object')
+    process.env = state.env
+  }
   for (const key of Object.keys(process.env)) {
     if (!(key in initialEnv)) {
       delete process.env[key]
@@ -185,7 +209,10 @@ afterAll(async () => {
   await vi.dynamicImportSettled()
   // Runs Vitest's end-of-file spy restore now: a spy restored by hand would otherwise be re-applied after this hook.
   vi.restoreAllMocks()
-  vi.useRealTimers()
+  if (vi.isFakeTimers()) {
+    // Touching Vitest's clock builds it from the globals present now; leave that to a file that fakes timers.
+    vi.useRealTimers()
+  }
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   const leaks = restoreProcessState()

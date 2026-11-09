@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
 import { configDefaults, defaultExclude, defineConfig } from 'vitest/config'
 import {
+  CROSS_VERSION_WIRE_DIR,
   UNIT_INCLUDE,
   UNIT_EXCLUDE,
   UNIT_SETUP_FILES
@@ -135,7 +136,10 @@ const sharedWorkerFiles =
         process.cwd(),
         globSync(UNIT_INCLUDE)
           .map((file) => file.replaceAll('\\', '/'))
-          .filter((file) => !nodeRuntimeFiles.has(file)),
+          // Release-checkout journeys load other Orca versions into the realm; keep them apart.
+          .filter(
+            (file) => !nodeRuntimeFiles.has(file) && !file.startsWith(CROSS_VERSION_WIRE_DIR)
+          ),
         [
           { find: '@renderer', replacement: resolve('src/renderer/src') },
           { find: '@', replacement: resolve('src/renderer/src') }
@@ -151,9 +155,12 @@ const sharedProjects =
             name: `${runtimeProject.test.name}-shared`,
             include: sharedWorkerFiles,
             isolate: false,
+            // First, so a module reset at file start precedes every setup file's imports.
             setupFiles: [
-              ...runtimeProject.test.setupFiles,
-              resolve('config/scripts/test-runtime/environment/vitest-shared-worker-file-reset.mjs')
+              resolve(
+                'config/scripts/test-runtime/environment/vitest-shared-worker-file-reset.mjs'
+              ),
+              ...runtimeProject.test.setupFiles
             ]
           }
         }

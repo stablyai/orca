@@ -1,16 +1,18 @@
 import { readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 
-// vitest-shared-worker-file-reset.mjs undoes mocks, timers, stubs, env and cwd after each file.
-// These can't be undone between files, so a file that uses them keeps its own worker.
+// vitest-shared-worker-file-reset.mjs undoes mocks, module resets, timers, stubs, globals, env
+// and cwd after each file. A DOM environment can't be undone, so those files keep their own worker.
+// Vitest's fake clock keeps the timer globals present when a worker first uses it.
+const CLOCK_TIMER_GLOBAL = String.raw`(?:request|cancel)(?:AnimationFrame|IdleCallback)|(?:set|clear)Immediate|performance|queueMicrotask`
 const ISOLATION_REQUIRING_API = new RegExp(
   [
     // Opt-out for a file whose state leaks in ways the reset cannot see.
     String.raw`@orca-isolated-worker\b`,
-    String.raw`\bvi\.(?:doMock|unmock|doUnmock|resetModules)\(`,
     String.raw`@vitest-environment\s+(?!node\b)`,
-    String.raw`\bglobalThis(?:\.\w+|\[[^\]]+\])\s*=[^=]`,
-    String.raw`\bObject\.defineProperty\(\s*(?:globalThis|process|navigator|window|document)\b`
+    String.raw`\bglobalThis\.(?:${CLOCK_TIMER_GLOBAL})\s*=[^=]`,
+    String.raw`\bstubGlobal\(\s*['"](?:${CLOCK_TIMER_GLOBAL})['"]`,
+    String.raw`\bdefineProperty\(\s*globalThis\s*,\s*['"](?:${CLOCK_TIMER_GLOBAL})['"]`
   ].join('|')
 )
 const IMPORT_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)['"]([^'"]+)['"]/g

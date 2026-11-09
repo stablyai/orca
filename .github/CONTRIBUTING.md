@@ -125,7 +125,7 @@ Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes 
 
 Most unit files share a worker and its module cache with the files before them. After each file
 the worker undoes mocks, fake timers, stubs, env, cwd, and leftover timers, listeners, and globals.
-Files using `vi.doMock`, `vi.resetModules`, a DOM environment, or direct `globalThis` writes keep
+DOM-environment files and files that install timer globals such as `requestAnimationFrame` keep
 their own worker. If a file passes alone but fails after others, add `// @orca-isolated-worker`
 to it; `ORCA_VITEST_ISOLATE_EVERY_FILE=1` isolates every file to confirm a leak.
 
