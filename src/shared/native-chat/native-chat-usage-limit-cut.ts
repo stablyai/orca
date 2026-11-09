@@ -23,6 +23,14 @@ function usageLimitOfRow(item: AgentJournalRenderItem): AgentSessionUsageLimit |
   return fact?.kind === 'usageLimitReached' ? (fact.usageLimit ?? {}) : null
 }
 
+/** The usage limit that ended this turn, if one did. */
+export function nativeChatTurnUsageLimit(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string
+): AgentSessionUsageLimit | null {
+  return findInNativeChatTurn(items, turnItemId, usageLimitOfRow)
+}
+
 export type NativeChatUsageLimitCut = {
   turnItemId: string
   resetsAt?: number
@@ -56,7 +64,7 @@ export function latestNativeChatUsageLimitCut(
   if (!latest || latest.verdict !== 'failure') {
     return null
   }
-  const limit = findInNativeChatTurn(items, latest.turnItem.itemId, usageLimitOfRow)
+  const limit = nativeChatTurnUsageLimit(items, latest.turnItem.itemId)
   if (limit === null) {
     return null
   }
