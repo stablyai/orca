@@ -73,6 +73,7 @@ describe('projectGroups IPC validation', () => {
     registerRepoHandlers(
       mockWindow as never,
       mockStore as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These IPC cases use only the metadata owner's enqueue method; other runtime handlers are not invoked.
       {
         repositoryForkBackfill: {
           enqueue: vi.fn().mockResolvedValue(undefined),
