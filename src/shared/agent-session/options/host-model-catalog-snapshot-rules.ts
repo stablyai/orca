@@ -66,7 +66,11 @@ export function selectHostModelCatalogSnapshot(
   if (exact) {
     return exact
   }
-  let listed = snapshot.account
+  const account = snapshot.account
+  if (account && (account.origin === 'unknown' || account.models.length === 0)) {
+    return undefined
+  }
+  let listed = account
   if (!listed) {
     for (const answer of snapshot.byWorktree.values()) {
       if (answer.origin !== 'unknown' && answer.models.length > 0) {
@@ -75,12 +79,10 @@ export function selectHostModelCatalogSnapshot(
       }
     }
   }
-  if (!listed || (listed.origin !== 'unknown' && listed.modelsDifferByWorkspace)) {
+  if (!listed || listed.modelsDifferByWorkspace) {
     return undefined
   }
   if (
-    listed.origin === 'unknown' ||
-    listed.models.length === 0 ||
     !launch.newLaunch ||
     listed.listingNamesConfiguredModel === false ||
     listed.defaultHoldsInEveryWorkspace === true

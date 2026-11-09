@@ -141,7 +141,7 @@ it.each([
         newLaunch: true,
         seedsModel: false
       })
-    ).toEqual(answer)
+    ).toBeUndefined()
     mocks.call
       .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
       .mockRejectedValueOnce(new Error('refresh offline'))
