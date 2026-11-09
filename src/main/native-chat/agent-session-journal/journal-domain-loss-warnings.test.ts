@@ -131,6 +131,24 @@ it('preserves imported semantic duplicates across writers and body kinds until t
   ).toMatchObject({ outcomes: [{ kind: 'committed', wrote: true }] })
 })
 
+it('rejects a stale warning writer before suppressing a matching warning', async () => {
+  const f = domainLifecycleFixture(cleanups)
+  await f.run({ kind: 'steps', steps: [warning('a', 'first')] })
+  const originalId = agentJournalItemKey(warningIdentity('a', 'first'))
+  const original = f.item(originalId)
+  f.db.exec("UPDATE journal_chat_state SET highest_fence=2 WHERE session_id='chat'")
+  for (const lostKey of ['first', 'missing']) {
+    const result = await f.run({ kind: 'steps', steps: [warning('b', lostKey)] })
+    expect(result.value).toMatchObject({
+      outcomes: [],
+      failure: { code: 'journal_stale_fence' },
+      cursor: { epoch: 'epoch', sequence: 1 }
+    })
+    expect(result.publication?.items).toEqual([])
+  }
+  expect(f.item(originalId)).toEqual(original)
+})
+
 it('does not suppress a missing warning for hidden rows, another physical epoch or an alias alone', async () => {
   const f = domainLifecycleFixture(cleanups)
   const hidden = warningIdentity('old', 'hidden')

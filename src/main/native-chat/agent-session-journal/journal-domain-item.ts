@@ -71,6 +71,25 @@ export type JournalDomainItemCommit = {
 }
 
 /** Runs only on the owning writer connection, inside its command SAVEPOINT. */
+export function assertJournalDomainItemAuthority(
+  db: Database.Database,
+  target: { sessionId: string; epoch: string },
+  fence: number
+) {
+  if (!db.isTransaction) {
+    throw new Error('journal message requires its writer transaction')
+  }
+  const head = db
+    .prepare(`SELECT last_sequence, highest_fence, context_boundary FROM journal_chat_state
+    WHERE session_id=? AND epoch=?`)
+    .get(target.sessionId, target.epoch)
+  if (!head) {
+    throw new Error('journal message targets a retired chat epoch')
+  }
+  assertJournalFence(fence, Number(head.highest_fence))
+  return head
+}
+
 export function applyJournalDomainItem(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
@@ -78,19 +97,9 @@ export function applyJournalDomainItem(
   savedAt: number,
   stopSettle?: JournalStopSettleFact
 ): JournalDomainItemCommit {
-  if (!db.isTransaction) {
-    throw new Error('journal message requires its writer transaction')
-  }
   const { sessionId, epoch } = target
   const prefix = [sessionId, epoch] as const
-  const head = db
-    .prepare(`SELECT last_sequence, highest_fence, context_boundary FROM journal_chat_state
-    WHERE session_id=? AND epoch=?`)
-    .get(...prefix)
-  if (!head) {
-    throw new Error('journal message targets a retired chat epoch')
-  }
-  assertJournalFence(input.options.fence, Number(head.highest_fence))
+  const head = assertJournalDomainItemAuthority(db, target, input.options.fence)
   const cursor = { epoch, sequence: Number(head.last_sequence) }
   const empty: JournalDomainItemCommit = {
     cursor,

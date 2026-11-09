@@ -11,7 +11,7 @@ import type {
 } from './writing/journal-writer-step'
 import { resolveJournalTimelineItem } from './writing/journal-timeline-resolution'
 import { resolveProviderTimelineSettlement } from '../agent-session-timeline/provider-timeline-writer-resolution'
-import { applyJournalDomainItem } from './journal-domain-item'
+import { applyJournalDomainItem, assertJournalDomainItemAuthority } from './journal-domain-item'
 import { journalDomainTimelineReads } from './journal-domain-timeline-reads'
 import {
   applyJournalDomainLifecycle,
@@ -198,6 +198,9 @@ function writeStep(
     identity = step.identity
     body = step.body
   } else if (step.kind === 'resolved-item') {
+    if (step.resolution.kind === 'acp-loss-warning') {
+      assertJournalDomainItemAuthority(db, target, step.options.fence)
+    }
     const resolved = resolveJournalTimelineItem(
       view,
       step.resolution,
