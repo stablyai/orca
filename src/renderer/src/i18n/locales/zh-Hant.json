@@ -6024,7 +6024,9 @@
           "822ff300ad": "關閉",
           "5bfd5c8779": "關閉設定指令碼",
           "ignoresSharedSetup": "此存放庫會忽略共用的 <yaml>orca.yaml</yaml> 設定指令碼。請新增本機命令，或在「設定」中變更來源。",
-          "reviewSetupScript": "檢查設定指令碼"
+          "reviewSetupScript": "檢查設定指令碼",
+          "7275f674cc": "已偵測的設定",
+          "detectedFromSource": "從 <file>{{source}}</file> 偵測到"
         },
         "SetupScriptReviewDialog": {
           "title": "檢查設定指令碼",

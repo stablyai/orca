@@ -6167,7 +6167,9 @@
           "822ff300ad": "Kapat",
           "5bfd5c8779": "Kurulum betiklerini kapat",
           "ignoresSharedSetup": "Bu repo, paylaşılan <yaml>orca.yaml</yaml> kurulum betiklerini yok sayıyor. Yerel bir komut ekleyin veya Ayarlar bölümünde kaynağı değiştirin.",
-          "reviewSetupScript": "Kurulum betiğini incele"
+          "reviewSetupScript": "Kurulum betiğini incele",
+          "7275f674cc": "Algılanan kurulum",
+          "detectedFromSource": "<file>{{source}}</file> kaynağından algılandı"
         },
         "SetupScriptReviewDialog": {
           "title": "Kurulum betiğini incele",

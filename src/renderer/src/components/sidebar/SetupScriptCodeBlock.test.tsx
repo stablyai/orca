@@ -2,9 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { SetupScriptCodeBlock } from './SetupScriptCodeBlock'
-import { SetupScriptReviewDialog } from './SetupScriptReviewDialog'
 
 afterEach(cleanup)
 
@@ -34,29 +33,4 @@ it('shows a short script in full with no toggle', () => {
   render(<SetupScriptCodeBlock heading="Setup script" script={script(5)} />)
   expect(screen.getByLabelText('Setup script')).toHaveTextContent('echo step-5')
   expect(screen.queryByRole('button')).toBeNull()
-})
-
-it('enables Save in the review dialog only after a long script is expanded', () => {
-  const onSave = vi.fn()
-  render(
-    <SetupScriptReviewDialog
-      open
-      onOpenChange={() => {}}
-      repoDisplayName="acme-web"
-      setup={script(40)}
-      archive="echo bye"
-      skippedFields={['postStartCommand']}
-      provenance=".devcontainer/devcontainer.json"
-      isSaving={false}
-      onSave={onSave}
-    />
-  )
-  const save = screen.getByRole('button', { name: 'Save local setup' })
-  expect(save).toBeDisabled()
-
-  fireEvent.click(screen.getByRole('button', { name: 'Show 35 more lines' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Show less' }))
-  expect(save).toBeEnabled()
-  fireEvent.click(save)
-  expect(onSave).toHaveBeenCalledTimes(1)
 })

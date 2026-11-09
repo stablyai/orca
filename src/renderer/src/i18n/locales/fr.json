@@ -6022,7 +6022,9 @@
           "822ff300ad": "Ignorer",
           "5bfd5c8779": "Ignorer les scripts de setup",
           "ignoresSharedSetup": "Ce dépôt ignore les scripts de setup partagés de <yaml>orca.yaml</yaml>. Ajoutez une commande locale ou changez la source dans les paramètres.",
-          "reviewSetupScript": "Vérifier le script de setup"
+          "reviewSetupScript": "Vérifier le script de setup",
+          "7275f674cc": "Setup détecté",
+          "detectedFromSource": "Détecté dans <file>{{source}}</file>"
         },
         "SetupScriptReviewDialog": {
           "title": "Vérifier le script de setup",

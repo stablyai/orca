@@ -5538,7 +5538,9 @@
           "822ff300ad": "閉じる",
           "5bfd5c8779": "セットアップスクリプトを閉じる",
           "ignoresSharedSetup": "このリポジトリは共有の <yaml>orca.yaml</yaml> セットアップスクリプトを無視します。ローカルコマンドを追加するか、設定でソースを変更してください。",
-          "reviewSetupScript": "セットアップスクリプトを確認"
+          "reviewSetupScript": "セットアップスクリプトを確認",
+          "7275f674cc": "検出されたセットアップ",
+          "detectedFromSource": "<file>{{source}}</file> から検出"
         },
         "SetupScriptReviewDialog": {
           "title": "セットアップスクリプトを確認",

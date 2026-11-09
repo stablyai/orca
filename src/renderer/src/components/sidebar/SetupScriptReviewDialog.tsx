@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { Download, LoaderCircle } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import {
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { isSetupScriptCollapsible, SetupScriptCodeBlock } from './SetupScriptCodeBlock'
+import { SetupScriptCodeBlock } from './SetupScriptCodeBlock'
 
 export type SetupScriptReviewDialogProps = {
   open: boolean
@@ -67,8 +67,9 @@ export function SetupScriptReviewDialog({
   const t = useTranslate()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent scrollable className="sm:max-w-xl">
-        <DialogHeader>
+      {/* Viewport-capped column: only the middle scrolls, so the title and Save stay visible for any script length. */}
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle size="compact">
             {t('auto.components.sidebar.SetupScriptReviewDialog.title', 'Review setup script')}
           </DialogTitle>
@@ -93,87 +94,43 @@ export function SetupScriptReviewDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ReviewedScripts
-          // A re-inspected candidate is new text, so it must be revealed again.
-          key={`${setup}\0${archive ?? ''}`}
-          setup={setup}
-          archive={archive}
-          skippedFields={skippedFields}
-          isSaving={isSaving}
-          onCancel={() => onOpenChange(false)}
-          onSave={onSave}
-        />
+        <div className="-mx-6 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto scrollbar-sleek px-6">
+          <SetupScriptCodeBlock
+            heading={t(
+              'auto.components.sidebar.SetupScriptReviewDialog.setupScript',
+              'Setup script'
+            )}
+            script={setup}
+          />
+          {archive ? (
+            <SetupScriptCodeBlock
+              heading={t(
+                'auto.components.sidebar.SetupScriptReviewDialog.archiveScript',
+                'Archive script'
+              )}
+              script={archive}
+            />
+          ) : null}
+
+          {skippedFields.length > 0 ? <SkippedFieldsList fields={skippedFields} /> : null}
+        </div>
+
+        <DialogFooter className="shrink-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button onClick={onSave} disabled={isSaving}>
+            {isSaving ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              <Download className="size-3.5" />
+            )}
+            <span className={cn(isSaving && 'text-muted-foreground')}>
+              {t('auto.components.sidebar.SetupScriptReviewDialog.save', 'Save local setup')}
+            </span>
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-// Lives inside DialogContent, which unmounts on close, so every opening starts unrevealed.
-function ReviewedScripts({
-  setup,
-  archive,
-  skippedFields,
-  isSaving,
-  onCancel,
-  onSave
-}: {
-  setup: string
-  archive: string | null
-  skippedFields: readonly string[]
-  isSaving: boolean
-  onCancel: () => void
-  onSave: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const [setupRevealed, setSetupRevealed] = useState(false)
-  const [archiveRevealed, setArchiveRevealed] = useState(false)
-  // Imported scripts are saved verbatim, so Save waits until every collapsed line has been shown.
-  const fullyShown =
-    (setupRevealed || !isSetupScriptCollapsible(setup)) &&
-    (archive === null || archiveRevealed || !isSetupScriptCollapsible(archive))
-  return (
-    <>
-      <SetupScriptCodeBlock
-        heading={t('auto.components.sidebar.SetupScriptReviewDialog.setupScript', 'Setup script')}
-        script={setup}
-        onExpand={() => setSetupRevealed(true)}
-      />
-      {archive ? (
-        <SetupScriptCodeBlock
-          heading={t(
-            'auto.components.sidebar.SetupScriptReviewDialog.archiveScript',
-            'Archive script'
-          )}
-          script={archive}
-          onExpand={() => setArchiveRevealed(true)}
-        />
-      ) : null}
-
-      {skippedFields.length > 0 ? <SkippedFieldsList fields={skippedFields} /> : null}
-
-      <DialogFooter className="sm:items-center">
-        {fullyShown ? null : (
-          <p className="text-xs text-muted-foreground sm:mr-auto">
-            {t(
-              'auto.components.sidebar.SetupScriptReviewDialog.showFullToSave',
-              'Show the full script to save it.'
-            )}
-          </p>
-        )}
-        <Button variant="outline" onClick={onCancel}>
-          {t('common.cancel', 'Cancel')}
-        </Button>
-        <Button onClick={onSave} disabled={isSaving || !fullyShown}>
-          {isSaving ? (
-            <LoaderCircle className="size-3.5 animate-spin" />
-          ) : (
-            <Download className="size-3.5" />
-          )}
-          <span className={cn(isSaving && 'text-muted-foreground')}>
-            {t('auto.components.sidebar.SetupScriptReviewDialog.save', 'Save local setup')}
-          </span>
-        </Button>
-      </DialogFooter>
-    </>
   )
 }

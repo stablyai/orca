@@ -6183,7 +6183,9 @@
           "822ff300ad": "Ausblenden",
           "5bfd5c8779": "Setup-Skripte ausblenden",
           "ignoresSharedSetup": "Dieses Repo ignoriert gemeinsame Einrichtungsskripte aus <yaml>orca.yaml</yaml>. Einen lokalen Befehl hinzufügen oder die Quelle in den Einstellungen ändern.",
-          "reviewSetupScript": "Einrichtungsskript prüfen"
+          "reviewSetupScript": "Einrichtungsskript prüfen",
+          "7275f674cc": "Erkanntes Setup",
+          "detectedFromSource": "In <file>{{source}}</file> erkannt"
         },
         "SetupScriptReviewDialog": {
           "title": "Einrichtungsskript prüfen",

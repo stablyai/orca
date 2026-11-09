@@ -12,6 +12,12 @@ const longSetup = Array.from({ length: 40 }, (_, index) => {
     : `pnpm --filter @acme/pkg-${step} run setup`
 }).join('\n')
 
+const hugeSetup = Array.from(
+  { length: 2000 },
+  (_, index) =>
+    `echo "step ${index + 1}" && ./scripts/run-step.sh --index=${index + 1} ${'--flag=value '.repeat(20)}`
+).join('\n')
+
 const base = {
   repoBadgeColor: '#7c3aed',
   repoDisplayName: 'acme-web',
@@ -97,19 +103,45 @@ export const devcontainerReview = defineFixture({
   interact: openReview
 })
 
+async function openReviewExpanded(frame: HTMLElement): Promise<void> {
+  await openReview(frame)
+  for (const toggle of document.querySelectorAll<HTMLButtonElement>(
+    'button[aria-expanded="false"][aria-controls]'
+  )) {
+    toggle.click()
+  }
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+}
+
 export const devcontainerReviewExpanded = defineFixture({
   ...devcontainer,
   width: 720,
-  interact: async (frame) => {
-    await openReview(frame)
-    document
-      .querySelector<HTMLButtonElement>('button[aria-expanded="false"][aria-controls]')
-      ?.click()
-    await new Promise((resolve) => setTimeout(resolve, 400))
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur()
-    }
-  }
+  interact: openReviewExpanded
+})
+
+// 2,000 long lines in setup and archive: the dialog must stay within the viewport with Save visible.
+export const hugeReviewExpanded = defineFixture({
+  width: 720,
+  render: () => (
+    <Frame>
+      <SetupScriptPromptCardShell
+        {...base}
+        isPackageManagerSuggestion={false}
+        candidateSource="GitHub Copilot setup steps"
+        candidateProvenance=".github/workflows/copilot-setup-steps.yml"
+        detectedSetupPreview={{
+          setup: hugeSetup,
+          archive: hugeSetup,
+          editable: false,
+          skippedFields: Array.from({ length: 30 }, (_, index) => `steps.${index}.uses`)
+        }}
+      />
+    </Frame>
+  ),
+  interact: openReviewExpanded
 })
 
 export const packageManager = defineFixture({

@@ -5538,7 +5538,9 @@
           "822ff300ad": "关闭",
           "5bfd5c8779": "关闭安装脚本",
           "ignoresSharedSetup": "此仓库会忽略共享的 <yaml>orca.yaml</yaml> 设置脚本。请添加本地命令，或在“设置”中更改来源。",
-          "reviewSetupScript": "查看设置脚本"
+          "reviewSetupScript": "查看设置脚本",
+          "7275f674cc": "已检测的设置",
+          "detectedFromSource": "从 <file>{{source}}</file> 已检测"
         },
         "SetupScriptReviewDialog": {
           "title": "查看设置脚本",

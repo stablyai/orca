@@ -1,5 +1,5 @@
 import React from 'react'
-import { Check, LoaderCircle, RefreshCw, ScrollText, Settings, X } from 'lucide-react'
+import { Check, LoaderCircle, PackageCheck, RefreshCw, ScrollText, Settings, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -41,25 +41,47 @@ function DismissButton({ onDismiss }: DismissButtonProps): React.JSX.Element {
 export type DetectedSetupPreviewProps = {
   setup: string
   onSetupChange: (value: string) => void
+  provenance: string | null
 }
 
+// Package-manager guesses only: imports are summarized in one line and reviewed in a dialog.
 export function DetectedSetupPreview({
   setup,
-  onSetupChange
+  onSetupChange,
+  provenance
 }: DetectedSetupPreviewProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <textarea
-      value={setup}
-      aria-label={t(
-        'auto.components.sidebar.SetupScriptPromptCardViews.fdbc6cb064',
-        'Detected setup script'
-      )}
-      onChange={(event) => onSetupChange(event.target.value)}
-      spellCheck={false}
-      rows={getDetectedSetupScriptTextareaRows(setup)}
-      className="setup-script-prompt-command mt-2 max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    />
+    <div className="mt-3 border-t border-worktree-sidebar-border pt-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <PackageCheck className="size-3.5" />
+        {t('auto.components.sidebar.SetupScriptPromptCardViews.7275f674cc', 'Detected setup')}
+      </div>
+      <textarea
+        value={setup}
+        aria-label={t(
+          'auto.components.sidebar.SetupScriptPromptCardViews.fdbc6cb064',
+          'Detected setup script'
+        )}
+        onChange={(event) => onSetupChange(event.target.value)}
+        spellCheck={false}
+        rows={getDetectedSetupScriptTextareaRows(setup)}
+        className="setup-script-prompt-command max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      {provenance ? (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          <Trans
+            i18n={i18n}
+            defaults={t(
+              'auto.components.sidebar.SetupScriptPromptCardViews.detectedFromSource',
+              'Detected from <file>{{source}}</file>'
+            )}
+            values={{ source: provenance }}
+            components={{ file: <code className="rounded bg-muted px-1 py-0.5" /> }}
+          />
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -173,17 +195,7 @@ export function SetupScriptPromptBody({
   }
   const sourceElement = <span className="break-words text-foreground" />
   if (isPackageManagerSuggestion) {
-    return candidateSource ? (
-      <Trans
-        i18n={i18n}
-        defaults={t(
-          'auto.components.sidebar.SetupScriptPromptCardViews.suggestedFromSource',
-          'Suggested from <file>{{source}}</file>. Save it to run for new worktrees.'
-        )}
-        values={{ source: candidateSource }}
-        components={{ file: sourceElement }}
-      />
-    ) : (
+    return (
       <>
         {t(
           'auto.components.sidebar.SetupScriptPromptCardViews.aef6c0a213',

@@ -6447,7 +6447,8 @@
           "888b83bf78": "Failed to save setup script",
           "a49196d538": "Runs when Orca creates a new worktree.",
           "savedSetupCommand": "Saved the setup command.",
-          "savedInProjectSettings": "Saved in this <settings>project's settings</settings>"
+          "savedInProjectSettings": "Saved in this <settings>project's settings</settings>",
+          "importTitle": "Import setup script"
         },
         "SetupScriptPromptCardViews": {
           "3933401d28": "Configure",
@@ -6464,7 +6465,8 @@
           "ignoresSharedSetup": "This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.",
           "reviewSetupScript": "Review setup script",
           "foundSetupScriptIn": "Found a setup script in <file>{{source}}</file>.",
-          "suggestedFromSource": "Suggested from <file>{{source}}</file>. Save it to run for new worktrees."
+          "7275f674cc": "Detected setup",
+          "detectedFromSource": "Detected from <file>{{source}}</file>"
         },
         "SetupScriptReviewDialog": {
           "title": "Review setup script",
@@ -6474,8 +6476,7 @@
           "save": "Save local setup",
           "descriptionWithSource": "From <file>{{source}}</file>. Saving runs this whenever Orca creates a worktree for {{repo}}.",
           "notImported": "Not imported",
-          "notImportedHint": "These settings have no Orca equivalent and won't be saved.",
-          "showFullToSave": "Show the full script to save it."
+          "notImportedHint": "These settings have no Orca equivalent and won't be saved."
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",

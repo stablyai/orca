@@ -10,21 +10,12 @@ const LINE_HEIGHT_PX = 20
 // py-1.5 plus room for a horizontal scrollbar, so the last line is never clipped.
 const BLOCK_PADDING_PX = 20
 
-export function isSetupScriptCollapsible(script: string): boolean {
-  return (
-    countScriptTextareaLines(script, SETUP_SCRIPT_COLLAPSED_LINES + 1) >
-    SETUP_SCRIPT_COLLAPSED_LINES
-  )
-}
-
 export function SetupScriptCodeBlock({
   heading,
-  script,
-  onExpand
+  script
 }: {
   heading: string
   script: string
-  onExpand?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const contentId = useId()
@@ -39,14 +30,11 @@ export function SetupScriptCodeBlock({
       // Collapsing keeps the scroll offset, so reset it to show the script's first lines.
       preRef.current.scrollTop = 0
     }
-    if (!expanded) {
-      onExpand?.()
-    }
     setExpanded(!expanded)
   }
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-md border border-border/70 bg-muted/35">
+    <section className="min-w-0 shrink-0 overflow-hidden rounded-md border border-border/70 bg-muted/35">
       <h3 className="px-3 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {heading}
       </h3>

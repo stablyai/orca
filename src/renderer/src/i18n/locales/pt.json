@@ -11810,7 +11810,9 @@
           "822ff300ad": "Descartar",
           "5bfd5c8779": "Descartar scripts de configuração",
           "ignoresSharedSetup": "Este repositório ignora scripts de configuração compartilhados de <yaml>orca.yaml</yaml>. Adicione um comando local ou altere a origem em Configurações.",
-          "reviewSetupScript": "Revisar script de configuração"
+          "reviewSetupScript": "Revisar script de configuração",
+          "7275f674cc": "Configuração detectada",
+          "detectedFromSource": "Detectado em <file>{{source}}</file>"
         },
         "SetupScriptReviewDialog": {
           "title": "Revisar script de configuração",
