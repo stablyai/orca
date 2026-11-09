@@ -27,7 +27,10 @@ function warningIdentity(namespace: string, lostKey: string, agent = 'grok') {
   })
 }
 
-const warning = (namespace: string, lostKey: string): JournalWriterStep => ({
+const warning = (
+  namespace: string,
+  lostKey: string
+): Extract<JournalWriterStep, { kind: 'resolved-item' }> => ({
   kind: 'resolved-item',
   options,
   reservedBytes: 4096,
@@ -131,20 +134,33 @@ it('preserves imported semantic duplicates across writers and body kinds until t
   ).toMatchObject({ outcomes: [{ kind: 'committed', wrote: true }] })
 })
 
-it('rejects a stale warning writer before suppressing a matching warning', async () => {
+it('rejects stale direct and nested warning writers before suppressing a matching warning', async () => {
   const f = domainLifecycleFixture(cleanups)
   await f.run({ kind: 'steps', steps: [warning('a', 'first')] })
   const originalId = agentJournalItemKey(warningIdentity('a', 'first'))
   const original = f.item(originalId)
   f.db.exec("UPDATE journal_chat_state SET highest_fence=2 WHERE session_id='chat'")
   for (const lostKey of ['first', 'missing']) {
-    const result = await f.run({ kind: 'steps', steps: [warning('b', lostKey)] })
-    expect(result.value).toMatchObject({
-      outcomes: [],
-      failure: { code: 'journal_stale_fence' },
-      cursor: { epoch: 'epoch', sequence: 1 }
-    })
-    expect(result.publication?.items).toEqual([])
+    const direct = warning('b', lostKey)
+    const nested: JournalWriterStep = {
+      ...direct,
+      resolution: {
+        kind: 'stop-decided',
+        turnId: 'turn',
+        endedAt: 2,
+        ran: direct.resolution,
+        stopped: null
+      }
+    }
+    for (const step of [direct, nested]) {
+      const result = await f.run({ kind: 'steps', steps: [step] })
+      expect(result.value).toMatchObject({
+        outcomes: [],
+        failure: { code: 'journal_stale_fence' },
+        cursor: { epoch: 'epoch', sequence: 1 }
+      })
+      expect(result.publication?.items).toEqual([])
+    }
   }
   expect(f.item(originalId)).toEqual(original)
 })

@@ -198,9 +198,7 @@ function writeStep(
     identity = step.identity
     body = step.body
   } else if (step.kind === 'resolved-item') {
-    if (step.resolution.kind === 'acp-loss-warning') {
-      assertJournalDomainItemAuthority(db, target, step.options.fence)
-    }
+    assertJournalDomainItemAuthority(db, target, step.options.fence)
     const resolved = resolveJournalTimelineItem(
       view,
       step.resolution,
