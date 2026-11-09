@@ -72,8 +72,7 @@ describe('chat launcher argv', () => {
                   })(sessionIdentity)
               : createAcpStructuredLaunchResolver(spec, {
                   savedSession: {
-                    hasProviderTurn: async () => false,
-                    savedItemIds: async () => new Set()
+                    hasProviderTurn: async () => false
                   },
                   ...common,
                   resolveCommand: () => process.execPath,
