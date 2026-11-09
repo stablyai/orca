@@ -6,16 +6,19 @@ import type {
   OrcaProfileOrgMemberMutationResult
 } from '../../../../../shared/orca-profiles'
 
+// i18next plurals (`_one` / `_other` in the catalogs), never ternaries.
 export function seatCountLabel(count: number, t: Translate): string {
-  return count === 1
-    ? t('auto.components.billing.team.oneSeat', '1 seat')
-    : t('auto.components.billing.team.seatsN', '{{value0}} seats', { value0: String(count) })
+  return t('auto.components.billing.team.seatCount', '{{count}} seats', {
+    count,
+    defaultValue_one: '{{count}} seat'
+  })
 }
 
 export function memberCountLabel(count: number, t: Translate): string {
-  return count === 1
-    ? t('auto.components.billing.team.oneMember', '1 member')
-    : t('auto.components.billing.team.membersN', '{{value0}} members', { value0: String(count) })
+  return t('auto.components.billing.team.memberCount', '{{count}} members', {
+    count,
+    defaultValue_one: '{{count}} member'
+  })
 }
 
 export function roleDescription(role: OrcaOrgRole, t: Translate): string {
@@ -94,7 +97,10 @@ export function mutationFailureCopy(
         'Too many team changes at once. Wait a minute and try again.'
       )
     case 'reconnect-required':
-      return t('auto.components.billing.openSignedOut', 'Sign in to Orca again to manage billing.')
+      return t(
+        'auto.components.billing.openSignedOut2',
+        'Sign in to Orca again to manage your team.'
+      )
     case 'unconfigured':
       return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
     case 'failed':
@@ -122,7 +128,10 @@ export function createTeamFailureCopy(
         'Too many team changes at once. Wait a minute and try again.'
       )
     case 'reconnect-required':
-      return t('auto.components.billing.openSignedOut', 'Sign in to Orca again to manage billing.')
+      return t(
+        'auto.components.billing.openSignedOut2',
+        'Sign in to Orca again to manage your team.'
+      )
     case 'unconfigured':
       return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
     case 'failed':

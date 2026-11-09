@@ -42,29 +42,34 @@ export function TeamPlanCard({
 
   const features = [
     t(
-      'auto.components.billing.plans.featureHours2',
-      '{{value0}} Standard hours (4 vCPU / 8 GB) per seat each month, pooled across your team',
+      'auto.components.billing.plans.featureHours4',
+      '{{value0}} sandbox hours per seat each month, pooled across your team',
       { value0: String(team.includedHoursPerSeat) }
     ),
     t(
-      'auto.components.billing.plans.featureLarge2',
-      'Large (8 vCPU / 16 GB) uses hours at {{value0}}×',
+      'auto.components.billing.plans.featureLarge3',
+      'Standard (4 vCPU · 8 GB) sandboxes; Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate',
       {
         value0: String(team.largeMachineWeight)
       }
     ),
-    t('auto.components.billing.plans.featureConcurrency', '{{value0}} running sandboxes per seat', {
-      value0: String(team.concurrentSandboxesPerSeat)
-    }),
+    t(
+      'auto.components.billing.plans.featureConcurrency2',
+      '{{value0}} sandboxes running at once per seat',
+      {
+        value0: String(team.concurrentSandboxesPerSeat)
+      }
+    ),
     t('auto.components.billing.plans.featureSleep2', 'Sleeps after {{value0}} minutes idle', {
       value0: String(team.idleSleepMinutes)
     }),
     t(
-      'auto.components.billing.plans.featureOverage',
-      'Optional overage at {{value0}}/hr ({{value1}}/hr Large) with a monthly spend cap',
+      'auto.components.billing.plans.featureOverage3',
+      'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), capped at a monthly spend cap you set ({{value2}} by default)',
       {
         value0: formatCents(team.overageCentsPerHour, locale),
-        value1: formatCents(team.overageCentsPerHour * team.largeMachineWeight, locale)
+        value1: formatCents(team.overageCentsPerHour * team.largeMachineWeight, locale),
+        value2: formatCents(team.defaultSpendCapCents, locale)
       }
     )
   ]
@@ -193,8 +198,8 @@ export function TeamPlanCard({
         <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <p className="text-pretty">
           {t(
-            'auto.components.billing.plans.lockedBody',
-            'Only an owner or admin of your org can choose a plan. Ask one of them to open Plan & billing in Orca.'
+            'auto.components.billing.plans.lockedBody2',
+            'Only an owner or admin of your team can choose a plan. Ask one of them to open Plan & billing in Orca.'
           )}
         </p>
       </div>

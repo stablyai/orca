@@ -26,7 +26,7 @@ export function TeamSettingsLink({
       <button
         type="button"
         onClick={() => openTeamPage()}
-        className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left shadow-xs transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left shadow-xs transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:outline-none"
       >
         {orgName ? <TeamMark name={orgName} className="size-8 text-xs" /> : null}
         <span className="min-w-0 flex-1">

@@ -204,6 +204,20 @@
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}"
         }
       },
+      "billing": {
+        "team": {
+          "invitedCount_one": "{{count}} invited",
+          "invitedCount_other": "{{count}} invited",
+          "memberCount_one": "{{count}} member",
+          "memberCount_other": "{{count}} members",
+          "seatCount_one": "{{count}} seat",
+          "seatCount_other": "{{count}} seats",
+          "sendInvites_one": "Send {{count}} invite",
+          "sendInvites_other": "Send {{count}} invites",
+          "skipInvalid_one": "Skipping {{count}} invalid entry.",
+          "skipInvalid_other": "Skipping {{count}} invalid entries."
+        }
+      },
       "browser-pane": {
         "markup": {
           "errorAttach": "Could not attach the markup screenshot.",

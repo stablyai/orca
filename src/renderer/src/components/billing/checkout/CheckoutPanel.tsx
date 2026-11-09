@@ -68,7 +68,9 @@ function OrderSummary({
       </div>
       <div className="flex items-baseline justify-between gap-3 border-t border-border/60 pt-2">
         <dt className="font-medium">
-          {t('auto.components.billing.checkout.dueToday', 'Due today')}
+          {phase.kind === 'paid'
+            ? t('auto.components.billing.checkout.paidRow', 'Paid')
+            : t('auto.components.billing.checkout.dueToday', 'Due today')}
         </dt>
         <dd className="text-base font-semibold tabular-nums">
           {total === null ? '—' : formatCents(total, locale)}
@@ -253,8 +255,8 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
       <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <Lock className="size-3" />
         {t(
-          'auto.components.billing.checkout.secured',
-          'Payments by Stripe · Cards, Apple Pay and Link · 3-D Secure'
+          'auto.components.billing.checkout.secured2',
+          'Payments by Stripe · Cards, Apple Pay and Link · Bank verification'
         )}
       </p>
     </div>

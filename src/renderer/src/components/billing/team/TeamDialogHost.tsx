@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -73,13 +73,30 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
       }))
       .then(async (outcome) => {
         if (outcome.status === 'created') {
-          await selectOrg(outcome.orgId)
+          // Clear "create" first so the remount for the new team lands on its page, not a blank form.
           clearTeamPageArrival()
-          toast.success(
-            t('auto.components.billing.team.createdToast', '{{value0}} created', {
-              value0: outcome.name
-            })
-          )
+          const selected = await selectOrg(outcome.orgId)
+          if (selected?.status === 'selected') {
+            toast.success(
+              t('auto.components.billing.team.createdToast', '{{value0}} created', {
+                value0: outcome.name
+              })
+            )
+          } else {
+            toast.error(
+              t(
+                'auto.components.billing.team.createdNotSwitched',
+                '{{value0}} was created, but Orca couldn’t switch to it.',
+                { value0: outcome.name }
+              ),
+              {
+                action: {
+                  label: t('auto.components.billing.team.switch', 'Switch'),
+                  onClick: () => void selectOrg(outcome.orgId)
+                }
+              }
+            )
+          }
         } else if (outcome.status === 'unsupported') {
           setCreateUnavailable(true)
         } else {
@@ -90,6 +107,7 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
   }
 
   const switchOrg = (target: string): void => {
+    clearTeamPageArrival()
     setSwitchingOrgId(target)
     void selectOrg(target).finally(() => setSwitchingOrgId(null))
   }
@@ -225,6 +243,15 @@ export function TeamDialogHost(): React.JSX.Element {
   const { open, arrival } = useTeamPageState()
   // Remount per team so optimistic rows and row errors never carry over to another org.
   const orgKey = useAppStore((state) => state.orcaProfileAuthStatus?.cloud?.activeOrgId ?? 'none')
+  // An arrival (create mode, or the post-checkout welcome) belongs to the team it was opened for;
+  // switching teams drops it so it never shows on another team.
+  const arrivalOrg = useRef(orgKey)
+  useEffect(() => {
+    if (arrivalOrg.current !== orgKey) {
+      arrivalOrg.current = orgKey
+      clearTeamPageArrival()
+    }
+  }, [orgKey])
   return (
     <Dialog
       open={open}

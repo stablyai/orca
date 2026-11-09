@@ -226,3 +226,20 @@ export const invitePasted = defineFixture({
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 })
+
+/** Short roster so the Enterprise SSO row and Leave sit inside the frame. */
+export const ssoAndLeave = defineFixture({
+  width,
+  render: () => (
+    <Page
+      roster={{
+        status: 'ok',
+        roster: {
+          ...roster,
+          members: [roster.members[0]!, { ...roster.members[1]!, role: 'owner' }],
+          pendingInvites: []
+        }
+      }}
+    />
+  )
+})

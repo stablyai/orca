@@ -1,5 +1,7 @@
 import { Crown, LogOut, MailPlus, MoreHorizontal, UserMinus, XCircle } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,7 +70,7 @@ function RoleControl({
   const member = row.member
   if (!row.manageable) {
     return (
-      <span className="w-28 shrink-0 text-right text-xs text-muted-foreground">
+      <span className="w-28 shrink-0 pl-3 text-left text-sm text-muted-foreground">
         {roleLabel(member.role, t)}
       </span>
     )
@@ -239,16 +241,9 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                     </span>
                   ) : null}
                   {row.status === 'active' ? null : (
-                    <span
-                      className={cn(
-                        'shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium leading-4',
-                        row.status === 'invited'
-                          ? 'border-callout-note/40 bg-callout-note/10 text-callout-note'
-                          : 'border-border text-muted-foreground'
-                      )}
-                    >
+                    <Badge variant="outline" className="shrink-0">
                       {memberStatusLabel(row.status, t)}
-                    </span>
+                    </Badge>
                   )}
                 </p>
                 {secondary ? (
@@ -264,17 +259,13 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                   onChange={(role) => props.onChangeRole(row.member, role)}
                 />
               ) : (
-                <span className="w-28 shrink-0 text-right text-xs text-muted-foreground">
+                <span className="w-28 shrink-0 pl-3 text-left text-sm text-muted-foreground">
                   {roleLabel(row.invite.role, t)}
                 </span>
               )}
               <RowMenu row={row} props={props} />
             </div>
-            {state.error ? (
-              <p role="alert" className="mt-1 pl-9 text-xs text-destructive">
-                {state.error}
-              </p>
-            ) : null}
+            {state.error ? <InlineError className="mt-2 ml-9" title={state.error} /> : null}
           </li>
         )
       })}

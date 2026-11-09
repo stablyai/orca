@@ -21,7 +21,7 @@ export function EnterprisePlanCard({
           {enterprise.label}
         </>
       }
-      price={<p className="text-3xl font-semibold tracking-tight">{enterprise.priceLabel}</p>}
+      price={<p className="text-xl font-semibold tracking-tight">{enterprise.priceLabel}</p>}
       priceNote={t('auto.components.billing.plans.entPriced', 'Priced for your organization')}
       featuresLead={t('auto.components.billing.plans.entLead', 'Everything in Team, plus:')}
       features={[
