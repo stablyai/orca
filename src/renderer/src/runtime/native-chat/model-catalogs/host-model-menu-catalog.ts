@@ -75,25 +75,7 @@ class HostModelMenuCatalog {
           this.pending = undefined
           this.publish({ pending: false })
         } else {
-          const exact = change.worktree === (this.scope.worktree ?? null)
-          const current = this.snapshot.answer
-          if (
-            !exact &&
-            change.worktree !== null &&
-            current &&
-            !current.listingInProgress &&
-            (current.origin === 'unknown' || current.models.length === 0)
-          ) {
-            return
-          }
-          const held = this.held()
-          const retired =
-            !change.catalog.listingInProgress &&
-            (change.catalog.origin === 'unknown' || change.catalog.models.length === 0)
-          this.publish({
-            ...this.snapshot,
-            answer: exact && retired ? change.catalog : held
-          })
+          this.publish({ ...this.snapshot, answer: this.held() })
         }
       }
     )

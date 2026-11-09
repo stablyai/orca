@@ -13,7 +13,7 @@ export type HostModelCatalogSnapshot = {
   readonly account: ListedHostModelCatalog | null
   /** A new chat's answer per worktree (`''` when it named none): only it says whether that
    *  workspace's own config replaces the listed default. */
-  readonly byWorktree: ReadonlyMap<string, ListedHostModelCatalog>
+  readonly byWorktree: ReadonlyMap<string, AgentSessionModelCatalogResult>
 }
 
 export type HostModelCatalogLaunch = { newLaunch: boolean; worktree?: string; seedsModel: boolean }
@@ -49,7 +49,15 @@ export function selectHostModelCatalogSnapshot(
   if (exact) {
     return exact
   }
-  const listed = snapshot.account ?? snapshot.byWorktree.values().next().value
+  let listed = snapshot.account
+  if (!listed) {
+    for (const answer of snapshot.byWorktree.values()) {
+      if (answer.origin !== 'unknown' && answer.models.length > 0) {
+        listed = answer
+        break
+      }
+    }
+  }
   if (!listed || listed.modelsDifferByWorkspace) {
     return undefined
   }
@@ -64,7 +72,7 @@ export function selectHostModelCatalogSnapshot(
 }
 
 /** The snapshot after a host answer for `worktree` (null for a session-less read); undefined means keep none.
- *  An unknown or empty answer proves absence and retires what it answered for. One whose listing is
+ *  An unknown or empty answer is retained for its scope so an older fallback cannot revive it. One whose listing is
  *  still running proves nothing yet: it never replaces or retires a held list, but may fill an empty scope. */
 export function withHostModelCatalogAnswer(
   snapshot: HostModelCatalogSnapshot | undefined,
@@ -82,18 +90,13 @@ export function withHostModelCatalogAnswer(
     }
   }
   if (!listed) {
-    if (worktree === null || !snapshot) {
+    if (worktree === null) {
       return undefined
     }
-    if (!snapshot.byWorktree.has(worktree)) {
-      return snapshot
-    }
-    const retired = snapshot.byWorktree.get(worktree)
-    const byWorktree = new Map(snapshot.byWorktree)
-    byWorktree.delete(worktree)
+    const retired = snapshot?.byWorktree.get(worktree)
     return {
-      account: retired && snapshot.account === retired ? null : snapshot.account,
-      byWorktree
+      account: retired && snapshot?.account === retired ? null : (snapshot?.account ?? null),
+      byWorktree: new Map(snapshot?.byWorktree).set(worktree, catalog)
     }
   }
   if (worktree === null) {

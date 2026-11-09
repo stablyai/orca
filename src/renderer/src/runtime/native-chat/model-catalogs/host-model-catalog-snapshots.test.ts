@@ -71,7 +71,7 @@ describe('host model catalog snapshots', () => {
       recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
       expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
       recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', retired)
-      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBeUndefined()
+      expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(retired)
       expect(readHostModelCatalogSnapshot(LOCAL, 'grok', other)).toBe(scoped)
       expect(readHostModelCatalogSnapshot(PAIRED, 'grok', NEW_CHAT)).toBe(worldwide)
       expect(readHostModelCatalogSnapshot(LOCAL, 'omp', NEW_CHAT)).toBe(scoped)
@@ -80,11 +80,12 @@ describe('host model catalog snapshots', () => {
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', worldwide)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-2', newer)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
-    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(newer)
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toEqual({ origin: 'unknown' })
     recordHostModelCatalogSnapshot(LOCAL, 'grok', null, worldwide)
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', scoped)
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
-    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
+    expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toEqual({ origin: 'unknown' })
   })
 
   it('keeps a held list through an answer whose listing is still running', () => {

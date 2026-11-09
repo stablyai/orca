@@ -194,34 +194,61 @@ it.each([75, 750])(
   }
 )
 
-it('publishes completed empty and retired answers without changing another workspace', () => {
-  const a = hostModelMenuCatalog({ target, agent: 'codex', worktree: 'id:a' })
-  const b = hostModelMenuCatalog({ target, agent: 'codex', worktree: 'id:b' })
-  const onA = vi.fn(),
-    onB = vi.fn()
-  const stopA = a.subscribe(onA),
-    stopB = b.subscribe(onB)
-  recordHostModelCatalogSnapshot(target, 'codex', 'id:a', catalog('old-only'))
-  recordHostModelCatalogSnapshot(target, 'codex', 'id:b', catalog('other'))
-  onA.mockClear()
-  onB.mockClear()
-  recordHostModelCatalogSnapshot(target, 'codex', 'id:a', {
-    origin: 'probe',
-    fetchedAt: 2,
-    models: []
-  })
-  expect(a.snapshot.answer).toEqual({ origin: 'probe', fetchedAt: 2, models: [] })
-  expect(onA).toHaveBeenCalledTimes(1)
-  expect(onB).not.toHaveBeenCalled()
-  recordHostModelCatalogSnapshot(target, 'codex', 'id:b', catalog('other-new'))
-  expect(a.snapshot.answer).toEqual({ origin: 'probe', fetchedAt: 2, models: [] })
-  onB.mockClear()
-  recordHostModelCatalogSnapshot(target, 'codex', 'id:a', { origin: 'unknown' })
-  expect(a.snapshot.answer).toEqual({ origin: 'unknown' })
-  expect(b.snapshot.answer).toMatchObject({ models: [{ id: 'other-new' }] })
-  expect(onB).not.toHaveBeenCalled()
-  stopA()
-  stopB()
+it('preserves scoped retirement across owner handoff and rejected reopen without changing another workspace', async () => {
+  for (const fallback of ['account', 'workspace'] as const) {
+    for (const retired of [
+      { origin: 'probe', fetchedAt: 2, models: [] },
+      { origin: 'unknown' }
+    ] satisfies AgentSessionModelCatalogResult[]) {
+      resetHostModelCatalogSnapshotsForTests()
+      recordHostModelCatalogSnapshot(
+        target,
+        'codex',
+        fallback === 'account' ? null : 'id:seed',
+        catalog('old-only')
+      )
+      const scope = { target, agent: 'codex', worktree: 'id:a' }
+      const a = hostModelMenuCatalog(scope)
+      const b = hostModelMenuCatalog({ target, agent: 'codex', worktree: 'id:b' })
+      const onA = vi.fn(),
+        onB = vi.fn()
+      const stopA = a.subscribe(onA),
+        stopB = b.subscribe(onB)
+      expect(a.snapshot.answer).toMatchObject({ models: [{ id: 'old-only' }] })
+      recordHostModelCatalogSnapshot(target, 'codex', 'id:b', catalog('other'))
+      onA.mockClear()
+      onB.mockClear()
+      recordHostModelCatalogSnapshot(target, 'codex', 'id:a', retired)
+      expect(a.snapshot.answer).toEqual(retired)
+      expect(onA).toHaveBeenCalledTimes(1)
+      expect(onB).not.toHaveBeenCalled()
+      stopA()
+      const successor = hostModelMenuCatalog(scope)
+      const stopSuccessor = successor.subscribe(() => {})
+      expect(successor).not.toBe(a)
+      expect(successor.snapshot.answer).toEqual(retired)
+      mocks.call.mockRejectedValueOnce(new Error('reopen offline'))
+      await successor.read()
+      expect(successor.snapshot.answer).toEqual(retired)
+      recordHostModelCatalogSnapshot(target, 'codex', 'id:b', catalog('other-new'))
+      expect(successor.snapshot.answer).toEqual(retired)
+      expect(b.snapshot.answer).toMatchObject({ models: [{ id: 'other-new' }] })
+      if (fallback === 'workspace') {
+        recordHostModelCatalogSnapshot(target, 'codex', 'id:seed', { origin: 'unknown' })
+        expect(
+          readHostModelCatalogSnapshot(target, 'codex', {
+            newLaunch: true,
+            seedsModel: true,
+            worktree: 'id:new'
+          })
+        ).toMatchObject({ models: [{ id: 'other-new' }] })
+      }
+      recordHostModelCatalogSnapshot(target, 'codex', 'id:a', catalog('replacement'))
+      expect(successor.snapshot.answer).toMatchObject({ models: [{ id: 'replacement' }] })
+      stopSuccessor()
+      stopB()
+    }
+  }
 })
 
 it('keeps native-only answers out of guest and differing paired-command routes', async () => {
