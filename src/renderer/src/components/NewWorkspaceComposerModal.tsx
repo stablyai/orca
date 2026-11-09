@@ -26,7 +26,7 @@ import AgentSettingsDialog, {
   restoreAgentSettingsInvoker
 } from '@/components/agent/AgentSettingsDialog'
 import type { AddRepoDialogHostedController } from '@/components/sidebar/project-admission/host-selection/use-add-repo-hosted-controller'
-import { useComposerState } from '@/hooks/useComposerState'
+import { usePluginTaskComposerState } from './new-workspace/use-plugin-task-launch'
 import {
   composerLaunchWorkspace,
   quickWorkspacePickerInputs,
@@ -37,7 +37,6 @@ import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { usePluginTaskLaunch } from './new-workspace/use-plugin-task-launch'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
@@ -137,7 +136,7 @@ function QuickTabBody({
     createDisabled: formDisabled,
     selectAddedProjectRepo,
     selectAddedProjectGroup
-  } = useComposerState({
+  } = usePluginTaskComposerState(modalData, {
     initialName: modalData.prefilledName ?? '',
     // Quick create ignores legacy prompt-prefill payloads.
     initialPrompt: '',
@@ -228,7 +227,6 @@ function QuickTabBody({
     [observation.contextKey]
   )
 
-  const pluginTask = usePluginTaskLaunch(modalData, quickAgent)
   const handleCreate = useCallback(async (): Promise<void> => {
     if (createDisabled) {
       return
@@ -272,11 +270,9 @@ function QuickTabBody({
         pickerDraft,
         quickAgentPick.entry,
         launchSelection.choice?.executionHostId
-      ),
-      ...pluginTask.submitOptions
+      )
     })
   }, [
-    pluginTask.submitOptions,
     createDisabled,
     quickAgent,
     launchSelection.choice,
@@ -391,7 +387,6 @@ function QuickTabBody({
           observation.model.pickerContext?.executionHostId !== 'local'
         }
         onQuickAgentChange={handleQuickAgentChange}
-        {...pluginTask.cardProps(isFolderWorkspaceTarget)}
         {...cardProps}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}

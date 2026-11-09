@@ -5,6 +5,7 @@ import type {
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import type { ComposerAgentRows } from '@/hooks/composer-state/composer-agent-rows-target'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
+import type { PluginTaskSessionOptions } from '@/lib/plugin-task-session-options'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type {
   NeedsSetupProjectHostOption,
@@ -57,9 +58,8 @@ export type NewWorkspaceComposerCardProps = {
   /** Present only when the opener prefilled an agent prompt. */
   agentDraft?: string | null
   onAgentDraftChange?: (value: string) => void
-  agentDraftUnavailableReason?: string | null
-  /** Shown under the agent prompt when the opener pinned session options. */
-  agentSessionNote?: string | null
+  /** Session options the opener pinned; described under the agent prompt. */
+  agentSessionOptions?: PluginTaskSessionOptions
   eligibleRepos: readonly RepoOption[]
   selectedRepo?: RepoOption | null
   repoId: string

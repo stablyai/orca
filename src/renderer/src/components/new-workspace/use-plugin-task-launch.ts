@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useCallback, useMemo, useState } from 'react'
 import {
-  describePluginTaskSessionOptions,
+  useComposerState,
+  type UseComposerStateOptions,
+  type UseComposerStateResult
+} from '@/hooks/useComposerState'
+import {
   sessionOptionsForAgent,
   type PluginTaskSessionOptions
 } from '@/lib/plugin-task-session-options'
 import type { LinkedPluginTask } from '../../../../shared/plugins/tasks/plugin-task-link'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
-import type { QuickSubmitOptions } from '@/hooks/composer-state/quick-creation-request'
 
 /** What a composer opener (a plugin task's start recipe) prefills for the agent launch. */
 export type PluginTaskLaunch = {
@@ -22,42 +23,48 @@ export type PluginTaskLaunch = {
 
 type PluginTaskCardProps = Pick<
   NewWorkspaceComposerCardProps,
-  'agentDraft' | 'onAgentDraftChange' | 'agentDraftUnavailableReason' | 'agentSessionNote'
+  'agentDraft' | 'onAgentDraftChange' | 'agentSessionOptions'
 >
 
-/** The quick composer's plugin-task launch: the editable prompt, session options and task link. */
-export function usePluginTaskLaunch(
+/** The quick composer with a plugin task's editable prompt, session options and task link. */
+export function usePluginTaskComposerState(
   data: PluginTaskLaunch,
-  quickAgent: TuiAgent | null
-): {
-  submitOptions: Pick<QuickSubmitOptions, 'agentDraft' | 'sessionOptions' | 'linkedPluginTask'>
-  cardProps: (isFolderWorkspaceTarget: boolean) => PluginTaskCardProps
-} {
+  options: UseComposerStateOptions
+): UseComposerStateResult & { cardProps: PluginTaskCardProps } {
+  const state = useComposerState(options)
   const [agentDraft, setAgentDraft] = useState<string | null>(data.initialAgentDraft ?? null)
   const { initialAgentSessionOptions, linkedPluginTask } = data
-  const submitOptions = useMemo(() => {
-    const sessionOptions = sessionOptionsForAgent(initialAgentSessionOptions, quickAgent)
-    return {
-      ...(agentDraft?.trim() ? { agentDraft } : {}),
-      ...(sessionOptions ? { sessionOptions } : {}),
-      ...(linkedPluginTask ? { linkedPluginTask } : {})
-    }
-  }, [agentDraft, initialAgentSessionOptions, linkedPluginTask, quickAgent])
-  const cardProps = (isFolderWorkspaceTarget: boolean): PluginTaskCardProps => ({
-    agentDraft,
-    onAgentDraftChange: setAgentDraft,
-    agentDraftUnavailableReason: isFolderWorkspaceTarget
-      ? translate(
-          'auto.components.NewWorkspaceComposerModal.agentDraftFolderGroup',
-          'Folder workspaces do not take an agent prompt, so this one will not be sent.'
-        )
-      : quickAgent === null
-        ? translate(
-            'auto.components.NewWorkspaceComposerModal.agentDraftNoAgent',
-            'Pick an agent to send this prompt.'
-          )
-        : null,
-    agentSessionNote: describePluginTaskSessionOptions(initialAgentSessionOptions, quickAgent)
-  })
-  return { submitOptions, cardProps }
+  const { submitQuick, cardProps } = state
+  const submitWithPluginTask = useCallback<UseComposerStateResult['submitQuick']>(
+    (agent, submitOptions) => {
+      const sessionOptions = sessionOptionsForAgent(initialAgentSessionOptions, agent)
+      const launchInputs = submitOptions?.launchInputs
+      return submitQuick(agent, {
+        ...submitOptions,
+        ...(agentDraft?.trim() ? { agentDraft } : {}),
+        // Why both: host-composed launches read only launchInputs; legacy ones read the override.
+        ...(sessionOptions
+          ? {
+              sessionOptions,
+              launchInputs: {
+                ...launchInputs,
+                sessionOptions: { ...sessionOptions, ...launchInputs?.sessionOptions }
+              }
+            }
+          : {}),
+        ...(linkedPluginTask ? { linkedPluginTask } : {})
+      })
+    },
+    [submitQuick, initialAgentSessionOptions, agentDraft, linkedPluginTask]
+  )
+  const pluginCardProps = useMemo(
+    () => ({
+      ...cardProps,
+      agentDraft,
+      onAgentDraftChange: setAgentDraft,
+      agentSessionOptions: initialAgentSessionOptions
+    }),
+    [cardProps, agentDraft, initialAgentSessionOptions]
+  )
+  return { ...state, cardProps: pluginCardProps, submitQuick: submitWithPluginTask }
 }
