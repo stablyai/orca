@@ -240,6 +240,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Parola kaydetme önerisi",
+        "updateTitle": "Parola güncellensin mi?",
+        "saveTitle": "Parola kaydedilsin mi?",
+        "username": "Kullanıcı adı",
+        "password": "Parola",
+        "never": "Bu site için asla",
+        "notNow": "Şimdi değil",
+        "update": "Güncelle",
+        "save": "Kaydet"
+      },
+      "fill": {
+        "noUsername": "(kullanıcı adı yok)",
+        "title": "Kaydedilmiş girişler",
+        "otherLogins": "Bu sitedeki diğer girişler"
+      }
+    },
     "loadFailure": {
       "connectionNotSecure": "Bağlantı güvenli değil",
       "cantReachHost": "{{value0}} adresine ulaşılamıyor",
@@ -928,21 +946,6 @@
         "invalid": "Geçerli bir proxy URL'si girin.",
         "unsupportedProtocol": "http, https, socks, socks4 veya socks5 proxy URL'si kullanın.",
         "missingHost": "Proxy URL'si bir ana makine içermelidir."
-      }
-    },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "25 Avrupa dili için en yüksek doğruluk. Noktalama, büyük/küçük harf kullanımı ve sözcük düzeyinde zaman damgaları.",
-        "parakeetV2": "Yalnızca İngilizce. Benzer doğrulukla v3'ten daha hızlı. Noktalama ve büyük/küçük harf kullanımı.",
-        "zipformerBilingual": "Dil geçişleriyle Çince + İngilizce. Düşük gecikmeli gerçek zamanlı akış.",
-        "paraformerBilingual": "Çince (Mandarin + lehçeler) + İngilizce. Aksanlı ve bölgesel Çince konuşmalarda güçlü.",
-        "zipformerStreamingEnRetired": "Artık sunulmuyor: cümlelerin başını atlıyor. Yer açmak için silin.",
-        "zipformerStreamingZh": "Yalnızca Çince. Kaynakları kısıtlı cihazlar için ideal, 14 milyon parametreli çok hafif model.",
-        "zipformerStreamingKo": "Yalnızca Korece. Düşük gecikmeli gerçek zamanlı akış.",
-        "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
-        "whisperTiny": "90'dan fazla dil. Parakeet'ten daha düşük doğruluk, ancak en geniş dil kapsamı.",
-        "senseVoice": "Otomatik dil algılamayla Çince, İngilizce, Japonca, Korece ve Kantonca.",
-        "gptTranscribe": "Yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir."
       }
     },
     "diagnostics": {
@@ -2762,7 +2765,7 @@
         "untitled": "Başlıksız sohbet",
         "listLabel": "Devam edilecek sohbetler",
         "dontAskAgain": "Bir daha sorma (otomatik devam et)",
-        "dontAskAgainHint": "Bu seçeneği Ayarlar → Deneysel → Sohbet Arayüzü bölümünden kapatabilirsiniz.",
+        "dontAskAgainHint": "Bu seçeneği Ayarlar → Sohbet → Davranış bölümünden kapatabilirsiniz.",
         "selectAgent": "{{value2}} içindeki \"{{value1}}\" adlı {{value0}} sohbetine devam et",
         "dismissAll": "Tümünü kapat",
         "viewChats": "Sohbetleri görüntüle",
@@ -8914,7 +8917,6 @@
           "7807c11c4d": "Genel",
           "6855b0f77d": "Orca'yı paralel ajan çalışması için kullanışlı kılan temel iş akışlarını tamamlayın.",
           "6d119427ef": "Başlangıç kontrol listesi",
-          "eb1176a14e": "Cihaz üzerindeki modellerle yerel sesten metne dikte.",
           "5063bb47a5": "Ses",
           "7118953f14": "Ajanların bilgisayarınızdaki herhangi bir uygulamayı kontrol etmesini sağlayın.",
           "c9841721cb": "Bilgisayar Kullanımı",
@@ -9429,7 +9431,6 @@
         "VoicePane": {
           "6fa734ed95": "{{value0}} silinsin mi",
           "68de13f72c": "Model silinemedi.",
-          "1ba81c0ff0": "önerilen",
           "cfde55c7b0": "Model indirilemedi.",
           "43fd4f454b": "Konuşma Modeli",
           "ba4a900d1d": "Dikte Modu",
@@ -9440,10 +9441,6 @@
           "506df81ba6": "OpenAI API anahtarı kaydedildi",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Çıkarılıyor...",
-          "8f4d2a51d7": "çevrimdışı",
-          "d504ab05f0": "akış",
-          "fbe5990716": "Model Seç",
-          "e24f7d43d2": "Bir konuşma modeli seçin. Yerel modeller çevrimdışı çalışır; bulut modelleri bir API anahtarı gerektirir.",
           "174da92062": "Basılı Tut",
           "118b3c2dee": "Aç/kapat",
           "ad5d036ecc": "Mikrofon izni istenemedi. Sesli dikte etkinleştirilmedi.",
@@ -9451,9 +9448,11 @@
           "1eac933202": "macOS Gizlilik ve Güvenlik açıldı. Erişimi verdikten sonra dikteyi tekrar etkinleştirin.",
           "cd9fe37556": "Mikrofon izni verildi",
           "openAiKeyName": "OpenAI transkripsiyon anahtarınız",
-          "dictationShortcutDescription": "Odaktaki herhangi bir bölmeye metin dikte etmek için {{shortcut}} tuşlarına basın.",
           "dictationModeAuto": "Otomatik",
-          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın."
+          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın.",
+          "speechGpuLabel": "GPU kullan",
+          "speechGpuDescription": "Konuşmayı çalıştığında ekran kartında, başarısız olduğunda CPU’da tanır. Dikte bilgisayarınızı donduruyor veya yeniden başlatıyorsa kapatın.",
+          "updateToFasterVersion": "Daha hızlı sürüme güncelle ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",
@@ -16953,6 +16952,7 @@
           "noModel": "Konuşma modeli seçilmedi. Ayarlar > Ses bölümünden bir model indirin.",
           "disabled": "Sesli dikte devre dışı. Ayarlar > Ses bölümünden etkinleştirin.",
           "notReady": "Konuşma modeli hazır değil. Ayarlar > Ses bölümünden indirin.",
+          "modelNeedsUpdate": "Konuşma modelinizin çalışmaya devam etmesi için güncellenmesi gerekiyor. Ayarlar > Ses bölümünden daha hızlı sürüme güncelleyin.",
           "unknownModel": "Seçili model artık kullanılamıyor. Ayarlar > Ses bölümünden başka bir model seçin.",
           "5d2c3e7ae3": "Konuşma algılanmadı.",
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
@@ -19251,6 +19251,11 @@
         "providerExitedRow": "Bu yanıt hazırlanırken {{agent}} durdu. Bu konuşmada devam edebilirsiniz.",
         "providerExitedRejection": "Bu mesaj gönderilmeden önce {{agent}} durdu.",
         "providerExitedAnswer": "{{agent}} durduğu için yanıtınız gönderilmedi. Devam etmek için bir mesaj gönderin.",
+        "providerUnavailable": "Hizmet meşgul olduğu için {{agent}} yanıt veremedi. Başka bir model seçin veya biraz bekleyip yeniden gönderin.",
+        "providerSafetyStopped": "{{agent}}, bir güvenlik kontrolünden sonra bu yanıtı durdurdu. İsteğinizi gözden geçirip yeniden gönderin.",
+        "providerResponseFailed": "{{agent}} bu yanıtı tamamlayamadı. Daha fazla bilgi için ayrıntıları açın.",
+        "modelUnavailable": "{{agent}}, {{detail}} modelini kullanamadı. Başka bir model seçip yeniden gönderin.",
+        "selectedModel": "seçilen modeli",
         "providerRejected": "{{agent}} bu mesajı kabul etmedi.",
         "providerRejectedQuoted": "{{agent}} bu mesajı kabul etmedi: {{detail}}.",
         "attachmentEmpty": "Bu mesajdaki bir görsel boş olduğu için mesaj gönderilmedi.",
@@ -20662,6 +20667,67 @@
         "fillerWords": {
           "title": "Dolgu seslerini kaldır",
           "description": "Dikte edilen metinden “hmm” gibi duraksama seslerini dikte diline göre çıkarır."
+        },
+        "sectionDescription": "Her bölmede yazmak yerine konuşun. Bulut modeli seçmediğiniz sürece konuşma bu bilgisayarda tanınır.",
+        "input": {
+          "title": "Giriş",
+          "shortcut": "Kısayol",
+          "shortcutDescription": "Odaktaki bölmede dikteyi başlatır.",
+          "changeShortcut": "Değiştir"
+        },
+        "language": {
+          "title": "Dil"
+        },
+        "cleanup": {
+          "title": "Temizleme"
+        },
+        "advanced": {
+          "title": "Gelişmiş"
+        },
+        "setup": {
+          "downloadingDescription": "Bu sayfadan ayrılabilirsiniz. İndirme bitince dikte çalışır.",
+          "title": "Dikteyi kur",
+          "pickModel": "Her bölmede yazmak yerine konuşun. Başlamak için aşağıdan bir konuşma modeli indirin; bu bilgisayardaki modeller sesinizi burada tutar.",
+          "microphoneMissingTitle": "{{microphone}} bağlı değil",
+          "microphoneMissingDescription": "Geri gelene kadar dikte sistemin varsayılan mikrofonunu kullanır.",
+          "changeMicrophone": "Mikrofonu değiştir",
+          "onTitle": "Dikte açık",
+          "onLocal": "Herhangi bir bölmede {{shortcut}} tuşuna basın. {{model}} bu bilgisayarda çalışır.",
+          "onCloud": "Herhangi bir bölmede {{shortcut}} tuşuna basın. {{model}} bulutta çalışır.",
+          "offTitle": "Dikte kapalı",
+          "offDescription": "Her bölmede {{shortcut}} ile dikte etmek için açın.",
+          "savedMicrophone": "Mikrofonunuz"
+        },
+        "quality": {
+          "unsupported": "Dilinizi desteklemiyor",
+          "unmeasured": "Ölçülmedi",
+          "poor": "Zayıf",
+          "fair": "Orta",
+          "good": "İyi",
+          "veryGood": "Çok iyi",
+          "excellent": "Mükemmel",
+          "characterErrorRate": "%{{percent}} karakter hata oranı",
+          "wordErrorRate": "%{{percent}} kelime hata oranı",
+          "librispeech": "Test: LibriSpeech (sesli okuma), {{clips}} klip, ölçüm tarihi {{date}}.",
+          "fleurs": "Test: FLEURS (sesli okuma), {{clips}} klip, ölçüm tarihi {{date}}.",
+          "bench": "Orca'nın Apple silikonlu bir Mac'teki kıyaslaması.",
+          "label": "Kalite: {{word}}"
+        },
+        "models": {
+          "retired": "Artık sunulmuyor. Yer açmak için silin.",
+          "sendsToOpenAi": "Sesinizi OpenAI'ye gönderir.",
+          "delete": "Sil",
+          "cancelDownload": "İndirmeyi iptal et",
+          "inUse": "Kullanımda",
+          "use": "Kullan",
+          "setUpCloud": "Kur",
+          "download": "İndir",
+          "cloud": "Bulut",
+          "description": "Kalite {{language}} için değerlendirildi. Testi görmek için bir puanın üzerine gelin.",
+          "where": "Modellerin çalıştığı yer",
+          "local": "Bu bilgisayarda",
+          "cloudDescription": "Bulut modelleri sesinizi sağlayıcıya gönderir. Bu bilgisayardaki modeller sesi burada tutar.",
+          "sendsToCompatible": "Sesinizi kurduğunuz hizmete gönderir."
         }
       },
       "repositoryHooks": {
@@ -23570,5 +23636,31 @@
     "branchName": "Dal adı",
     "invalidBranchName": "Bu dal adı geçersiz. Farklı bir ad seçin.",
     "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Konuşma modelinizi güncelleyin",
+    "updateDescription": "Dikte artık daha hızlı bir motorla çalışıyor. Yeniden dikte edebilmeniz için {{model}} modelinin bir kez indirilmesi gerekiyor ({{size}} MB).",
+    "update": "Güncelle",
+    "replacedTitle": "Konuşma modeliniz değiştirildi",
+    "replacedDescription": "{{old}} yeni konuşma motorunda çalışamıyor. Yerine {{model}} kullanılacak ({{size}} MB).",
+    "downloadReplacement": "{{model}} indir",
+    "later": "Daha sonra",
+    "dismiss": "Kapat",
+    "updatingTitle": "{{model}} güncelleniyor",
+    "downloadingTitle": "{{model}} indiriliyor",
+    "downloadingDescription": "Çalışmaya devam edebilirsiniz. Bu bittiğinde dikte geri gelir.",
+    "progress": "{{done}} / {{total}} MB",
+    "cancel": "İptal",
+    "doneTitle": "Dikte hazır",
+    "doneDescription": "{{model}} güncellendi. Eski dosyalar kaldırıldı.",
+    "doneRetiredDescription": "{{model}} kuruldu. Eski {{old}} dosyaları hâlâ diskte.",
+    "keep": "Sakla",
+    "deleteOld": "Eski modeli sil",
+    "deleteFailed": "{{model}} silinemedi.",
+    "updateFailedTitle": "{{model}} güncellenemedi",
+    "downloadFailedTitle": "{{model}} indirilemedi",
+    "failedAtDescription": "İndirme {{mb}} MB'de durdu. Bağlantınızı kontrol edip yeniden deneyin.",
+    "failedDescription": "İndirme durdu. Bağlantınızı kontrol edip yeniden deneyin.",
+    "tryAgain": "Yeniden dene"
   }
 }

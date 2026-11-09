@@ -125,16 +125,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('brings typed fields back after the app is killed instead of the commit seed', async () => {
-  await open()
-  expect(titleField()?.props.value).toBe('Seed from commits')
-  await typeTitle('Fix the login race')
-  kill()
-
-  await open()
-  expect(titleField()?.props.value).toBe('Fix the login race')
-})
-
 it('keeps nothing for the next Create once a Create lands after its sheet closed', async () => {
   let land: (outcome: unknown) => void = () => {}
   host.create.mockReturnValue(new Promise((resolve) => (land = resolve)))

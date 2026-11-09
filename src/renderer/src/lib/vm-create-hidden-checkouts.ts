@@ -1,45 +1,75 @@
 import type { SidebarFeedDomains } from '../../../shared/sidebar-list/sidebar-feed-domains'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import {
+  indexPendingVmCheckouts,
+  isPendingVmCheckout,
+  type PendingVmCheckout,
+  type PendingVmCheckoutIndex
+} from '../../../shared/pending-vm-checkouts'
 
 /** A VM's primary checkout, registered on its host before the create that owns it finishes. */
-export type HiddenVmCheckout = { repoId: string; path: string }
+export type HiddenVmCheckout = PendingVmCheckout
 type CheckoutRow = { repoId: string; path: string; isMainWorktree?: boolean }
 
-/** What the sidebar filters by; `repoIds` lets most rows skip building a path key. */
-export type HiddenVmCheckouts = {
-  readonly repoIds: ReadonlySet<string>
-  readonly keys: ReadonlySet<string>
-}
+/** What lists filter by: this window's pending VM checkouts and every other window's. */
+export type HiddenVmCheckouts = PendingVmCheckoutIndex
 
 // Upper bound for a cleaned-up VM's rows to leave the lists (its host is retired asynchronously).
 const HIDDEN_AFTER_CLEANUP_MS = 60_000
 
-const EMPTY: HiddenVmCheckouts = { repoIds: new Set(), keys: new Set() }
-type Hide = HiddenVmCheckout & { key: string }
 // Keyed per hide, not per creation: a retry re-provisions under the same creation id while the
 // previous attempt's cleaned-up VM may still be listed.
-let hides = new Map<number, Hide>()
+let hides = new Map<number, HiddenVmCheckout>()
 const activeHideByCreation = new Map<string, number>()
 const cleanedHides = new Set<number>()
 let nextHideId = 1
-let hidden: HiddenVmCheckouts = EMPTY
+/** The other windows' sets as main last sent them; this window's own live in `hides`. */
+let otherWindows: HiddenVmCheckout[] = []
+let hidden: HiddenVmCheckouts = indexPendingVmCheckouts([])
+let detachMain: (() => void) | null = null
 const listeners = new Set<() => void>()
 
-function checkoutKey(repoId: string, path: string): string {
-  return `${repoId}\0${normalizeRuntimePathForComparison(path)}`
+function sameKeys(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return left.size === right.size && [...left].every((key) => right.has(key))
 }
 
-function publish(next: Map<number, Hide>): void {
-  hides = next
-  const values = [...next.values()]
-  hidden =
-    values.length === 0
-      ? EMPTY
-      : {
-          repoIds: new Set(values.map((hide) => hide.repoId)),
-          keys: new Set(values.map((hide) => hide.key))
-        }
+function republish(): void {
+  const next = indexPendingVmCheckouts([...hides.values(), ...otherWindows])
+  if (sameKeys(next.keys, hidden.keys)) {
+    return
+  }
+  hidden = next
   listeners.forEach((listener) => listener())
+}
+
+function publish(next: Map<number, HiddenVmCheckout>): void {
+  hides = next
+  // Main holds the source of truth for other windows and the paired phone's host lists.
+  if (typeof window !== 'undefined') {
+    window.api?.ephemeralVm?.publishPendingCheckouts?.([...next.values()])
+  }
+  republish()
+}
+
+function attachMain(): void {
+  const api = typeof window === 'undefined' ? undefined : window.api?.ephemeralVm
+  if (detachMain || !api?.onPendingCheckoutsChanged) {
+    return
+  }
+  // A reloaded window starts with no creates; drop whatever its previous page left in main.
+  if (hides.size === 0) {
+    api.publishPendingCheckouts?.([])
+  }
+  detachMain = api.onPendingCheckoutsChanged((checkouts) => {
+    otherWindows = checkouts
+    republish()
+  })
+  void api
+    .listPendingCheckouts?.()
+    .then((checkouts) => {
+      otherWindows = checkouts
+      republish()
+    })
+    .catch(() => {})
 }
 
 function removeHide(hideId: number): void {
@@ -59,9 +89,7 @@ function removeHide(hideId: number): void {
 export function hideVmCreateCheckout(creationId: string, checkout: HiddenVmCheckout): void {
   const hideId = nextHideId++
   activeHideByCreation.set(creationId, hideId)
-  publish(
-    new Map(hides).set(hideId, { ...checkout, key: checkoutKey(checkout.repoId, checkout.path) })
-  )
+  publish(new Map(hides).set(hideId, { repoId: checkout.repoId, path: checkout.path }))
 }
 
 /** The create finished: the checkout is now a workspace (or its project) the sidebar may list. */
@@ -94,20 +122,13 @@ export function settleVmCreateCheckoutAfterCleanup(creationId: string, cleanedUp
 }
 
 export function subscribeHiddenVmCheckouts(listener: () => void): () => void {
+  attachMain()
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
 
 export function readHiddenVmCheckouts(): HiddenVmCheckouts {
   return hidden
-}
-
-function isHidden(checkouts: HiddenVmCheckouts, row: CheckoutRow): boolean {
-  return (
-    row.isMainWorktree !== false &&
-    checkouts.repoIds.has(row.repoId) &&
-    checkouts.keys.has(checkoutKey(row.repoId, row.path))
-  )
 }
 
 /** The window's sidebar list without the primary checkouts of VMs whose creates are in progress. */
@@ -118,8 +139,31 @@ export function withoutHiddenVmWorktrees<W extends CheckoutRow>(
   if (checkouts.keys.size === 0) {
     return worktrees
   }
-  const kept = worktrees.filter((worktree) => !isHidden(checkouts, worktree))
+  const kept = worktrees.filter((worktree) => !isPendingVmCheckout(checkouts, worktree))
   return kept.length === worktrees.length ? worktrees : kept
+}
+
+/** Per-repo lists without pending VM checkouts; the same object when nothing matches. */
+export function withoutHiddenVmWorktreesByRepo<W extends CheckoutRow>(
+  worktreesByRepo: Record<string, W[]>,
+  checkouts: HiddenVmCheckouts
+): Record<string, W[]> {
+  if (checkouts.keys.size === 0) {
+    return worktreesByRepo
+  }
+  let next: Record<string, W[]> | null = null
+  for (const repoId of checkouts.repoIds) {
+    const list = worktreesByRepo[repoId]
+    if (!list) {
+      continue
+    }
+    const kept = withoutHiddenVmWorktrees(list, checkouts)
+    if (kept !== list) {
+      next ??= { ...worktreesByRepo }
+      next[repoId] = kept
+    }
+  }
+  return next ?? worktreesByRepo
 }
 
 function withoutHiddenRows<K, V extends CheckoutRow>(
@@ -128,7 +172,7 @@ function withoutHiddenRows<K, V extends CheckoutRow>(
 ): ReadonlyMap<K, V> {
   let kept: Map<K, V> | null = null
   for (const [key, row] of rows) {
-    if (isHidden(checkouts, row)) {
+    if (isPendingVmCheckout(checkouts, row)) {
       kept ??= new Map(rows)
       kept.delete(key)
     }

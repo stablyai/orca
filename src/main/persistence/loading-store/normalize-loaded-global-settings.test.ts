@@ -3,6 +3,7 @@ import { expect, it } from 'vitest'
 import { resolveAntigravityChatAuthConfig } from '../../../shared/antigravity-chat-auth-config'
 import { getDefaultPersistedState, getDefaultVoiceSettings } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import { buildKnownOrcaWorkspaceLayouts } from '../../../shared/worktree/ownership'
 import { normalizeLoadedGlobalSettings } from './normalize-loaded-global-settings'
 import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
@@ -56,4 +57,20 @@ it('stores Auto as Toggle plus hold-to-record so older builds keep a working sho
     'toggle',
     false
   ])
+})
+
+it('loads a padded workspace directory as the absolute path while keeping its old root known', () => {
+  const settings = normalizeLegacyProfile({
+    workspaceDir: ' /Users/me/dev',
+    nestWorkspaces: false,
+    workspaceDirHistory: []
+  })
+
+  expect(settings.workspaceDir).toBe('/Users/me/dev')
+  // Checkouts an older build placed under <repo>/ /Users/me/dev keep their known layout.
+  expect(
+    buildKnownOrcaWorkspaceLayouts(settings, { path: '/repo', worktreeBasePath: undefined }).map(
+      (layout) => layout.path
+    )
+  ).toContain('/repo/ /Users/me/dev')
 })

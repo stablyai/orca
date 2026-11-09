@@ -1717,21 +1717,6 @@
         "missingHost": "A URL de proxy deve incluir um host."
       }
     },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "Máxima precisão para 25 idiomas europeus. Pontuação, maiúsculas e minúsculas e marcas de tempo por palavra.",
-        "parakeetV2": "Somente inglês. Mais rápido que v3 com precisão semelhante. Pontuação e maiúsculas e minúsculas.",
-        "zipformerBilingual": "Chinês + inglês com alternância de idiomas. Streaming em tempo real com baixa latência.",
-        "paraformerBilingual": "Chinês (mandarim + dialetos) + inglês. Bom desempenho com sotaques e variantes regionais do chinês.",
-        "zipformerStreamingEnRetired": "Não é mais oferecido: ele perde o início das frases. Exclua-o para liberar espaço.",
-        "zipformerStreamingZh": "Somente chinês. Modelo ultraleve de 14 milhões de parâmetros, ideal para dispositivos com poucos recursos.",
-        "zipformerStreamingKo": "Somente coreano. Streaming em tempo real com baixa latência.",
-        "parakeetJa": "Somente japonês. Treinado com mais de 35 mil horas de fala natural. Inclui pontuação.",
-        "whisperTiny": "Mais de 90 idiomas. Menor precisão que Parakeet, mas com a maior cobertura de idiomas.",
-        "senseVoice": "Chinês, inglês, japonês, coreano e cantonês com detecção automática de idioma.",
-        "gptTranscribe": "Transcrição na nuvem com alta precisão. Exige uma chave de API da OpenAI."
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "a criação de arquivos de revisão está desativada",
@@ -5149,7 +5134,6 @@
           "7807c11c4d": "Geral",
           "6855b0f77d": "Conclua os fluxos de trabalho essenciais que tornam o Orca útil para trabalho paralelo com agentes.",
           "6d119427ef": "Checklist de introdução",
-          "eb1176a14e": "Ditado de voz para texto local com modelos no dispositivo.",
           "5063bb47a5": "Voz",
           "7118953f14": "Permita que agentes controlem qualquer aplicativo no seu computador.",
           "c9841721cb": "Uso do Computador",
@@ -6482,7 +6466,6 @@
         "VoicePane": {
           "6fa734ed95": "Excluir {{value0}}",
           "68de13f72c": "Falha ao excluir o modelo.",
-          "1ba81c0ff0": "recomendado",
           "cfde55c7b0": "Falha ao baixar o modelo.",
           "43fd4f454b": "Modelo de Voz",
           "ba4a900d1d": "Modo de Ditado",
@@ -6493,10 +6476,6 @@
           "506df81ba6": "Chave de API da OpenAI salva",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Extraindo...",
-          "8f4d2a51d7": "off-line",
-          "d504ab05f0": "streaming",
-          "fbe5990716": "Selecionar Modelo",
-          "e24f7d43d2": "Selecione um modelo de voz. Modelos locais funcionam off-line; modelos na nuvem exigem uma chave de API.",
           "174da92062": "Manter Pressionado",
           "118b3c2dee": "Alternar",
           "ad5d036ecc": "Não foi possível solicitar a permissão do microfone. O ditado por voz não foi ativado.",
@@ -6504,9 +6483,11 @@
           "1eac933202": "Privacidade e Segurança do macOS aberta. Ative o ditado novamente após conceder o acesso.",
           "cd9fe37556": "Permissão do microfone concedida",
           "openAiKeyName": "Sua chave de transcrição da OpenAI",
-          "dictationShortcutDescription": "Pressione {{shortcut}} para ditar texto em qualquer painel com foco.",
           "dictationModeAuto": "Automático",
-          "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar."
+          "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar.",
+          "speechGpuLabel": "Usar GPU",
+          "speechGpuDescription": "Reconhece a fala na placa de vídeo quando ela funciona e na CPU quando falha. Desative se o ditado travar ou reiniciar o computador.",
+          "updateToFasterVersion": "Atualizar para a versão mais rápida ({{value0}} MB)"
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar Notificação de Teste",
@@ -19254,6 +19235,7 @@
           "noModel": "Nenhum modelo de fala selecionado. Baixe um em Configurações > Voz.",
           "disabled": "O ditado por voz está desativado. Ative-o em Configurações > Voz.",
           "notReady": "O modelo de fala não está pronto. Baixe-o em Configurações > Voz.",
+          "modelNeedsUpdate": "Seu modelo de voz precisa de uma atualização para continuar funcionando. Atualize para a versão mais rápida em Configurações > Voz.",
           "unknownModel": "O modelo selecionado não está mais disponível. Escolha outro em Configurações > Voz.",
           "5d2c3e7ae3": "Nenhuma fala detectada.",
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
@@ -20691,6 +20673,11 @@
         "providerExitedRow": "{{agent}} parou enquanto esta resposta estava em andamento. Você pode continuar nesta conversa.",
         "providerExitedRejection": "{{agent}} parou antes de esta mensagem ser enviada.",
         "providerExitedAnswer": "{{agent}} parou, por isso sua resposta não foi enviada. Envie uma mensagem para continuar.",
+        "providerUnavailable": "{{agent}} não conseguiu responder porque o serviço está ocupado. Escolha outro modelo ou aguarde um pouco e envie novamente.",
+        "providerSafetyStopped": "{{agent}} interrompeu esta resposta após uma verificação de segurança. Revise sua solicitação e envie novamente.",
+        "providerResponseFailed": "{{agent}} não conseguiu concluir esta resposta. Abra os detalhes para obter mais informações.",
+        "modelUnavailable": "{{agent}} não conseguiu usar {{detail}}. Selecione outro modelo e envie novamente.",
+        "selectedModel": "o modelo selecionado",
         "providerRejected": "{{agent}} não aceitou esta mensagem.",
         "providerRejectedQuoted": "{{agent}} não aceitou esta mensagem: {{detail}}.",
         "attachmentEmpty": "Uma imagem nesta mensagem está vazia, por isso a mensagem não foi enviada.",
@@ -21668,6 +21655,67 @@
         "fillerWords": {
           "title": "Remover hesitações",
           "description": "Remove sons como “hã” e “hum” do texto ditado, conforme o idioma do ditado."
+        },
+        "sectionDescription": "Fale em vez de digitar em qualquer painel. A fala é reconhecida neste computador, a menos que você escolha um modelo na nuvem.",
+        "input": {
+          "title": "Entrada",
+          "shortcut": "Atalho",
+          "shortcutDescription": "Inicia o ditado no painel em foco.",
+          "changeShortcut": "Alterar"
+        },
+        "language": {
+          "title": "Idioma"
+        },
+        "cleanup": {
+          "title": "Limpeza"
+        },
+        "advanced": {
+          "title": "Avançado"
+        },
+        "setup": {
+          "downloadingDescription": "Você pode sair desta página. O ditado funciona quando o download terminar.",
+          "title": "Configurar o ditado",
+          "pickModel": "Fale em vez de digitar em qualquer painel. Baixe um modelo de voz abaixo para começar; modelos neste computador mantêm seu áudio aqui.",
+          "microphoneMissingTitle": "{{microphone}} não está conectado",
+          "microphoneMissingDescription": "O ditado usa o microfone padrão do sistema até ele voltar.",
+          "changeMicrophone": "Trocar microfone",
+          "onTitle": "O ditado está ativado",
+          "onLocal": "Pressione {{shortcut}} em qualquer painel. {{model}} roda neste computador.",
+          "onCloud": "Pressione {{shortcut}} em qualquer painel. {{model}} roda na nuvem.",
+          "offTitle": "O ditado está desativado",
+          "offDescription": "Ative para ditar com {{shortcut}} em qualquer painel.",
+          "savedMicrophone": "Seu microfone"
+        },
+        "quality": {
+          "unsupported": "Não suporta seu idioma",
+          "unmeasured": "Não medido",
+          "poor": "Ruim",
+          "fair": "Razoável",
+          "good": "Boa",
+          "veryGood": "Muito boa",
+          "excellent": "Excelente",
+          "characterErrorRate": "{{percent}}% de erro por caractere",
+          "wordErrorRate": "{{percent}}% de erro por palavra",
+          "librispeech": "Teste: LibriSpeech (fala lida), {{clips}} clipes, medido em {{date}}.",
+          "fleurs": "Teste: FLEURS (fala lida), {{clips}} clipes, medido em {{date}}.",
+          "bench": "Benchmark do Orca em um Mac com Apple silicon.",
+          "label": "Qualidade: {{word}}"
+        },
+        "models": {
+          "retired": "Não é mais oferecido. Exclua para liberar espaço.",
+          "sendsToOpenAi": "Envia seu áudio para a OpenAI.",
+          "delete": "Excluir",
+          "cancelDownload": "Cancelar download",
+          "inUse": "Em uso",
+          "use": "Usar",
+          "setUpCloud": "Configurar",
+          "download": "Baixar",
+          "cloud": "Nuvem",
+          "description": "A qualidade é avaliada para {{language}}. Passe o cursor sobre uma avaliação para ver o teste.",
+          "where": "Onde os modelos rodam",
+          "local": "Neste computador",
+          "cloudDescription": "Modelos na nuvem enviam seu áudio ao provedor. Os deste computador o mantêm aqui.",
+          "sendsToCompatible": "Envia seu áudio para o serviço que você configurou."
         }
       },
       "repositoryHooks": {
@@ -23969,5 +24017,31 @@
     "branchName": "Nome da branch",
     "invalidBranchName": "Este nome de branch é inválido. Escolha outro nome.",
     "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Atualize seu modelo de voz",
+    "updateDescription": "O ditado agora usa um mecanismo mais rápido. {{model}} precisa de um download único ({{size}} MB) antes que você possa ditar novamente.",
+    "update": "Atualizar",
+    "replacedTitle": "Seu modelo de voz foi substituído",
+    "replacedDescription": "{{old}} não funciona no novo mecanismo de voz. {{model}} o substitui ({{size}} MB).",
+    "downloadReplacement": "Baixar {{model}}",
+    "later": "Mais tarde",
+    "dismiss": "Fechar",
+    "updatingTitle": "Atualizando {{model}}",
+    "downloadingTitle": "Baixando {{model}}",
+    "downloadingDescription": "Você pode continuar trabalhando. O ditado volta quando isso terminar.",
+    "progress": "{{done}} de {{total}} MB",
+    "cancel": "Cancelar",
+    "doneTitle": "O ditado está pronto",
+    "doneDescription": "{{model}} foi atualizado. Os arquivos antigos foram removidos.",
+    "doneRetiredDescription": "{{model}} está pronto. Os arquivos antigos de {{old}} ainda estão no disco.",
+    "keep": "Manter",
+    "deleteOld": "Excluir modelo antigo",
+    "deleteFailed": "Não foi possível excluir {{model}}.",
+    "updateFailedTitle": "Não foi possível atualizar {{model}}",
+    "downloadFailedTitle": "Não foi possível baixar {{model}}",
+    "failedAtDescription": "O download parou em {{mb}} MB. Verifique sua conexão e tente novamente.",
+    "failedDescription": "O download parou. Verifique sua conexão e tente novamente.",
+    "tryAgain": "Tentar novamente"
   }
 }

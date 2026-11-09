@@ -142,25 +142,46 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
 }
 
 // A cached read through the screen's `read`: reuses a fresh answer and joins a read already out. An answer
-// an event marked stale as it landed predates that change, so it is read again.
+// an event marked stale as it landed predates that change, so it goes to `onStale` (still the newest one) and is
+// read again while `isCurrent` holds: at once after a quiet spell (a write's own event lands mid-read), else
+// `floorMs` after it landed.
 export async function fetchHostQuery<TInput extends HostQueryParams, TData>(
   queryClient: QueryClient,
   query: HostQuery<TInput, TData>,
   host: { hostId: string; client: RpcClient },
   target: HostQueryTarget,
   input: TInput,
-  read: () => Promise<TData>
+  reader: { read: () => Promise<TData>; isCurrent: () => boolean; onStale: (data: TData) => void }
 ): Promise<TData> {
+  const { isCurrent } = reader
   const options = {
     ...hostQueryOptions(query, host.client, host.hostId, target, input),
-    queryFn: read
+    queryFn: reader.read
   }
+  const floorMs = query.signal?.floorMs ?? 0
+  const before = queryClient.getQueryState(options.queryKey)
+  let quiet =
+    before?.fetchStatus !== 'fetching' && (before?.dataUpdatedAt ?? 0) + floorMs <= Date.now()
   let data = await queryClient.fetchQuery(options)
-  // Each pass needs a newer event, so this ends with the event burst.
-  while (queryClient.getQueryState(options.queryKey)?.isInvalidated) {
+  for (;;) {
+    const state = queryClient.getQueryState(options.queryKey)
+    // A caller that moved on never shows this answer, so it is not read again.
+    if (!state?.isInvalidated || !isCurrent()) {
+      return data
+    }
+    reader.onStale(data)
+    if (state.fetchStatus === 'idle') {
+      const wait = quiet ? 0 : state.dataUpdatedAt + floorMs - Date.now()
+      quiet = false
+      if (wait > 0) {
+        await new Promise((resolve) => setTimeout(resolve, wait))
+        if (!isCurrent()) {
+          return data
+        }
+      }
+    }
     data = await queryClient.fetchQuery(options)
   }
-  return data
 }
 
 // A read ahead of the user: skipped while the key holds current data, joins a read already out.

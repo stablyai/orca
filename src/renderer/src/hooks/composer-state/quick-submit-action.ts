@@ -34,6 +34,7 @@ type QuickSubmitActionInput = Pick<
   | 'selectedRepoRequiresConnection'
   | 'selectedTargetNeedsVisibleHost'
   | 'selectedWorkspaceTarget'
+  | 'revealSetupChoice'
   | 'setCreateError'
   | 'setCreating'
   | 'setupDecision'
@@ -64,6 +65,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     selectedRepoRequiresConnection,
     selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget,
+    revealSetupChoice,
     setCreateError,
     setCreating,
     setupDecision,
@@ -100,7 +102,6 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         sourceIntentBlocksCreate ||
         selectedRepoRequiresConnection ||
         selectedTargetNeedsVisibleHost ||
-        (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
       ) {
         return
@@ -136,6 +137,12 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         liveStore.setActiveView('terminal')
         liveStore.setSidebarOpen(true)
         onCreated?.()
+        return
+      }
+
+      if (requiresExplicitSetupChoice && !setupDecision) {
+        // The Run/Skip choice lives in Advanced; reveal it rather than refuse silently.
+        revealSetupChoice()
         return
       }
 
@@ -219,6 +226,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       selectedRepoRequiresConnection,
       selectedTargetNeedsVisibleHost,
       selectedWorkspaceTarget,
+      revealSetupChoice,
       setCreateError,
       setCreating,
       setupDecision,

@@ -345,7 +345,7 @@ export function MobileNativeChatComposer({
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             <MobileNativeChatDictationLeading
-              {...{ micActive, micStarting, micProcessing, cancelRef }}
+              {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
             >
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}
@@ -373,7 +373,6 @@ export function MobileNativeChatComposer({
               <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
               {goal.chip}
             </MobileNativeChatDictationLeading>
-            {micActive || micProcessing ? null : contextRing.ring}
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 {...{ onMicPress, micActive, micStarting, micProcessing, dictationMode }}

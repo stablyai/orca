@@ -1,8 +1,9 @@
 import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 
-export const LANDING_ROW_CLASS =
-  'flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none'
+export function LandingRowLabel({ label }: { label: string }): React.JSX.Element {
+  return <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+}
 
 export function LandingRowShortcut({
   shortcut

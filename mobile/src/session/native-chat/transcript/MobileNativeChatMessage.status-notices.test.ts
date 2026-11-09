@@ -2,11 +2,18 @@ import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import { agentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
+import {
+  MobileNativeChatNoticeContext,
+  type MobileNativeChatNoticeView
+} from '../../mobile-native-chat-notice-context'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -95,6 +102,69 @@ describe('MobileNativeChatMessage status notices', () => {
       observedAt: 2,
       body
     })!
+  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeView) => {
+    act(() => {
+      renderer = create(
+        createElement(
+          MobileNativeChatNoticeContext.Provider,
+          { value: names },
+          createElement(MobileNativeChatMessage, { message: statusRow(body) })
+        )
+      )
+    })
+    return renderer!.root.findAll(
+      (node) => String(node.type) === 'Text' && node.props.selectable === true
+    )[0]!
+  }
+
+  it('localizes a canonical failure and discloses its diagnostic only on request', async () => {
+    await activateMobileUiLocale('fr')
+    const diagnostic = 'Internal provider diagnostic: modelNotFound'
+    const notice = renderNotice(
+      {
+        kind: 'status',
+        tone: 'error',
+        ...agentSessionFailureWords(agentSessionFailureFact('modelUnavailable'), {
+          agentName: 'Codex',
+          surface: 'row'
+        }),
+        providerFrame: {
+          provider: 'codex',
+          kind: 'notification:error',
+          payload: {
+            head: diagnostic,
+            byteLength: diagnostic.length,
+            digest: 'fixture',
+            truncated: false
+          }
+        }
+      },
+      { hostName: null, agentName: 'Codex' }
+    )
+    expect(String(notice.props.children)).toContain('le modèle sélectionné')
+    expect(String(notice.props.children)).not.toContain(diagnostic)
+    const details = () =>
+      renderer!.root.findAll(
+        (node) => String(node.type) === 'Text' && String(node.props.children).includes(diagnostic)
+      )
+    expect(details()).toHaveLength(0)
+    const disclosure = renderer!.root.find(
+      (node) => String(node.type) === 'Pressable' && node.props['aria-expanded'] === false
+    )
+    act(() => disclosure.props.onPress())
+    expect(details().length).toBeGreaterThan(0)
+    act(() => renderer?.unmount())
+    const hostAdvice: unknown = {
+      kind: 'status',
+      text: 'Custom host advice: use the enterprise model.',
+      failure: agentSessionFailureFact('modelUnavailable')
+    }
+    if (!isAdmissibleAgentJournalItemBody(hostAdvice) || hostAdvice.kind !== 'status') {
+      throw new Error('Expected host status row')
+    }
+    const custom = renderNotice(hostAdvice, { hostName: null, agentName: 'Codex' })
+    expect(custom.props.children).toBe('Custom host advice: use the enterprise model.')
+  })
 
   it('links a CI result line to its pull request and commit through the link sheet', () => {
     const openLink = vi.fn()

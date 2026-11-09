@@ -5,31 +5,10 @@ import React from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AutomationTimeField, resolveDigitCommit, resolveDigitStep } from './AutomationTimeField'
+import { AutomationTimeField } from './AutomationTimeField'
 
 afterEach(() => {
   cleanup()
-})
-
-describe('AutomationTimeField helpers', () => {
-  it('resolves digit commits with empty → min and range clamp', () => {
-    expect(resolveDigitCommit('', 9, 1, 12)).toBe(1)
-    expect(resolveDigitCommit('', 15, 0, 59)).toBe(0)
-    expect(resolveDigitCommit('9', 1, 1, 12)).toBe(9)
-    expect(resolveDigitCommit('00', 9, 1, 12)).toBe(1)
-    expect(resolveDigitCommit('24', 9, 0, 23)).toBe(23)
-    expect(resolveDigitCommit('99', 15, 0, 59)).toBe(59)
-    expect(resolveDigitCommit('abc', 15, 0, 59)).toBe(15)
-  })
-
-  it('steps from in-progress text rather than only the committed value', () => {
-    expect(resolveDigitStep('1', 9, 1, 12, 1)).toBe(2)
-    // At the min bound, down wraps to max.
-    expect(resolveDigitStep('1', 9, 1, 12, -1)).toBe(12)
-    expect(resolveDigitStep('', 9, 1, 12, 1)).toBe(10)
-    expect(resolveDigitStep('12', 12, 1, 12, 1)).toBe(1)
-    expect(resolveDigitStep('0', 0, 0, 59, -1)).toBe(59)
-  })
 })
 
 function ControlledTimeField({

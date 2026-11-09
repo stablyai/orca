@@ -503,21 +503,6 @@
         "missingHost": "La URL de proxy debe incluir un host."
       }
     },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "Máxima precisión para 25 idiomas europeos. Puntuación, mayúsculas y minúsculas y marcas de tiempo por palabra.",
-        "parakeetV2": "Solo inglés. Más rápido que v3 con una precisión similar. Puntuación y mayúsculas y minúsculas.",
-        "zipformerBilingual": "Chino + inglés con alternancia de idiomas. Streaming en tiempo real de baja latencia.",
-        "paraformerBilingual": "Chino (mandarín + dialectos) + inglés. Buen rendimiento con acentos y variantes regionales del chino.",
-        "zipformerStreamingEnRetired": "Ya no se ofrece: omite el comienzo de las frases. Elimínalo para liberar espacio.",
-        "zipformerStreamingZh": "Solo chino. Modelo ultraligero de 14 millones de parámetros, ideal para dispositivos con pocos recursos.",
-        "zipformerStreamingKo": "Solo coreano. Streaming en tiempo real de baja latencia.",
-        "parakeetJa": "Solo japonés. Entrenado con más de 35 000 horas de habla natural. Incluye puntuación.",
-        "whisperTiny": "Más de 90 idiomas. Menor precisión que Parakeet, pero con la mayor cobertura de idiomas.",
-        "senseVoice": "Chino, inglés, japonés, coreano y cantonés con detección automática de idioma.",
-        "gptTranscribe": "Transcripción en la nube con alta precisión. Requiere una clave API de OpenAI."
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "la creación de archivos de revisión está desactivada",
@@ -8531,7 +8516,6 @@
           "7807c11c4d": "General",
           "6855b0f77d": "Termina los flujos de trabajo principales que hacen que Orca sea útil para el trabajo de agentes en paralelo.",
           "6d119427ef": "Lista de verificación de incorporación",
-          "eb1176a14e": "Dictado local de voz a texto con modelos en el dispositivo.",
           "5063bb47a5": "Voz",
           "7118953f14": "Permite que los agentes controlen cualquier app en tu computadora.",
           "c9841721cb": "Computer Use",
@@ -9041,7 +9025,6 @@
         },
         "VoicePane": {
           "68de13f72c": "No se pudo eliminar el modelo.",
-          "1ba81c0ff0": "recomendado",
           "cfde55c7b0": "No se pudo descargar el modelo.",
           "43fd4f454b": "Modelo de voz",
           "ba4a900d1d": "Modo de dictado",
@@ -9052,10 +9035,6 @@
           "506df81ba6": "Clave API de OpenAI guardada",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Extrayendo...",
-          "8f4d2a51d7": "sin conexión",
-          "d504ab05f0": "streaming",
-          "fbe5990716": "Seleccionar modelo",
-          "e24f7d43d2": "Selecciona un modelo de voz. Los modelos locales funcionan sin conexión; los modelos en la nube requieren una clave API.",
           "174da92062": "Mantener",
           "118b3c2dee": "Alternar",
           "ad5d036ecc": "No se pudo solicitar permiso para el micrófono. El dictado de voz no se habilitó.",
@@ -9064,9 +9043,11 @@
           "cd9fe37556": "Permiso de micrófono concedido",
           "6fa734ed95": "Eliminar {{value0}}",
           "openAiKeyName": "Su clave de transcripción OpenAI",
-          "dictationShortcutDescription": "Pulsa {{shortcut}} para dictar texto en cualquier panel con foco.",
           "dictationModeAuto": "Automático",
-          "dictationModesWithAutoDescription": "Automático: mantén {{shortcut}} para dictar hasta que lo sueltes, o tócalo para empezar y parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado. Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar."
+          "dictationModesWithAutoDescription": "Automático: mantén {{shortcut}} para dictar hasta que lo sueltes, o tócalo para empezar y parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado. Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar.",
+          "speechGpuLabel": "Usar GPU",
+          "speechGpuDescription": "Reconoce la voz en la tarjeta gráfica cuando funciona y en la CPU cuando falla. Desactívelo si el dictado congela o reinicia su equipo.",
+          "updateToFasterVersion": "Actualizar a la versión más rápida ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
@@ -13251,8 +13232,8 @@
             "9845a71e17": "Más acciones",
             "2bfaf4379c": "Más acciones de {{value0}}",
             "377269db6f": "{{value0}} reabierto",
-            "78f5ff294c": "Esto reabrirá el {{value0}}.",
-            "a3d572a4de": "Esto cerrará el {{value0}}.",
+            "78f5ff294c": "Esto reabrirá la solicitud de revisión ({{value0}}).",
+            "a3d572a4de": "Esto cerrará la solicitud de revisión ({{value0}}).",
             "e4aca40024": "Eliminar espacio de trabajo",
             "eefd50457e": "Eliminando…",
             "3ce211ece6": "Reabrir {{value0}}",
@@ -13423,7 +13404,7 @@
             "dd43c47089": "Elija un agente para este error de commit",
             "30b8d4f181": "Solucionar error de commit con IA",
             "4b37ae99b0": "Iniciar el agente de IA predeterminado para solucionar este error de commit",
-            "ae743199cd": "Elige una rama base diferente antes de crear un {{value0}}.",
+            "ae743199cd": "Elige una rama base diferente antes de crear una solicitud de revisión ({{value0}}).",
             "318e2a7f88": "Espere a que termine la generación con IA.",
             "f76307c1f7": "Elige una rama base.",
             "4f76c0a9de": "La rama base debe ser distinta de la rama HEAD.",
@@ -13810,21 +13791,21 @@
               "review": {
                 "detail": {
                   "positive": "Orca también tiene información de {{reviewLabel}} guardada que no pudo verificar.",
-                  "rate_limited": "Orca también no pudo verificar el estado de {{reviewLabel}} porque {{provider}} está limitando temporalmente las solicitudes.",
-                  "network": "Orca también no pudo verificar el estado de {{reviewLabel}} porque este entorno no pudo conectar con {{provider}}.",
-                  "untyped": "Orca también no pudo confirmar si esta rama ya tiene un {{reviewLabel}}."
+                  "rate_limited": "Orca tampoco pudo verificar el estado de {{reviewLabel}} porque {{provider}} está limitando temporalmente las solicitudes.",
+                  "network": "Orca tampoco pudo verificar el estado de {{reviewLabel}} porque este entorno no pudo conectar con {{provider}}.",
+                  "untyped": "Orca tampoco pudo confirmar si esta rama ya tiene una solicitud de revisión ({{reviewLabel}})."
                 },
                 "positive": {
                   "title": "Detalles de {{reviewLabelCap}} no disponibles",
                   "body": "Orca ha guardado información de {{reviewLabel}} para esta rama pero no pudo confirmar su estado actual."
                 },
                 "no_review": {
-                  "title": "No se encontró ningún {{reviewLabel}}",
-                  "body": "Crea un {{reviewLabel}} para iniciar las verificaciones y la revisión."
+                  "title": "No se encontró ninguna solicitud de revisión ({{reviewLabel}})",
+                  "body": "Crea una solicitud de revisión ({{reviewLabel}}) para iniciar las verificaciones y la revisión."
                 },
                 "active": {
                   "title": "Verificando estado de {{reviewLabel}}",
-                  "body": "Orca está verificando {{provider}} para un {{reviewLabel}} en esta rama."
+                  "body": "Orca está comprobando en {{provider}} si esta rama tiene una solicitud de revisión ({{reviewLabel}})."
                 },
                 "git_loading": {
                   "title": "Verificando estado de la rama",
@@ -13832,7 +13813,7 @@
                 },
                 "git_error": {
                   "title": "No se pudo verificar el estado de la rama",
-                  "body": "Orca no pudo confirmar el upstream de esta rama desde este entorno. Reintenta antes de publicar o crear un {{reviewLabel}}."
+                  "body": "Orca no pudo confirmar el upstream de esta rama desde este entorno. Reintenta antes de publicar o crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "unknown": {
                   "title": "Estado de {{reviewLabelCap}} no disponible",
@@ -13848,11 +13829,11 @@
                 },
                 "unknown_error": {
                   "title": "No se pudo verificar el estado de {{reviewLabel}}",
-                  "body": "La búsqueda falló, por lo que Orca no pudo confirmar si esta rama ya tiene un {{reviewLabel}}."
+                  "body": "La búsqueda falló, por lo que Orca no pudo confirmar si esta rama ya tiene una solicitud de revisión ({{reviewLabel}})."
                 },
                 "untyped": {
                   "title": "Estado de {{reviewLabelCap}} no disponible",
-                  "body": "Orca no pudo confirmar si esta rama ya tiene un {{reviewLabel}}. Reintenta para verificar de nuevo."
+                  "body": "Orca no pudo confirmar si esta rama ya tiene una solicitud de revisión ({{reviewLabel}}). Reintenta para verificar de nuevo."
                 },
                 "auth": {
                   "title": "Autenticación de {{provider}} fallida",
@@ -13860,7 +13841,7 @@
                 },
                 "permission": {
                   "title": "Acceso denegado por {{provider}}",
-                  "body": "Las credenciales actuales de {{provider}} no pueden leer los {{reviewLabel}} de este repositorio. Verifica la cuenta, los alcances del token y el acceso al repositorio, luego reintenta."
+                  "body": "Las credenciales actuales de {{provider}} no pueden leer las solicitudes de revisión ({{reviewLabel}}) de este repositorio. Verifica la cuenta, los alcances del token y el acceso al repositorio, luego reintenta."
                 },
                 "repo": {
                   "title": "Repositorio de {{provider}} no disponible",
@@ -13894,47 +13875,47 @@
                 },
                 "no_upstream": {
                   "title": "Sin upstream configurado",
-                  "body": "Publica esta rama para configurar su upstream antes de crear un {{reviewLabel}}."
+                  "body": "Publica esta rama para configurar su upstream antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "needs_sync": {
                   "title": "La rama necesita sincronizarse",
-                  "body": "Sincroniza esta rama con su upstream antes de crear un {{reviewLabel}}."
+                  "body": "Sincroniza esta rama con su upstream antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "auth_required": {
                   "title": "Conecta {{provider}}",
-                  "body": "{{provider}} debe estar conectado en este entorno antes de que Orca pueda crear un {{reviewLabel}}."
+                  "body": "{{provider}} debe estar conectado en este entorno antes de que Orca pueda crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "needs_push": {
                   "title": "La rama tiene commits sin enviar",
-                  "body": "Envía los últimos commits antes de crear un {{reviewLabel}}."
+                  "body": "Envía los últimos commits antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "existing": {
                   "title": "{{reviewLabelCap}} ya existe",
-                  "body": "Orca encontró un {{reviewLabel}} existente para esta rama."
+                  "body": "Orca encontró una solicitud de revisión existente ({{reviewLabel}}) para esta rama."
                 },
                 "detached": {
                   "title": "Sin rama actual",
-                  "body": "Selecciona una rama antes de crear un {{reviewLabel}}."
+                  "body": "Selecciona una rama antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "dirty": {
                   "title": "Primero confirma los cambios",
-                  "body": "Confirma o guarda tus cambios antes de crear un {{reviewLabel}}."
+                  "body": "Confirma o guarda tus cambios antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "default_branch": {
                   "title": "En la rama por defecto",
-                  "body": "Cambia a una rama de características antes de crear un {{reviewLabel}}."
+                  "body": "Cambia a una rama de características antes de crear una solicitud de revisión ({{reviewLabel}})."
                 },
                 "fork": {
                   "title": "Fork head no soportado",
-                  "body": "Orca no puede crear un {{reviewLabel}} desde este fork head aquí."
+                  "body": "Orca no puede crear una solicitud de revisión ({{reviewLabel}}) desde este fork head aquí."
                 },
                 "base_missing": {
                   "title": "La rama base no está en el remote",
-                  "body": "La base de esta rama aún no está en el remote, por lo que un {{reviewLabel}} no puede apuntar a ella."
+                  "body": "La base de esta rama aún no está en el remote, por lo que una solicitud de revisión ({{reviewLabel}}) no puede apuntar a ella."
                 },
                 "unsupported": {
-                  "title": "{{reviewLabelCap}} no soportado aquí",
-                  "body": "Este proveedor de repositorio no soporta la creación de un {{reviewLabel}} desde Orca."
+                  "title": "No se admiten solicitudes de revisión ({{reviewLabelCap}}) aquí",
+                  "body": "Este proveedor de repositorio no soporta la creación de una solicitud de revisión ({{reviewLabel}}) desde Orca."
                 }
               },
               "loadFailedOnMachine": "No se pudo cargar desde {{machine}}: {{detail}}",
@@ -14099,11 +14080,11 @@
                   "titleLinkedReviewBranchExists": "La rama de review vinculada ya existe",
                   "titleCheckOutBranchToPublish": "Haz checkout de una rama antes de publicar commits",
                   "titleBranchAlreadyPublished": "La rama ya está publicada",
-                  "titleCreateReviewForBranch": "Crear un {{reviewLabel}} para esta rama",
+                  "titleCreateReviewForBranch": "Crear una solicitud de revisión ({{reviewLabel}}) para esta rama",
                   "forcePushBeforeReview": "Force Push antes de {{shortLabel}}",
                   "pushBeforeReview": "Push antes de {{shortLabel}}",
-                  "titleForcePushBeforeCreatingReview": "Haz force push con lease antes de crear un {{reviewLabel}}",
-                  "titlePushBeforeCreatingReview": "Haz push de los commits locales antes de crear un {{reviewLabel}}",
+                  "titleForcePushBeforeCreatingReview": "Haz force push con lease antes de crear una solicitud de revisión ({{reviewLabel}})",
+                  "titlePushBeforeCreatingReview": "Haz push de los commits locales antes de crear una solicitud de revisión ({{reviewLabel}})",
                   "pushCount_one": "Hacer push de {{count}} commit",
                   "pushCount_other": "Hacer push de {{count}} commits",
                   "pushCount_many": "Hacer push de {{count}} commits",
@@ -14149,7 +14130,7 @@
                   "blockedForcePushFirst": "Haz force push primero",
                   "blockedSyncFirst": "Sincroniza primero",
                   "blockedUnsupportedProvider": "Proveedor no compatible",
-                  "blockedExistingReview": "Ya existe un {{reviewLabel}}",
+                  "blockedExistingReview": "Ya existe una solicitud de revisión ({{reviewLabel}})",
                   "blockedForkHeadUnsupported": "Head de fork no compatible",
                   "blockedBaseNotOnRemote": "La rama base no está en el remoto",
                   "blockedBranchNotReady": "La rama no está lista"
@@ -14158,7 +14139,7 @@
               "primary": {
                 "action": {
                   "ed93b4f14f": "Commit",
-                  "946a8a05ea": "Crear un {{value0}} para esta rama",
+                  "946a8a05ea": "Crear una solicitud de revisión ({{value0}}) para esta rama",
                   "e7ffa46946": "Crear {{value0}}",
                   "95550cff15": "Push",
                   "d64292a938": "Pull",
@@ -14183,19 +14164,19 @@
                   "1d47e850cf": "Haz push de actualizaciones a la rama de review vinculada",
                   "c39d0c75c3": "El destino de la rama de review vinculada no está disponible.",
                   "d37e68f61d": "Preparando la rama para revisión…",
-                  "c72e5e65d1": "Prepara esta rama y crea un {{value0}}",
+                  "c72e5e65d1": "Prepara esta rama y crea una solicitud de revisión ({{value0}})",
                   "b8e4f2a901": "Espera a que termine la operación remota.",
-                  "c9f3a1b802": "Resuelve los conflictos antes de crear un {{value0}}.",
-                  "e3b9d5f814": "No se puede crear un {{value0}} desde la rama predeterminada.",
-                  "f4c0e6a925": "Haz commit de los cambios antes de crear un {{value0}}.",
-                  "a5d1f7b036": "Publica los commits antes de crear un {{value0}}.",
-                  "b6e2a8c147": "Haz push de los commits antes de crear un {{value0}}.",
-                  "c7f3b9d258": "Sincroniza esta rama antes de crear un {{value0}}.",
-                  "d8a4c0e369": "Autentícate antes de crear un {{value0}}.",
-                  "e9b5d1f470": "Haz checkout de una rama antes de crear un {{value0}}.",
-                  "f0c6e2a581": "Esta rama aún no está lista para un {{value0}}.",
+                  "c9f3a1b802": "Resuelve los conflictos antes de crear una solicitud de revisión ({{value0}}).",
+                  "e3b9d5f814": "No se puede crear una solicitud de revisión ({{value0}}) desde la rama predeterminada.",
+                  "f4c0e6a925": "Haz commit de los cambios antes de crear una solicitud de revisión ({{value0}}).",
+                  "a5d1f7b036": "Publica los commits antes de crear una solicitud de revisión ({{value0}}).",
+                  "b6e2a8c147": "Haz push de los commits antes de crear una solicitud de revisión ({{value0}}).",
+                  "c7f3b9d258": "Sincroniza esta rama antes de crear una solicitud de revisión ({{value0}}).",
+                  "d8a4c0e369": "Autentícate antes de crear una solicitud de revisión ({{value0}}).",
+                  "e9b5d1f470": "Haz checkout de una rama antes de crear una solicitud de revisión ({{value0}}).",
+                  "f0c6e2a581": "Esta rama aún no está lista para una solicitud de revisión ({{value0}}).",
                   "8f9a0b1c2d": "No hay nada para hacer commit. La rama está actualizada.",
-                  "h3i4j5k607": "Comprobando si esta rama puede crear un {{value0}}…"
+                  "h3i4j5k607": "Comprobando si esta rama puede crear una solicitud de revisión ({{value0}})…"
                 }
               },
               "branch": {
@@ -16695,6 +16676,7 @@
           "noModel": "No hay ningún modelo de voz seleccionado. Descargue uno en Configuración > Voz.",
           "disabled": "El dictado por voz está desactivado. Actívelo en Configuración > Voz.",
           "notReady": "El modelo de voz no está listo. Descárguelo en Configuración > Voz.",
+          "modelNeedsUpdate": "Su modelo de voz necesita una actualización para seguir funcionando. Actualícelo a la versión más rápida en Configuración > Voz.",
           "unknownModel": "El modelo seleccionado ya no está disponible. Elija otro en Configuración > Voz.",
           "5d2c3e7ae3": "No se detectó ninguna voz.",
           "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
@@ -19019,6 +19001,11 @@
         "providerExitedRow": "{{agent}} se detuvo mientras esta respuesta estaba en curso. Puede continuar en esta conversación.",
         "providerExitedRejection": "{{agent}} se detuvo antes de que se enviara este mensaje.",
         "providerExitedAnswer": "{{agent}} se detuvo, así que su respuesta no se envió. Envíe un mensaje para continuar.",
+        "providerUnavailable": "{{agent}} no pudo responder porque el servicio está ocupado. Elige otro modelo o espera un poco y vuelve a enviar el mensaje.",
+        "providerSafetyStopped": "{{agent}} detuvo esta respuesta tras una comprobación de seguridad. Revisa tu solicitud y vuelve a enviarla.",
+        "providerResponseFailed": "{{agent}} no pudo terminar esta respuesta. Abre los detalles para obtener más información.",
+        "modelUnavailable": "{{agent}} no pudo usar {{detail}}. Elige otro modelo y vuelve a enviar el mensaje.",
+        "selectedModel": "el modelo seleccionado",
         "providerRejected": "{{agent}} no aceptó este mensaje.",
         "providerRejectedQuoted": "{{agent}} no aceptó este mensaje: {{detail}}.",
         "attachmentEmpty": "Una imagen de este mensaje está vacía, así que el mensaje no se envió.",
@@ -20486,6 +20473,67 @@
         "fillerWords": {
           "title": "Quitar muletillas",
           "description": "Quita sonidos como «ehm» y «em» del texto dictado, según el idioma de dictado."
+        },
+        "sectionDescription": "Habla en lugar de escribir en cualquier panel. La voz se reconoce en este equipo, salvo que elijas un modelo en la nube.",
+        "input": {
+          "title": "Entrada",
+          "shortcut": "Atajo",
+          "shortcutDescription": "Inicia el dictado en el panel activo.",
+          "changeShortcut": "Cambiar"
+        },
+        "language": {
+          "title": "Idioma"
+        },
+        "cleanup": {
+          "title": "Limpieza"
+        },
+        "advanced": {
+          "title": "Avanzado"
+        },
+        "setup": {
+          "downloadingDescription": "Puedes salir de esta página. El dictado funcionará cuando termine la descarga.",
+          "title": "Configurar el dictado",
+          "pickModel": "Habla en lugar de escribir en cualquier panel. Descarga abajo un modelo de voz para empezar; los modelos de este equipo mantienen tu audio aquí.",
+          "microphoneMissingTitle": "{{microphone}} no está conectado",
+          "microphoneMissingDescription": "El dictado usa el micrófono predeterminado del sistema hasta que vuelva.",
+          "changeMicrophone": "Cambiar micrófono",
+          "onTitle": "El dictado está activado",
+          "onLocal": "Pulsa {{shortcut}} en cualquier panel. {{model}} se ejecuta en este equipo.",
+          "onCloud": "Pulsa {{shortcut}} en cualquier panel. {{model}} se ejecuta en la nube.",
+          "offTitle": "El dictado está desactivado",
+          "offDescription": "Actívalo para dictar con {{shortcut}} en cualquier panel.",
+          "savedMicrophone": "Tu micrófono"
+        },
+        "quality": {
+          "unsupported": "No admite tu idioma",
+          "unmeasured": "Sin medir",
+          "poor": "Mala",
+          "fair": "Regular",
+          "good": "Buena",
+          "veryGood": "Muy buena",
+          "excellent": "Excelente",
+          "characterErrorRate": "{{percent}} % de error por carácter",
+          "wordErrorRate": "{{percent}} % de error por palabra",
+          "librispeech": "Prueba: LibriSpeech (habla leída), {{clips}} clips, medida el {{date}}.",
+          "fleurs": "Prueba: FLEURS (habla leída), {{clips}} clips, medida el {{date}}.",
+          "bench": "Benchmark de Orca en un Mac con Apple silicon.",
+          "label": "Calidad: {{word}}"
+        },
+        "models": {
+          "retired": "Ya no se ofrece. Bórralo para liberar espacio.",
+          "sendsToOpenAi": "Envía tu audio a OpenAI.",
+          "delete": "Borrar",
+          "cancelDownload": "Cancelar descarga",
+          "inUse": "En uso",
+          "use": "Usar",
+          "setUpCloud": "Configurar",
+          "download": "Descargar",
+          "cloud": "Nube",
+          "description": "La calidad se valora para {{language}}. Pasa el cursor sobre una valoración para ver la prueba.",
+          "where": "Dónde se ejecutan los modelos",
+          "local": "En este equipo",
+          "cloudDescription": "Los modelos en la nube envían tu audio al proveedor. Los de este equipo lo mantienen aquí.",
+          "sendsToCompatible": "Envía tu audio al servicio que configuraste."
         }
       },
       "repositoryHooks": {
@@ -20822,6 +20870,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Aviso para guardar contraseña",
+        "updateTitle": "¿Actualizar contraseña?",
+        "saveTitle": "¿Guardar contraseña?",
+        "username": "Nombre de usuario",
+        "password": "Contraseña",
+        "never": "Nunca para este sitio",
+        "notNow": "Ahora no",
+        "update": "Actualizar",
+        "save": "Guardar"
+      },
+      "fill": {
+        "noUsername": "(sin nombre de usuario)",
+        "title": "Inicios de sesión guardados",
+        "otherLogins": "Otros inicios de sesión en este sitio"
+      }
+    },
     "newTab": {
       "emptyHint": "Busca o introduce una dirección arriba. Aquí aparecerán los sitios que visites, los servidores de desarrollo que se ejecuten en este espacio de trabajo, y su PR e incidencia.",
       "openServerFailed": "No se pudo abrir {{address}}",
@@ -23996,5 +24062,31 @@
     "branchName": "Nombre de la rama",
     "invalidBranchName": "Este nombre de rama no es válido. Elige otro nombre.",
     "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Actualiza tu modelo de voz",
+    "updateDescription": "El dictado ahora usa un motor más rápido. {{model}} necesita una descarga única ({{size}} MB) antes de que puedas volver a dictar.",
+    "update": "Actualizar",
+    "replacedTitle": "Tu modelo de voz se ha sustituido",
+    "replacedDescription": "{{old}} no funciona con el nuevo motor de voz. {{model}} lo sustituye ({{size}} MB).",
+    "downloadReplacement": "Descargar {{model}}",
+    "later": "Más tarde",
+    "dismiss": "Cerrar",
+    "updatingTitle": "Actualizando {{model}}",
+    "downloadingTitle": "Descargando {{model}}",
+    "downloadingDescription": "Puedes seguir trabajando. El dictado vuelve cuando termine.",
+    "progress": "{{done}} de {{total}} MB",
+    "cancel": "Cancelar",
+    "doneTitle": "El dictado está listo",
+    "doneDescription": "{{model}} está actualizado. Se eliminaron los archivos antiguos.",
+    "doneRetiredDescription": "{{model}} está listo. Los archivos antiguos de {{old}} siguen en el disco.",
+    "keep": "Conservar",
+    "deleteOld": "Eliminar modelo antiguo",
+    "deleteFailed": "No se pudo eliminar {{model}}.",
+    "updateFailedTitle": "No se pudo actualizar {{model}}",
+    "downloadFailedTitle": "No se pudo descargar {{model}}",
+    "failedAtDescription": "La descarga se detuvo en {{mb}} MB. Comprueba tu conexión e inténtalo de nuevo.",
+    "failedDescription": "La descarga se detuvo. Comprueba tu conexión e inténtalo de nuevo.",
+    "tryAgain": "Reintentar"
   }
 }

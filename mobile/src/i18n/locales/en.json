@@ -534,13 +534,36 @@
       "meterOnPhone": "Recording, {{duration}}, on this phone",
       "meterOn": "Recording, {{duration}}, on {{computer}}",
       "meterOnComputer": "Recording, {{duration}}, on the computer",
-      "meter": "Recording, {{duration}}"
+      "meter": "Recording, {{duration}}",
+      "discard": "Discard recording",
+      "retry": "Retry dictation",
+      "retryShort": "Retry"
     },
     "status": {
       "finishingOn": "Finishing on {{computer}}",
       "finishingOnComputer": "Finishing on the computer",
       "movedTo": "Moved to {{computer}}",
       "movedToComputer": "Moved to the computer"
+    },
+    "failure": {
+      "recordingKept": "Recording kept",
+      "connectionLost": "Connection lost",
+      "connectionSlow": "Connection too slow",
+      "phoneStopped": "Stopped on this phone",
+      "stopped": "Dictation stopped"
+    },
+    "announce": {
+      "typedInto": "Typed into {{target}}",
+      "insertedIn": "Inserted in {{target}}"
+    },
+    "pill": {
+      "open": "Open",
+      "listening": "Listening",
+      "starting": "Starting",
+      "finishing": "Finishing",
+      "stopped": "Dictation stopped",
+      "label": "Dictation to {{target}}, {{duration}}",
+      "hint": "Double-tap to go back"
     }
   },
   "home": {
@@ -2615,6 +2638,10 @@
       "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
       "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
       "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
+      "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+      "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
+      "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+      "selectedModel": "the selected model",
       "providerRejected": "{{agent}} didn't accept this message.",
       "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
       "attachmentEmpty": "An image on this message is empty, so the message was not sent.",

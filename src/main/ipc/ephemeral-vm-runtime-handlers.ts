@@ -19,6 +19,11 @@ import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
 import { ephemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-attachment'
 import { forgetInterruptedEphemeralVmProvision } from '../ephemeral-vm/runtime-provisioning-persistence'
+import { pendingVmCheckouts } from '../ephemeral-vm/pending-vm-checkouts'
+import {
+  parsePendingVmCheckouts,
+  PENDING_VM_CHECKOUTS_CHANGED_CHANNEL
+} from '../../shared/pending-vm-checkouts'
 
 let stopRuntimesChangedBroadcast: (() => void) | null = null
 let runtimesChangedBroadcastQueued = false
@@ -52,7 +57,55 @@ export type EphemeralVmCleanupCommandResult = {
   message?: string
 }
 
+let detachPendingCheckoutBroadcast: (() => void) | null = null
+const pendingCheckoutOwners = new Set<number>()
+
+function broadcastPendingVmCheckouts(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed()) {
+      continue
+    }
+    try {
+      window.webContents.send(
+        PENDING_VM_CHECKOUTS_CHANGED_CHANNEL,
+        pendingVmCheckouts.listExcept(window.webContents.id)
+      )
+    } catch {
+      // A renderer can disappear between isDestroyed() and send().
+    }
+  }
+}
+
+/** Windows publish the VM checkouts their creates have not adopted yet; every window reads the union. */
+function registerPendingVmCheckoutHandlers(): void {
+  ipcMain.removeHandler('ephemeralVm:publishPendingCheckouts')
+  ipcMain.removeHandler('ephemeralVm:listPendingCheckouts')
+  detachPendingCheckoutBroadcast?.()
+  detachPendingCheckoutBroadcast = pendingVmCheckouts.onChanged(broadcastPendingVmCheckouts)
+  ipcMain.handle('ephemeralVm:publishPendingCheckouts', (event, value: unknown): void => {
+    const sender = event.sender
+    const ownerId = sender.id
+    if (!pendingCheckoutOwners.has(ownerId)) {
+      pendingCheckoutOwners.add(ownerId)
+      // A closed or crashed window's creates cannot finish; its hides go with it. A reloaded
+      // window publishes its empty set when it starts.
+      const drop = (): void => {
+        pendingCheckoutOwners.delete(ownerId)
+        sender.removeListener('render-process-gone', drop)
+        pendingVmCheckouts.publish(ownerId, [])
+      }
+      sender.once('destroyed', drop)
+      sender.once('render-process-gone', drop)
+    }
+    pendingVmCheckouts.publish(ownerId, parsePendingVmCheckouts(value))
+  })
+  ipcMain.handle('ephemeralVm:listPendingCheckouts', (event) =>
+    pendingVmCheckouts.listExcept(event.sender.id)
+  )
+}
+
 export function registerEphemeralVmRuntimeHandlers(store: Store): void {
+  registerPendingVmCheckoutHandlers()
   ipcMain.removeHandler('ephemeralVm:attachWorkspace')
   ipcMain.removeHandler('ephemeralVm:listRuntimes')
   ipcMain.removeHandler('ephemeralVm:cleanup')
