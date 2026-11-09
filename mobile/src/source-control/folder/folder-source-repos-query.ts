@@ -1,8 +1,8 @@
 import type { Repo } from '../../../../src/shared/repo-types'
 import type { ProjectGroup } from '../../../../src/shared/project-group-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host'
 import { getFolderSourceRepos } from '../../../../src/shared/folder-workspaces/folder-workspace-source-repos'
 import {
+  LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost
 } from '../../../../src/shared/execution-host'
