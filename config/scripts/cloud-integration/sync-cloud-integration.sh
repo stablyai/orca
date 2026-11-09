@@ -31,7 +31,13 @@ git fetch -q private +cloud/integration:refs/remotes/private/cloud/integration
 if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
   echo "Working tree has changes; commit or set them aside first." >&2; exit 1
 fi
-git checkout -q -B cloud/integration private/cloud/integration
+# Keep local unpushed commits: fast-forward or merge the remote tip in, never reset onto it.
+if git rev-parse -q --verify refs/heads/cloud/integration >/dev/null; then
+  git checkout -q cloud/integration
+  git merge --no-edit -q private/cloud/integration
+else
+  git checkout -q -b cloud/integration private/cloud/integration
+fi
 
 for ref in origin/main "${PRIVATE_BRANCHES[@]/#/private/}" "${STACKED[@]/#/origin/}"; do
   git merge-base --is-ancestor "$ref" HEAD && continue
