@@ -12,6 +12,7 @@ const CATALOG_IMPORTS: Record<Exclude<SupportedUiLocale, 'en'>, () => Promise<Lo
   pt: () => import('./locales/pt.json').then((module) => module.default),
   ru: () => import('./locales/ru.json').then((module) => module.default),
   tr: () => import('./locales/tr.json').then((module) => module.default),
+  vi: () => import('./locales/vi.json').then((module) => module.default),
   zh: () => import('./locales/zh.json').then((module) => module.default),
   'zh-Hant': () => import('./locales/zh-Hant.json').then((module) => module.default)
 }
