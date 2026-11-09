@@ -37,7 +37,7 @@ export function appendProjectGroupSections(
       repoOrder: args.repoOrder
     },
     {
-      group: (projectGroup, depth, count) => {
+      group: (projectGroup, depth, count, hasChildGroups) => {
         const key = getProjectGroupHeaderKey(projectGroup.id)
         result.push({
           type: 'header',
@@ -46,7 +46,8 @@ export function appendProjectGroupSections(
           count,
           icon: { kind: 'project' },
           projectGroup,
-          projectGroupDepth: depth
+          projectGroupDepth: depth,
+          hasChildGroups
         })
         if (collapsedGroups.has(key)) {
           return false

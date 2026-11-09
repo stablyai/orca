@@ -24,7 +24,7 @@ type GroupedProjectEntry = ProjectSectionEntry<
 
 export type ProjectGroupTreeVisitor<V extends GroupedProjectEntry> = {
   /** Lists a group header; returns whether its contents follow (false when collapsed). */
-  group: (group: ProjectGroup, depth: number, count: number) => boolean
+  group: (group: ProjectGroup, depth: number, count: number, hasChildGroups: boolean) => boolean
   projects: (entries: [string, V][], depth: number) => void
 }
 
@@ -98,10 +98,18 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
   }
 
   const walkProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
+    const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
-    if (visit.group(projectGroup, depth, getProjectGroupSubtreeCount(projectGroup.id))) {
+    if (
+      visit.group(
+        projectGroup,
+        depth,
+        getProjectGroupSubtreeCount(projectGroup.id),
+        childGroups.length > 0
+      )
+    ) {
       visit.projects(withRepoSectionDisplayLabels(repoEntries), depth + 1)
-      for (const childGroup of childGroupsByParentId.get(projectGroup.id) ?? []) {
+      for (const childGroup of childGroups) {
         walkProjectGroup(childGroup, depth + 1)
       }
     }
