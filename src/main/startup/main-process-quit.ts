@@ -19,7 +19,7 @@ import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file
 import { clearRuntimeMetadataIfOwned } from '../runtime/rpc/server/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { disposeDesktopBrowserBridge } from '../ipc/browser/desktop-browser-bridge-wiring'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../codex/history/index/codex-state-db-backfill-recovery'
 import { stopCodexAccountSessionBridges } from '../codex/history/bridges/codex-account-session-bridge'
 import { awaitPackedRefsLockRelease } from '../git/refs/maintenance/local-repo-ref-maintenance'

@@ -15,7 +15,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
-import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
+import { isConnectingSshStatus } from '../../../../ssh/ssh-connection-recoverability'
+import type { SshTargetBusyAction } from './ssh-target-action-state'
 import { sshIdentityFileName } from './ssh-target-list-model'
 import { isManagedServerSshHost } from './SshManagedHostRemoveDialog'
 import {
@@ -173,7 +174,7 @@ export function SshTargetCard({
         </Button>
       )
     }
-    if (isSshTargetConnecting(status)) {
+    if (isConnectingSshStatus(status)) {
       return (
         <Button variant="ghost" size="xs" disabled>
           {t('auto.components.settings.SshTargetCard.1810b51482', 'Connecting')}
@@ -271,7 +272,7 @@ export function SshTargetCard({
                 testing ||
                 hasActionInFlight ||
                 status === 'connected' ||
-                isSshTargetConnecting(status)
+                isConnectingSshStatus(status)
               }
               onSelect={() => void onTest(target.id)}
             >

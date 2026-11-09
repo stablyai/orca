@@ -18,7 +18,6 @@ import {
   evaluateHostDetails,
   getHostDetailsDescription,
   getRuntimeServerConnectionState,
-  isRuntimeServerTransportConnected,
   type RuntimeHostDetails
 } from '../catalog/runtime-environment-host-details'
 
@@ -79,7 +78,7 @@ export function useRuntimeServerRowState(
     details?.status === 'loading' && !runtimeStatusEntry?.status
       ? 'checking'
       : getRuntimeServerConnectionState(effectiveDetails)
-  const isReachable = isRuntimeServerTransportConnected(connectionState)
+  const isReachable = isConnectedRuntimeHostState(connectionState)
   // Keep last verified descriptors across lost probes; latest status alone can be absent.
   const descriptorStatus = lastVerifiedRuntimeStatus(runtimeStatusEntry)
   const hostDisplay = resolveHostDisplay({

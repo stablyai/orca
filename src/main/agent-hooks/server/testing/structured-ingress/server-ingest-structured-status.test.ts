@@ -1,6 +1,7 @@
+import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import { makeStructuredAgentStatusSubject } from '../../../../../shared/agent-status/contracts/agent-status-subject'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
@@ -215,9 +216,9 @@ describe('structured rows and last-status.json', () => {
       server.stop()
     }
 
-    const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8')) as {
+    const file: {
       entries: Record<string, unknown>
-    }
+    } = JSON.parse(readSavedStatus(lastStatusPath()))
     expect(Object.keys(file.entries)).toEqual([PANE])
 
     const restored = new AgentHookServer()

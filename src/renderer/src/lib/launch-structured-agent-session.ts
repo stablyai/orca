@@ -47,6 +47,8 @@ export type StructuredAgentSessionLaunchIntent = {
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
   sendSelectionSupport?: boolean
+  /** Client-only admission requirement; reacquired from the child after reload. */
+  forkRequiresInheritedOriginal?: boolean
   sendSkillsSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
@@ -183,6 +185,7 @@ export function retryStructuredAgentSessionLaunchIntent(
       intent.seedOptions,
       intent.params.forkFrom
     ),
+    forkRequiresInheritedOriginal: intent.forkRequiresInheritedOriginal,
     explicitLaunchOptions: intent.explicitLaunchOptions
   }
 }

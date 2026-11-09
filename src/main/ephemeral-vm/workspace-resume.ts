@@ -1,21 +1,17 @@
 import { app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import {
-  findWorkspaceEphemeralVmRuntime,
-  updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
 } from '../../shared/ephemeral-vm-recipes'
-import {
-  resolveEnvironment,
-  updateEnvironmentFromPairingCode
-} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
+import { applyResumedRuntimePairing } from './runtime-resume-pairing'
 import { getRuntimeOwnedSshTargetId } from '../ssh/targets/ssh-target-runtime-ownership'
 import {
   isSshUserDisconnected,
@@ -42,12 +38,15 @@ export async function resumeEphemeralVmWorkspace(
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
   const result = await resumeEphemeralVmRuntime({
     userDataPath,
-    repoPath: recipeContext.repo.repo.path,
+    repoPath: recipeContext.repoPath,
     recipe: recipeContext.recipe,
     runtimeId: runtime.id
   })
   if (!result.ok) {
     throw new Error(result.error)
+  }
+  if (!result.runtime.recipeResult) {
+    return result.runtime
   }
   const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
   // SSH servers use their target and have no pairing to refresh.
@@ -56,11 +55,17 @@ export async function resumeEphemeralVmWorkspace(
     if (!pairingCode) {
       throw new Error('Resume result did not include an Orca Server pairing code.')
     }
-    const repaired = updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
-      pairingCode
+    const { environment } = await applyResumedRuntimePairing({
+      userDataPath,
+      environmentId: runtime.runtimeEnvironmentId,
+      pairingCode,
+      invalidateTransport: invalidateRuntimeEnvironmentTransport
     })
-    noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt)
-    invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
+    noteRecipeVmWakePairing(
+      environment.id,
+      environment.pairingRevision ?? environment.createdAt,
+      true
+    )
   }
   // Suspend tore down the runtime-owned SSH transport, so an SSH VM reconnects even when its
   // recipe had no resume step to run.
