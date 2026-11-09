@@ -159,9 +159,17 @@ describe('adopting a provider conversation on create', () => {
       mintSpawnToken: () => 'spawn-a',
       now: () => NOW
     })
-    vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems').mockRejectedValueOnce(
-      new Error('disk write failed')
-    )
+    const write = AgentSessionJournal.prototype.write
+    vi.spyOn(AgentSessionJournal.prototype, 'write').mockImplementationOnce(function (
+      this: AgentSessionJournal,
+      operation,
+      prepare
+    ) {
+      if (operation.kind === 'epoch-replace') {
+        throw new Error('disk write failed')
+      }
+      return write.call(this, operation, prepare)
+    })
     const attached = await host
       .attach({ callerKey: 'client-1' }, attachParams(transcriptPath))
       .catch(() => null)

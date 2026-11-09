@@ -24,10 +24,10 @@ it.each(['mobile', 'runtime'] as const)(
     await attach()
     const { host: previous, store } = hostTestState()
     await previous.flushAllStreamedEvents()
-    await store.transitionHandoff(SESSION, (record) => ({
-      ...record,
+    await store.updateRecord(SESSION, {
+      kind: 'last-turn',
       lastTurn: { state: 'settled', outcome: 'success', at: 100 }
-    }))
+    })
     await store.setSessionTabVisibility(SESSION, true)
     const host = new StructuredAgentSessionHost(previous.deps)
     setStructuredAgentSessionHost(host)

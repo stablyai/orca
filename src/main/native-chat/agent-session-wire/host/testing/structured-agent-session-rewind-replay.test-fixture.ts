@@ -88,9 +88,9 @@ export async function expectAtomicRewindCompletion({
 }) {
   const target = await seed()
   const request = await params(target)
-  const replaceBeforeCrash = AgentSessionJournal.prototype.replaceEpochItems
+  const replaceBeforeCrash = AgentSessionJournal.prototype.completeRewind
   const checkpoint = vi
-    .spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
+    .spyOn(AgentSessionJournal.prototype, 'completeRewind')
     .mockImplementationOnce(async function (this: AgentSessionJournal, ...args) {
       await replaceBeforeCrash.apply(this, args)
       throw new Error('completion write failed')
@@ -100,7 +100,7 @@ export async function expectAtomicRewindCompletion({
   expect(committed.cursor.epoch).not.toBe(request.expectedEpoch)
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   checkpoint.mockRestore()
-  const replace = vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
+  const replace = vi.spyOn(AgentSessionJournal.prototype, 'completeRewind')
   expect(
     await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
   ).toMatchObject({ ok: true })

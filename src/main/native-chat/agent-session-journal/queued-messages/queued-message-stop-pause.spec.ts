@@ -1,4 +1,4 @@
-import { finishTestJournalHistoricalInputs } from '../replay/journal-historical-inputs.test-support'
+import { seedTestJournalHistoricalRows } from '../replay/journal-historical-inputs.test-support'
 import { openTestJournalHostDatabase } from '../store-lifecycle/journal-host-database-test-support'
 import type { createFixture } from './queued-message-pause-contract-test-fixture'
 import { describe, expect, it } from 'vitest'
@@ -17,8 +17,8 @@ export function registerQueuedMessageStopPauseTests(
       await journal.appendItem(identity, body, { fence: 0, turnScope: { kind: 'thread' } })
       await fixture.queueDraft(journal, 'carried')
       await journal.appendQueueResume(0)
-      await journal.replaceEpochItems('handle_forked', 0, kept)
-      expect(fixture.reason(journal)).toBeNull()
+      await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: kept })
+      expect(await fixture.reason(journal)).toBeNull()
       const later = { ...identity, uuid: 'T' }
       await journal.appendItem(
         later,
@@ -26,9 +26,9 @@ export function registerQueuedMessageStopPauseTests(
         { fence: 0, turnScope: { kind: 'thread' } }
       )
       await journal.appendTombstone(later, { fence: 0 })
-      expect(fixture.reason(journal)).toBe('failed')
-      await journal.replaceEpochItems('handle_forked', 0, kept)
-      expect(fixture.reason(journal)).toBe('failed')
+      expect(await fixture.reason(journal)).toBe('failed')
+      await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: kept })
+      expect(await fixture.reason(journal)).toBe('failed')
       expect(await journal.queuedMessages.nextInputCard()).toBeNull()
       await journal.appendQueueResume(0)
       expect((await journal.queuedMessages.nextInputCard())?.messageId).toBe('carried')
@@ -63,16 +63,15 @@ export function registerQueuedMessageStopPauseTests(
     it("a rewind's epoch replacement restates a Stop still pausing, and not one a turn ended", async () => {
       const journal = await fixture.open()
       await fixture.userStop(journal)
-      await journal.replaceEpochItems('handle_forked', 0, [])
-      expect(fixture.reason(journal)).toBe('stopped')
+      await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: [] })
+      expect(await fixture.reason(journal)).toBe('stopped')
       await fixture.turn(journal, 'typed')
-      await journal.replaceEpochItems('handle_forked', 0, [])
-      expect(fixture.reason(journal)).toBeNull()
+      await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: [] })
+      expect(await fixture.reason(journal)).toBeNull()
     })
   })
   it('mail does not lift Stop, while personal acceptance survives transcript removal and restore', async () => {
     let journal = await fixture.open()
-    finishTestJournalHistoricalInputs(journal)
     await journal.queuedMessages.insert({
       messageId: 'P',
       body: fixture.message('P'),
@@ -96,18 +95,17 @@ export function registerQueuedMessageStopPauseTests(
       fence: 0
     })
     expect(await journal.queuedMessages.nextInputCard()).toBeNull()
-    expect(fixture.reason(journal)).toBe('stopped')
+    expect(await fixture.reason(journal)).toBe('stopped')
     await fixture.turn(journal, 'person')
-    await journal.replaceEpochItems('handle_forked', 0, [])
+    await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: [] })
     await journal.close()
     journal = await fixture.open()
     expect((await journal.queuedMessages.nextInputCard())?.messageId).toBe('P')
-    expect(fixture.reason(journal)).toBeNull()
+    expect(await fixture.reason(journal)).toBeNull()
   })
 
   it('clear restatement retains personal members after unattended acceptance releases the others', async () => {
     let journal = await fixture.open()
-    finishTestJournalHistoricalInputs(journal)
     for (const [messageId, unattended] of [
       ['P', false],
       ['A', true],
@@ -134,12 +132,12 @@ export function registerQueuedMessageStopPauseTests(
       providerIdentity: null,
       fence: 0
     })
-    expect(fixture.held(journal)).toEqual([
+    expect(await fixture.held(journal)).toEqual([
       ['P', true],
       ['A', false],
       ['L', false]
     ])
-    await journal.replaceEpochItems('handle_forked', 0, [])
+    await journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence: 0, items: [] })
     await journal.close()
     journal = await fixture.open()
     expect(
@@ -147,7 +145,7 @@ export function registerQueuedMessageStopPauseTests(
         ?.messageIds
     ).toEqual(['P'])
     await fixture.turn(journal, 'person')
-    expect(fixture.held(journal)).toEqual([
+    expect(await fixture.held(journal)).toEqual([
       ['P', false],
       ['A', false],
       ['L', false]
@@ -155,21 +153,61 @@ export function registerQueuedMessageStopPauseTests(
   })
 
   it('a retired accepted outcome still proves a later personal turn lifted Stop', async () => {
-    const journal = await fixture.open()
-    finishTestJournalHistoricalInputs(journal)
-    await fixture.queueDraft(journal, 'W')
-    await fixture.userStop(journal)
-    await fixture.turn(journal, 'retired-person')
-    await journal.close()
-    const db = openTestJournalHostDatabase(fixture.root).db
-    const source = db.prepare('SELECT generation,through_seq FROM journal_outcome_epochs').get()!
-    db.prepare(
-      "INSERT INTO journal_outcomes (generation,seq,field,entry_key,format,ordinal,value_json,deleted) VALUES (?,?,'submissions',?,2,'s0000000000000001:0000000000000001','null',1)"
-    ).run(source.generation, Number(source.through_seq) + 1, JSON.stringify('retired-person'))
-    db.prepare('UPDATE journal_outcome_epochs SET through_seq=through_seq+1').run()
+    const row = (seq: number) => ({ v: 3, epoch: 'historical', seq, fence: 0, ts: 1_000 })
+    seedTestJournalHistoricalRows(
+      openTestJournalHostDatabase(fixture.root).db,
+      fixture.IDENTITY,
+      [
+        {
+          ...row(1),
+          kind: 'epoch',
+          reason: 'session_created',
+          providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
+        },
+        {
+          ...row(2),
+          kind: 'queue',
+          messageId: 'W',
+          change: { op: 'queued', body: fixture.message('W'), position: 1, queuedAt: null }
+        },
+        {
+          ...row(3),
+          kind: 'tombstone',
+          itemId: 'orca:stop',
+          revision: 1,
+          stopEvent: { reason: 'user-stop', at: 1_000 }
+        },
+        {
+          ...row(4),
+          kind: 'submission',
+          clientMessageId: 'retired-person',
+          payloadFingerprint: 'person',
+          body: fixture.message('person'),
+          providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null },
+          source: { kind: 'user' },
+          handoverRecorded: true
+        },
+        {
+          ...row(5),
+          kind: 'dispatch',
+          clientMessageId: 'retired-person',
+          state: 'accepted',
+          providerItemId: null,
+          reason: null
+        },
+        {
+          ...row(6),
+          kind: 'tombstone',
+          itemId: 'orca:retired-person',
+          revision: 1,
+          retireSubmission: true
+        }
+      ],
+      true
+    )
     const restored = await fixture.open()
     expect(await restored.reads.submission('retired-person')).toBeUndefined()
     expect((await restored.queuedMessages.nextInputCard())?.messageId).toBe('W')
-    expect(fixture.reason(restored)).toBeNull()
+    expect(await fixture.reason(restored)).toBeNull()
   })
 }

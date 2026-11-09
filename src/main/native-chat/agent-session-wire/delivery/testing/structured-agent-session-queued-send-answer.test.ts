@@ -89,8 +89,8 @@ async function answer(
       input: async (operation) => readJournalInput(state, operation)
     },
     queuedMessages: {
-      get: (id) => state.queue.cards.get(id) ?? null,
-      clearedThrough: () => state.queuePauseMarks.cleared?.sequence ?? 0
+      get: async (id) => state.queue.cards.get(id) ?? null,
+      clearedThrough: async () => state.queuePauseMarks.cleared?.sequence ?? 0
     }
   }
   // Following sends never walks the conversation's history.

@@ -91,9 +91,12 @@ it('isolates legacy acquired history from live matching and saves exact proof be
     })
     await journal().resolveDispatch({ clientMessageId: id, state: 'unknown', fence: 1 })
   }
-  await journal().replaceEpochItems('handle_forked', store.getRecord(SESSION)!.lease.runtimeFence, [
-    { identity: { provider: 'orca', clientMessageId: 'U' }, body, ownerFence: 1 }
-  ])
+  await journal().write({
+    kind: 'epoch-replace',
+    reason: 'handle_forked',
+    fence: store.getRecord(SESSION)!.lease.runtimeFence,
+    items: [{ identity: { provider: 'orca', clientMessageId: 'U' }, body, ownerFence: 1 }]
+  })
   expect((await journal().reads.item('orca:U'))?.revision).toBeGreaterThan(1)
   const user = (id: string | null) => ({
     type: 'userMessage',
@@ -143,11 +146,12 @@ it('isolates legacy acquired history from live matching and saves exact proof be
     oldTurn([user(null), { type: 'agentMessage', id: 'old-answer', text: 'historical answer' }])
   ])
   expect(journal().cursor()).toEqual(before)
-  await journal().replaceEpochItems(
-    'handle_forked',
-    store.getRecord(SESSION)!.lease.runtimeFence,
-    []
-  )
+  await journal().write({
+    kind: 'epoch-replace',
+    reason: 'handle_forked',
+    fence: store.getRecord(SESSION)!.lease.runtimeFence,
+    items: []
+  })
   await reopen([
     oldTurn([
       user('U'),

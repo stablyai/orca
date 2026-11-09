@@ -22,7 +22,6 @@ it('publishes live text while restart keeps the saved block, then saves a clean 
   let source: Parameters<NonNullable<ProviderTimelineSink['bindLiveText']>>[0] | undefined
   const delivered: AgentJournalRenderItem[][] = []
   const sink: ProviderTimelineSink = {
-    journalItems: () => null,
     written: async () => {
       await pending
       return { ok: true }

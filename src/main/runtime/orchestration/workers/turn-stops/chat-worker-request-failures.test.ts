@@ -1,4 +1,3 @@
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   SESSION,
   tick,
@@ -157,7 +156,7 @@ it.each(['history', 'close', 'replacement', 'epoch'] as const)(
       await r.journal.write({
         kind: 'epoch-replace',
         reason: 'handle_forked',
-        providerHandle: codexProviderHandle('handle_forked'),
+        providerHandle: { kind: 'opaque', agent: 'codex', value: 'handle_forked' },
         fence: 0,
         items: []
       })
@@ -192,7 +191,7 @@ it('consumes unassigned failures and baselines adoption, epoch replacement and c
   await r.journal.write({
     kind: 'epoch-replace',
     reason: 'handle_forked',
-    providerHandle: codexProviderHandle('handle_forked'),
+    providerHandle: { kind: 'opaque', agent: 'codex', value: 'handle_forked' },
     fence: 0,
     items: []
   })

@@ -1,6 +1,6 @@
 import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { JournalStopAcceptor } from '../../../agent-session-journal/context-epochs/journal-stop-acceptance'
+import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 import { holdDelivery } from './structured-agent-session-delivery-hold.test-fixture'
 import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
@@ -104,9 +104,17 @@ it('a Stop whose acceptance fails takes back no hand-off; the draft sends as it 
   await rig.settleAccepted(working, 'working')
   await eventually(async () => expect(await rig.handoff(a)).toBeDefined())
   const firstA = await rig.handoffId(a)
-  const failing = vi
-    .spyOn(JournalStopAcceptor.prototype, 'accept')
-    .mockRejectedValueOnce(new Error('disk full'))
+  const write = AgentSessionJournal.prototype.write
+  const failing = vi.spyOn(AgentSessionJournal.prototype, 'write').mockImplementation(function (
+    this: AgentSessionJournal,
+    operation,
+    ...args
+  ) {
+    if (operation.kind === 'stop-accept') {
+      return Promise.reject(new Error('disk full'))
+    }
+    return write.call(this, operation, ...args)
+  })
   const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   try {
     const stopped = rig.stop()

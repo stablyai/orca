@@ -1,6 +1,5 @@
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionJournalProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { structuredAttentionOrigin } from '../../../../../shared/agent-session/agent-session-attention'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -159,10 +158,11 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
     await rig.host.flushStreamedEvents(SESSION)
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
     const physicalEpoch = journal.physicalCursor().epoch
-    await journal.replaceEpochItems(
-      'handle_forked',
-      attached.fence,
-      [
+    await journal.write({
+      kind: 'epoch-replace',
+      reason: 'handle_forked',
+      fence: attached.fence,
+      items: [
         {
           identity: { provider: 'orca', clientMessageId: firstRequest.clientMessageId },
           body: initial.body,
@@ -176,12 +176,8 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
           turnScope: AGENT_JOURNAL_THREAD_SCOPE
         }
       ],
-      undefined,
-      agentSessionJournalProviderHandle({
-        agent: 'codex',
-        providerHandle: rig.store.getRecord(SESSION)!.providerHandleChain.at(-1)!.handle
-      })
-    )
+      providerHandle: undefined
+    })
     await rig.host.flushStreamedEvents(SESSION)
     expect(journal.cursor().epoch).not.toBe(physicalEpoch)
     const events: AgentSessionTurnCompletionEvent[] = []

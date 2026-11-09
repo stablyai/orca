@@ -12,14 +12,12 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { holdUnsentSends, type UnsentSendHold } from './journal-unsent-send-hold'
+import type { JournalWriterOperation } from '../journal-writer-command'
+type UnsentSendHold = Extract<JournalWriterOperation, { kind: 'hold-unsent' }>['hold']
 import type { AgentSessionJournal } from '../journal-store'
 import {
   closeTestJournalHostDatabases,
-  createTrackedJournalOpener,
-  liveTestJournalRows,
-  openTestJournalHostDatabase,
-  updateTestJournalRowJson
+  createTrackedJournalOpener
 } from '../store-lifecycle/journal-host-database-test-support'
 
 export function createFixture() {
@@ -69,7 +67,7 @@ export function createFixture() {
   }
 
   function hold(journal: AgentSessionJournal, settle: UnsentSendHold = { cause: 'hostRestarted' }) {
-    return holdUnsentSends(journal, { fence: 0, hold: settle })
+    return journal.write({ kind: 'hold-unsent', fence: 0, hold: settle })
   }
 
   const MAIL_SOURCE: AgentMessageSource = {
@@ -118,30 +116,8 @@ export function createFixture() {
     return open()
   }
 
-  async function storeSubmissionSourceAs(
-    journal: AgentSessionJournal,
-    id: string,
-    source: unknown
-  ): Promise<void> {
-    await journal.close()
-    const seq = (await journal.reads.submission(id))?.submittedSequence
-    const { db } = openTestJournalHostDatabase(root)
-    const stored = liveTestJournalRows(db, IDENTITY.sessionId).find((row) => row.seq === seq)
-    if (!stored) {
-      throw new Error(`no stored row for ${id}`)
-    }
-    const row: unknown = JSON.parse(stored.rowJson)
-    updateTestJournalRowJson(
-      db,
-      IDENTITY.sessionId,
-      stored.seq,
-      JSON.stringify({ ...(typeof row === 'object' ? row : {}), source })
-    )
-  }
-
-  function cardOrder(journal: AgentSessionJournal): string[] {
-    return journal.queuedMessages
-      .list()
+  async function cardOrder(journal: AgentSessionJournal): Promise<string[]> {
+    return (await journal.queuedMessages.list())
       .filter((card) => card.state === 'waiting')
       .map((card) => card.messageId)
   }
@@ -187,7 +163,6 @@ export function createFixture() {
     },
     set root(value: typeof root) {
       root = value
-    },
-    storeSubmissionSourceAs
+    }
   }
 }

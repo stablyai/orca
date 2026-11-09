@@ -107,7 +107,7 @@ export function registerJournalSubmissionPositionsTests(): void {
         dispatchState: 'rejected',
         answeredInTurn: { turnItemId, via: 'start' }
       })
-      expect(readAgentSessionHydrationPage(journal).submissions).toEqual([
+      expect((await readAgentSessionHydrationPage(journal)).submissions).toEqual([
         expect.objectContaining({ answeredInTurn: { turnItemId, via: 'start' } })
       ])
       await journals.closeAll()
@@ -124,7 +124,7 @@ export function registerJournalSubmissionPositionsTests(): void {
         await sendHandedOverThenWithdrawn()
 
       expect(pending).toMatchObject({ submittedSequence: submitted.sequence })
-      expect(handedOver.sequence).toBeGreaterThan(submitted.sequence)
+      expect(handedOver?.sequence).toBeGreaterThan(submitted.sequence)
       expect(await journal.reads.submission('send-1')).toMatchObject({
         dispatchState: 'rejected',
         submittedSequence: submitted.sequence
@@ -134,7 +134,7 @@ export function registerJournalSubmissionPositionsTests(): void {
         (await readTestJournalItems(journal)).find(
           (item) => item.itemId === agentJournalSubmissionKey('send-1')
         )?.sequence
-      ).toBe(withdrawn.sequence)
+      ).toBe(withdrawn?.sequence)
     })
   })
 }

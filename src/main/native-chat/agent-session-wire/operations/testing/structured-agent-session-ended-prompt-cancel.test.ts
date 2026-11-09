@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 // Dismiss stale-generation prompts in the journal without stopping current turns or withdrawing queued work.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -73,11 +74,11 @@ async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; i
   return { journal, itemId: card.itemId }
 }
 
-function queueUntouched(journal: AgentSessionJournal): void {
-  expect(journal.queuedMessages.list().map((card) => [card.messageId, card.state])).toEqual([
-    ['queued-1', 'waiting']
-  ])
-  expect(structuredQueuePauses(journal)).toEqual([])
+async function queueUntouched(journal: AgentSessionJournal): Promise<void> {
+  expect((await journal.queuedMessages.list()).map((card) => [card.messageId, card.state])).toEqual(
+    [['queued-1', 'waiting']]
+  )
+  expect(await structuredQueuePauses(journal)).toEqual([])
 }
 
 function provider(routePromptCancel?: StructuredAgentSessionAdapter['routePromptCancel']) {
@@ -117,8 +118,10 @@ function chatStop() {
   }))
 }
 
-function resolution(journal: AgentSessionJournal, itemId: string) {
-  const body = journal.snapshot().items.find((item) => item.itemId === itemId)?.body
+async function resolution(journal: AgentSessionJournal, itemId: string) {
+  const body = (await readTestJournalSnapshot(journal)).items.find(
+    (item) => item.itemId === itemId
+  )?.body
   return body?.kind === 'approval' || body?.kind === 'question' ? body.resolution.state : undefined
 }
 
@@ -141,6 +144,6 @@ describe('a question an ended generation raised, cancelled from a client that st
     expect(interrupt).not.toHaveBeenCalled()
     expect(agent.cancelTurn).not.toHaveBeenCalled()
     expect(agent.dismissPrompt).not.toHaveBeenCalled()
-    queueUntouched(journal)
+    await queueUntouched(journal)
   })
 })

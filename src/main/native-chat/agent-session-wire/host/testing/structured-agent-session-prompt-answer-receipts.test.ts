@@ -63,8 +63,8 @@ function journal() {
   return open
 }
 
-function promptBody(itemId: string): AgentJournalItemBody {
-  const body = journal().itemBody(itemId)
+async function promptBody(itemId: string): Promise<AgentJournalItemBody> {
+  const body = await journal().reads.itemBody(itemId)
   if (!body) {
     throw new Error(`no item ${itemId}`)
   }

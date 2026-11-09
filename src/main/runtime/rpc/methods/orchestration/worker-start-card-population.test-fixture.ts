@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import type { createOrchestrationRpcHarness } from './rpc-test-harness'
 import { expect } from 'vitest'
 import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -5,15 +6,17 @@ import type { AgentSessionJournal } from '../../../../native-chat/agent-session-
 import type { JournalHostDatabase } from '../../../../native-chat/agent-session-journal/database/journal-host-database'
 import { COORD } from './worker-start-card-contract-test-fixture'
 
-export function expectWorkerStartPopulation(input: {
+export async function expectWorkerStartPopulation(input: {
   journal: AgentSessionJournal
   count: number
   connection: JournalHostDatabase['db']
   facts: { dispatchId: string; workerAddress: string; task: string; name: string }[]
   before: AgentJournalSnapshot
-}): void {
+}): Promise<void> {
   const { journal, facts, count, connection, before } = input
-  const cards = journal.snapshot().items.filter(({ body }) => body.kind === 'agent-start')
+  const cards = (await readTestJournalSnapshot(journal)).items.filter(
+    ({ body }) => body.kind === 'agent-start'
+  )
   expect(cards.map(({ body }) => body)).toEqual(
     facts.map((fact) => ({
       kind: 'agent-start',

@@ -692,7 +692,12 @@ describe('the structured redrive publication edge', () => {
     const { identity, journal, fence, onJournalActivity } = await startWatchedWorker()
     const before = journal.cursor()
 
-    await journal.rollEpoch('unreconcilable_prefix', fence)
+    await journal.write({
+      kind: 'epoch-replace',
+      reason: 'unreconcilable_prefix',
+      fence,
+      items: []
+    })
     vi.advanceTimersByTime(300)
 
     expect(journal.cursor().epoch).not.toBe(before.epoch)

@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -90,16 +91,18 @@ function settle(fence: number, deathEvidence: AgentSessionDeathEvidence | null) 
   })
 }
 
-function turnState(turnId: string) {
-  const item = journal
-    .snapshot()
-    .items.find((row) => readAgentJournalTurn(row.body)?.turnId === turnId)
+async function turnState(turnId: string) {
+  const item = (await readTestJournalSnapshot(journal)).items.find(
+    (row) => readAgentJournalTurn(row.body)?.turnId === turnId
+  )
   return readAgentJournalTurn(item?.body)?.state
 }
 
-function callLifecycle(turnId: string, ordinal: number) {
+async function callLifecycle(turnId: string, ordinal: number) {
   const key = agentJournalItemKey(identityOf(turnId, ordinal))
-  const body = journal.snapshot().items.find((item) => item.itemId === key)?.body
+  const body = (await readTestJournalSnapshot(journal)).items.find(
+    (item) => item.itemId === key
+  )?.body
   return body?.kind === 'tool-call' ? agentJournalToolCallLifecycle(body) : undefined
 }
 

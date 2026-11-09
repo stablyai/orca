@@ -76,7 +76,7 @@ describe('what the journal already holds stands', () => {
       body: { ...runningTool('read'), state: 'completed' }
     })
     await rig.rows()
-    const blind = rig.assemble({ sink: { ...rig.sink, journalItems: () => null } })
+    const blind = rig.assemble({ sink: rig.sink })
     blind.apply({ type: 'item.open', item: 'tool', body: runningTool('read') })
     await rig.rows()
     expect(
@@ -174,8 +174,7 @@ describe('requests', () => {
       fence: 1,
       turnScope: { kind: 'turn', turnItemId: providerTurnItemId('t1') }
     })
-    // Simulate a same-generation assembler with no journal view.
-    const blind = rig.assemble({ sink: { ...rig.sink, journalItems: () => null } })
+    const blind = rig.assemble({ sink: rig.sink })
     blind.apply({ type: 'request.open', request: 'p1', body: pendingApproval })
     expect((await rig.row(providerItemId('request', 'p1')))?.body).toMatchObject({
       resolution: { state: 'resolved', selectedOptionId: 'allow' }

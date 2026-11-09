@@ -58,7 +58,7 @@ export function withJournalQueueMembers<T extends AppendingDouble>(
       beforeRun?: () => boolean
     ): Promise<JournalStepsResult> => {
       const result: JournalStepsResult = { outcomes: [] }
-      const item = (itemId: string) => journal.item?.(itemId) ?? null
+      const item = async (itemId: string) => (await journal.reads.item(itemId)) ?? null
       const view = journalTimelineItemsView(item, () => {
         const items: AgentJournalRenderItem[] = []
         journal.visitItems?.((itemId) => {

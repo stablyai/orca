@@ -41,9 +41,8 @@ async function queue(text: string, mail = false) {
   }
   return result.value.queued.messageId
 }
-function order() {
-  return journal()
-    .queuedMessages.list()
+async function order() {
+  return (await journal().queuedMessages.list())
     .filter((card) => card.state === 'waiting' || card.state === 'returned')
     .map((card) => card.messageId)
 }

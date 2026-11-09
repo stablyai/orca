@@ -115,7 +115,7 @@ export function registerJournalQueuedRejectionBatchTests(): void {
     })
 
     await Promise.all([
-      journal.rejectQueuedSubmissions(0, withdrawal),
+      journal.write({ kind: 'queued-reject', fence: 0, rejection: withdrawal }),
       journal.appendLifecycleBatch(startFailureBatch())
     ])
 

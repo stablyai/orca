@@ -111,7 +111,7 @@ export function stopEventsAtClose(connection: FakeConnection): () => number | un
   const close = connection.close
   connection.close = async () => {
     const journal = fixture.host.collaboratorsForTests().sessions.get(SESSION)?.journal
-    atClose ??= journal?.stopMarks.latest()?.event.reason === 'user-stop' ? 1 : 0
+    atClose ??= (await journal?.stopMarks.latest())?.event.reason === 'user-stop' ? 1 : 0
     return close()
   }
   return () => atClose

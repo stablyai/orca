@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -74,16 +75,8 @@ export async function note(body: AgentJournalItemBody = unconfirmed) {
   await journal.appendItem(noteIdentity, body, { fence: 1, turnScope: scope })
 }
 
-export function readNote() {
-  return journal.snapshot().items.find((item) => item.itemId === noteId)!
-}
-
-export function rows() {
-  const result = journal.readSince({ epoch: journal.physicalCursor().epoch, sequence: 0 })
-  if (!result.ok) {
-    throw new Error(result.reset)
-  }
-  return result.rows
+export async function readNote() {
+  return (await readTestJournalSnapshot(journal)).items.find((item) => item.itemId === noteId)!
 }
 
 export const fixture = {

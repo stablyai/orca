@@ -148,7 +148,7 @@ describe('a chat as the assignee of orchestration dispatch', () => {
       orchestration: { message: 'task', runId, taskId, dispatchId }
     }
     // On the card's body: the turn the queue sends carries it, and the provider never sees it.
-    expect(queuedRows(PEER_CHAT).map((card) => card.body.from)).toMatchObject([from])
+    expect((await queuedRows(PEER_CHAT)).map((card) => card.body.from)).toMatchObject([from])
 
     await endTurn()
     await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)

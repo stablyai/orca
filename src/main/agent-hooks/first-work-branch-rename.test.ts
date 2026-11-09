@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
 import '../../shared/worktree/id'
@@ -78,6 +85,40 @@ function elapseGenerationBackoff(): void {
   clockMs += Math.max(...FIRST_WORK_GENERATION_RETRY_DELAYS_MS)
 }
 
+const journals = createTrackedJournalOpener()
+const roots: string[] = []
+afterEach(async () => {
+  await journals.closeAll()
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+})
+
+async function renameJournal(agent: 'claude' | 'codex', workspaceId: string) {
+  const root = await mkdtemp(join(tmpdir(), 'orca-first-work-sql-'))
+  roots.push(root)
+  return journals.open({
+    stateDirectory: root,
+    identity: {
+      sessionId: 'session',
+      workspaceId,
+      hostId: 'local',
+      agent,
+      providerHandle:
+        agent === 'claude' ? claudeProviderHandle('native', null) : codexProviderHandle('native')
+    }
+  })
+}
+
+const USER = {
+  kind: 'message',
+  role: 'user',
+  blocks: [{ type: 'text', text: 'Fix auth' }]
+} satisfies AgentJournalItemBody
+const TURN = {
+  kind: 'status',
+  text: 'Working',
+  turnLifecycle: { turnId: 'turn-1', state: 'running' }
+} satisfies AgentJournalItemBody
+
 describe('maybeAutoRenameBranchOnFirstWork', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -113,29 +154,18 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         getFolderWorkspacePath: () => '/workspace/platform',
         isPendingFirstAgentMessageRename: () => true
       })
-      const items: AgentJournalRenderItem[] = []
-      // Advance journal sequence so projection caching cannot hide a rename event.
-      let sequence = 0
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
-      const journal = {
-        snapshot: () => ({ items, submissions: [] }),
-        statusRead: () => ({ items, submissions: [] }),
-        inputOrder: {
-          inputCount: () => 0,
-          inputOrdinal: () => Infinity,
-          recoverableSubmissions: () => []
-        },
-        context: { floor: () => null },
-        item: ((itemId) =>
-          items.find((item) => item.itemId === itemId) ??
-          null) satisfies AgentSessionJournal['item'],
-        stopMarks: { latest: () => null, revision: () => 0 },
-        lastActivityAt: () => 1,
-        cursor: () => ({ epoch: 1, sequence: (sequence += 1) }),
-        itemFence: () => undefined,
-        wroteBeforeOpen: () => false,
-        runningTurn: () => null
-      } as unknown as AgentSessionJournal
+      const journal = await renameJournal(agent, workspaceId)
+      const userIdentity =
+        agent === 'claude'
+          ? { provider: 'claude' as const, sessionId: 'native', uuid: 'user' }
+          : { provider: 'codex' as const, threadId: 'native', turnId: 'turn-1', ordinal: 0 }
+      const turnIdentity =
+        agent === 'claude'
+          ? { provider: 'claude' as const, sessionId: 'native', uuid: 'turn' }
+          : { provider: 'codex' as const, threadId: 'native', turnId: 'turn-1', ordinal: 1 }
+      const appendTurn = () =>
+        journal.appendItem(turnIdentity, TURN, { fence: 0, turnScope: { kind: 'thread' } })
+      const removeTurn = () => journal.appendTombstone(turnIdentity, { fence: 0 })
       const pending: Promise<void>[] = []
       const observe = vi.fn((summary, options) => {
         const work = maybeAutoRenameWorkspaceOnFirstStructuredTurn(summary, options, deps)
@@ -166,40 +196,28 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         now: () => 1,
         onStatusChanged: observe
       })
-      const user = {
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] }
-      } as AgentJournalRenderItem
-      const turn = {
-        body: {
-          kind: 'status',
-          text: 'Working',
-          turnLifecycle: { turnId: 'turn-1', state: 'running' }
-        }
-      } as AgentJournalRenderItem
-      items.push(user, turn)
-      feed.publish('session', journal, { replay: true })
+      await journal.appendItem(userIdentity, USER, { fence: 0, turnScope: { kind: 'thread' } })
+      await appendTurn()
+      await feed.publish('session', journal, { replay: true })
       await Promise.all(pending)
       expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
 
-      items.pop()
-      feed.publish('session', journal)
-      items.push(turn)
+      await removeTurn()
+      await feed.publish('session', journal)
+      await appendTurn()
       generateBranchNameMock.mockResolvedValueOnce({ success: false, error: 'temporary failure' })
-      feed.publish('session', journal)
+      await feed.publish('session', journal)
       await Promise.all(pending)
       expect(generateBranchNameMock).toHaveBeenCalledOnce()
       expect(setDisplayName).not.toHaveBeenCalled()
-      const callsBeforeOutput = observe.mock.calls.length
-      for (let index = 0; index < 100; index++) {
-        feed.publish('session', journal)
-      }
-      expect(observe).toHaveBeenCalledTimes(callsBeforeOutput)
+      await feed.publish('session', journal)
+      expect(generateBranchNameMock).toHaveBeenCalledOnce()
 
       elapseGenerationBackoff()
-      items.pop()
-      feed.publish('session', journal)
-      items.push(turn)
-      feed.publish('session', journal)
+      await removeTurn()
+      await feed.publish('session', journal)
+      await appendTurn()
+      await feed.publish('session', journal)
       await Promise.all(pending)
       expect(generateBranchNameMock).toHaveBeenCalledTimes(2)
       expect(setDisplayName).toHaveBeenCalledWith(workspaceId, 'Fix auth')
@@ -219,45 +237,14 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const { deps, setDisplayName, setRenameError } = makeDeps({
       getRepo: () => ({ id: REPO_ID, kind: 'folder', path: '/workspace/platform' }) as Repo
     })
-    const items: AgentJournalRenderItem[] = [
-      {
-        itemId: 'user-1',
-        sequence: 1,
-        revision: 1,
-        observedAt: 1,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] }
-      },
-      {
-        itemId: 'turn-1',
-        sequence: 2,
-        revision: 1,
-        observedAt: 1,
-        body: {
-          kind: 'status',
-          text: 'Working',
-          turnLifecycle: { turnId: 'turn-1', state: 'running' }
-        }
-      }
-    ]
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed uses these held rows and provenance reads; the item lookup is checked against the real journal contract.
-    const journal = {
-      lastActivityAt: () => 1,
-      context: { floor: () => null },
-      stopMarks: { latest: () => null, revision: () => 0 },
-      cursor: () => ({ epoch: 1, sequence: 1 }),
-      snapshot: () => ({ items, submissions: [] }),
-      statusRead: () => ({ items, submissions: [] }),
-      inputOrder: {
-        inputCount: () => 0,
-        inputOrdinal: () => Infinity,
-        recoverableSubmissions: () => []
-      },
-      item: ((itemId) =>
-        items.find((item) => item.itemId === itemId) ?? null) satisfies AgentSessionJournal['item'],
-      itemFence: () => undefined,
-      wroteBeforeOpen: () => false,
-      runningTurn: () => null
-    } as unknown as AgentSessionJournal
+    const journal = await renameJournal('codex', workspaceId)
+    for (const [ordinal, body] of [USER, TURN].entries()) {
+      await journal.appendItem(
+        { provider: 'codex', threadId: 'native', turnId: 'turn-1', ordinal },
+        body,
+        { fence: 0, turnScope: { kind: 'thread' } }
+      )
+    }
     const location = {
       executionHostId: 'local' as const,
       wslDistro: null,
@@ -279,7 +266,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       }
     })
 
-    feed.publish('session', journal)
+    await feed.publish('session', journal)
     await Promise.all(pending)
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()

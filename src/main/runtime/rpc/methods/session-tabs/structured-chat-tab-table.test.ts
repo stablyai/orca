@@ -75,10 +75,15 @@ describe('a chat tab across /clear', () => {
   it('replays a lost answer with the same tab and one divider', async () => {
     await createChat(HOST_TEST_SESSION)
     const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
-    const original = journal.context.clear.bind(journal.context)
-    const lost = vi.spyOn(journal.context, 'clear').mockImplementationOnce(async (...args) => {
-      await original(...args)
-      throw new Error('lost acknowledgement')
+    const original = journal.write.bind(journal)
+    let loseClear = true
+    const lost = vi.spyOn(journal, 'write').mockImplementation(async (operation, prepare) => {
+      const result = await original(operation, prepare)
+      if (operation.kind === 'context-clear' && loseClear) {
+        loseClear = false
+        throw new Error('lost acknowledgement')
+      }
+      return result
     })
     const params = {
       command: 'clear',

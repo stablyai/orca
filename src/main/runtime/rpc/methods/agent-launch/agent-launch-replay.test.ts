@@ -206,13 +206,9 @@ describe('a fresh launch writes the ledger once before its effect', () => {
       fingerprint: 'fp-1',
       now: NOW
     }
-    const claimAfter = (decision: { decision: string; row?: AgentSessionOperationRow }) =>
-      decision.decision === 'admit' ||
-      (decision.decision === 'replay' && decision.row?.outcome.status === 'pending')
-
     const results = await Promise.all([
-      store.admitAndClaimOperation(admission, claimAfter),
-      store.admitAndClaimOperation(admission, claimAfter)
+      store.admitAndClaimOperation(admission),
+      store.admitAndClaimOperation(admission)
     ])
 
     expect(results.filter((result) => result.claim?.claim === 'won')).toHaveLength(1)

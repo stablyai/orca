@@ -6,12 +6,9 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/age
 import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
-import { AgentSessionJournal } from './journal-store'
+import type { AgentSessionJournal } from './journal-store'
 import { SqlAgentSessionJournal } from './journal-sql-store'
-import {
-  closeTestJournalHostDatabase,
-  openTestJournalHostDatabase
-} from './store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from './store-lifecycle/journal-host-database-test-support'
 import {
   journalSqlReaderPath,
   journalSqlWorkerPath
@@ -39,18 +36,6 @@ type Journal = Pick<AgentSessionJournal, 'appendItem' | 'settleUnheldTurns'> & {
   turnState: (turnId: string) => Promise<unknown>
 }
 
-async function memory(root: string): Promise<Journal> {
-  const journal = new AgentSessionJournal({
-    database: openTestJournalHostDatabase(root),
-    identity,
-    now: () => 100
-  })
-  await journal.open()
-  return Object.assign(journal, {
-    turnState: async (turnId: string) => (await journal.reads.item(`orca:${turnId}`))?.body
-  })
-}
-
 async function sql(root: string): Promise<Journal> {
   const { journalDatabase } = await openStructuredAgentSessionSqlJournalDatabase({
     stateDirectory: root,
@@ -69,61 +54,55 @@ async function sql(root: string): Promise<Journal> {
   })
 }
 
-it.each([
-  ['memory', memory],
-  ['sql', sql]
-])(
-  'selects unheld running turns after earlier queued writes on the %s writer',
-  async (_name, open) => {
-    const root = await mkdtemp(join(tmpdir(), 'journal-unheld-turns-'))
-    roots.push(root)
-    const journal = await open(root)
-    const turn = (
-      turnId: string,
-      state: 'running' | 'completed',
-      fence: number,
-      producer: AgentJournalProducerLinkage = {}
-    ) =>
-      journal.appendItem(
-        { provider: 'orca', clientMessageId: turnId },
-        { kind: 'turn', turnId, state, ...(state === 'completed' ? { completedAt: 90 } : {}) },
-        { fence, turnScope: { kind: 'thread' }, ...producer }
-      )
-    await turn('older-child', 'running', 1)
-    await turn('finished', 'running', 2)
+it('selects unheld running turns after earlier queued writes on the SQL writer', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'journal-unheld-turns-'))
+  roots.push(root)
+  const journal = await sql(root)
+  const turn = (
+    turnId: string,
+    state: 'running' | 'completed',
+    fence: number,
+    producer: AgentJournalProducerLinkage = {}
+  ) =>
+    journal.appendItem(
+      { provider: 'orca', clientMessageId: turnId },
+      { kind: 'turn', turnId, state, ...(state === 'completed' ? { completedAt: 90 } : {}) },
+      { fence, turnScope: { kind: 'thread' }, ...producer }
+    )
+  await turn('older-child', 'running', 1)
+  await turn('finished', 'running', 2)
 
-    // Queued, not awaited: the settlement must see these at its write position.
-    const queued = [
-      turn('restored', 'running', 2),
-      turn('live', 'running', 2),
-      turn('subagent', 'running', 2, { agentId: 'helper' }),
-      turn('finished', 'completed', 2)
-    ]
-    const settled = journal.settleUnheldTurns({
-      sessionId: 'session',
-      fence: 2,
-      generation: 'g1',
-      liveTurnId: 'live'
-    })
-    await Promise.all([...queued, settled])
+  // Queued, not awaited: the settlement must see these at its write position.
+  const queued = [
+    turn('restored', 'running', 2),
+    turn('live', 'running', 2),
+    turn('subagent', 'running', 2, { agentId: 'helper' }),
+    turn('finished', 'completed', 2)
+  ]
+  const settled = journal.settleUnheldTurns({
+    sessionId: 'session',
+    fence: 2,
+    generation: 'g1',
+    liveTurnId: 'live'
+  })
+  await Promise.all([...queued, settled])
 
-    expect(await journal.turnState('restored')).toMatchObject({ state: 'interrupted' })
-    expect(await journal.turnState('finished')).toMatchObject({
-      state: 'completed',
-      completedAt: 90
-    })
-    for (const turnId of ['live', 'subagent', 'older-child']) {
-      expect(await journal.turnState(turnId)).toMatchObject({ state: 'running' })
-    }
-
-    // One settlement per child generation, even when a later turn runs unheld.
-    await turn('later', 'running', 2)
-    await journal.settleUnheldTurns({
-      sessionId: 'session',
-      fence: 2,
-      generation: 'g1',
-      liveTurnId: null
-    })
-    expect(await journal.turnState('later')).toMatchObject({ state: 'running' })
+  expect(await journal.turnState('restored')).toMatchObject({ state: 'interrupted' })
+  expect(await journal.turnState('finished')).toMatchObject({
+    state: 'completed',
+    completedAt: 90
+  })
+  for (const turnId of ['live', 'subagent', 'older-child']) {
+    expect(await journal.turnState(turnId)).toMatchObject({ state: 'running' })
   }
-)
+
+  // One settlement per child generation, even when a later turn runs unheld.
+  await turn('later', 'running', 2)
+  await journal.settleUnheldTurns({
+    sessionId: 'session',
+    fence: 2,
+    generation: 'g1',
+    liveTurnId: null
+  })
+  expect(await journal.turnState('later')).toMatchObject({ state: 'running' })
+})

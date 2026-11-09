@@ -175,7 +175,7 @@ async function foundReceiptSession(database: JournalSqlDatabase): Promise<void> 
             request: {
               sessionId: 'session-1',
               location: {
-                executionHostId: 'host',
+                executionHostId: 'local',
                 workspaceId: 'workspace',
                 workspaceKind: 'git-worktree',
                 wslDistro: null

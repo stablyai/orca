@@ -1,67 +1,29 @@
 import type Database from '../../../sqlite/sync-database'
-import type { AgentSessionJournal } from '../journal-store'
-import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
-import { readJournalSessionEpoch, insertJournalRow } from '../durable-rows/journal-row-table'
-import { applyJournalRow } from '../projection/journal-reducer'
-import { isolateJournalTransition } from '../projection/journal-reducer-transition'
+import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalRow } from '../durable-rows/journal-row-schema'
+import { insertJournalRow, publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
+import { runJournalTransaction } from '../database/journal-database'
+import { publishJournalOutcomeEpoch } from '../outcomes/journal-outcome-epoch.test-fixture'
 
-/** Input fixtures stand for a chat an older build wrote and goes on writing: writes to its input
- * epoch stay input rows, as that build's writer stored them, so the input reader meets writer-made
- * rows. A context this build replaces uses its current writer, including logical replacement. */
-const historicalWriters = new WeakMap<AgentSessionJournal, (() => void) | null>()
-
-/** End historical authoring; subsequent operations use the unmodified production writer. */
-export function finishTestJournalHistoricalInputs(journal: AgentSessionJournal): void {
-  historicalWriters.get(journal)?.()
-}
-
-export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
-  const projection = journal['projection']
-  const prepare = projection.prepare.bind(projection)
-  const db = journal['database'].db
-  const sessionId = journal['identity'].sessionId
-  const epoch = readJournalSessionEpoch(db, sessionId)
-  if (historicalWriters.has(journal) || (epoch && journalOutcomeSource(db, sessionId, epoch))) {
-    return
-  }
-  journal.inputOrder.beginReconstruction()
-  historicalWriters.set(journal, () => {
-    projection.prepare = prepare
-    historicalWriters.set(journal, null)
-  })
-  projection.prepare = (db, rows, savedAt, finishFold) => {
-    const state = journal['state']
-    if (
-      journalOutcomeSource(db, state.sessionId, state.epoch) ||
-      rows.some((row) => row.kind === 'epoch')
-    ) {
-      const adopt = prepare(db, rows, savedAt, finishFold)
-      return () => {
-        adopt()
-        finishTestJournalHistoricalInputs(journal)
-      }
-    }
-    const transition = isolateJournalTransition(state, (draft) => {
-      for (const row of rows) {
-        applyJournalRow(draft, row, savedAt)
-      }
-      finishFold?.(draft)
-    })
-    for (const row of rows) {
-      insertJournalRow(db, state.sessionId, row, savedAt)
-    }
-    return () => {
-      transition.adopt()
-    }
-  }
-}
-
-export function assertTestJournalHistoricalInputs(
+/** Author frozen saved rows before opening the current SQL journal. */
+export function seedTestJournalHistoricalRows(
   db: Database.Database,
-  journal: AgentSessionJournal
+  identity: AgentSessionJournalIdentity,
+  rows: readonly JournalRow[],
+  retained = false
 ): void {
-  const state = journal['state']
-  if (!historicalWriters.get(journal) || journalOutcomeSource(db, state.sessionId, state.epoch)) {
-    throw new Error('historical journal authoring ended at current-writer takeover')
+  const first = rows[0]
+  if (first?.kind !== 'epoch') {
+    throw new Error('historical fixture needs its founding epoch')
   }
+  runJournalTransaction(db, () => {
+    publishJournalSessionEpoch(db, identity, first.epoch)
+    if (retained) {
+      publishJournalOutcomeEpoch(db, identity.sessionId, first.epoch, rows)
+    } else {
+      for (const row of rows) {
+        insertJournalRow(db, identity.sessionId, row)
+      }
+    }
+  })
 }

@@ -54,7 +54,7 @@ function journalTarget(): StructuredAgentSessionEventTarget {
   return { journal, fence: 1, publish: vi.fn() }
 }
 
-const row = () => journal.itemBody(agentJournalItemKey(ROW))
+const row = async () => await journal.reads.itemBody(agentJournalItemKey(ROW))
 
 describe('resolved revisions', () => {
   it('resolves each queued revision against the row as the journal holds it when it runs', async () => {

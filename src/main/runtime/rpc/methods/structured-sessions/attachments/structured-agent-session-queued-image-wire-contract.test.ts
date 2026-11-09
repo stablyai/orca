@@ -1,9 +1,5 @@
-import {
-  appendTestJournalQueueRow,
-  openTestJournalHostDatabase
-} from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { seedTestJournalQueueCard } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
-import { finishTestJournalHistoricalInputs } from '../../../../../native-chat/agent-session-journal/replay/journal-historical-inputs.test-support'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -272,16 +268,19 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
   await rig.host.flushStreamedEvents(SESSION)
   const j = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const saved = `recovery:${id}`
-  appendTestJournalQueueRow(openTestJournalHostDatabase(rig.root).db, j, saved, {
-    op: 'queued',
+  await seedTestJournalQueueCard(rig.root, j, {
+    messageId: saved,
+    state: 'waiting',
+    holdReason: 'delivery_unconfirmed',
+    returnedReason: null,
+    returnedRejection: null,
+    consumedAs: null,
     body,
     recovers: id,
     position: -1,
     queuedAt: j.cursor(),
-    options: { model: 'default' },
-    returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
+    options: { model: 'default' }
   })
-  finishTestJournalHistoricalInputs(j)
   async function published() {
     const rpc = await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, OLD)
     if (!rpc.ok) {

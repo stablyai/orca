@@ -18,7 +18,7 @@ export type MobileQueuedEditHostFixture = {
   sessionId: string
   start: () => Promise<string>
   insert: (input: Omit<StoredQueuedMessage, 'position'>) => Promise<StoredQueuedMessage>
-  read: (messageId: string) => StoredQueuedMessage | null
+  read: (messageId: string) => Promise<StoredQueuedMessage | null>
   published: (messageId: string) => Promise<AgentSessionQueuedMessage>
   request: (method: string, params: unknown) => Promise<unknown>
   restart: () => Promise<void>

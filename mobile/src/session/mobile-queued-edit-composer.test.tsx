@@ -443,7 +443,7 @@ describe('real phone inline composer from More through picker pruning and host b
         })
         // Equal Save proves no durable sender mutation or update RPC.
         await act(async () => button('Save edited message').props.onPress())
-        expect(rig.read(before.messageId)?.body.from).toEqual(from)
+        expect((await rig.read(before.messageId))?.body.from).toEqual(from)
         expect(
           sendRequest.mock.calls.some(([method]) => method === 'agentSession.queuedMessageUpdate')
         ).toBe(false)
@@ -455,7 +455,7 @@ describe('real phone inline composer from More through picker pruning and host b
         ])
         expect(error.mock.calls).toEqual([])
         expect(state.hook!.queued.editor).toBeUndefined()
-        const accepted = rig.read(before.messageId)!
+        const accepted = (await rig.read(before.messageId))!
         expect(accepted).toMatchObject({
           position: before.position,
           options: before.options,
@@ -463,7 +463,7 @@ describe('real phone inline composer from More through picker pruning and host b
         })
         expect(accepted.body).not.toHaveProperty('from')
         await rig.restart()
-        const reopened = rig.read(before.messageId)!
+        const reopened = (await rig.read(before.messageId))!
         expect(reopened).toEqual(accepted)
         const publication = snapshotEvent({
           queuedMessages: [await rig.published(reopened.messageId)]

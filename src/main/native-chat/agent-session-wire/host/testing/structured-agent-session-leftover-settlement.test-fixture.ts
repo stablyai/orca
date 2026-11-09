@@ -138,8 +138,10 @@ export function currentJournal(current: QueuedMessageTestRig) {
   return journal
 }
 
-export function currentWork(current: QueuedMessageTestRig): StructuredAgentSessionCurrentWork {
-  const work = hostStructuredAgentSessionCurrentWork(
+export async function currentWork(
+  current: QueuedMessageTestRig
+): Promise<StructuredAgentSessionCurrentWork> {
+  const work = await hostStructuredAgentSessionCurrentWork(
     { store: current.store, sessions: current.host.collaboratorsForTests().sessions },
     SESSION
   )
@@ -149,6 +151,7 @@ export function currentWork(current: QueuedMessageTestRig): StructuredAgentSessi
   return work
 }
 
-export function turnState(current: QueuedMessageTestRig): string | undefined {
-  return readAgentJournalTurn(currentJournal(current).itemBody(TURN_KEY) ?? undefined)?.state
+export async function turnState(current: QueuedMessageTestRig): Promise<string | undefined> {
+  return readAgentJournalTurn((await currentJournal(current).reads.itemBody(TURN_KEY)) ?? undefined)
+    ?.state
 }

@@ -93,7 +93,7 @@ describe("Stop's event", () => {
     await rig.workingSend()
     let pausedAtInterrupt: unknown = 'not interrupted'
     rig.cancelTurn.mockImplementationOnce(async () => {
-      pausedAtInterrupt = structuredQueuePauses(journal())[0]?.reason ?? null
+      pausedAtInterrupt = (await structuredQueuePauses(journal()))[0]?.reason ?? null
       return { cancelled: true }
     })
     expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
@@ -194,7 +194,9 @@ describe("Stop's event", () => {
     // Neither stopped card can come back, so a reopen holds nothing.
     await rig.restartHostProcess()
     await rig.queuePause()
-    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).not.toContain('restarted')
+    expect((await structuredQueuePauses(journal())).map((pause) => pause.reason)).not.toContain(
+      'restarted'
+    )
   })
 
   it('survives a host crash: Resume releases waiting work without resending the uncertain original', async () => {
@@ -212,7 +214,7 @@ describe("Stop's event", () => {
     expect((await rig.handoff(sentId))?.dispatchState).toBe('unknown')
     // The ordinary original never becomes queued work or resends automatically.
     await expectHeld(null, waiting)
-    expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toEqual([
+    expect((await structuredQueuePauses(journal())).map((pause) => pause.reason)).toEqual([
       'stopped',
       'restarted'
     ])
@@ -250,10 +252,9 @@ describe("a /clear's carried cards", () => {
     }
     // Held there, unshown: nothing runs in the fresh conversation.
     expect(await rig.queuePause(replacementId)).toBeNull()
-    expect(structuredQueuePauses(journal(replacementId)).map((pause) => pause.reason)).toEqual([
-      'stopped',
-      'cleared'
-    ])
+    expect(
+      (await structuredQueuePauses(journal(replacementId))).map((pause) => pause.reason)
+    ).toEqual(['stopped', 'cleared'])
     // Idle there, so the person's send goes straight out rather than queueing.
     const text = hostTestMessage('hi')
     const person = rig.host.send(QUEUED_RIG_CALLER, {
@@ -288,6 +289,6 @@ describe("a /clear's carried cards", () => {
       }
     })
     expect((await journal(replacementId).queuedMessages.list())[0]?.messageId).toBe(carried)
-    expect(structuredQueuePauses(journal(replacementId))).toEqual([])
+    expect(await structuredQueuePauses(journal(replacementId))).toEqual([])
   })
 })

@@ -1,8 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { evictStructuredAgentSession } from '../structured-agent-session-eviction'
 import { StructuredAgentSessionHostRuntimeState } from '../../host/structured-agent-session-host-runtime-state'
-import { withJournalQueueMembers } from '../../journal-ingress/testing/structured-agent-session-journal-double.test-fixture'
 import { recordingStructuredAgentSessionLogger } from '../../host/testing/structured-agent-session-logger.test-fixture'
+
+const journals = createTrackedJournalOpener()
+const roots: string[] = []
+afterEach(async () => {
+  await journals.closeAll()
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+})
 
 function runtimeState(): StructuredAgentSessionHostRuntimeState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: eviction against the sink cache reads only the sinks and the logger; store and adapter are never reached.
@@ -27,11 +38,22 @@ describe('eviction against the real sink cache', () => {
       acknowledgeRelease: () => {}
     })
 
+    const root = await mkdtemp(join(tmpdir(), 'orca-eviction-'))
+    roots.push(root)
+    const journal = await journals.open({
+      identity: {
+        sessionId,
+        workspaceId: 'workspace',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: codexProviderHandle('thread')
+      },
+      stateDirectory: root
+    })
     const published: string[] = []
     const reattached = state.eventSinkFor(sessionId)
     reattached.bind({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these rows are publications only, which reach nothing on the journal but its in-order read.
-      journal: withJournalQueueMembers({ appendItem: async () => ({}) }) as never,
+      journal,
       fence: 2,
       publish: () => published.push('published')
     })

@@ -2,10 +2,7 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { CodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection-types'
-import {
-  readCodexAppliedInputOptions,
-  resolvedCodexMessageOptions
-} from '../../../../codex/structured/turns/codex-structured-message-options'
+import { resolvedCodexMessageOptions } from '../../../../codex/structured/turns/codex-structured-message-options'
 import { optionSession } from '../../../../codex/structured/catalog/codex-structured-option-session.test-fixture'
 import { dispatchCodexTurn } from '../../../../codex/structured/turns/codex-structured-turn-start'
 import {
@@ -39,8 +36,6 @@ async function createGoalRig(): Promise<QueuedMessageTestRig> {
     reportsModel: 'gpt-ran',
     reportsEffort: 'high'
   })
-  created.host.deps.adapter.readAppliedInputOptions = (input) =>
-    input.sessionId === SESSION ? readCodexAppliedInputOptions(native, input) : null
   created.host.deps.adapter.holdsLiveProviderProcess = (sessionId, generation) =>
     sessionId === SESSION &&
     generation === native.acquisitionGeneration &&

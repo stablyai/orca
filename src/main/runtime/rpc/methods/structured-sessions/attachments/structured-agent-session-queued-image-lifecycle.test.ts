@@ -1,15 +1,10 @@
 import { readTestJournalItems } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
-import { journalInputSourceBody } from '../../../../../native-chat/agent-session-journal/input-order/journal-input-source'
 import {
   streamState,
   queuedImageTestBody
 } from '../protocol/structured-agent-session-wire-record.test-fixture'
-import {
-  appendTestJournalQueueRow,
-  openTestJournalHostDatabase
-} from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { seedTestJournalQueueCard } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
-import { finishTestJournalHistoricalInputs } from '../../../../../native-chat/agent-session-journal/replay/journal-historical-inputs.test-support'
 import {
   reduceStructuredAgentSession,
   EMPTY_STRUCTURED_AGENT_SESSION
@@ -300,7 +295,7 @@ it('keeps a hidden original pageable beyond1024 rows and preserves edited recove
   const { id, body, card } = await failedImage()
   const j = journal()
   const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence
-  await j.rollEpoch('unreconcilable_prefix', fence)
+  await j.write({ kind: 'epoch-replace', reason: 'unreconcilable_prefix', fence, items: [] })
   expect(
     (await readTestJournalItems(j)).find((item) => item.itemId === agentJournalSubmissionKey(id))
   ).toBeUndefined()
@@ -389,7 +384,7 @@ it('keeps a hidden original pageable beyond1024 rows and preserves edited recove
     body: { blocks: [{ type: 'text', text: 'changed' }, body.blocks[1]] },
     options: { model: 'default' }
   })
-  const pub = rig.host.collaboratorsForTests().subscribers.readQueuePublication(SESSION)!
+  const pub = (await rig.host.collaboratorsForTests().subscribers.readQueuePublication(SESSION))!
   const { projectQueuedImageCardPublication } =
     await import('./structured-agent-session-queued-image-capability')
   const oldCards = projectQueuedImageCardPublication(pub, OLD)
@@ -694,27 +689,27 @@ it.each([
     }
     const id = await sendImage(body)
     await eventually(() => expect(rig!.dispatch).toHaveBeenCalledTimes(1))
-    await eventually(() => expect(journal().submission(id)?.handedOverAt).toBeDefined())
+    await eventually(async () =>
+      expect((await journal().reads.submission(id))?.handedOverAt).toBeDefined()
+    )
     await rig.stop()
     await rig.host.flushStreamedEvents(SESSION)
     await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
     expect(await journal().queuedMessages.list()).toEqual([])
     if (edit) {
-      appendTestJournalQueueRow(
-        openTestJournalHostDatabase(rig.root).db,
-        journal(),
-        `recovery:${id}`,
-        {
-          op: 'queued',
-          body,
-          recovers: id,
-          position: 0,
-          queuedAt: journal().cursor(),
-          options: { model: 'default' },
-          returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
-        }
-      )
-      finishTestJournalHistoricalInputs(journal())
+      await seedTestJournalQueueCard(rig.root, journal(), {
+        messageId: `recovery:${id}`,
+        state: 'waiting',
+        body,
+        recovers: id,
+        position: 0,
+        holdReason: 'delivery_unconfirmed',
+        returnedReason: null,
+        returnedRejection: null,
+        consumedAs: null,
+        queuedAt: journal().cursor(),
+        options: { model: 'default' }
+      })
     }
     const card = await journal().queuedMessages.get(`recovery:${id}`)
     const original = (await journal().reads.submission(id))!
@@ -752,12 +747,6 @@ it.each([
       })
       expect(await journal().queuedMessages.get(`recovery:${id}`)).toEqual(edited)
     }
-    const input = structuredClone(journal().queuedMessages.displayState().inputs.sources.get(id))
-    expect(journalInputSourceBody(input)).toEqual(body)
-    expect(input?.kind === 'submission' ? input.options : input?.submission.options).toEqual(
-      original.options
-    )
-    expect(input?.fence).toBe(original.fence)
     const beforeProof = await journal().queuedMessages.get(`recovery:${id}`)
     expect(await journal().reads.submission(id)).toEqual(original)
     expect(await journal().reads.receiptFor(id)).toEqual(receipt)
@@ -783,7 +772,6 @@ it.each([
     expect(acceptedReceipt).not.toEqual(receipt)
     await rig.settleAccepted(id, 'pinned-original-late-echo')
     expect(await journal().reads.receiptFor(id)).toEqual(acceptedReceipt)
-    expect(journal().queuedMessages.displayState().inputs.sources.get(id)).toEqual(input)
     expect(await journal().reads.submissionBody(id)).toEqual(body)
     expect(rig.dispatch).toHaveBeenCalledTimes(1)
     if (card) {

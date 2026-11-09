@@ -58,7 +58,15 @@ export async function expectRestoredUsageLimitCancelled(
   const restored = await readTestHostJournal(host, HOST_TEST_SESSION)
   expect(latestNativeChatUsageLimitCut(restored.items, restored.submissions)).toMatchObject(cut)
   expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toEqual(cut)
-  expect(host.usageLimitContinue.readState(HOST_TEST_SESSION)?.state).toBe('cancelled')
+  expect(
+    host.usageLimitContinue.readState(
+      HOST_TEST_SESSION,
+      await host
+        .collaboratorsForTests()
+        .sessions.get(HOST_TEST_SESSION)!
+        .journal.reads.usageLimitCut()
+    )?.state
+  ).toBe('cancelled')
 }
 
 export async function expectUsageLimitRewindCancellation({
@@ -87,7 +95,15 @@ export async function expectNoUsageLimitAutoContinue(host: StructuredAgentSessio
   const sent = vi.spyOn(host, 'send')
   await host.usageLimitContinue.tick()
   expect(sent).not.toHaveBeenCalled()
-  expect(host.usageLimitContinue.readState(HOST_TEST_SESSION)?.state).toBe('cancelled')
+  expect(
+    host.usageLimitContinue.readState(
+      HOST_TEST_SESSION,
+      await host
+        .collaboratorsForTests()
+        .sessions.get(HOST_TEST_SESSION)!
+        .journal.reads.usageLimitCut()
+    )?.state
+  ).toBe('cancelled')
 }
 
 export async function expectReopenedUsageLimitCancellation(
@@ -157,7 +173,7 @@ export async function expectUsageLimitCompletionRollback({
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('provider-succeeded')
   expect(store.getRecord(HOST_TEST_SESSION)?.usageLimitContinueCancel).toBeUndefined()
   db.exec('DROP TRIGGER fail_rewind_completion')
-  const replace = vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
+  const replace = vi.spyOn(AgentSessionJournal.prototype, 'completeRewind')
   expect(
     await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
   ).toMatchObject({ ok: true })

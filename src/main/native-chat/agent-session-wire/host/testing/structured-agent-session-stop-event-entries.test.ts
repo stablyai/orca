@@ -4,16 +4,6 @@ import {
 } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import {
-  assertTestJournalHistoricalInputs,
-  finishTestJournalHistoricalInputs
-} from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
-import {
-  appendTestJournalQueueRow,
-  openTestJournalHostDatabase,
-  readTestJournalOutcomes
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { outcomeFormat1StoredScalars } from '../../../agent-session-journal/outcomes/journal-outcome-format-1'
-import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,
   hostTestOperationId
@@ -39,23 +29,14 @@ function journal() {
   }
   return value
 }
-type StoredStopEvent = NonNullable<
-  ReturnType<typeof outcomeFormat1StoredScalars.shape.queuePauseMarks.parse>['latestStop']
->['event']
-
-function stopEvents(): StoredStopEvent[] {
-  const events = new Map<number, StoredStopEvent>()
-  for (const row of readTestJournalOutcomes(openTestJournalHostDatabase(rig.root).db, SESSION)) {
-    if (row.field === '$' && row.key === JSON.stringify('queuePauseMarks') && !row.deleted) {
-      const { latestStop } = outcomeFormat1StoredScalars.shape.queuePauseMarks.parse(
-        JSON.parse(row.json)
-      )
-      if (latestStop) {
-        events.set(latestStop.sequence, latestStop.event)
-      }
-    }
-  }
-  return [...events.values()]
+async function stopEvents() {
+  const latest = await journal().stopMarks.latest()
+  const personal = await journal().queuedMessages.userStopInForce()
+  return [
+    ...new Map(
+      [personal, latest].flatMap((stop) => (stop ? [[stop.sequence, stop.event] as const] : []))
+    ).values()
+  ]
 }
 async function queuedDraft(text: string) {
   const queued = await rig.send(text, 'queue-if-active').result
@@ -89,16 +70,16 @@ it('keeps Resume visible beside an idle-evicted unknown send recovery', async ()
   await eventually(async () =>
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'unknown' })
   )
-  const before = stopEvents()
+  const before = await stopEvents()
 
   await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
 
-  expect(stopEvents()).toEqual(before)
+  expect(await stopEvents()).toEqual(before)
   expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
   expect(await journal().reads.submissionBody(id)).toEqual(fields.body)
   expect(await journal().queuedMessages.get(`recovery:${id}`)).toBeNull()
   expect(await journal().reads.itemBody(`orca:${id}`)).toEqual(fields.body)
-  expect(structuredQueuePauses(journal()).map((pause) => pause.reason)).toContain('stopped')
+  expect((await structuredQueuePauses(journal())).map((pause) => pause.reason)).toContain('stopped')
   expect(await rig.drafts()).toEqual([{ messageId: held, state: 'waiting' }])
   expect(await rig.handoff(held)).toBeUndefined()
   expect(await rig.deleteQueued(`recovery:${id}`)).toMatchObject({ value: { deleted: false } })
@@ -131,7 +112,7 @@ it('a failed personal start retains Stop after its returned input is deleted', a
   await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
   await personal.result
 
-  expect(stopEvents().map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
+  expect((await stopEvents()).map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
   expect((await journal().queuedMessages.userStopInForce())?.event.reason).toBe('user-stop')
   await eventually(async () =>
     expect(await rig.drafts()).toContainEqual({ messageId: personal.id, state: 'returned' })
@@ -193,17 +174,12 @@ it.each(['host-stop', 'user-close', 'user-close-before-exit'] as const)(
     await rig.settleAccepted(first, 'first')
     await openRigTurnFor(rig, first)
     const held = hostTestOperationId()
-    const db = openTestJournalHostDatabase(rig.root).db
-    assertTestJournalHistoricalInputs(db, journal())
-    appendTestJournalQueueRow(db, journal(), held, {
-      op: 'queued',
-      body: hostTestMessage('keep this stopped'),
-      position: 1,
-      queuedAt: journal().physicalCursor()
+    await journal().queuedMessages.insert({
+      messageId: held,
+      body: hostTestMessage('keep this stopped')
     })
     expect((await journal().queuedMessages.get(held))?.unattended).toBeUndefined()
     expect(await rig.stop()).toMatchObject({ ok: true })
-    finishTestJournalHistoricalInputs(journal())
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
     const mailOptions = {
       internal: true as const,

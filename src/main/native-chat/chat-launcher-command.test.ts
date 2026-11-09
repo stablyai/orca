@@ -71,8 +71,11 @@ describe('chat launcher argv', () => {
                     probeVersion: readVersion
                   })(sessionIdentity)
               : createAcpStructuredLaunchResolver(spec, {
+                  savedSession: {
+                    hasProviderTurn: async () => false,
+                    savedItemIds: async () => new Set()
+                  },
                   ...common,
-                  readJournal: () => null,
                   resolveCommand: () => process.execPath,
                   probeVersion: readVersion
                 })

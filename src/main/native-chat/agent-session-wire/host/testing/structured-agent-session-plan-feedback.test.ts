@@ -136,9 +136,10 @@ it.each(['selected-plan', 'absent'] as const)(
       await dispatch.mock.results[before]!.value
       claudeFrame(connection, { ...connection.sent.at(-1)!, parent_tool_use_id: null })
       const id = dispatch.mock.calls[before]![0].clientMessageId
-      await vi.waitFor(() =>
+      await vi.waitFor(async () =>
         expect(
-          host.collaboratorsForTests().sessions.get(SESSION)!.journal.submission(id)?.dispatchState
+          (await host.collaboratorsForTests().sessions.get(SESSION)!.journal.reads.submission(id))
+            ?.dispatchState
         ).toBe('accepted')
       )
       await host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)

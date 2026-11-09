@@ -96,10 +96,10 @@ describe('a receipt', () => {
     args: Parameters<AgentSessionRecordStore['operationOutcomeReceipt']>[0],
     cut = cancel
   ) {
-    return composeJournalOperationReceipts(
-      store.operationOutcomeReceipt(args),
-      store.usageLimitContinueCancelReceipt('chat-a-0001', cut)
-    )
+    const cancelReceipt = store.usageLimitContinueCancelReceipt('chat-a-0001', cut)
+    return cancelReceipt
+      ? composeJournalOperationReceipts(store.operationOutcomeReceipt(args), cancelReceipt)
+      : store.operationOutcomeReceipt(args)
   }
   async function pendingOperation(insert = false): Promise<AgentSessionRecordStore> {
     const store = await openTestAgentSessionRecordStore(root)

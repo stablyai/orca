@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionRecordFixture } from '../../../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
@@ -127,10 +128,10 @@ export function hostTestCancelParams() {
 }
 
 export async function hostTestSubmission(
-  host: Pick<StructuredAgentSessionHost, 'journalSnapshot'>,
+  host: StructuredAgentSessionHost,
   id: string
 ): Promise<AgentJournalSubmission | undefined> {
-  return (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
+  return (await readTestHostJournal(host, HOST_TEST_SESSION)).submissions.find(
     (entry) => entry.clientMessageId === id
   )
 }
