@@ -56,7 +56,9 @@ export type StructuredAgentSessionLaunchLifecycle =
   | 'cancelled'
 
 const structuredLaunchesBySessionId = new Map<string, StructuredLaunchState>()
-const structuredLaunchListeners = new Set<() => void>()
+/** Null when the writer can't name one session, so subscribers re-read every launch. */
+type StructuredLaunchListener = (sessionId: string | null) => void
+const structuredLaunchListeners = new Set<StructuredLaunchListener>()
 
 export function resetStructuredAgentLaunchRegistryForTests(): void {
   for (const sessionId of structuredLaunchesBySessionId.keys()) {
@@ -68,23 +70,25 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   resetStructuredAgentLocalLaunchCancelsForTests()
 }
 
-export function notifyStructuredLaunchListeners(): void {
+export function notifyStructuredLaunchListeners(sessionId?: string): void {
   function* changes(): Generator<readonly [string, StructuredAgentLaunchPersistedRecord | null]> {
     for (const state of structuredLaunchesBySessionId.values()) {
       yield [state.intent.sessionId, structuredLaunchRecord(state)]
     }
   }
   updateStructuredAgentLaunchRecords(changes())
-  publishStructuredLaunchChange()
+  publishStructuredLaunchChange(sessionId)
 }
 
-export function publishStructuredLaunchChange(): void {
+export function publishStructuredLaunchChange(sessionId?: string): void {
   for (const listener of structuredLaunchListeners) {
-    listener()
+    listener(sessionId ?? null)
   }
 }
 
-export function subscribeStructuredAgentLaunchStatus(listener: () => void): () => void {
+export function subscribeStructuredAgentLaunchStatus(
+  listener: StructuredLaunchListener
+): () => void {
   structuredLaunchListeners.add(listener)
   return () => structuredLaunchListeners.delete(listener)
 }
@@ -251,7 +255,7 @@ export function retireStructuredAgentSessionLaunchCancellationTombstone(
     return false
   }
   retireStructuredAgentLaunchCancellation(sessionId)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
   return true
 }
 

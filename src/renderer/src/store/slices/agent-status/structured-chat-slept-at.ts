@@ -54,6 +54,18 @@ export const hasAwakeStructuredChat = createStructuredChatPresenceSelector(
   (sleptAt) => typeof sleptAt !== 'number'
 )
 
+export function withStructuredChatSleptAt(
+  current: StructuredChatSleptAtByPaneKey,
+  paneKey: string,
+  sleptAt: number | null | undefined
+): StructuredChatSleptAtByPaneKey {
+  if (current[paneKey] === sleptAt) {
+    return current
+  }
+  const { [paneKey]: _previous, ...rest } = current
+  return sleptAt === undefined ? rest : { ...rest, [paneKey]: sleptAt }
+}
+
 export const createStructuredChatSleptAtSlice: StateCreator<
   AppState,
   [],
@@ -63,14 +75,9 @@ export const createStructuredChatSleptAtSlice: StateCreator<
   structuredChatSleptAtByPaneKey: {},
   setStructuredChatSleptAt: (paneKey, sleptAt) =>
     set((state) => {
-      const current = state.structuredChatSleptAtByPaneKey
-      if (current[paneKey] === sleptAt) {
-        return state
-      }
-      const { [paneKey]: _previous, ...rest } = current
-      return {
-        structuredChatSleptAtByPaneKey:
-          sleptAt === undefined ? rest : { ...rest, [paneKey]: sleptAt }
-      }
+      const next = withStructuredChatSleptAt(state.structuredChatSleptAtByPaneKey, paneKey, sleptAt)
+      return next === state.structuredChatSleptAtByPaneKey
+        ? state
+        : { structuredChatSleptAtByPaneKey: next }
     })
 })

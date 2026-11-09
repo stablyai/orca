@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { projectStatus } from './structured-agent-session-status-projection'
 import {
@@ -9,11 +8,11 @@ import {
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import type { StructuredChatCompanionWrite } from '@/store/slices/agent-status/structured-chat-companion-writes'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   getStructuredAgentSessionStatusFeed,
-  structuredAgentSessionStatusFeedKey,
-  type StructuredAgentSessionStatusFeedOwner
+  structuredAgentSessionStatusFeedKey
 } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 import {
@@ -21,36 +20,13 @@ import {
   ownerInputChanged,
   ownerInputs
 } from './structured-agent-session-tab-owner-cache'
+import {
+  createStructuredSessionMembership,
+  type HostGroup,
+  type Member,
+  type ProjectionInput
+} from './structured-agent-session-status-membership'
 
-// Re-exported so the bridge stays the one import site its consumers already know.
-
-type HostGroup = {
-  members: Member[]
-  /** A host tick names its sessions; this finds their tabs without walking every member. */
-  membersBySession: Map<string, Member[]>
-  /** Captured but not yet projected (a throwing commit); retried on this host's next tick. */
-  owed: Set<Member>
-  feed: StructuredAgentSessionStatusFeedOwner
-  unsubscribe: () => void
-  release?: () => void
-}
-type ProjectionInput = {
-  tab: StructuredTab
-  member: Member
-  summary: AgentSessionStatusSummary | null
-  observation: 'live' | 'unverifiable'
-  failedAt: number | null
-  sleptAt: number | null | undefined
-  directory: string | undefined
-}
-type Member = {
-  paneKey: string
-  tab: StructuredTab
-  hostKey: string | null
-  group: HostGroup | null
-  status?: ProjectionInput
-  captured?: ProjectionInput
-}
 /** Unchanged feed facts for an unchanged tab cannot change its projection or companions. */
 function sameCapturedInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
@@ -73,9 +49,10 @@ function sameStatusInput(previous: ProjectionInput | undefined, next: Projection
 }
 
 function installStatusProjection(): () => void {
-  const members = new Map<string, Member>()
-  const membersByTabId = new Map<string, Member>()
+  const membership = createStructuredSessionMembership()
+  const { members, membersByTabId, legacy } = membership
   const retired = new Set<Member>()
+  let tabs: readonly StructuredTab[] | null = null
   const groups = new Map<string, HostGroup>()
   const queue: (() => void)[] = []
   const ownerForTab = createTabOwnerCache()
@@ -124,16 +101,13 @@ function installStatusProjection(): () => void {
       (target ? structuredAgentSessionStatusFeedKey(target) : null) === input.member.hostKey
     )
   }
-  const companions = (input: ProjectionInput): void => {
+  const companions = (input: ProjectionInput, writes: StructuredChatCompanionWrite[]): void => {
     const { member, tab, sleptAt, directory } = input
     if (
       current(input) &&
       (member.group ? member.group.feed.getSessionSleepState(tab.entityId) : null) === sleptAt
     ) {
-      const store = useAppStore.getState()
-      if (store.structuredChatSleptAtByPaneKey[member.paneKey] !== sleptAt) {
-        store.setStructuredChatSleptAt(member.paneKey, sleptAt)
-      }
+      writes.push({ kind: 'slept-at', paneKey: member.paneKey, sleptAt })
     }
     if (!current(input)) {
       return
@@ -145,19 +119,16 @@ function installStatusProjection(): () => void {
     if (latestDirectory !== directory) {
       return
     }
-    const store = useAppStore.getState()
-    const pin = store.structuredSessionLaunchDirectoryByTabId[tab.id]
-    if (
+    writes.push(
       directory
-        ? pin?.sessionId !== tab.entityId || pin.launchDirectory !== directory
-        : pin?.sessionId === tab.entityId
-    ) {
-      if (directory) {
-        store.setStructuredSessionLaunchDirectory(tab.id, tab.entityId, directory)
-      } else {
-        store.clearStructuredSessionLaunchDirectory(tab.id, tab.entityId)
-      }
-    }
+        ? {
+            kind: 'launch-directory',
+            tabId: tab.id,
+            sessionId: tab.entityId,
+            launchDirectory: directory
+          }
+        : { kind: 'clear-launch-directory', tabId: tab.id, sessionId: tab.entityId }
+    )
   }
   const project = (inputs: ProjectionInput[]): void => {
     const removed = [...retired]
@@ -165,18 +136,26 @@ function installStatusProjection(): () => void {
       (input) => current(input) && !sameStatusInput(input.member.status, input)
     )
     const clean = (): void => {
+      const writes: StructuredChatCompanionWrite[] = []
       for (const old of removed) {
         if (!members.has(old.paneKey)) {
-          useAppStore.getState().setStructuredChatSleptAt(old.paneKey, undefined)
+          writes.push({ kind: 'slept-at', paneKey: old.paneKey, sleptAt: undefined })
         }
         const replacement = membersByTabId.get(old.tab.id)
         if (!replacement || replacement.tab.entityId !== old.tab.entityId) {
-          useAppStore.getState().clearStructuredSessionLaunchDirectory(old.tab.id, old.tab.entityId)
+          writes.push({
+            kind: 'clear-launch-directory',
+            tabId: old.tab.id,
+            sessionId: old.tab.entityId
+          })
         }
-        retired.delete(old)
       }
       for (const input of inputs) {
-        companions(input)
+        companions(input, writes)
+      }
+      useAppStore.getState().applyStructuredChatCompanionWrites(writes)
+      for (const old of removed) {
+        retired.delete(old)
       }
     }
     if (dirty.length || removed.length) {
@@ -209,9 +188,9 @@ function installStatusProjection(): () => void {
   }
   const activateGroups = (): void => {
     for (const [hostKey, group] of groups) {
-      if (groups.get(hostKey) === group && group.members.length && !group.release) {
+      if (groups.get(hostKey) === group && group.members.size && !group.release) {
         const release = group.feed.activate()
-        if (disposed || groups.get(hostKey) !== group || !group.members.length) {
+        if (disposed || groups.get(hostKey) !== group || !group.members.size) {
           release()
         } else {
           group.release = release
@@ -251,125 +230,130 @@ function installStatusProjection(): () => void {
       inputs.map(({ member }) => ({ host: member.hostKey, paneKey: member.paneKey }))
     )
   }
-  const reconcile = (): void => {
-    const state = useAppStore.getState()
-    const next = new Map<string, Member>()
-    for (const tab of getStructuredAgentSessionTabs(state.unifiedTabsByWorktree)) {
-      const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-      const target = structuredAgentSessionTargetForHost(ownerForTab(state, tab))
-      const hostKey = target ? structuredAgentSessionStatusFeedKey(target) : null
-      let group = hostKey ? groups.get(hostKey) : undefined
-      if (!group && target && hostKey) {
-        const feed = getStructuredAgentSessionStatusFeed(target)
-        const created: HostGroup = {
-          members: [],
-          membersBySession: new Map(),
-          owed: new Set(),
-          feed,
-          unsubscribe: () => {}
-        }
-        groups.set(hostKey, created)
-        created.unsubscribe = feed.subscribe((change) =>
-          boundary(() => {
-            if (disposed) {
-              return
-            }
-            if (change === null) {
-              capture(created.members)
-              return
-            }
-            const selected = new Set<Member>()
-            for (const sessionId of change) {
-              for (const member of created.membersBySession.get(sessionId) ?? []) {
-                selected.add(member)
-              }
-            }
-            // Reconcile prunes superseded members, so the debt holds only current tabs.
-            created.owed.forEach((member) => selected.add(member))
-            capture(selected)
-          })
-        )
-        group = created
-      }
-      const old = members.get(paneKey)
-      const member: Member =
-        old?.group === (group ?? null)
-          ? old
-          : {
-              paneKey,
-              tab,
-              hostKey,
-              group: group ?? null
-            }
-      member.tab = tab
-      next.set(paneKey, member)
-    }
-    for (const member of members.values()) {
-      if (!next.has(member.paneKey)) {
-        retired.add(member)
-      }
-    }
-    members.clear()
-    membersByTabId.clear()
+  const withOwed = (selected: Iterable<Member>): Set<Member> => {
+    const result = new Set(selected)
     for (const group of groups.values()) {
-      group.members = []
-      group.membersBySession = new Map()
-      // A rebound pane gets a new member without retiring the old one; drop every superseded identity.
-      for (const member of group.owed) {
-        if (next.get(member.paneKey) !== member) {
-          group.owed.delete(member)
+      group.owed.forEach((member) => result.add(member))
+    }
+    return result
+  }
+  const groupFor = (
+    state: AppState,
+    tab: StructuredTab
+  ): { hostKey: string | null; group: HostGroup | null } => {
+    const target = structuredAgentSessionTargetForHost(ownerForTab(state, tab))
+    const hostKey = target ? structuredAgentSessionStatusFeedKey(target) : null
+    const existing = hostKey ? groups.get(hostKey) : undefined
+    if (existing || !target || !hostKey) {
+      return { hostKey, group: existing ?? null }
+    }
+    const feed = getStructuredAgentSessionStatusFeed(target)
+    const created: HostGroup = {
+      members: new Set(),
+      membersBySession: new Map(),
+      owed: new Set(),
+      feed,
+      unsubscribe: () => {}
+    }
+    groups.set(hostKey, created)
+    created.unsubscribe = feed.subscribe((change) =>
+      boundary(() => {
+        if (disposed) {
+          return
+        }
+        if (change === null) {
+          capture(created.members)
+          return
+        }
+        const selected = new Set<Member>()
+        for (const sessionId of change) {
+          created.membersBySession.get(sessionId)?.forEach((member) => selected.add(member))
+        }
+        // Membership changes prune superseded members, so the debt holds only current tabs.
+        created.owed.forEach((member) => selected.add(member))
+        capture(selected)
+      })
+    )
+    return { hostKey, group: created }
+  }
+  const place = (state: AppState, tab: StructuredTab, paneKey: string, changed: Set<Member>) => {
+    const { hostKey, group } = groupFor(state, tab)
+    const member = membership.place(tab, paneKey, hostKey, group)
+    if (member) {
+      changed.add(member)
+    }
+  }
+  const reconcile = (ownersChanged: boolean): void => {
+    const state = useAppStore.getState()
+    const nextTabs = getStructuredAgentSessionTabs(state.unifiedTabsByWorktree)
+    const changed = new Set<Member>()
+    if (nextTabs !== tabs) {
+      const listed = new Set<string>()
+      for (const tab of nextTabs) {
+        const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+        listed.add(paneKey)
+        if (members.get(paneKey)?.tab !== tab) {
+          place(state, tab, paneKey, changed)
         }
       }
-    }
-    for (const [key, member] of next) {
-      members.set(key, member)
-      membersByTabId.set(member.tab.id, member)
-      if (member.group) {
-        member.group.members.push(member)
-        const sessionMembers = member.group.membersBySession.get(member.tab.entityId)
-        if (sessionMembers) {
-          sessionMembers.push(member)
-        } else {
-          member.group.membersBySession.set(member.tab.entityId, [member])
+      for (const member of members.values()) {
+        if (!listed.has(member.paneKey)) {
+          membership.detach(member)
+          retired.add(member)
         }
+      }
+      // Advanced only after a normal return, so a throwing pass is retried by the next tab write.
+      tabs = nextTabs
+    }
+    if (ownersChanged) {
+      for (const member of legacy) {
+        place(state, member.tab, member.paneKey, changed)
       }
     }
     for (const [key, group] of groups) {
-      if (groups.get(key) === group && !group.members.length) {
+      if (groups.get(key) === group && !group.members.size) {
         groups.delete(key)
-        group.members = []
         group.unsubscribe()
         group.release?.()
       }
     }
     enqueue(() => {
       activateGroups()
-      capture(members.values())
+      capture(withOwed(changed))
     })
   }
   const unsubscribeApp = useAppStore.subscribe((state: AppState, previous: AppState) => {
-    if (
-      !disposed &&
-      (state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
-        ownerInputs.some((key) => ownerInputChanged(state, previous, key)))
-    ) {
-      boundary(reconcile)
+    if (disposed) {
+      return
+    }
+    const ownersChanged = ownerInputs.some((key) => ownerInputChanged(state, previous, key))
+    if (ownersChanged || getStructuredAgentSessionTabs(state.unifiedTabsByWorktree) !== tabs) {
+      boundary(() => reconcile(ownersChanged))
     }
   })
-  const unsubscribeLaunch = subscribeStructuredAgentLaunchStatus(() =>
+  const unsubscribeLaunch = subscribeStructuredAgentLaunchStatus((sessionId) =>
     boundary(() => {
-      if (!disposed) {
-        capture(members.values())
+      if (disposed) {
+        return
       }
+      if (sessionId === null) {
+        capture(members.values())
+        return
+      }
+      const selected = new Set<Member>()
+      for (const group of groups.values()) {
+        group.membersBySession.get(sessionId)?.forEach((member) => selected.add(member))
+      }
+      capture(withOwed(selected))
     })
   )
-  boundary(reconcile)
+  boundary(() => reconcile(false))
   return () => {
     disposed = true
     unsubscribeApp()
     unsubscribeLaunch()
     for (const group of groups.values()) {
-      group.members = []
+      group.members.clear()
       group.unsubscribe()
       boundary(() => group.release?.())
     }
@@ -377,8 +361,7 @@ function installStatusProjection(): () => void {
     for (const member of members.values()) {
       retired.add(member)
     }
-    members.clear()
-    membersByTabId.clear()
+    membership.clear()
     enqueue(() => project([]))
   }
 }
