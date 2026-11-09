@@ -13,7 +13,7 @@ import { journalInputOrder } from '../../agent-session-journal/input-order/journ
 import type Database from '../../../sqlite/sync-database'
 import {
   latestNativeChatUsageLimitCut,
-  nativeChatTurnUsageLimit,
+  nativeChatUsageLimitOfRow,
   type NativeChatUsageLimitCut
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 
@@ -86,7 +86,17 @@ function usageLimitBetween(
   end: number
 ): AgentSessionUsageLimit | null {
   const turnItemId = items[turnIndex]!.itemId
-  return nativeChatTurnUsageLimit(items.slice(turnIndex + 1, end), turnItemId)
+  for (let index = turnIndex + 1; index < end; index += 1) {
+    const item = items[index]!
+    const limit =
+      item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turnItemId
+        ? nativeChatUsageLimitOfRow(item)
+        : null
+    if (limit) {
+      return limit
+    }
+  }
+  return null
 }
 
 /** How many automatic continues in a row ended in another usage limit, read from the journal so a
@@ -132,16 +142,23 @@ export function usageLimitContinueChain(
 /** A cut as the host's sweep reads it: with the chain that led to it. */
 export type HostUsageLimitCut = NativeChatUsageLimitCut & { chain: number }
 
+/** The chain depends only on history before the cut, so a rebuild for the same cut reuses it. */
 export function hostUsageLimitCut(
   snapshot: {
     items: readonly AgentJournalRenderItem[]
     submissions: readonly ChainSubmission[]
   },
-  cut: NativeChatUsageLimitCut | null
+  cut: NativeChatUsageLimitCut | null,
+  previous?: HostUsageLimitCut | null
 ): HostUsageLimitCut | null {
-  return cut
-    ? { ...cut, chain: usageLimitContinueChain(snapshot.items, snapshot.submissions, cut) }
-    : null
+  if (!cut) {
+    return null
+  }
+  const chain =
+    previous && usageLimitContinueIdentity(previous) === usageLimitContinueIdentity(cut)
+      ? previous.chain
+      : usageLimitContinueChain(snapshot.items, snapshot.submissions, cut)
+  return { ...cut, chain }
 }
 
 /** Reads a chat's saved conversation without opening it, as main does for unopened chats. */

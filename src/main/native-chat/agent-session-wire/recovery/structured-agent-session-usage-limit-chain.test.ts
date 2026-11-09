@@ -7,6 +7,7 @@ import type {
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import {
+  hostUsageLimitCut,
   usageLimitContinueChain,
   usageLimitContinueMessageId,
   usageLimitContinueTag
@@ -90,4 +91,33 @@ it('reads only the chain, never the older conversation, at N and 10N rows of his
   // Three links of a send row, a turn and its limit row, plus the person's limited turn before them.
   expect(large.reads).toBe(small.reads)
   expect(small.reads).toBeLessThanOrEqual(40)
+})
+
+it('rebuilding the status for the same cut reads nothing, however long its turn ran', () => {
+  const measure = (outputRows: number) => {
+    const { items, submissions, cut } = conversation(10, 0)
+    // A person's limited turn with a long output: its chain is 0, and stays 0 for this cut.
+    const limitRow = items.pop()!
+    for (let index = 0; index < outputRows; index += 1) {
+      items.push({
+        itemId: `output-${index}`,
+        revision: 0,
+        sequence: items.length + 1,
+        observedAt: items.length,
+        turnScope: { kind: 'turn', turnItemId: cut.turnItemId },
+        body: { kind: 'message', role: 'assistant', blocks: [] }
+      })
+    }
+    items.push(limitRow)
+    const first = hostUsageLimitCut({ items, submissions }, cut)
+    const reads = { count: 0 }
+    const rebuilt = hostUsageLimitCut(
+      { items: counted(items, reads), submissions: counted(submissions, reads) },
+      cut,
+      first
+    )
+    return { chain: rebuilt?.chain, reads: reads.count }
+  }
+  expect(measure(1_000)).toEqual({ chain: 0, reads: 0 })
+  expect(measure(10_000)).toEqual({ chain: 0, reads: 0 })
 })
