@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
@@ -404,18 +404,20 @@ it.each(['hidden', 'moved', 'unproven-target'])(
   }
 )
 
-it.each(['missing', 'foreign'])(
+it.each(['missing', 'foreign', 'unregistered'])(
   'retains unknown capacity but releases affirmative %s authority',
   async (kind) => {
     const { arm } = await fixture()
     await arm()
     const [entry] = listPreparations()
     const lock = git(entry.preparedPath, 'rev-parse', '--git-path', 'locked')
-    await (kind === 'missing' ? rm(lock) : writeFile(lock, 'replacement owner\n'))
+    await (kind === 'foreign'
+      ? writeFile(lock, 'replacement owner\n')
+      : rm(kind === 'unregistered' ? dirname(lock) : lock, { recursive: true }))
     discardRepoPreparations(entry.repoPathKey)
     await entry.operation.discard()
     expect(existsSync(join(entry.preparedPath, 'version.txt'))).toBe(true)
-    expect(preparationCapacityUsed()).toBe(kind === 'missing' ? 1 : 0)
+    expect(preparationCapacityUsed()).toBe(kind === 'foreign' ? 0 : 1)
   }
 )
 
