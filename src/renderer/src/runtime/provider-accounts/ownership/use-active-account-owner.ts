@@ -8,7 +8,7 @@ import {
   wslHostDistroForTarget,
   accountOwnerFor,
   type AccountOwner
-} from '../../../lib/wsl-host-account-owner'
+} from './wsl-host-account-owner'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { useActiveWorkspaceOwnerTarget } from '../../rpc/targets/use-worktree-runtime-target'
 

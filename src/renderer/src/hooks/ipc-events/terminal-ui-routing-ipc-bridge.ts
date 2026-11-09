@@ -5,12 +5,12 @@ import {
   queueTerminalPaneSplitRequest
 } from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
-import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 

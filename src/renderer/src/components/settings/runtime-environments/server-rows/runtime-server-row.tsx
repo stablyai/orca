@@ -30,7 +30,7 @@ import {
   ServerRowChip,
   ServerRowDetailsToggle,
   type ServerRowStatus
-} from './runtime-server-list-row'
+} from '../../host-rows/ServerListRow'
 import { RuntimeSshAccessControl } from '../ssh-access/RuntimeSshAccessControl'
 import { RuntimeSshAccessDialog } from '../ssh-access/runtime-ssh-access-dialog'
 import {
@@ -42,7 +42,7 @@ import {
   managedServerHasPrimaryAction,
   managedServerForgettable,
   ManagedServerPrimaryAction
-} from '../managed-servers/managed-server-row-parts'
+} from '../managed-servers/managed-server-row-content'
 import type { ManagedServerLifecycle } from '../managed-servers/use-managed-server-lifecycle'
 
 const NO_SSH_TARGETS: SshTarget[] = []

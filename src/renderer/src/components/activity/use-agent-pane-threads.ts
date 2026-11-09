@@ -221,10 +221,11 @@ export function useAgentPaneThreads(args: {
     const matchesSearchQuery =
       normalizedQuery === null ? null : createActivityThreadSearchMatcher(normalizedQuery)
     return scopeVisibleThreads.filter((thread) => {
-      // Why: keep the just-selected thread visible after auto-mark-read flips it to read, else unread-only mode makes the clicked row vanish from the list.
+      // Keep live agents and the selected row visible after marking read; migration blocks are unavailable.
       if (
         readFilter === 'unread' &&
         !thread.unread &&
+        (thread.currentAgentState === null || thread.migrationUnsupportedPtyId !== undefined) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false

@@ -9,10 +9,10 @@ import {
   resolveCheckRunDetailsFixRepo
 } from './check-run-details-fix-context'
 import { openSourceControlAiSettingsTarget } from '@/components/right-sidebar/source-control/panel/source-control-ai-settings-navigation'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
-import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
+import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { useAppStore } from '@/store/index'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'

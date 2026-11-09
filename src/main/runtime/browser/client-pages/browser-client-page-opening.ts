@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../../browser/browser-error'
-import { browserNetworkExecutionHostKey } from '../../../browser/network/execution-routes/browser-network-execution-route'
+import '../../../browser/network/execution-routes/browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {

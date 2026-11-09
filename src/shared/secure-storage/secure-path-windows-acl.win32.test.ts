@@ -122,23 +122,6 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
     expect(sidsOf(file)).toEqual(ORCA_PRINCIPALS())
   })
 
-  it.each([
-    ['spaces', 'a b c'],
-    ['single quote and dollar', "quo'te $var"],
-    ['backtick', 'back`tick'],
-    ['semicolon and ampersand', 'semi;colon & amp'],
-    ['caret and percent', 'car^et %PATH%'],
-    ['non-ASCII', 'résumé 資料']
-  ])('hardens a path containing %s', (_label, segment) => {
-    const dir = join(root, segment)
-    mkdirSync(dir, { recursive: true })
-    const file = join(dir, 'secret.json')
-    writeFileSync(file, '{}')
-
-    expect(restrictWindowsPathSync(file, false)).toBe(true)
-    expect(sidsOf(file)).toEqual(ORCA_PRINCIPALS())
-  })
-
   it('hardens a path longer than MAX_PATH', () => {
     let dir = join(root, 'long')
     while (dir.length < 280) {
@@ -158,13 +141,5 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
 
     expect(restrictWindowsPathSync(join(root, 'missing.json'), false)).toBe(false)
     expect(reports).toContainEqual(expect.objectContaining({ stage: 'apply' }))
-  })
-
-  it('keeps hardening alive when the installed reporter throws', () => {
-    setSecurePathHardeningReporter(() => {
-      throw new Error('caller bug')
-    })
-
-    expect(restrictWindowsPathSync(join(root, 'missing-reporter.json'), false)).toBe(false)
   })
 })

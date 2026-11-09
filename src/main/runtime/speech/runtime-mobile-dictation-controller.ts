@@ -1,5 +1,6 @@
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
+import { speechModelNotReadyError } from '../../../shared/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../../speech/model-catalog'
 import {
@@ -14,7 +15,7 @@ import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot
-} from './mobile-dictation-transcript'
+} from '../../../shared/dictation-transcript'
 
 type MobileDictationSession = {
   id: string
@@ -27,6 +28,8 @@ type MobileDictationSession = {
   reportedRevision: number
   reportedAt: number
   chunkOrder: MobileDictationChunkOrder
+  // Cloud audio past the upload cap is dropped, so the client should stop and insert what was kept.
+  audioLimitReached: boolean
   abandonTimer?: ReturnType<typeof setTimeout>
 }
 
@@ -51,12 +54,12 @@ export class RuntimeMobileDictationController {
       throw new Error('voice_model_not_selected')
     }
     const manifest = getCatalogModel(modelId)
-    if (manifest && isLocalSpeechModel(manifest) && !hasLocalSpeechRecognizer()) {
+    if (manifest && isLocalSpeechModel(manifest) && !hasLocalSpeechRecognizer(manifest)) {
       throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
     }
     const modelState = await getSpeechModelManager(store).getModelState(modelId)
     if (modelState.status !== 'ready') {
-      throw new Error(`voice_model_not_ready:${modelState.status}`)
+      throw new Error(speechModelNotReadyError(modelState))
     }
     const clientId = params.clientId
     if (!clientId) {
@@ -78,7 +81,8 @@ export class RuntimeMobileDictationController {
       errors: [],
       reportedRevision: 0,
       reportedAt: 0,
-      chunkOrder: new MobileDictationChunkOrder()
+      chunkOrder: new MobileDictationChunkOrder(),
+      audioLimitReached: false
     }
     this.sessions.set(clientId, session)
     try {
@@ -87,7 +91,7 @@ export class RuntimeMobileDictationController {
         (event) => acceptEvent(session, event),
         undefined,
         owner,
-        voice.dictationLanguage
+        voice
       )
       if (this.sessions.get(clientId) !== session) {
         throw new Error('dictation_canceled')
@@ -114,7 +118,7 @@ export class RuntimeMobileDictationController {
     sampleRate: number
     seq?: number
     clientId?: string
-  }): { dictationId: string } & Partial<DictationTranscriptSnapshot> {
+  }): { dictationId: string; audioLimitReached?: true } & Partial<DictationTranscriptSnapshot> {
     const session = this.requireOwnedSession(params)
     if (session.state !== 'active') {
       throw new Error('dictation_stream_closing')
@@ -128,15 +132,19 @@ export class RuntimeMobileDictationController {
     for (const chunk of ready) {
       this.feedChunk(session, chunk)
     }
+    // Repeated on every reply, so a reply lost to a drop cannot hide it.
+    const reply = session.audioLimitReached
+      ? { dictationId: params.dictationId, audioLimitReached: true as const }
+      : { dictationId: params.dictationId }
     // The text so far lets the phone keep it if the connection never comes back; resent each second in case a reply was lost.
     const now = Date.now()
     const { revision } = session.transcript
     if (session.reportedRevision === revision && now - session.reportedAt < 1000) {
-      return { dictationId: params.dictationId }
+      return reply
     }
     session.reportedRevision = revision
     session.reportedAt = now
-    return { dictationId: params.dictationId, ...session.transcript.snapshot() }
+    return { ...reply, ...session.transcript.snapshot() }
   }
 
   async finish(params: {
@@ -166,12 +174,18 @@ export class RuntimeMobileDictationController {
   }
 
   private feedChunk(session: MobileDictationSession, chunk: MobileDictationChunk): void {
+    if (session.audioLimitReached) {
+      return
+    }
     const pcm = Buffer.from(chunk.audioBase64, 'base64')
     const samples = new Float32Array(Math.floor(pcm.length / 2))
     for (let i = 0; i < samples.length; i += 1) {
       samples[i] = pcm.readInt16LE(i * 2) / 32768
     }
-    getSpeechSttService(this.requireStore()).feedAudio(samples, chunk.sampleRate, session.owner)
+    const speech = getSpeechSttService(this.requireStore())
+    if (speech.feedAudio(samples, chunk.sampleRate, session.owner)) {
+      session.audioLimitReached = true
+    }
   }
 
   private requireOwnedSession(params: {

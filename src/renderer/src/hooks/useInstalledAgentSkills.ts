@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { agentReadsSkill } from '@/lib/agent-skill-coverage'
+import { agentReadsSkill } from '@/lib/skills/agent-skill-coverage'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -9,7 +9,7 @@ import type {
   SkillDiscoveryTarget,
   SkillSourceKind
 } from '../../../shared/skills'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
 import {
   discoverInstalledAgentSkills,

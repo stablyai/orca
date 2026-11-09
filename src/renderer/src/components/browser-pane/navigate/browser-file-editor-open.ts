@@ -1,4 +1,4 @@
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'

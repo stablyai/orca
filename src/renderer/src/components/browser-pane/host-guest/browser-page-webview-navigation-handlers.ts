@@ -16,7 +16,7 @@ import {
 import {
   browserNavigationLeavesFaviconOrigin,
   pickDisplayableFaviconUrl
-} from '../describe-page/browser-favicon-url'
+} from '../../../../../shared/browser/browser-favicon-url'
 import {
   applyBrowserExtensionPageFavicon,
   isChromeExtensionPageUrl

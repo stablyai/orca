@@ -103,6 +103,7 @@ describe('a download that reuses the cached generation', () => {
       runtime: {
         createStore: () => store,
         mintSessionId: () => 's',
+        claimSpareSessionId: async () => null,
         now: () => 0,
         setForegroundTimer: () => () => {}
       },

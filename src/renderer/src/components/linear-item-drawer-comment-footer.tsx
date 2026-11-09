@@ -17,7 +17,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { LinearLocalComment } from '@/components/linear-item-drawer-types'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 export function LinearIssueCommentFooter({
   issueId,

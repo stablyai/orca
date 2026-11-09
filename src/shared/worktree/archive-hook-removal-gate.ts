@@ -4,8 +4,9 @@
 export const ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 
 /** Allow unbounded Git deletion and the host’s two-at-a-time queue after any hook deadline. A client timeout is not proof removal failed; settle from host listings. */
-export function worktreeRemovalReplyTimeoutMs(runsArchiveHook: boolean): number {
-  return (runsArchiveHook ? ARCHIVE_HOOK_TIMEOUT_MS : 0) + 180_000
+/** A nested delete removes each listed worktree in turn before replying. */
+export function worktreeRemovalReplyTimeoutMs(runsArchiveHook: boolean, worktreeCount = 1): number {
+  return ((runsArchiveHook ? ARCHIVE_HOOK_TIMEOUT_MS : 0) + 180_000) * Math.max(1, worktreeCount)
 }
 
 /** RPC/CLI error code for a removal refused because the repo's archive hook did not succeed. */

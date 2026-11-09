@@ -8,7 +8,7 @@ import {
   statSync
 } from 'node:fs'
 import { dirname, extname, join, parse, relative } from 'node:path'
-import { writeFileAtomically } from './fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-migration'
 import { normalizeCodexRuntimeSelection } from './runtime-selection'
 import { getSystemCodexHomePath } from '../codex/configuration/homes/codex-home-paths'

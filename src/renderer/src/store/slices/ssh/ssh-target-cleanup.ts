@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
-import { resolveDirectSshTargetWorktreeIds } from '../../../lib/direct-ssh-target-scope'
+import { resolveDirectSshTargetWorktreeIds } from '../../../lib/workspace/ownership/direct-ssh-target-scope'
 import { unbindTerminalTabPtys } from '../tabs/worktree-layout-lifecycle'
 import {
   selectDetectedWorktreesByRepo,
