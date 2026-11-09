@@ -12,6 +12,8 @@ import {
 } from '../persistence-test-harness'
 
 import { normalizeRuntimePathSeparators } from '../../../shared/cross-platform-path'
+import { ProjectGroupUpdateArgs } from '../../ipc/repos/repo-ipc-arg-schemas'
+import { ProjectGroupUpdate } from '../../../shared/rpc-contract/repo-params'
 
 vi.mock('electron', () => ({
   app: {
@@ -40,6 +42,27 @@ describe('Flat folder-scan project groups adaptation', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('persists name coloring through validated desktop and runtime updates and reload', () => {
+    const store = createStore()
+    const group = store.createProjectGroup({ name: 'Projects', createdFrom: 'manual' })
+    const desktop = ProjectGroupUpdateArgs.parse({
+      groupId: group.id,
+      updates: { color: '#ef4444', colorName: true }
+    })
+    store.updateProjectGroup(desktop.groupId, desktop.updates)
+    store.flush()
+    const restored = createStore()
+    expect(restored.getProjectGroups()).toContainEqual(
+      expect.objectContaining({ id: group.id, color: '#ef4444', colorName: true })
+    )
+    const runtime = ProjectGroupUpdate.parse({ groupId: group.id, updates: { colorName: false } })
+    restored.updateProjectGroup(runtime.groupId, runtime.updates)
+    restored.flush()
+    expect(createStore().getProjectGroups()).toContainEqual(
+      expect.objectContaining({ id: group.id, color: '#ef4444', colorName: false })
+    )
   })
 
   it.each([false, true])(

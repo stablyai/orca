@@ -74,6 +74,7 @@ export const ProjectGroupSchema = z.object({
   rootProjectOrder: salvagedOptional('rootProjectOrder', z.number().finite()),
   isCollapsed: z.boolean(),
   color: z.string().nullable(),
+  colorName: salvagedOptional('colorName', z.boolean()),
   createdAt: z.number(),
   updatedAt: z.number()
 }) satisfies z.ZodType<ProjectGroup, unknown>

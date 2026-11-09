@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { createProjectGroup } from '../../../../../../shared/project-groups'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
@@ -143,6 +144,40 @@ function clickCreate(row: GroupHeaderRow): void {
   )
   fireEvent.click(view.getByRole('button', { name: /Create new worktree for/ }))
 }
+
+it('colors the section label only while name coloring is enabled', () => {
+  const group = {
+    ...createProjectGroup({ name: 'Projects', createdFrom: 'manual', tabOrder: 0 }),
+    color: '#ef4444',
+    colorName: false
+  }
+  const row: GroupHeaderRow = {
+    type: 'header',
+    key: 'project-group:group-1',
+    label: 'Projects',
+    count: 0,
+    icon: { kind: 'project' },
+    projectGroup: group
+  }
+  const header = () =>
+    renderWorktreeSectionHeaderRow({
+      ctx: headerContext(),
+      row,
+      vItem: { key: 'header', index: 0, start: 0, size: 35, end: 35, lane: 0 },
+      isActiveStickyHeader: false,
+      hasStickyHost: false,
+      hasHeaderTopSpacing: false,
+      measureVirtualRowElement: vi.fn()
+    })
+  const view = render(<TooltipProvider>{header()}</TooltipProvider>)
+  expect(view.getByText('Projects').style.color).toBe('')
+  group.colorName = true
+  view.rerender(<TooltipProvider>{header()}</TooltipProvider>)
+  expect(view.getByText('Projects').style.color).toBe('#ef4444')
+  group.colorName = false
+  view.rerender(<TooltipProvider>{header()}</TooltipProvider>)
+  expect(view.getByText('Projects').style.color).toBe('')
+})
 
 it("opens Create on a same-id twin's own host in a view that shows only that host", () => {
   clickCreate(

@@ -93,6 +93,9 @@ export class ProjectGroupPersistenceOperations {
     if (updates.color !== undefined) {
       group.color = typeof updates.color === 'string' ? updates.color : null
     }
+    if (updates.colorName !== undefined) {
+      group.colorName = updates.colorName
+    }
     group.updatedAt = Date.now()
     this.scheduleSave()
     return group

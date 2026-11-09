@@ -11,7 +11,7 @@ afterEach(() => {
   useAppStore.setState(initial, true)
 })
 
-it('sets and clears a section color on the row owner host', async () => {
+it('sets and clears a section color and toggles name coloring on the row owner host', async () => {
   const updateProjectGroup = vi.fn().mockResolvedValue(true)
   useAppStore.setState({ updateProjectGroup })
   const projectGroup: ProjectGroup = {
@@ -26,7 +26,7 @@ it('sets and clears a section color on the row owner host', async () => {
     createdAt: 0,
     updatedAt: 0
   }
-  const view = render(
+  const menu = () => (
     <ProjectGroupHeaderMenu
       groupId="group-1"
       hostId="runtime:studio"
@@ -36,7 +36,15 @@ it('sets and clears a section color on the row owner host', async () => {
       onDelete={vi.fn()}
     />
   )
+  const view = render(menu())
   const openColors = async () => {
+    await waitFor(() =>
+      expect(
+        view
+          .getByRole('button', { name: 'Group actions for Projects' })
+          .getAttribute('aria-expanded')
+      ).toBe('false')
+    )
     fireEvent.keyDown(view.getByRole('button', { name: 'Group actions for Projects' }), {
       key: 'ArrowDown'
     })
@@ -44,20 +52,36 @@ it('sets and clears a section color on the row owner host', async () => {
   }
 
   await openColors()
-  fireEvent.click(await view.findByLabelText('Use #ef4444 section color'))
+  expect(view.queryByRole('menuitemcheckbox', { name: 'Color the name too' })).toBeNull()
+  fireEvent.keyDown(await view.findByRole('menuitemcheckbox', { name: 'Red' }), { key: 'Enter' })
   expect(updateProjectGroup).toHaveBeenLastCalledWith(
     'group-1',
     { color: '#ef4444' },
     { hostId: 'runtime:studio' }
   )
 
-  await waitFor(() =>
-    expect(
-      view.getByRole('button', { name: 'Group actions for Projects' }).getAttribute('aria-expanded')
-    ).toBe('false')
-  )
+  projectGroup.color = '#ef4444'
+  view.rerender(menu())
   await openColors()
-  fireEvent.click(await view.findByText('No color'))
+  fireEvent.click(await view.findByRole('menuitemcheckbox', { name: 'Color the name too' }))
+  expect(updateProjectGroup).toHaveBeenLastCalledWith(
+    'group-1',
+    { colorName: true },
+    { hostId: 'runtime:studio' }
+  )
+
+  projectGroup.colorName = true
+  view.rerender(menu())
+  await openColors()
+  fireEvent.click(await view.findByRole('menuitemcheckbox', { name: 'Color the name too' }))
+  expect(updateProjectGroup).toHaveBeenLastCalledWith(
+    'group-1',
+    { colorName: false },
+    { hostId: 'runtime:studio' }
+  )
+
+  await openColors()
+  fireEvent.click(await view.findByRole('menuitemcheckbox', { name: 'No color' }))
   expect(updateProjectGroup).toHaveBeenLastCalledWith(
     'group-1',
     { color: null },
