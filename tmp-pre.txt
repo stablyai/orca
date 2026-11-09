@@ -1,0 +1,57 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mC:/Users/DF/orca-workspace/orca[39m
+
+[90mstderr[2m | src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22m[2ma worker start writes its brief only into the agent it launched[2m > [22m[2mtypes nothing when the agent exited and its shell is in front
+[22m[39m[agent-launch] could not resolve chat preference Error: runtime_unavailable
+    at OrcaRuntimeService.requireStore (C:/Users/DF/orca-workspace/orca/src/main/runtime/workspaces/workspace-selectors.ts:268:13)
+    at readAgentLaunchModeSettings (C:/Users/DF/orca-workspace/orca/src/main/agent-launch/agent-launch-mode.ts:324:20)
+    at readWorkerStartModeSettings (C:/Users/DF/orca-workspace/orca/src/main/runtime/rpc/methods/orchestration/structured-workers/orchestration-worker-start-mode.ts:68:10)
+    at startWorker (C:/Users/DF/orca-workspace/orca/src/main/runtime/rpc/methods/orchestration/worker/workers.ts:170:15)
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)[39m
+    at Object.startWorker (C:/Users/DF/orca-workspace/orca/src/main/runtime/rpc/methods/orchestration/worker/worker-release.test-support.ts:243:20)
+    at C:/Users/DF/orca-workspace/orca/src/main/runtime/rpc/methods/orchestration/worker/worker-start-terminal-target.spec.ts:179:7
+    at async file:///C:/Users/DF/AppData/Local/pnpm/store/v11/links/@/vitest/5.0.5/3486d4dd36fc7a1d06d003a89bf618951407aed1af2ea31d5902bddb49096d35/node_modules/[4mvitest[24m/dist/chunks/run.BPv-BBRv.js:2801:20
+
+(node:72992) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22morchestration worker-list Run scope (runtime)[2m > [22mresolves the bound Run from the coordinator handle and lists only its dispatches
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22morchestration worker-list Run scope (runtime)[2m > [22mrefuses runCurrent for an unbound handle, and an unscoped list spans every Run
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22mworker-start --retry-of a context-only Dispatch[2m > [22mrestarts the Task after the attempt is abandoned
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22mcontext-only self-dispatch and nesting depth[2m > [22mleaves the coordinator able to start a worker
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22mpre-v3 dispatch rows in worker-list[2m > [22mcloses a pending question when a legacy dispatch settles as completed
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22mpre-v3 dispatch rows in worker-list[2m > [22mcloses a pending question when a legacy dispatch settles as failed
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22mworker-start --terminal target[2m > [22mrefuses the coordinator terminal by handle
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22mworker-start --terminal target[2m > [22mrefuses a different handle that resolves to the coordinator pane
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22morchestration.dispatch --to the caller[2m > [22mrefuses an injected dispatch aimed at the coordinator handle
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22morchestration.dispatch --to the caller[2m > [22mrefuses an injected dispatch to a different handle that resolves to the coordinator pane
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22morchestration.dispatch --to the caller[2m > [22mstill records a context-only dispatch aimed at the coordinator handle
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22morchestration.dispatch --to the caller[2m > [22mrefuses the coordinator handle even when no agent is detected
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22morchestration.dispatch --to the caller[2m > [22mrefuses an alias of the coordinator pane even when no agent is detected
+ [31m×[39m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22ma worker start writes its brief only into the agent it launched[2m > [22mtypes nothing when the agent exited and its shell is in front[33m 5024[2mms[22m[39m
+[31m   → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22mcomposer-marker first dispatch readiness[2m > [22mzcode waits for the new composer before dispatch
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22mcomposer-marker first dispatch readiness[2m > [22mopencode waits for the new composer before dispatch
+ [2m[90m↓[39m[22m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22mcomposer-marker first dispatch readiness[2m > [22mopencode2 waits for the new composer before dispatch
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/main/runtime/rpc/methods/orchestration/worker/worker-run-dispatch-contracts.test.ts[2m > [22ma worker start writes its brief only into the agent it launched[2m > [22mtypes nothing when the agent exited and its shell is in front
+[31m[1mError[22m: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m src/main/runtime/rpc/methods/orchestration/worker/worker-start-terminal-target.spec.ts:[2m176:5[22m[39m
+    [90m174|[39m     }
+    [90m175|[39m
+    [90m176|[39m     it('types nothing when the agent exited and its shell is in front'…
+    [90m   |[39m     [31m^[39m
+    [90m177|[39m       const writes = launchedPane('shell')
+    [90m178|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m16 skipped[39m[90m (17)[39m
+[2m   Start at [22m 22:58:44
+[2m   Duration [22m 129.29s[2m (transform 83%, import 13%, tests 4%)[22m
+

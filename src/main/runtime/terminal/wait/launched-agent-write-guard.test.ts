@@ -8,6 +8,7 @@ import {
 type GuardOptions = {
   unprovableHost?: 'refuse' | 'write-unless-shell' | 'write-if-shell-provable'
   agentForegroundWaitMs?: number
+  agentForegroundDeadlineMs?: number
 }
 
 function guardHarness(foregrounds: LaunchedAgentForeground[], options?: GuardOptions) {
@@ -76,6 +77,46 @@ describe('a fresh launch that outruns the agent foreground claim (#40253)', () =
       await refused
       // The guard polled past its first read instead of refusing on it.
       expect(vi.mocked(runtime.readLaunchedAgentForeground).mock.calls.length).toBeGreaterThan(1)
+      guard.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not start a read at or past the caller deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, guard } = guardHarness(['shell', 'shell', 'shell', 'shell', 'shell'], {
+        unprovableHost: 'write-unless-shell',
+        agentForegroundWaitMs: 60_000,
+        agentForegroundDeadlineMs: Date.now() + 1_000
+      })
+      const write = guard.beforeWrite('pty-1')
+      const refused = expect(write).rejects.toThrow('agent_not_in_foreground')
+      await vi.advanceTimersByTimeAsync(5_000)
+      await refused
+      // Reads at 0/250/500/750 ms only: the sleep stops at the deadline and no read follows it.
+      expect(runtime.readLaunchedAgentForeground).toHaveBeenCalledTimes(4)
+      guard.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not poll when the caller deadline is already spent', async () => {
+    vi.useFakeTimers()
+    try {
+      const { runtime, guard } = guardHarness(['shell', 'shell', 'shell'], {
+        unprovableHost: 'write-unless-shell',
+        agentForegroundWaitMs: 10_000,
+        agentForegroundDeadlineMs: Date.now() - 5
+      })
+      const write = guard.beforeWrite('pty-1')
+      const refused = expect(write).rejects.toThrow('agent_not_in_foreground')
+      await vi.advanceTimersByTimeAsync(5_000)
+      await refused
+      // A hook consumed the readiness budget: the guard refuses on its single read.
+      expect(runtime.readLaunchedAgentForeground).toHaveBeenCalledTimes(1)
       guard.dispose()
     } finally {
       vi.useRealTimers()
