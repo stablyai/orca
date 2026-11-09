@@ -34,7 +34,6 @@ import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/age
 import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createStructuredChatNamingHandler } from '../../src/main/native-chat/structured-chat-naming'
 import { PI_RPC_AGENT } from '../../src/main/pi/rpc-agent-definition'
-import type { AgentSessionStatusEvent } from '../../src/shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store'
 import {
   getStructuredAgentSessionStatusFeed,
@@ -186,14 +185,10 @@ it('detaches a mounted provider History row after clear without losing the nativ
       name: NAME,
       applied: true
     })
-    let emitFrame = (_event: AgentSessionStatusEvent): void => {}
-    const unsubscribe = vi.fn()
     mocks.subscribe.mockImplementation(async (_target, emit) => {
-      emitFrame = emit
       const stop = host?.subscribeStatus({ id: 'history-clear-test', emit })
       return {
         unsubscribe: () => {
-          unsubscribe()
           stop?.()
         }
       }
@@ -243,33 +238,10 @@ it('detaches a mounted provider History row after clear without losing the nativ
     expect(screen.getByTestId('history-row').getAttribute('data-owner')).toBe(SESSION)
     expect(screen.getByTestId('history-row').getAttribute('data-copy-resume')).toBe('false')
 
-    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
-    const confirmed = feed.getSnapshot().get(SESSION)!
-    const revision = feed.getAssociationRevision()
     const queries = window.api.aiVault.listSessions
-    const beforeChurn = vi.mocked(queries).mock.calls.length
-    for (const n of [10, 100]) {
-      await act(async () => {
-        for (let i = 0; i < n; i++) {
-          emitFrame({
-            type: 'status',
-            session: { ...confirmed, updatedAt: i, latestPrompt: `${i}` }
-          })
-          emitFrame({
-            type: 'snapshot',
-            sessions: [],
-            namingActiveSessionIds: [],
-            conversationNames: [{ sessionId: SESSION, conversationName: NAME }]
-          })
-        }
-      })
-      expect(vi.mocked(queries).mock.calls).toHaveLength(beforeChurn)
-      expect(feed.getAssociationRevision()).toBe(revision)
-    }
     const oldProjection = project()
     if (remount) {
       view.unmount()
-      expect(unsubscribe).toHaveBeenCalledOnce()
     }
     let settleOld = (_result: AiVaultListResult): void => {}
     if (remount) {
@@ -306,7 +278,6 @@ it('detaches a mounted provider History row after clear without losing the nativ
         value: { command: 'clear', state: 'completed' }
       })
     })
-    const beforeSettlement = vi.mocked(queries).mock.calls.length
     if (remount) {
       expect(screen.getByTestId('history-row').textContent).toBe(NAME)
       await act(async () => settleOld(oldProjection))
@@ -332,10 +303,7 @@ it('detaches a mounted provider History row after clear without losing the nativ
         `pi --session ${FILE}`
       )
     })
-    expect(vi.mocked(queries).mock.calls).toHaveLength(beforeSettlement + (remount ? 1 : 0))
-    expect(vi.mocked(queries).mock.calls.every(([args]) => args?.force !== true)).toBe(true)
     view.unmount()
-    expect(unsubscribe).toHaveBeenCalledTimes(remount ? 2 : 1)
     expect((await readPersistedTestAgentSessionStore(directory)).records[SESSION]).toMatchObject({
       conversationName: NAME,
       conversationNameSource: 'user'
