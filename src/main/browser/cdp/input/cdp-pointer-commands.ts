@@ -3,21 +3,37 @@ import type {
   BrowserDragResult,
   BrowserHoverResult
 } from '../../../../shared/runtime-browser-contracts'
-import { CdpBridgeCommandModule } from '../commands/cdp-bridge-command-module'
+import type { CdpBridgeState } from '../commands/cdp-bridge-state'
+import type { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'
+import type { CdpRefResolution } from '../commands/cdp-ref-resolution'
 
-export class CdpPointerCommands extends CdpBridgeCommandModule {
+export class CdpPointerCommands {
+  constructor(
+    private readonly bridgeState: CdpBridgeState,
+    private readonly debuggerLifecycle: CdpDebuggerLifecycle,
+    private readonly refResolution: CdpRefResolution
+  ) {}
+
   click(element: string): Promise<BrowserClickResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const node = await this.resolveRef(guest, sender, element)
-      const refSender = this.senderForRef(guest, node)
+      const node = await this.refResolution.resolveRef(guest, sender, element)
+      const refSender = this.refResolution.senderForRef(guest, node)
 
-      await this.scrollIntoView(refSender, node.backendDOMNodeId)
-      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
-      const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
+      await this.refResolution.scrollIntoView(refSender, node.backendDOMNodeId)
+      const localCenter = await this.refResolution.getElementCenter(
+        refSender,
+        node.backendDOMNodeId
+      )
+      const { cx, cy } = await this.refResolution.getPageCoordinates(
+        guest,
+        node,
+        localCenter.cx,
+        localCenter.cy
+      )
 
       // Reveal hover-dependent targets before clicking.
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
@@ -41,16 +57,24 @@ export class CdpPointerCommands extends CdpBridgeCommandModule {
   }
 
   hover(element: string): Promise<BrowserHoverResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const node = await this.resolveRef(guest, sender, element)
-      const refSender = this.senderForRef(guest, node)
-      await this.scrollIntoView(refSender, node.backendDOMNodeId)
-      const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
-      const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
+      const node = await this.refResolution.resolveRef(guest, sender, element)
+      const refSender = this.refResolution.senderForRef(guest, node)
+      await this.refResolution.scrollIntoView(refSender, node.backendDOMNodeId)
+      const localCenter = await this.refResolution.getElementCenter(
+        refSender,
+        node.backendDOMNodeId
+      )
+      const { cx, cy } = await this.refResolution.getPageCoordinates(
+        guest,
+        node,
+        localCenter.cx,
+        localCenter.cy
+      )
 
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
 
@@ -59,21 +83,29 @@ export class CdpPointerCommands extends CdpBridgeCommandModule {
   }
 
   drag(fromElement: string, toElement: string): Promise<BrowserDragResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const fromNode = await this.resolveRef(guest, sender, fromElement)
-      const toNode = await this.resolveRef(guest, sender, toElement)
-      const fromSender = this.senderForRef(guest, fromNode)
-      const toSender = this.senderForRef(guest, toNode)
+      const fromNode = await this.refResolution.resolveRef(guest, sender, fromElement)
+      const toNode = await this.refResolution.resolveRef(guest, sender, toElement)
+      const fromSender = this.refResolution.senderForRef(guest, fromNode)
+      const toSender = this.refResolution.senderForRef(guest, toNode)
 
-      await this.scrollIntoView(fromSender, fromNode.backendDOMNodeId)
-      const fromLocal = await this.getElementCenter(fromSender, fromNode.backendDOMNodeId)
-      const from = await this.getPageCoordinates(guest, fromNode, fromLocal.cx, fromLocal.cy)
-      const toLocal = await this.getElementCenter(toSender, toNode.backendDOMNodeId)
-      const to = await this.getPageCoordinates(guest, toNode, toLocal.cx, toLocal.cy)
+      await this.refResolution.scrollIntoView(fromSender, fromNode.backendDOMNodeId)
+      const fromLocal = await this.refResolution.getElementCenter(
+        fromSender,
+        fromNode.backendDOMNodeId
+      )
+      const from = await this.refResolution.getPageCoordinates(
+        guest,
+        fromNode,
+        fromLocal.cx,
+        fromLocal.cy
+      )
+      const toLocal = await this.refResolution.getElementCenter(toSender, toNode.backendDOMNodeId)
+      const to = await this.refResolution.getPageCoordinates(guest, toNode, toLocal.cx, toLocal.cy)
 
       // Intermediate drag events are required by many drag-and-drop libraries.
       await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.cx, y: from.cy })

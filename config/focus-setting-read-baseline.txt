@@ -88,7 +88,7 @@
 4 src/renderer/src/components/settings/runtime-environments/catalog/RuntimeEnvironmentsPane.tsx
 1 src/renderer/src/components/settings/runtime-environments/catalog/use-runtime-environment-mutation-actions.ts
 1 src/renderer/src/components/settings/setup-guide/SettingsSetupGuidePane.tsx
-2 src/renderer/src/components/settings/setup-guide/settings-setup-guide-progress.ts
+1 src/renderer/src/components/settings/setup-guide/settings-setup-guide-progress.ts
 1 src/renderer/src/components/settings/shortcuts/ShortcutsPane.tsx
 3 src/renderer/src/components/settings/skills/linear/LinearAgentSkillPane.tsx
 2 src/renderer/src/components/settings/tasks/TasksPane.tsx

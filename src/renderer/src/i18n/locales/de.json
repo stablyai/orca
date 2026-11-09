@@ -4205,6 +4205,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aktivieren"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Für ein anderes Fenster angepasst",
+            "fitHere": "Hier anpassen"
           }
         }
       },
@@ -21393,7 +21397,6 @@
       "sortRelevance": "Relevanteste",
       "sortNewest": "Neueste",
       "sortResultsAriaLabel": "Ergebnisse sortieren: {{value0}}",
-      "consent": "Volltextsuche aktivieren? Orca erstellt auf diesem Computer einen Index aus lokalen Agentenprotokollen, einschließlich vollständiger Unterhaltungen und bis zu 3.072 Zeichen pro Tool-Ausgabe. Inhalte werden nicht geschwärzt. Authentifizierte, gekoppelte Clients können den Index durchsuchen.",
       "remoteDisabled": "Die Suche ist auf diesem Computer deaktiviert. Dort die Indexierung von Protokollen aktivieren, um seine Sitzungen zu durchsuchen.",
       "titleOnly": "Die Volltextsuche ist auf diesem Computer deaktiviert. Daher werden nur Sitzungstitel durchsucht.",
       "notReady": "Der Suchindex ist noch nicht bereit. In Kürze erneut versuchen.",
@@ -21453,7 +21456,6 @@
       "description": "Alles durchsuchen, was Agenten auf diesem Computer und auf gekoppelten Orca-Servern gesagt und getan haben.",
       "searchDescription": "Die Sitzungssuche für diesen Computer und gekoppelte Server aktivieren oder Suchdaten löschen.",
       "indexComputers": "Innerhalb von Sitzungen suchen",
-      "computersConsent": "Jeder Computer speichert eine durchsuchbare Kopie seiner eigenen Agentenunterhaltungen und Tool-Ausgaben. Nichts verlässt diesen Computer.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Sitzungen auf {{host}} durchsuchen",
       "serverOffline": "Offline",

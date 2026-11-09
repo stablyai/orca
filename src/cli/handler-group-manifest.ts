@@ -27,6 +27,12 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   ...SERVE_PAIRING_HANDLER_GROUPS,
   {
+    name: 'serve-reset-identity',
+    keys: ['serve reset-identity'],
+    load: async () =>
+      (await import('./handlers/serve-reset-identity.js')).SERVE_RESET_IDENTITY_HANDLERS
+  },
+  {
     name: 'serve-service',
     keys: ['serve service install', 'serve service status', 'serve service uninstall'],
     load: async () => (await import('./handlers/serve-service.js')).SERVE_SERVICE_HANDLERS

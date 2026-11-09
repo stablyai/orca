@@ -1,6 +1,7 @@
 import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
 import type { WorkerListRunScope } from './worker-list-run-scope'
 import { isActionableOrchestrationFleetAttention } from '../../../shared/orchestration/fleet/orchestration-fleet-attention'
+import { formatPrCommentRelativeTime } from '../../../shared/source-control/review-comments/pr-comment-time'
 
 type WorkerProjection = {
   runId?: string
@@ -9,7 +10,8 @@ type WorkerProjection = {
   host: { id: string }
   workspace?: { id: string } | null
   stage: { activity: string }
-  liveness: { verdict: string }
+  liveness: { verdict: string; detail?: string }
+  evidence?: { lastObservedAt: number | null }
   nextAction: { argv: string[] }
   attention?: { categories: string[] }
   resource?: { terminalState?: string | null } | null
@@ -49,6 +51,8 @@ type WorkerShowFields = {
   state: string
   stage: string
   liveness?: string
+  activity?: string
+  lastActivity?: string
   terminal?: string
   terminalState?: string
   workspace?: string
@@ -69,7 +73,9 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       followUpOf: value.dispatch?.followUpOf ?? undefined,
       state: value.worker.state,
       stage: value.worker.stage,
-      liveness: value.projection?.liveness.verdict,
+      liveness: livenessField(value.projection),
+      activity: knownActivity(value.projection),
+      lastActivity: lastActivity(value.projection),
       terminal:
         value.worker.agentTerminalHandle ?? value.terminalResource?.terminalHandle ?? undefined,
       // The projection's accounting state matches worker-list; releaseState is the raw column.
@@ -211,4 +217,25 @@ function actionableAttention(
 
 function nonEmpty<T>(values: T[] | undefined): T[] | undefined {
   return values && values.length > 0 ? values : undefined
+}
+
+/** Name what could not be verified, so a lost host never reads like a stuck worker. */
+function livenessField(projection: WorkerProjection | null | undefined): string | undefined {
+  const liveness = projection?.liveness
+  return liveness?.detail ? `${liveness.verdict} (${liveness.detail})` : liveness?.verdict
+}
+
+/** Only a live worker's activity is known; a finished turn is an idle agent, not finished work. */
+function knownActivity(projection: WorkerProjection | null | undefined): string | undefined {
+  if (projection?.liveness.verdict !== 'live' || projection.stage.activity === 'unknown') {
+    return undefined
+  }
+  return projection.stage.activity === 'done' ? 'idle' : projection.stage.activity
+}
+
+function lastActivity(projection: WorkerProjection | null | undefined): string | undefined {
+  const at = projection?.evidence?.lastObservedAt
+  return knownActivity(projection) && typeof at === 'number'
+    ? formatPrCommentRelativeTime(new Date(at).toISOString(), Date.now())
+    : undefined
 }

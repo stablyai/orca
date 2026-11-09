@@ -51,3 +51,24 @@ it('keeps the session list running when the index write fails', async () => {
   expect(errors.length).toBeGreaterThan(0)
   expect(owed()?.state).not.toBe('current')
 })
+
+it('leaves a recoverable lagging prefix current when the list cursor has advanced', () => {
+  replayTranscriptRead({
+    messages: userMessages('original', 1),
+    outcome: { byteOffset: 100, prefixHash: 'known-prefix' }
+  })
+  replayTranscriptRead({
+    mode: 'append',
+    previousByteOffset: 200,
+    messages: userMessages('lagging', 1),
+    outcome: { byteOffset: 300 }
+  })
+  expect(owed()).toEqual({ state: 'current', fail_count: 0 })
+  expect(
+    store.resumableCursor({
+      agent: 'claude',
+      codexHome: null,
+      file: { path: SYNTHETIC_TRANSCRIPT, mtimeMs: 1740000000000, sizeBytes: 4096, modifiedAt: '' }
+    })
+  ).toEqual({ byteOffset: 100, prefixHash: 'known-prefix' })
+})

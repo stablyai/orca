@@ -102,7 +102,7 @@ import {
 import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/identity/browser-process-user-agent'
-import { initializeBrowserIdentityModeStore } from '../browser/identity/browser-identity-mode-store'
+import { initializeBrowserIdentityModeStore } from '../browser/identity/mode/browser-identity-mode-store'
 import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
 import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
 import {

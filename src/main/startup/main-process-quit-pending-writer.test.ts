@@ -46,7 +46,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../browser/guest-lifecycle/manager/browser-manager': {
     browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
   },
-  '../browser/sessions/browser-session-registry': { browserSessionRegistry: {} },
+  '../browser/sessions/profiles/browser-session-registry': { browserSessionRegistry: {} },
   '../browser/routing/local-host-partitions/local-ssh-browser-route': {
     closeAllLocalSshBrowserRoutes: settled()
   },
@@ -57,7 +57,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../dock/unread-badge': { setUnreadDockBadgeCount: idle() },
   '../tray/system-tray': { destroySystemTray: idle() },
   '../telemetry/client': { shutdownTelemetry: settled() },
-  '../observability': { shutdownObservability: settled() },
+  '../observability/index': { shutdownObservability: settled() },
   '../updater': { isQuittingForUpdate: vi.fn(() => false) },
   '../updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
   '../macos-permissions/macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
