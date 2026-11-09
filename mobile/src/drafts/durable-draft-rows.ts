@@ -84,6 +84,21 @@ export function durableDraftRowKey(namespace: string, worktreeId: string, id: st
   return `draft:${namespace}:#${fnv1a(rest, 0x811c9dc5)}${fnv1a(rest, 0x01000193)}`
 }
 
+/** The host and remote runtime a worktree lives on, so two hosts' same-named worktrees never share a draft. */
+export type WorkspaceDraftScope = { hostId: string; executionHost?: string; worktreeId: string }
+
+export function workspaceDraftRowKey(
+  namespace: string,
+  scope: WorkspaceDraftScope,
+  id: string
+): string {
+  return durableDraftRowKey(
+    namespace,
+    scope.worktreeId,
+    `${scope.hostId}:${scope.executionHost ?? ''}:${id}`
+  )
+}
+
 export function deviceStoreDraftBackend(
   store: PageDeviceStore,
   key: string

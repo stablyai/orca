@@ -35,6 +35,7 @@ import type { FileDocState, FileSyntaxState } from './session-document-state'
 import { DiffLineRow } from '../../source-control/review/MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from '../../source-control/review/mobile-diff-comments'
 import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
+import { useKeptTextDraft } from '../../drafts/use-kept-draft'
 
 type FileReaderProps = {
   doc: FileDocState | undefined
@@ -44,6 +45,8 @@ type FileReaderProps = {
   documentId?: string
   language?: string
   diffCommentActions?: DiffCommentActions
+  // Where an unsaved note waits through leaving the file and the app being killed.
+  noteDraftKey?: string
 }
 
 export function FileReader(props: FileReaderProps) {
@@ -58,7 +61,8 @@ function FileReaderDocument({
   title,
   relativePath,
   language,
-  diffCommentActions
+  diffCommentActions,
+  noteDraftKey
 }: FileReaderProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -69,7 +73,7 @@ function FileReaderDocument({
   const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
   const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
   const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
-  const [commentDraft, setCommentDraft] = useState('')
+  const [commentDraft, setCommentDraft] = useKeptTextDraft(noteDraftKey ?? null)
   const plainDiffLines = useMemo(
     () =>
       doc?.status === 'ready' && doc.kind === 'diff'

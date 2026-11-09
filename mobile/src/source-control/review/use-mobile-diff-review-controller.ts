@@ -27,6 +27,9 @@ import { useMobilePrSidebarController } from './use-mobile-pr-sidebar-controller
 import { useMobileDiffReviewGitHub } from './use-mobile-diff-review-github'
 import { mobileDiffReviewThreadsForItem } from './mobile-diff-review-github'
 import { mobileDiffReviewNotesForItem } from './mobile-diff-comments'
+import { useMobileDiffReviewNoteDraft } from './use-mobile-diff-review-note-draft'
+import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 
 const NO_COMMENTS: readonly DiffComment[] = []
 
@@ -74,7 +77,13 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const [sheets, dispatchSheets] = useReducer(reduceReviewSheets, NO_REVIEW_SHEETS)
   const sheetIntents = useMemo(() => reviewSheetIntents(dispatchSheets), [])
   const composer = reviewComposer(sheets)
-  const [composerBody, setComposerBody] = useState('')
+  const executionHost = useWorkspaceExecutionHost()
+  const noteDraft = useMobileDiffReviewNoteDraft({
+    draftKey: workspaceDraftRowKey('reviewNote', { hostId, executionHost, worktreeId }, ''),
+    composer,
+    openSheet: sheetIntents.openSheet
+  })
+  const { composerBody, setComposerBody } = noteDraft
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
@@ -182,7 +191,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     selectKey,
     moveSelection,
     remoteViewed: setRemoteViewed,
-    setComposerBody,
+    noteDraft,
     setActionError,
     setBusyAction,
     sheets: sheetIntents,

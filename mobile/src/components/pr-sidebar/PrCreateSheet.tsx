@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction
-} from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronsUpDown, Sparkles } from 'lucide-react-native'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
@@ -27,11 +20,11 @@ import {
   isMobileHostedReviewCommitFailure,
   runMobileHostedReviewCreateIntent
 } from '../../source-control/mobile-hosted-review-create-intent-runner'
+import * as z from 'zod'
 import {
   cancelMobilePrFields,
   generateMobilePrFields,
-  loadMobilePrCreateDraft,
-  type MobilePrCreateDraft
+  loadMobilePrCreateDraft
 } from '../../source-control/mobile-pr-create-draft'
 import {
   getMobileCommitFailureStagedEntries,
@@ -43,33 +36,36 @@ import type { MobilePrTab } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { PrBasePicker } from './PrBasePicker'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
+import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
+import { setKeptDraft, useKeptDraft } from '../../drafts/use-kept-draft'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 
-type Fields = { title: string; body: string; base: string; draft: boolean }
-
-/** What Cancel leaves for the next open on the same workspace branch. */
-export type PrCreateKept = { key: string; draft: MobilePrCreateDraft; fields: Fields }
+// The provider rides along so a kept draft reopens without asking the host again.
+const FIELDS = z.object({
+  title: z.string(),
+  body: z.string(),
+  base: z.string(),
+  draft: z.boolean(),
+  provider: z.string()
+})
+type Fields = z.infer<typeof FIELDS>
 
 // One Create flow for every entry point and all five providers: seed from commits, push if needed, land on the PR tab.
-export function PrCreateSheet({
-  tab,
-  kept,
-  onKeep
-}: {
-  tab: MobilePrTab
-  kept: PrCreateKept | null
-  onKeep: Dispatch<SetStateAction<PrCreateKept | null>>
-}) {
+export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { client, worktreeId, gitBranch } = tab
+  const { client, hostId, worktreeId, gitBranch } = tab
+  const executionHost = useWorkspaceExecutionHost()
   const creating = tab.creatingPr
   const setCreating = tab.setCreatingPr
-  const keepKey = gitBranch ? `${worktreeId}\u0000${gitBranch}` : null
-  // Reopening on the same branch restores what was typed instead of re-seeding from commits.
-  const [restored] = useState(() => (kept && kept.key === keepKey ? kept : null))
-  const [draft, setDraft] = useState<MobilePrCreateDraft | null>(restored?.draft ?? null)
-  const [fields, setFields] = useState<Fields | null>(restored?.fields ?? null)
-  const editedRef = useRef(restored !== null)
+  // What was typed waits, per workspace branch, through Cancel and the app being killed.
+  const keptKey = gitBranch
+    ? workspaceDraftRowKey('prCreate', { hostId, executionHost, worktreeId }, gitBranch)
+    : null
+  const [kept, setKept] = useKeptDraft(keptKey, FIELDS)
+  const [seeded, setSeeded] = useState<Fields | null>(null)
+  const [seedError, setSeedError] = useState<string | null>(null)
+  const fields = kept ?? seeded
   const [pickingBase, setPickingBase] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null)
@@ -89,11 +85,11 @@ export function PrCreateSheet({
   useLayoutEffect(() => {
     commitsAheadRef.current = tab.commitsAhead
   })
-  // Seed once per open: a reconnect or a status reload must not overwrite what the user typed.
-  const seededRef = useRef(restored !== null)
+  // Seed once per open, and not over a kept draft: a reconnect or a status reload must not overwrite what was typed.
+  const seedRef = useRef(kept !== null)
 
   useEffect(() => {
-    if (!client || !gitBranch || seededRef.current) {
+    if (!client || !gitBranch || seedRef.current) {
       return
     }
     let cancelled = false
@@ -104,14 +100,19 @@ export function PrCreateSheet({
     })
       .then((loaded) => {
         if (!cancelled) {
-          seededRef.current = true
-          setDraft(loaded)
-          setFields({ title: loaded.title, body: loaded.body, base: loaded.base, draft: false })
+          seedRef.current = true
+          setSeeded({
+            title: loaded.title,
+            body: loaded.body,
+            base: loaded.base,
+            draft: false,
+            provider: loaded.prefill.provider
+          })
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setMessage({ text: err instanceof Error ? err.message : String(err), error: true })
+          setSeedError(err instanceof Error ? err.message : String(err))
         }
       })
     return () => {
@@ -119,13 +120,16 @@ export function PrCreateSheet({
     }
   }, [client, gitBranch, worktreeId])
 
-  const copy = hostedReviewCopy(draft?.prefill.provider)
+  const copy = hostedReviewCopy(fields?.provider)
   const title = t('pullRequest.createSheet.title', 'Create {{reviewLabel}}', {
     reviewLabel: copy.reviewLabel
   })
+  // The first edit turns the seeded fields into a kept draft.
   const update = (patch: Partial<Fields>) => {
-    editedRef.current = true
-    setFields((current) => (current ? { ...current, ...patch } : current))
+    setKept((current) => {
+      const from = current ?? seeded
+      return from ? { ...from, ...patch } : null
+    })
   }
 
   // Closing the sheet cancels a running generation, drops its late answer and keeps typed fields; a reconnect does none.
@@ -134,9 +138,9 @@ export function PrCreateSheet({
   useLayoutEffect(() => {
     generatingRef.current = generating
   })
-  const closeTargetRef = useRef({ client, worktreeId, keepKey, draft, fields, onKeep })
+  const closeTargetRef = useRef({ client, worktreeId })
   useLayoutEffect(() => {
-    closeTargetRef.current = { client, worktreeId, keepKey, draft, fields, onKeep }
+    closeTargetRef.current = { client, worktreeId }
   })
   useEffect(
     () => () => {
@@ -145,25 +149,19 @@ export function PrCreateSheet({
       if (generatingRef.current && target.client) {
         void cancelMobilePrFields(target.client, target.worktreeId).catch(() => {})
       }
-      if (editedRef.current && target.keepKey && target.draft && target.fields) {
-        target.onKeep({ key: target.keepKey, draft: target.draft, fields: target.fields })
-      }
     },
     []
   )
 
   const writeWithAi = async () => {
-    if (!client || !fields || !draft || generating) {
+    if (!client || !fields || generating) {
       return
     }
     const generation = ++generationRef.current
     setGenerating(true)
     setMessage(null)
     try {
-      const result = await generateMobilePrFields(client, worktreeId, {
-        ...fields,
-        provider: draft.prefill.provider
-      })
+      const result = await generateMobilePrFields(client, worktreeId, fields)
       if (generation !== generationRef.current) {
         return
       }
@@ -190,7 +188,7 @@ export function PrCreateSheet({
       return
     }
     createInFlightRef.current = true
-    const createdKey = keepKey
+    const createdKey = keptKey
     setCreating(true)
     setMessage(null)
     setCommitFailure(null)
@@ -226,10 +224,12 @@ export function PrCreateSheet({
       }
       triggerSuccess()
       setCreating(false)
-      // The PR exists now, so nothing carries over to the next Create on this branch, even text kept
-      // when a branch or client change closed this sheet mid-run.
-      editedRef.current = false
-      onKeep((current) => (current?.key === createdKey ? null : current))
+      // The PR exists now, so nothing carries over to the next Create on this branch, even when a branch or
+      // client change closed this sheet mid-run.
+      setSeeded(fields)
+      if (createdKey) {
+        setKeptDraft(createdKey, FIELDS, null)
+      }
       const created = {
         url: outcome.url,
         warning: outcome.warning ?? null,
@@ -281,8 +281,8 @@ export function PrCreateSheet({
                 'Check out a branch before creating a pull request.'
               )}
             </Text>
-          ) : message ? (
-            <Text style={sheetStyles.error}>{message.text}</Text>
+          ) : seedError ? (
+            <Text style={sheetStyles.error}>{seedError}</Text>
           ) : (
             <ActivityIndicator color={colors.textSecondary} />
           )}

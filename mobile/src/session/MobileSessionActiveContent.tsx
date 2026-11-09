@@ -30,6 +30,7 @@ import { FileReader } from '../files/session-documents/MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
 import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdownReader'
 import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
+import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
 import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
 
 export function MobileSessionActiveContent({
@@ -141,6 +142,9 @@ export function MobileSessionActiveContent({
     controller
   )
   const { presentedConnState, showOfflineState, forceReconnectHost } = controller
+  // Review notes are for working-tree diffs only.
+  const fileTabTakesNotes =
+    activeFileTab?.diffSource === 'staged' || activeFileTab?.diffSource === 'unstaged'
   const toast = toastMessage ? (
     <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
       <Text style={styles.toastText}>{toastMessage}</Text>
@@ -193,8 +197,17 @@ export function MobileSessionActiveContent({
           title={activeFileTab.title || t('session.activeContent.fileTitle', 'File')}
           relativePath={activeFileTab.relativePath}
           language={activeFileTab.language}
+          noteDraftKey={
+            fileTabTakesNotes
+              ? workspaceDraftRowKey(
+                  'fileNote',
+                  { hostId, executionHost, worktreeId },
+                  activeFileTab.relativePath
+                )
+              : undefined
+          }
           diffCommentActions={
-            activeFileTab.diffSource === 'staged' || activeFileTab.diffSource === 'unstaged'
+            fileTabTakesNotes
               ? {
                   comments: diffComments,
                   sendingCommentIds: sendingDiffCommentIds,

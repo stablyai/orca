@@ -102,14 +102,18 @@ export function useMobileSourceControlCommitRunners(params: Params) {
         await sendCommitRequest(message)
         didCommit = true
         await afterCommit()
+        setCommitMessage('')
         if (!mountedRef.current) {
           return false
         }
-        setCommitMessage('')
         triggerSuccess()
         await loadStatus({ force: true })
         return true
       } catch (err) {
+        // A landed commit's message must not come back, even when the screen has left.
+        if (didCommit) {
+          setCommitMessage('')
+        }
         if (!mountedRef.current) {
           return false
         }
@@ -122,7 +126,6 @@ export function useMobileSourceControlCommitRunners(params: Params) {
           recordCommitFailure({ error: errorMessage, commitMessage: message, stagedEntries })
         }
         if (didCommit) {
-          setCommitMessage('')
           await loadStatus({
             clearActionErrorOnSuccess: false,
             force: true

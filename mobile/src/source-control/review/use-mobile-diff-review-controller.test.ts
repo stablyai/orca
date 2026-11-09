@@ -6,6 +6,8 @@ import { createFakeRpcClient } from '../../mobile-web-shell/bridge-host-test-fak
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
 import { documentQueryClient } from '../../test-support/rpc-recording/hook-mount'
+import { publishPageDeviceStore } from '../../mobile-web-shell/bridge/page-device-store'
+import { resetKeptDraftsForTests } from '../../drafts/use-kept-draft'
 
 const loadSnapshot = vi.hoisted(() => vi.fn())
 // Each build's notes-and-files read; status comes from the shared git.status query, held pending here.
@@ -92,6 +94,8 @@ describe('useMobileDiffReviewController', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    resetKeptDraftsForTests()
+    publishPageDeviceStore(null)
   })
 
   describe('Stage · next file', () => {
@@ -203,6 +207,61 @@ describe('useMobileDiffReviewController', () => {
       })
       act(() => controller?.openComposer(3))
       expect(controller?.composerBody).toBe('')
+    })
+
+    it('brings an unsaved new note back after the app is killed, not the text of an edit', async () => {
+      // The shell's draft table outlives the page; nothing else does.
+      const table = new Map<string, string>()
+      publishPageDeviceStore({
+        available: () => true,
+        read: async (_table, keys) => ({
+          status: 'ok',
+          values: keys.map((key) => table.get(key) ?? null)
+        }),
+        write: async (_table, ops) => {
+          for (const op of ops) {
+            if (op.value === null) {
+              table.delete(op.key)
+            } else {
+              table.set(op.key, op.value)
+            }
+          }
+          return { written: true }
+        }
+      })
+      const openReview = async () => {
+        loadSnapshot.mockResolvedValueOnce(unstaged(['c.ts']))
+        await act(async () => {
+          renderer = create(queries.wrap(createElement(StageProbe)))
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+      }
+      await openReview()
+      act(() => controller?.openComposer(3))
+      act(() => controller?.setComposerBody('rename this'))
+      act(() => controller?.closeComposer())
+      act(() =>
+        controller?.openEditComposer({
+          id: 'saved',
+          worktreeId: 'wt-1',
+          filePath: 'c.ts',
+          lineNumber: 1,
+          side: 'modified',
+          body: 'older note',
+          createdAt: 1
+        })
+      )
+      act(() => controller?.setComposerBody('older note, edited'))
+      // Past the draft row's typing debounce.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 300))
+      })
+      act(() => renderer?.unmount())
+      resetKeptDraftsForTests()
+
+      await openReview()
+      act(() => controller?.openComposer(3))
+      expect(controller?.composerBody).toBe('rename this')
     })
   })
 })

@@ -94,11 +94,12 @@ export function useMobileSourceControlRunners(params: Params) {
       recordCommitFailure(null)
       try {
         await runner()
-        if (!mountedRef.current) {
-          return false
-        }
+        // The commit landed, so its message must not come back, even when the screen has left.
         if (options?.clearCommitMessage) {
           setCommitMessage('')
+        }
+        if (!mountedRef.current) {
+          return false
         }
         triggerSuccess()
         await loadStatus({ force: true })

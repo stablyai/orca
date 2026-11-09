@@ -1,11 +1,12 @@
 import * as z from 'zod'
 import {
   durableDraftRow,
-  durableDraftRowKey,
   fitsDeviceStore,
   pageDraftRowBackend,
   resetDurableDraftRowsForTests,
-  type DurableDraftRow
+  workspaceDraftRowKey,
+  type DurableDraftRow,
+  type WorkspaceDraftScope
 } from './durable-draft-rows'
 
 /** Unsaved edits to a file or Markdown tab, with the hash of the host's version they were made against. */
@@ -23,19 +24,12 @@ type Slot = {
 }
 const slots = new Map<string, Slot>()
 
-/** The host and remote runtime a worktree lives on, so two hosts' same-named documents never share edits. */
-export type DocumentEditScope = { hostId: string; executionHost?: string; worktreeId: string }
-
-function scopedId(scope: DocumentEditScope, id: string): string {
-  return `${scope.hostId}:${scope.executionHost ?? ''}:${id}`
+export function markdownTabDraftKey(scope: WorkspaceDraftScope, tabId: string): string {
+  return workspaceDraftRowKey('markdownTab', scope, tabId)
 }
 
-export function markdownTabDraftKey(scope: DocumentEditScope, tabId: string): string {
-  return durableDraftRowKey('markdownTab', scope.worktreeId, scopedId(scope, tabId))
-}
-
-export function fileEditDraftKey(scope: DocumentEditScope, path: string): string {
-  return durableDraftRowKey('fileEdit', scope.worktreeId, scopedId(scope, path))
+export function fileEditDraftKey(scope: WorkspaceDraftScope, path: string): string {
+  return workspaceDraftRowKey('fileEdit', scope, path)
 }
 
 function slotFor(key: string): Slot {
