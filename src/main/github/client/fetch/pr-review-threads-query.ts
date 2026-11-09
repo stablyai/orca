@@ -23,6 +23,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
               databaseId
               author { __typename login avatarUrl(size: 48) }
               body
+              bodyHTML
               createdAt
               url
               viewerDidAuthor
@@ -44,6 +45,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           databaseId
           author { __typename login avatarUrl(size: 48) }
           body
+          bodyHTML
           createdAt
           url
           viewerDidAuthor
@@ -62,6 +64,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           databaseId
           author { __typename login avatarUrl(size: 48) }
           body
+          bodyHTML
           createdAt
           submittedAt
           url

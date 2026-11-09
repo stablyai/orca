@@ -22,13 +22,19 @@ vi.mock('@/store', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/store/selectors', () => ({
+vi.mock('@/store/repos/use-repository-catalog', () => ({
   useActiveRepo: () => null,
-  useActiveWorktree: () => null,
-  useActiveWorktreeId: () => null,
-  useAllWorktrees: () => [],
-  useProjectHostSetupProjection: () => ({ projects: [], setups: [] }),
   useRepos: () => []
+}))
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
+  useActiveWorktree: () => null,
+  useActiveWorktreeId: () => null
+}))
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
+  useAllWorktrees: () => []
+}))
+vi.mock('@/store/projects/use-project-host-setup-projection', () => ({
+  useProjectHostSetupProjection: () => ({ projects: [], setups: [] })
 }))
 const sessions: AiVaultSession[] = [
   {

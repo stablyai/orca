@@ -17,7 +17,10 @@ import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../../ssh/orcad-stdio-bridge'
+import {
+  checkOrcadStdioBridge,
+  openOrcadStdioBridgeChannel
+} from '../../managed-server/lifecycle/orcad-stdio-bridge'
 import { startEchoServer } from '../../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
 import {
   fakeWslBridgeChildren,
@@ -33,7 +36,7 @@ import {
   WslOrcadConnectionSupersededError,
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
-import type { WslOrcadLaunch } from './wsl-orcad-deploy'
+import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
 import { wslOrcadHostDistro } from './wsl-orcad-host-environments'

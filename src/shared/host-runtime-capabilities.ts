@@ -13,6 +13,9 @@ export const RUNTIME_AUTOMATIC_WORK_RUNTIME_CAPABILITY = 'runtime.automatic-work
 // Hosts without this capability ignore a request's expectedRuntimeSource; the CLI's pre-send probe
 // is then the only fence.
 export const RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY = 'runtime-source-fence.v1' as const
+// Hosts with this capability publish settingsChanged, so a client keeps settings until it says otherwise.
+export const SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY =
+  'runtime.settings-changed-event.v1' as const
 
 // The paired host itself: status, environments, control, updates and the servers it manages.
 export const HOST_RUNTIME_CAPABILITIES = [
@@ -24,5 +27,6 @@ export const HOST_RUNTIME_CAPABILITIES = [
   MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY,
   RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY,
+  SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY,
   SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY
 ] as const

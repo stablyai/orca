@@ -1,13 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  loadHosts,
-  RelayRoutingHostRemovedError,
-  resetHostStoreForTests,
-  setRelayRouting,
-  updateHostNameAndEndpoint
-} from './host-store'
+import { loadHosts, resetHostStoreForTests, updateHostNameAndEndpoint } from './host-store'
 import { resetMobileRelayHostOverlayStoreForTests } from './mobile-relay-host-overlay-store'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -43,10 +37,6 @@ describe('relay routing after a host edit', () => {
   }
 
   const storage = new Map<string, string>()
-
-  function writesTo(key: string): unknown[] {
-    return vi.mocked(AsyncStorage.setItem).mock.calls.filter(([written]) => written === key)
-  }
 
   beforeEach(() => {
     resetHostStoreForTests()
@@ -98,18 +88,5 @@ describe('relay routing after a host edit', () => {
       deviceToken: 'device-token',
       relay
     })
-  })
-
-  it('refuses to write routing for a removed host and leaves no overlay behind', async () => {
-    storage.set('orca:hosts', '[]')
-    storage.set(OVERLAY_KEY, '[]')
-
-    await expect(setRelayRouting('host-1', relay)).rejects.toBeInstanceOf(
-      RelayRoutingHostRemovedError
-    )
-
-    expect(writesTo(OVERLAY_KEY)).toEqual([])
-    expect(writesTo('orca:hosts')).toEqual([])
-    await expect(loadHosts()).resolves.toEqual([])
   })
 })

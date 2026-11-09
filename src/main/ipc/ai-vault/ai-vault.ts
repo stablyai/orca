@@ -118,7 +118,8 @@ async function listAiVaultSessions(
         : scopePaths,
     executionHostScope,
     includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions === true,
-    includeStructuredSessions: args?.includeStructuredSessions === true
+    includeStructuredSessions: args?.includeStructuredSessions === true,
+    ...(args?.scopeOnly === true ? { scopeOnly: true } : {})
   })
   const depth = requestedAiVaultSessionDepth(args)
   const afterFingerprint =

@@ -29,7 +29,7 @@ vi.mock('fs/promises', () => ({
 }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
-import { resetSshConnectionGenerations } from '../../ssh/connection/ssh-connection-generation'
+import { resetSshConnectionGenerations } from '../../ssh/connection/authority/ssh-connection-generation'
 
 // Resolve fixture paths like production to preserve cross-platform comparisons.
 const REPO_PATH = path.resolve('/workspace/repo')

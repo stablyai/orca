@@ -1,4 +1,6 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
+import { memo } from 'react'
+import { shallow } from 'zustand/shallow'
 import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
 import type {
   AiVaultScope,
@@ -40,56 +42,16 @@ export type AiVaultListRow =
   | { type: 'group'; group: AiVaultSessionGroup }
   | { type: 'session'; groupKey: string; session: AiVaultSession }
 
-export function AiVaultVirtualRow({
-  conversationNavigation = false,
-  onOpenConversation,
-  row,
-  index,
-  start,
-  activeStickyHeaderIndex,
-  measureElement,
-  collapsedGroups,
-  expandedSessionIds,
-  vaultScope,
-  buildResumeStartup,
-  getOriginalPaneTarget,
-  isStructuredSessionOpen,
-  getSessionLiveState,
-  getWorktreeInfo,
-  getSessionResumeState,
-  getSessionResumeActions,
-  getSessionResumeInChat,
-  onToggleGroup,
-  onToggleSessionDetails,
-  onJumpToOriginalPane,
-  onJumpToWorktree,
-  onResume,
-  onContinueInNewSession,
-  onResumeInNewChat,
-  onResumeInNewCli,
-  onCopyResume,
-  onCopyId,
-  onCopyPath,
-  onOpenLog,
-  onRevealLog,
-  onOpenCwd,
-  onRevealArtifacts,
-  onRequestDelete,
-  searchHits,
-  searchHitHostLabels,
-  selected,
-  onSelect,
-  onPickSession
-}: {
+type AiVaultVirtualRowProps = {
   conversationNavigation?: boolean
   onOpenConversation?: (session: AiVaultSession) => void
   row: AiVaultListRow | undefined
   index: number
   start: number
-  activeStickyHeaderIndex: number | null
+  activeStickyHeader: boolean
   measureElement: (node: Element | null) => void
-  collapsedGroups: ReadonlySet<string>
-  expandedSessionIds: ReadonlySet<string>
+  groupCollapsed: boolean
+  detailsExpanded: boolean
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
@@ -115,20 +77,69 @@ export function AiVaultVirtualRow({
   onOpenCwd: (session: AiVaultSession) => void
   onRevealArtifacts: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
-  searchHits?: ReadonlyMap<string, AiVaultSearchHit>
-  searchHitHostLabels?: ReadonlyMap<string, string> | null
+  searchHit?: AiVaultSearchHit
+  sourceHostLabel?: string
   /** Set only where rows are keyboard-selectable. */
   selected?: boolean
-  onSelect?: () => void
+  onSelect?: (index: number) => void
   /** Set in `/resume`'s picker; see VaultSessionRow's `onPick`. */
   onPickSession?: (session: AiVaultSession) => void
-}): React.JSX.Element | null {
+}
+
+// Why: the list rebuilds every row wrapper when its groups change, so compare the session it holds.
+function sameRowProps(previous: AiVaultVirtualRowProps, next: AiVaultVirtualRowProps): boolean {
+  const { row: a, ...previousRest } = previous
+  const { row: b, ...nextRest } = next
+  const sameRow = a?.type === 'session' && b?.type === 'session' ? a.session === b.session : a === b
+  return sameRow && shallow(previousRest, nextRest)
+}
+
+export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
+  conversationNavigation = false,
+  onOpenConversation,
+  row,
+  index,
+  start,
+  activeStickyHeader,
+  measureElement,
+  groupCollapsed,
+  detailsExpanded,
+  vaultScope,
+  buildResumeStartup,
+  getOriginalPaneTarget,
+  isStructuredSessionOpen,
+  getSessionLiveState,
+  getWorktreeInfo,
+  getSessionResumeState,
+  getSessionResumeActions,
+  getSessionResumeInChat,
+  onToggleGroup,
+  onToggleSessionDetails,
+  onJumpToOriginalPane,
+  onJumpToWorktree,
+  onResume,
+  onContinueInNewSession,
+  onResumeInNewChat,
+  onResumeInNewCli,
+  onCopyResume,
+  onCopyId,
+  onCopyPath,
+  onOpenLog,
+  onRevealLog,
+  onOpenCwd,
+  onRevealArtifacts,
+  onRequestDelete,
+  searchHit,
+  sourceHostLabel,
+  selected,
+  onSelect,
+  onPickSession
+}: AiVaultVirtualRowProps): React.JSX.Element | null {
   const t = useTranslate()
   if (!row) {
     return null
   }
 
-  const isActiveStickyHeader = row.type === 'group' && activeStickyHeaderIndex === index
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
   const structuredSessionOpen = row.type === 'session' && isStructuredSessionOpen(row.session)
   const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
@@ -152,7 +163,6 @@ export function AiVaultVirtualRow({
       ? aiVaultSessionRowResumeGating(row.session, resumeState)
       : { resumeDisabled: true, canCopyResumeCommand: false }
   const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState, t) : ''
-  const searchHit = row.type === 'session' ? searchHits?.get(row.session.id) : undefined
   const {
     canJumpToOriginalPane,
     resumeDisabled,
@@ -208,14 +218,14 @@ export function AiVaultVirtualRow({
       className={cn(
         'left-0 w-full',
         row.type === 'session' && 'ai-vault-session-row',
-        isActiveStickyHeader ? 'sticky top-0 z-10 bg-sidebar' : 'absolute top-0'
+        activeStickyHeader ? 'sticky top-0 z-10 bg-sidebar' : 'absolute top-0'
       )}
-      style={isActiveStickyHeader ? undefined : { transform: `translateY(${start}px)` }}
+      style={activeStickyHeader ? undefined : { transform: `translateY(${start}px)` }}
     >
       {row.type === 'group' ? (
         <VaultGroupHeader
           group={row.group}
-          collapsed={collapsedGroups.has(row.group.key)}
+          collapsed={groupCollapsed}
           onToggle={() => onToggleGroup(row.group.key)}
         />
       ) : (
@@ -224,7 +234,7 @@ export function AiVaultVirtualRow({
           onOpen={onOpenConversation ? () => onOpenConversation(row.session) : undefined}
           session={row.session}
           searchHit={searchHit}
-          sourceHostLabel={searchHitHostLabels?.get(row.session.executionHostId)}
+          sourceHostLabel={sourceHostLabel}
           liveState={getSessionLiveState(row.session)}
           resumeStartup={resumeStartup}
           realHomeResumeStartup={
@@ -234,18 +244,18 @@ export function AiVaultVirtualRow({
           }
           worktreeInfo={worktreeInfo}
           vaultScope={vaultScope}
-          detailsExpanded={expandedSessionIds.has(row.session.id)}
+          detailsExpanded={detailsExpanded}
           resumeDisabled={resumeDisabled}
           resumeLabel={resumeLabel}
           resumeActions={visibleResumeActions}
           onToggleDetails={() => {
-            onSelect?.()
+            onSelect?.(index)
             onToggleSessionDetails(row.session.id)
           }}
           onPick={
             onPickSession
               ? () => {
-                  onSelect?.()
+                  onSelect?.(index)
                   onPickSession(row.session)
                 }
               : undefined
@@ -317,4 +327,4 @@ export function AiVaultVirtualRow({
       )}
     </div>
   )
-}
+}, sameRowProps)

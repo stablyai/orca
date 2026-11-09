@@ -17,9 +17,12 @@ export type AiVaultSessionListGroup = {
   sessions: AiVaultSession[]
 }
 
+/** Browse groups title-filtered sessions; search lists hits as given, or title matches until hits arrive. */
+export type AiVaultPanelListMode = 'browse' | 'search-hits' | 'search-titles'
+
 export function useAiVaultPanelSessions(
   sessions: readonly AiVaultSession[],
-  searching: boolean,
+  mode: AiVaultPanelListMode,
   group: AiVaultGroup,
   {
     query,
@@ -36,7 +39,7 @@ export function useAiVaultPanelSessions(
 ) {
   const filteredSessions = useMemo(
     () =>
-      searching
+      mode === 'search-hits'
         ? sessions
         : filterAiVaultSessions(sessions, {
             query,
@@ -51,7 +54,7 @@ export function useAiVaultPanelSessions(
             preserveStructuredSessions
           }),
     [
-      searching,
+      mode,
       sessions,
       query,
       agents,
@@ -67,13 +70,13 @@ export function useAiVaultPanelSessions(
   )
   const groups = useMemo<AiVaultSessionListGroup[]>(
     () =>
-      searching
+      mode !== 'browse'
         ? filteredSessions.length === 0
           ? []
           : // The results bar above the list carries the count, so this group only holds rows.
             [{ key: 'search-results', label: null, sessions: [...filteredSessions] }]
         : groupAiVaultSessions(filteredSessions, group, { sessionProjectById, projectLabelByKey }),
-    [searching, filteredSessions, group, projectLabelByKey, sessionProjectById]
+    [mode, filteredSessions, group, projectLabelByKey, sessionProjectById]
   )
   return { filteredSessions, groups }
 }

@@ -40,6 +40,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       "--reclaim-stale-lock starts nothing. When a start refuses because this profile's lock may belong to an Orca on another machine sharing this home (for example after a reboot, on a network home), it checks that the lock was written on a host with this name in an earlier boot, was last written or refreshed at least 5 minutes ago, and that nothing answers on this machine at its holder's endpoints. Those checks cannot rule out another machine with the same host name, so it then only prints what it found (exit 2); add --yes, once you are sure no other machine sharing this home runs Orca for this profile, to clear it (exit 0). It exits 1 when a check fails and 4 when there is no lock. --data-root names the data root the refusal printed. --json prints the status (none, eligible, refused or reclaimed). Linux only.",
       'On macOS, after Orca serve aborts at startup (it could not register with Launch Services), later runs from the same environment refuse for 30 minutes with exit code 78. Use --force to try anyway.',
       '--supervise is for service managers (launchd, systemd). Orca serve then restarts the server itself with growing delays instead of exiting when it stops, waits while an update replaces the app, and waits while another Orca serves this profile. On the orcad runtime (the default), a supervised server does not start without its terminal daemon, because terminals outside it would not survive a restart; that counts as a failure. After 6 failures in 15 minutes it gives up and exits with code 0 so the manager stops too, and later supervised runs refuse until a new build is installed or --force is passed. Not available on Windows yet.',
+      "Copies of a machine image share the server's pairing identity. Set ORCA_INSTANCE_ID to a value unique to each instance, or run `orca serve reset-identity` on each copy.",
       'Experimental and off by default: set ORCA_TERMINAL_PROCESS_CEILING=<n> (64 or more) before the terminal host starts to have the OS cap how many processes each terminal may run (Linux, through a systemd user scope per terminal, which needs a user manager that outlives logout; Windows, through a job per terminal). `orca serve` reports the ceiling as on or off, with the reason.',
       'Off by default: set ORCA_TERMINAL_MEMORY_MAX=<size> (256M or more) and ORCA_TERMINAL_MEMORY_SWAP_MAX=<size> (0 for no swap) before the terminal host starts to cap the memory and swap of each terminal on Linux, through the same per-terminal systemd user scope. A terminal over its limit has its largest process OOM-killed; the host and other terminals keep running. Sizes take K, M, G or T. A limit the host cannot enforce is skipped and logged in the terminal host log. No effect on macOS or Windows.'
     ],
@@ -63,6 +64,18 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'It also lists restores from an older Orca client that this host refused, with the command that resumes each one.'
     ],
     examples: ['orca serve restore resume', 'orca serve restore resume --json']
+  },
+  {
+    path: ['serve', 'reset-identity'],
+    summary: "Give this machine's Orca server a new pairing identity",
+    usage: 'orca serve reset-identity [--yes] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'yes'],
+    notes: [
+      'Replaces the pairing key and installation id and removes every paired device, so clients must pair again. Use it on each copy of a machine image that was made after Orca had run, so the copies stop sharing one identity.',
+      'Asks for confirmation in a terminal; pass --yes to skip it. Stop Orca (the desktop app or `orca serve`) for this profile first; the command refuses while it runs.',
+      'To have each copy rotate on its own instead, start `orca serve` with ORCA_INSTANCE_ID set to a value unique to that instance (for example the cloud-init instance id). When the value differs from the one recorded with the current identity, Orca rotates it at startup. The first value seen is only recorded, and an unset variable never rotates anything.'
+    ],
+    examples: ['orca serve reset-identity', 'orca serve reset-identity --yes']
   },
   {
     path: ['serve', 'service', 'install'],

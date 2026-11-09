@@ -62,7 +62,7 @@ let latest: ReturnType<typeof useAiVaultSessionRefresh> | undefined
 let response: AiVaultListResult
 
 function Probe({ scope = 'local' }: { scope?: ExecutionHostScope }): null {
-  latest = useAiVaultSessionRefresh([], scope, 500, true)
+  latest = useAiVaultSessionRefresh([], scope, 500, false, true)
   return null
 }
 

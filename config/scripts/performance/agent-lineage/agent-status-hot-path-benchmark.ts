@@ -9,23 +9,17 @@ import type { AppState } from '@/store/types'
 import type { AgentStatusBatchUpdate } from '@/store/slices/agent-status/agent-status-contract'
 import '@/store/slices/agent-status/agent-status'
 import { MAX_LIVE_AGENT_STATUSES } from '@/store/slices/agent-status/agent-status-capacity-eviction'
-import { createTestStore } from '@/store/testing/app-store-test-fixture'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
-import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
-import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import { makePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
-import { getDefaultSettings } from '../../../../src/shared/constants'
+import type { createTestStore } from '@/store/testing/app-store-test-fixture'
 import {
   createAgentStatusPaneRoutingIndex,
   resolvePaneKeyFromRoutingIndex
 } from '@/hooks/ipc-events/agent-status-pane-routing-index'
+import { buildAgentStatusScaleFixture } from '@/store/slices/agent-status/agent-status-scale.test-fixture'
 import { resolvePaneKey } from '@/hooks/ipc-events/agent-status-routing'
 
 const WORKTREES = 423
 const EVENTS = 1_000
 const BATCH_SIZE = 8
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const BASE_TIME = 2_000_000_000
 
 const counters = { maps: 0, sets: 0, tabComparisons: 0 }
@@ -58,62 +52,16 @@ function withAllocationCounting<T>(run: () => T): T {
   }
 }
 
-/** Tab list whose iteration is observable, so the nested-loop resolver's comparisons are countable. */
-class CountingTabList<T> extends Array<T> {
-  [Symbol.iterator](): ArrayIterator<T> {
-    const iterator = super[Symbol.iterator]()
-    const next = iterator.next.bind(iterator)
-    iterator.next = (...args) => {
-      const result = next(...args)
-      if (!result.done) {
-        counters.tabComparisons += 1
-      }
-      return result
-    }
-    return iterator
-  }
-}
-
 function buildFixture(countTabIteration: boolean) {
-  const store = createTestStore()
-  const settings = store.getState().settings ?? getDefaultSettings(tmpdir())
-  const tabsByWorktree: AppState['tabsByWorktree'] = {}
-  const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {}
-  const worktrees: ReturnType<typeof makeWorktree>[] = []
-  const paneKeys: string[] = []
-  const owners: { tabId: string; worktreeId: string }[] = []
-  for (let index = 0; index < WORKTREES; index += 1) {
-    const worktreeId = `wt-${index}`
-    worktrees.push(makeWorktree({ id: worktreeId, repoId: TEST_REPO.id }))
-    const tabs: ReturnType<typeof makeTab>[] = []
-    const unified: ReturnType<typeof makeUnifiedTab>[] = []
-    for (let tab = 0; tab < (index % 2 === 0 ? 1 : 2); tab += 1) {
-      const tabId = `tab-${index}-${tab}`
-      tabs.push(makeTab({ id: tabId, worktreeId, title: `Terminal ${index}-${tab}` }))
-      unified.push(
-        makeUnifiedTab({
-          id: tabId,
-          worktreeId,
-          groupId: `group-${index}`,
-          label: `Label ${index}`
-        })
-      )
-      paneKeys.push(makePaneKey(tabId, LEAF_ID))
-      owners.push({ tabId, worktreeId })
-    }
-    tabsByWorktree[worktreeId] = countTabIteration ? CountingTabList.from(tabs) : tabs
-    unifiedTabsByWorktree[worktreeId] = unified
-  }
-  store.setState({
-    repos: [TEST_REPO],
-    worktreesByRepo: { [TEST_REPO.id]: worktrees },
-    tabsByWorktree,
-    unifiedTabsByWorktree,
-    terminalLayoutsByTabId: {},
-    setGeneratedTabTitlesFromAgentPrompts: () => {},
-    settings: { ...settings, tabAutoGenerateTitle: false }
-  })
-  return { store, paneKeys, owners }
+  const fixture = buildAgentStatusScaleFixture(
+    countTabIteration
+      ? () => {
+          counters.tabComparisons += 1
+        }
+      : undefined
+  )
+  fixture.store.setState({ setGeneratedTabTitlesFromAgentPrompts: () => {} })
+  return fixture
 }
 
 function measure(run: () => void): number {

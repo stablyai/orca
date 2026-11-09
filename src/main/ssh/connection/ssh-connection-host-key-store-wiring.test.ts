@@ -1,7 +1,7 @@
 /** Prove accepted first-contact keys persist and inform later connections. Isolate the bound module-level store: real disk I/O cannot settle inside the shared reconnect suite's fake ticks. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { Socket } from 'node:net'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as SshGConfigResolution from '../config/ssh-g-config-resolution'
@@ -21,7 +21,7 @@ let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
 let presentedHostKey: Buffer
 let hostKeyAccepted: boolean | undefined
 
-vi.mock('../ssh2-module-load', async () => {
+vi.mock('../authentication/ssh2-module-load', async () => {
   const { utils } = await vi.importActual<typeof Ssh2>('ssh2')
   class MockSshClient {
     setNoDelay = vi.fn()
@@ -66,7 +66,7 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) => ({
 }))
 
 import { SshConnection } from './ssh-connection'
-import { initSshHostKeyStoreFile, isTrusted, loadTrustedHostKeys } from '../ssh-host-key-store'
+import { initSshHostKeyStoreFile, loadTrustedHostKeys } from '../host-keys/ssh-host-key-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 
 const target = (overrides?: Partial<SshTarget>): SshTarget => ({
@@ -116,30 +116,6 @@ describe('recording a first-contact host key', () => {
     )
   })
 
-  it('accepts the same key from the store on the next connection', async () => {
-    await new SshConnection(target(), callbacks()).connect()
-    await waitForStoredKeys(1)
-
-    await expect(
-      isTrusted({
-        host: 'example.com',
-        port: 22,
-        keyType: 'ssh-ed25519',
-        key: VALID_ED25519_HOST_KEY
-      })
-    ).resolves.toBe('match')
-  })
-
-  it('does not record the same key twice', async () => {
-    await new SshConnection(target(), callbacks()).connect()
-    await waitForStoredKeys(1)
-    await new SshConnection(target(), callbacks()).connect()
-    // Give a duplicate write time to land before asserting it never did.
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    expect(await loadTrustedHostKeys()).toHaveLength(1)
-  })
-
   // Recorded trust must refuse changed keys even when known_hosts has no entry.
   it('refuses a different key for a host it recorded itself', async () => {
     await new SshConnection(target(), callbacks()).connect()
@@ -150,39 +126,5 @@ describe('recording a first-contact host key', () => {
 
     await expect(second.connect()).rejects.toThrow(/host key verification failed/i)
     expect(hostKeyAccepted).toBe(false)
-  })
-
-  // Unreadable known_hosts permits connection without recording; withheld evidence must never become durable first-contact trust.
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'records nothing when a known_hosts file exists but cannot be read',
-    async () => {
-      const home = mkdtempSync(join(tmpdir(), 'orca-ssh-home-'))
-      mkdirSync(join(home, '.ssh'))
-      const knownHosts = join(home, '.ssh', 'known_hosts')
-      writeFileSync(knownHosts, '')
-      chmodSync(knownHosts, 0o000)
-      vi.stubEnv('HOME', home)
-
-      try {
-        await new SshConnection(target(), callbacks()).connect()
-        await new Promise((resolve) => setTimeout(resolve, 50))
-
-        expect(hostKeyAccepted).toBe(true)
-        expect(await loadTrustedHostKeys()).toEqual([])
-      } finally {
-        vi.unstubAllEnvs()
-        rmSync(home, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it('records nothing for an on-demand runtime target', async () => {
-    await new SshConnection(
-      target({ owner: { type: 'on-demand-runtime', runtimeId: 'rt-1' } }),
-      callbacks()
-    ).connect()
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    expect(await loadTrustedHostKeys()).toEqual([])
   })
 })

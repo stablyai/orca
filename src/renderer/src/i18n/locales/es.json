@@ -3735,6 +3735,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Activar"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Ajustado para otra ventana",
+            "fitHere": "Ajustar aquí"
           }
         }
       },
@@ -16006,6 +16010,7 @@
           "kernelStartFailed": "El kernel no pudo iniciarse.",
           "noPython": "No se encontró Python en este equipo. Instálalo desde [python.org](https://www.python.org/downloads/) y vuelve a ejecutar la celda.",
           "kernelDied": "El kernel murió.",
+          "outputTruncated": "Salida truncada: Orca conservó el principio de la salida de esta celda y descartó el resto. Para conservarla completa, escríbela en un archivo.",
           "localOnly": "Las celdas del notebook solo pueden ejecutarse para archivos de este equipo.",
           "pythonOnly": "Solo los notebooks de Python pueden ejecutarse en Orca.",
           "commandCopied": "Comando copiado",
@@ -19994,6 +19999,7 @@
         "copyIdentity": "Copiar {{value0}}",
         "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
+        "turnWorking": "El agente de este chat está trabajando. Cambia de rama cuando termine su turno.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "El chat de este agente aún no está disponible en Windows. Ábralo en una terminal.",
@@ -22107,6 +22113,7 @@
       "switch": "Cambiar de rama: {{branch}}",
       "search": "Buscar ramas",
       "recover": "Cambiar a {{branch}}",
+      "copy": "Copiar nombre de la rama",
       "create": "Crear la rama {{name}} desde {{branch}}",
       "open": "Abrir espacio de trabajo",
       "occupied": "Activa en {{path}}",

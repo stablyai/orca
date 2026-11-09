@@ -1,7 +1,6 @@
 import { aiVaultSearchScopeIdentity } from '../search/ai-vault-search-scope-identity'
 import { useMemo } from 'react'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { withAiVaultHistoryPreviews } from '../search/ai-vault-search-session'
 import {
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
@@ -13,13 +12,6 @@ import {
 
 type ProjectContextArgs = Omit<Parameters<typeof buildAiVaultProjectContext>[0], 'sessions'>
 type SessionProjectArgs = Omit<Parameters<typeof buildAiVaultSessionProjectById>[0], 'sessions'>
-
-export function useAiVaultPanelSearchSessions(
-  indexed: AiVaultSession[],
-  history: readonly AiVaultSession[]
-) {
-  return useMemo(() => withAiVaultHistoryPreviews(indexed, history), [indexed, history])
-}
 
 export function useAiVaultPanelProjectContext({
   folderWorkspaces,
@@ -67,7 +59,12 @@ export function useAiVaultPanelSessionProjects(
   includeHistory: boolean
 ) {
   const sessions = useMemo(
-    () => (searching ? (includeHistory ? [...history, ...indexed] : indexed) : history),
+    () =>
+      !searching || indexed.length === 0
+        ? history
+        : includeHistory
+          ? [...history, ...indexed]
+          : indexed,
     [includeHistory, searching, history, indexed]
   )
   return useMemo(

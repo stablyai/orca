@@ -18,7 +18,7 @@ import {
   conversationWorktrees
 } from '../sidebar/ProjectConversationList.test-fixture'
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: async () => ({ unsubscribe: () => {} })
 }))
 vi.mock('../sidebar/use-conversation-preferences', () => ({
