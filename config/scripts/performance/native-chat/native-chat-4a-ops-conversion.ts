@@ -227,6 +227,7 @@ export async function sweepRows(
   const context = {
     profile: label,
     chats: chats.length,
+    completedDiffChat: manifest.diffChat.sessionId,
     activity: 'none: the app stays idle until the last ready mark',
     endPoints:
       "previous chat's ready mark → this chat's ready mark in observed order; includes the sweep's idle-boundary waits",
@@ -240,8 +241,15 @@ export async function sweepRows(
       context: { ...context, ...extra }
     })
   const whole = row('background sweep, launch to every chat ready')
+  const diff = manifest.diffChat
+  const small = manifest.fillerSessionIds.filter((id) => id !== diff.sessionId)
   const sized = [
-    { name: 'small chats', ids: manifest.fillerSessionIds, items: 'filler recipe' },
+    { name: 'small chats', ids: small, items: 'filler recipe' },
+    {
+      name: 'completed-diff chat',
+      ids: [diff.sessionId],
+      items: `filler recipe + ${diff.itemIds.length} × ${diff.patchBytes} B diff originals`
+    },
     {
       name: 'medium chat',
       ids: manifest.mediumSessionId ? [manifest.mediumSessionId] : [],

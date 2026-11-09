@@ -11,6 +11,7 @@ import {
   type Workspace
 } from './native-chat-4a-arm'
 import { rpc, storageBytes } from './native-chat-4a-probes'
+import { captureDiffTarget, writeSeedDiffs, type DiffChat } from './native-chat-4a-seed-diffs'
 import { createChat, history, send, waitForDurable, waitForIdle } from './native-chat-4a-session'
 import { expectedItems, fillerTurn, historyTurns, type Workload } from './native-chat-4a-workloads'
 
@@ -26,6 +27,8 @@ export type Manifest = {
   /** Null when the recipe seeds no medium chat (the large-source profile). */
   mediumSessionId: string | null
   fillerSessionIds: string[]
+  /** The last filler, which also holds the known completed diff originals; conversion rows report it apart. */
+  diffChat: DiffChat
   largeItems: number
   mediumItems: number
   storageBytes: number
@@ -50,12 +53,18 @@ async function countItems(page: Page, sessionId: string): Promise<number> {
 
 /** A manifest this harness wrote from `recipe`; only the recipe digest decides reuse. */
 function isManifestFrom(value: unknown, recipe: string): value is Manifest {
-  return typeof value === 'object' && value !== null && 'recipe' in value && value.recipe === recipe
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'recipe' in value &&
+    value.recipe === recipe &&
+    'diffChat' in value
+  )
 }
 
 const recipeOf = (workload: Workload, toolOutputBytes: number): string =>
   createHash('sha256')
-    .update(JSON.stringify({ history: workload.history, toolOutputBytes }))
+    .update(JSON.stringify({ history: workload.history, toolOutputBytes, diffs: workload.diffs }))
     .digest('hex')
     .slice(0, 16)
 
@@ -172,6 +181,21 @@ export async function seedProfile(input: {
         input.log(`seed: ${chat + 1}/${input.workload.history.fillerChats} filler chats`)
       }
     }
+    const diffSessionId = fillerSessionIds.at(-1)
+    if (!diffSessionId) {
+      throw new Error('seed: the recipe has no filler chat to hold the completed diffs')
+    }
+    await waitForIdle(page, diffSessionId, 600_000)
+    const diffTarget = await captureDiffTarget(page, diffSessionId)
+    await stopArm(launch)
+    const diffChat = await writeSeedDiffs({
+      arm: input.arm,
+      scratch: path.join(input.runDir, 'scratch'),
+      profileDir: input.profileDir,
+      target: diffTarget,
+      workload: input.workload
+    })
+    input.log(`seed: ${diffChat.itemIds.length} completed diffs written to ${diffSessionId}`)
     const manifest: Manifest = {
       seedArm: input.arm.name,
       seedSha: input.arm.sha,
@@ -182,14 +206,12 @@ export async function seedProfile(input: {
       largeSessionId: large.sessionId,
       mediumSessionId: medium?.sessionId ?? null,
       fillerSessionIds,
+      diffChat,
       largeItems: large.items,
       mediumItems: medium?.items ?? 0,
-      storageBytes: 0,
-      seedMs: 0
+      storageBytes: storageBytes(input.profileDir).total,
+      seedMs: Date.now() - started
     }
-    await stopArm(launch)
-    manifest.storageBytes = storageBytes(input.profileDir).total
-    manifest.seedMs = Date.now() - started
     renameSync(input.profileDir, seedDir)
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
     return manifest

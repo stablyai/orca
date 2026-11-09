@@ -87,16 +87,33 @@ export async function resolveArm(name: string, root: string, scratch: string): P
   if (typeof electronPath !== 'string') {
     throw new Error(`${name}: the electron package in ${absolute} names no executable`)
   }
-  const outfile = path.join(scratch, `${name}-protocol.cjs`)
-  const source = (file: string): string => JSON.stringify(path.join(absolute, file))
+  const protocol: ArmProtocol = await bundleFromCheckout(
+    absolute,
+    path.join(scratch, `${name}-protocol.cjs`),
+    [
+      ['*', MUTATION_SOURCE],
+      ['{ createStructuredAgentSessionId }', CREATE_SOURCE],
+      [
+        '{ structuredAgentSessionMessageSendMutation, agentSessionSendBodyFingerprint }',
+        SEND_SOURCE
+      ]
+    ]
+  )
+  return { name, root: absolute, sha: git(absolute, 'rev-parse', 'HEAD'), electronPath, protocol }
+}
+
+/** Compile `exports` ([names, checkout-relative file]) from a checkout's own source and load them. */
+export async function bundleFromCheckout<T>(
+  root: string,
+  outfile: string,
+  exports: readonly (readonly [names: string, file: string])[]
+): Promise<T> {
   await build({
     stdin: {
-      contents: [
-        `export * from ${source(MUTATION_SOURCE)}`,
-        `export { createStructuredAgentSessionId } from ${source(CREATE_SOURCE)}`,
-        `export { structuredAgentSessionMessageSendMutation, agentSessionSendBodyFingerprint } from ${source(SEND_SOURCE)}`
-      ].join(';'),
-      resolveDir: absolute
+      contents: exports
+        .map(([names, file]) => `export ${names} from ${JSON.stringify(path.join(root, file))}`)
+        .join(';'),
+      resolveDir: root
     },
     bundle: true,
     platform: 'node',
@@ -105,8 +122,7 @@ export async function resolveArm(name: string, root: string, scratch: string): P
     logLevel: 'silent',
     nodePaths: [path.join(HARNESS_ROOT, 'node_modules')]
   })
-  const protocol: ArmProtocol = createRequire(import.meta.url)(outfile)
-  return { name, root: absolute, sha: git(absolute, 'rev-parse', 'HEAD'), electronPath, protocol }
+  return createRequire(import.meta.url)(outfile)
 }
 
 /** The stub wrapper and its directory; the launch PATH holds only it and the system tool dirs. */
