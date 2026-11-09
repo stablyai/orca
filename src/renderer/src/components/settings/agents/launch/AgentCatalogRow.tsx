@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { SettingsBadge, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
-
 import {
   type AgentSessionSourceHomeControl,
   AgentSessionSourceHomeInput
@@ -24,11 +23,9 @@ import {
   AgentDefaultArgsInput,
   AgentDefaultEnvInput
 } from '../../../agent/launch-settings/AgentLaunchDefaultsEditor'
-import {
-  agentPermissionChoiceLabel,
-  AgentPermissionMenu,
-  type AgentPermissionChoiceRow
-} from '../../../agent/launch-settings/AgentPermissionChoiceControls'
+import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
+import { AgentPermissionMenu } from '../../../agent/launch-settings/AgentPermissionMenu'
+import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import type { AgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
 import { AgentOpensAsControl } from '../../../agent/launch-settings/AgentChatChoiceControls'

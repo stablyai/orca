@@ -1,5 +1,5 @@
-import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../../../../shared/claude-sign-in-link'
-import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../../shared/codex-auth-errors'
+import { CLAUDE_SIGN_IN_FAILED_MESSAGE } from '../../../../shared/claude-sign-in-link'
+import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../../../shared/codex-auth-errors'
 
 export function getCodexAccountErrorDescription(error: unknown): string {
   const message = String((error as Error)?.message ?? error)

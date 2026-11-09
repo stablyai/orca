@@ -422,11 +422,11 @@
 1 src/renderer/src/components/settings/privacy/PrivacyPane.tsx
 1 src/renderer/src/components/settings/quick-commands/QuickCommandsPane.tsx
 1 src/renderer/src/components/settings/repository/RepositoryFormatterSection.tsx
-2 src/renderer/src/components/settings/repository/RepositoryGitHubAccountSection.tsx
+2 src/renderer/src/components/settings/repository/source-control/RepositoryGitHubAccountSection.tsx
 3 src/renderer/src/components/settings/repository/RepositoryJiraProjectSection.tsx
-2 src/renderer/src/components/settings/repository/execution/RepositoryForkSyncSection.tsx
-3 src/renderer/src/components/settings/repository/execution/RepositoryHostSetupActions.tsx
-2 src/renderer/src/components/settings/repository/execution/SparsePresetSettingsSection.tsx
+2 src/renderer/src/components/settings/repository/source-control/RepositoryForkSyncSection.tsx
+3 src/renderer/src/components/settings/repository/hosts/RepositoryHostSetupActions.tsx
+2 src/renderer/src/components/settings/repository/worktrees/SparsePresetSettingsSection.tsx
 2 src/renderer/src/components/settings/repository/identity/RepositoryIconPicker.tsx
 1 src/renderer/src/components/settings/repository/mcp/McpConfigSection.tsx
 9 src/renderer/src/components/settings/repository/source-control/repository-source-control-ai-global-ux.ts
