@@ -23,7 +23,7 @@ import {
   hostWorkingClientBoundaryByPaneKey,
   type WebSessionTabsSyncState
 } from './state'
-import { annotateWorkspaceScopedPatch, markTabRecordsFullResync } from './scoped-patch-annotation'
+import { markHostMirrorPatchFullResync } from './scoped-patch-annotation'
 import { reportVisibleTabPickToHost } from './navigation/web-session-visible-tab-pick-report'
 import {
   createHostSessionMirrorSettle,
@@ -45,12 +45,6 @@ export function applyWebSessionTabsStorePatch(
     .map(({ worktreeId }) => worktreeId)
 ): HostSessionMirrorSettle {
   let mirroredAgentStatusChanged = false
-  const annotatedWorkspaceIds = new Set(affectedWorkspaces)
-  for (const { source, decision } of hostMirrorVerdict.frames) {
-    if (decision.apply && source) {
-      annotatedWorkspaceIds.add(source.worktree)
-    }
-  }
   // Zustand commits before notifying subscribers, so a completed producer has landed even if a subscriber throws.
   let patchCommitted = false
   const acceptedNotificationStatuses: {
@@ -70,9 +64,7 @@ export function applyWebSessionTabsStorePatch(
     changedAgentPaneKeys: Set<string>
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
     const patch = buildPatch(state, changedAgentPaneKeys)
-    // Snapshot patches only rewrite the workspaces their frames name.
-    annotateWorkspaceScopedPatch(state, patch, annotatedWorkspaceIds)
-    markTabRecordsFullResync(state, patch)
+    markHostMirrorPatchFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey

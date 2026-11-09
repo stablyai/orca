@@ -1,9 +1,6 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '../../../types'
-import {
-  annotateRecordReplacement,
-  annotateTabBucketReplacement
-} from '../../../keyed-record-transitions'
+import { replaceRecordEntries, replaceTabBuckets } from '../../../keyed-record-transitions'
 
 type InPlaceTabState = Pick<
   AppState,
@@ -35,24 +32,21 @@ export function rekeyRestoredEditorTabsInPlace(
     activeGroupIdByWorktree: s.activeGroupIdByWorktree,
     activeTabTypeByWorktree: s.activeTabTypeByWorktree,
     layoutByWorktree: s.layoutByWorktree,
-    groupsByWorktree: annotateRecordReplacement(
-      s.groupsByWorktree,
-      {
-        ...s.groupsByWorktree,
-        [worktreeId]: (s.groupsByWorktree[worktreeId] ?? []).map((group) => ({
+    groupsByWorktree: replaceRecordEntries(s.groupsByWorktree, [
+      [
+        worktreeId,
+        (s.groupsByWorktree[worktreeId] ?? []).map((group) => ({
           ...group,
           activeTabId: group.activeTabId ? tabId(group.activeTabId) : group.activeTabId,
           tabOrder: group.tabOrder.map(tabId),
           ...(group.recentTabIds ? { recentTabIds: group.recentTabIds.map(tabId) } : {})
         }))
-      },
-      [worktreeId]
-    ),
-    unifiedTabsByWorktree: annotateTabBucketReplacement(
-      s.unifiedTabsByWorktree,
-      {
-        ...s.unifiedTabsByWorktree,
-        [worktreeId]: (s.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) =>
+      ]
+    ]),
+    unifiedTabsByWorktree: replaceTabBuckets(s.unifiedTabsByWorktree, [
+      [
+        worktreeId,
+        (s.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) =>
           tabIdMigrations.has(tab.id) || fileIdMigrations.has(tab.entityId)
             ? {
                 ...tab,
@@ -62,9 +56,8 @@ export function rekeyRestoredEditorTabsInPlace(
               }
             : tab
         )
-      },
-      [worktreeId]
-    ),
+      ]
+    ]),
     tabBarOrderByWorktree: {
       ...s.tabBarOrderByWorktree,
       [worktreeId]: (s.tabBarOrderByWorktree[worktreeId] ?? []).map(fileId)

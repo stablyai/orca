@@ -67,20 +67,34 @@ export function ensureGroup(
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
 } {
-  const existing =
-    groupsByWorktree[worktreeId]?.find((group) => group.id === preferredGroupId) ??
-    groupsByWorktree[worktreeId]?.[0]
-  if (existing) {
-    return { group: existing, groupsByWorktree, activeGroupIdByWorktree }
+  const { group, created } = ensureWorktreeGroup(
+    groupsByWorktree[worktreeId],
+    worktreeId,
+    preferredGroupId
+  )
+  if (!created) {
+    return { group, groupsByWorktree, activeGroupIdByWorktree }
   }
-  // Switch point: the root group id main and the Loader mint for a workspace with no group.
-  const groupId = ORCA_LAYOUT_OWNER_IS_MAIN ? workspaceRootGroupId(worktreeId) : createBrowserUuid()
-  const group: TabGroup = { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }
   return {
     group,
     groupsByWorktree: replaceRecordEntries(groupsByWorktree, [[worktreeId, [group]]]),
-    activeGroupIdByWorktree: replaceRecordEntries(activeGroupIdByWorktree, [[worktreeId, groupId]])
+    activeGroupIdByWorktree: replaceRecordEntries(activeGroupIdByWorktree, [[worktreeId, group.id]])
   }
+}
+
+/** ensureGroup for one worktree's groups; a created group becomes the worktree's only and active group. */
+export function ensureWorktreeGroup(
+  groups: TabGroup[] | undefined,
+  worktreeId: string,
+  preferredGroupId?: string
+): { group: TabGroup; created: boolean } {
+  const existing = groups?.find((group) => group.id === preferredGroupId) ?? groups?.[0]
+  if (existing) {
+    return { group: existing, created: false }
+  }
+  // Switch point: the root group id main and the Loader mint for a workspace with no group.
+  const groupId = ORCA_LAYOUT_OWNER_IS_MAIN ? workspaceRootGroupId(worktreeId) : createBrowserUuid()
+  return { group: { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }, created: true }
 }
 
 export function updateGroup(groups: TabGroup[], updated: TabGroup): TabGroup[] {

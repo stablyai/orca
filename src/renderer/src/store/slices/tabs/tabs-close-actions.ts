@@ -8,7 +8,7 @@ export { landOnEmptiedWorktree } from './tabs-empty-workspace'
 import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { findGroupForTab, findTabAndWorktree } from './tab-group-state'
 import { pickNextActiveTab, sanitizeRecentTabIds } from './tab-selection-history'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
@@ -34,11 +34,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
-import {
-  annotateRecordReplacement,
-  replaceRecordEntries,
-  replaceTabBuckets
-} from '../../keyed-record-transitions'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -155,30 +151,21 @@ export function createTabsCloseActions(
             )
             let nextLayoutByWorktree = current.layoutByWorktree
             let nextActiveGroupIdByWorktree = current.activeGroupIdByWorktree
-            if (
-              group &&
-              wasLastTab &&
-              current.layoutByWorktree[worktreeId] &&
-              nextGroups.length > 1
-            ) {
+            const currentLayout = current.layoutByWorktree[worktreeId]
+            if (group && wasLastTab && currentLayout && nextGroups.length > 1) {
               nextGroups = nextGroups.filter((candidate) => candidate.id !== group.id)
-              const collapsedState = collapseGroupLayout(
-                current.layoutByWorktree,
-                current.activeGroupIdByWorktree,
-                worktreeId,
+              const collapsed = collapseWorktreeGroupLayout(
+                currentLayout,
+                current.activeGroupIdByWorktree[worktreeId],
                 group.id,
                 nextGroups[0]?.id ?? null
               )
-              nextLayoutByWorktree = annotateRecordReplacement(
-                current.layoutByWorktree,
-                collapsedState.layoutByWorktree,
-                [worktreeId]
-              )
-              nextActiveGroupIdByWorktree = annotateRecordReplacement(
-                current.activeGroupIdByWorktree,
-                collapsedState.activeGroupIdByWorktree,
-                [worktreeId]
-              )
+              nextLayoutByWorktree = replaceRecordEntries(current.layoutByWorktree, [
+                [worktreeId, collapsed.layout]
+              ])
+              nextActiveGroupIdByWorktree = replaceRecordEntries(current.activeGroupIdByWorktree, [
+                [worktreeId, collapsed.activeGroupId]
+              ])
             }
             const nextUnifiedTabsByWorktree = replaceTabBuckets(current.unifiedTabsByWorktree, [
               [worktreeId, nextTabs]

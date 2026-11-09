@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  annotateTabBucketReplacement,
   markFullResync,
-  readRecordChanges,
-  readTabMapChanges,
+  recordDraft,
   replaceMapEntries,
   replaceRecordEntries,
-  replaceTabBuckets
+  replaceTabBuckets,
+  tabBucketDraft
 } from './keyed-record-transitions'
+import { readRecordChanges, readTabMapChanges } from './keyed-record-change-reads'
 
 const a1 = { id: 'a1' }
 const a2 = { id: 'a2' }
@@ -56,14 +56,29 @@ describe('keyed record transitions', () => {
     expect(readTabMapChanges(hydrated, start)).toEqual({ kind: 'full-resync', reason: 'hydration' })
   })
 
-  it('reads a builder that declares a move as reordered, and refuses an undeclared one', () => {
+  it('derives changes and order from the operations a draft performed', () => {
     const start = { a: [a1], b: [b1] }
-    const { a: _a, ...rest } = start
-    const moved = annotateTabBucketReplacement(start, { ...rest, a: [a1, a2] }, ['a'], 'reordered')
-    expect(readTabMapChanges(moved, start)).toEqual({ kind: 'full-resync', reason: 'reordered' })
-    expect(() => annotateTabBucketReplacement(start, { ...rest, a: [a1, a2] }, ['a'])).toThrow(
-      "annotate it with order 'reordered'"
-    )
+    const draft = tabBucketDraft(start)
+    draft.set('c', [{ id: 'c1' }])
+    draft.set('a', [a1, a2])
+    draft.delete('b')
+    const next = draft.finish()
+    expect(Object.keys(next)).toEqual(['a', 'c'])
+    expect(readTabMapChanges(next, start)).toEqual({
+      kind: 'addressed',
+      workspaceIds: new Set(['c', 'a', 'b']),
+      tabIds: new Set(['c1', 'a2', 'b1']),
+      workspaceSetChanged: true,
+      addedWorkspaceIds: ['c'],
+      deletedWorkspaceIds: new Set(['b'])
+    })
+    const moved = recordDraft({ early: 1, later: 2 })
+    moved.delete('early')
+    moved.set('early', 1)
+    expect(readRecordChanges(moved.finish(), { early: 1, later: 2 })?.kind).toBe('full-resync')
+    const untouched = recordDraft(start)
+    untouched.set('a', start.a)
+    expect(untouched.finish()).toBe(start)
   })
 
   it('reports keys added across a chain in source order, index keys first', () => {
@@ -146,12 +161,5 @@ describe('keyed record transitions', () => {
       added: [],
       deleted: new Set(['t1'])
     })
-  })
-
-  it('refuses an annotation that omits a changed bucket', () => {
-    const start = { a: [a1], b: [b1] }
-    expect(() => annotateTabBucketReplacement(start, { a: [a1, a2], b: [] }, ['a'])).toThrow(
-      'unnamed key b'
-    )
   })
 })

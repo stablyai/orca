@@ -18,7 +18,7 @@ import {
   getStructuredAgentSessionTabsInWorkspace,
   type StructuredTab
 } from './structured-agent-session-tabs'
-import { readTabMapChanges } from '@/store/keyed-record-transitions'
+import { readTabMapChanges } from '@/store/keyed-record-change-reads'
 import {
   createTabOwnerCache,
   ownerInputChanged,

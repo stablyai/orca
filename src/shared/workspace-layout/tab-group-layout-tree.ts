@@ -110,11 +110,15 @@ export function collapseGroupLayout(
   if (!currentLayout) {
     return { layoutByWorktree, activeGroupIdByWorktree }
   }
-  const siblingId = findSiblingGroupId(currentLayout, groupId)
-  const collapsed = removeGroupLayoutLeaf(currentLayout, groupId)
+  const collapsed = collapseWorktreeGroupLayout(
+    currentLayout,
+    activeGroupIdByWorktree[worktreeId],
+    groupId,
+    fallbackGroupId
+  )
   const nextLayoutByWorktree = { ...layoutByWorktree }
-  if (collapsed) {
-    nextLayoutByWorktree[worktreeId] = collapsed
+  if (collapsed.layout) {
+    nextLayoutByWorktree[worktreeId] = collapsed.layout
   } else {
     delete nextLayoutByWorktree[worktreeId]
   }
@@ -122,8 +126,22 @@ export function collapseGroupLayout(
     layoutByWorktree: nextLayoutByWorktree,
     activeGroupIdByWorktree: {
       ...activeGroupIdByWorktree,
-      [worktreeId]: siblingId ?? fallbackGroupId ?? activeGroupIdByWorktree[worktreeId]
+      [worktreeId]: collapsed.activeGroupId
     }
+  }
+}
+
+/** collapseGroupLayout's values for its one worktree: a null layout deletes the entry. */
+export function collapseWorktreeGroupLayout<A extends string | undefined>(
+  currentLayout: TabGroupLayoutNode,
+  currentActiveGroupId: A,
+  groupId: string,
+  fallbackGroupId?: string | null
+): { layout: TabGroupLayoutNode | null; activeGroupId: string | A } {
+  return {
+    layout: removeGroupLayoutLeaf(currentLayout, groupId),
+    activeGroupId:
+      findSiblingGroupId(currentLayout, groupId) ?? fallbackGroupId ?? currentActiveGroupId
   }
 }
 

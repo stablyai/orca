@@ -25,11 +25,23 @@ import {
 } from './terminal-tab-create-through-layout-owner'
 import type { AppState } from '../types'
 import { normalizeTabStartupCommand } from './terminal-startup-queues'
-import {
-  annotateRecordReplacement,
-  replaceRecordEntries,
-  replaceTabBuckets
-} from '../keyed-record-transitions'
+import { recordDraft, replaceRecordEntries, replaceTabBuckets } from '../keyed-record-transitions'
+
+/** Ordered set/delete operations (null deletes); returns `previous` when none changed it. */
+function applyEntries<V>(
+  previous: Record<string, V>,
+  entries: Iterable<readonly [key: string, value: V | null]>
+): Record<string, V> {
+  const draft = recordDraft(previous)
+  for (const [key, value] of entries) {
+    if (value === null) {
+      draft.delete(key)
+    } else {
+      draft.set(key, value)
+    }
+  }
+  return draft.finish()
+}
 
 export function createTerminalTabCreationActions(
   set: TerminalStoreSet,
@@ -137,10 +149,10 @@ export function createTerminalTabCreationActions(
           worktreeId,
           validTargetGroupId ?? s.activeGroupIdByWorktree[worktreeId]
         )
-        const nextActiveGroupIdByWorktree =
+        const nextActiveGroupId =
           shouldActivate && validTargetGroupId
-            ? { ...activeGroupIdByWorktree, [worktreeId]: validTargetGroupId }
-            : activeGroupIdByWorktree
+            ? validTargetGroupId
+            : activeGroupIdByWorktree[worktreeId]
         const existingUnifiedTabs = s.unifiedTabsByWorktree[worktreeId] ?? []
         const existingTerminalTab = findTabByEntityInGroup(
           s.unifiedTabsByWorktree,
@@ -208,8 +220,8 @@ export function createTerminalTabCreationActions(
         const nextActiveTabIdForWorktree = shouldActivate
           ? tab.id
           : (cleanedActiveTabIdForWorktree ?? cleanedGroupActiveTabId ?? tab.id)
-        // Named against the updater's state: the orphan purge and the created tab are the only changed keys.
-        const changedTabIds = [...orphanTerminalIds, tab.id]
+        // Against the updater's state: the orphan cleanup's per-tab deletes, in its order, then the created tab.
+        const orphanDeletes = [...orphanTerminalIds].map((orphanId) => [orphanId, null] as const)
         return {
           ...orphanCleanupPatch,
           tabsByWorktree: replaceTabBuckets(current.tabsByWorktree, [
@@ -235,11 +247,9 @@ export function createTerminalTabCreationActions(
               })
             ]
           ]),
-          activeGroupIdByWorktree: annotateRecordReplacement(
-            current.activeGroupIdByWorktree,
-            nextActiveGroupIdByWorktree,
-            [worktreeId]
-          ),
+          activeGroupIdByWorktree: applyEntries(current.activeGroupIdByWorktree, [
+            [worktreeId, nextActiveGroupId ?? null]
+          ]),
           layoutByWorktree: replaceRecordEntries(current.layoutByWorktree, [
             [worktreeId, s.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }]
           ]),
@@ -251,43 +261,27 @@ export function createTerminalTabCreationActions(
             ...orphanCleanupPatch.activeTabIdByWorktree,
             [worktreeId]: nextActiveTabIdForWorktree
           },
-          ptyIdsByTabId: annotateRecordReplacement(
-            current.ptyIdsByTabId,
-            {
-              ...orphanCleanupPatch.ptyIdsByTabId,
-              [tab.id]: options?.initialPtyId ? [options.initialPtyId] : []
-            },
-            changedTabIds
-          ),
-          runtimePaneTitlesByTabId: annotateRecordReplacement(
-            current.runtimePaneTitlesByTabId,
-            orphanCleanupPatch.runtimePaneTitlesByTabId,
-            orphanTerminalIds
-          ),
-          pendingStartupByTabId: annotateRecordReplacement(
-            current.pendingStartupByTabId,
-            options?.pendingStartup
-              ? {
-                  ...orphanCleanupPatch.pendingStartupByTabId,
-                  [tab.id]: normalizeTabStartupCommand(options.pendingStartup)
-                }
-              : orphanCleanupPatch.pendingStartupByTabId,
-            changedTabIds
-          ),
+          ptyIdsByTabId: applyEntries(current.ptyIdsByTabId, [
+            ...orphanDeletes,
+            [tab.id, options?.initialPtyId ? [options.initialPtyId] : []]
+          ]),
+          runtimePaneTitlesByTabId: applyEntries(current.runtimePaneTitlesByTabId, orphanDeletes),
+          pendingStartupByTabId: applyEntries(current.pendingStartupByTabId, [
+            ...orphanDeletes,
+            ...(options?.pendingStartup
+              ? [[tab.id, normalizeTabStartupCommand(options.pendingStartup)] as const]
+              : [])
+          ]),
           automaticAgentResumeClaimsByTabId: options?.automaticResumeClaim
             ? {
                 ...orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
                 [tab.id]: options.automaticResumeClaim
               }
             : orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
-          terminalLayoutsByTabId: annotateRecordReplacement(
-            current.terminalLayoutsByTabId,
-            {
-              ...orphanCleanupPatch.terminalLayoutsByTabId,
-              [tab.id]: singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
-            },
-            changedTabIds
-          )
+          terminalLayoutsByTabId: applyEntries(current.terminalLayoutsByTabId, [
+            ...orphanDeletes,
+            [tab.id, singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)]
+          ])
         }
       })
       // Switch point: main writes the tab under these ids before any later command names it.

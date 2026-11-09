@@ -5,10 +5,7 @@ import { pushClosedTerminalTabSnapshot } from './recently-closed-terminal-tabs'
 import { pushRecentlyClosedTabKind } from '../slices/tabs/recently-closed-tabs'
 // Use store-free registry to avoid reentering slice creation through terminal-parked-tab-watchers.
 import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
-import {
-  buildTerminalTabRetirementPlan,
-  removeSleepingAgentSessionsForTab
-} from './terminal-tab-retirement'
+import { buildTerminalTabRetirementPlan } from './terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { stopLegacyRelayBridgedShellsForTab } from './legacy-relay-bridged-tab-close'
@@ -25,10 +22,7 @@ import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
 import { runAsAutomaticDeselection } from '../workspaces/selection/active-worktree-deselection-intent'
-import {
-  annotateRecordReplacement,
-  annotateTabBucketReplacement
-} from '../keyed-record-transitions'
+import { recordDraft, tabBucketDraft } from '../keyed-record-transitions'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -67,14 +61,18 @@ export function createTerminalTabCloseActions(
           const omitByTabId = <T>(record: Record<string, T>): Record<string, T> =>
             omitRecordKeys(record, closingTabIds)
           // Partial test slices may lack a record; omitRecordKeys normalizes those to {}.
-          const omitAddressedByTabId = <T>(record: Record<string, T>): Record<string, T> =>
-            record ? annotateRecordReplacement(record, omitByTabId(record), closingTabIds) : {}
-          const changedWorktreeIds: string[] = []
-          const next = { ...s.tabsByWorktree }
+          const omitAddressedByTabId = <T>(record: Record<string, T>): Record<string, T> => {
+            if (!record) {
+              return {}
+            }
+            const draft = recordDraft(record)
+            draft.delete(tabId)
+            return draft.finish()
+          }
+          const tabsDraft = tabBucketDraft(s.tabsByWorktree)
           let closedTab: TerminalTab | null = null
           let closedWorktreeId: string | null = null
-          for (const wId of Object.keys(next)) {
-            const before = next[wId]
+          for (const [wId, before] of Object.entries(s.tabsByWorktree)) {
             const closing = before.find((t) => t.id === tabId)
             if (closing) {
               closingWorktreeId = wId
@@ -94,10 +92,10 @@ export function createTerminalTabCloseActions(
             }
             const after = before.filter((t) => t.id !== tabId)
             if (after.length !== before.length) {
-              next[wId] = after
-              changedWorktreeIds.push(wId)
+              tabsDraft.set(wId, after)
             }
           }
+          const next = tabsDraft.finish()
           // Session-only tombstone fences synchronous SSH pulls before main acknowledges close; retire once merge moves to main.
           const nextClosedTombstones =
             intentReason && closedWorktreeId && opts?.remoteCloseOwnedByHost !== true
@@ -149,19 +147,16 @@ export function createTerminalTabCloseActions(
             s.lastTerminalInputAtByPaneKey,
             tabId
           )
-          const removedSleepingSessions = retiresSession
-            ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
-            : s.sleepingAgentSessionsByPaneKey
-          const nextSleepingAgentSessionsByPaneKey =
-            removedSleepingSessions === s.sleepingAgentSessionsByPaneKey
-              ? removedSleepingSessions
-              : annotateRecordReplacement(
-                  s.sleepingAgentSessionsByPaneKey,
-                  removedSleepingSessions,
-                  Object.keys(s.sleepingAgentSessionsByPaneKey).filter(
-                    (paneKey) => !Object.hasOwn(removedSleepingSessions, paneKey)
-                  )
-                )
+          // Same pane-key/tab match as removeSleepingAgentSessionsForTab, as delete operations.
+          const sleepingDraft = recordDraft(s.sleepingAgentSessionsByPaneKey)
+          if (retiresSession) {
+            for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
+              if (paneKey.startsWith(`${tabId}:`) || record.tabId === tabId) {
+                sleepingDraft.delete(paneKey)
+              }
+            }
+          }
+          const nextSleepingAgentSessionsByPaneKey = sleepingDraft.finish()
           const nextPendingStartupByTabId = omitAddressedByTabId(s.pendingStartupByTabId)
           const nextAutomaticAgentResumeClaimsByTabId = omitByTabId(
             s.automaticAgentResumeClaimsByTabId
@@ -215,11 +210,7 @@ export function createTerminalTabCloseActions(
             }
           }
           return {
-            tabsByWorktree: annotateTabBucketReplacement(
-              s.tabsByWorktree,
-              next,
-              changedWorktreeIds
-            ),
+            tabsByWorktree: next,
             activeTabId: s.activeTabId === tabId ? null : s.activeTabId,
             activeTabIdByWorktree: nextActiveTabIdByWorktree,
             ptyIdsByTabId: nextPtyIdsByTabId,

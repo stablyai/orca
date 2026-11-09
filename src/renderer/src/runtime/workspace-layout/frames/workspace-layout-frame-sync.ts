@@ -11,7 +11,6 @@ import {
 } from '@/store/workspace-layout/workspace-layout-cache'
 
 import { terminalLayoutsPatch } from '@/store/workspace-layout/frames/workspace-layout-frame-store-patch'
-import { annotateLayoutFlushPatch } from '../../web-session-tabs-sync/scoped-patch-annotation'
 import {
   layoutHoldsBoundPane,
   onWorkspaceStartsDrawing
@@ -120,9 +119,8 @@ export function openWorkspaceLayoutFrameSync(
       paneTreeKeys,
       source.draws(state)
     )
-    const tabIds = [...paneTreeKeys].flatMap((k) => cache[k]?.tabs.map((t) => t.entityId) ?? [])
     paneTreeKeys = shownTrees.waiting
-    show(terminalLayoutsPatch(state, shownTrees.layouts, tabIds))
+    show(terminalLayoutsPatch(state, shownTrees.layouts))
   }
 
   const flush = (): void => {
@@ -194,7 +192,8 @@ export function openWorkspaceLayoutFrameSync(
     const builtKeys = [...fullBuilt, ...workspaceBuilt]
     const builds = { fullBuilt, workspaceBuilt, rebound }
     const patch = layoutFrameFlushPatch(base, cache, builds, holds)
-    show(annotateLayoutFlushPatch(state, rekeyed, patch, builds), builtKeys)
+    // The flush's builds mark their own records full resync; rekeys keep their writers' provenance.
+    show({ ...rekeyed, ...patch }, builtKeys)
     if (titleUpdates.length > 0) {
       store.getState().updateTabTitles(titleUpdates)
     }

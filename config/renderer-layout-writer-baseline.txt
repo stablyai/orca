@@ -57,7 +57,7 @@
 9 src/renderer/src/store/slices/editor/checks/check-run-details-actions.ts
 6 src/renderer/src/store/slices/editor/closing/close-file-action.ts
 10 src/renderer/src/store/slices/editor/closing/recently-closed-editor-tabs.ts
-3 src/renderer/src/store/slices/editor/file-ids/hydrated-editor-file-ids.ts
+1 src/renderer/src/store/slices/editor/file-ids/hydrated-editor-file-ids.ts
 2 src/renderer/src/store/slices/editor/file-ids/hydrated-editor-file-selection.ts
 1 src/renderer/src/store/slices/editor/file-ids/open-file-path-rekey.ts
 2 src/renderer/src/store/slices/editor/file-ids/rekey-open-files-action.ts
@@ -82,20 +82,21 @@
 4 src/renderer/src/store/slices/tabs/tab-group-state.ts
 9 src/renderer/src/store/slices/tabs/tabs-close-actions.ts
 14 src/renderer/src/store/slices/tabs/tabs-create-actions.ts
-23 src/renderer/src/store/slices/tabs/tabs-drag-preview-actions.ts
+22 src/renderer/src/store/slices/tabs/tabs-drag-preview-actions.ts
 11 src/renderer/src/store/slices/tabs/tabs-drop-actions.ts
 8 src/renderer/src/store/slices/tabs/tabs-empty-workspace.ts
 4 src/renderer/src/store/slices/tabs/tabs-focus-actions.ts
-12 src/renderer/src/store/slices/tabs/tabs-group-actions.ts
+14 src/renderer/src/store/slices/tabs/tabs-group-actions.ts # collapse applied per worktree through the seam instead of adopting whole records
 1 src/renderer/src/store/slices/tabs/tabs-host-mirroring.ts
 1 src/renderer/src/store/slices/tabs/tabs-hydration.ts
 8 src/renderer/src/store/slices/tabs/tabs-label-actions.ts
 10 src/renderer/src/store/slices/tabs/tabs-move-actions.ts
-9 src/renderer/src/store/slices/tabs/tabs-reconciliation.ts
+4 src/renderer/src/store/slices/tabs/tabs-reconciliation-batch.ts # reconciliation drafts moved out of tabs-reconciliation.ts (9 -> 6)
+6 src/renderer/src/store/slices/tabs/tabs-reconciliation.ts
 4 src/renderer/src/store/slices/tabs/tabs-session-actions.ts
 1 src/renderer/src/store/slices/tabs/tabs-split-ratio-actions.ts
 5 src/renderer/src/store/slices/tabs/tabs-surface.ts
-21 src/renderer/src/store/slices/tabs/worktree-layout-lifecycle.ts
+19 src/renderer/src/store/slices/tabs/worktree-layout-lifecycle.ts
 3 src/renderer/src/store/slices/tabs/worktree-terminal-tab-respawn.ts # moved unchanged out of worktree-layout-lifecycle.ts (24 -> 21)
 5 src/renderer/src/store/slices/worktrees/session/set-active-worktree.ts
 2 src/renderer/src/store/slices/worktrees/session/worktree-slice-lookups.ts

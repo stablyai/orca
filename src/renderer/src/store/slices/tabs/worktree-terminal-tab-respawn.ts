@@ -2,9 +2,9 @@ import type { AppState } from '../../types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { getTerminalActivationSpawnSuppression } from '../../terminals/terminal-activation-spawn-suppression'
 import {
-  annotateRecordReplacement,
-  annotateTabBucketReplacement,
-  replaceTabBuckets
+  replaceRecordEntries,
+  replaceTabBuckets,
+  tabBucketDraft
 } from '../../keyed-record-transitions'
 
 /**
@@ -43,39 +43,26 @@ export function unbindTerminalTabPtys(
   s: AppState,
   tabIds: ReadonlySet<string>
 ): Pick<AppState, 'tabsByWorktree' | 'ptyIdsByTabId'> {
-  let nextTabsByWorktree = s.tabsByWorktree
-  const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
-  const unboundTabIds: string[] = []
-  const changedWorkspaces: string[] = []
-  for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
-    let nextTabs = tabs
-    for (const [index, tab] of tabs.entries()) {
+  const tabs = tabBucketDraft(s.tabsByWorktree)
+  const ptyIdOperations: [string, string[]][] = []
+  for (const [worktreeId, worktreeTabs] of Object.entries(s.tabsByWorktree)) {
+    let nextTabs = worktreeTabs
+    for (const [index, tab] of worktreeTabs.entries()) {
       if (!tabIds.has(tab.id)) {
         continue
       }
-      if (nextTabs === tabs) {
-        nextTabs = [...tabs]
+      if (nextTabs === worktreeTabs) {
+        nextTabs = [...worktreeTabs]
       }
       const { pendingActivationSpawn: _pendingActivationSpawn, ...tabWithoutActivationSpawn } = tab
       void _pendingActivationSpawn
       nextTabs[index] = { ...tabWithoutActivationSpawn, ptyId: null }
-      nextPtyIdsByTabId[tab.id] = []
-      unboundTabIds.push(tab.id)
+      ptyIdOperations.push([tab.id, []])
     }
-    if (nextTabs !== tabs) {
-      if (nextTabsByWorktree === s.tabsByWorktree) {
-        nextTabsByWorktree = { ...nextTabsByWorktree }
-      }
-      nextTabsByWorktree[worktreeId] = nextTabs
-      changedWorkspaces.push(worktreeId)
-    }
+    tabs.set(worktreeId, nextTabs)
   }
   return {
-    tabsByWorktree: annotateTabBucketReplacement(
-      s.tabsByWorktree,
-      nextTabsByWorktree,
-      changedWorkspaces
-    ),
-    ptyIdsByTabId: annotateRecordReplacement(s.ptyIdsByTabId, nextPtyIdsByTabId, unboundTabIds)
+    tabsByWorktree: tabs.finish(),
+    ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, ptyIdOperations)
   }
 }

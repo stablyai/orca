@@ -1,17 +1,17 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
-import type { TabGroup } from '../../../../../shared/tab-types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import {
   buildSplitNode,
-  collapseGroupLayout,
+  collapseWorktreeGroupLayout,
   replaceLeaf
 } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { ownsGlobalSelection } from '../../workspaces/selection/global-selection-owner'
-import { annotateRecordReplacement, replaceRecordEntries } from '../../keyed-record-transitions'
+import { replaceRecordEntries } from '../../keyed-record-transitions'
 
 type SplitGroupState = Pick<
   TabsSlice,
@@ -25,6 +25,24 @@ export function insertSplitGroup(
   target: TabSplitTarget,
   newGroup: TabGroup
 ): SplitGroupState {
+  const split = splitGroupEntries(state, worktreeId, target, newGroup)
+  return {
+    groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [[worktreeId, split.groups]]),
+    layoutByWorktree: replaceRecordEntries(state.layoutByWorktree, [[worktreeId, split.layout]]),
+    activeGroupIdByWorktree:
+      split.activeGroupId === null
+        ? state.activeGroupIdByWorktree
+        : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, split.activeGroupId]])
+  }
+}
+
+/** insertSplitGroup's values for its one worktree; a null active group id leaves the entry unwritten. */
+export function splitGroupEntries(
+  state: SplitGroupState,
+  worktreeId: string,
+  target: TabSplitTarget,
+  newGroup: TabGroup
+): { groups: TabGroup[]; layout: TabGroupLayoutNode; activeGroupId: string | null } {
   const { sourceGroupId, splitDirection } = target
   const currentLayout =
     state.layoutByWorktree[worktreeId] ?? ({ type: 'leaf', groupId: sourceGroupId } as const)
@@ -35,16 +53,9 @@ export function insertSplitGroup(
     splitDirection === 'left' || splitDirection === 'up' ? 'first' : 'second'
   )
   return {
-    groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
-      [worktreeId, [...(state.groupsByWorktree[worktreeId] ?? []), newGroup]]
-    ]),
-    layoutByWorktree: replaceRecordEntries(state.layoutByWorktree, [
-      [worktreeId, replaceLeaf(currentLayout, sourceGroupId, replacement)]
-    ]),
-    activeGroupIdByWorktree:
-      target.activate === false
-        ? state.activeGroupIdByWorktree
-        : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, newGroup.id]])
+    groups: [...(state.groupsByWorktree[worktreeId] ?? []), newGroup],
+    layout: replaceLeaf(currentLayout, sourceGroupId, replacement),
+    activeGroupId: target.activate === false ? null : newGroup.id
   }
 }
 
@@ -178,21 +189,28 @@ export function createTabsGroupActions(
         const remainingGroups = (current.groupsByWorktree[worktreeId] ?? []).filter(
           (candidate) => candidate.id !== groupId
         )
-        const collapsedState = collapseGroupLayout(
-          current.layoutByWorktree,
-          current.activeGroupIdByWorktree,
-          worktreeId,
-          groupId,
-          remainingGroups[0]?.id ?? null
-        )
-        annotateRecordReplacement(current.layoutByWorktree, collapsedState.layoutByWorktree, [
-          worktreeId
-        ])
-        annotateRecordReplacement(
-          current.activeGroupIdByWorktree,
-          collapsedState.activeGroupIdByWorktree,
-          [worktreeId]
-        )
+        const currentLayout = current.layoutByWorktree[worktreeId]
+        const collapsed =
+          currentLayout &&
+          collapseWorktreeGroupLayout(
+            currentLayout,
+            current.activeGroupIdByWorktree[worktreeId],
+            groupId,
+            remainingGroups[0]?.id ?? null
+          )
+        const collapsedState = collapsed
+          ? {
+              layoutByWorktree: replaceRecordEntries(current.layoutByWorktree, [
+                [worktreeId, collapsed.layout]
+              ]),
+              activeGroupIdByWorktree: replaceRecordEntries(current.activeGroupIdByWorktree, [
+                [worktreeId, collapsed.activeGroupId]
+              ])
+            }
+          : {
+              layoutByWorktree: current.layoutByWorktree,
+              activeGroupIdByWorktree: current.activeGroupIdByWorktree
+            }
         const nextGroupsByWorktree = replaceRecordEntries(current.groupsByWorktree, [
           [worktreeId, remainingGroups]
         ])

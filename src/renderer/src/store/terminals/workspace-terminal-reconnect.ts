@@ -4,11 +4,7 @@ import { buildWorktreeByIdIndex } from './workspace-terminal-worktree-index'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { selectWorktreesByRepo } from '../workspaces/catalog/workspace-record-fields'
-import {
-  annotateRecordReplacement,
-  annotateTabBucketReplacement,
-  markFullResync
-} from '../keyed-record-transitions'
+import { markFullResync, recordDraft, tabBucketDraft } from '../keyed-record-transitions'
 
 export function createWorkspaceTerminalReconnectActions(
   set: TerminalStoreSet,
@@ -39,10 +35,8 @@ export function createWorkspaceTerminalReconnectActions(
         return
       }
       // Why: defer daemon attachment for real dimensions; eager 80×24 flushes garble output.
-      let reconnectedTabsByWorktree: Record<string, TerminalTab[]> | null = null
-      let reconnectedPtyIdsByTabId: Record<string, string[]> | null = null
-      const reconnectedWorktreeIds = new Set<string>()
-      const reconnectedTabIds = new Set<string>()
+      const reconnectedTabsByWorktree = tabBucketDraft(tabsByWorktree)
+      const reconnectedPtyIdsByTabId = recordDraft(ptyIdsByTabId)
       // No writes/awaits in the loop, so one store-snapshot index serves every iteration.
       const worktreeById = buildWorktreeByIdIndex(selectWorktreesByRepo(get()))
       const repoById = buildByIdIndex(get().repos)
@@ -73,20 +67,17 @@ export function createWorkspaceTerminalReconnectActions(
               : []
           if (allPtyIds.length > 0) {
             // Why: hide-sleeping reads ptyIdsByTabId for liveness; restored daemon sessions run before their pane remounts, so advertise them.
-            reconnectedPtyIdsByTabId ??= { ...ptyIdsByTabId }
-            reconnectedPtyIdsByTabId[tabId] = allPtyIds
-            reconnectedTabIds.add(tabId)
+            reconnectedPtyIdsByTabId.set(tabId, allPtyIds)
           }
           if (tabLevelPtyId) {
-            reconnectedTabsByWorktree ??= { ...tabsByWorktree }
-            const nextTabs = reconnectedTabsByWorktree[worktreeId]
+            const nextTabs = reconnectedTabsByWorktree.get(worktreeId)
             if (!nextTabs) {
               continue
             }
-            reconnectedTabsByWorktree[worktreeId] = nextTabs.map((t) =>
-              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
+            reconnectedTabsByWorktree.set(
+              worktreeId,
+              nextTabs.map((t) => (t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t))
             )
-            reconnectedWorktreeIds.add(worktreeId)
           }
         }
       }
@@ -120,26 +111,12 @@ export function createWorkspaceTerminalReconnectActions(
       if (signal?.aborted) {
         return
       }
+      const nextTabsByWorktree = reconnectedTabsByWorktree.finish()
+      const nextPtyIdsByTabId = reconnectedPtyIdsByTabId.finish()
       set({
         // Only each row's ptyId changes, a field the frame merge leaves to the window.
-        ...(reconnectedTabsByWorktree
-          ? {
-              tabsByWorktree: annotateTabBucketReplacement(
-                tabsByWorktree,
-                reconnectedTabsByWorktree,
-                reconnectedWorktreeIds
-              )
-            }
-          : {}),
-        ...(reconnectedPtyIdsByTabId
-          ? {
-              ptyIdsByTabId: annotateRecordReplacement(
-                ptyIdsByTabId,
-                reconnectedPtyIdsByTabId,
-                reconnectedTabIds
-              )
-            }
-          : {}),
+        ...(nextTabsByWorktree !== tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
+        ...(nextPtyIdsByTabId !== ptyIdsByTabId ? { ptyIdsByTabId: nextPtyIdsByTabId } : {}),
         workspaceSessionReady: true,
         pendingReconnectWorktreeIds: [],
         pendingReconnectTabByWorktree: {},

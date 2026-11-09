@@ -8,13 +8,11 @@ import { buildActiveSurfacePatch } from './tabs-surface'
 import type { AppState } from '../../types'
 export { renameWorktreeLayoutKeys } from './rename-worktree-layout'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
-import {
-  annotateRecordReplacement,
-  annotateTabBucketReplacement
-} from '../../keyed-record-transitions'
-import { collapseEmptiedKeptGroups } from './collapse-emptied-kept-groups'
+import { recordDraft, tabBucketDraft } from '../../keyed-record-transitions'
+import { collapseEmptiedKeptGroups, type GroupLayoutDrafts } from './collapse-emptied-kept-groups'
 import {
   createKeptWorktreeSurfacePruners,
+  pruneKeptEntries,
   type KeptWorktreeSurfaceRemoval
 } from './kept-worktree-surface-pruning'
 
@@ -64,13 +62,24 @@ export function removeWorktreeLayout(
   const kept = removed.kept ? createKeptWorktreeSurfacePruners(s, removed.kept) : null
   const keep = <T>(value: T, prune: ((value: T) => T) | undefined): T =>
     prune ? prune(value) : value
-  const groupLayout = removed.kept
-    ? collapseEmptiedKeptGroups(
-        s,
-        keep(omitByWorktree(s.groupsByWorktree), kept?.groups),
-        removed.kept.worktreeIds
-      )
-    : null
+  // Seam records are built once each, through the same operations, in the order this teardown applies them.
+  const tabs = tabBucketDraft(s.tabsByWorktree ?? {})
+  const unifiedTabs = tabBucketDraft(s.unifiedTabsByWorktree)
+  const drafts: GroupLayoutDrafts = {
+    groups: recordDraft(s.groupsByWorktree ?? {}),
+    layout: recordDraft(s.layoutByWorktree ?? {}),
+    activeGroups: recordDraft(s.activeGroupIdByWorktree ?? {})
+  }
+  for (const worktreeId of worktreeIds) {
+    tabs.delete(worktreeId)
+    unifiedTabs.delete(worktreeId)
+    drafts.groups.delete(worktreeId)
+  }
+  if (removed.kept && kept) {
+    pruneKeptEntries(tabs, removed.kept.worktreeIds, kept.entries.tabs)
+    pruneKeptEntries(drafts.groups, removed.kept.worktreeIds, kept.entries.groups)
+    collapseEmptiedKeptGroups(s.groupsByWorktree, drafts, removed.kept.worktreeIds)
+  }
   const removedContentIds = new Set(
     s.openFiles.filter((file) => worktreeIds.has(file.worktreeId)).map((file) => file.id)
   )
@@ -96,24 +105,36 @@ export function removeWorktreeLayout(
         hasPendingEntityTab(null, file.id) ||
         file.mode === 'edit')
   )
+  // Removed workspaces' entries are source-only here, so the kept groups stand in for the pruned record.
+  const keptGroups = removed.kept
+    ? Object.fromEntries(
+        [...removed.kept.worktreeIds].flatMap((id) => {
+          const groups = drafts.groups.get(id)
+          return groups ? [[id, groups]] : []
+        })
+      )
+    : null
   const transferred = editorPlacementsInContentOwners(
     remainingFiles,
     s.unifiedTabsByWorktree,
-    groupLayout?.groups ?? s.groupsByWorktree,
+    keptGroups ? { ...s.groupsByWorktree, ...keptGroups } : s.groupsByWorktree,
     worktreeIds
   )
-  const transferredPlacements = keep(omitByWorktree(transferred.sourceTabs), kept?.unifiedTabs)
   const survivingIds = new Set(remainingFiles.map((file) => file.id))
-  const unifiedTabs = Object.fromEntries(
-    Object.entries(transferredPlacements).map(([id, tabs]) => {
-      const live = tabs.filter(
-        (tab) => !isEditorTabContentType(tab.contentType) || survivingIds.has(tab.entityId)
-      )
-      return [id, live.length === tabs.length ? tabs : live]
-    })
-  )
+  for (const [id, sourceTabs] of Object.entries(transferred.sourceTabs)) {
+    if (worktreeIds.has(id)) {
+      continue
+    }
+    const pruned =
+      kept && removed.kept?.worktreeIds.has(id) ? kept.entries.unifiedTabs(sourceTabs) : sourceTabs
+    const live = pruned.filter(
+      (tab) => !isEditorTabContentType(tab.contentType) || survivingIds.has(tab.entityId)
+    )
+    unifiedTabs.set(id, live.length === pruned.length ? pruned : live)
+  }
+  const nextUnifiedTabs = unifiedTabs.finish()
   const liveTabIds = new Set(
-    Object.values(unifiedTabs).flatMap((tabs) => tabs.map((tab) => tab.id))
+    Object.values(nextUnifiedTabs).flatMap((tabs) => tabs.map((tab) => tab.id))
   )
   const removedPlacementIds = new Set(
     Object.values(s.unifiedTabsByWorktree).flatMap((tabs) =>
@@ -125,8 +146,11 @@ export function removeWorktreeLayout(
       .filter(([, tabs]) => tabs.some((tab) => removedPlacementIds.has(tab.id)))
       .map(([id]) => id)
   )
-  const cleanGroups = Object.fromEntries(
-    Object.entries(omitByWorktree(transferred.sourceGroups)).map(([id, groups]) => [
+  for (const [id, groups] of Object.entries(transferred.sourceGroups)) {
+    if (worktreeIds.has(id)) {
+      continue
+    }
+    drafts.groups.set(
       id,
       affectedWorkspaces.has(id)
         ? groups.map((group) => {
@@ -142,17 +166,9 @@ export function removeWorktreeLayout(
             }
           })
         : groups
-    ])
-  )
-  const collapsed = collapseEmptiedKeptGroups(
-    {
-      ...s,
-      layoutByWorktree: groupLayout?.layout ?? s.layoutByWorktree,
-      activeGroupIdByWorktree: groupLayout?.activeGroups ?? s.activeGroupIdByWorktree
-    },
-    cleanGroups,
-    affectedWorkspaces
-  )
+    )
+  }
+  collapseEmptiedKeptGroups(s.groupsByWorktree, drafts, affectedWorkspaces)
   const recentEditors = Object.fromEntries(
     Object.entries(omitByWorktree(s.recentlyClosedEditorTabsByWorktree)).map(([id, rows]) => [
       id,
@@ -177,68 +193,33 @@ export function removeWorktreeLayout(
       ([id, selected]) => [id, selected && survivingIds.has(selected) ? selected : null]
     )
   )
-  const ownerLayouts = { ...collapsed.layout }
-  const ownerActiveGroups = { ...collapsed.activeGroups }
   const ownerOrders = { ...keep(omitByWorktree(s.tabBarOrderByWorktree), kept?.tabBarOrder) }
   const ownerActiveTypes = { ...omitByWorktree(s.activeTabTypeByWorktree) }
   for (const tab of transferred.movedTabs) {
     affectedWorkspaces.add(tab.worktreeId)
-    ownerLayouts[tab.worktreeId] ??= { type: 'leaf', groupId: tab.groupId }
-    ownerActiveGroups[tab.worktreeId] ??= tab.groupId
+    if (drafts.layout.get(tab.worktreeId) == null) {
+      drafts.layout.set(tab.worktreeId, { type: 'leaf', groupId: tab.groupId })
+    }
+    if (drafts.activeGroups.get(tab.worktreeId) == null) {
+      drafts.activeGroups.set(tab.worktreeId, tab.groupId)
+    }
     ownerOrders[tab.worktreeId] = [...(ownerOrders[tab.worktreeId] ?? []), tab.entityId]
     activeFiles[tab.worktreeId] ??= tab.entityId
     ownerActiveTypes[tab.worktreeId] ??= 'editor'
   }
-  // Removed, pruned, filtered and content-owner workspaces are the only layout keys rewritten.
-  const layoutKeys = new Set([
-    ...worktreeIds,
-    ...(removed.kept?.worktreeIds ?? []),
-    ...affectedWorkspaces
-  ])
-  const terminalKeys = new Set([...worktreeIds, ...(removed.kept?.worktreeIds ?? [])])
-  // Editor transfers may create entries for their target workspaces in tab order, not named order.
-  const layoutOrder = affectedWorkspaces.size ? 'reordered' : 'appended'
+  for (const worktreeId of worktreeIds) {
+    drafts.layout.delete(worktreeId)
+    drafts.activeGroups.delete(worktreeId)
+  }
   const patch: WorktreeLayoutPatch = {
-    tabsByWorktree: annotateTabBucketReplacement(
-      s.tabsByWorktree ?? {},
-      keep(omitByWorktree(s.tabsByWorktree), kept?.tabs),
-      terminalKeys
-    ),
-    terminalLayoutsByTabId: annotateRecordReplacement(
-      s.terminalLayoutsByTabId ?? {},
-      omitByTabId(s.terminalLayoutsByTabId),
-      tabIds
-    ),
-    ptyIdsByTabId: annotateRecordReplacement(
-      s.ptyIdsByTabId ?? {},
-      omitByTabId(s.ptyIdsByTabId),
-      tabIds
-    ),
+    tabsByWorktree: tabs.finish(),
+    terminalLayoutsByTabId: omitByTabId(s.terminalLayoutsByTabId),
+    ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
     // Why: split-tab layout/group state is worktree-owned; leaving it makes a deleted worktree look restorable.
-    unifiedTabsByWorktree: annotateTabBucketReplacement(
-      s.unifiedTabsByWorktree,
-      unifiedTabs,
-      layoutKeys,
-      layoutOrder
-    ),
-    groupsByWorktree: annotateRecordReplacement(
-      s.groupsByWorktree ?? {},
-      collapsed.groups,
-      layoutKeys,
-      layoutOrder
-    ),
-    layoutByWorktree: annotateRecordReplacement(
-      s.layoutByWorktree ?? {},
-      omitByWorktree(ownerLayouts),
-      layoutKeys,
-      layoutOrder
-    ),
-    activeGroupIdByWorktree: annotateRecordReplacement(
-      s.activeGroupIdByWorktree ?? {},
-      omitByWorktree(ownerActiveGroups),
-      layoutKeys,
-      layoutOrder
-    ),
+    unifiedTabsByWorktree: nextUnifiedTabs,
+    groupsByWorktree: drafts.groups.finish(),
+    layoutByWorktree: drafts.layout.finish(),
+    activeGroupIdByWorktree: drafts.activeGroups.finish(),
     tabBarOrderByWorktree: Object.fromEntries(
       Object.entries(ownerOrders).map(([id, order]) => [
         id,

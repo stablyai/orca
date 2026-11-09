@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceSet } from './tabs-slice-contract'
-import { annotateRecordReplacement } from '../../keyed-record-transitions'
+import { replaceRecordEntries } from '../../keyed-record-transitions'
 
 function previewActiveSurfacePatch(
   state: AppState,
@@ -114,26 +114,19 @@ export function createTabsDragPreviewActions(
 
         const next: Partial<AppState> = { ...surfacePatch }
         if (!groupUnchanged) {
-          next.groupsByWorktree = annotateRecordReplacement(
-            state.groupsByWorktree,
-            {
-              ...state.groupsByWorktree,
-              [worktreeId]: groups.map((group) =>
+          next.groupsByWorktree = replaceRecordEntries(state.groupsByWorktree, [
+            [
+              worktreeId,
+              groups.map((group) =>
                 group.id === groupId ? { ...group, activeTabId: tabId } : group
               )
-            },
-            [worktreeId]
-          )
+            ]
+          ])
         }
         if (!focusUnchanged) {
-          next.activeGroupIdByWorktree = annotateRecordReplacement(
-            state.activeGroupIdByWorktree,
-            {
-              ...state.activeGroupIdByWorktree,
-              [worktreeId]: activeGroupId
-            },
-            [worktreeId]
-          )
+          next.activeGroupIdByWorktree = replaceRecordEntries(state.activeGroupIdByWorktree, [
+            [worktreeId, activeGroupId]
+          ])
         }
         return next
       })
@@ -150,37 +143,21 @@ export function createTabsDragPreviewActions(
 
         const next: Partial<AppState> = {}
         if (!groupsUnchanged) {
-          next.groupsByWorktree = annotateRecordReplacement(
-            state.groupsByWorktree,
-            {
-              ...state.groupsByWorktree,
-              [worktreeId]: groups.map((group) => ({
+          next.groupsByWorktree = replaceRecordEntries(state.groupsByWorktree, [
+            [
+              worktreeId,
+              groups.map((group) => ({
                 ...group,
                 activeTabId: snapshot.activeTabIdByGroup[group.id] ?? null
               }))
-            },
-            [worktreeId]
-          )
+            ]
+          ])
         }
         if (!focusUnchanged) {
-          if (snapshot.activeGroupId === null) {
-            const nextActiveGroupIdByWorktree = { ...state.activeGroupIdByWorktree }
-            delete nextActiveGroupIdByWorktree[worktreeId]
-            next.activeGroupIdByWorktree = annotateRecordReplacement(
-              state.activeGroupIdByWorktree,
-              nextActiveGroupIdByWorktree,
-              [worktreeId]
-            )
-          } else {
-            next.activeGroupIdByWorktree = annotateRecordReplacement(
-              state.activeGroupIdByWorktree,
-              {
-                ...state.activeGroupIdByWorktree,
-                [worktreeId]: snapshot.activeGroupId
-              },
-              [worktreeId]
-            )
-          }
+          // A null snapshot group deletes the entry.
+          next.activeGroupIdByWorktree = replaceRecordEntries(state.activeGroupIdByWorktree, [
+            [worktreeId, snapshot.activeGroupId]
+          ])
         }
 
         const restoredGroupId = snapshot.activeGroupId
@@ -215,16 +192,14 @@ export function createTabsDragPreviewActions(
           return state
         }
         return {
-          groupsByWorktree: annotateRecordReplacement(
-            state.groupsByWorktree,
-            {
-              ...state.groupsByWorktree,
-              [worktreeId]: groups.map((group) =>
+          groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
+            [
+              worktreeId,
+              groups.map((group) =>
                 group.id === sourceGroupId ? { ...group, activeTabId: preDragActiveTabId } : group
               )
-            },
-            [worktreeId]
-          )
+            ]
+          ])
         }
       })
     }

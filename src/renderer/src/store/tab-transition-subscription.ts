@@ -1,5 +1,6 @@
 import type { AppState } from './types'
-import { readTabMapChanges, type TabMapChanges } from './keyed-record-transitions'
+import { readTabMapChanges } from './keyed-record-change-reads'
+import type { TabMapChanges } from './keyed-record-transitions'
 
 type ObservedStore = {
   getState: () => AppState

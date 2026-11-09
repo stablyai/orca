@@ -25,10 +25,12 @@ export function isSeamTabMapField(field: string): field is SeamTabMapField {
   return SEAM_TAB_MAP_FIELDS.some((name) => name === field)
 }
 
-/** Cold path: every tracked record this patch replaces was rebuilt wholesale. */
+/** Cold path: every tracked record this patch replaces was rebuilt wholesale. Records equal to
+ *  `previous`'s are left alone: the patch passes them through rather than replacing them. */
 export function markPatchFullResync<P extends Partial<Pick<AppState, TrackedField>>>(
   patch: P,
-  reason: FullResyncReason
+  reason: FullResyncReason,
+  previous?: Partial<Pick<AppState, TrackedField>>
 ): P {
   for (const field of [
     ...SEAM_TAB_MAP_FIELDS,
@@ -36,7 +38,7 @@ export function markPatchFullResync<P extends Partial<Pick<AppState, TrackedFiel
     ...SEAM_SCOPED_TAB_RECORD_FIELDS
   ]) {
     const next = patch[field]
-    if (next) {
+    if (next && next !== previous?.[field]) {
       markFullResync(next, reason)
     }
   }
