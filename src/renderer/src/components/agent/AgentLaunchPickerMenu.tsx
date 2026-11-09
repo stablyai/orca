@@ -6,6 +6,9 @@ import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type 
 import { useAppStore } from '@/store/index'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { Input } from '@/components/ui/input'
+import { Terminal } from 'lucide-react'
+import { agentPickerBlankTerminalMatches } from '@/lib/agent-picker-search'
+import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
@@ -38,6 +41,7 @@ export function AgentLaunchPickerMenu({
   onSelectAgent,
   defaultAgent,
   onSetDefault,
+  onSelectBlankTerminal,
   leadingItems
 }: {
   model?: NewTabAgentMenuModel
@@ -57,7 +61,8 @@ export function AgentLaunchPickerMenu({
   searchInputRef?: Ref<HTMLInputElement>
   onSelectAgent?: (agent: AgentPickerEntry['agent']) => void
   defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
-  onSetDefault?: (agent: AgentPickerEntry['agent']) => void
+  onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
+  onSelectBlankTerminal?: () => void
   leadingItems?: ReactNode
 }) {
   const t = useTranslate()
@@ -138,13 +143,14 @@ export function AgentLaunchPickerMenu({
   }
   // Why: Enter in the search picks the first enabled row, so show it highlighted like cmdk comboboxes.
   const enabled = (entry: AgentPickerEntry) => !disabled && entry.surfaces.length > 0
-  const firstSetup = setups.find((setup) => enabled(setup.entry))
-  const firstEntry = firstSetup ? undefined : visible.find(enabled)
+  const showBlankTerminal = !!onSelectBlankTerminal && agentPickerBlankTerminalMatches(query)
+  const firstSetup = showBlankTerminal ? undefined : setups.find((setup) => enabled(setup.entry))
+  const firstEntry = showBlankTerminal || firstSetup ? undefined : visible.find(enabled)
   const showSearchDefault = searchFocused && query.trim().length > 0
   return (
     <div ref={root} data-agent-launch-picker="true">
       {!hideSearch ? (
-        <div className="px-1 py-0.5">
+        <div className="px-1 pt-0.5 pb-1.5">
           <Input
             ref={searchInputRef}
             value={query}
@@ -169,8 +175,12 @@ export function AgentLaunchPickerMenu({
               event.stopPropagation()
               if (event.key === 'Enter' || event.key === 'ArrowDown') {
                 event.preventDefault()
+                const results =
+                  event.key === 'Enter'
+                    ? '[data-agent-picker-agent-results]'
+                    : '[data-agent-picker-results]'
                 const first = root.current?.querySelector<HTMLElement>(
-                  '[data-agent-picker-agent-results] [role="menuitem"]:not([data-disabled])'
+                  `${results} [role="menuitem"]:not([data-disabled])`
                 )
                 if (event.key === 'Enter') {
                   first?.click()
@@ -182,9 +192,26 @@ export function AgentLaunchPickerMenu({
           />
         </div>
       ) : null}
-      <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+      <div data-agent-picker-results className="max-h-64 overflow-y-auto scrollbar-sleek">
         {leadingItems}
         <div data-agent-picker-agent-results>
+          {showBlankTerminal ? (
+            <AgentDefaultContextMenu
+              isDefault={defaultAgent === 'blank'}
+              onSetDefault={onSetDefault ? () => onSetDefault('blank') : undefined}
+            >
+              <DropdownMenuItem
+                variant="launch"
+                className="h-9"
+                disabled={disabled}
+                data-search-default={showSearchDefault || undefined}
+                onSelect={onSelectBlankTerminal}
+              >
+                <Terminal className="size-4" />
+                {t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+              </DropdownMenuItem>
+            </AgentDefaultContextMenu>
+          ) : null}
           {setups.map((setup) => {
             const source = draftForEntry?.(setup.entry)
             return (
@@ -234,7 +261,7 @@ export function AgentLaunchPickerMenu({
               />
             )
           })}
-          {!visible.length && !setups.length ? (
+          {!showBlankTerminal && !visible.length && !setups.length ? (
             <DropdownMenuItem disabled>
               {t('auto.components.agent.AgentCombobox.579c768bde', 'No agents match your search.')}
             </DropdownMenuItem>

@@ -1,9 +1,7 @@
 import React from 'react'
-import { ChevronDown, Settings2, Terminal } from 'lucide-react'
+import { ChevronDown, Settings2 } from 'lucide-react'
 import type AgentCombobox from '@/components/agent/AgentCombobox'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
-import { AgentDefaultContextMenu } from '@/components/agent/agent-combobox-items'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -99,21 +97,9 @@ export function NewWorkspaceComposerAgentSection({
           emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
           defaultAgent={defaultTuiAgent}
           onSetDefault={handleSetDefaultAgent}
+          onSelectBlankTerminal={() => onQuickAgentChange(null)}
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
-        >
-          <AgentDefaultContextMenu
-            isDefault={defaultTuiAgent === 'blank'}
-            onSetDefault={() => handleSetDefaultAgent('blank')}
-          >
-            <DropdownMenuItem
-              className="h-8 px-2 text-xs leading-5 font-medium"
-              onSelect={() => onQuickAgentChange(null)}
-            >
-              <Terminal className="size-3.5" />
-              {t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
-            </DropdownMenuItem>
-          </AgentDefaultContextMenu>
-        </AgentLaunchPicker>
+        />
       </div>
 
       <div className="!mb-2">
