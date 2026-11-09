@@ -5,7 +5,7 @@ import { stripTypeScriptTypes } from 'node:module'
 import { performance } from 'node:perf_hooks'
 
 // Run from the worktree root: node config/scripts/benchmark-browser-tunnel-framing.mjs [base-ref]
-const path = 'src/shared/browser-network-tunnel-stream-framing.ts'
+const path = 'src/shared/browser/network/tunnels/browser-network-tunnel-stream-framing.ts'
 const baselineRef = process.argv[2] ?? 'HEAD'
 const beforeSource = execFileSync('git', ['show', `${baselineRef}:${path}`], {
   encoding: 'utf8'

@@ -15,7 +15,7 @@ import {
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
-} from '../../../../../shared/browser-runtime-capabilities'
+} from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { defineStreamingMethod } from '../../core'
 

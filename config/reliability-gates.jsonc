@@ -4991,7 +4991,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/browser/browser-client-host-reconciliation.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/client-pages/execution/browser-client-page-command-executor.test.ts src/main/browser/client-pages/execution/browser-client-page-command-integration.test.ts src/main/browser/client-pages/lifecycle/browser-client-page-inventory.test.ts src/main/browser/client-hosts/lifecycle/paired-runtime-browser-client-host-composition.test.ts src/main/browser/client-hosts/leases/paired-runtime-browser-host-lease.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser/browser-client-host.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/client-pages/lifecycle/browser-client-page-reconciliation-adapters.test.ts src/main/browser/routing/sessions/browser-route-prepared-page-rekey.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser-network-tunnel-protocol.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session.test.ts src/main/browser/network/tunnels/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/browser/network/tunnels/browser-network-tunnel-protocol.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session.test.ts src/main/browser/network/tunnels/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/tunnels/browser-network-tunnel-client.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser/browser-network-tunnel.test.ts src/main/runtime/browser/network/browser-network-tunnel-paired-runtime.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/tunnels/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/runtime/rpc/server/runtime-rpc-browser-host-admission.test.ts src/main/runtime/rpc/methods/browser/browser-client-host.test.ts src/main/runtime/rpc/methods/browser/browser-network-tunnel.test.ts src/main/browser/client-hosts/leases/paired-runtime-browser-host-lease.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/browser/network/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/network/tunnels/browser-network-tunnel-client.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/network/tunnels/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/network/tunnels/remote-browser-socks-server.test.ts",
@@ -5013,7 +5013,7 @@
       "testFiles": [
         "src/main/browser/routing/guest-authority/browser-route-webcontents-registry.test.ts",
         "src/main/runtime/browser/client-pages/runtime-browser-client-page-recovery.test.ts",
-        "src/shared/browser-network-tunnel-protocol.test.ts",
+        "src/shared/browser/network/tunnels/browser-network-tunnel-protocol.test.ts",
         "src/main/runtime/browser-host/reconciliation/browser-host-page-retirement.test.ts",
         "src/main/runtime/browser-host/reconciliation/browser-host-page-placement-replacement.test.ts",
         "src/main/runtime/browser-host/reconciliation/browser-host-page-placement.test.ts",
@@ -5152,7 +5152,7 @@
           ]
         },
         {
-          "file": "src/shared/browser-network-tunnel-protocol.test.ts",
+          "file": "src/shared/browser/network/tunnels/browser-network-tunnel-protocol.test.ts",
           "assertions": [
             "remote DNS names round-trip without client resolution",
             "unknown versions, opcodes, oversized payloads, and length mismatches fail closed"

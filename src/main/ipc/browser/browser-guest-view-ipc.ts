@@ -10,7 +10,7 @@ import {
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import type { BrowserViewportOverride } from '../../../shared/browser-workspace-types'
-import { isValidBrowserGrabRect } from '../../../shared/browser-annotation-viewport-report'
+import { isValidBrowserGrabRect } from '../../../shared/browser/annotations/browser-annotation-viewport-report'
 import {
   isBrowserSiteColorScheme,
   type BrowserPageSiteDisplay
@@ -19,7 +19,7 @@ import {
   isValidBrowserAnnotationViewportBridgeMarkers,
   isValidBrowserAnnotationViewportBridgeToken,
   type BrowserSetAnnotationViewportBridgeArgs
-} from '../../../shared/browser-annotation-viewport-bridge'
+} from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
 function isPagePoint(value: unknown): value is { x: number; y: number } {
   return (

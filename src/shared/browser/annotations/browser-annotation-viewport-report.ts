@@ -1,4 +1,4 @@
-import type { BrowserGrabRect } from './browser-grab-types'
+import type { BrowserGrabRect } from '../element-grab/browser-grab-types'
 
 /** What the bridge reports while a pending annotation card is open, in guest CSS pixels. */
 export type BrowserAnnotationViewportReport = {

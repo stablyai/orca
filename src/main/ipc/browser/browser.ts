@@ -26,7 +26,7 @@ import type { BrowserWebAuthnAccountResponse } from '../../../shared/browser-web
 import type {
   BrowserPagePromptResponse,
   BrowserPagePromptResult
-} from '../../../shared/browser-page-prompt'
+} from '../../../shared/browser/prompts/browser-page-prompt'
 import { respondToBrowserPagePrompt } from '../../browser/guest-lifecycle/prompts/browser-page-prompts'
 import { recordActiveBrowserPage } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-model'
 import { announceRegisteredBrowserExtensionTab } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-lifecycle'

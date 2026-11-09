@@ -2,7 +2,7 @@ import {
   BrowserNetworkTunnelOpcode,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { admitBrowserNetworkTunnelOpen } from './browser-network-tunnel-open-admission'
 import {
   BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW,
