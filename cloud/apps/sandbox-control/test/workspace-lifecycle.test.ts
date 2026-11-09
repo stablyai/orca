@@ -208,3 +208,32 @@ describe('archive', () => {
     expect([...h.vercel.snapshots.values()].filter((s) => s.status !== 'deleted')).toHaveLength(0)
   })
 })
+
+describe('desktop client against the real handler', () => {
+  it('drives wake, status, restart, archive and unarchive through the desktop client', async () => {
+    const { createHostedSandboxControlPlaneClient } = await import(
+      '../../../../src/main/hosted-sandbox/hosted-sandbox-control-plane-client'
+    )
+    const h = await createHarness()
+    const client = createHostedSandboxControlPlaneClient({
+      baseUrl: 'https://sandbox.test',
+      getAccessToken: () => h.token('alice'),
+      fetch: (input, init) => h.send(new Request(input as URL, init))
+    })
+    const created = await client.create({ workspaceId: 'ws-c', machineSize: 'standard' })
+    const id = created.sandbox.id
+    h.vercel.onScript = (script) =>
+      script === METRICS_SCRIPT
+        ? { exitCode: 0, stdout: metricsLine(), stderr: '' }
+        : script === ARCHIVE_SCRIPT
+          ? { exitCode: 0, stdout: JSON.stringify({ checkouts: [checkout] }), stderr: '' }
+          : undefined
+    expect((await client.wake(id, 30_000)).state).toBe('ready')
+    expect((await client.workspaceStatus(id)).status.state).toBe('ready')
+    expect((await client.restart(id)).sandbox.status).toBe('running')
+    expect((await client.archive(id, {})).status).toBe('archived')
+    expect((await client.archiveInfo(id))?.metadata.checkouts[0]?.branch).toBe('feature/x')
+    expect((await client.wake(id, 0)).state).toBe('archived')
+    expect((await client.unarchive(id)).sandbox.status).toBe('running')
+  })
+})
