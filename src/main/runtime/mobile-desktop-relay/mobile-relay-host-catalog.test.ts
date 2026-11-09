@@ -69,6 +69,7 @@ function fakeHosts(
     environments,
     pairingRevision: 1,
     retire: (_environmentId: string) => {},
+    statusChanged: () => {},
     sshTargetLabels: new Map<string, string>(),
     sshConnectionStates: new Map<string, SshConnectionState>()
   }
@@ -119,7 +120,10 @@ function fakeHosts(
       state.retire = listener
       return () => {}
     },
-    onStatusChanged: () => () => {},
+    onStatusChanged: (listener) => {
+      state.statusChanged = listener
+      return () => {}
+    },
     watchChanges: () => ({ close: () => {}, current: () => true })
   }
   return { hosts, call, state }
@@ -250,6 +254,25 @@ describe('mobile relay host catalog', () => {
     expect(hostCatalog.list().hosts).toEqual([])
     state.environments = [{ ...removed[0]!, snapshot: snapshot('env', 'unreachable') }]
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual({ worktrees: null })
+  })
+
+  it('tells phones when a status change alters the host list, and not when it leaves it as is', async () => {
+    const { hosts, state } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+    ])
+    const { catalog: hostCatalog } = catalog(hosts)
+    const changed = vi.fn()
+    hostCatalog.publishListChanges({ onClientEvent: () => () => {}, changed })
+    expect(hostCatalog.list().hosts).toMatchObject([{ hostId: 'runtime:env', relay: 'ready' }])
+
+    state.statusChanged()
+    await Promise.resolve()
+    expect(changed).not.toHaveBeenCalled()
+
+    state.environments = [{ ...state.environments[0]!, snapshot: snapshot('env', 'unreachable') }]
+    state.statusChanged()
+    await Promise.resolve()
+    expect(changed).toHaveBeenCalledTimes(1)
   })
 
   it('answers with the last rows when the server never answers the fetch', async () => {
