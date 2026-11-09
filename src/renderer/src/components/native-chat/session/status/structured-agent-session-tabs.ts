@@ -52,38 +52,41 @@ function sameBuckets(
   return true
 }
 
-// Cold path: bootstrap, hydration or an unannotated replacement; the only whole-map walk here.
+// Cold path: bootstrap, hydration, an unannotated replacement or a workspace added or removed.
+// Every source workspace keeps a slot, even without chats, so the list follows source order.
 function rebuildFromSnapshot(source: TabsByWorktree, previous: Projection | undefined): Projection {
   const byWorktree = new Map<string, readonly StructuredTab[]>()
   for (const worktreeId of Object.keys(source)) {
-    const tabs = structuredTabsOf(source[worktreeId] ?? [], previous?.byWorktree.get(worktreeId))
-    if (tabs.length) {
-      byWorktree.set(worktreeId, tabs)
-    }
+    byWorktree.set(
+      worktreeId,
+      structuredTabsOf(source[worktreeId] ?? [], previous?.byWorktree.get(worktreeId))
+    )
   }
   return previous && sameBuckets(previous.byWorktree, byWorktree)
     ? previous
     : { byWorktree, tabs: [...byWorktree.values()].flat() }
 }
 
+/** Null when a named workspace isn't in the projection, which only the cold path can order. */
 function applyAddressed(
   source: TabsByWorktree,
   previous: Projection,
   workspaceIds: ReadonlySet<string>
-): Projection {
+): Projection | null {
   let byWorktree: Map<string, readonly StructuredTab[]> | null = null
   for (const worktreeId of workspaceIds) {
     const before = previous.byWorktree.get(worktreeId)
     const bucket = Object.hasOwn(source, worktreeId) ? source[worktreeId] : undefined
-    const tabs = bucket ? structuredTabsOf(bucket, before) : NO_TABS
-    if (tabs === (before ?? NO_TABS)) {
+    if ((before === undefined) !== (bucket === undefined)) {
+      return null
+    }
+    if (!bucket || !before) {
       continue
     }
-    byWorktree ??= new Map(previous.byWorktree)
-    if (tabs.length) {
+    const tabs = structuredTabsOf(bucket, before)
+    if (tabs !== before) {
+      byWorktree ??= new Map(previous.byWorktree)
       byWorktree.set(worktreeId, tabs)
-    } else {
-      byWorktree.delete(worktreeId)
     }
   }
   return byWorktree ? { byWorktree, tabs: [...byWorktree.values()].flat() } : previous
@@ -99,9 +102,11 @@ function project(source: TabsByWorktree): Projection {
   }
   const changes = latest ? readTabMapChanges(source, latest.source) : null
   const projection =
-    latest && changes?.kind === 'addressed'
-      ? applyAddressed(source, latest.projection, changes.workspaceIds)
-      : rebuildFromSnapshot(source, latest?.projection)
+    (latest &&
+      changes?.kind === 'addressed' &&
+      !changes.workspaceSetChanged &&
+      applyAddressed(source, latest.projection, changes.workspaceIds)) ||
+    rebuildFromSnapshot(source, latest?.projection)
   projectionsBySnapshot.set(source, projection)
   latest = { source, projection }
   return projection

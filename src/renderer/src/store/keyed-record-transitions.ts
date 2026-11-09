@@ -7,6 +7,7 @@ export type FullResyncReason =
   | 'host-mirror-frame'
   | 'reconnect-inventory'
   | 'teardown'
+  | 'reordered'
   | 'unknown'
 
 export type RecordChanges =
@@ -14,11 +15,22 @@ export type RecordChanges =
   | { kind: 'full-resync'; reason: FullResyncReason }
 
 export type TabMapChanges =
-  | { kind: 'addressed'; workspaceIds: ReadonlySet<string>; tabIds: ReadonlySet<string> }
+  | {
+      kind: 'addressed'
+      workspaceIds: ReadonlySet<string>
+      tabIds: ReadonlySet<string>
+      /** A workspace key was added or deleted, so readers that keep source order must re-walk keys. */
+      workspaceSetChanged: boolean
+    }
   | { kind: 'full-resync'; reason: FullResyncReason }
 
 type Link =
-  | { previous: WeakRef<KeyedSnapshot>; keys: ReadonlySet<string>; tabIds?: ReadonlySet<string> }
+  | {
+      previous: WeakRef<KeyedSnapshot>
+      keys: ReadonlySet<string>
+      tabIds?: ReadonlySet<string>
+      keySetChanged?: boolean
+    }
   | { reason: FullResyncReason }
 
 /** Any keyed store record a writer replaces: tab buckets or a companion record. */
@@ -121,10 +133,12 @@ function linkTabBuckets(
   keys: ReadonlySet<string>
 ): void {
   const tabIds = new Set<string>()
+  let keySetChanged = false
   for (const workspaceId of keys) {
+    keySetChanged ||= Object.hasOwn(previous, workspaceId) !== Object.hasOwn(next, workspaceId)
     changedTabIds(tabRows(previous, workspaceId), tabRows(next, workspaceId), tabIds)
   }
-  links.set(next, { previous: new WeakRef(previous), keys, tabIds })
+  links.set(next, { previous: new WeakRef(previous), keys, tabIds, keySetChanged })
 }
 
 /** Tab-bucket form; tab IDs come from diffing only the replaced buckets. */
@@ -148,8 +162,28 @@ export function annotateTabBucketReplacement<R extends KeyedSnapshot>(
   }
   const named = new Set(workspaceIds)
   verifyNamedKeys(previous, next, named)
-  linkTabBuckets(previous, next, named)
+  if (keepsKeyOrder(previous, next)) {
+    linkTabBuckets(previous, next, named)
+  } else {
+    // Bucket order is ownership precedence, so a moved key cannot be expressed as addressed buckets.
+    links.set(next, { reason: 'reordered' })
+  }
   return next
+}
+
+// Addressed tab maps promise surviving keys keep their order and added keys follow them.
+function keepsKeyOrder(previous: KeyedSnapshot, next: KeyedSnapshot): boolean {
+  const nextKeys = Object.keys(next)
+  let index = 0
+  for (const key of Object.keys(previous)) {
+    if (Object.hasOwn(next, key)) {
+      if (nextKeys[index] !== key) {
+        return false
+      }
+      index++
+    }
+  }
+  return nextKeys.slice(index).every((key) => !Object.hasOwn(previous, key))
 }
 
 /** Named cold path: the whole record was rebuilt from a snapshot. */
@@ -158,11 +192,12 @@ export function markFullResync<R extends KeyedSnapshot>(next: R, reason: FullRes
   return next
 }
 
-type Walked = { keys: Set<string>; tabIds: Set<string> | null }
+type Walked = { keys: Set<string>; tabIds: Set<string> | null; keySetChanged: boolean }
 
 function walk(next: KeyedSnapshot, previous: KeyedSnapshot): Walked | FullResyncReason {
   const keys = new Set<string>()
   let tabIds: Set<string> | null = new Set()
+  let keySetChanged = false
   let current: KeyedSnapshot = next
   for (let depth = 0; depth < MAX_CHAIN; depth++) {
     const step = links.get(current)
@@ -173,6 +208,7 @@ function walk(next: KeyedSnapshot, previous: KeyedSnapshot): Walked | FullResync
       return step.reason
     }
     step.keys.forEach((key) => keys.add(key))
+    keySetChanged ||= step.keySetChanged === true
     const stepTabIds = step.tabIds
     if (stepTabIds && tabIds) {
       stepTabIds.forEach((id) => tabIds?.add(id))
@@ -184,7 +220,7 @@ function walk(next: KeyedSnapshot, previous: KeyedSnapshot): Walked | FullResync
       return 'unknown'
     }
     if (before === previous) {
-      return { keys, tabIds }
+      return { keys, tabIds, keySetChanged }
     }
     current = before
   }
@@ -218,6 +254,11 @@ export function readTabMapChanges(
   }
   // A plain record link names no tabs, so it cannot address a tab map.
   return result.tabIds
-    ? { kind: 'addressed', workspaceIds: result.keys, tabIds: result.tabIds }
+    ? {
+        kind: 'addressed',
+        workspaceIds: result.keys,
+        tabIds: result.tabIds,
+        workspaceSetChanged: result.keySetChanged
+      }
     : { kind: 'full-resync', reason: 'unknown' }
 }

@@ -20,7 +20,8 @@ describe('keyed record transitions', () => {
     expect(readTabMapChanges(next, start)).toEqual({
       kind: 'addressed',
       workspaceIds: new Set(['a']),
-      tabIds: new Set(['a2'])
+      tabIds: new Set(['a2']),
+      workspaceSetChanged: false
     })
     expect(next.b).toBe(start.b)
   })
@@ -35,7 +36,8 @@ describe('keyed record transitions', () => {
     expect(readTabMapChanges(moved, start)).toEqual({
       kind: 'addressed',
       workspaceIds: new Set(['a', 'b', 'c']),
-      tabIds: new Set(['a2', 'c1'])
+      tabIds: new Set(['a2', 'c1']),
+      workspaceSetChanged: true
     })
   })
 
@@ -47,6 +49,13 @@ describe('keyed record transitions', () => {
     })
     const hydrated = replaceTabBuckets(markFullResync({ a: [a2] }, 'hydration'), [['b', [b1]]])
     expect(readTabMapChanges(hydrated, start)).toEqual({ kind: 'full-resync', reason: 'hydration' })
+  })
+
+  it('reads a builder that moved a surviving bucket as reordered', () => {
+    const start = { a: [a1], b: [b1] }
+    const { a: _a, ...rest } = start
+    const moved = annotateTabBucketReplacement(start, { ...rest, a: [a1, a2] }, ['a'])
+    expect(readTabMapChanges(moved, start)).toEqual({ kind: 'full-resync', reason: 'reordered' })
   })
 
   it('names deleted record keys', () => {
