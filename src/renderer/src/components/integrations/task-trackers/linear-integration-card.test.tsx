@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { TooltipProvider } from '../../ui/tooltip'
 import { LinearIntegrationCard } from './linear-integration-card'
 

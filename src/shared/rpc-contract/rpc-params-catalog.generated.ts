@@ -103,6 +103,7 @@ import {
   AutomationUpdate
 } from './automation-params'
 import { CertificateProceed } from './browser-core-params'
+import { ExtensionList, ExtensionReload } from './browser-extension-params'
 import { MouseClick } from './browser-extras-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser-identity-params'
 import { Screenshot, Snapshot } from './browser-observation-params'
@@ -920,6 +921,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.drag': Drag,
   'browser.eval': Eval,
   'browser.exec': Exec,
+  'browser.extensionList': ExtensionList,
+  'browser.extensionReload': ExtensionReload,
   'browser.fill': Fill,
   'browser.find': Find,
   'browser.focus': Element,
@@ -1440,6 +1443,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.add': RepoPath,
   'repo.addRemote': RepoAddRemote,
   'repo.baseRefDefault': RepoSelector,
+  'repo.checkCloneTarget': RepoClone,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,

@@ -5,13 +5,12 @@ import {
   type AgentChoicePatch
 } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { AgentDefaultArgsInput } from './AgentLaunchDefaultsEditor'
-import { AgentPermissionMenu, type AgentPermissionChoiceRow } from './AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from './AgentPermissionMenu'
+import type { AgentPermissionChoiceRow } from './agent-permission-choice-row'
 import { agentModelChoiceChips } from './agent-model-choice-chips'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
 import { reconcileAgentChoiceArgs } from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
-
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentChoiceFields } from './AgentChoiceControls'
 

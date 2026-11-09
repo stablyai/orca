@@ -27,7 +27,7 @@ import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEdit
 import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { AgentPermissionMenu } from './launch-settings/AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from './launch-settings/AgentPermissionMenu'
 import {
   AgentLaunchSetupFooter,
   agentLaunchSetupArgumentsNote,

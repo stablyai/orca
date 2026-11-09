@@ -102,3 +102,14 @@ export class AcpRequestTimeoutError extends Error {
     withProviderRequestTimeout(this, { method, timeoutMs })
   }
 }
+
+/** Null waits for the answer; otherwise `expire` runs once the call goes unanswered. */
+export function startAcpRequestDeadline(
+  method: string,
+  timeoutMs: number | null,
+  expire: (error: AcpRequestTimeoutError) => void
+): ReturnType<typeof setTimeout> | undefined {
+  return timeoutMs === null
+    ? undefined
+    : setTimeout(() => expire(new AcpRequestTimeoutError(method, timeoutMs)), timeoutMs)
+}

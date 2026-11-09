@@ -7,7 +7,7 @@ import { Label } from '../../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/tooltip'
 import { AdvancedNetworkSettingsSection } from './network/AdvancedNetworkSettingsSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getAdvancedSearchEntry } from './advanced-search'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
@@ -90,10 +90,10 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
                 </TooltipProvider>
               </div>
             </div>
-            <SettingsSwitch
+            <Switch
               checked={http1CompatibilityEnabled}
-              onChange={toggleHttp1CompatibilityMode}
-              ariaLabelledBy="advanced-http1-compatibility-label"
+              onCheckedChange={toggleHttp1CompatibilityMode}
+              aria-labelledby="advanced-http1-compatibility-label"
             />
           </div>
 

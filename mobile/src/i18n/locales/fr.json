@@ -2260,8 +2260,7 @@
       "copyPathLabel": "Copier le chemin du fichier Markdown",
       "copySource": "Copier la source Markdown",
       "discard": "Abandonner",
-      "dismissKeyboard": "Masquer le clavier",
-      "dismissKeyboardHint": "Masque le clavier virtuel et laisse l'éditeur Markdown ouvert.",
+      "previewTruncated": "Aperçu tronqué.",
       "readOnly": "Lecture seule"
     },
     "nativeChatAttachActions": {
