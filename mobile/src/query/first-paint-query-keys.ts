@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import {
   HOST_LIST_TARGET,
   hostRepoCatalogQuery,
@@ -43,6 +44,11 @@ export function firstPaintQueryKeys(hostId: string, route: URL): PersistedHostQu
   }
   if (screen === 'tasks') {
     return firstPaintTaskKeys(hostId)
+  }
+  if (screen === 'accounts') {
+    return [persistedHostQueryKey(accountsSnapshotFamily, accountsSnapshotKey(hostId))].filter(
+      (key) => key !== null
+    )
   }
   if (screen === 'new-workspace') {
     // The drawer's existing-workspace check and host labels.

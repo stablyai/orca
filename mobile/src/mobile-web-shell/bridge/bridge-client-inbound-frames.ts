@@ -11,6 +11,7 @@ import {
   type BridgeHostMessage
 } from './bridge-envelope'
 import { reconstructBridgeError } from './bridge-error-capture'
+import { BRIDGE_APP_INACTIVE_FRAME } from './bridge-app-inactive'
 
 export type BridgeInboundFramePort = {
   requests: BridgeClientRequests
@@ -21,6 +22,7 @@ export type BridgeInboundFramePort = {
   acceptConnectionPath: (connection: BridgeConnectionSnapshot) => void
   acceptBack: () => void
   acceptParked: () => void
+  acceptAppInactive: () => void
   acceptTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => void
 }
 
@@ -69,6 +71,9 @@ export function createBridgeInboundFrameReader(
         return
       case 'parked':
         port.acceptParked()
+        return
+      case BRIDGE_APP_INACTIVE_FRAME:
+        port.acceptAppInactive()
         return
       case 'terminalKey':
         port.acceptTerminalKey(message.key, message.inputOwner)
