@@ -50,9 +50,9 @@ your own `check`, and they wake you like local mail. The other agent answers
 with a plain `reply --id <msg_id> --body <text>`; no flag is needed on either
 side. Mail from another server names its sender as `<sender> on <server name>`.
 
-`--server <server>` runs one command on that server and delivers nothing back
+`--environment <server>` runs one command on that server and delivers nothing back
 to you, so an agent never mails with it. Your mailbox stays on your own Orca:
-`check` takes no server flag. Read-only commands such as `inbox` or
-`worker-list` with `--server` show that server's records. A server whose Orca
+`check` takes no `--environment`. Read-only commands such as `inbox` or
+`worker-list` with `--environment` show that server's records. A server whose Orca
 is too old answers `server_mail_unsupported` and nothing is sent. Pair servers
 with `orca pair` or in Settings.

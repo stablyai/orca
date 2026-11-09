@@ -115,7 +115,7 @@ export async function main(
     ) {
       throw new RuntimeClientError(
         'invalid_argument',
-        '--on already names the server the mail goes to; drop --server. Your own Orca carries it.'
+        '--on already names the server the mail goes to; drop --environment. Your own Orca carries it.'
       )
     }
     const ignoreRemoteSelection = peerMail || ignoresRemoteSelection(parsed.commandPath)

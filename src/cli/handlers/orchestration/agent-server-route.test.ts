@@ -53,14 +53,18 @@ describe('an agent pointing mail at another server', () => {
     ).rejects.toMatchObject({
       code: 'agent_server_route_refused',
       message:
-        'send with --server devB runs on devB and nothing comes back to you. To message an agent on devB, use: orca orchestration send --on devB --to term_b --subject hi'
+        'send with --environment devB runs on devB and nothing comes back to you. To message an agent on devB, use: orca orchestration send --on devB --to term_b --subject hi'
     })
   })
 
   it('refuses a check against another server: the mailbox is local', async () => {
     await expect(
       refuseAgentServerRoute('check', ctx(['orchestration', 'check'], [['environment', 'devB']]))
-    ).rejects.toMatchObject({ code: 'mailbox_is_local' })
+    ).rejects.toMatchObject({
+      code: 'mailbox_is_local',
+      message:
+        'Your mailbox is on this Orca; replies from devB arrive here. Drop --environment devB.'
+    })
   })
 
   it('leaves a person in a shell running the command on that server', async () => {

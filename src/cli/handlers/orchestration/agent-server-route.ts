@@ -8,21 +8,19 @@ import { ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY } from '../../../shared/orch
 
 type AgentServerRoutedCommand = 'send' | 'worker-start' | 'check'
 
-const SERVER_FLAGS = new Set(['--environment', '--server'])
-
 /** The server a remote client was pointed at, as the caller spelled it. */
 function serverSelector(
   flags: HandlerContext['flags']
 ): { name: string; route: string } | undefined {
-  const explicit = flags.get('environment') ?? flags.get('server')
+  const explicit = flags.get('environment')
   if (typeof explicit === 'string') {
-    return { name: explicit, route: `--server ${explicit}` }
+    return { name: explicit, route: `--environment ${explicit}` }
   }
   const inherited = process.env.ORCA_ENVIRONMENT?.trim()
   return inherited ? { name: inherited, route: `ORCA_ENVIRONMENT=${inherited}` } : undefined
 }
 
-/** Only an agent its own Orca verifies counts; a person's shell keeps --server = run it there. */
+/** Only an agent its own Orca verifies counts; a person's shell keeps --environment = run it there. */
 async function isOrcaVerifiedAgent(): Promise<boolean> {
   if (!readInjectedAgentSessionId() && !process.env.ORCA_AGENT_LAUNCH_TOKEN?.trim()) {
     return false
@@ -36,14 +34,14 @@ async function isOrcaVerifiedAgent(): Promise<boolean> {
   }
 }
 
-/** The same command with the server moved from --server to --on. */
+/** The same command with the server moved from --environment to --on. */
 function withOn(rawArgs: readonly string[] | undefined, server: string): string {
   const args = rawArgs ?? []
   const kept: string[] = []
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!
     const [name] = arg.split('=', 1)
-    if (SERVER_FLAGS.has(name!)) {
+    if (name === '--environment') {
       if (!arg.includes('=')) {
         index += 1
       }
