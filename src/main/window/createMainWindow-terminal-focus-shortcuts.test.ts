@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { DictationMode } from '../../shared/speech-types'
 
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
@@ -58,12 +59,11 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    const voice: { enabled: boolean; sttModel: string; dictationMode: 'auto' | 'toggle' | 'hold' } =
-      {
-        enabled: false,
-        sttModel: '',
-        dictationMode: 'toggle'
-      }
+    const voice: { enabled: boolean; sttModel: string; dictationMode: DictationMode } = {
+      enabled: false,
+      sttModel: '',
+      dictationMode: 'toggle'
+    }
     createMainWindow({
       getUI: () => ({}) as never,
       getSettings: () => ({ windowBackgroundBlur: false, voice }) as never,
@@ -173,12 +173,11 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    const voice: { enabled: boolean; sttModel: string; dictationMode: 'auto' | 'toggle' | 'hold' } =
-      {
-        enabled: false,
-        sttModel: '',
-        dictationMode: 'toggle'
-      }
+    const voice: { enabled: boolean; sttModel: string; dictationMode: DictationMode } = {
+      enabled: false,
+      sttModel: '',
+      dictationMode: 'toggle'
+    }
     createMainWindow(
       {
         getUI: () => ({}),

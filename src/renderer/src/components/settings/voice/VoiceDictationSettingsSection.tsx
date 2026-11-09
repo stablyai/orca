@@ -21,6 +21,11 @@ export function VoiceDictationSettingsSection({
 }: VoiceDictationSettingsSectionProps): React.JSX.Element {
   const t = useTranslate()
   const shortcutLabel = useShortcutLabel('voice.dictation')
+  const modeLabels = {
+    auto: t('auto.components.settings.VoicePane.dictationModeAuto', 'Auto'),
+    hold: t('auto.components.settings.VoicePane.174da92062', 'Hold'),
+    toggle: t('auto.components.settings.VoicePane.118b3c2dee', 'Toggle')
+  }
 
   return (
     <>
@@ -72,11 +77,7 @@ export function VoiceDictationSettingsSection({
                   : 'text-muted-foreground hover:text-foreground'
               } ${!voiceSettings.enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {mode === 'auto'
-                ? t('auto.components.settings.VoicePane.dictationModeAuto', 'Auto')
-                : mode === 'toggle'
-                  ? t('auto.components.settings.VoicePane.118b3c2dee', 'Toggle')
-                  : t('auto.components.settings.VoicePane.174da92062', 'Hold')}
+              {modeLabels[mode]}
             </button>
           ))}
         </div>

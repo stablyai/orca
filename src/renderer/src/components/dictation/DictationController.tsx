@@ -262,7 +262,7 @@ export function DictationController() {
     }
   }, [startDictation, stopDictation])
 
-  // Toggle presses, and Auto double taps (which have no release), arrive as intercepted main IPC so the chord cannot reach xterm or system shortcuts.
+  // Main intercepts Toggle presses and Auto double taps so the chord never reaches xterm.
   useEffect(() => {
     const mode = settings?.voice?.dictationMode ?? 'auto'
     if (mode === 'hold' || !settings?.voice?.enabled) {

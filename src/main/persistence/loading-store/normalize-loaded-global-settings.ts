@@ -74,13 +74,12 @@ export function normalizeLoadedGlobalSettings(
   const pluginOwnedSettings = normalizePluginOwnedSettings(parsed.settings ?? {})
   const voice = { ...getDefaultVoiceSettings(), ...parsed.settings?.voice }
   // Stored 'toggle' was everyone's old default, and Auto still toggles on a tap; Hold was always a choice.
-  if (
-    voice.dictationMode !== 'hold' &&
-    !(
-      parsed.settings?.voiceDictationModeDefaultedToAuto === true &&
-      voice.dictationMode === 'toggle'
-    )
-  ) {
+  const keepsDictationMode =
+    voice.dictationMode === 'hold' ||
+    voice.dictationMode === 'auto' ||
+    (parsed.settings?.voiceDictationModeDefaultedToAuto === true &&
+      voice.dictationMode === 'toggle')
+  if (!keepsDictationMode) {
     voice.dictationMode = 'auto'
   }
   const matchTerminalSidebarInputs = {
