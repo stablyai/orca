@@ -11,7 +11,7 @@ import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { markRevoked, runVmRevoke, type GrantRow } from './grant-revokes'
 import { LifecycleError, resumeSandbox, syncMemberGit, type LifecycleDeps } from './lifecycle'
-import { installEntryPoints } from './golden-images'
+import { ensureEntryPoints } from './golden-images'
 import type { CommandResult } from './sandbox-provider'
 import { ORCAD_PORT } from './sandbox-vm-commands'
 import { getSandbox, touchActivity, type SandboxRow } from './store'
@@ -55,15 +55,9 @@ export async function withEntryPoints(
   command: string,
   run: () => Promise<CommandResult>
 ): Promise<CommandResult> {
-  const first = await run().catch((error: unknown) => ({ exitCode: -1, stdout: '', stderr: String(error) }))
-  if (first.exitCode === 0) {
-    return first
-  }
-  const probe = await deps.provider.runCommand(sessionId, { command: 'test', args: ['-x', command], timeoutMs: 15_000 }).catch(() => null)
-  if (!probe || probe.exitCode === 0) {
-    return first
-  }
-  await installEntryPoints(deps, sessionId)
+  // Stale or missing scripts from an older image are replaced first (one marker check when current).
+  await ensureEntryPoints(deps, sessionId).catch(() => undefined)
+  void command
   return run()
 }
 
@@ -275,17 +269,17 @@ export function revokeGrantsForDeviceSession(deps: LifecycleDeps, deviceSessionI
  * The creator's desktop pairs with the create's own offer; record that device (its id is in the
  * offer, not secret) so reassigning the workspace or removing the member revokes it like any grant.
  */
-export async function recordOwnerDevice(db: D1Database, row: SandboxRow, pairingCode: string, now: number): Promise<void> {
+export async function recordOwnerDevice(db: D1Database, row: SandboxRow, pairingCode: string, now: number): Promise<boolean> {
   const deviceId = pairedDeviceIdOf(pairingCode)
   if (!deviceId) {
-    return
+    return false
   }
   const existing = await db
     .prepare('SELECT id FROM workspace_grants WHERE sandbox_id = ? AND orcad_device_id = ?')
     .bind(row.id, deviceId)
     .first<{ id: string }>()
   if (existing) {
-    return
+    return false
   }
   await db
     .prepare(
@@ -294,6 +288,14 @@ export async function recordOwnerDevice(db: D1Database, row: SandboxRow, pairing
     )
     .bind(randomGrantId(), row.id, row.account_id, row.user_id, deviceId, now)
     .run()
+  return true
+}
+
+/** Records the owner's device and, when it is new, lets the VM map it to the owner (git as the sender). */
+export async function recordOwnerDeviceAndSync(deps: LifecycleDeps, row: SandboxRow, pairingCode: string): Promise<void> {
+  if ((await recordOwnerDevice(deps.db, row, pairingCode, deps.now())) && row.status === 'running' && row.session_id) {
+    await syncMemberGit(deps, row, row.session_id)
+  }
 }
 
 export function pairedDeviceIdOf(pairingCode: string): string | null {

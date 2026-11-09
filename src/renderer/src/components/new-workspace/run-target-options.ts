@@ -55,11 +55,10 @@ export function isOrcaCloudSelection({
 }
 
 export function getOrcaCloudDetail(t: Translate = translate): string {
-  return t(
-    'auto.components.new.workspace.RunTargetCombobox.orcaCloudDetail',
-    // Non-breaking spaces keep each number with its unit when the row wraps.
-    'Hosted sandbox · 4\u00a0vCPU\u00a0/\u00a08\u00a0GB'
-  )
+  return `${t('auto.components.new.workspace.RunTargetCombobox.orcaCloudHosted', 'Hosted sandbox')} · ${t(
+    'auto.components.new.workspace.RunTargetCombobox.orcaCloudSpecs',
+    '4 vCPU · 8 GB'
+  )}`
 }
 
 export function getRecipeCommandDisplay(command: string): string {
@@ -94,6 +93,24 @@ export function getRecipeDetail(recipe: EphemeralVmRecipeOption, t?: Translate):
 
 export function getRunTargetHostRowKey(option: ReadyProjectHostSetupOption): string {
   return `host:${getProjectHostSetupSelectionKey(option)}`
+}
+
+/** What the closed field shows for the committed selection. */
+export function getRunTargetFieldText(
+  selectedRecipe: EphemeralVmRecipeOption | null,
+  selectedHost: ReadyProjectHostSetupOption | null,
+  t?: Translate
+): { label: string; detail: string; recipeKind: 'orca-cloud' | 'recipe' | null } {
+  if (!selectedRecipe) {
+    return { label: selectedHost?.label ?? '', detail: selectedHost?.path ?? '', recipeKind: null }
+  }
+  return {
+    label: selectedRecipe.provider
+      ? selectedRecipe.name
+      : `${getEphemeralVmLabel(t)} / ${selectedRecipe.name}`,
+    detail: getRecipeDetail(selectedRecipe, t),
+    recipeKind: isOrcaCloudRecipe(selectedRecipe) ? 'orca-cloud' : 'recipe'
+  }
 }
 
 /** The row that holds the committed selection, armed when the picker opens. */
@@ -223,6 +240,11 @@ export function getRunTargetSubmenuItemKeys(
     ...(hasAddSshHost ? [RUN_TARGET_ADD_SSH_HOST_ITEM] : []),
     ...(hasAddRemoteServer ? [RUN_TARGET_ADD_REMOTE_SERVER_ITEM] : [])
   ]
+}
+
+/** Stable per row and submenu item, so `aria-activedescendant` changes whenever the arm moves. */
+export function getRunTargetOptionId(listId: string, key: string): string {
+  return `${listId}-opt-${encodeURIComponent(key)}`
 }
 
 export function getRecipeSubmenuItemKey(recipeId: string): string {

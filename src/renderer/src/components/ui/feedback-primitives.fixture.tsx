@@ -20,6 +20,31 @@ export const skeletonCard = defineFixture({
   )
 })
 
+export const inlineErrorNarrow = defineFixture({
+  width: 300,
+  render: () => (
+    <div className="w-[260px] space-y-3">
+      <InlineError
+        density="compact"
+        title="Payment failed"
+        detail="New sandboxes can't start."
+        action={
+          <Button type="button" variant="outline" size="xs">
+            Update payment method
+          </Button>
+        }
+      />
+      <InlineError
+        density="compact"
+        tone="neutral"
+        title="Orca Cloud needs a Team plan"
+        retryLabel="Try again"
+        onRetry={() => {}}
+      />
+    </div>
+  )
+})
+
 export const inlineError = defineFixture({
   width: 520,
   render: () => (

@@ -33,6 +33,7 @@ import {
   listRecipeCatalog,
   listRecipes,
   listPickerRecipes,
+  buildEphemeralEnvironmentName,
   resolveRecipeForRepo,
   type EphemeralVmRecipeCatalogEntry
 } from './ephemeral-vm-recipe-context'
@@ -76,7 +77,7 @@ export type EphemeralVmProvisionIpcResult =
     } & EphemeralVmFailure)
 
 export function registerEphemeralVmHandlers(store: Store, pluginService?: PluginService): void {
-  installHostedSandbox()
+  installHostedSandbox(store)
   ipcMain.removeHandler('ephemeralVm:listRecipes')
   ipcMain.removeHandler('ephemeralVm:listRecipeCatalog')
   ipcMain.removeHandler('ephemeralVm:doctor')
@@ -251,7 +252,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
         let environment: ReturnType<typeof addEnvironmentFromPairingCode>
         try {
           environment = addEnvironmentFromPairingCode(getRuntimeEnvironmentRegistryRoot(), {
-            name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id),
+            name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id, recipe),
             pairingCode: connection.pairingCode,
             source: 'ephemeral-vm'
           })
@@ -302,10 +303,6 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
       return { cancelled: true }
     }
   )
-}
-
-function buildEphemeralEnvironmentName(repoName: string, runtimeId: string): string {
-  return `${repoName} VM ${runtimeId.slice(-8)}`
 }
 
 function provisionFailure(failure: EphemeralVmFailure): EphemeralVmProvisionIpcResult {

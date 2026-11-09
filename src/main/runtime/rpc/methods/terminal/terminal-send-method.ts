@@ -1,3 +1,4 @@
+import { recordDrivingDevice, terminalSenderKey } from '../../../sender/driving-device-registry'
 import {
   isTerminalInputPaused,
   TerminalInputPausedError
@@ -267,6 +268,9 @@ export const TERMINAL_SEND_METHODS = [
         }
         if (result.accepted !== true) {
           mobileFloorClaim.current?.rollback()
+        } else if (inputSource !== 'programmatic' && params.text) {
+          // A person's message to the agent in this terminal (git as the sender reads it back).
+          recordDrivingDevice(terminalSenderKey(params.terminal), caller)
         }
         if (
           result.accepted === true &&

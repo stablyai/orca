@@ -1,5 +1,6 @@
 // Lifecycle actions on an Orca Cloud workspace (restart, archive, unarchive) as store updates:
 // each marks the workspace pending while it runs and re-reads its status after.
+import { translate } from '@/i18n/i18n'
 import type { CloudWorkspaceResult } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedArchivePullRequest } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import {
@@ -25,16 +26,21 @@ function withPending<T>(
   })
 }
 
-const UNAVAILABLE = {
-  ok: false,
-  code: 'not_cloud',
-  message: 'Orca Cloud is unavailable.'
-} as const
+function unavailable(): CloudWorkspaceResult<never> {
+  return {
+    ok: false,
+    code: 'not_cloud',
+    message: translate(
+      'auto.lib.orcaCloud.workspaceActions.unavailable',
+      'Orca Cloud is unavailable.'
+    )
+  }
+}
 
 export function restartCloudWorkspace(workspaceId: string): Promise<CloudWorkspaceResult<null>> {
   const bridge = cloudWorkspaceApi()
   if (!bridge) {
-    return Promise.resolve(UNAVAILABLE)
+    return Promise.resolve(unavailable())
   }
   return withPending(workspaceId, 'restart', async () => {
     const result = await bridge.restart({ workspaceId })
@@ -58,7 +64,7 @@ export function archiveCloudWorkspace(
 ): Promise<CloudWorkspaceResult<null>> {
   const bridge = cloudWorkspaceApi()
   if (!bridge) {
-    return Promise.resolve(UNAVAILABLE)
+    return Promise.resolve(unavailable())
   }
   return withPending(workspaceId, 'archive', async () => {
     await deps.sleep(workspaceId)
@@ -76,7 +82,7 @@ export function unarchiveCloudWorkspace(
 ): Promise<CloudWorkspaceResult<null>> {
   const bridge = cloudWorkspaceApi()
   if (!bridge) {
-    return Promise.resolve(UNAVAILABLE)
+    return Promise.resolve(unavailable())
   }
   return withPending(workspaceId, 'unarchive', async () => {
     const result = await bridge.unarchive({ workspaceId })

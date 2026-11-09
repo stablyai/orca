@@ -11,18 +11,26 @@ const outlineButtonClasses =
 const pressClasses = 'motion-safe:active:scale-[0.98]'
 
 // Disabled solid buttons fade like every other disabled variant, from a muted fill instead of a primary slab.
-const disabledSolidClasses = 'disabled:bg-muted disabled:text-muted-foreground'
+// aria-disabled (focusable, e.g. to explain why via a tooltip) gets the same muted look unless it is
+// a pending action (aria-busy), which keeps full colour and a progress cursor; pending callers must
+// show a spinner or change the label, and must guard onClick themselves.
+const disabledSolidClasses =
+  'disabled:bg-muted disabled:text-muted-foreground aria-disabled:not-aria-busy:bg-muted aria-disabled:not-aria-busy:text-muted-foreground aria-disabled:not-aria-busy:hover:bg-muted'
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:pointer-events-none disabled:opacity-50 aria-disabled:not-aria-busy:cursor-not-allowed aria-disabled:not-aria-busy:opacity-50 aria-busy:cursor-progress aria-disabled:active:scale-100 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: `bg-primary text-primary-foreground hover:bg-primary/90 ${pressClasses} ${disabledSolidClasses}`,
-        destructive: `bg-destructive text-white hover:bg-destructive/90 ${pressClasses} dark:bg-destructive/60 dark:disabled:bg-muted ${disabledSolidClasses}`,
+        // Primary that stays focusable while unavailable (aria-disabled): reads muted like disabled.
+        'default-held': `bg-primary text-primary-foreground hover:bg-primary/90 ${pressClasses} ${disabledSolidClasses} aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:hover:bg-muted`,
+        destructive: `bg-destructive text-white hover:bg-destructive/90 ${pressClasses} dark:bg-destructive/60 dark:disabled:bg-muted dark:aria-disabled:not-aria-busy:bg-muted ${disabledSolidClasses}`,
         outline: `${outlineButtonClasses} ${pressClasses}`,
         'orchestration-tab': `${outlineButtonClasses} border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating dark:border-(--crew-border) dark:bg-(--crew-surface) dark:hover:bg-accent dark:hover:text-accent-foreground`,
         secondary: `bg-secondary text-secondary-foreground hover:bg-secondary/80 ${pressClasses}`,
+        /** Secondary pill floating over scrolling content (e.g. "Jump to latest"). */
+        'secondary-floating': `rounded-full bg-secondary text-secondary-foreground shadow-md hover:bg-secondary/80 ${pressClasses}`,
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // Secondary text action that only takes the foreground colour on hover.
         quiet:
@@ -42,7 +50,9 @@ const buttonVariants = cva(
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
         inline: 'h-6 gap-1 px-0 has-[>svg]:px-0',
         // A text action inside a dense status line: shorter than xs, body-weight text.
-        statusAction: 'h-5 gap-1 rounded-md px-1 text-2xs font-normal [&_svg]:size-3',
+        // 20px tall to sit in a status line; the ::after pads the hit area to 24px (WCAG 2.5.8).
+        statusAction:
+          "relative h-5 gap-1 rounded-md px-1 text-2xs font-normal after:absolute after:-inset-0.5 after:content-[''] [&_svg]:size-3",
         // A ghost name inside a row label: `inline`'s height, padded so its hover fill clears the text.
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',

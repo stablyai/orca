@@ -192,3 +192,28 @@ export const orcaCloudSelected = defineFixture({
   ...closed,
   render: () => <ProjectAndHostPreview orcaCloud={entitled} cloudSelected />
 })
+// The hint under Run on once Orca Cloud is committed but blocked (billing answered after the pick).
+export const orcaCloudSelectedNoPlan = defineFixture({
+  ...closed,
+  render: () => (
+    <ProjectAndHostPreview orcaCloud={{ state: 'no-plan', lapsed: false }} cloudSelected />
+  )
+})
+export const orcaCloudSelectedOutOfHoursMember = defineFixture({
+  ...closed,
+  render: () => (
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'out-of-hours', cause: 'hours', canManageBilling: false }}
+      cloudSelected
+    />
+  )
+})
+export const orcaCloudSelectedPaymentAdmin = defineFixture({
+  ...closed,
+  render: () => (
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'payment-issue', canManageBilling: true }}
+      cloudSelected
+    />
+  )
+})

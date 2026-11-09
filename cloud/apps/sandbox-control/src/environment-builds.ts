@@ -32,6 +32,8 @@ const STARTING_STUCK_MS = 5 * 60_000
 const SNAPSHOTTING_STUCK_MS = 3 * 60_000
 /** A secret value shorter than this is not redacted from logs (too likely to match ordinary text). */
 const MIN_REDACTED_SECRET = 6
+/** Event-stream keepalive; desktop watchers treat ~90 s of silence as a dead connection. */
+const HEARTBEAT_MS = 20_000
 /** Succeeded builds whose snapshot is kept (rollback window); older ones keep their record and log. */
 export const KEPT_BUILDS = 5
 const MAX_LOG_BYTES = 2 * 1024 * 1024
@@ -75,6 +77,8 @@ export type BuildRow = {
   updated_at: number
   generation: number
   snapshot_deleted_at: number | null
+  /** When billing accepted this build's VM time (null: not yet). */
+  usage_reported_at: number | null
 }
 
 export type BuildConfig = {
@@ -457,6 +461,7 @@ async function completeBuild(deps: BuildDeps, row: BuildRow, snapshotId: string)
         // Ours to delete only when this pass is the one that failed the build.
         await deps.provider.deleteSnapshot(snapshotId).catch(() => undefined)
         log('environment_build_failed', { buildId: row.id, number: row.number, step: 'snapshot', error: 'smoke_failed' })
+        await reportBuildUsage(deps, failed)
         return failed
       }
       return (await getBuild(deps.db, row.environment_id, row.id)) ?? row
@@ -485,6 +490,7 @@ async function completeBuild(deps: BuildDeps, row: BuildRow, snapshotId: string)
     log('environment_build_prune_failed', { buildId: row.id, error: String(error).slice(0, 200) })
   )
   log('environment_build_succeeded', { buildId: row.id, number: row.number, ms: now - row.created_at, snapshotId })
+  await reportBuildUsage(deps, done)
   return done
 }
 
@@ -570,6 +576,7 @@ async function failBuild(deps: BuildDeps, row: BuildRow, step: string, error: st
     }
     await deps.provider.deleteSandbox(row.provider_name).catch(() => undefined)
     log('environment_build_failed', { buildId: row.id, number: row.number, step, error })
+    await reportBuildUsage(deps, failed)
   }
   return failed ?? (await getBuild(deps.db, row.environment_id, row.id))
 }
@@ -590,6 +597,7 @@ export async function cancelBuild(deps: BuildDeps, caller: SandboxCaller, row: B
   await storeLogs(deps, canceled, { live: true }).catch(() => undefined)
   await deps.provider.deleteSandbox(row.provider_name).catch(() => undefined)
   log('environment_build_canceled', { buildId: row.id })
+  await reportBuildUsage(deps, canceled)
   return (await getBuild(deps.db, row.environment_id, row.id)) ?? canceled
 }
 
@@ -692,12 +700,61 @@ export async function storedLogs(db: D1Database, buildId: string): Promise<strin
   return results.map((r) => r.data).join('')
 }
 
+/**
+ * A build ran a sandbox from its creation to its end (including the smoke boot): bill that time like
+ * a workspace's, at the build's sandbox size, to the member who started it. Idempotent per build
+ * (`build:<id>`); a billing outage leaves it for the cron.
+ */
+export async function reportBuildUsage(deps: Pick<BuildDeps, 'db' | 'entitlements' | 'now'>, row: BuildRow): Promise<boolean> {
+  if (row.usage_reported_at !== null || row.finished_at === null || !TERMINAL.has(row.status)) {
+    return false
+  }
+  // A build that never got a VM (refused before boot) used nothing.
+  const startedAt = row.created_at
+  const endedAt = Math.max(row.finished_at, startedAt)
+  if (!row.session_id && row.status !== 'succeeded') {
+    await deps.db.prepare('UPDATE environment_builds SET usage_reported_at = ? WHERE id = ?').bind(deps.now(), row.id).run()
+    return false
+  }
+  let machineSize: MachineSize = 'standard'
+  try {
+    machineSize = parseConfig(row).machineSize ?? 'standard'
+  } catch {
+    machineSize = 'standard'
+  }
+  try {
+    await deps.entitlements.reportUsage({
+      usageId: `build:${row.id}`,
+      accountId: row.account_id,
+      sandboxId: row.id,
+      machineSize,
+      startedAt,
+      endedAt,
+      userId: row.created_by
+    })
+  } catch (error) {
+    log('environment_build_usage_failed', { buildId: row.id, error: String(error).slice(0, 120) })
+    return false
+  }
+  await deps.db.prepare('UPDATE environment_builds SET usage_reported_at = ? WHERE id = ?').bind(deps.now(), row.id).run()
+  return true
+}
+
 /** Cron: advance every unfinished build (finalize the ones nobody is watching). */
 export async function advanceAllBuilds(deps: BuildDeps): Promise<number> {
   const { results } = await deps.db
     .prepare(`SELECT * FROM environment_builds WHERE status IN ('starting', 'running', 'snapshotting') ORDER BY updated_at LIMIT 20`)
     .all<BuildRow>()
   let moved = 0
+  const { results: unbilled } = await deps.db
+    .prepare(
+      `SELECT * FROM environment_builds WHERE usage_reported_at IS NULL AND finished_at IS NOT NULL
+         AND status IN ('succeeded', 'failed', 'canceled') ORDER BY finished_at LIMIT 20`
+    )
+    .all<BuildRow>()
+  for (const row of unbilled) {
+    await reportBuildUsage(deps, row)
+  }
   for (const row of results) {
     try {
       const next = await advanceBuild(deps, row)
@@ -726,6 +783,11 @@ export function streamBuildEvents(
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
   const writer = writable.getWriter()
   const send = (event: unknown) => writer.write(encoder.encode(`${JSON.stringify(event)}\n`))
+  // A quiet step (snapshot, a long compile) prints nothing for minutes: a heartbeat tells watchers the
+  // stream is alive so they don't reconnect (and replay the whole log) for nothing.
+  const heartbeat = setInterval(() => {
+    send({ type: 'heartbeat', at: deps.now() }).catch(() => clearInterval(heartbeat))
+  }, HEARTBEAT_MS)
   const run = async () => {
     let row = initial
     await send({ type: 'build', build: await view(row) })
@@ -809,7 +871,10 @@ export function streamBuildEvents(
       log('environment_build_stream_failed', { buildId: initial.id, error: String(error).slice(0, 200) })
       return send({ type: 'error', error: 'stream_failed' }).catch(() => undefined)
     })
-    .finally(() => writer.close().catch(() => undefined))
+    .finally(() => {
+      clearInterval(heartbeat)
+      return writer.close().catch(() => undefined)
+    })
   return readable
 }
 

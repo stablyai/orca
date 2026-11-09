@@ -175,7 +175,7 @@ export function TeamSeatsCard({
           }
           detail={
             entitlement.offers
-              ? t('auto.components.billing.team.perSeatMo', '{{value0}} per seat / month', {
+              ? t('auto.components.billing.team.perSeatPerMonth', '{{value0}} per seat per month', {
                   value0: formatCents(
                     perSeatMonthlyCents(entitlement.offers.team, entitlement.interval ?? 'month') ??
                       0,

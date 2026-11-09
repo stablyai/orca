@@ -73,7 +73,8 @@ const base: TeamPageViewProps = {
   onSeePlans: noop,
   onManageBilling: noop,
   onCreateWorkspace: noop,
-  onDismissArrival: noop
+  onDismissArrival: noop,
+  onContactSales: noop
 }
 
 function Page(props: Partial<TeamPageViewProps>): React.JSX.Element {
@@ -224,4 +225,21 @@ export const invitePasted = defineFixture({
     input.dispatchEvent(new Event('input', { bubbles: true }))
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
+})
+
+/** Short roster so the Enterprise SSO row and Leave sit inside the frame. */
+export const ssoAndLeave = defineFixture({
+  width,
+  render: () => (
+    <Page
+      roster={{
+        status: 'ok',
+        roster: {
+          ...roster,
+          members: [roster.members[0]!, { ...roster.members[1]!, role: 'owner' }],
+          pendingInvites: []
+        }
+      }}
+    />
+  )
 })

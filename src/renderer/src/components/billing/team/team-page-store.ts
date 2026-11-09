@@ -2,7 +2,11 @@
 // a finished Checkout (which lands here with a one-time "You're on Team" confirmation).
 import { useSyncExternalStore } from 'react'
 
-export type TeamPageArrival = { kind: 'checkout-success'; seats: number } | null
+export type TeamPageArrival =
+  | { kind: 'checkout-success'; seats: number }
+  /** Open on "Create a team" even when a team is active (account menu → Create a team…). */
+  | { kind: 'create' }
+  | null
 
 type TeamPageState = { open: boolean; arrival: TeamPageArrival }
 

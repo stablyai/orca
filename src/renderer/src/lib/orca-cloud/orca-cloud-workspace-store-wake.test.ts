@@ -23,18 +23,27 @@ function stub(
   getStatus: OrcaCloudWorkspaceApi['getStatus'],
   ids: string[] = []
 ): OrcaCloudWorkspaceApi {
-  const bridge = {
+  const unused = async (): Promise<never> => {
+    throw new Error('not used by these tests')
+  }
+  const bridge: OrcaCloudWorkspaceApi = {
     getStatus: vi.fn(getStatus),
-    listCloudWorkspaceIds: vi.fn(async () => ids)
-  } as unknown as OrcaCloudWorkspaceApi
-  ;(globalThis as unknown as { window: unknown }).window = { api: { orcaCloudWorkspace: bridge } }
+    restart: vi.fn(unused),
+    archive: vi.fn(unused),
+    unarchive: vi.fn(unused),
+    getArchive: vi.fn(unused),
+    listCloudWorkspaceIds: vi.fn(async () => ids),
+    onWakeProgress: vi.fn(() => () => {}),
+    onOom: vi.fn(() => () => {})
+  }
+  vi.stubGlobal('window', { api: { orcaCloudWorkspace: bridge } })
   return bridge
 }
 
 beforeEach(() => seedCloudWorkspaceSnapshot({}))
 afterEach(() => {
   vi.useRealTimers()
-  delete (globalThis as { window?: unknown }).window
+  vi.unstubAllGlobals()
 })
 
 describe('wake state and archive guard', () => {

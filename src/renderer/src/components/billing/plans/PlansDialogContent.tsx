@@ -8,23 +8,32 @@ import { PlansView, isSubscribed, type PlansViewProps } from './PlansView'
  * Top-anchored so loading, plans and checkout never make the dialog jump (review M4).
  */
 export function PlansDialogContent(
-  props: PlansViewProps & { checkout?: ReactNode }
+  props: PlansViewProps & {
+    checkout?: ReactNode
+    /** Checkout state, so the dialog title says what happened (paid, canceled). */
+    checkoutState?: 'paid' | 'canceled' | 'other'
+    /** Payment landed: the Team page takes over, so this dialog leaves without its zoom-out. */
+    handingOff?: boolean
+  }
 ): React.JSX.Element {
   const t = useTranslate()
   const subscribed = isSubscribed(props.result)
-  const { checkout, ...viewProps } = props
+  const { checkout, checkoutState, handingOff, ...viewProps } = props
   return (
     <DialogContent
       scrollable
-      className="top-[6vh] max-h-[88vh] translate-y-0 sm:max-w-4xl [@media(max-height:800px)]:top-4 [@media(max-height:800px)]:max-h-[calc(100vh-2rem)]"
+      exitMotion={handingOff ? 'none' : 'default'}
+      className={
+        checkout
+          ? // Checkout is one column; a narrower dialog keeps it from floating in empty space.
+            'top-[6vh] max-h-[88vh] translate-y-0 sm:max-w-lg [@media(max-height:800px)]:top-4 [@media(max-height:800px)]:max-h-[calc(100vh-2rem)]'
+          : 'top-[6vh] max-h-[88vh] translate-y-0 sm:max-w-4xl [@media(max-height:800px)]:top-4 [@media(max-height:800px)]:max-h-[calc(100vh-2rem)]'
+      }
       onOpenAutoFocus={(event) => {
-        // Land on the primary action for this state when it is already rendered (review P1-13);
-        // otherwise on the dialog itself so nothing looks pre-selected.
+        // The dialog itself first; PlansView moves focus to the primary action once plans load.
         event.preventDefault()
         if (event.currentTarget instanceof HTMLElement) {
-          const primary = event.currentTarget.querySelector<HTMLElement>('[data-plans-primary]')
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: focusVisible is a valid FocusOptions member newer than this TS lib.
-          ;(primary ?? event.currentTarget).focus({ focusVisible: false } as FocusOptions)
+          event.currentTarget.focus()
         }
       }}
     >
@@ -34,7 +43,11 @@ export function PlansDialogContent(
         </p>
         <DialogTitle size="display">
           {checkout
-            ? t('auto.components.billing.checkout.title', 'Checkout')
+            ? checkoutState === 'paid'
+              ? t('auto.components.billing.checkout.titlePaid', 'Welcome to Orca Cloud')
+              : checkoutState === 'canceled'
+                ? t('auto.components.billing.checkout.titleCanceled', 'Checkout canceled')
+                : t('auto.components.billing.checkout.title', 'Checkout')
             : subscribed
               ? t('auto.components.billing.plans.titleSubscribed', 'Your Orca Cloud plan')
               : t('auto.components.billing.plans.title', 'Cloud sandboxes for your whole team')}

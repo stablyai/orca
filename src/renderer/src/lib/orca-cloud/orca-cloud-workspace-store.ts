@@ -2,6 +2,15 @@
 // status from the control plane, in-flight wakes and OOM notices. The one source of cloud ids and
 // wake state for every cloud surface. A tiny external store (not an app-store slice) so the
 // hundreds of sidebar rows that are not cloud workspaces subscribe to nothing.
+import {
+  armInterruptedTurnsForHostRestart,
+  continueInterruptedTurns,
+  disarmInterruptedTurns
+} from '@/lib/agent-session/resume/interrupted-turn-continue'
+import {
+  beginWorkspaceWake,
+  endWorkspaceWake
+} from '@/components/terminal-pane/input/wake-input-buffer'
 import { useSyncExternalStore } from 'react'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type {
@@ -259,6 +268,22 @@ export function noteCloudWakeProgress(event: CloudWakeProgressEvent): void {
     ids: s.ids.has(event.workspaceId) ? s.ids : new Set([...s.ids, event.workspaceId]),
     wake: { ...s.wake, [event.workspaceId]: next }
   }))
+  // Typing into the workspace while it wakes is held and delivered to the woken terminal.
+  if (event.phase === 'waking' || event.phase === 'connecting') {
+    beginWorkspaceWake(event.workspaceId, event.startedAt)
+  } else {
+    endWorkspaceWake(event.workspaceId, event.phase === 'ready' ? 'ready' : 'failed')
+  }
+  // Restart reboots the host under any working agent: carry its interrupted turn on afterwards.
+  if (next.source === 'restart') {
+    if (event.phase === 'waking' && (!started || started.startedAt !== event.startedAt)) {
+      armInterruptedTurnsForHostRestart(event.workspaceId)
+    } else if (event.phase === 'ready') {
+      void continueInterruptedTurns(event.workspaceId)
+    } else if (event.phase === 'failed') {
+      disarmInterruptedTurns(event.workspaceId)
+    }
+  }
   if (event.phase === 'ready') {
     // Settled: drop the entry once the status says what the VM is, so nothing keeps ticking.
     void refreshCloudWorkspaceStatus(event.workspaceId).finally(() =>
@@ -320,40 +345,4 @@ export function installOrcaCloudWorkspaceStore(): () => void {
     stopIds()
     stopStatus()
   }
-}
-
-const rolloverStarts = new Map<string, number>()
-
-/**
- * A session rollover (24h cap or "Restart now") runs in main without a wake step, so the sidebar
- * mark and status panel learn about it here: restarting is a wake from source `restart`.
- */
-export function noteCloudRolloverState(
-  workspaceId: string,
-  state: 'restarting' | 'running' | 'restart-failed'
-): void {
-  if (state === 'restarting') {
-    const startedAt = Date.now()
-    rolloverStarts.set(workspaceId, startedAt)
-    noteCloudWakeProgress({
-      workspaceId,
-      phase: 'waking',
-      source: 'restart',
-      startedAt,
-      at: startedAt
-    })
-    return
-  }
-  const startedAt = rolloverStarts.get(workspaceId)
-  rolloverStarts.delete(workspaceId)
-  if (startedAt === undefined) {
-    return
-  }
-  noteCloudWakeProgress({
-    workspaceId,
-    phase: state === 'running' ? 'ready' : 'failed',
-    source: 'restart',
-    startedAt,
-    at: Date.now()
-  })
 }

@@ -18,6 +18,22 @@ export type EphemeralVmWorkspaceRuntime = Pick<
   failure?: EphemeralVmFailure
   /** False when the recipe snapshot has no suspend step, so Suspend VM would do nothing. */
   canSuspend: boolean
+  /** Orca Cloud workspace booted from an org environment build (dependencies preinstalled). */
+  environmentBuildId?: string
+}
+
+/** The environment build an Orca Cloud recipe result records, if any. */
+function environmentBuildIdOf(record: EphemeralVmRuntimeRecord): string | undefined {
+  const driver = record.recipeResult?.userData?.environmentDriver
+  if (!driver || typeof driver !== 'object' || Array.isArray(driver)) {
+    return undefined
+  }
+  const state = 'driverState' in driver ? driver.driverState : undefined
+  const id =
+    state && typeof state === 'object' && !Array.isArray(state) && 'environmentBuildId' in state
+      ? state.environmentBuildId
+      : undefined
+  return typeof id === 'string' && id ? id : undefined
 }
 
 export type EphemeralVmLifecycleSlice = {
@@ -73,6 +89,7 @@ export function projectEphemeralVmWorkspaceRuntimes(
       workspaceId: record.workspaceId,
       status: record.status,
       ...(record.runtimeEnvironmentId ? { runtimeEnvironmentId: record.runtimeEnvironmentId } : {}),
+      ...(environmentBuildIdOf(record) ? { environmentBuildId: environmentBuildIdOf(record) } : {}),
       ...(failure ? { failure } : {}),
       // Records without a snapshot resolve the recipe from the repo at suspend time.
       // Main only suspends a VM whose repo it can resolve (findWorkspaceEphemeralVmRuntime).

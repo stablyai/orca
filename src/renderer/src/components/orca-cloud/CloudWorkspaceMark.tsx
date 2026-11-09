@@ -121,7 +121,8 @@ function CloudWorkspaceMarkInner({
         side="right"
         align="start"
         sideOffset={10}
-        className={cn('w-72 p-3', FOCUS_RING)}
+        focusRing
+        className="w-72"
         aria-label={label}
         tabIndex={-1}
         onPointerEnter={() => clearTimer()}
@@ -136,13 +137,15 @@ function CloudWorkspaceMarkInner({
         }}
         onClick={(event) => event.stopPropagation()}
       >
-        <CloudWorkspaceStatusPanel
-          workspaceId={workspaceId}
-          state={view.state}
-          entry={view.entry}
-          pending={view.pending}
-          actions={actions}
-        />
+        <div className="p-3">
+          <CloudWorkspaceStatusPanel
+            workspaceId={workspaceId}
+            state={view.state}
+            entry={view.entry}
+            pending={view.pending}
+            actions={actions}
+          />
+        </div>
       </PopoverContent>
     </Popover>
   )

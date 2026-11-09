@@ -40,6 +40,8 @@ export type SandboxRow = {
   egress_secret_hosts: string | null
   /** Comma list of custom model-provider hosts added to this session's egress allowlist. */
   egress_allow_hosts: string | null
+  /** Comma list of hosts the workspace's own tools need (synced remote MCP servers); set by the desktop. */
+  egress_user_hosts: string | null
   retention_warned_at: number | null
   /** Environment build this sandbox first booted from (null: the golden image). Never changes. */
   environment_id: string | null
@@ -178,7 +180,7 @@ type Patch = Partial<Omit<SandboxRow, 'id' | 'account_id' | 'generation' | 'crea
 const PATCHABLE = new Set<string>([
   'status', 'session_id', 'session_started_at', 'session_deadline_at', 'lease_expires_at',
   'usage_settled_at', 'last_error', 'destroyed_at', 'github_token_expires_at',
-  'egress_secret_hosts', 'egress_allow_hosts', 'repo_url', 'retention_warned_at', 'orcad_endpoint', 'ready_at',
+  'egress_secret_hosts', 'egress_allow_hosts', 'egress_user_hosts', 'repo_url', 'retention_warned_at', 'orcad_endpoint', 'ready_at',
   'archived_at', 'archive_expires_at'
 ])
 

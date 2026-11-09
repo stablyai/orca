@@ -20,20 +20,34 @@ const STEP_OF_PHASE: Partial<Record<CloudTransferProgressEvent['phase'], CloudMo
   applying: 'applying'
 }
 
+/** A move that hasn't settled by now is reported as failed (the pack or download stalled). */
+export const MOVE_TIMEOUT_MS = 15 * 60_000
+
+let inFlight = false
+
 export async function runOrcaCloudTransferToLocal(
   workspaceId: string,
-  name: string
+  name: string,
+  options: { archiveAfter?: boolean; onArchive?: (workspaceId: string, name: string) => void } = {}
 ): Promise<void> {
   const api = window.api?.orcaCloudWorkspace
-  if (!api?.prepareTransferToLocal) {
+  // One move at a time: a second click (or a retry racing the first) must not start another pack.
+  if (!api?.prepareTransferToLocal || inFlight) {
     return
   }
+  inFlight = true
+  const archiveAfter = options.archiveAfter ?? false
   const startedAt = Date.now()
   let step: CloudMoveStep = 'packing'
   let skipped: CloudMoveStep[] = ['waking']
   let bytes: number | null = null
   let totalBytes: number | null = null
-  const publish = (): void =>
+  let timedOut = false
+  const publish = (): void => {
+    if (timedOut) {
+      return
+    }
+    const previous = getCloudMoveState()
     setCloudMoveState({
       stage: 'running',
       workspaceId,
@@ -42,8 +56,16 @@ export async function runOrcaCloudTransferToLocal(
       skipped,
       startedAt,
       bytes,
-      totalBytes
+      totalBytes,
+      archiveAfter,
+      hidden: previous.stage === 'running' ? previous.hidden : false
     })
+  }
+  const timeout = setTimeout(() => {
+    timedOut = true
+    setCloudMoveState({ stage: 'failed', workspaceId, name, step, timedOut: true })
+  }, MOVE_TIMEOUT_MS)
+  const live = (): boolean => !timedOut && getCloudMoveState().stage === 'running'
   const dispose = api.onTransferProgress((event) => {
     const next = event.workspaceId === workspaceId ? STEP_OF_PHASE[event.phase] : undefined
     if (!next) {
@@ -108,7 +130,10 @@ export async function runOrcaCloudTransferToLocal(
     if (!finished.ok) {
       throw new Error(finished.message)
     }
-    noteCloudWorkspaceMoved(workspaceId, Date.now())
+    if (timedOut) {
+      return
+    }
+    noteCloudWorkspaceMoved(workspaceId, Date.now(), worktree.id)
     setCloudMoveState({
       stage: 'done',
       workspaceId,
@@ -116,16 +141,22 @@ export async function runOrcaCloudTransferToLocal(
       localWorktreeId: worktree.id,
       prepared: prepared.value,
       finished: finished.value,
-      elapsedMs: Date.now() - startedAt
+      elapsedMs: Date.now() - startedAt,
+      archivedAfter: archiveAfter
     })
     activateAndRevealWorktree(worktree.id)
+    if (archiveAfter) {
+      options.onArchive?.(workspaceId, name)
+    }
   } catch (error) {
     // Details go to the log, not the dialog (error tone: plain words, nothing lost, one action).
     console.error('[orca-cloud] move to this computer failed', error)
-    if (getCloudMoveState().stage === 'running') {
-      setCloudMoveState({ stage: 'failed', workspaceId, name, step })
+    if (live()) {
+      setCloudMoveState({ stage: 'failed', workspaceId, name, step, timedOut: false })
     }
   } finally {
+    clearTimeout(timeout)
+    inFlight = false
     dispose()
   }
 }

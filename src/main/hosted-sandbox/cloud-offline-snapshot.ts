@@ -1,4 +1,5 @@
 // Turns cached RPC answers into what the asleep view shows, and into archive git metadata.
+import { z } from 'zod'
 import type {
   CloudOfflineChat,
   CloudOfflineChatMessage,
@@ -26,40 +27,98 @@ export function stripAnsi(text: string): string {
   return text.replace(ANSI, '').replace(/\r(?!\n)/g, '')
 }
 
-type HistoryResult = {
-  ok?: boolean
-  page?: {
-    sessionId?: string
-    items?: {
-      itemId: string
-      observedAt: number
-      body: { kind: string; role?: string; blocks?: { type: string; text?: string }[] }
-    }[]
-  }
+// Cached answers came from the VM: parse leniently, and a malformed piece is skipped, never trusted.
+const Text = z.string()
+const ChatItemSchema = z.looseObject({
+  itemId: Text,
+  observedAt: z.number(),
+  body: z.looseObject({
+    kind: Text,
+    role: Text.optional(),
+    blocks: z.array(z.looseObject({ type: Text, text: z.unknown().optional() })).optional()
+  })
+})
+const HistoryResultSchema = z.looseObject({
+  page: z
+    .looseObject({ sessionId: Text.optional(), items: z.array(z.unknown()).optional() })
+    .optional()
+})
+const TerminalListSchema = z.looseObject({
+  terminals: z
+    .array(
+      z.looseObject({
+        handle: Text,
+        title: Text.nullable().optional(),
+        paneTitle: Text.optional()
+      })
+    )
+    .catch([])
+    .optional()
+})
+// `terminal.read` answers `{terminal: RuntimeTerminalRead}`.
+const TerminalReadSchema = z.looseObject({
+  terminal: z.looseObject({ handle: Text.optional(), tail: z.array(Text).optional() }).optional()
+})
+const StatusResultSchema = z.looseObject({
+  entries: z
+    .array(z.looseObject({ path: Text, status: Text, area: Text }))
+    .catch([])
+    .optional(),
+  head: Text.optional().catch(undefined),
+  branch: Text.optional().catch(undefined)
+})
+const HistoryItemsSchema = z.looseObject({
+  items: z
+    .array(
+      z.looseObject({
+        id: Text,
+        subject: Text,
+        author: Text.optional(),
+        timestamp: z.number().optional()
+      })
+    )
+    .catch([])
+    .optional()
+})
+const ParamsSchema = z.record(z.string(), z.unknown())
+
+/** A string field of a cached call's params, if it has one. */
+export function stringParam(params: unknown, key: string): string | undefined {
+  const parsed = ParamsSchema.safeParse(params)
+  const value = parsed.success ? parsed.data[key] : undefined
+  return typeof value === 'string' ? value : undefined
+}
+
+/** Terminal handles from a cached `terminal.list` answer. */
+export function terminalHandlesOf(result: unknown): string[] {
+  const parsed = TerminalListSchema.safeParse(result)
+  return parsed.success ? (parsed.data.terminals ?? []).map((terminal) => terminal.handle) : []
 }
 
 function chatOf(entry: OfflineCacheEntry): CloudOfflineChat | null {
-  const result = entry.result as HistoryResult
-  const sessionId =
-    result?.page?.sessionId ?? (entry.params as { sessionId?: string } | null)?.sessionId
-  if (!sessionId || !Array.isArray(result?.page?.items)) {
+  const parsed = HistoryResultSchema.safeParse(entry.result)
+  const page = parsed.success ? parsed.data.page : undefined
+  const sessionId = page?.sessionId ?? stringParam(entry.params, 'sessionId')
+  if (!sessionId || !Array.isArray(page?.items)) {
     return null
   }
   const messages: CloudOfflineChatMessage[] = []
-  for (const item of result.page.items) {
-    if (item.body?.kind !== 'message' || !Array.isArray(item.body.blocks)) {
+  for (const raw of page.items) {
+    const item = ChatItemSchema.safeParse(raw)
+    if (!item.success || item.data.body.kind !== 'message' || !item.data.body.blocks) {
       continue
     }
-    const text = item.body.blocks
-      .filter((block) => block.type === 'text' && typeof block.text === 'string')
-      .map((block) => block.text)
+    const text = item.data.body.blocks
+      .flatMap((block) =>
+        block.type === 'text' && typeof block.text === 'string' ? [block.text] : []
+      )
       .join('\n')
       .trim()
-    const role = item.body.role
+    const role = item.data.body.role
     if (!text || (role !== 'user' && role !== 'assistant' && role !== 'system')) {
       continue
     }
-    messages.push({ itemId: item.itemId, role, text, at: item.observedAt })
+    messages.push({ itemId: item.data.itemId, role, text, at: item.data.observedAt })
   }
   return { sessionId, at: entry.at, messages: messages.slice(-MAX_MESSAGES) }
 }
@@ -68,7 +127,7 @@ function chatOf(entry: OfflineCacheEntry): CloudOfflineChat | null {
 function chatsOf(entries: OfflineCacheEntry[]): CloudOfflineChat[] {
   const bySession = new Map<string, CloudOfflineChat>()
   for (const entry of entries) {
-    const direction = (entry.params as { direction?: string } | null)?.direction
+    const direction = stringParam(entry.params, 'direction')
     if (direction && direction !== 'tail') {
       continue
     }
@@ -85,17 +144,15 @@ function chatsOf(entries: OfflineCacheEntry[]): CloudOfflineChat[] {
   return [...bySession.values()].sort((a, b) => b.at - a.at)
 }
 
-function terminalsOf(cache: CloudOfflineCache, environmentId: string): CloudOfflineTerminal[] {
+async function terminalsOf(
+  cache: CloudOfflineCache,
+  environmentId: string
+): Promise<CloudOfflineTerminal[]> {
   // Every listing contributes titles (a filtered listing can be empty); newest first wins.
   const titles = new Map<string, string | null>()
-  for (const list of cache.entries(environmentId, 'terminal.list')) {
-    const listed =
-      (
-        list.result as {
-          terminals?: { handle: string; title: string | null; paneTitle?: string }[]
-        } | null
-      )?.terminals ?? []
-    for (const terminal of listed) {
+  for (const list of await cache.entries(environmentId, 'terminal.list')) {
+    const parsed = TerminalListSchema.safeParse(list.result)
+    for (const terminal of parsed.success ? (parsed.data.terminals ?? []) : []) {
       if (!titles.has(terminal.handle)) {
         titles.set(terminal.handle, terminal.paneTitle ?? terminal.title ?? null)
       }
@@ -103,12 +160,11 @@ function terminalsOf(cache: CloudOfflineCache, environmentId: string): CloudOffl
   }
   const seen = new Set<string>()
   const terminals: CloudOfflineTerminal[] = []
-  for (const entry of cache.entries(environmentId, 'terminal.read')) {
-    // `terminal.read` answers `{terminal: RuntimeTerminalRead}`.
-    const wrapped = entry.result as { terminal?: { handle?: string; tail?: string[] } } | null
-    const result = wrapped?.terminal
-    const handle = result?.handle ?? (entry.params as { terminal?: string } | null)?.terminal
-    if (!handle || seen.has(handle) || !Array.isArray(result?.tail)) {
+  for (const entry of await cache.entries(environmentId, 'terminal.read')) {
+    const parsed = TerminalReadSchema.safeParse(entry.result)
+    const result = parsed.success ? parsed.data.terminal : undefined
+    const handle = result?.handle ?? stringParam(entry.params, 'terminal')
+    if (!handle || seen.has(handle) || !result?.tail) {
       continue
     }
     seen.add(handle)
@@ -122,22 +178,19 @@ function terminalsOf(cache: CloudOfflineCache, environmentId: string): CloudOffl
   return terminals
 }
 
-type StatusResult = {
-  entries?: { path: string; status: string; area: string }[]
-  head?: string
-  branch?: string
-}
-type HistoryItems = {
-  items?: { id: string; subject: string; author?: string; timestamp?: number }[]
-}
-
-function gitOf(cache: CloudOfflineCache, environmentId: string): CloudOfflineGit | null {
-  const status = cache.entries(environmentId, 'git.status')[0]
-  const history = cache.entries(environmentId, 'git.history')[0]
+async function gitOf(
+  cache: CloudOfflineCache,
+  environmentId: string
+): Promise<CloudOfflineGit | null> {
+  const status = (await cache.entries(environmentId, 'git.status'))[0]
+  const history = (await cache.entries(environmentId, 'git.history'))[0]
   if (!status && !history) {
     return null
   }
-  const statusResult = (status?.result ?? {}) as StatusResult
+  const parsedStatus = StatusResultSchema.safeParse(status?.result ?? {})
+  const statusResult = parsedStatus.success ? parsedStatus.data : {}
+  const parsedHistory = HistoryItemsSchema.safeParse(history?.result ?? {})
+  const items = parsedHistory.success ? (parsedHistory.data.items ?? []) : []
   const entries = statusResult.entries ?? []
   return {
     branch: statusResult.branch?.replace(/^refs\/heads\//, '') ?? null,
@@ -146,7 +199,7 @@ function gitOf(cache: CloudOfflineCache, environmentId: string): CloudOfflineGit
       .slice(0, MAX_CHANGES)
       .map(({ path, status: s, area }) => ({ path, status: s, area })),
     changeCount: entries.length,
-    commits: (((history?.result ?? {}) as HistoryItems).items ?? []).slice(0, 20).map((item) => ({
+    commits: items.slice(0, 20).map((item) => ({
       id: item.id,
       subject: item.subject,
       author: item.author ?? null,
@@ -156,15 +209,15 @@ function gitOf(cache: CloudOfflineCache, environmentId: string): CloudOfflineGit
   }
 }
 
-export function buildOfflineSnapshot(
+export async function buildOfflineSnapshot(
   cache: CloudOfflineCache,
   environmentId: string,
   workspaceId: string,
   asleep: boolean
-): CloudOfflineSnapshot {
-  const git = gitOf(cache, environmentId)
-  const terminals = terminalsOf(cache, environmentId)
-  const chats = chatsOf(cache.entries(environmentId, 'agentSession.history'))
+): Promise<CloudOfflineSnapshot> {
+  const git = await gitOf(cache, environmentId)
+  const terminals = await terminalsOf(cache, environmentId)
+  const chats = chatsOf(await cache.entries(environmentId, 'agentSession.history'))
   const times = [git?.at ?? 0, ...terminals.map((t) => t.at), ...chats.map((c) => c.at)].filter(
     (t) => t > 0
   )
@@ -188,12 +241,12 @@ const STATUS_LETTER: Record<string, string> = {
 }
 
 /** Archive metadata from the cache, for archiving a VM that is already asleep. */
-export function archiveCheckoutsFromCache(
+export async function archiveCheckoutsFromCache(
   cache: CloudOfflineCache,
   environmentId: string,
   projectRoot: string
-): HostedArchiveCheckout[] | null {
-  const git = gitOf(cache, environmentId)
+): Promise<HostedArchiveCheckout[] | null> {
+  const git = await gitOf(cache, environmentId)
   if (!git || (!git.branch && !git.head)) {
     return null
   }

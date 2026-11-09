@@ -14,7 +14,7 @@ import {
 } from './checkout-flow'
 
 /** How long the "paid" check shows before the Team page takes over. */
-export const PAID_HANDOFF_MS = 1_400
+export const PAID_HANDOFF_MS = 2_200
 
 export type CheckoutFlow = {
   phase: CheckoutPhase

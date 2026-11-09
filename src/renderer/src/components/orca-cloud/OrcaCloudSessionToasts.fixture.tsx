@@ -59,10 +59,10 @@ function warning(minutesLeft: HostedSessionWarningEvent['minutesLeft']): () => v
   return () => showOrcaCloudRestartWarningToast({ ...workspace, minutesLeft }, restartActions)
 }
 
-/** 60 and 15 min left: dismisses itself after 20s. */
+/** 60 minutes left. Every tier stays until the user acts or the restart happens. */
 export const restartWarning = toastFixture(warning(60))
-/** 5 min left: stays until the user acts or the restart happens. */
-export const restartWarningPersistent = toastFixture(warning(5))
+/** The last tier, 5 minutes left. */
+export const restartWarningFiveMinutes = toastFixture(warning(5))
 export const restarting = toastFixture(() =>
   showOrcaCloudRestartingToast(workspace.workspaceId, workspace.workspaceName)
 )

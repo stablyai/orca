@@ -62,6 +62,7 @@ export default function PortsPanel({ isVisible }: { isVisible: boolean }): React
           runtimeTarget={host.target}
           sshForwardTargetId={sshForwardTargetId}
           portMenuItems={shareAvailable ? sharePortMenuItems : undefined}
+          isSandbox={shareAvailable}
           footer={(activePorts) => (
             <CloudSharedLinksSection
               action={shareAction}

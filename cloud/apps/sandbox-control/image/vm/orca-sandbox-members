@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
-# Writes one git config per workspace member for `orca-git-as`. No token ever lands here: each file
-# carries the member's egress placeholder (swapped for their GitHub token by the control plane's
-# egress proxy, for this workspace's repository only) and their GitHub author identity.
-# Env: ORCA_MEMBERS_B64 = base64 JSON [{userId, name, email, authorization}]. Prints {"members":<n>}.
+# Runs as root (control plane, sudo). Installs who-may-push-as-whom for `orca-git-as`:
+#   /etc/orca/members/<member>.gitconfig  egress placeholder header + GitHub author identity
+#   /etc/orca/members/devices.json        {"<orcad device id>": "<member id>"} (each member's paired devices)
+# Both root-only: agents never read another member's placeholder. `orca-git-identity` (root, via a
+# sudoers rule) hands an agent only the identity of the member whose device drove its turn, as orcad
+# attests it. No token lives here: the placeholder is swapped at egress, for this repository only.
+# Env: ORCA_MEMBERS_B64 = base64 JSON [{userId, name, email, authorization, deviceIds:[...]}]
+# The VM user agents run as is orcad's own user (detected). Prints {"members":<n>,"devices":<n>}.
 set -euo pipefail
 umask 077
-DIR="$HOME/.orca-sandbox/members"
-mkdir -p "$DIR"
+DIR=/etc/orca/members
+orcad_pid="$(pgrep -f orcad-server.js | head -n 1 || true)"
+USER_NAME="$( [ -n "$orcad_pid" ] && ps -o user= -p "$orcad_pid" | tr -d ' ' || true)"
+USER_NAME="${USER_NAME:-${ORCA_SANDBOX_USER:-${SUDO_USER:-}}}"
+case "$USER_NAME" in '' | *[!a-z0-9_-]*) echo 'bad user' >&2; exit 2 ;; esac
+mkdir -p /etc/orca
 json="$(printf '%s' "${ORCA_MEMBERS_B64:-W10=}" | base64 -d)"
-tmp="$(mktemp -d "$DIR.XXXXXX")"
+tmp="$(mktemp -d /etc/orca/members.XXXXXX)"
 count=0
 while IFS= read -r row; do
   user="$(jq -r '.userId' <<<"$row")"
@@ -21,8 +29,33 @@ while IFS= read -r row; do
   git config -f "$file" user.email "$(jq -r '.email' <<<"$row")"
   count=$((count + 1))
 done < <(jq -c '.[]' <<<"$json")
+jq -c '[.[] | select(.userId | test("^[A-Za-z0-9_.:-]+$")) | .userId as $u | (.deviceIds // [])[] | select(test("^[A-Za-z0-9_-]{1,128}$")) | {key: ., value: $u}] | from_entries' <<<"$json" >"$tmp/devices.json"
+devices="$(jq 'length' "$tmp/devices.json")"
+chmod 0700 "$tmp" && chmod 0600 "$tmp"/*
 rm -rf "$DIR.old"
 [ -d "$DIR" ] && mv "$DIR" "$DIR.old"
 mv "$tmp" "$DIR"
 rm -rf "$DIR.old"
-echo "{\"members\":$count}"
+# Agents may ask for their own sender's identity, and only that (the helper checks with orcad).
+rule="$USER_NAME ALL=(root) NOPASSWD:SETENV: /opt/orca/bin/orca-git-identity"
+printf '%s\n' "$rule" >/etc/sudoers.d/orca-git-identity.new
+chmod 0440 /etc/sudoers.d/orca-git-identity.new
+if visudo -cf /etc/sudoers.d/orca-git-identity.new >/dev/null; then
+  mv -f /etc/sudoers.d/orca-git-identity.new /etc/sudoers.d/orca-git-identity
+else
+  rm -f /etc/sudoers.d/orca-git-identity.new
+  echo 'sudoers rule rejected' >&2
+  exit 1
+fi
+# Pre-attestation layout (agent-readable member files) must not linger.
+user_home="$(getent passwd "$USER_NAME" | cut -d: -f6)"
+[ -n "$orcad_pid" ] && user_home="$(tr '\0' '\n' <"/proc/$orcad_pid/environ" | sed -n 's/^HOME=//p' | head -n 1)"
+[ -n "$user_home" ] && rm -rf "$user_home/.orca-sandbox/members"
+# Commits outside a teammate's turn still need an author (images older than orca-sandbox-start's default).
+if [ -n "$user_home" ]; then
+  sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.email >/dev/null 2>&1 \
+    || sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.email 'cloud@users.noreply.onorca.dev'
+  sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.name >/dev/null 2>&1 \
+    || sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.name 'Orca Cloud'
+fi
+echo "{\"members\":$count,\"devices\":$devices}"

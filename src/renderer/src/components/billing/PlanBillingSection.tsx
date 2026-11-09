@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
@@ -17,12 +18,15 @@ import { OverageControls, UsageSummary } from './PlanBillingUsage'
 import { denyReasonCopy, openFailureCopy, overageFailureCopy } from './plan-billing-copy'
 import { PlanStatusBadge } from './PlanStatusBadge'
 import { useOrcaBillingStatus } from './use-orca-billing-status'
+import { invalidateOrcaCloudBilling } from '../new-workspace/orca-cloud-billing-cache'
 
 export function PlanBillingSection(): React.JSX.Element | null {
   const t = useTranslate()
   const { loading, result, refresh } = useOrcaBillingStatus(true)
   const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<PlanBillingNotice | null>(null)
+  const [userRefreshing, setUserRefreshing] = useState(false)
+  const [overageFailures, setOverageFailures] = useState(0)
 
   const run = async (open: () => Promise<OrcaBillingOpenResult>): Promise<void> => {
     setBusy(true)
@@ -32,13 +36,17 @@ export function PlanBillingSection(): React.JSX.Element | null {
       error: String(error)
     }))
     setBusy(false)
+    const failure = openFailureCopy(outcome, t)
     setNotice(
-      outcome.status === 'opened'
-        ? t(
-            'auto.components.billing.continueInBrowser',
-            'Continue in your browser. This updates when you come back.'
-          )
-        : openFailureCopy(outcome, t)
+      failure
+        ? { kind: 'error', text: failure }
+        : {
+            kind: 'info',
+            text: t(
+              'auto.components.billing.continueInBrowser',
+              'Continue in your browser. This updates when you come back.'
+            )
+          }
     )
   }
 
@@ -54,8 +62,12 @@ export function PlanBillingSection(): React.JSX.Element | null {
     setBusy(false)
     if (outcome.status === 'ok') {
       refresh()
+      // The Run-on picker's Orca Cloud row reads a shared copy; overage/cap just changed it.
+      invalidateOrcaCloudBilling()
     } else {
-      setNotice(overageFailureCopy(outcome, t))
+      const failure = overageFailureCopy(outcome, t)
+      setNotice(failure ? { kind: 'error', text: failure } : null)
+      setOverageFailures((count) => count + 1)
     }
   }
 
@@ -63,24 +75,36 @@ export function PlanBillingSection(): React.JSX.Element | null {
     <PlanBillingView
       result={result}
       loading={loading}
+      refreshing={userRefreshing}
       busy={busy}
       notice={notice}
-      onRefresh={refresh}
+      onRefresh={() => {
+        // Spin only for a refresh the user asked for, and long enough to be seen (review M16).
+        setUserRefreshing(true)
+        refresh()
+        window.setTimeout(() => setUserRefreshing(false), 400)
+      }}
       onPortal={() => void run(() => window.api.orcaProfiles.billingOpenPortal())}
+      overageFailures={overageFailures}
       onSetOverage={(args) => void setOverage(args)}
       onSeePlans={() => openPlansPage('settings')}
     />
   )
 }
 
+export type PlanBillingNotice = { kind: 'error' | 'info'; text: string }
+
 export type PlanBillingViewProps = {
   result: OrcaBillingStatusResult | null
   loading: boolean
+  /** A user-requested refresh is running; background re-reads (window focus) never spin. */
+  refreshing?: boolean
   busy: boolean
-  notice: string | null
+  notice: PlanBillingNotice | null
   onRefresh: () => void
   onPortal: () => void
   onSetOverage: (args: OrcaBillingOverageArgs) => void
+  overageFailures?: number
   /** Opens the plans page (pricing, Checkout, Enterprise contact). */
   onSeePlans: () => void
 }
@@ -88,11 +112,13 @@ export type PlanBillingViewProps = {
 export function PlanBillingView({
   result,
   loading,
+  refreshing = false,
   busy,
   notice,
   onRefresh,
   onPortal,
   onSetOverage,
+  overageFailures = 0,
   onSeePlans
 }: PlanBillingViewProps): React.JSX.Element | null {
   const t = useTranslate()
@@ -103,21 +129,22 @@ export function PlanBillingView({
   }
 
   const header = (
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {t('auto.components.billing.title', 'Plan & billing')}
-      </p>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        disabled={loading}
-        onClick={onRefresh}
-        aria-label={t('auto.components.billing.refresh', 'Refresh plan')}
-      >
-        <RefreshCw className={cn(loading && 'animate-spin')} />
-      </Button>
-    </div>
+    <SettingsGroupHeader
+      className="px-0"
+      title={t('auto.components.billing.title', 'Plan & billing')}
+      action={
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-disabled={refreshing || undefined}
+          onClick={refreshing ? undefined : onRefresh}
+          aria-label={t('auto.components.billing.refresh', 'Refresh plan')}
+        >
+          <RefreshCw className={cn(refreshing && 'motion-safe:animate-spin')} />
+        </Button>
+      }
+    />
   )
 
   if (result.status === 'failed') {
@@ -142,41 +169,54 @@ export function PlanBillingView({
   return (
     <div className="space-y-4 border-t border-border/60 pt-5">
       {header}
+      <PaymentIssueNotice entitlement={entitlement} busy={busy} onUpdatePayment={onPortal} />
       {hasPlan ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <CreditCard className="size-4 text-muted-foreground" />
             <p className="text-sm font-medium">{entitlement.planLabel}</p>
             <span className="text-xs text-muted-foreground">
-              {t('auto.components.billing.seatsInterval', '{{value0}} seats · {{value1}}', {
-                value0: String(entitlement.seats),
-                value1:
-                  entitlement.interval === 'year'
-                    ? t('auto.components.billing.annual', 'Annual')
-                    : t('auto.components.billing.monthly', 'Monthly')
-              })}
+              {entitlement.interval === 'year'
+                ? t('auto.components.billing.seatsAnnual', '{{count}} seats · Annual', {
+                    count: entitlement.seats,
+                    defaultValue_one: '{{count}} seat · Annual'
+                  })
+                : t('auto.components.billing.seatsMonthly', '{{count}} seats · Monthly', {
+                    count: entitlement.seats,
+                    defaultValue_one: '{{count}} seat · Monthly'
+                  })}
             </span>
             <PlanStatusBadge entitlement={entitlement} />
           </div>
           <UsageSummary entitlement={entitlement} />
-          <OverageControls entitlement={entitlement} busy={busy} onSetOverage={onSetOverage} />
+          {/* Overage is moot while sandboxes are suspended for a failed payment. */}
+          {entitlement.payment.suspendRunning ? null : (
+            <OverageControls
+              entitlement={entitlement}
+              busy={busy}
+              failures={overageFailures}
+              onSetOverage={onSetOverage}
+            />
+          )}
         </div>
       ) : null}
 
-      <PaymentIssueNotice entitlement={entitlement} busy={busy} onUpdatePayment={onPortal} />
-
-      {entitlement.reason && entitlement.payment.pastDueSince === null ? (
+      {/* The overage card carries the cap-reached hint for admins; don't repeat it here. */}
+      {hasPlan &&
+      entitlement.reason &&
+      entitlement.payment.pastDueSince === null &&
+      !(entitlement.reason === 'overage_cap_reached' && entitlement.canManageBilling) ? (
         <p className="text-xs text-muted-foreground">
           {denyReasonCopy(entitlement.reason, t, entitlement.canManageBilling)}
         </p>
       ) : null}
 
       {!hasPlan ? (
-        <p className="text-sm text-pretty">
+        <p className="text-sm text-muted-foreground text-pretty">
           {teamPrice
             ? t(
-                'auto.components.billing.upsellLine',
-                'Orca Cloud runs agents in hosted sandboxes. Team is {{value0}} per seat / month.',
+                'auto.components.billing.upsellLine2',
+                'Orca Cloud runs agents in sandboxes. Team is {{value0}} per seat per month.',
                 { value0: teamPrice }
               )
             : t(
@@ -193,7 +233,13 @@ export function PlanBillingView({
           </Button>
         )}
         {hasPlan && entitlement.canManageBilling && entitlement.payment.pastDueSince === null ? (
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onPortal}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-disabled={busy || undefined}
+            onClick={busy ? undefined : onPortal}
+          >
             {t('auto.components.billing.manageBilling', 'Manage billing')}
             <ExternalLink />
           </Button>
@@ -205,13 +251,20 @@ export function PlanBillingView({
         ) : null}
       </div>
 
-      {!entitlement.canManageBilling ? (
+      {/* The payment alert already says who to ask; don't ask twice. */}
+      {!entitlement.canManageBilling && entitlement.payment.pastDueSince === null ? (
         <p className="text-xs text-muted-foreground">
-          {t('auto.components.billing.askAdmin', 'Ask an org owner or admin to change the plan.')}
+          {t('auto.components.billing.askAdmin2', 'Ask an owner or admin to change the plan.')}
         </p>
       ) : null}
 
-      {notice ? <p className="text-xs text-muted-foreground">{notice}</p> : null}
+      {notice?.kind === 'error' ? (
+        <InlineError tone="error" title={notice.text} />
+      ) : notice ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          {notice.text}
+        </p>
+      ) : null}
     </div>
   )
 }

@@ -17,7 +17,14 @@ export const CLOUD_MOVE_STEPS: readonly CloudMoveStep[] = [
 
 export type CloudMoveState =
   | { stage: 'closed' }
-  | { stage: 'confirm'; workspaceId: string; name: string }
+  | {
+      stage: 'confirm'
+      workspaceId: string
+      name: string
+      /** What the client cache already knows (asleep-view snapshot); null until read or when empty. */
+      known: CloudMoveKnownCounts | null
+      archiveAfter: boolean
+    }
   | {
       stage: 'running'
       workspaceId: string
@@ -28,6 +35,9 @@ export type CloudMoveState =
       startedAt: number
       bytes: number | null
       totalBytes: number | null
+      archiveAfter: boolean
+      /** Hidden behind a toast; progress keeps going and the dialog returns when it settles. */
+      hidden: boolean
     }
   | {
       stage: 'done'
@@ -37,8 +47,23 @@ export type CloudMoveState =
       prepared: CloudTransferPrepared
       finished: CloudTransferFinished
       elapsedMs: number
+      /** "Archive the cloud workspace afterwards" was ticked: it is being archived (with undo). */
+      archivedAfter: boolean
     }
-  | { stage: 'failed'; workspaceId: string; name: string; step: CloudMoveStep }
+  | {
+      stage: 'failed'
+      workspaceId: string
+      name: string
+      step: CloudMoveStep
+      /** The move gave up after MOVE_TIMEOUT_MS. */
+      timedOut: boolean
+    }
+
+export type CloudMoveKnownCounts = {
+  branch: string | null
+  uncommittedChanges: number
+  chats: number
+}
 
 let state: CloudMoveState = { stage: 'closed' }
 const listeners = new Set<() => void>()
@@ -64,9 +89,43 @@ export function useCloudMoveState(): CloudMoveState {
 export function openMoveToThisComputer(workspaceId: string, name: string): void {
   // A move in flight keeps its dialog; opening another one would orphan its progress.
   if (state.stage === 'running') {
+    if (state.hidden) {
+      setCloudMoveState({ ...state, hidden: false })
+    }
     return
   }
-  setCloudMoveState({ stage: 'confirm', workspaceId, name })
+  setCloudMoveState({ stage: 'confirm', workspaceId, name, known: null, archiveAfter: true })
+  // Counts from the client cache, so the confirm screen can say what moves without waking anything.
+  void (typeof window === 'undefined' ? undefined : window.api?.orcaCloudOffline)
+    ?.getSnapshot({ workspaceId })
+    .then((snapshot) => {
+      const current = getCloudMoveState()
+      if (!snapshot || current.stage !== 'confirm' || current.workspaceId !== workspaceId) {
+        return
+      }
+      setCloudMoveState({
+        ...current,
+        known: {
+          branch: snapshot.git?.branch ?? null,
+          uncommittedChanges: snapshot.git?.changeCount ?? 0,
+          chats: snapshot.chats.length
+        }
+      })
+    })
+    .catch(() => undefined)
+}
+
+export function setMoveArchiveAfter(archiveAfter: boolean): void {
+  if (state.stage === 'confirm') {
+    setCloudMoveState({ ...state, archiveAfter })
+  }
+}
+
+/** "Hide": the move keeps going behind a toast; Show (or the result) brings the dialog back. */
+export function hideRunningMove(hidden: boolean): void {
+  if (state.stage === 'running') {
+    setCloudMoveState({ ...state, hidden })
+  }
 }
 
 export function closeMoveToThisComputer(): void {
@@ -77,20 +136,41 @@ export function closeMoveToThisComputer(): void {
 
 const MOVED_KEY = 'orca-cloud-moved-at:'
 
-/** When this cloud workspace was last moved to this computer (the panel's quiet "Moved" line). */
-export function cloudWorkspaceMovedAt(workspaceId: string): number | null {
+export type CloudWorkspaceMoved = { at: number; localWorktreeId: string | null }
+
+/** When this cloud workspace was last copied to this computer, and where (the panel's quiet line). */
+export function cloudWorkspaceMoved(workspaceId: string): CloudWorkspaceMoved | null {
   try {
     const raw = window.localStorage.getItem(`${MOVED_KEY}${workspaceId}`)
-    const at = raw ? Number(raw) : Number.NaN
-    return Number.isFinite(at) ? at : null
+    if (!raw) {
+      return null
+    }
+    // Older entries are a bare timestamp.
+    const parsed: unknown = raw.startsWith('{')
+      ? JSON.parse(raw)
+      : { at: Number(raw), localWorktreeId: null }
+    const value = parsed as Partial<CloudWorkspaceMoved>
+    return typeof value.at === 'number' && Number.isFinite(value.at)
+      ? {
+          at: value.at,
+          localWorktreeId: typeof value.localWorktreeId === 'string' ? value.localWorktreeId : null
+        }
+      : null
   } catch {
     return null
   }
 }
 
-export function noteCloudWorkspaceMoved(workspaceId: string, at: number): void {
+export function noteCloudWorkspaceMoved(
+  workspaceId: string,
+  at: number,
+  localWorktreeId: string | null = null
+): void {
   try {
-    window.localStorage.setItem(`${MOVED_KEY}${workspaceId}`, String(at))
+    window.localStorage.setItem(
+      `${MOVED_KEY}${workspaceId}`,
+      JSON.stringify({ at, localWorktreeId })
+    )
   } catch {
     // Storage unavailable: the marker is a nicety.
   }

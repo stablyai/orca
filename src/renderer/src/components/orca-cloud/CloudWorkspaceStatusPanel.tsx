@@ -2,7 +2,8 @@ import React from 'react'
 import { Archive, ArchiveRestore, Cloud, Laptop, Loader2, Play, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
-import { cloudWorkspaceMovedAt } from '@/lib/orca-cloud/orca-cloud-move-store'
+import { cloudWorkspaceMoved } from '@/lib/orca-cloud/orca-cloud-move-store'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { useNow } from '@/hooks/use-now'
@@ -82,9 +83,9 @@ function MeterSkeleton(): React.JSX.Element {
     <div className="flex flex-col gap-1.5" aria-hidden="true">
       {Array.from({ length: METER_ROWS }, (_, row) => (
         <div key={row} className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-2">
-          <Skeleton className="h-3 w-10 rounded" />
-          <Skeleton className="h-1 rounded-full animate-none" />
-          <Skeleton className="h-3 w-20 rounded" />
+          <Skeleton shape="small" className="h-3 w-10" />
+          <Skeleton shape="circle" motion="still" className="h-1" />
+          <Skeleton shape="small" className="h-3 w-20" />
         </div>
       ))}
     </div>
@@ -152,7 +153,7 @@ export function CloudWorkspaceStatusPanel({
   const state: CloudDotState = restarting ? 'waking' : rawState
   const status = entry?.status ?? null
   const metrics = status?.metrics ?? null
-  const movedAt = cloudWorkspaceMovedAt(workspaceId)
+  const moved = cloudWorkspaceMoved(workspaceId)
   const unavailable = !status && Boolean(entry?.error)
   const firstLoad = !status && !entry?.error
   const anyBusy = pending !== undefined
@@ -209,7 +210,7 @@ export function CloudWorkspaceStatusPanel({
           retryLabel={t('orcaCloudWorkspace.retry', 'Retry')}
           retrying={entry?.loading}
           onRetry={() => void refreshCloudWorkspaceStatus(workspaceId)}
-          className="text-xs"
+          density="compact"
         />
       ) : firstLoad ? (
         <div
@@ -277,11 +278,24 @@ export function CloudWorkspaceStatusPanel({
                 value={formatShortDate(status.archive.expiresAt)}
               />
             ) : null}
-            {movedAt !== null ? (
+            {moved ? (
               <Fact
-                label={t('orcaCloudWorkspace.movedToComputer', 'Moved to this computer')}
-                value={formatShortDate(movedAt)}
+                label={t('orcaCloudWorkspace.copiedToComputer', 'Copied to this computer')}
                 muted
+                value={
+                  <span className="flex items-baseline gap-2">
+                    {formatShortDate(moved.at)}
+                    {moved.localWorktreeId ? (
+                      <button
+                        type="button"
+                        className="text-foreground underline-offset-2 hover:underline focus-visible:outline-[var(--focus-ring)]"
+                        onClick={() => activateAndRevealWorktree(moved.localWorktreeId!)}
+                      >
+                        {t('orcaCloudWorkspace.openLocal', 'Open local workspace')}
+                      </button>
+                    ) : null}
+                  </span>
+                }
               />
             ) : null}
           </dl>
@@ -301,21 +315,20 @@ export function CloudWorkspaceStatusPanel({
           <div className="flex shrink-0 items-center gap-1">
             {actions.onMoveToComputer && canArchive && !restarting ? (
               <Button
-                size="icon-xs"
+                size="xs"
                 variant="ghost"
                 className="text-muted-foreground"
                 aria-label={t('orcaCloudWorkspace.moveToComputer', 'Move to this computer')}
-                title={t('orcaCloudWorkspace.moveToComputer', 'Move to this computer')}
                 {...busyProps(false, anyBusy, actions.onMoveToComputer)}
               >
                 <Laptop />
+                {t('orcaCloudWorkspace.moveHere', 'Move here')}
               </Button>
             ) : null}
             {canArchive && !restarting ? (
               <Button
                 size="xs"
-                variant="ghost"
-                className="text-muted-foreground"
+                variant="quiet"
                 {...busyProps(pending === 'archive', anyBusy, actions.onArchive)}
               >
                 {pending === 'archive' ? <Loader2 className="animate-spin" /> : <Archive />}

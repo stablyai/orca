@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# git for agents in Orca Cloud workspaces (first on orcad's PATH). Commands that author or publish
+# work run as the teammate whose message started this agent's turn (orca-git-as: orcad attests the
+# sender's paired device; root-only member identities). Everything else is plain git, untouched.
+real=/usr/bin/git
+sub=''
+skip=0
+for arg in "$@"; do
+  if [ "$skip" = 1 ]; then skip=0; continue; fi
+  case "$arg" in
+    -C | -c | --git-dir | --work-tree | --namespace | --exec-path | --config-env) skip=1 ;;
+    -*) ;;
+    *) sub="$arg"; break ;;
+  esac
+done
+case "$sub" in
+  commit | push | merge | rebase | cherry-pick | revert | am | pull | tag)
+    # Outside an agent turn (no attested sender) orca-git-as falls back to the workspace identity.
+    if [ -n "${ORCA_TERMINAL_HANDLE:-}${ORCA_AGENT_SESSION_ID:-}" ] && [ -x /opt/orca/bin/orca-git-as ]; then
+      PATH="/usr/bin:/bin:$PATH" exec /opt/orca/bin/orca-git-as "$@" 2> >(grep -v '^orca-git-as: no teammate identity' >&2)
+    fi
+    ;;
+esac
+exec "$real" "$@"

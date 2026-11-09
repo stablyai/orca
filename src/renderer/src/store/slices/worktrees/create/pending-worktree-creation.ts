@@ -133,15 +133,11 @@ export function createRemovePendingWorktreeCreation(
     }
     const cleanup = cleanUpCancelledVm(creationId, removedEntry.request, get)
     if (removedEntry.status === 'creating' && isOrcaCloudCreateRequest(removedEntry.request)) {
-      beginOrcaCloudCancelCleanup(
-        creationId,
-        cleanup ? [cleanup] : [],
-        {
-          runtimeId: removedEntry.request.ephemeralVmRuntimeId,
-          createStartedAt: removedEntry.startedAt
-        },
-        () => get().openSettingsTarget({ pane: 'servers', repoId: null })
-      )
+      beginOrcaCloudCancelCleanup(creationId, cleanup ? [cleanup] : [], {
+        runtimeId: removedEntry.request.ephemeralVmRuntimeId,
+        createStartedAt: removedEntry.startedAt,
+        canceledAt: Date.now()
+      })
     }
   }
 }

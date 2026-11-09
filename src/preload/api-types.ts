@@ -1,4 +1,6 @@
 import type { AgentApiKeysApi } from './api/agent-api-keys-bridge'
+import type { CloudApiBridge } from './api/cloud-api-bridge'
+import type { CloudSecretsApi } from './api/cloud-secrets-bridge'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -46,6 +48,7 @@ import type { MobileApi } from './api/mobile-api'
 import type { NativeChatApi } from './api/native-chat-api'
 import type { OnboardingApi, StarNagApi } from './api/onboarding-api'
 import type { OrcaProfileApi } from './api/orca-profile-api'
+import type { OrcaCloudEnvironmentsApi } from '../shared/hosted-sandbox/hosted-environment-api'
 import type {
   ComputerUsePermissionsApi,
   DeveloperPermissionsApi,
@@ -86,6 +89,7 @@ type Merged<T> = { [K in keyof T]: T[K] }
 export type PreloadApi = {
   app: AppApi
   orcaProfiles: OrcaProfileApi
+  orcaCloudEnvironments: OrcaCloudEnvironmentsApi
   platform: PlatformApi
   e2e: E2EApi
   repos: RepositoryApi
@@ -178,6 +182,10 @@ export type PreloadApi = {
   plainSsh?: PlainSshTerminalApi
   /** Desktop only: the API keys Orca hands to agent launches. */
   agentApiKeys?: AgentApiKeysApi
+  /** Desktop only: Orca Cloud API keys, org settings and routines (hosted builds). */
+  cloudApi?: CloudApiBridge
+  /** Desktop only: Orca Cloud secrets (personal, team, repo) injected into cloud workspaces. */
+  cloudSecrets?: CloudSecretsApi
   /** COMPAT(legacy-relay-bridge): desktop-only, revisit 2027-01-15. */
   legacyRelayBridge?: LegacyRelayBridgeApi
   automations: AutomationsApi

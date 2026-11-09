@@ -55,7 +55,9 @@ export type RuntimePortRowForwarding = {
 export function useRuntimePortRowForwarding(
   runtimeTarget: RuntimeClientTarget | null,
   /** Host actions after the forward items (Orca Cloud: Share…). */
-  extraMenuItems?: (port: WorkspacePort) => ReactNode
+  extraMenuItems?: (port: WorkspacePort) => ReactNode,
+  /** Orca Cloud: copy says "sandbox", and offline offers Wake. */
+  isSandbox = false
 ): RuntimePortRowForwarding | null {
   const t = useTranslate()
   const environmentId = runtimeTarget?.kind === 'environment' ? runtimeTarget.environmentId : null
@@ -124,6 +126,7 @@ export function useRuntimePortRowForwarding(
         <RuntimePortForwardStatus
           remotePort={port.port}
           state={rowState(port)}
+          isSandbox={isSandbox}
           onForward={() => void forward(port)}
           onReconnect={
             environmentId ? () => void wakeRuntimePortForwardHost(environmentId) : undefined
@@ -199,7 +202,17 @@ export function useRuntimePortRowForwarding(
         return existing ? `localhost:${existing.localPort}` : undefined
       }
     }
-  }, [environmentId, extraMenuItems, failures, forward, forwardFor, hostOffline, pending, t])
+  }, [
+    environmentId,
+    extraMenuItems,
+    failures,
+    forward,
+    forwardFor,
+    hostOffline,
+    isSandbox,
+    pending,
+    t
+  ])
 
   if (!environmentId || !runtimePortForwardingAvailable()) {
     return null

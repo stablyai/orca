@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { returnFocusToWorkspace } from './cloud-focus-return'
 
-const body = {} as HTMLElement
+// Identity is all the helper compares, so plain objects stand in for DOM nodes.
+const body = {}
 
 describe('returnFocusToWorkspace (waking overlay → null)', () => {
   it('gives focus back to the active tab when the cover took it with it to <body>', () => {
@@ -17,7 +18,7 @@ describe('returnFocusToWorkspace (waking overlay → null)', () => {
 
   it('never steals focus the user moved elsewhere, and needs an active tab', () => {
     const focusTab = vi.fn()
-    const sidebarButton = {} as Element
+    const sidebarButton = {}
     expect(returnFocusToWorkspace('tab-1', focusTab, { activeElement: sidebarButton, body })).toBe(
       false
     )

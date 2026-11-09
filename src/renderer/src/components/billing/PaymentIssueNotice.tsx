@@ -39,22 +39,17 @@ export function PaymentIssueNotice({
       <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
       <div className="min-w-0 flex-1 space-y-2">
         <p className="text-sm font-medium">
-          {payment.suspendRunning
-            ? t(
-                'auto.components.billing.paymentFailedSuspended',
-                'Payment failed · sandboxes suspended'
-              )
-            : t('auto.components.billing.paymentFailed', 'Payment failed')}
+          {t('auto.components.billing.paymentFailed', 'Payment failed')}
         </p>
         <p className="text-xs text-muted-foreground">
           {payment.suspendRunning || payment.graceEndsAt === null
             ? t(
-                'auto.components.billing.paymentSuspendedBody',
-                'Running sandboxes were suspended and new ones cannot start. Update your payment method; everything resumes once the invoice is paid.'
+                'auto.components.billing.paymentAsleepBody',
+                'New sandboxes can’t start and running sandboxes are asleep. They can wake again once the payment goes through. Your files are safe.'
               )
             : t(
-                'auto.components.billing.paymentGraceBody',
-                'New sandboxes are paused. Running sandboxes will be suspended on {{value0}} unless the payment goes through. Stripe will retry the card and email your billing contact.',
+                'auto.components.billing.paymentGraceBody2',
+                'New sandboxes can’t start. Running sandboxes go to sleep on {{value0}} unless the payment goes through.',
                 { value0: when(payment.graceEndsAt) }
               )}
         </p>
@@ -62,8 +57,8 @@ export function PaymentIssueNotice({
           <Button
             type="button"
             size="sm"
-            disabled={busy}
-            onClick={onUpdatePayment}
+            aria-disabled={busy || undefined}
+            onClick={busy ? undefined : onUpdatePayment}
             data-plans-primary=""
           >
             {t('auto.components.billing.updatePayment', 'Update payment method')}

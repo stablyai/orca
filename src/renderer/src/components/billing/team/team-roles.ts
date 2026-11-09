@@ -31,3 +31,9 @@ export function roleLabel(role: OrcaOrgRole, t: Translate): string {
       return t('auto.components.billing.team.roleMember', 'Member')
   }
 }
+
+/** Auth reports provider role names ("Owner", "Admin", custom); unknown roles read as Member. */
+export function normalizeOrgRole(raw: string | undefined): OrcaOrgRole {
+  const value = raw?.trim().toLowerCase()
+  return value === 'owner' || value === 'admin' ? value : 'member'
+}

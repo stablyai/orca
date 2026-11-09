@@ -24,6 +24,8 @@ const ClaimsSchema = z.object({
   orgRole: z.enum(['owner', 'admin', 'member']).optional(),
   /** Same role as Orca Cloud auth spells it in its tokens (`org_role`); either is accepted. */
   org_role: z.enum(['owner', 'admin', 'member']).optional(),
+  /** Display name (auth sanitizes it, ≤80 chars). Untrusted text: label only, never identity. */
+  name: z.string().max(200).optional(),
   purpose: z.literal('sandbox')
 })
 
@@ -37,6 +39,14 @@ export type SandboxCaller = {
   dev?: boolean
   /** Set when a companion device (phone) signed this request with its own enrolled key. */
   deviceSessionId?: string
+  /** Display name from the token, for labels next to the user id; never used for access. */
+  name?: string
+}
+
+/** One line of plain text, ≤80 chars; anything else is dropped rather than trusted. */
+function displayName(value: string | undefined): string | undefined {
+  const clean = value?.replace(/[\u0000-\u001f\u007f"\\]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
+  return clean || undefined
 }
 
 const keySets = new Map<string, JWTVerifyGetKey>()
@@ -86,6 +96,7 @@ async function verify(
     return {
       userId: claims.sub,
       accountId: accountIdFor(claims),
+      ...(displayName(claims.name) ? { name: displayName(claims.name) } : {}),
       ...(claims.org ? { orgId: claims.org, ...((claims.orgRole ?? claims.org_role) ? { orgRole: claims.orgRole ?? claims.org_role } : {}) } : {})
     }
   } catch {

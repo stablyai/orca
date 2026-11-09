@@ -1,6 +1,8 @@
 import { ExternalLink, Lock, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
+import type { PlanBillingNotice } from '../PlanBillingSection'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaBillingInterval, OrcaBillingOffers } from '../../../../../shared/orca-billing'
@@ -26,7 +28,7 @@ export function TeamPlanCard({
   /** choose: can buy; current: already on Team; locked: only owners/admins can buy. */
   mode: TeamPlanCardMode
   busy: boolean
-  notice: string | null
+  notice: PlanBillingNotice | null
   /** A payment banner already offers the same Portal action. */
   hideManage: boolean
   onCheckout: () => void
@@ -42,29 +44,34 @@ export function TeamPlanCard({
 
   const features = [
     t(
-      'auto.components.billing.plans.featureHours2',
-      '{{value0}} Standard hours (4 vCPU / 8 GB) per seat each month, pooled across your team',
+      'auto.components.billing.plans.featureHours4',
+      '{{value0}} sandbox hours per seat each month, pooled across your team',
       { value0: String(team.includedHoursPerSeat) }
     ),
     t(
-      'auto.components.billing.plans.featureLarge2',
-      'Large (8 vCPU / 16 GB) uses hours at {{value0}}×',
+      'auto.components.billing.plans.featureLarge3',
+      'Standard (4 vCPU · 8 GB) sandboxes; Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate',
       {
         value0: String(team.largeMachineWeight)
       }
     ),
-    t('auto.components.billing.plans.featureConcurrency', '{{value0}} running sandboxes per seat', {
-      value0: String(team.concurrentSandboxesPerSeat)
-    }),
+    t(
+      'auto.components.billing.plans.featureConcurrency2',
+      '{{value0}} sandboxes running at once per seat',
+      {
+        value0: String(team.concurrentSandboxesPerSeat)
+      }
+    ),
     t('auto.components.billing.plans.featureSleep2', 'Sleeps after {{value0}} minutes idle', {
       value0: String(team.idleSleepMinutes)
     }),
     t(
-      'auto.components.billing.plans.featureOverage',
-      'Optional overage at {{value0}}/hr ({{value1}}/hr Large) with a monthly spend cap',
+      'auto.components.billing.plans.featureOverage3',
+      'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), capped at a monthly spend cap you set ({{value2}} by default)',
       {
         value0: formatCents(team.overageCentsPerHour, locale),
-        value1: formatCents(team.overageCentsPerHour * team.largeMachineWeight, locale)
+        value1: formatCents(team.overageCentsPerHour * team.largeMachineWeight, locale),
+        value2: formatCents(team.defaultSpendCapCents, locale)
       }
     )
   ]
@@ -90,7 +97,7 @@ export function TeamPlanCard({
       </span>
       {monthly === null ? null : (
         <span className="text-sm text-muted-foreground">
-          {t('auto.components.billing.plans.perSeatMonth', 'per seat / month')}
+          {t('auto.components.billing.plans.perSeatPerMonth', 'per seat per month')}
         </span>
       )}
     </p>
@@ -101,8 +108,8 @@ export function TeamPlanCard({
       ? team.annualPriceCentsPerSeat === null
         ? t('auto.components.billing.plans.billedYearly', 'Billed yearly')
         : t(
-            'auto.components.billing.plans.billedYearlyAmount',
-            'Billed {{value0}} per seat yearly',
+            'auto.components.billing.plans.billedYearlyAmount2',
+            '{{value0}} per seat, billed yearly',
             {
               value0: formatCents(team.annualPriceCentsPerSeat, locale)
             }
@@ -113,9 +120,14 @@ export function TeamPlanCard({
     mode === 'choose' ? (
       <div className="flex items-baseline justify-between gap-3 rounded-md bg-muted/60 px-3 py-2">
         <p className="text-xs text-muted-foreground">
-          {t('auto.components.billing.plans.seatsOne', 'Seats: {{value0}} (one per team member)', {
-            value0: String(seats)
-          })}
+          {t(
+            'auto.components.billing.plans.seatsPerMember',
+            '{{count}} seats, one per team member',
+            {
+              count: seats,
+              defaultValue_one: '{{count}} seat, one per team member'
+            }
+          )}
         </p>
         {total === null ? null : (
           <p className="text-sm font-medium tabular-nums" aria-live="polite">
@@ -138,8 +150,8 @@ export function TeamPlanCard({
         <Button
           type="button"
           className="w-full"
-          disabled={busy}
-          onClick={onCheckout}
+          aria-disabled={busy || undefined}
+          onClick={busy ? undefined : onCheckout}
           data-plans-primary=""
         >
           {busy ? <LoadingSpinner /> : null}
@@ -148,13 +160,17 @@ export function TeamPlanCard({
             : t('auto.components.billing.plans.checkout', 'Continue to checkout')}
           {busy ? null : <ExternalLink />}
         </Button>
-        <p role="status" className="text-center text-xs text-muted-foreground text-pretty">
-          {notice ??
-            t(
-              'auto.components.billing.plans.seatsFollow2',
-              'Seats follow your team: new members add a seat now; removed seats drop off at renewal.'
-            )}
-        </p>
+        {notice?.kind === 'error' ? (
+          <InlineError title={notice.text} />
+        ) : (
+          <p role="status" className="text-center text-xs text-muted-foreground text-pretty">
+            {notice?.text ??
+              t(
+                'auto.components.billing.plans.seatsFollow2',
+                'Seats follow your team: new members add a seat now; removed seats drop off at renewal.'
+              )}
+          </p>
+        )}
       </>
     )
   } else if (mode === 'current') {
@@ -171,20 +187,24 @@ export function TeamPlanCard({
           type="button"
           variant="outline"
           className="w-full"
-          disabled={busy}
-          onClick={onManage}
+          aria-disabled={busy || undefined}
+          onClick={busy ? undefined : onManage}
           data-plans-primary=""
         >
           {t('auto.components.billing.manageBilling', 'Manage billing')}
           <ExternalLink />
         </Button>
-        <p role="status" className="text-center text-xs text-muted-foreground">
-          {notice ??
-            t(
-              'auto.components.billing.plans.manageHint',
-              'Switch monthly or annual, update payment, or cancel.'
-            )}
-        </p>
+        {notice?.kind === 'error' ? (
+          <InlineError title={notice.text} />
+        ) : (
+          <p role="status" className="text-center text-xs text-muted-foreground">
+            {notice?.text ??
+              t(
+                'auto.components.billing.plans.manageHint',
+                'Switch monthly or annual, update payment, or cancel.'
+              )}
+          </p>
+        )}
       </>
     )
   } else {
@@ -193,8 +213,8 @@ export function TeamPlanCard({
         <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <p className="text-pretty">
           {t(
-            'auto.components.billing.plans.lockedBody',
-            'Only an owner or admin of your org can choose a plan. Ask one of them to open Plan & billing in Orca.'
+            'auto.components.billing.plans.lockedBody2',
+            'Only an owner or admin of your team can choose a plan. Ask one of them to open Plan & billing in Orca.'
           )}
         </p>
       </div>

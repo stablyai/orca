@@ -42,7 +42,9 @@ function TerminalSkeleton({ still }: { still: boolean }): React.JSX.Element {
         <span key={index} className="flex h-3 items-center gap-2">
           <span className="w-2 leading-none">{line.prompt ? '$' : ''}</span>
           <Skeleton
-            className={cn('h-2 rounded-sm', still ? 'animate-none' : '[animation-duration:2.4s]')}
+            shape="small"
+            motion={still ? 'still' : 'slow'}
+            className="h-2"
             style={{ width: `${line.width}%`, animationDelay: `${index * 140}ms` }}
           />
         </span>
@@ -62,6 +64,9 @@ export function CloudWakingOverlay({
   workspaceName,
   leaving = false,
   autoFocus = true,
+  typeThrough = false,
+  pendingInput = 0,
+  onClearPending,
   onRetry,
   onRestart,
   onDismiss
@@ -69,6 +74,11 @@ export function CloudWakingOverlay({
   wake: CloudWakeProgressEvent
   workspaceName: string | null
   leaving?: boolean
+  /** Leave the terminal visible and typeable under a small pill; typing is delivered on wake. */
+  typeThrough?: boolean
+  /** Characters held for the woken terminal (a count, never the text: it may be a password). */
+  pendingInput?: number
+  onClearPending?: () => void
   /** Move focus into the overlay (only when it covers the pane that had focus). */
   autoFocus?: boolean
   onRetry: () => void
@@ -109,12 +119,15 @@ export function CloudWakingOverlay({
         : null
   // Announced once each (the text changes only when crossing 20 s and 60 s).
   const slowAnnouncement = stuck ? hint : slow ? hint : ''
+  const passThrough = typeThrough && !failed
   return (
     <div
       ref={rootRef}
       tabIndex={-1}
       className={cn(
-        'absolute inset-0 bg-background outline-none',
+        passThrough
+          ? 'pointer-events-none absolute inset-x-0 top-3 flex justify-center outline-none'
+          : 'absolute inset-0 bg-background outline-none',
         'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150',
         'motion-safe:transition-opacity motion-safe:duration-200',
         leaving ? 'pointer-events-none opacity-0' : 'opacity-100'
@@ -133,11 +146,17 @@ export function CloudWakingOverlay({
               : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name })
       }
     >
-      <TerminalSkeleton still={failed} />
+      {passThrough ? null : <TerminalSkeleton still={failed} />}
       <div role="status" className="sr-only">
         {failed ? '' : slowAnnouncement}
       </div>
-      <div className="absolute inset-0 flex items-center justify-center p-4">
+      <div
+        className={
+          passThrough
+            ? 'pointer-events-auto flex flex-col items-center gap-1.5 px-4'
+            : 'absolute inset-0 flex items-center justify-center p-4'
+        }
+      >
         {failed ? (
           <div
             role="alert"
@@ -161,8 +180,8 @@ export function CloudWakingOverlay({
               </div>
               <Button
                 size="icon-xs"
-                variant="ghost"
-                className="-mt-1 -mr-1 text-muted-foreground"
+                variant="quiet"
+                className="-mt-1 -mr-1"
                 aria-label={t('orcaCloudWorkspace.dismiss', 'Dismiss')}
                 onClick={onDismiss}
               >
@@ -202,6 +221,37 @@ export function CloudWakingOverlay({
               </span>
             </div>
             {hint ? <p className="text-center text-xs text-muted-foreground">{hint}</p> : null}
+            {passThrough && pendingInput > 0 ? (
+              <div
+                className="flex items-center gap-1.5 rounded-md border border-dashed border-border bg-card/95 py-0.5 pr-0.5 pl-2 text-xs shadow-xs"
+                data-cloud-pending-input={pendingInput}
+              >
+                <span className="text-muted-foreground">
+                  {t(
+                    'orcaCloudWorkspace.overlay.pendingKeys',
+                    '{{count}} keys waiting · go to the terminal when it’s up',
+                    {
+                      count: pendingInput,
+                      defaultValue_one: '{{count}} key waiting · goes to the terminal when it’s up'
+                    }
+                  )}
+                </span>
+                {onClearPending ? (
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    className="text-muted-foreground"
+                    aria-label={t(
+                      'orcaCloudWorkspace.overlay.clearPendingKeys',
+                      'Discard waiting keys'
+                    )}
+                    onClick={onClearPending}
+                  >
+                    <X />
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             {stuck ? (
               <div className="flex gap-2">
                 <Button size="xs" variant="ghost" onClick={onRestart}>

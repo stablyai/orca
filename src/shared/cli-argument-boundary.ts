@@ -55,6 +55,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'refuse-public',
   'reclaim-stale-lock',
   'references',
+  'refresh',
   'relations',
   'relay',
   'removed',

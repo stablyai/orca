@@ -15,7 +15,16 @@ export function cloudMoveConflictsFor(workspaceId: string): CloudMoveConflicts {
         worktree.id !== workspaceId &&
         worktree.branch?.replace(/^refs\/heads\//, '') === shortBranch
     )
-  return { branchCheckedOutLocally: taken ? shortBranch : null }
+  if (!taken || shortBranch === null) {
+    return { branchCheckedOutLocally: null }
+  }
+  // The transfer renames a taken branch with the first free numeric suffix.
+  const names = new Set(all.map((worktree) => worktree.branch?.replace(/^refs\/heads\//, '')))
+  let suffix = 2
+  while (names.has(`${shortBranch}-${suffix}`)) {
+    suffix++
+  }
+  return { branchCheckedOutLocally: { branch: shortBranch, newName: `${shortBranch}-${suffix}` } }
 }
 
 export function CloudMoveToComputerDialogMount(): React.JSX.Element {

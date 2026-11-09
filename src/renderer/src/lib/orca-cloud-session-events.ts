@@ -1,6 +1,12 @@
 // Window side of Orca Cloud's session lifecycle: cap warnings, rollovers and idle sleep from main.
+import {
+  armInterruptedTurnsForHostRestart,
+  continueInterruptedTurns,
+  disarmInterruptedTurns
+} from '@/lib/agent-session/resume/interrupted-turn-continue'
 import { createElement } from 'react'
 import { toast } from 'sonner'
+import { noteCloudRolloverState } from '@/lib/orca-cloud/orca-cloud-rollover-state'
 import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -8,10 +14,7 @@ import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
-import {
-  installOrcaCloudWorkspaceStore,
-  noteCloudRolloverState
-} from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { installOrcaCloudWorkspaceStore } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import type { HostedSessionRestartResult } from '../../../shared/hosted-sandbox/hosted-session-events'
 import {
   dismissOrcaCloudRestartWarning,
@@ -58,6 +61,14 @@ export function installOrcaCloudSessionEvents(): () => void {
       if (workspaceId) {
         noteOrcaCloudRolloverState(workspaceId, displayName(workspaceId, null), state)
         noteCloudRolloverState(workspaceId, state)
+        // A rollover restarts the host under any working agent: carry its turn on afterwards.
+        if (state === 'restarting') {
+          armInterruptedTurnsForHostRestart(workspaceId)
+        } else if (state === 'running') {
+          void continueInterruptedTurns(workspaceId)
+        } else {
+          disarmInterruptedTurns(workspaceId)
+        }
       }
     }) ?? (() => {})
   const disposeIdle = api.onCloudIdleSleepRequested(({ workspaceId, idleMs }) => {
@@ -91,7 +102,7 @@ export function showOrcaCloudPlanUpsell(message: string): void {
   })
 }
 
-/** "<name> slept after N minutes idle · Wake" (N from the control plane): the quiet receipt for an automatic sleep. */
+/** "<name> slept after N minutes idle · Wake" (N from the control plane, via the event): the quiet receipt for an automatic sleep. */
 export function showIdleSleepNotice(
   workspaceId: string,
   name: string,

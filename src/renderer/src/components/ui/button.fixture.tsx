@@ -6,7 +6,7 @@ const VARIANTS = ['default', 'secondary', 'outline', 'ghost', 'destructive', 'li
 const SIZES = ['xs', 'sm', 'default', 'lg'] as const
 
 export const variants = defineFixture({
-  width: 640,
+  width: 900,
   render: () => (
     <div className="flex flex-col gap-3">
       {VARIANTS.map((variant) => (
@@ -19,6 +19,12 @@ export const variants = defineFixture({
           </Button>
           <Button variant={variant} disabled>
             Disabled
+          </Button>
+          <Button variant={variant} aria-disabled>
+            Unavailable
+          </Button>
+          <Button variant={variant} aria-disabled aria-busy>
+            Saving…
           </Button>
         </div>
       ))}

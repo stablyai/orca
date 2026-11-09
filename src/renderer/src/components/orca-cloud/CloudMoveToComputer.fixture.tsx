@@ -2,11 +2,12 @@ import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { useTranslate } from '@/i18n/use-translate'
 import type { CloudMoveState } from '@/lib/orca-cloud/orca-cloud-move-store'
+import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 import {
   CloudMoveToComputerView,
   cloudMoveTitle,
   type CloudMoveConflicts
-} from './CloudMoveToComputerDialog'
+} from './CloudMoveToComputerView'
 
 const NOW = Date.now()
 const noop = (): void => {}
@@ -50,7 +51,10 @@ function Frame({
         onCancel={noop}
         onOpenFolder={noop}
         onArchiveCloud={noop}
+        onOpenLocal={noop}
         onClose={noop}
+        onArchiveAfterChange={noop}
+        onHide={noop}
       />
     </div>
   )
@@ -60,15 +64,26 @@ const base = { workspaceId: 'ws', name: 'fix-auth-redirect' }
 
 export const moveConfirm = defineFixture({
   width: 460,
-  render: () => <Frame state={{ stage: 'confirm', ...base }} />
+  render: () => (
+    <Frame
+      state={{
+        stage: 'confirm',
+        ...base,
+        known: { branch: 'fix-auth-redirect', uncommittedChanges: 4, chats: 2 },
+        archiveAfter: true
+      }}
+    />
+  )
 })
 
 export const moveConfirmBranchTaken = defineFixture({
   width: 460,
   render: () => (
     <Frame
-      state={{ stage: 'confirm', ...base }}
-      conflicts={{ branchCheckedOutLocally: 'fix-auth-redirect' }}
+      state={{ stage: 'confirm', ...base, known: null, archiveAfter: false }}
+      conflicts={{
+        branchCheckedOutLocally: { branch: 'fix-auth-redirect', newName: 'fix-auth-redirect-2' }
+      }}
     />
   )
 })
@@ -84,7 +99,9 @@ export const moveRunningFromSleep = defineFixture({
         skipped: [],
         startedAt: NOW - 14_000,
         bytes: 18 * 1024 * 1024,
-        totalBytes: 41 * 1024 * 1024
+        totalBytes: 41 * 1024 * 1024,
+        archiveAfter: false,
+        hidden: false
       }}
     />
   )
@@ -101,7 +118,9 @@ export const moveRunningAwake = defineFixture({
         skipped: ['waking'],
         startedAt: NOW - 3_000,
         bytes: null,
-        totalBytes: null
+        totalBytes: null,
+        archiveAfter: true,
+        hidden: false
       }}
     />
   )
@@ -117,7 +136,8 @@ export const moveDone = defineFixture({
         localWorktreeId: 'l1',
         prepared,
         finished,
-        elapsedMs: 8_300
+        elapsedMs: 8_300,
+        archivedAfter: true
       }}
     />
   )
@@ -133,7 +153,8 @@ export const moveDonePartial = defineFixture({
         localWorktreeId: 'l1',
         prepared: { ...prepared, branch: 'fix-auth-redirect-2' },
         finished: { ...finished, leftoverPatchDir: '/Users/me/Library/Orca/cloud-transfers/t1' },
-        elapsedMs: 9_100
+        elapsedMs: 9_100,
+        archivedAfter: false
       }}
     />
   )
@@ -141,5 +162,61 @@ export const moveDonePartial = defineFixture({
 
 export const moveFailed = defineFixture({
   width: 460,
-  render: () => <Frame state={{ stage: 'failed', ...base, step: 'downloading' }} />
+  render: () => <Frame state={{ stage: 'failed', ...base, step: 'downloading', timedOut: false }} />
+})
+
+export const moveFailedAfterLocal = defineFixture({
+  width: 460,
+  render: () => <Frame state={{ stage: 'failed', ...base, step: 'applying', timedOut: false }} />
+})
+
+/** After the move: the cloud workspace stays usable, with a quiet "Copied to this computer" line. */
+export const panelMovedToComputer = defineFixture({
+  width: 320,
+  setup: () =>
+    window.localStorage.setItem(
+      'orca-cloud-moved-at:ws',
+      JSON.stringify({ at: Date.UTC(2026, 11, 7), localWorktreeId: 'local-ws' })
+    ),
+  render: () => (
+    <div className="rounded-md border border-border bg-floating-surface p-3">
+      <CloudWorkspaceStatusPanel
+        workspaceId="ws"
+        state="running"
+        entry={{
+          status: {
+            state: 'ready',
+            metrics: {
+              cpuPercent: 12,
+              cpus: 4,
+              load1: 0.4,
+              memTotalBytes: 8e9,
+              memUsedBytes: 2.1e9,
+              diskTotalBytes: 34.3e9,
+              diskUsedBytes: 6.2e9,
+              uptimeSeconds: 3_600,
+              oomKills: 0,
+              lastOomVictim: null,
+              orcadAlive: true
+            },
+            uptimeMs: 3_600_000,
+            usage: { totalMs: 2.4 * 3_600_000, centsPerHour: 75, costCents: 180 },
+            archive: null,
+            checkedAt: NOW
+          },
+          loading: false,
+          error: null,
+          fetchedAt: NOW - 42_000
+        }}
+        pending={undefined}
+        actions={{
+          onWake: noop,
+          onRestart: noop,
+          onArchive: noop,
+          onUnarchive: noop,
+          onMoveToComputer: noop
+        }}
+      />
+    </div>
+  )
 })

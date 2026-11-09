@@ -252,6 +252,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           browserImportHintHidden: ui.browserImportHintHidden === true,
           mobileEmulatorTabIntroDismissed: ui.mobileEmulatorTabIntroDismissed === true,
           mobileEmulatorAgentSetupDismissed: ui.mobileEmulatorAgentSetupDismissed === true,
+          cloudAgentSetupDone: ui.cloudAgentSetupDone === true,
           projectOrderManualDefaultNoticeDismissed:
             ui.projectOrderManualDefaultNoticeDismissed === true,
           // Why: treat only explicit true as dismissed so a false from migration still surfaces.

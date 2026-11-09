@@ -2,6 +2,7 @@
 // Which provider runs the VM (Vercel today) is a control-plane detail the desktop never sees.
 import {
   HOSTED_SANDBOX_MACHINE_SIZES,
+  ORCA_CLOUD_IDLE_SLEEP_MINUTES,
   type HostedSandboxMachineSize,
   type HostedSandboxReadyResponse,
   type HostedSandboxView
@@ -31,7 +32,7 @@ export const HOSTED_SANDBOX_CAPABILITIES: HostedEnvironmentCapabilities = Object
   fsPersistOnStop: true,
   egressInjection: true,
   // Fallback only: the control plane's status (`idleSleepMinutes`) wins once read.
-  idleStopMs: 15 * 60_000
+  idleStopMs: ORCA_CLOUD_IDLE_SLEEP_MINUTES * 60_000
 })
 
 const STATUS: Record<HostedSandboxView['status'], EnvironmentStatus> = {
@@ -155,7 +156,13 @@ export function toReady(ready: HostedSandboxReadyResponse): HostedEnvironmentRea
   const handle: EnvironmentHandle = {
     driverId: HOSTED_SANDBOX_DRIVER_ID,
     environmentId: ready.sandbox.id,
-    driverState: { sandboxId: ready.sandbox.id }
+    driverState: {
+      sandboxId: ready.sandbox.id,
+      // Booted from an org environment build: dependencies are installed, so no setup-script nudge.
+      ...(ready.sandbox.environmentBuildId
+        ? { environmentBuildId: ready.sandbox.environmentBuildId }
+        : {})
+    }
   }
   return {
     handle,

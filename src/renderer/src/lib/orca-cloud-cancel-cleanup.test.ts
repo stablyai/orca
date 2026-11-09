@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const toasts = vi.hoisted(() => ({
   showOrcaCloudCleanupStartedToast: vi.fn(),
   showOrcaCloudCleanupDoneToast: vi.fn(),
-  showOrcaCloudCleanupFailedToast: vi.fn()
+  showOrcaCloudCleanupFailedToast: vi.fn<(creationId: string, tryAgain: () => void) => void>()
 }))
 vi.mock('@/lib/orca-cloud-session-toasts', () => toasts)
 
@@ -29,7 +29,7 @@ describe('Orca Cloud cancel cleanup', () => {
     const run = deferred<void>()
     const cleanup = deferred<boolean>()
     void trackOrcaCloudCreateStep('c-1', run.promise)
-    beginOrcaCloudCancelCleanup('c-1', [cleanup.promise], { createStartedAt: 0 }, () => {})
+    beginOrcaCloudCancelCleanup('c-1', [cleanup.promise], { createStartedAt: 0, canceledAt: 1000 })
     expect(toasts.showOrcaCloudCleanupStartedToast).toHaveBeenCalledWith('c-1')
 
     cleanup.resolve(true)
@@ -43,7 +43,10 @@ describe('Orca Cloud cancel cleanup', () => {
   })
 
   it('reports a failure when a cleanup left the sandbox running', async () => {
-    beginOrcaCloudCancelCleanup('c-2', [Promise.resolve(false)], { createStartedAt: 0 }, () => {})
+    beginOrcaCloudCancelCleanup('c-2', [Promise.resolve(false)], {
+      createStartedAt: 0,
+      canceledAt: 1000
+    })
     await flush()
     expect(toasts.showOrcaCloudCleanupFailedToast).toHaveBeenCalledWith('c-2', expect.any(Function))
     expect(toasts.showOrcaCloudCleanupDoneToast).not.toHaveBeenCalled()
@@ -70,7 +73,7 @@ describe('Orca Cloud cancel cleanup', () => {
         }
       }
     })
-    beginOrcaCloudCancelCleanup('c-3', [], { createStartedAt: 100 }, () => {})
+    beginOrcaCloudCancelCleanup('c-3', [], { createStartedAt: 100, canceledAt: 1000 })
     await flush()
     expect(toasts.showOrcaCloudCleanupFailedToast).toHaveBeenCalledWith('c-3', expect.any(Function))
   })
@@ -90,8 +93,42 @@ describe('Orca Cloud cancel cleanup', () => {
         }
       }
     })
-    beginOrcaCloudCancelCleanup('c-4', [], { createStartedAt: 100 }, () => {})
+    beginOrcaCloudCancelCleanup('c-4', [], { createStartedAt: 100, canceledAt: 1000 })
     await flush()
     expect(toasts.showOrcaCloudCleanupDoneToast).toHaveBeenCalledWith('c-4')
+  })
+
+  it("Try again deletes only this create's sandbox whose delete failed", async () => {
+    const cleanupCalls: string[] = []
+    vi.stubGlobal('window', {
+      api: {
+        ephemeralVm: {
+          listRuntimes: async () => [
+            {
+              id: 'mine',
+              recipe: { provider: 'orca-cloud' },
+              status: 'cleanup_failed',
+              createdAt: 200
+            },
+            { id: 'later', recipe: { provider: 'orca-cloud' }, status: 'running', createdAt: 2000 }
+          ],
+          cleanup: async ({ runtimeId }: { runtimeId: string }) => {
+            cleanupCalls.push(runtimeId)
+            return { cleanupStatus: 'succeeded' }
+          }
+        }
+      }
+    })
+    beginOrcaCloudCancelCleanup('c-5', [Promise.resolve(false)], {
+      createStartedAt: 100,
+      canceledAt: 1000
+    })
+    await flush()
+    const tryAgain = toasts.showOrcaCloudCleanupFailedToast.mock.calls[0]?.[1]
+    expect(tryAgain).toBeTypeOf('function')
+    tryAgain?.()
+    await flush()
+    expect(cleanupCalls).toEqual(['mine'])
+    expect(toasts.showOrcaCloudCleanupStartedToast).toHaveBeenCalledTimes(2)
   })
 })

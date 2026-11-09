@@ -2,6 +2,18 @@
 // The Worker's tests parse its responses with these schemas, so either side drifting fails a test.
 import { z } from 'zod'
 
+/**
+ * Minutes of no agent work and no input before a cloud sandbox sleeps. The one source for every
+ * surface: the control plane serves it (GET /v1/config), the desktop scheduler enforces it, billing's
+ * plan card and the idle-sleep toast print it. Never write the number anywhere else.
+ */
+export const ORCA_CLOUD_IDLE_SLEEP_MINUTES = 15
+
+/** GET /v1/config: product constants clients (desktop, mobile, CLI, marketing) must not hardcode. */
+export const HostedSandboxConfigResponseSchema = z.object({
+  idleSleepMinutes: z.number().int().positive()
+})
+
 // Billing sells exactly these; larger boxes need a Vercel Enterprise plan.
 export const HOSTED_SANDBOX_MACHINE_SIZES = ['standard', 'large'] as const
 export type HostedSandboxMachineSize = (typeof HOSTED_SANDBOX_MACHINE_SIZES)[number]
@@ -200,12 +212,13 @@ export const HostedWorkspaceStatusSchema = z
     idleSleepMinutes: z.number().int().positive().max(1440).optional(),
     checkedAt: Millis
   })
-  .strict()
+  // Strip, not strict: a newer control plane may add fields; this desktop ignores them.
+  .strip()
 export type HostedWorkspaceStatus = z.infer<typeof HostedWorkspaceStatusSchema>
 
 export const HostedWorkspaceStatusResponseSchema = z
   .object({ sandbox: HostedSandboxViewSchema, status: HostedWorkspaceStatusSchema })
-  .strict()
+  .strip()
 
 const ArchiveCommit = z
   .object({

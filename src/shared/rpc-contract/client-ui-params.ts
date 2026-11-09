@@ -252,6 +252,7 @@ export const UiUpdateFields = z
     browserImportHintHidden: z.boolean().optional(),
     mobileEmulatorTabIntroDismissed: z.boolean().optional(),
     mobileEmulatorAgentSetupDismissed: z.boolean().optional(),
+    cloudAgentSetupDone: z.boolean().optional(),
     projectOrderManualDefaultNoticeDismissed: z.boolean().optional(),
     usagePercentageDisplayChangeNoticeDismissed: z.boolean().optional(),
     statusBarCompactChangeNoticeDismissed: z.boolean().optional(),

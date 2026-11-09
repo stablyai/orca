@@ -1,5 +1,5 @@
-import { useRef } from 'react'
-import { LogOut, RefreshCw } from 'lucide-react'
+import { useEffect, useId, useRef } from 'react'
+import { ExternalLink, LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -48,6 +48,8 @@ export type TeamPageViewProps = {
   onManageBilling: () => void
   onCreateWorkspace: () => void
   onDismissArrival: () => void
+  /** Opens the Enterprise contact page (SSO/SCIM are Enterprise; nothing here pretends otherwise). */
+  onContactSales: (url: string) => void
 }
 
 function viewerRoleSentence(role: OrcaOrgRole, t: Translate): string {
@@ -107,6 +109,18 @@ function SkeletonRows(): React.JSX.Element {
 export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
   const t = useTranslate()
   const inviteInput = useRef<HTMLInputElement>(null)
+  const ssoTitleId = useId()
+  const hasRoster = props.roster !== null
+  useEffect(() => {
+    const active = document.activeElement
+    if (
+      hasRoster &&
+      (!active || active === document.body || active.getAttribute('role') === 'dialog')
+    ) {
+      document.querySelector<HTMLElement>('[data-team-page-heading]')?.focus()
+    }
+  }, [hasRoster])
+  const leaveTitleId = useId()
 
   if (!props.org) {
     return (
@@ -120,6 +134,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
 
   const roster = props.roster?.status === 'ok' ? props.roster.roster : null
   const entitlement = props.billing?.status === 'ok' ? props.billing.entitlement : null
+  const enterprise = entitlement?.offers?.enterprise ?? null
   const rows = roster ? teamRows(roster, props.viewerUserId) : []
   const selfRow = rows.find((row) => row.self)
   const viewerRole = roster?.viewerRole ?? 'member'
@@ -132,14 +147,20 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
       <header className="flex items-center gap-3">
         <TeamMark name={props.org.name} />
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-semibold tracking-tight">{props.org.name}</h2>
+          <h2
+            data-team-page-heading=""
+            tabIndex={-1}
+            className="truncate text-lg font-semibold tracking-tight outline-none"
+          >
+            {props.org.name}
+          </h2>
           <p className="text-xs text-muted-foreground">
             {roster
               ? [
                   memberCountLabel(roster.members.length, t),
                   roster.pendingInvites.length > 0
-                    ? t('auto.components.billing.team.invitedN', '{{value0}} invited', {
-                        value0: String(roster.pendingInvites.length)
+                    ? t('auto.components.billing.team.invitedCount', '{{count}} invited', {
+                        count: roster.pendingInvites.length
                       })
                     : null,
                   viewerRoleSentence(viewerRole, t)
@@ -182,6 +203,18 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         <PlanSkeleton />
       ) : null}
 
+      {props.roster === null ? (
+        <div aria-hidden className="space-y-2">
+          <Skeleton className="h-4 w-28" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 flex-1" />
+            <Skeleton className="h-8 w-28" />
+            <Skeleton className="h-8 w-28" />
+          </div>
+          <Skeleton className="h-3 w-3/4" />
+        </div>
+      ) : null}
+
       {roster?.canManageMembers ? (
         <TeamInviteComposer
           viewerRole={viewerRole}
@@ -204,8 +237,8 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={props.onRefresh}
-              disabled={props.refreshing}
+              onClick={props.refreshing ? undefined : props.onRefresh}
+              aria-disabled={props.refreshing || undefined}
               aria-label={t('auto.components.billing.team.refresh', 'Refresh team')}
             >
               <RefreshCw className={cn(props.refreshing && 'motion-safe:animate-spin')} />
@@ -237,8 +270,8 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
             detail={
               props.roster.status === 'reconnect-required'
                 ? t(
-                    'auto.components.billing.openSignedOut',
-                    'Sign in to Orca again to manage billing.'
+                    'auto.components.billing.openSignedOut2',
+                    'Sign in to Orca again to manage your team.'
                   )
                 : t(
                     'auto.components.billing.team.loadFailed2',
@@ -260,51 +293,80 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         ) : null}
       </section>
 
-      {selfRow ? (
-        <section
-          aria-labelledby="team-leave-title"
-          className="flex flex-wrap items-center gap-3 rounded-xl border border-border p-4"
-        >
-          <div className="min-w-[14rem] flex-1 space-y-0.5">
-            <h3 id="team-leave-title" className="text-sm font-medium">
-              {t('auto.components.billing.team.leaveTitle', 'Leave {{value0}}', {
-                value0: props.org.name
-              })}
-            </h3>
-            <p className="text-xs text-muted-foreground text-pretty">
-              {canLeave
-                ? t(
-                    'auto.components.billing.team.leaveBody',
-                    'You lose access to the team’s cloud workspaces and secrets. An admin can invite you back.'
-                  )
-                : t(
-                    'auto.components.billing.team.leaveLastOwner',
-                    'You’re the only owner. Make someone else an owner first.'
+      {(roster?.canManageMembers && enterprise) || selfRow ? (
+        <div className="divide-y divide-border/60 rounded-xl border border-border">
+          {roster?.canManageMembers && enterprise ? (
+            <section aria-labelledby={ssoTitleId} className="flex flex-wrap items-center gap-3 p-4">
+              <div className="min-w-[14rem] flex-1 space-y-0.5">
+                <h3 id={ssoTitleId} className="text-sm font-medium">
+                  {t('auto.components.billing.team.ssoTitle', 'Single sign-on and provisioning')}
+                </h3>
+                <p className="text-xs text-muted-foreground text-pretty">
+                  {t(
+                    'auto.components.billing.team.ssoBody',
+                    'SAML SSO and SCIM user provisioning are part of {{value0}}.',
+                    { value0: enterprise.label }
                   )}
-            </p>
-          </div>
-          <SettingsDisabledControlTooltip
-            reason={
-              canLeave
-                ? undefined
-                : t(
-                    'auto.components.billing.team.leaveNeedsOwner',
-                    'Make someone else an owner first'
-                  )
-            }
-          >
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!canLeave}
-              onClick={props.onLeave}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => props.onContactSales(enterprise.contactUrl)}
+              >
+                {t('auto.components.billing.enterpriseContactSales', 'Contact sales')}
+                <ExternalLink />
+              </Button>
+            </section>
+          ) : null}
+          {selfRow ? (
+            <section
+              aria-labelledby={leaveTitleId}
+              className="flex flex-wrap items-center gap-3 p-4"
             >
-              <LogOut />
-              {t('auto.components.billing.team.leaveCta', 'Leave team')}
-            </Button>
-          </SettingsDisabledControlTooltip>
-        </section>
+              <div className="min-w-[14rem] flex-1 space-y-0.5">
+                <h3 id={leaveTitleId} className="text-sm font-medium">
+                  {t('auto.components.billing.team.leaveTitle', 'Leave {{value0}}', {
+                    value0: props.org.name
+                  })}
+                </h3>
+                <p className="text-xs text-muted-foreground text-pretty">
+                  {canLeave
+                    ? t(
+                        'auto.components.billing.team.leaveBody2',
+                        'You lose access to the team’s cloud workspaces and secrets. An owner or admin can invite you back.'
+                      )
+                    : t(
+                        'auto.components.billing.team.leaveLastOwner',
+                        'You’re the only owner. Make someone else an owner first.'
+                      )}
+                </p>
+              </div>
+              <SettingsDisabledControlTooltip
+                reason={
+                  canLeave
+                    ? undefined
+                    : t(
+                        'auto.components.billing.team.leaveNeedsOwner',
+                        'Make someone else an owner first'
+                      )
+                }
+              >
+                <Button
+                  type="button"
+                  variant="destructive-chip"
+                  size="sm"
+                  disabled={!canLeave}
+                  onClick={props.onLeave}
+                >
+                  <LogOut />
+                  {t('auto.components.billing.team.leaveCta', 'Leave team')}
+                </Button>
+              </SettingsDisabledControlTooltip>
+            </section>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
