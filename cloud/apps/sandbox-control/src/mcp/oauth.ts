@@ -642,13 +642,14 @@ export type GrantRow = {
   granted_at: number
   last_used_at: number | null
   via_key: string | null
+  redirect_uris: string | null
 }
 
 /** Live grants: one row per family that still has an unrevoked, unexpired refresh token. */
 export async function listGrants(db: D1Database, accountId: string, now: number, createdBy?: string): Promise<GrantRow[]> {
   const { results } = await db
     .prepare(
-      `SELECT r.family_id, r.client_id, c.client_name, r.created_by, r.scopes,
+      `SELECT r.family_id, r.client_id, c.client_name, c.redirect_uris, r.created_by, r.scopes,
          COALESCE(r.family_expires_at, r.created_at + ${GRANT_TTL_MS}) AS family_expires_at,
          (SELECT MIN(f.created_at) FROM api_keys f WHERE f.family_id = r.family_id) AS granted_at,
          (SELECT MAX(f.last_used_at) FROM api_keys f WHERE f.family_id = r.family_id) AS last_used_at,
@@ -663,11 +664,33 @@ export async function listGrants(db: D1Database, accountId: string, now: number,
   return results
 }
 
+/** Where a client sends its codes (hosts, or the custom scheme of a native app): who it really is. */
+function redirectHosts(raw: string | null): string[] {
+  try {
+    const uris = JSON.parse(raw ?? '[]') as unknown
+    if (!Array.isArray(uris)) {
+      return []
+    }
+    const hosts = uris.flatMap((uri) => {
+      try {
+        const url = new URL(String(uri))
+        return [url.host || `${url.protocol}`]
+      } catch {
+        return []
+      }
+    })
+    return [...new Set(hosts)]
+  } catch {
+    return []
+  }
+}
+
 export function grantView(row: GrantRow) {
   return {
     id: row.family_id,
     clientId: row.client_id,
     clientName: row.client_name,
+    redirectHosts: redirectHosts(row.redirect_uris),
     userId: row.created_by,
     scopes: row.scopes.split(' ').filter(Boolean),
     approvedWith: row.via_key ? { apiKeyPrefix: row.via_key } : { approvalCode: true },
