@@ -17426,7 +17426,9 @@
           "listening": "Listening…",
           "cancel": "Cancel",
           "finish": "Finish",
-          "oneMinuteLeft": "One minute left."
+          "oneMinuteLeft": "One minute left.",
+          "sendsWhenLanded": "Sends when the text lands",
+          "entersWhenLanded": "Presses Enter when the text lands"
         },
         "DictationPillFailure": {
           "discard": "Discard recording",
