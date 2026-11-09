@@ -114,13 +114,7 @@ export function SkillPlanStatusPill({
   const t = useTranslate()
   const status = getSkillFreshnessDisplayStatus(plan, skillName)
   const entry = plan?.skills.find((skill) => skill.name === skillName)
-  const needsAttention =
-    hasSkillCopyNeedingAttention(plan, skillName) ||
-    Boolean(
-      entry?.ops.some(
-        (op) => op.kind === 'leave' && (op.reason === 'edited' || op.reason === 'other')
-      )
-    )
+  const needsAttention = hasSkillCopyNeedingAttention(plan, skillName)
   // Offer Details for any planned location/action, including adding an agent link.
   const hasDetails = needsAttention || skillPlanHasDetails(plan, skillName)
   return (
