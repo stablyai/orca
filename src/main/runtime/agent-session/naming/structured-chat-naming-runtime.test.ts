@@ -33,7 +33,10 @@ import { holdUnsentSends } from '../../../native-chat/agent-session-journal/queu
 import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { AgentSessionStartFailure } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { HOST_TEST_SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION,
+  hostTestOperationId
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 
 const mocks = vi.hoisted(() => ({
   account: vi.fn((_provider: string, id: string) => ({
@@ -677,7 +680,7 @@ it('finishes naming admitted during delivery even if recording its failure canno
   const fields = { command: 'compact' as const }
   const command = chat.host.conversationCommand(QUEUED_RIG_CALLER, {
     ...fields,
-    envelope: chat.envelope(fields, 'agentSession.conversationCommand', 'compact-before-prose')
+    envelope: chat.envelope(fields, 'agentSession.conversationCommand', hostTestOperationId())
   })
   try {
     await vi.waitFor(() => expect(chat.starts).toHaveBeenCalledOnce())
