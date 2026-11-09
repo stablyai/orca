@@ -1,4 +1,4 @@
-import { recordTabRowChanges } from './keyed-tab-row-changes'
+import { recordTabRowChanges } from './keyed-tab-row-diff'
 
 // Accepted-write provenance for keyed store records: the writer's helper names what it replaced,
 // so readers update only those keys; anything it did not annotate reads as a full resync.
