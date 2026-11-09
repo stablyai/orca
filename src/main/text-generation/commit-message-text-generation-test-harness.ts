@@ -1,5 +1,6 @@
 import { ChildProcess } from 'node:child_process'
 import { PassThrough } from 'node:stream'
+import { isProviderRecord } from '../provider-process/provider-json-record'
 import { expect, vi } from 'vitest'
 
 export type MockDiscoveryChild = ChildProcess & {
@@ -34,10 +35,10 @@ export function answerCodexAppServer(
   let page = 0
   child.stdin.on('data', (chunk: Buffer) => {
     for (const line of chunk.toString('utf8').split('\n').filter(Boolean)) {
-      const message = JSON.parse(line) as { id?: number; method: string }
-      if (message.id !== undefined) {
+      const message: unknown = JSON.parse(line)
+      if (isProviderRecord(message) && typeof message.id === 'number') {
         const answer = message.method === 'model/list' ? pages[page++] : {}
-        const error = (answer as { rpcError?: unknown } | undefined)?.rpcError
+        const error = isProviderRecord(answer) ? answer.rpcError : undefined
         const reply = Buffer.from(
           `${JSON.stringify(error ? { id: message.id, error } : { id: message.id, result: answer })}\n`
         )

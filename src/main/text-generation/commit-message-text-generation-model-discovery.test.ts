@@ -37,6 +37,13 @@ vi.mock('child_process', async (importOriginal) => {
 
 const spawnMock = vi.mocked(spawn)
 
+function spawnChildren(...children: ReturnType<typeof createMockDiscoveryChild>[]): void {
+  for (const child of children) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: discovery reads only the pid, kill, stdio streams and events the mock child implements.
+    spawnMock.mockReturnValueOnce(child as unknown as ReturnType<typeof spawn>)
+  }
+}
+
 function spawnError(errno: string): Error {
   return Object.assign(new Error(`spawn claude ${errno}`), { code: errno })
 }
@@ -342,7 +349,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     vi.useFakeTimers()
     const child = createMockDiscoveryChild()
     const nextChild = createMockDiscoveryChild()
-    spawnMock.mockReturnValueOnce(child as never).mockReturnValueOnce(nextChild as never)
+    spawnChildren(child, nextChild)
     const env = { CODEX_HOME: '/managed/codex-model-list-home' }
     answerCodexAppServer(child, [
       { data: agentPickerCliRecordings.modelList.data, nextCursor: 'page-2' },
@@ -421,7 +428,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     }
     for (const home of ['C:\\accounts\\a', 'C:\\accounts\\b']) {
       const child = createMockDiscoveryChild()
-      spawnMock.mockReturnValueOnce(child as never)
+      spawnChildren(child)
       answerCodexAppServer(child, [listing])
       await expect(
         discoverCommitMessageModelsLocal('codex', { codex_home: 'C:\\shell', CODEX_HOME: home })
@@ -436,7 +443,7 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     ['an unreadable page', { data: 'not-a-list', nextCursor: null }]
   ])('keeps the built-in Codex list when the app-server returns %s', async (name, page) => {
     const child = createMockDiscoveryChild()
-    spawnMock.mockReturnValue(child as never)
+    spawnChildren(child)
     answerCodexAppServer(child, [page])
 
     await expect(

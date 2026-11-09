@@ -4,6 +4,7 @@ import type { AgentSessionModelOption } from '../../shared/agent-session/agent-s
 import type { CommitMessageModel } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { createIncrementalNdjsonFramer } from '../../shared/main-process-ndjson-framer'
 import { createCodexAppServerRecordDispatcher } from '../codex/app-server/codex-app-server-record-dispatch'
+import { isProviderRecord } from '../provider-process/provider-json-record'
 import { listCodexModelPages } from '../codex/structured/catalog/codex-structured-model-catalog'
 import type { AgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import { discoveredModelsResult } from './commit-message-model-discovery-policy'
@@ -56,8 +57,8 @@ export function startCodexModelListDiscovery(stdin: Writable): CodexModelListDis
   const decoder = new StringDecoder('utf8')
   const framer = createIncrementalNdjsonFramer(
     (record) => {
-      if (typeof record === 'object' && record !== null && !Array.isArray(record)) {
-        dispatcher.dispatch(record as Record<string, unknown>)
+      if (isProviderRecord(record)) {
+        dispatcher.dispatch(record)
       }
     },
     (rejected) => {
