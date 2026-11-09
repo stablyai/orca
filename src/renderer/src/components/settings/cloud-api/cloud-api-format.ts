@@ -101,7 +101,10 @@ export function describeRoutineTrigger(
   if (trigger.kind === 'webhook') {
     return t('auto.components.settings.cloudRoutines.trigger.webhook', 'Webhook')
   }
-  const events = trigger.events.map((event) => githubEventLabel(event, t)).join(', ')
+  const events = formatList(
+    trigger.events.map((event) => githubEventLabel(event, t)),
+    intlLocale
+  )
   const labels = trigger.labels?.length ? ` “${trigger.labels.join('”, “')}”` : ''
   return t('auto.components.settings.cloudRoutines.trigger.githubSummary', 'GitHub: {{value0}}', {
     value0: `${events}${labels}`
@@ -170,4 +173,13 @@ export function shortTimeZoneName(
 export function friendlyTimeZone(timeZone: string): string {
   const city = timeZone.split('/').pop() ?? timeZone
   return city.replaceAll('_', ' ')
+}
+
+/** "a, b and c" in the UI language (hosts, accounts, events). */
+export function formatList(items: readonly string[], intlLocale?: string): string {
+  try {
+    return new Intl.ListFormat(intlLocale, { style: 'long', type: 'conjunction' }).format(items)
+  } catch {
+    return items.join(', ')
+  }
 }

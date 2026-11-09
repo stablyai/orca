@@ -12,7 +12,8 @@ import type {
   RoutineCreated,
   RoutineInput,
   RoutinePatch,
-  RoutineRun
+  RoutineRun,
+  RoutineUpdated
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { CloudConfirmDialog } from './CloudConfirmDialog'
@@ -33,7 +34,7 @@ export type CloudRoutinesViewProps = {
   localTimezone: string
   onRefresh: () => void
   onCreate: (input: RoutineInput) => Promise<CloudApiResult<RoutineCreated>>
-  onUpdate: (id: string, patch: RoutinePatch) => Promise<CloudApiResult<{ routine: Routine }>>
+  onUpdate: (id: string, patch: RoutinePatch) => Promise<CloudApiResult<RoutineUpdated>>
   /** Each resolves to an error message or null. */
   onToggle: (routine: Routine, enabled: boolean) => Promise<string | null>
   onRunNow: (routine: Routine) => Promise<string | null>
@@ -105,7 +106,9 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                onClick={props.onRefresh}
+                onClick={
+                  routines.status === 'loading' || props.refreshing ? undefined : props.onRefresh
+                }
                 aria-disabled={routines.status === 'loading' || props.refreshing}
                 aria-busy={props.refreshing}
                 aria-label={t('auto.components.settings.cloudRoutines.refresh', 'Refresh routines')}
@@ -222,7 +225,10 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
         confirmLabel={t('auto.components.settings.cloudRoutines.delete.confirm', 'Delete routine')}
         returnFocusTo={() => {
           // The deleted row is gone: land on the next row's Run now, else New routine.
-          if (!deleting || listRef.current?.querySelector(`[data-routine-id="${deleting.id}"]`)) {
+          if (
+            !deleting ||
+            listRef.current?.querySelector(`[data-routine-id="${CSS.escape(deleting.id)}"]`)
+          ) {
             return null
           }
           const rows = [

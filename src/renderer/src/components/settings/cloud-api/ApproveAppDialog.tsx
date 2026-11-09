@@ -62,6 +62,9 @@ export function ApproveAppDialog({
   const expired = approval !== null && remaining <= 0
 
   const change = (next: boolean): void => {
+    if (!next && busy) {
+      return
+    }
     if (!next) {
       // A code never outlives the dialog that showed it.
       setApproval(null)

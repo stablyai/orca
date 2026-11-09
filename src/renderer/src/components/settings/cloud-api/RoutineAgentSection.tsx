@@ -55,8 +55,8 @@ export function routineFieldError(
       )
     case 'maxRuntimeMinutes':
       return t(
-        'auto.components.settings.cloudRoutines.editor.runtimeInvalid',
-        'Use a whole number from 1 to 720.'
+        'auto.components.settings.cloudRoutines.editor.runtimeRange',
+        'Use a whole number from 5 to 120.'
       )
   }
 }

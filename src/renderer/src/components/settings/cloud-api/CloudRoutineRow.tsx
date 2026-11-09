@@ -108,7 +108,14 @@ export function RoutineRow({
     }
   }
   const runNow = async (): Promise<void> => {
-    if (running || active) {
+    if (active) {
+      // The history polls and refreshes the pill, so a finished run is noticed right away.
+      if (!expanded) {
+        onToggleHistory()
+      }
+      return
+    }
+    if (running) {
       return
     }
     setRunning(true)

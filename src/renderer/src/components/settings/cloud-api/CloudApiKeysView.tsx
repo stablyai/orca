@@ -93,7 +93,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
   // After a revoke the row (and its button) is gone: land on the next row, else the previous,
   // else Create key. A cancelled revoke keeps the row, so the dialog's default return wins.
   const focusAfterRevoke = (): HTMLElement | null => {
-    if (!revoking || listRef.current?.querySelector(`[data-key-id="${revoking.id}"]`)) {
+    if (!revoking || listRef.current?.querySelector(`[data-key-id="${CSS.escape(revoking.id)}"]`)) {
       return null
     }
     const rows = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-key-id]') ?? [])]
@@ -143,7 +143,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={props.onRefresh}
+              onClick={keys.status === 'loading' || props.refreshing ? undefined : props.onRefresh}
               aria-disabled={keys.status === 'loading' || props.refreshing}
               aria-busy={props.refreshing}
               aria-label={t('auto.components.settings.cloudApi.keys.refresh', 'Refresh API keys')}

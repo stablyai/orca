@@ -17,6 +17,7 @@ import {
   RoutineListSchema,
   RoutineRunEnvelopeSchema,
   RoutineRunPageSchema,
+  RoutineUpdatedSchema,
   RoutineWebhookSchema,
   type CloudApiErrorCode,
   type CreateCloudApiApprovalInput,
@@ -193,7 +194,7 @@ export function createCloudApiClient(deps: CloudApiClientDeps) {
     createRoutine: (input: RoutineInput) =>
       request('POST', 'v1/routines', RoutineCreatedSchema, { body: input }),
     updateRoutine: (id: string, patch: RoutinePatch) =>
-      request('PATCH', routinePath(id), RoutineEnvelopeSchema, { body: patch }),
+      request('PATCH', routinePath(id), RoutineUpdatedSchema, { body: patch }),
     deleteRoutine: async (id: string): Promise<void> => {
       await request('DELETE', routinePath(id), z.unknown())
     },

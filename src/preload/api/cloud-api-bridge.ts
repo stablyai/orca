@@ -19,7 +19,8 @@ import type {
   RoutinePatch,
   RoutineRun,
   RoutineRunPage,
-  RoutineRunsQuery
+  RoutineRunsQuery,
+  RoutineUpdated
 } from '../../shared/cloud-api/cloud-api-types'
 
 /** Desktop only: Orca Cloud API keys, org settings, audit and routines. The session token stays in main. */
@@ -44,7 +45,7 @@ export type CloudApiBridge = {
   listInstallations: () => Promise<CloudApiResult<{ installations: CloudApiInstallation[] }>>
   listRoutines: () => Promise<CloudApiResult<{ routines: Routine[] }>>
   createRoutine: (input: RoutineInput) => Promise<CloudApiResult<RoutineCreated>>
-  updateRoutine: (id: string, patch: RoutinePatch) => Promise<CloudApiResult<{ routine: Routine }>>
+  updateRoutine: (id: string, patch: RoutinePatch) => Promise<CloudApiResult<RoutineUpdated>>
   deleteRoutine: (id: string) => Promise<CloudApiResult<unknown>>
   runRoutine: (id: string) => Promise<CloudApiResult<{ run: RoutineRun }>>
   rotateRoutineWebhook: (id: string) => Promise<CloudApiResult<{ url: string }>>

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import type { CloudApiInstallation, Routine } from '../../../../../shared/cloud-api/cloud-api-types'
+import { formatList } from './cloud-api-format'
 import { CopyValueButton } from './cloud-api-parts'
 import { OneTimeSecret, OneTimeSecretDoneButton } from './OneTimeSecret'
 
@@ -23,7 +24,7 @@ export function GithubAppHint({
         ? t(
             'auto.components.settings.cloudRoutines.editor.appInstalled',
             'The Orca Cloud GitHub App can reach repositories in {{value0}}.',
-            { value0: installations.map((installation) => installation.account).join(', ') }
+            { value0: formatList(installations.map((installation) => installation.account)) }
           )
         : t(
             'auto.components.settings.cloudRoutines.editor.appMissing',

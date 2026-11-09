@@ -19,6 +19,33 @@ export type LoadRoutineRuns = (
 
 const POLL_MS = 5000
 
+type OkState = Extract<State, { status: 'ok' }>
+
+/**
+ * A refresh or poll returns page 1. Older pages the user already loaded stay below it (deduped by
+ * id) with their cursor, so polling never collapses "Show older runs".
+ */
+function mergeFirstPage(current: State, page: RoutineRunPage): State {
+  if (current.status !== 'ok' || current.runs.length <= page.runs.length) {
+    return {
+      status: 'ok',
+      runs: page.runs,
+      nextBefore: page.nextBefore,
+      loadingMore: current.status === 'ok' ? current.loadingMore : false,
+      ...(current.status === 'ok' && current.moreError ? { moreError: current.moreError } : {})
+    }
+  }
+  const fresh = new Set(page.runs.map((run) => run.id))
+  const merged: OkState = {
+    ...current,
+    runs: [
+      ...page.runs,
+      ...current.runs.slice(page.runs.length).filter((run) => !fresh.has(run.id))
+    ]
+  }
+  return merged
+}
+
 type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
@@ -61,6 +88,7 @@ export function RoutineRunHistory({
   const [liveNow, setNow] = useState(() => Date.now())
   const now = fixedNow ?? liveNow
   const generation = useRef(0)
+  const moreGeneration = useRef(0)
   const latestRef = useRef(onLatestRun)
   latestRef.current = onLatestRun
 
@@ -74,13 +102,7 @@ export function RoutineRunHistory({
     }
     setNow(Date.now())
     if (result.ok) {
-      setState((current) => ({
-        status: 'ok',
-        runs: result.data.runs,
-        nextBefore: result.data.nextBefore,
-        loadingMore: false,
-        ...(current.status === 'ok' && current.moreError ? { moreError: current.moreError } : {})
-      }))
+      setState((current) => mergeFirstPage(current, result.data))
       latestRef.current?.(result.data.runs[0] ?? null)
     } else {
       setState((current) =>
@@ -112,6 +134,7 @@ export function RoutineRunHistory({
   useEffect(
     () => () => {
       generation.current++
+      moreGeneration.current++
     },
     []
   )
@@ -120,10 +143,10 @@ export function RoutineRunHistory({
     if (state.status !== 'ok' || state.nextBefore === null || state.loadingMore) {
       return
     }
-    const mine = generation.current
+    const mine = ++moreGeneration.current
     setState({ ...state, loadingMore: true, moreError: undefined })
     const result = await loadRuns(routineId, state.nextBefore)
-    if (mine !== generation.current) {
+    if (mine !== moreGeneration.current) {
       return
     }
     setState((current) =>

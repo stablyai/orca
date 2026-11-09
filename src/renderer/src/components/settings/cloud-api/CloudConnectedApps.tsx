@@ -5,7 +5,12 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import type { CloudApiGrant, CloudApiMe } from '../../../../../shared/cloud-api/cloud-api-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { CloudConfirmDialog } from './CloudConfirmDialog'
-import { formatAbsoluteTime, formatKeyPrefix, formatRelativeFromNow } from './cloud-api-format'
+import {
+  formatAbsoluteTime,
+  formatKeyPrefix,
+  formatRelativeFromNow,
+  formatList
+} from './cloud-api-format'
 import { CloudApiEmptyState, CloudApiErrorNotice, CloudApiSkeletonRows } from './cloud-api-parts'
 import { ScopeSummary } from './ScopeSummary'
 import type { CloudLoadState } from './cloud-load-state'
@@ -116,9 +121,9 @@ export function CloudConnectedApps({
                     {grant.redirectHosts?.length ? (
                       <code
                         className="truncate font-mono text-xs text-muted-foreground"
-                        title={grant.redirectHosts.join(', ')}
+                        title={formatList(grant.redirectHosts)}
                       >
-                        {grant.redirectHosts.join(', ')}
+                        {formatList(grant.redirectHosts)}
                       </code>
                     ) : null}
                     <ScopeSummary scopes={grant.scopes} />
@@ -215,7 +220,7 @@ export function CloudConnectedApps({
                   'auto.components.settings.cloudApi.apps.confirmHosts',
                   'It signs in through {{value0}}.',
                   {
-                    value0: target.redirectHosts.join(', ')
+                    value0: formatList(target.redirectHosts)
                   }
                 )}
               </p>
@@ -224,7 +229,10 @@ export function CloudConnectedApps({
         }
         confirmLabel={t('auto.components.settings.cloudApi.apps.confirm', 'Disconnect')}
         returnFocusTo={() => {
-          if (!target || listRef.current?.querySelector(`[data-grant-id="${target.id}"]`)) {
+          if (
+            !target ||
+            listRef.current?.querySelector(`[data-grant-id="${CSS.escape(target.id)}"]`)
+          ) {
             return null
           }
           const rows = [

@@ -18,6 +18,9 @@ export const ROUTINE_AGENTS = ['claude', 'codex'] as const
 export type RoutineAgent = (typeof ROUTINE_AGENTS)[number]
 export const ROUTINE_POST_RESULTS = ['none', 'comment', 'pr'] as const
 export type RoutinePostResults = (typeof ROUTINE_POST_RESULTS)[number]
+/** The control plane's time-limit bounds, in minutes. */
+export const ROUTINE_MIN_RUNTIME = 5
+export const ROUTINE_MAX_RUNTIME = 120
 export const ROUTINE_MACHINE_SIZES = ['standard', 'large'] as const
 export type RoutineMachineSize = (typeof ROUTINE_MACHINE_SIZES)[number]
 
@@ -95,8 +98,15 @@ export type Routine = z.infer<typeof RoutineSchema>
 
 export const RoutineListSchema = z.object({ routines: z.array(RoutineSchema).max(1000) })
 export const RoutineEnvelopeSchema = z.object({ routine: RoutineSchema })
-export const RoutineCreatedSchema = z.object({
+/** PATCH answer: switching a routine to a webhook trigger mints its URL (shown once). */
+export const RoutineUpdatedSchema = z.object({
   routine: RoutineSchema,
+  webhookUrl: HttpsUrl.optional().catch(undefined)
+})
+export type RoutineUpdated = z.infer<typeof RoutineUpdatedSchema>
+// The routine already exists when this arrives: a drifted view must not cost its one-time URL.
+export const RoutineCreatedSchema = z.object({
+  routine: RoutineSchema.nullable().catch(null),
   webhookUrl: HttpsUrl.optional()
 })
 export type RoutineCreated = z.infer<typeof RoutineCreatedSchema>
@@ -112,8 +122,9 @@ export const RoutineRunSchema = z.object({
   result: z
     .object({
       summary: z.string().max(4000).optional(),
-      prUrl: HttpsUrl.optional(),
-      commentUrl: HttpsUrl.optional()
+      // One bad link must not fail the whole runs page.
+      prUrl: HttpsUrl.optional().catch(undefined),
+      commentUrl: HttpsUrl.optional().catch(undefined)
     })
     .nullable(),
   error: z.string().max(2000).nullable(),
@@ -149,18 +160,12 @@ export const RoutineInputSchema = z
     postResults: z.enum(ROUTINE_POST_RESULTS),
     enabled: z.boolean().optional(),
     machineSize: z.enum(ROUTINE_MACHINE_SIZES).optional(),
-    maxRuntimeMinutes: z.number().int().min(1).max(720).optional()
+    maxRuntimeMinutes: z.number().int().min(ROUTINE_MIN_RUNTIME).max(ROUTINE_MAX_RUNTIME).optional()
   })
   .strict()
 export type RoutineInput = z.infer<typeof RoutineInputSchema>
-/** Only changed fields; null clears a field (switching project ↔ repo, removing the time limit). */
-export const RoutinePatchSchema = RoutineInputSchema.partial()
-  .extend({
-    projectId: Id.nullable().optional(),
-    repo: RepoInput.nullable().optional(),
-    maxRuntimeMinutes: z.number().int().min(1).max(720).nullable().optional()
-  })
-  .strict()
+/** Only changed fields. Setting projectId or repo replaces the other source server-side. */
+export const RoutinePatchSchema = RoutineInputSchema.partial().strict()
 export type RoutinePatch = z.infer<typeof RoutinePatchSchema>
 
 export const RoutineRunsQuerySchema = z

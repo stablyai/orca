@@ -3,6 +3,8 @@ import { buildAutomationCronSchedule } from '../../../../../shared/automations/s
 import { classifyAutomationCronSchedule } from '../../../../../shared/automations/scheduling/automation-schedules'
 import { isValidAutomationCronSchedule } from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
 import {
+  ROUTINE_MAX_RUNTIME,
+  ROUTINE_MIN_RUNTIME,
   RoutineInputSchema,
   type CloudApiProject,
   type Routine,
@@ -203,9 +205,9 @@ export function validateRoutineDraft(draft: RoutineDraft): RoutineDraftValidatio
     errors.prompt = 'required'
   }
   const runtime = draft.maxRuntimeMinutes.trim()
+  const minutes = Number(runtime)
   if (
-    runtime &&
-    !(Number.isInteger(Number(runtime)) && Number(runtime) >= 1 && Number(runtime) <= 720)
+    !(Number.isInteger(minutes) && minutes >= ROUTINE_MIN_RUNTIME && minutes <= ROUTINE_MAX_RUNTIME)
   ) {
     errors.maxRuntimeMinutes = 'invalid'
   }
@@ -227,7 +229,7 @@ export function validateRoutineDraft(draft: RoutineDraft): RoutineDraftValidatio
     prompt: draft.prompt.trim(),
     postResults: draft.postResults,
     enabled: draft.enabled,
-    ...(runtime ? { maxRuntimeMinutes: Number(runtime) } : {})
+    maxRuntimeMinutes: minutes
   }
   const parsed = RoutineInputSchema.safeParse(candidate)
   if (!parsed.success) {
@@ -252,22 +254,17 @@ export function routinePatchFromInput(routine: Routine, input: RoutineInput): Ro
   if (input.name !== routine.name) {
     patch.name = input.name
   }
+  // Sending the new source is enough: the server re-resolves the routine's project from it.
   if (input.projectId) {
-    if (input.projectId !== routine.projectId) {
+    if (input.projectId !== routine.projectId || routine.repo) {
       patch.projectId = input.projectId
-    }
-    if (routine.repo) {
-      patch.repo = null
     }
   } else if (input.repo) {
     const current = routine.repo
       ? { url: routine.repo.url, ...(routine.repo.ref ? { ref: routine.repo.ref } : {}) }
       : null
-    if (!same(input.repo, current)) {
+    if (!same(input.repo, current) || routine.projectId) {
       patch.repo = input.repo
-    }
-    if (routine.projectId) {
-      patch.projectId = null
     }
   }
   const { urlHint: _hint, ...currentTrigger } = routine.trigger as RoutineTriggerInput & {
@@ -285,9 +282,11 @@ export function routinePatchFromInput(routine: Routine, input: RoutineInput): Ro
   if (input.postResults !== routine.postResults) {
     patch.postResults = input.postResults
   }
-  const runtime = input.maxRuntimeMinutes ?? null
-  if (runtime !== (routine.maxRuntimeMinutes ?? null)) {
-    patch.maxRuntimeMinutes = runtime
+  if (
+    input.maxRuntimeMinutes !== undefined &&
+    input.maxRuntimeMinutes !== routine.maxRuntimeMinutes
+  ) {
+    patch.maxRuntimeMinutes = input.maxRuntimeMinutes
   }
   return patch
 }

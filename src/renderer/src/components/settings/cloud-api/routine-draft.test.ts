@@ -165,14 +165,14 @@ describe('routine edits', () => {
     expect(routinePatchFromInput(routine, input({ ...draft, enabled: true }))).toEqual({})
   })
 
-  it('clears the other source and the time limit with explicit nulls', () => {
+  it('switches source by sending only the new one (the server rejects nulls)', () => {
     const draft = routineDraftFromRoutine(routine, 'UTC')
     expect(
       routinePatchFromInput(
         routine,
-        input({ ...draft, source: 'project', projectId: 'prj_9', maxRuntimeMinutes: '' })
+        input({ ...draft, source: 'project', projectId: 'prj_9', maxRuntimeMinutes: '60' })
       )
-    ).toEqual({ projectId: 'prj_9', repo: null, maxRuntimeMinutes: null })
+    ).toEqual({ projectId: 'prj_9', maxRuntimeMinutes: 60 })
     const projectRoutine = { ...routine, projectId: 'prj_9', repo: null }
     expect(
       routinePatchFromInput(
@@ -183,7 +183,18 @@ describe('routine edits', () => {
           repoUrl: 'https://github.com/a/b'
         })
       )
-    ).toEqual({ repo: { url: 'https://github.com/a/b' }, projectId: null })
+    ).toEqual({ repo: { url: 'https://github.com/a/b' } })
+  })
+
+  it('requires a time limit within the control plane bounds', () => {
+    const draft = routineDraftFromRoutine(routine, 'UTC')
+    for (const bad of ['', '4', '121', '7.5']) {
+      expect(validateRoutineDraft({ ...draft, maxRuntimeMinutes: bad })).toEqual({
+        ok: false,
+        errors: { maxRuntimeMinutes: 'invalid' }
+      })
+    }
+    expect(validateRoutineDraft({ ...draft, maxRuntimeMinutes: '120' }).ok).toBe(true)
   })
 
   it('sends only the changed trigger', () => {

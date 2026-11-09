@@ -133,11 +133,14 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
       onCreate={async (input) => {
         const result = await api.createRoutine(input)
         if (result.ok) {
-          setRoutines((current) =>
-            current.status === 'ok'
-              ? { status: 'ok', data: [result.data.routine, ...current.data] }
-              : current
-          )
+          const created = result.data.routine
+          if (created) {
+            setRoutines((current) =>
+              current.status === 'ok' ? { status: 'ok', data: [created, ...current.data] } : current
+            )
+          } else {
+            void load()
+          }
         }
         return result
       }}

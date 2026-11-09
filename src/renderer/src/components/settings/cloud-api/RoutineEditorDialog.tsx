@@ -18,7 +18,8 @@ import type {
   Routine,
   RoutineCreated,
   RoutineInput,
-  RoutinePatch
+  RoutinePatch,
+  RoutineUpdated
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { cloudApiErrorCopy } from './cloud-api-copy'
 import { CloudApiErrorNotice, FormField } from './cloud-api-parts'
@@ -52,7 +53,7 @@ export type RoutineEditorDialogProps = {
   installations: readonly CloudApiInstallation[] | null
   localTimezone: string
   onCreate: (input: RoutineInput) => Promise<CloudApiResult<RoutineCreated>>
-  onUpdate: (id: string, patch: RoutinePatch) => Promise<CloudApiResult<{ routine: Routine }>>
+  onUpdate: (id: string, patch: RoutinePatch) => Promise<CloudApiResult<RoutineUpdated>>
   onRotateWebhook: (routine: Routine) => Promise<CloudApiResult<{ url: string }>>
   /** Fixtures: preset form values / open on the one-time webhook URL. */
   initialDraft?: Partial<RoutineDraft>
@@ -246,7 +247,7 @@ function EditorForm({
         setFailure(cloudApiErrorCopy(result.error, t, result))
         return
       }
-      onSaved(null)
+      onSaved(result.data.webhookUrl ?? null)
       return
     }
     const result = await onCreate(validation.input)
