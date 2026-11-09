@@ -293,12 +293,14 @@ export class WorktreePreparationOperation extends WorktreePreparationDisposal {
       (status): SettledPreparationDiscard => ({ status, attempted }),
       (error: unknown): SettledPreparationDiscard => ({
         status:
-          error instanceof WorktreePreparationLockOwnershipError
-            ? error.replaced
-              ? 'ownership-lost'
-              : 'revoked'
-            : 'failed',
-        attempted: true,
+          !eligible() && !attempted
+            ? 'skipped'
+            : error instanceof WorktreePreparationLockOwnershipError
+              ? error.replaced
+                ? 'ownership-lost'
+                : 'revoked'
+              : 'failed',
+        attempted: attempted || eligible(),
         error
       })
     )
