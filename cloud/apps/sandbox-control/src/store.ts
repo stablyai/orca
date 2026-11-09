@@ -32,6 +32,8 @@ export type SandboxRow = {
   created_at: number
   updated_at: number
   destroyed_at: number | null
+  repo_url: string | null
+  github_token_expires_at: number | null
 }
 
 export type SessionFields = Pick<
@@ -54,18 +56,18 @@ export async function insertSandbox(
   db: D1Database,
   row: Pick<
     SandboxRow,
-    'id' | 'account_id' | 'user_id' | 'workspace_id' | 'provider' | 'provider_name' | 'machine_size' | 'region'
+    'id' | 'account_id' | 'user_id' | 'workspace_id' | 'provider' | 'provider_name' | 'machine_size' | 'region' | 'repo_url'
   >,
   now: number
 ): Promise<SandboxRow> {
   await db
     .prepare(
       `INSERT INTO sandboxes (id, account_id, user_id, workspace_id, provider, provider_name, status,
-         machine_size, region, generation, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?)`
+         machine_size, region, generation, created_at, updated_at, repo_url)
+       VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?)`
     )
     .bind(row.id, row.account_id, row.user_id, row.workspace_id, row.provider, row.provider_name,
-      row.machine_size, row.region, now, now)
+      row.machine_size, row.region, now, now, row.repo_url)
     .run()
   const inserted = await getSandbox(db, row.id)
   if (!inserted) {
@@ -122,7 +124,7 @@ export async function listByStatus(db: D1Database, statuses: readonly SandboxSta
 type Patch = Partial<Omit<SandboxRow, 'id' | 'account_id' | 'generation' | 'created_at'>>
 const PATCHABLE = new Set<string>([
   'status', 'session_id', 'session_started_at', 'session_deadline_at', 'lease_expires_at',
-  'usage_settled_at', 'last_error', 'destroyed_at'
+  'usage_settled_at', 'last_error', 'destroyed_at', 'github_token_expires_at'
 ])
 
 /** Applies `patch` only if nobody moved the row since `expected` was read; null on a lost race. */

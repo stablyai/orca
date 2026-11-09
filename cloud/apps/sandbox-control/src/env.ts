@@ -26,6 +26,8 @@ export type Env = {
 
   // Billing Worker (entitlement checks + usage). CONTROL_PLANE_TOKEN is shared with it.
   BILLING_URL?: string
+  /** Service binding to the billing Worker; Workers on one account cannot reach each other over workers.dev. */
+  BILLING?: Fetcher
   CONTROL_PLANE_TOKEN?: string
   /** `stub` allows every start and records nothing: local dev only, refused when SANDBOX_ENV=prod. */
   ENTITLEMENTS_MODE?: string
@@ -36,4 +38,8 @@ export type Env = {
   SESSION_DEADLINE_MS?: string
   /** Dev-only: Authorization the egress proxy injects for api.github.com until the GitHub App minter exists. */
   EGRESS_DEV_STATIC_AUTHORIZATION?: string
+
+  // GitHub App (contents/pull_requests write, metadata read). The PKCS#8 key is a secret.
+  GITHUB_APP_ID?: string
+  GITHUB_APP_PRIVATE_KEY?: string
 }

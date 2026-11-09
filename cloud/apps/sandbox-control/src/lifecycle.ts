@@ -1,7 +1,8 @@
 // Sandbox lifecycle: one persistent provider sandbox per Orca workspace, with an Orca-owned lease,
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
 import type { EntitlementClient, MachineSize } from './entitlements'
-import { compileNetworkPolicy, type CredentialRoute } from './network-policy'
+import type { GitHubAppMinter } from './github-app'
+import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
 import { ORCAD_PORT, drainOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
 import {
@@ -9,6 +10,7 @@ import {
   countActiveSandboxes,
   getSandbox,
   insertSandbox,
+  listAccountSandboxes,
   liveSandboxForWorkspace,
   markSnapshotsDeleted,
   recordSnapshots,
@@ -23,12 +25,14 @@ export const LEASE_MS = 30 * 60_000
 const PROVIDER_SESSION_CAP_MS = 24 * 60 * 60_000
 /** Orca stops 10 min early so it, not the provider, ends the session (drain first). */
 export const SESSION_DEADLINE_MS = PROVIDER_SESSION_CAP_MS - 10 * 60_000
-const VCPUS: Record<MachineSize, number> = { standard: 4, large: 8, xlarge: 16 }
+const VCPUS: Record<MachineSize, number> = { standard: 4, large: 8 }
 
 export type LifecycleDeps = {
   db: D1Database
   provider: SandboxProviderApi
   entitlements: EntitlementClient
+  /** GitHub App installation tokens for the workspace repo; absent until the app is configured. */
+  github?: GitHubAppMinter
   now: () => number
   config: {
     environment: string
@@ -67,7 +71,19 @@ export function githubPlaceholderHeaders(row: SandboxRow): string[] {
   return [`Bearer ${token}`, `token ${token}`]
 }
 
-function egressPolicy(deps: LifecycleDeps, row: SandboxRow) {
+export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: string) {
+  const git: CredentialRoute[] = gitToken
+    ? [
+        {
+          // git (libcurl) is unaffected by the transform-rule framing hang, so it is injected inline.
+          host: 'github.com',
+          header: 'authorization',
+          placeholders: [gitBasicAuthorization(githubPlaceholderToken(row))],
+          via: 'transform',
+          value: gitBasicAuthorization(gitToken)
+        }
+      ]
+    : []
   const credentials: CredentialRoute[] = deps.config.egressProxyUrl
     ? [
         {
@@ -79,7 +95,7 @@ function egressPolicy(deps: LifecycleDeps, row: SandboxRow) {
         }
       ]
     : []
-  return compileNetworkPolicy({ mode: 'allowlist', credentials })
+  return compileNetworkPolicy({ mode: 'allowlist', credentials: [...git, ...credentials] })
 }
 
 export function sessionFields(deps: LifecycleDeps, state: ProviderSandboxState): SessionFields {
@@ -105,6 +121,9 @@ async function claim(deps: LifecycleDeps, row: SandboxRow, patch: Partial<Sandbo
 async function requireStart(deps: LifecycleDeps, accountId: string, machineSize: MachineSize) {
   const runningSandboxes = await countActiveSandboxes(deps.db, accountId)
   const decision = await deps.entitlements.checkStart({ accountId, machineSize, runningSandboxes })
+  if (decision.suspendRunning) {
+    await suspendAccountRunning(deps, accountId)
+  }
   if (!decision.allow) {
     throw new LifecycleError('entitlement_denied', decision.reason ?? 'denied')
   }
@@ -114,13 +133,37 @@ async function boot(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandbox
   if (state.sandbox.tags.orcaSandbox !== row.id) {
     throw new LifecycleError('conflict', 'ownership_mismatch')
   }
+  const git = await refreshGitCredentials(deps, row, state.session.id)
   const connection = await startOrcad(deps.provider, state, {
     sandboxId: row.id,
     repo,
-    githubPlaceholder: deps.config.egressProxyUrl ? githubPlaceholderToken(row) : undefined
+    githubPlaceholder: deps.config.egressProxyUrl ? githubPlaceholderToken(row) : undefined,
+    gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined
   })
-  const running = await claim(deps, row, { status: 'running', last_error: null, ...sessionFields(deps, state) })
+  const running = await claim(deps, row, {
+    status: 'running',
+    last_error: null,
+    github_token_expires_at: git?.expiresAt ?? null,
+    ...sessionFields(deps, state)
+  })
   return { row: running, connection }
+}
+
+/** Mints a fresh repo token and swaps it into the live policy; null when the repo has no app install. */
+export async function refreshGitCredentials(
+  deps: LifecycleDeps,
+  row: SandboxRow,
+  sessionId: string
+): Promise<{ expiresAt: number } | null> {
+  if (!deps.github || !row.repo_url) {
+    return null
+  }
+  const minted = await deps.github.tokenForRepo(row.repo_url)
+  if (!minted) {
+    return null
+  }
+  await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, minted.token))
+  return { expiresAt: minted.expiresAt }
 }
 
 export async function createSandbox(
@@ -152,7 +195,8 @@ export async function createSandbox(
       provider: 'vercel',
       provider_name: `orca-${deps.config.environment}-${id}`,
       machine_size: request.machineSize,
-      region: request.region ?? deps.config.defaultRegion
+      region: request.region ?? deps.config.defaultRegion,
+      repo_url: request.repo?.url ?? null
     },
     deps.now()
   )
@@ -178,6 +222,26 @@ export async function createSandbox(
     await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
     throw error
   }
+}
+
+/**
+ * Billing says the account's payment grace ran out: stop (snapshot-preserving, never destroy) every
+ * running sandbox. Resume stays refused by the start check until billing allows starts again.
+ */
+export async function suspendAccountRunning(deps: LifecycleDeps, accountId: string): Promise<number> {
+  let suspended = 0
+  for (const row of await listAccountSandboxes(deps.db, accountId)) {
+    if (row.status !== 'running') {
+      continue
+    }
+    try {
+      await suspendSandbox(deps, row)
+      suspended++
+    } catch {
+      // A concurrent transition or provider hiccup; the next cron pass retries.
+    }
+  }
+  return suspended
 }
 
 /** A create that never became usable is destroyed now; the cron retries if this also fails. */
