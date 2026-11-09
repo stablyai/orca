@@ -5044,6 +5044,9 @@
             "accounts": "Gespeicherte Antigravity-Konten",
             "readAgo": "Ausgelesen {{time}}",
             "notRead": "Nutzung unbekannt: noch nicht ausgelesen"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Zurücksetzung um {{when}}"
           }
         }
       },

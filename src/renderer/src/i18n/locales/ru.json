@@ -5232,6 +5232,9 @@
             "accounts": "Сохранённые аккаунты Antigravity",
             "readAgo": "Считано {{time}}",
             "notRead": "Использование неизвестно: данные ещё не считаны"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Сброс: {{when}}"
           }
         }
       },

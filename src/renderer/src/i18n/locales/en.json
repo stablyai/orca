@@ -5308,6 +5308,9 @@
             "accounts": "Saved Antigravity Accounts",
             "readAgo": "Read {{time}}",
             "notRead": "Usage unknown: not read yet"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Resets {{when}}"
           }
         }
       },
