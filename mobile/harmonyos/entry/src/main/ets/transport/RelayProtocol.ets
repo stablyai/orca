@@ -31,6 +31,8 @@ export interface RelayConnectionOptions {
   credential: string;
   credentialKind: string;
   credentialVersion?: number;
+  // Recovery verifies the pending install and confirms resume in the same authenticated RPC.
+  pairingRecovery?: boolean;
 }
 export interface RelayMove { cellUrl: string; assignmentEpoch: number; }
 

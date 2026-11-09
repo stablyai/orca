@@ -1,4 +1,4 @@
-import { RelayEndpoint, RelayCredential, readRelayEndpoint, readRelayCredential, isDirectEndpoint } from '../transport/RelayProtocol';
+import { PairingRelay, RelayEndpoint, RelayCredential, readRelayEndpoint, readRelayCredential, isDirectEndpoint } from '../transport/RelayProtocol';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
@@ -6,6 +6,7 @@ import { asset } from '@kit.AssetStoreKit';
 import { util } from '@kit.ArkTS';
 import { sha256 } from '../transport/crypto/Sha256';
 import { utf8Decode, base64DecodeCanonical } from '../transport/crypto/Bytes';
+import { DeviceRowStore } from './DeviceRowStore';
 
 /**
  * Paired-host catalog: non-secret metadata in preferences, the device token in the
@@ -23,8 +24,23 @@ export interface HostMeta {
   relay?: RelayEndpoint;
 }
 
+export interface PairingJournal {
+  startedAt: number;
+  reqId: string;
+  token: string;
+  hash: string;
+  offerKey: string;
+  deviceToken: string;
+  committedMeta?: HostMeta;
+  credential?: RelayCredential;
+  draft?: HostMeta;
+  relay?: PairingRelay;
+}
+
 const PREFS_NAME = 'orca_hosts';
 const PREFS_KEY = 'hosts';
+const PAIRING_PREFS_NAME = 'orca_relay_pairing';
+const PAIRING_PENDING_KEY = 'pending';
 
 function hostIdFromKey(publicKeyB64: string): string {
   let encoded = new util.TextEncoder().encodeInto(publicKeyB64);
@@ -128,13 +144,18 @@ async function removeToken(hostId: string): Promise<void> {
   catch (e) { if ((e as BusinessError).code !== asset.ErrorCode.NOT_FOUND) { throw e as Error; } }
 }
 
-export function saveHost(context: common.Context, meta: HostMeta, deviceToken: string, relayCredential?: RelayCredential, pairingStartedAt: number = Date.now(), recovering: boolean = false): Promise<void> {
+export function saveHost(context: common.Context, meta: HostMeta, deviceToken: string, relayCredential?: RelayCredential,
+  pairingStartedAt: number = Date.now(), recovering: boolean = false, expectedJournal?: PairingJournal): Promise<void> {
   return mutateHost(async (): Promise<void> => {
     let removedAt = hostRemovalTimestamp(context, meta.id);
     if (!Number.isSafeInteger(pairingStartedAt) || pairingStartedAt < 0 || (removedAt > 0 && pairingStartedAt <= removedAt)) { throw new Error('Pairing was superseded by desktop removal'); }
     let prefs = await loadPrefs(context);
     let lastPairing = prefs.getSync(`paired.${meta.id}`, 0) as number;
     if (pairingStartedAt < lastPairing || (recovering && pairingStartedAt === 0)) { throw new Error('Pairing was superseded by a newer pairing'); }
+    if (expectedJournal && (expectedJournal.startedAt !== pairingStartedAt
+      || !matchesPairingJournal(await readHostPairingJournal(context, meta.id), expectedJournal))) {
+      throw new Error('Pairing journal was superseded');
+    }
     let key = base64DecodeCanonical(meta.publicKeyB64);
     if (!key || key.length !== 32 || meta.id !== hostIdFromKey(meta.publicKeyB64)
       || !isDirectEndpoint(meta.endpoint) || !meta.name || meta.name.length > 1024 || !deviceToken) {
@@ -194,7 +215,7 @@ export function deleteHost(context: common.Context, hostId: string): Promise<voi
     let oldToken = await getDeviceToken(context, hostId);
     let oldRelay = await getRelayCredential(context, hostId);
     let prefs = await loadPrefs(context); prefs.putSync(`removed.${hostId}`, Date.now()); prefs.flushSync();
-    await clearHostPairingJournal(context, hostId);
+    await clearHostPairingJournalUnlocked(context, hostId);
     await removeToken(hostId);
     try { await removeRelayCredential(hostId); await writeHostList(context, hosts.filter((host: HostMeta): boolean => host.id !== hostId)); }
     catch (e) {
@@ -282,11 +303,117 @@ export function hostRemovalTimestamp(context: common.Context, hostId: string): n
   let prefs = preferences.getPreferencesSync(context, { name: PREFS_NAME });
   return prefs.getSync(`removed.${hostId}`, 0) as number;
 }
-export async function clearHostPairingJournal(context: common.Context, hostId: string): Promise<void> {
-  let query: asset.AssetMap = new Map(); query.set(asset.Tag.ALIAS, new util.TextEncoder().encodeInto(`orca.relay.pair.${hostId}`));
+
+export function hostPairingTimestamp(context: common.Context, hostId: string): number {
+  let prefs = preferences.getPreferencesSync(context, { name: PREFS_NAME });
+  return prefs.getSync(`paired.${hostId}`, 0) as number;
+}
+
+function pairingPrefs(context: common.Context): preferences.Preferences {
+  return preferences.getPreferencesSync(context, { name: PAIRING_PREFS_NAME });
+}
+
+function pendingPairingIds(prefs: preferences.Preferences): string[] {
+  let ids = JSON.parse(prefs.getSync(PAIRING_PENDING_KEY, '[]') as string) as string[];
+  if (!Array.isArray(ids)) { throw new Error('Invalid pairing journal index'); }
+  return Array.from(new Set(ids.filter((id: string): boolean => typeof id === 'string' && /^[a-f0-9]{32}$/.test(id))));
+}
+
+export function listHostPairingJournals(context: common.Context): string[] {
+  return pendingPairingIds(pairingPrefs(context));
+}
+
+function persistPendingPairingIds(prefs: preferences.Preferences, ids: string[]): void {
+  let previous = prefs.getSync(PAIRING_PENDING_KEY, '[]');
+  try { prefs.putSync(PAIRING_PENDING_KEY, JSON.stringify(ids)); prefs.flushSync(); }
+  catch (e) { prefs.putSync(PAIRING_PENDING_KEY, previous); throw e as Error; }
+}
+
+function legacyPairingQuery(hostId: string): asset.AssetMap {
+  let query: asset.AssetMap = new Map();
+  query.set(asset.Tag.ALIAS, new util.TextEncoder().encodeInto(`orca.relay.pair.${hostId}`));
+  return query;
+}
+
+function assertPairingJournal(hostId: string, journal: PairingJournal): void {
+  if (!journal || typeof journal !== 'object' || Array.isArray(journal)
+    || !Number.isSafeInteger(journal.startedAt) || journal.startedAt < 0
+    || typeof journal.reqId !== 'string' || journal.reqId.length < 1 || journal.reqId.length > 128
+    || typeof journal.offerKey !== 'string' || hostIdFromKey(journal.offerKey) !== hostId
+    || typeof journal.token !== 'string' || !journal.token || typeof journal.hash !== 'string' || !journal.hash
+    || typeof journal.deviceToken !== 'string' || !journal.deviceToken
+    || (journal.draft !== undefined && (journal.draft?.id !== hostId || journal.draft?.publicKeyB64 !== journal.offerKey))
+    || (journal.committedMeta !== undefined
+      && (journal.committedMeta?.id !== hostId || journal.committedMeta?.publicKeyB64 !== journal.offerKey))) {
+    throw new Error('Invalid pairing journal');
+  }
+}
+
+function matchesPairingJournal(held: PairingJournal | null, expected: PairingJournal): boolean {
+  return held !== null && held.startedAt === expected.startedAt && held.reqId === expected.reqId;
+}
+
+export async function readHostPairingJournal(context: common.Context, hostId: string): Promise<PairingJournal | null> {
+  let rows = new DeviceRowStore(context, hostId);
+  let text = await rows.readPairingJournal();
+  if (text === null) {
+    let query = legacyPairingQuery(hostId); query.set(asset.Tag.RETURN_TYPE, asset.ReturnType.ALL);
+    try {
+      let found = await asset.query(query);
+      if (found.length === 0) { return null; }
+      text = utf8Decode(found[0].get(asset.Tag.SECRET) as Uint8Array);
+    } catch (e) {
+      if ((e as BusinessError).code === asset.ErrorCode.NOT_FOUND) { return null; }
+      throw e as Error;
+    }
+  }
+  let journal: PairingJournal;
+  try { journal = JSON.parse(text) as PairingJournal; }
+  catch (e) { throw new Error('Invalid pairing journal'); }
+  assertPairingJournal(hostId, journal);
+  return journal;
+}
+
+export function writeHostPairingJournal(context: common.Context, hostId: string, journal: PairingJournal,
+  expected?: PairingJournal): Promise<void> {
+  return mutateHost(async (): Promise<void> => {
+    assertPairingJournal(hostId, journal);
+    let removedAt = hostRemovalTimestamp(context, hostId);
+    if (removedAt > 0 && journal.startedAt <= removedAt) { throw new Error('Pairing was superseded by desktop removal'); }
+    let held = await readHostPairingJournal(context, hostId);
+    let lastPairing = hostPairingTimestamp(context, hostId);
+    if (expected) {
+      let replacesHeld = journal.startedAt > expected.startedAt && journal.startedAt > lastPairing;
+      if (journal.startedAt < lastPairing || !matchesPairingJournal(held, expected)
+        || (!matchesPairingJournal(journal, expected) && !replacesHeld)) { throw new Error('Pairing journal was superseded'); }
+    } else if ((lastPairing > 0 && journal.startedAt <= lastPairing) || (held && journal.startedAt <= held.startedAt)) {
+      throw new Error('Pairing journal was superseded');
+    }
+    let prefs = pairingPrefs(context);
+    let ids = pendingPairingIds(prefs);
+    if (!ids.includes(hostId)) { ids.push(hostId); persistPendingPairingIds(prefs, ids); }
+    await new DeviceRowStore(context, hostId).writePairingJournal(JSON.stringify(journal));
+  });
+}
+
+async function clearHostPairingJournalUnlocked(context: common.Context, hostId: string): Promise<void> {
+  let rows = new DeviceRowStore(context, hostId);
+  let query = legacyPairingQuery(hostId);
+  // Removing the fallback first prevents a crash during cleanup from restoring an old journal.
   try { await asset.remove(query); }
   catch (e) { if ((e as BusinessError).code !== asset.ErrorCode.NOT_FOUND) { throw e as Error; } }
-  let prefs = preferences.getPreferencesSync(context, { name: 'orca_relay_pairing' });
-  let ids = JSON.parse(prefs.getSync('pending', '[]') as string) as string[];
-  prefs.putSync('pending', JSON.stringify(ids.filter((id: string): boolean => id !== hostId))); prefs.flushSync();
+  await rows.deletePairingJournal();
+  let prefs = pairingPrefs(context);
+  let ids = pendingPairingIds(prefs);
+  if (ids.includes(hostId)) { persistPendingPairingIds(prefs, ids.filter((id: string): boolean => id !== hostId)); }
+}
+
+export function clearHostPairingJournal(context: common.Context, hostId: string, expected?: PairingJournal): Promise<void> {
+  return mutateHost(async (): Promise<void> => {
+    if (expected) {
+      let held = await readHostPairingJournal(context, hostId);
+      if (held && !matchesPairingJournal(held, expected)) { return; }
+    }
+    await clearHostPairingJournalUnlocked(context, hostId);
+  });
 }

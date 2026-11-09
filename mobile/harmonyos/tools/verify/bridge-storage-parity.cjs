@@ -233,6 +233,30 @@ test('device rows survive reopening and remain scoped to their host and table', 
   )
 })
 
+test('a large pairing journal survives reopening and is inaccessible to page storage', async (t) => {
+  const { DeviceRowStore, context, deleteDeviceRows } = deviceRows(t)
+  const store = new DeviceRowStore(context, hostId)
+  const token = 'pending-desktop-pairing-token'
+  const journal = JSON.stringify({ token, description: '待配对的桌面'.repeat(250) })
+  await store.writePairingJournal(journal)
+  const persisted = fs
+    .readdirSync(context.filesDir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+  assert.ok(persisted.length > 0)
+  for (const entry of persisted) {
+    const raw = fs.readFileSync(path.join(entry.parentPath, entry.name), 'utf8')
+    assert.equal(raw.includes(token) || Buffer.from(raw, 'base64').includes(token), false)
+  }
+
+  const reopened = new DeviceRowStore(context, hostId)
+  assert.equal(await reopened.readPairingJournal(), journal)
+  assert.throws(() => reopened.serve({ action: 'read', table: 'pairing', keys: ['journal'] }))
+  await deleteDeviceRows(context, hostId)
+  assert.equal(await reopened.readPairingJournal(), journal)
+  await reopened.deletePairingJournal()
+  assert.equal(await reopened.readPairingJournal(), null)
+})
+
 test('a partial disk write is refused without replacing the committed draft', async (t) => {
   const { DeviceRowStore, context, failWrites } = deviceRows(t)
   const store = new DeviceRowStore(context, hostId)

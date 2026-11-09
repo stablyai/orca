@@ -66,18 +66,23 @@ export class SpikeRpcClient {
   private relayOptions: RelayConnectionOptions | null = null;
   private relayMove: RelayMove | null = null;
   private resumeConfirmation: Record<string, Object> | null = null;
+  private relayAcceptedVersion: number = 0;
   private relayCloseCode: number = 0;
+  private relayRejectedCredential: boolean = false;
   private authRejected: boolean = false;
   private deadlineFailure: string = '';
   getDeadlineFailure(): string { return this.deadlineFailure; }
   authenticationRejected(): boolean { return this.authRejected; }
   configureRelay(options: RelayConnectionOptions): void {
     if (!/^[A-Za-z0-9_-]{16}$/.test(options.relayHostId) || !/^[A-Za-z0-9_-]{43}$/.test(options.credential)
-      || !['invite', 'resume'].includes(options.credentialKind)) { throw new Error('Invalid relay credentials'); }
+      || !['invite', 'resume'].includes(options.credentialKind)
+      || (options.pairingRecovery && options.credentialKind !== 'resume')) { throw new Error('Invalid relay credentials'); }
     this.relayOptions = options;
   }
   getRelayMove(): RelayMove | null { return this.relayMove; }
   getRelayCloseCode(): number { return this.relayCloseCode; }
+  relayCredentialRejected(): boolean { return this.relayRejectedCredential; }
+  getRelayAcceptedVersion(): number { return this.relayAcceptedVersion; }
   getResumeConfirmation(): Record<string, Object> | null { return this.resumeConfirmation; }
   isRelay(): boolean { return this.relayOptions !== null; }
   private handshakeMs: number;
@@ -151,11 +156,17 @@ export class SpikeRpcClient {
 
   /** Connects and runs the E2EE handshake (framing 'v2' or 'legacy'); resolves once authenticated. */
   connect(endpoint: string, deviceToken: string, serverPublicKeyB64: string, framing: string): Promise<void> {
+    if (this.relayOptions?.pairingRecovery && framing !== 'v2') {
+      return Promise.reject(new Error('Relay pairing recovery requires E2EE v2'));
+    }
     this.currentDeviceToken = deviceToken;
     this.framing = framing;
     return new Promise<void>((resolve, reject) => {
       this.state = 'connecting';
       this.closedNotified = false;
+      this.relayAcceptedVersion = 0;
+      this.relayCloseCode = 0;
+      this.relayRejectedCredential = false;
       this.rejectConnect = reject;
       this.connectTimer = setTimeout((): void => {
         this.deadlineFailure = this.state === 'connecting' ? 'connect-timeout' : 'handshake-timeout';
@@ -187,7 +198,7 @@ export class SpikeRpcClient {
         }
       });
       this.ws.on('close', (_err: BusinessError, value: webSocket.CloseResult) => {
-        this.relayCloseCode = value.code;
+        if (!this.relayRejectedCredential) { this.relayCloseCode = value.code; }
         if (this.state === 'ready' && value.code === 4001 && value.reason === 'Unauthorized') {
           this.authRejected = true;
         }
@@ -226,13 +237,24 @@ export class SpikeRpcClient {
     }
     if (!hello || hello['type'] !== 'relay-hello' || typeof hello['ok'] !== 'boolean') { throw new Error('Invalid relay hello'); }
     if (hello['ok'] === false) {
-      this.relayCloseCode = typeof hello['code'] === 'number' ? hello['code'] : 4400;
+      let code: number = hello['code'];
+      if (Object.keys(hello).length !== 3 || !Number.isSafeInteger(code) || code < 4000 || code > 4999) {
+        throw new Error('Invalid relay refusal');
+      }
+      this.relayCloseCode = code;
+      this.relayRejectedCredential = code === 4401;
       this.terminate(`Relay refused credential (${this.relayCloseCode})`); return;
     }
     if (hello['credentialKind'] !== this.relayOptions.credentialKind || !Number.isSafeInteger(hello['leaseExpiresAt'])
       || hello['leaseExpiresAt'] <= Date.now()) { throw new Error('Relay credential kind or lease mismatch'); }
-    if (hello['credentialKind'] === 'resume' && hello['acceptedCredentialVersion'] !== this.relayOptions.credentialVersion) {
-      throw new Error('Relay credential version mismatch');
+    if (hello['credentialKind'] === 'resume') {
+      let acceptedVersion: number = hello['acceptedCredentialVersion'];
+      let expectedVersion = this.relayOptions.credentialVersion;
+      let pendingVersion = this.relayOptions.pairingRecovery && expectedVersion === undefined;
+      if (!Number.isSafeInteger(acceptedVersion) || acceptedVersion <= 0 || (!pendingVersion && acceptedVersion !== expectedVersion)) {
+        throw new Error('Relay credential version mismatch');
+      }
+      this.relayAcceptedVersion = acceptedVersion;
     }
     this.beginHandshake(publicKeyB64);
   }
@@ -395,7 +417,7 @@ export class SpikeRpcClient {
     }
     this.state = 'ready';
     this.log('authenticated — channel ready');
-    if (this.relayOptions && this.relayOptions.credentialKind === 'resume') {
+    if (this.relayOptions && this.relayOptions.credentialKind === 'resume' && !this.relayOptions.pairingRecovery) {
       this.confirmResume(resolveConnect, rejectConnect);
     } else { resolveConnect(); }
   }

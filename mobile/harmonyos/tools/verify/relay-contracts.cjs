@@ -2,11 +2,19 @@ const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { loadArkts, util } = require('./arkts-source.cjs')
 
-function createRelayPeer({ expectedKind = 'resume', helloKind = 'resume', version = 3 } = {}) {
+function createRelayPeer({
+  expectedKind = 'resume',
+  helloKind = 'resume',
+  version = 3,
+  configure = {},
+  refusal,
+  closeOnlyCode
+} = {}) {
   const sent = []
   const contexts = []
   const handlers = new Map()
   const receive = (value) => handlers.get('message')(null, JSON.stringify(value))
+  const closeFromPeer = (code) => handlers.get('close')(null, { code, reason: '' })
   let confirm
   const webSocket = {
     createWebSocket() {
@@ -20,13 +28,25 @@ function createRelayPeer({ expectedKind = 'resume', helloKind = 'resume', versio
           const frame = JSON.parse(text)
           sent.push(frame)
           if (frame.type === 'relay-auth') {
-            receive({
-              type: 'relay-hello',
-              ok: true,
-              credentialKind: helloKind,
-              leaseExpiresAt: Date.now() + 60000,
-              acceptedCredentialVersion: version
-            })
+            if (closeOnlyCode) {
+              closeFromPeer(closeOnlyCode)
+            } else {
+              receive(
+                refusal ?? {
+                  type: 'relay-hello',
+                  ok: true,
+                  credentialKind: helloKind,
+                  leaseExpiresAt: 4102444800000,
+                  ...(helloKind === 'resume'
+                    ? {
+                        acceptedCredentialVersion: version,
+                        acceptedAs: 'current',
+                        resumeExpiresAt: 4102444800000
+                      }
+                    : {})
+                }
+              )
+            }
           } else if (frame.type === 'e2ee_hello') {
             receive({})
           } else if (frame.type === 'auth') {
@@ -44,7 +64,7 @@ function createRelayPeer({ expectedKind = 'resume', helloKind = 'resume', versio
                     currentVersion: version,
                     acceptedAs: 'current',
                     renewed: true,
-                    resumeExpiresAt: Date.now() + 86400000
+                    resumeExpiresAt: 4102444800000
                   }
                 }
               })
@@ -87,9 +107,10 @@ function createRelayPeer({ expectedKind = 'resume', helloKind = 'resume', versio
     relayHostId: 'abcdefghijklmnop',
     credential: 'A'.repeat(43),
     credentialKind: expectedKind,
-    credentialVersion: version
+    credentialVersion: version,
+    ...configure
   })
-  return { client, sent, contexts, confirm: () => confirm() }
+  return { client, sent, contexts, closeFromPeer, confirm: () => confirm() }
 }
 
 test('relay resume waits for authoritative confirmation after the outer and pinned handshakes', async () => {
@@ -116,6 +137,58 @@ test('an invite cannot be silently accepted as a stored resume credential', asyn
   const peer = createRelayPeer({ helloKind: 'invite' })
   await assert.rejects(peer.client.connect('wss://cell.example', 'device-token', 'key', 'v2'))
   assert.equal(peer.contexts.length, 0)
+})
+
+test('pairing recovery lets the first encrypted RPC reconcile installation and confirm resume', async () => {
+  const peer = createRelayPeer({
+    configure: { pairingRecovery: true, credentialVersion: undefined }
+  })
+  await peer.client.connect('wss://cell.example', 'device-token', 'pinned-key', 'v2')
+  assert.equal(peer.client.getRelayAcceptedVersion(), 3)
+  const result = peer.client.request(
+    'pairing.getEndpoints',
+    JSON.stringify({ installReqId: 'install-pending', resumeConfirmReqId: 'confirm-pending' })
+  )
+  assert.deepEqual(
+    peer.sent.map((frame) => frame.method ?? frame.type),
+    ['relay-auth', 'e2ee_hello', 'auth', 'pairing.getEndpoints']
+  )
+  assert.deepEqual(peer.sent[3].params, {
+    installReqId: 'install-pending',
+    resumeConfirmReqId: 'confirm-pending'
+  })
+  peer.confirm()
+  assert.equal(JSON.parse((await result).result).resumeConfirmation.reqId, 'confirm-pending')
+  peer.client.close()
+})
+
+test('a missing expected version is allowed only for recovery with a valid accepted version', async () => {
+  for (const options of [
+    { configure: { credentialVersion: undefined } },
+    { version: 0, configure: { pairingRecovery: true, credentialVersion: undefined } },
+    { configure: { pairingRecovery: true, credentialVersion: 2 } }
+  ]) {
+    const peer = createRelayPeer(options)
+    await assert.rejects(peer.client.connect('wss://cell.example', 'device-token', 'key', 'v2'))
+    assert.equal(peer.client.getRelayAcceptedVersion(), 0)
+  }
+})
+
+test('only an explicit valid relay refusal rejects the credential after a socket close', async () => {
+  const refused = createRelayPeer({ refusal: { type: 'relay-hello', ok: false, code: 4401 } })
+  await assert.rejects(refused.client.connect('wss://cell.example', 'device-token', 'key', 'v2'))
+  refused.closeFromPeer(1006)
+  assert.equal(refused.client.relayCredentialRejected(), true)
+  assert.equal(refused.client.getRelayCloseCode(), 4401)
+
+  for (const options of [
+    { closeOnlyCode: 4401 },
+    { refusal: { type: 'relay-hello', ok: false, code: 4401, unexpected: true } }
+  ]) {
+    const peer = createRelayPeer(options)
+    await assert.rejects(peer.client.connect('wss://cell.example', 'device-token', 'key', 'v2'))
+    assert.equal(peer.client.relayCredentialRejected(), false)
+  }
 })
 
 test('relay pairing authenticates the invite before any desktop credentials are sent', async () => {

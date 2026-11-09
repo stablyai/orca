@@ -6,6 +6,9 @@ const { loadArkts, util } = require('./arkts-source.cjs')
 function hostStorage() {
   let now = 1800000000000
   let failJournalRemove = false
+  let failJournalWrite = false
+  let recoveryDial
+  let randomSequence = 0
   const sha256 = (value) => Uint8Array.from(createHash('sha256').update(value).digest())
   const utf8Encode = (value) => Uint8Array.from(Buffer.from(value))
   const utf8Decode = (value) => Buffer.from(value).toString()
@@ -63,6 +66,25 @@ function hostStorage() {
     }
   }
   const stores = new Map()
+  const journals = new Map()
+  class DeviceRowStore {
+    constructor(_context, id) {
+      this.id = id
+    }
+    async readPairingJournal() {
+      return journals.get(this.id) ?? null
+    }
+    async writePairingJournal(value) {
+      if (failJournalWrite) {
+        failJournalWrite = false
+        throw new Error('Journal write interrupted')
+      }
+      journals.set(this.id, value)
+    }
+    async deletePairingJournal() {
+      journals.delete(this.id)
+    }
+  }
   function getPreferences(_context, { name }) {
     if (!stores.has(name)) {
       stores.set(name, new Map())
@@ -112,6 +134,10 @@ function hostStorage() {
       'getRelayCredential',
       'updateRelayCredential',
       'hostRemovalTimestamp',
+      'hostPairingTimestamp',
+      'readHostPairingJournal',
+      'writeHostPairingJournal',
+      'listHostPairingJournals',
       'clearHostPairingJournal'
     ],
     {
@@ -122,6 +148,7 @@ function hostStorage() {
       base64DecodeCanonical,
       asset,
       preferences,
+      DeviceRowStore,
       Date: clock
     }
   )
@@ -131,21 +158,26 @@ function hostStorage() {
       this.result = JSON.stringify(result)
     }
   }
-  const pairing = loadArkts(
-    'transport/RelayPairing.ets',
-    ['prepareRelayPairing', 'commitRelayPairing', 'recoverRelayPairings'],
-    {
-      ...protocol,
-      ...host,
-      asset,
-      preferences,
-      utf8Encode,
-      utf8Decode,
-      randomBytes: (length) => new Uint8Array(length).fill(7),
-      RpcSuccess,
-      Date: clock
-    }
-  )
+  const openPairing = () =>
+    loadArkts(
+      'transport/RelayPairing.ets',
+      ['beginRelayPairing', 'prepareRelayPairing', 'commitRelayPairing', 'recoverRelayPairings'],
+      {
+        ...protocol,
+        ...host,
+        randomBytes: (length) => new Uint8Array(length).fill(++randomSequence),
+        RpcSuccess,
+        PairingConnection: class {
+          connectRecoveryRelay(...args) {
+            return recoveryDial(...args)
+          }
+          close() {}
+        },
+        RELAY_PAIRING_CREDENTIAL_REJECTED: 'relay rejected the pairing credential',
+        Date: clock
+      }
+    )
+  const pairing = openPairing()
   const publicKeyB64 = Buffer.alloc(32, 2).toString('base64')
   const relay = {
     v: 1,
@@ -156,27 +188,33 @@ function hostStorage() {
     e2eeFraming: 2
   }
   const offer = {
+    endpoint: 'ws://127.0.0.1:6768',
     publicKeyB64,
     deviceToken: 'paired-device-token',
     relay: { ...relay, inviteToken: 'I'.repeat(43), inviteExpiresAt: now + 300000 }
   }
+  const installResult = (reqId) => ({
+    v: 1,
+    reqId,
+    currentVersion: 1,
+    resumeExpiresAt: 1800086400000,
+    authorizationMode: 'relay-basis'
+  })
+  const status = (reqId, result, resumeConfirmation) =>
+    new RpcSuccess('reply', {
+      v: 1,
+      relay,
+      installStatus: result
+        ? { v: 1, reqId, state: 'committed', result }
+        : { v: 1, reqId, state: 'not-found' },
+      resumeConfirmation
+    })
   const client = {
     isRelay: () => true,
-    async request(_method, json) {
-      const params = JSON.parse(json)
-      return new RpcSuccess('reply', {
-        relay,
-        installStatus: {
-          state: 'committed',
-          result: {
-            v: 1,
-            reqId: params.installReqId,
-            currentVersion: 1,
-            resumeExpiresAt: now + 86400000,
-            authorizationMode: 'relay-basis'
-          }
-        }
-      })
+    async request(method, json) {
+      assert.equal(method, 'pairing.getEndpoints')
+      const { installReqId } = JSON.parse(json)
+      return status(installReqId, installResult(installReqId))
     }
   }
   const meta = {
@@ -194,6 +232,23 @@ function hostStorage() {
     meta,
     relay,
     protocol,
+    openPairing,
+    status,
+    installResult,
+    installedReply: (result) => new RpcSuccess('install', result),
+    onRecoveryDial: (dial) => {
+      recoveryDial = dial
+    },
+    failJournalWrite: () => {
+      failJournalWrite = true
+    },
+    seedLegacyJournal: (journal) => {
+      records.set(`orca.relay.pair.${meta.id}`, utf8Encode(JSON.stringify(journal)))
+      getPreferences({}, { name: 'orca_relay_pairing' }).putSync(
+        'pending',
+        JSON.stringify([meta.id])
+      )
+    },
     advance: () => {
       now += 1000
       return now
@@ -204,15 +259,166 @@ function hostStorage() {
   }
 }
 
+const active = () => true
+
+test('interrupted relay installation and confirmation recover with the same install and a fresh socket proof', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance, status, installResult } = fixture
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  assert.equal((await host.readHostPairingJournal({}, meta.id)).draft.endpoint, offer.endpoint)
+  let committed
+  await assert.rejects(
+    pairing.prepareRelayPairing(
+      {},
+      journal,
+      meta,
+      {
+        async request(method, raw) {
+          const args = JSON.parse(raw)
+          if (method === 'pairing.getEndpoints') {
+            return status(args.installReqId, null)
+          }
+          assert.equal(method, 'pairing.provisionRelay')
+          assert.equal(args.reqId, journal.reqId)
+          assert.equal(args.newResumeTokenHash, journal.hash)
+          committed = installResult(args.reqId)
+          throw new Error('Response lost after install')
+        }
+      },
+      active
+    ),
+    /Response lost/
+  )
+  assert.equal((await host.listHosts({})).length, 0)
+  const proofs = []
+  fixture.onRecoveryDial(async (_offer, _relay, kind, token) => {
+    assert.equal(kind, 'resume')
+    assert.equal(token, journal.token)
+    return {
+      getRelayAcceptedVersion: () => 1,
+      async request(method, raw) {
+        assert.equal(method, 'pairing.getEndpoints')
+        const { installReqId, resumeConfirmReqId } = JSON.parse(raw)
+        assert.equal(installReqId, journal.reqId)
+        proofs.push(resumeConfirmReqId)
+        return status(installReqId, committed, {
+          v: 1,
+          reqId: resumeConfirmReqId,
+          currentVersion: 1,
+          acceptedAs: 'current',
+          renewed: true,
+          resumeExpiresAt: 1800172800000
+        })
+      }
+    }
+  })
+  fixture.failJournalWrite()
+  assert.deepEqual(Array.from(await fixture.openPairing().recoverRelayPairings({})), [])
+  assert.equal((await host.listHosts({})).length, 0)
+  assert.deepEqual(Array.from(await fixture.openPairing().recoverRelayPairings({})), [meta.id])
+  assert.equal(new Set(proofs).size, 2)
+  assert.equal((await host.listHosts({}))[0].name, 'Example desktop')
+  assert.equal((await host.getRelayCredential({}, meta.id)).expiresAt, 1800172800000)
+  assert.equal(await host.readHostPairingJournal({}, meta.id), null)
+})
+
+test('invite recovery retries the original install only after an authenticated not-found reply', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance, status, installResult, installedReply } = fixture
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  let disconnected = true
+  let installed = null
+  fixture.onRecoveryDial(async (_offer, _relay, kind) => {
+    if (kind === 'resume') {
+      throw new Error('relay rejected the pairing credential')
+    }
+    return {
+      isRelay: () => true,
+      async request(method, raw) {
+        const args = JSON.parse(raw)
+        if (method === 'pairing.getEndpoints') {
+          return disconnected ? { errorCode: 'closed' } : status(args.installReqId, installed)
+        }
+        assert.equal(method, 'pairing.provisionRelay')
+        assert.equal(disconnected, false)
+        assert.deepEqual(args, { reqId: journal.reqId, newResumeTokenHash: journal.hash })
+        installed = installResult(args.reqId)
+        return installedReply(installed)
+      }
+    }
+  })
+  assert.deepEqual(Array.from(await fixture.openPairing().recoverRelayPairings({})), [])
+  assert.equal((await host.readHostPairingJournal({}, meta.id)).reqId, journal.reqId)
+  disconnected = false
+  assert.deepEqual(Array.from(await fixture.openPairing().recoverRelayPairings({})), [meta.id])
+  assert.equal((await host.getRelayCredential({}, meta.id)).hash, journal.hash)
+})
+
+test('removing a desktop while invite recovery checks its status prevents a new remote install', async () => {
+  const fixture = hostStorage()
+  const { host, pairing, offer, meta, advance, status } = fixture
+  await host.saveHost({}, meta, 'existing-token', undefined, advance())
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  let requestStarted
+  const waiting = new Promise((resolve) => {
+    requestStarted = resolve
+  })
+  let resolveStatus
+  const pending = new Promise((resolve) => {
+    resolveStatus = resolve
+  })
+  const requests = []
+  fixture.onRecoveryDial(async (_offer, _relay, kind) => {
+    if (kind === 'resume') {
+      throw new Error('relay rejected the pairing credential')
+    }
+    return {
+      async request(method) {
+        requests.push(method)
+        requestStarted()
+        return pending
+      }
+    }
+  })
+  const recovery = fixture.openPairing().recoverRelayPairings({})
+  await waiting
+  advance()
+  await host.deleteHost({}, meta.id)
+  resolveStatus(status(journal.reqId, null))
+  assert.deepEqual(Array.from(await recovery), [])
+  assert.deepEqual(requests, ['pairing.getEndpoints'])
+  assert.equal((await host.listHosts({})).length, 0)
+  assert.equal(await host.readHostPairingJournal({}, meta.id), null)
+})
+
+test('a committed pairing journal from the Asset Store remains recoverable after upgrade', async () => {
+  const { host, pairing, meta, offer, relay, protocol, seedLegacyJournal, advance } = hostStorage()
+  const token = 'T'.repeat(43)
+  const hash = protocol.relayCredentialHash(token)
+  seedLegacyJournal({
+    startedAt: advance(),
+    reqId: 'old-install',
+    token,
+    hash,
+    offerKey: offer.publicKeyB64,
+    deviceToken: 'legacy-token',
+    committedMeta: { ...meta, relay },
+    credential: { token, hash, version: 2, expiresAt: 1800086400000 }
+  })
+  assert.deepEqual(Array.from(await pairing.recoverRelayPairings({})), [meta.id])
+  assert.equal(await host.getDeviceToken({}, meta.id), 'legacy-token')
+  assert.equal((await host.getRelayCredential({}, meta.id)).version, 2)
+  assert.equal(await host.readHostPairingJournal({}, meta.id), null)
+})
+
 test('removing a paired host prevents a committed but uncleared pairing journal from restoring its trust', async () => {
   const { host, pairing, offer, client, meta, advance, failJournalRemoval } = hostStorage()
-  const prepared = await pairing.prepareRelayPairing({}, offer, client)
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  const prepared = await pairing.prepareRelayPairing({}, journal, meta, client, active)
   failJournalRemoval()
-  await assert.rejects(
-    pairing.commitRelayPairing({}, meta, 'paired-device-token', prepared),
-    /Journal removal failed/
-  )
+  await pairing.commitRelayPairing({}, meta, 'paired-device-token', prepared, active)
   assert.equal((await host.listHosts({}))[0].id, meta.id)
+  assert.equal((await host.readHostPairingJournal({}, meta.id)).committedMeta.id, meta.id)
   advance()
   await host.deleteHost({}, meta.id)
   assert.deepEqual(Array.from(await host.listHosts({})), [])
@@ -238,8 +444,9 @@ test('a direct pairing started before removal cannot restore the removed desktop
 
 test('a late relay credential writer cannot overwrite credentials from a newer pairing', async () => {
   const { host, pairing, offer, client, meta, relay, protocol, advance } = hostStorage()
-  const prepared = await pairing.prepareRelayPairing({}, offer, client)
-  await pairing.commitRelayPairing({}, meta, 'paired-device-token', prepared)
+  const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
+  const prepared = await pairing.prepareRelayPairing({}, journal, meta, client, active)
+  await pairing.commitRelayPairing({}, meta, 'paired-device-token', prepared, active)
   const old = await host.getRelayCredential({}, meta.id)
   const oldFence = { deviceToken: 'paired-device-token', hash: old.hash, version: old.version }
   advance()

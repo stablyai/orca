@@ -9,10 +9,11 @@ import { playHapticFeedback } from '../settings/HapticFeedback';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { refreshDesktopConnection } from '../transport/DesktopConnections';
 import { PairingConnection, PAIRING_CODE_REFUSED } from '../pairing/PairingConnection';
-import { prepareRelayPairing, commitRelayPairing } from '../transport/RelayPairing';
+import { beginRelayPairing, finishRelayPairing, rememberRelayPairingMove, prepareRelayPairing, commitRelayPairing } from '../transport/RelayPairing';
 import { RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { parsePairingOffer, PairingOffer } from '../transport/E2eeV2Session';
-import { hostIdFor, saveHost, HostMeta } from '../storage/HostStore';
+import { RelayMove } from '../transport/RelayProtocol';
+import { hostIdFor, hostRemovalTimestamp, hostPairingTimestamp, saveHost, clearHostPairingJournal, HostMeta, PairingJournal } from '../storage/HostStore';
 import { randomBytes, toHex } from '../transport/crypto/Bytes';
 
 const TICKET_EXCHANGE_CAPABILITY = 'pairing.ticket-exchange.v1';
@@ -269,11 +270,21 @@ struct PairScan {
     this.deadline = setTimeout((): void => {
       this.timedOut = true; attempt.close();
     }, PAIR_TIMEOUT_MS);
+    let context = getContext(this);
+    let hostId = hostIdFor(offer.publicKeyB64);
+    let isActive = (): boolean => !this.disposed && !this.timedOut && pairingStartedAt > hostRemovalTimestamp(context, hostId)
+      && pairingStartedAt > hostPairingTimestamp(context, hostId);
+    let journal: PairingJournal | null = null;
     try {
       this.appendLog(this.t('正在验证配对信息…'));
       let endpoint = offer.endpoint;
+      journal = await beginRelayPairing(context, offer, pairingStartedAt, isActive);
+      if (!isActive()) { throw new Error('Pairing stopped'); }
+      if (journal?.relay) { offer.relay = journal.relay; }
       let connected = await attempt.connect(offer, (line: string): void => {
         if (!this.disposed) { this.appendLog(line); }
+      }, async (move: RelayMove): Promise<void> => {
+        if (journal) { await rememberRelayPairingMove(context, journal, move, isActive); }
       });
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
@@ -289,9 +300,9 @@ struct PairScan {
       }
       this.appendLog(`host: ${hostName}`);
 
-      if (this.disposed) { return; }
-      if (this.timedOut) { throw new Error('Pairing timed out'); }
-      let prepared = await prepareRelayPairing(getContext(this), offer, client, pairingStartedAt, (): boolean => !this.disposed && !this.timedOut);
+      let meta: HostMeta = { id: hostId, name: hostName, endpoint: endpoint,
+        publicKeyB64: offer.publicKeyB64, lastConnected: Date.now() };
+      let prepared = await prepareRelayPairing(context, journal, meta, client, isActive);
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
       let token = offer.deviceToken;
@@ -323,17 +334,13 @@ struct PairScan {
         this.appendLog('桌面未广播换票 capability，保留扫码 token');
       }
 
-      let meta: HostMeta = {
-        id: hostIdFor(offer.publicKeyB64),
-        name: hostName,
-        endpoint: endpoint,
-        publicKeyB64: offer.publicKeyB64,
-        lastConnected: Date.now()
-      };
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
-      if (prepared) { await commitRelayPairing(getContext(this), meta, token, prepared, (): boolean => !this.disposed && !this.timedOut); }
-      else { await saveHost(getContext(this), meta, token, undefined, pairingStartedAt); }
+      if (prepared) { await commitRelayPairing(context, meta, token, prepared, isActive); }
+      else {
+        await saveHost(context, meta, token, undefined, pairingStartedAt, false, journal ?? undefined);
+        if (journal) { await clearHostPairingJournal(context, hostId, journal).catch(() => {}); }
+      }
       refreshDesktopConnection(meta.id, 'paired');
       if (this.disposed) { return; }
       this.pairingCode = '';
@@ -354,6 +361,7 @@ struct PairScan {
     } finally {
       if (this.deadline >= 0) { clearTimeout(this.deadline); this.deadline = -1; }
       attempt.close();
+      if (journal) { finishRelayPairing(hostId, pairingStartedAt); }
       this.attempt = null;
       this.busy = false; this.updateCamera();
       if (!this.disposed && this.visible && navigationEpoch !== this.navigationEpoch

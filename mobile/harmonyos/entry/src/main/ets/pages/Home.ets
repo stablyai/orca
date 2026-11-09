@@ -11,7 +11,7 @@ import { removeDesktop } from '../storage/HostRemoval';
 import { listHosts, HostMeta } from '../storage/HostStore';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { SessionPhase } from '../transport/HostSession';
-import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
+import { DesktopConnectionLease, retainDesktopConnection, refreshDesktopConnection } from '../transport/DesktopConnections';
 import { HomeWorktree, readHomeCatalog } from '../home/HomeCatalog';
 import { AgentDesktop, AgentListRow, HomeAgentEntry, agentsNeedingYou } from '../home/AgentListModel';
 import { AgentListRows } from '../home/AgentListRows';
@@ -191,6 +191,7 @@ struct Home {
     this.appInForeground = true;
     this.updateTabClock();
     if (this.visible) {
+      this.recoverPairings();
       enterHomePrewarm(); this.schedulePrewarm();
       this.runtimes.forEach((rt: HostRuntime, id: string): void => {
         if (rt.client && rt.online) { this.fetchCatalog(rt.client, id, this.epoch); }
@@ -219,6 +220,7 @@ struct Home {
       setTimeout((): void => { router.pushUrl({ url: page, params: params }).catch(() => {}); }, 0);
     }
     this.reload();
+    this.recoverPairings();
     getNumber(getContext(this) as common.Context, KEY_HOME_FONT_SCALE).then((v: number): void => {
       this.fontScale = Math.max(0.8, Math.min(1.5, v));
     }).catch(() => {});
@@ -263,7 +265,7 @@ struct Home {
   reload(): void {
     let loadEpoch = ++this.loadEpoch;
     let context = getContext(this) as common.Context;
-    recoverRelayPairings(context).then(() => listHosts(context)).then((hosts: HostMeta[]): void => {
+    listHosts(context).then((hosts: HostMeta[]): void => {
       if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.hosts = hosts.slice().sort((left: HostMeta, right: HostMeta): number => right.lastConnected - left.lastConnected);
       this.agentCatalogs.forEach((_catalog: AgentCatalog, id: string): void => {
@@ -278,6 +280,15 @@ struct Home {
       this.loaded = true;
       this.loadError = '无法读取已配对桌面，请重试。';
     });
+  }
+
+  private recoverPairings(): void {
+    let context = getContext(this) as common.Context;
+    recoverRelayPairings(context).then((hostIds: string[]): void => {
+      if (hostIds.length === 0) { return; }
+      hostIds.forEach((id: string): void => refreshDesktopConnection(id, 'paired'));
+      if (this.visible) { this.reload(); }
+    }).catch(() => {});
   }
 
   private openPendingOnboarding(context: common.Context): boolean {

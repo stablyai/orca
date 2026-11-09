@@ -1,131 +1,281 @@
 import { common } from '@kit.AbilityKit';
-import { asset } from '@kit.AssetStoreKit';
-import { preferences } from '@kit.ArkData';
-import { BusinessError } from '@kit.BasicServicesKit';
 import { PairingOffer } from './E2eeV2Session';
 import { SpikeRpcClient, RpcSuccess } from './SpikeRpcClient';
-import { RelayEndpoint, RelayCredential, readRelayEndpoint, relayBase64Url, relayCredentialHash } from './RelayProtocol';
-import { randomBytes, utf8Encode, utf8Decode } from './crypto/Bytes';
-import { HostMeta, hostIdFor, saveHost, hostRemovalTimestamp, clearHostPairingJournal } from '../storage/HostStore';
+import { PairingRelay, RelayEndpoint, RelayCredential, RelayMove, readRelayEndpoint, relayBase64Url, relayCredentialHash } from './RelayProtocol';
+import { PairingConnection, RELAY_PAIRING_CREDENTIAL_REJECTED } from '../pairing/PairingConnection';
+import { randomBytes } from './crypto/Bytes';
+import { HostMeta, PairingJournal, hostIdFor, saveHost, hostRemovalTimestamp, hostPairingTimestamp,
+  readHostPairingJournal, writeHostPairingJournal, clearHostPairingJournal, listHostPairingJournals } from '../storage/HostStore';
 
-export interface RelayPairingPrepared { endpoint: RelayEndpoint; credential: RelayCredential; journalId: string; startedAt: number; }
-interface PairingJournal { startedAt: number; reqId: string; token: string; hash: string; offerKey: string; deviceToken: string; committedMeta?: HostMeta; credential?: RelayCredential; }
-async function readJournal(hostId: string): Promise<PairingJournal | null> {
-  let query: asset.AssetMap = new Map(); query.set(asset.Tag.ALIAS, utf8Encode(`orca.relay.pair.${hostId}`));
-  query.set(asset.Tag.RETURN_TYPE, asset.ReturnType.ALL);
-  try {
-    let found = await asset.query(query);
-    if (!found.length) { return null; }
-    return JSON.parse(utf8Decode(found[0].get(asset.Tag.SECRET) as Uint8Array)) as PairingJournal;
-  } catch (e) { if ((e as BusinessError).code === asset.ErrorCode.NOT_FOUND) { return null; } throw e as Error; }
+const RECOVERY_GRACE_MS = 10 * 60 * 1000;
+const RECOVERY_TIMEOUT_MS = 25000;
+const RPC_TIMEOUT_MS = 8000;
+const activePairings = new Map<string, number>();
+let recovering: Promise<string[]> | null = null;
+
+interface InstalledCredential {
+  version: number;
+  expiresAt: number;
+  authorizationMode: string;
+  graceExpiresAt?: number;
 }
-async function writeJournal(context: common.Context, hostId: string, journal: PairingJournal): Promise<void> {
-  if (!Number.isSafeInteger(journal.startedAt) || (hostRemovalTimestamp(context, hostId) > 0 && journal.startedAt <= hostRemovalTimestamp(context, hostId))) {
-    throw new Error('Pairing was superseded by desktop removal');
-  }
-  let held = await readJournal(hostId);
-  if (held && Number.isSafeInteger(held.startedAt) && held.startedAt > journal.startedAt) { throw new Error('Pairing journal was superseded'); }
-  let alias = utf8Encode(`orca.relay.pair.${hostId}`); let encoded = utf8Encode(JSON.stringify(journal));
-  let secret: asset.AssetMap = new Map(); secret.set(asset.Tag.ALIAS, alias); secret.set(asset.Tag.SECRET, encoded);
-  try { await asset.add(secret); }
-  catch (e) {
-    if ((e as BusinessError).code !== asset.ErrorCode.DUPLICATED) { throw e as Error; }
-    let query: asset.AssetMap = new Map(); query.set(asset.Tag.ALIAS, alias);
-    let update: asset.AssetMap = new Map(); update.set(asset.Tag.SECRET, encoded); await asset.update(query, update);
-  }
-  let prefs = preferences.getPreferencesSync(context, { name: 'orca_relay_pairing' });
-  let ids = JSON.parse(prefs.getSync('pending', '[]') as string) as string[];
-  if (!ids.includes(hostId)) { ids.push(hostId); prefs.putSync('pending', JSON.stringify(ids)); prefs.flushSync(); }
+interface InstallStatus {
+  endpoint: RelayEndpoint;
+  state: string;
+  installed?: InstalledCredential;
+  confirmation?: ESObject;
 }
-async function clearJournal(context: common.Context, hostId: string): Promise<void> {
-  await clearHostPairingJournal(context, hostId);
+export interface RelayPairingPrepared {
+  endpoint: RelayEndpoint;
+  credential: RelayCredential;
+  journal: PairingJournal;
 }
 
 function assertPairingActive(isActive: () => boolean): void {
   if (!isActive()) { throw new Error('Pairing was cancelled'); }
 }
 
-export async function prepareRelayPairing(context: common.Context, offer: PairingOffer, client: SpikeRpcClient, pairingStartedAt: number = Date.now(), isActive: () => boolean = (): boolean => true): Promise<RelayPairingPrepared | null> {
-  assertPairingActive(isActive);
-  if (!offer.relay) { return null; }
+export async function beginRelayPairing(context: common.Context, offer: PairingOffer, startedAt: number,
+  isActive: () => boolean): Promise<PairingJournal | null> {
+  let relay = offer.relay;
+  if (!relay) { return null; }
   let hostId = hostIdFor(offer.publicKeyB64);
-  let journal = await readJournal(hostId);
-  assertPairingActive(isActive);
-  if (!journal || journal.offerKey !== offer.publicKeyB64 || journal.deviceToken !== offer.deviceToken || journal.committedMeta || !Number.isSafeInteger(journal.startedAt)
-    || (hostRemovalTimestamp(context, hostId) > 0 && journal.startedAt <= hostRemovalTimestamp(context, hostId))) {
-    let token = relayBase64Url(randomBytes(32));
-    journal = { startedAt: pairingStartedAt, reqId: `install-${relayBase64Url(randomBytes(16))}`, token: token, hash: relayCredentialHash(token),
-      offerKey: offer.publicKeyB64, deviceToken: offer.deviceToken };
+  if (activePairings.has(hostId)) { throw new Error('Pairing is already in progress'); }
+  activePairings.set(hostId, startedAt);
+  try {
+    let previous = await readHostPairingJournal(context, hostId);
     assertPairingActive(isActive);
-    await writeJournal(context, hostId, journal);
-    assertPairingActive(isActive);
+    let reuse = previous && !previous.committedMeta && previous.startedAt > hostRemovalTimestamp(context, hostId)
+      && previous.startedAt >= hostPairingTimestamp(context, hostId)
+      && previous.offerKey === offer.publicKeyB64 && previous.deviceToken === offer.deviceToken
+      && (!previous.relay || previous.relay.inviteToken === relay.inviteToken);
+    let token = reuse && previous ? previous.token : relayBase64Url(randomBytes(32));
+    let reqId = reuse && previous ? previous.reqId : `install-${relayBase64Url(randomBytes(16))}`;
+    if (reuse && previous?.relay && previous.relay.assignmentEpoch > relay.assignmentEpoch) { relay = previous.relay; }
+    let draft: HostMeta = { id: hostId, name: offer.endpoint, endpoint: offer.endpoint, publicKeyB64: offer.publicKeyB64,
+      lastConnected: startedAt };
+    let journal: PairingJournal = { startedAt: startedAt, reqId: reqId, token: token, hash: relayCredentialHash(token),
+      offerKey: offer.publicKeyB64, deviceToken: offer.deviceToken, draft: draft, relay: relay };
+    await writeHostPairingJournal(context, hostId, journal, previous ?? undefined);
+    return journal;
+  } catch (e) {
+    finishRelayPairing(hostId, startedAt); throw e as Error;
   }
-  let query: Record<string, string> = { 'installReqId': journal.reqId };
+}
+
+export function finishRelayPairing(hostId: string, startedAt: number): void {
+  if (activePairings.get(hostId) === startedAt) { activePairings.delete(hostId); }
+}
+
+export async function rememberRelayPairingMove(context: common.Context, journal: PairingJournal, move: RelayMove,
+  isActive: () => boolean): Promise<void> {
+  let relay = journal.relay;
+  if (!relay || move.assignmentEpoch <= relay.assignmentEpoch) { return; }
   assertPairingActive(isActive);
-  let response = await client.request('pairing.getEndpoints', JSON.stringify(query));
-  assertPairingActive(isActive);
-  let endpointResult: ESObject = response instanceof RpcSuccess ? JSON.parse(response.result) : null;
-  let status: ESObject = endpointResult ? endpointResult['installStatus'] : null;
-  if (!status || status['state'] !== 'committed') {
-    let params: Record<string, string> = { 'reqId': journal.reqId, 'newResumeTokenHash': journal.hash };
-    assertPairingActive(isActive);
-    let provision = await client.request('pairing.provisionRelay', JSON.stringify(params));
-    assertPairingActive(isActive);
-    if (!(provision instanceof RpcSuccess)) {
-      if (!client.isRelay() && ['unknown_method', 'method_not_found', 'not_supported', 'relay_unavailable', 'forbidden'].includes(provision.errorCode)) {
-        await clearJournal(context, hostId); assertPairingActive(isActive); return null;
-      }
-      throw new Error('Relay credential installation failed; pair again to reconcile');
-    }
-    let installed: ESObject = JSON.parse(provision.result);
-    assertPairingActive(isActive);
-    response = await client.request('pairing.getEndpoints', JSON.stringify(query));
-    assertPairingActive(isActive);
-    if (!(response instanceof RpcSuccess)) { throw new Error('Relay credential installation status unavailable'); }
-    endpointResult = JSON.parse(response.result); status = endpointResult['installStatus'];
-    if (!status || status['state'] !== 'committed' || JSON.stringify(status['result']) !== JSON.stringify(installed)) {
-      throw new Error('Relay credential install was not authoritatively committed');
-    }
-  }
-  let installed: ESObject = status['result'];
-  if (!installed || installed['v'] !== 1 || installed['reqId'] !== journal.reqId
-    || !Number.isSafeInteger(installed['currentVersion']) || installed['currentVersion'] < 1
-    || !Number.isSafeInteger(installed['resumeExpiresAt']) || installed['resumeExpiresAt'] <= Date.now()
-    || !['relay-basis', 'authenticated-direct'].includes(installed['authorizationMode'])) {
+  let next: PairingRelay = { v: relay.v, directorUrl: relay.directorUrl, cellUrl: move.cellUrl,
+    assignmentEpoch: move.assignmentEpoch, relayHostId: relay.relayHostId, e2eeFraming: relay.e2eeFraming,
+    inviteToken: relay.inviteToken, inviteExpiresAt: relay.inviteExpiresAt };
+  journal.relay = next;
+  await writeHostPairingJournal(context, hostIdFor(journal.offerKey), journal, journal);
+}
+
+function readInstalled(raw: ESObject, reqId: string): InstalledCredential {
+  if (!raw || raw['v'] !== 1 || raw['reqId'] !== reqId || !Number.isSafeInteger(raw['currentVersion'])
+    || raw['currentVersion'] < 1 || !Number.isSafeInteger(raw['resumeExpiresAt']) || raw['resumeExpiresAt'] < 0
+    || !['relay-basis', 'authenticated-direct'].includes(raw['authorizationMode'])) {
     throw new Error('Invalid relay credential installation result');
   }
-  let endpoint = readRelayEndpoint(endpointResult['relay'], offer.publicKeyB64);
-  let credential: RelayCredential = { token: journal.token, hash: journal.hash, version: installed['currentVersion'], expiresAt: installed['resumeExpiresAt'] };
-  let prepared: RelayPairingPrepared = { endpoint: endpoint, credential: credential, journalId: hostId, startedAt: journal.startedAt };
-  return prepared;
+  return { version: raw['currentVersion'], expiresAt: raw['resumeExpiresAt'], authorizationMode: raw['authorizationMode'],
+    graceExpiresAt: raw['graceExpiresAt'] };
 }
 
-export async function commitRelayPairing(context: common.Context, meta: HostMeta, deviceToken: string, prepared: RelayPairingPrepared, isActive: () => boolean = (): boolean => true): Promise<void> {
-  assertPairingActive(isActive);
-  let journal = await readJournal(meta.id);
-  assertPairingActive(isActive);
-  if (!journal || journal.token !== prepared.credential.token) { throw new Error('Relay pairing journal changed'); }
-  assertPairingActive(isActive);
-  meta.relay = prepared.endpoint;
-  journal.deviceToken = deviceToken; journal.committedMeta = meta; journal.credential = prepared.credential;
-  await writeJournal(context, meta.id, journal);
-  await saveHost(context, meta, deviceToken, prepared.credential, prepared.startedAt);
-  await clearJournal(context, meta.id);
-}
-
-export async function recoverRelayPairings(context: common.Context): Promise<void> {
-  let prefs = preferences.getPreferencesSync(context, { name: 'orca_relay_pairing' });
-  let ids = JSON.parse(prefs.getSync('pending', '[]') as string) as string[];
-  for (let i = 0; i < ids.length; i++) {
-    if (!/^[a-f0-9]{32}$/.test(ids[i])) { continue; }
-    let journal = await readJournal(ids[i]);
-    let removedAt = hostRemovalTimestamp(context, ids[i]);
-    if (removedAt > 0 && (!journal || !Number.isSafeInteger(journal.startedAt) || journal.startedAt <= removedAt)) {
-      await clearJournal(context, ids[i]); continue;
-    }
-    if (journal && journal.committedMeta && journal.credential) {
-      await saveHost(context, journal.committedMeta, journal.deviceToken, journal.credential, journal.startedAt, true);
-      await clearJournal(context, ids[i]);
-    }
+function readStatus(reply: RpcSuccess, journal: PairingJournal): InstallStatus | null {
+  let result: ESObject = JSON.parse(reply.result);
+  let status: ESObject = result?.['installStatus'];
+  if (!status) { return null; }
+  if (result['v'] !== 1 || status['v'] !== 1 || status['reqId'] !== journal.reqId ||
+    !['committed', 'not-found'].includes(status['state'])) { throw new Error('Invalid relay installation status'); }
+  let endpoint = readRelayEndpoint(result['relay'], journal.offerKey);
+  let relay = journal.relay;
+  if (relay && (endpoint.assignmentEpoch < relay.assignmentEpoch ||
+    (endpoint.assignmentEpoch === relay.assignmentEpoch && endpoint.cellUrl !== relay.cellUrl))) {
+    throw new Error('Relay endpoint was superseded');
   }
+  return { endpoint: endpoint, state: status['state'],
+    installed: status['state'] === 'committed' ? readInstalled(status['result'], journal.reqId) : undefined,
+    confirmation: result['resumeConfirmation'] };
+}
+
+function sameInstall(left: InstalledCredential, right: InstalledCredential): boolean {
+  return left.version === right.version && left.expiresAt === right.expiresAt
+    && left.authorizationMode === right.authorizationMode && left.graceExpiresAt === right.graceExpiresAt;
+}
+
+function prepared(journal: PairingJournal, status: InstallStatus, expiresAt?: number): RelayPairingPrepared {
+  let installed = status.installed;
+  if (!installed || (expiresAt ?? installed.expiresAt) <= Date.now()) { throw new Error('Relay install is not current'); }
+  let credential: RelayCredential = { token: journal.token, hash: journal.hash, version: installed.version,
+    expiresAt: expiresAt ?? installed.expiresAt };
+  return { endpoint: status.endpoint, credential: credential, journal: journal };
+}
+
+async function provision(client: SpikeRpcClient, journal: PairingJournal, isActive: () => boolean): Promise<InstallStatus | null> {
+  assertPairingActive(isActive);
+  let params: Record<string, string> = { 'reqId': journal.reqId, 'newResumeTokenHash': journal.hash };
+  let reply = await client.request('pairing.provisionRelay', JSON.stringify(params), RPC_TIMEOUT_MS);
+  assertPairingActive(isActive);
+  if (!(reply instanceof RpcSuccess)) {
+    if (!client.isRelay() && ['unknown_method', 'method_not_found', 'not_supported', 'relay_unavailable', 'forbidden'].includes(reply.errorCode)) {
+      return null;
+    }
+    throw new Error('Relay credential installation is unresolved');
+  }
+  let installed = readInstalled(JSON.parse(reply.result), journal.reqId);
+  let query: Record<string, string> = { 'installReqId': journal.reqId };
+  let response = await client.request('pairing.getEndpoints', JSON.stringify(query), RPC_TIMEOUT_MS);
+  assertPairingActive(isActive);
+  let status = response instanceof RpcSuccess ? readStatus(response, journal) : null;
+  if (!status || !status.installed || !sameInstall(status.installed, installed)) {
+    throw new Error('Relay credential installation is not confirmed');
+  }
+  return status;
+}
+
+export async function prepareRelayPairing(context: common.Context, journal: PairingJournal | null, meta: HostMeta,
+  client: SpikeRpcClient, isActive: () => boolean): Promise<RelayPairingPrepared | null> {
+  if (!journal) { return null; }
+  assertPairingActive(isActive);
+  journal.draft = meta;
+  await writeHostPairingJournal(context, meta.id, journal, journal);
+  assertPairingActive(isActive);
+  let query: Record<string, string> = { 'installReqId': journal.reqId };
+  let reply = await client.request('pairing.getEndpoints', JSON.stringify(query), RPC_TIMEOUT_MS);
+  assertPairingActive(isActive);
+  let status = reply instanceof RpcSuccess ? readStatus(reply, journal) : null;
+  if (!status?.installed) { status = await provision(client, journal, isActive); }
+  if (!status) { return null; }
+  return prepared(journal, status);
+}
+
+export async function commitRelayPairing(context: common.Context, meta: HostMeta, deviceToken: string,
+  relayPairing: RelayPairingPrepared, isActive: () => boolean): Promise<void> {
+  assertPairingActive(isActive);
+  let journal = relayPairing.journal;
+  meta.relay = relayPairing.endpoint;
+  let committed: PairingJournal = { startedAt: journal.startedAt, reqId: journal.reqId, token: journal.token,
+    hash: journal.hash, offerKey: journal.offerKey, deviceToken: deviceToken, committedMeta: meta, credential: relayPairing.credential };
+  await writeHostPairingJournal(context, meta.id, committed, journal);
+  assertPairingActive(isActive);
+  await publishCommitted(context, committed);
+}
+
+async function publishCommitted(context: common.Context, journal: PairingJournal): Promise<void> {
+  let meta = journal.committedMeta;
+  let credential = journal.credential;
+  if (!meta || !credential) { throw new Error('Relay journal is missing the committed credential'); }
+  await saveHost(context, meta, journal.deviceToken, credential, journal.startedAt, true, journal);
+  // A later startup may clean up the journal if only this deletion failed.
+  await clearHostPairingJournal(context, meta.id, journal).catch(() => {});
+}
+
+async function resumeInstall(client: SpikeRpcClient, journal: PairingJournal, observeCommitted: () => void): Promise<RelayPairingPrepared | null> {
+  // A resume confirmation is bound to this socket's basis connection, not the install request.
+  let confirmId = `confirm-${relayBase64Url(randomBytes(16))}`;
+  let query: Record<string, string> = { 'installReqId': journal.reqId, 'resumeConfirmReqId': confirmId };
+  let reply = await client.request('pairing.getEndpoints', JSON.stringify(query), RPC_TIMEOUT_MS);
+  let status = reply instanceof RpcSuccess ? readStatus(reply, journal) : null;
+  if (!status?.installed) { return null; }
+  observeCommitted();
+  let proof: ESObject = status.confirmation;
+  if (!proof || proof['v'] !== 1 || proof['reqId'] !== confirmId || proof['acceptedAs'] !== 'current'
+    || proof['currentVersion'] !== client.getRelayAcceptedVersion() || proof['currentVersion'] !== status.installed.version
+    || typeof proof['renewed'] !== 'boolean' || !Number.isSafeInteger(proof['resumeExpiresAt'])
+    || proof['resumeExpiresAt'] <= Date.now()) { throw new Error('Invalid relay pairing resume confirmation'); }
+  return prepared(journal, status, proof['resumeExpiresAt']);
+}
+
+async function inviteInstall(client: SpikeRpcClient, journal: PairingJournal,
+  isActive: () => boolean, observeCommitted: () => void): Promise<RelayPairingPrepared | null> {
+  let query: Record<string, string> = { 'installReqId': journal.reqId };
+  let reply = await client.request('pairing.getEndpoints', JSON.stringify(query), RPC_TIMEOUT_MS);
+  assertPairingActive(isActive);
+  let status = reply instanceof RpcSuccess ? readStatus(reply, journal) : null;
+  if (status?.state === 'not-found') { status = await provision(client, journal, isActive); }
+  if (!status?.installed) { return null; }
+  observeCommitted();
+  return prepared(journal, status);
+}
+
+async function recoverPending(context: common.Context, journal: PairingJournal, meta: HostMeta, relay: PairingRelay): Promise<boolean> {
+  let offer: PairingOffer = { endpoint: meta.endpoint, deviceToken: journal.deviceToken, publicKeyB64: journal.offerKey,
+    scope: '', hasRelay: true, relay: relay };
+  let timedOut = false;
+  let attempt: PairingConnection | null = null;
+  let deadline = setTimeout((): void => { timedOut = true; attempt?.close(); }, RECOVERY_TIMEOUT_MS);
+  let isActive = (): boolean => !timedOut && !activePairings.has(meta.id)
+    && journal.startedAt > hostRemovalTimestamp(context, meta.id) && journal.startedAt > hostPairingTimestamp(context, meta.id);
+  let kinds = relay.inviteExpiresAt > Date.now() ? ['resume', 'invite'] : ['resume'];
+  let refused = 0;
+  let observedCommitted = false;
+  let observeCommitted = (): void => { observedCommitted = true; };
+  try {
+    for (let kind of kinds) {
+      if (!isActive()) { return false; }
+      let connection = new PairingConnection();
+      attempt = connection;
+      let recovered: RelayPairingPrepared | null = null;
+      try {
+        let latest = journal.relay ?? relay;
+        let client = await connection.connectRecoveryRelay(offer, latest, kind, kind === 'resume' ? journal.token : relay.inviteToken,
+          (move: RelayMove): Promise<void> => rememberRelayPairingMove(context, journal, move, isActive));
+        assertPairingActive(isActive);
+        recovered = kind === 'resume' ? await resumeInstall(client, journal, observeCommitted)
+          : await inviteInstall(client, journal, isActive, observeCommitted);
+      } catch (e) {
+        if ((e as Error).message === RELAY_PAIRING_CREDENTIAL_REJECTED) { refused++; }
+      } finally { connection.close(); attempt = null; }
+      if (recovered) {
+        await commitRelayPairing(context, meta, journal.deviceToken, recovered, isActive);
+        return true;
+      }
+    }
+    if (isActive() && !observedCommitted && (refused === kinds.length || relay.inviteExpiresAt + RECOVERY_GRACE_MS <= Date.now())) {
+      await clearHostPairingJournal(context, meta.id, journal);
+    }
+    return false;
+  } finally { clearTimeout(deadline); }
+}
+
+async function recoverHost(context: common.Context, id: string): Promise<boolean> {
+  if (activePairings.has(id)) { return false; }
+  let journal = await readHostPairingJournal(context, id);
+  if (activePairings.has(id)) { return false; }
+  if (!journal) { return false; }
+  if (journal.startedAt <= hostRemovalTimestamp(context, id) || journal.startedAt <= hostPairingTimestamp(context, id)) {
+    await clearHostPairingJournal(context, id, journal); return false;
+  }
+  if (hostIdFor(journal.offerKey) !== id || journal.hash !== relayCredentialHash(journal.token)) { return false; }
+  if (journal.committedMeta && journal.credential) {
+    if (journal.committedMeta.id !== id) { return false; }
+    await publishCommitted(context, journal);
+    return true;
+  }
+  let draft = journal.draft;
+  let relay = journal.relay;
+  if (!draft || draft.id !== id || draft.publicKeyB64 !== journal.offerKey || !relay) { return false; }
+  return recoverPending(context, journal, draft, relay);
+}
+
+export function recoverRelayPairings(context: common.Context): Promise<string[]> {
+  if (recovering) { return recovering; }
+  recovering = Promise.resolve().then(async (): Promise<string[]> => {
+    let ids = listHostPairingJournals(context);
+    let restored: string[] = [];
+    for (let id of ids) {
+      try { if (await recoverHost(context, id)) { restored.push(id); } }
+      catch (e) { }
+    }
+    return restored;
+  }).finally((): void => { recovering = null; });
+  return recovering;
 }

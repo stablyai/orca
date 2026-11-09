@@ -11,6 +11,8 @@ interface RowFile { path: string; bytes: number; modified: number; }
 interface RowOp { key: string; value: string | null; }
 const MAX_VALUE = 512 * 1024;
 const READ_BUDGET = 6 * 1024 * 1024;
+const PAIRING_TABLE = 'pairing';
+const PAIRING_KEY = 'journal';
 const queues: Map<string, Promise<RowResult>> = new Map();
 
 export class DeviceRowStore {
@@ -22,6 +24,7 @@ export class DeviceRowStore {
     this.context = context; this.hostId = hostId;
   }
   private root(table: string): string {
+    if (table === PAIRING_TABLE) { return `${this.context.filesDir}/orca-pairing-rows/${this.hostId}`; }
     return `${table === 'cache' ? this.context.cacheDir : this.context.filesDir}/orca-rows/${this.hostId}/${table}`;
   }
   private path(table: string, key: string): string {
@@ -39,9 +42,12 @@ export class DeviceRowStore {
     }
     return files;
   }
-  private async openKey(): Promise<Uint8Array> {
-    if (this.key) { return this.key; }
-    let alias = utf8Encode(`orca.rows.key.${this.hostId}`);
+  private pairingKeyAlias(): Uint8Array {
+    return utf8Encode(`orca.pairing.rows.key.${this.hostId}`);
+  }
+  private async openKey(pairing: boolean = false): Promise<Uint8Array> {
+    if (!pairing && this.key) { return this.key; }
+    let alias = pairing ? this.pairingKeyAlias() : utf8Encode(`orca.rows.key.${this.hostId}`);
     let query: asset.AssetMap = new Map();
     query.set(asset.Tag.ALIAS, alias); query.set(asset.Tag.RETURN_TYPE, asset.ReturnType.ALL);
     let found: Array<asset.AssetMap> = [];
@@ -50,15 +56,72 @@ export class DeviceRowStore {
     if (found.length > 0) {
       let key = found[0].get(asset.Tag.SECRET) as Uint8Array;
       if (!key || key.length !== 32) { throw new Error('Device store key unavailable'); }
-      this.key = key; return key;
+      if (!pairing) { this.key = key; }
+      return key;
     }
-    if (this.files(this.root('draft')).length > 0 || this.files(this.root('cache')).length > 0) {
+    let hasRows = pairing ? fs.accessSync(this.path(PAIRING_TABLE, PAIRING_KEY))
+      : this.files(this.root('draft')).length > 0 || this.files(this.root('cache')).length > 0;
+    if (hasRows) {
       throw new Error('Device store key unavailable');
     }
     let key = naclRandomBytes(32);
     let secret: asset.AssetMap = new Map();
     secret.set(asset.Tag.ALIAS, alias); secret.set(asset.Tag.SECRET, key);
-    await asset.add(secret); this.key = key; return key;
+    await asset.add(secret);
+    if (!pairing) { this.key = key; }
+    return key;
+  }
+  async readPairingJournal(): Promise<string | null> {
+    if (!fs.accessSync(this.path(PAIRING_TABLE, PAIRING_KEY))) { return null; }
+    return this.readValue(PAIRING_TABLE, PAIRING_KEY, await this.openKey(true));
+  }
+  async writePairingJournal(value: string): Promise<void> {
+    if (value.length > MAX_VALUE) { throw new Error('Pairing journal is too large'); }
+    let encoded = this.encodeValue(PAIRING_TABLE, PAIRING_KEY, value, await this.openKey(true));
+    if (encoded.length > MAX_VALUE * 2) { throw new Error('Pairing journal is too large'); }
+    let directory = this.root(PAIRING_TABLE);
+    if (!fs.accessSync(directory)) { fs.mkdirSync(directory, true); }
+    this.commitValue(this.path(PAIRING_TABLE, PAIRING_KEY), encoded);
+  }
+  async deletePairingJournal(): Promise<void> {
+    let directory = this.root(PAIRING_TABLE);
+    if (fs.accessSync(directory)) { fs.rmdirSync(directory); }
+    let query: asset.AssetMap = new Map(); query.set(asset.Tag.ALIAS, this.pairingKeyAlias());
+    try { await asset.remove(query); }
+    catch (e) { if ((e as BusinessError).code !== asset.ErrorCode.NOT_FOUND) { throw e as Error; } }
+  }
+  private readValue(table: string, name: string, key: Uint8Array): string | null {
+    let path = this.path(table, name);
+    if (!fs.accessSync(path)) { return null; }
+    if (fs.statSync(path).size > MAX_VALUE * 2) { throw new Error('Invalid device row'); }
+    let encoded = base64DecodeCanonical(fs.readTextSync(path));
+    if (!encoded || encoded.length < 40) { throw new Error('Invalid device row'); }
+    let plain = naclSecretboxOpen(encoded.subarray(24), encoded.subarray(0, 24), key);
+    if (!plain) { throw new Error('Unreadable device row'); }
+    let row = JSON.parse(utf8Decode(plain)) as Record<string, Object>;
+    if (row['host'] !== this.hostId || row['table'] !== table || row['key'] !== name
+      || typeof row['value'] !== 'string' || (row['value'] as string).length > MAX_VALUE) {
+      throw new Error('Invalid device row identity');
+    }
+    return row['value'] as string;
+  }
+  private encodeValue(table: string, name: string, value: string, key: Uint8Array): string {
+    let nonce = naclRandomBytes(24);
+    let row: Record<string, string> = { 'host': this.hostId, 'table': table, 'key': name, 'value': value };
+    return base64Encode(concatBytes([nonce, naclSecretbox(utf8Encode(JSON.stringify(row)), nonce, key)]));
+  }
+  private commitValue(path: string, value: string | null): void {
+    if (value === null) { if (fs.accessSync(path)) { fs.unlinkSync(path); } return; }
+    let temp = `${path}.tmp`;
+    let committed = false;
+    try {
+      let file = fs.openSync(temp, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+      try {
+        if (fs.writeSync(file.fd, value) !== value.length) { throw new Error('Device row write incomplete'); }
+        fs.fsyncSync(file.fd);
+      } finally { fs.closeSync(file); }
+      fs.renameSync(temp, path); committed = true;
+    } finally { if (!committed && fs.accessSync(temp)) { fs.unlinkSync(temp); } }
   }
   serve(params: ESObject): Promise<Object> {
     this.validate(params);
@@ -103,19 +166,9 @@ export class DeviceRowStore {
         let values: Array<string | null> = []; let deferred: number[] = []; let filled = 0;
         for (let i = 0; i < names.length; i++) {
           if (filled + MAX_VALUE > READ_BUDGET) { values.push(null); deferred.push(i); continue; }
-          let path = this.path(table, names[i]);
-          if (!fs.accessSync(path)) { values.push(null); continue; }
-          if (fs.statSync(path).size > MAX_VALUE * 2) { throw new Error('Invalid device row'); }
-          let encoded = base64DecodeCanonical(fs.readTextSync(path));
-          if (!encoded || encoded.length < 40) { throw new Error('Invalid device row'); }
-          let plain = naclSecretboxOpen(encoded.subarray(24), encoded.subarray(0, 24), key);
-          if (!plain) { throw new Error('Unreadable device row'); }
-          let row = JSON.parse(utf8Decode(plain)) as Record<string, Object>;
-          if (row['host'] !== this.hostId || row['table'] !== table || row['key'] !== names[i]
-            || typeof row['value'] !== 'string' || (row['value'] as string).length > MAX_VALUE) {
-            throw new Error('Invalid device row identity');
-          }
-          let value = row['value'] as string; filled += value.length; values.push(value);
+          let value = this.readValue(table, names[i], key);
+          if (value !== null) { filled += value.length; }
+          values.push(value);
         }
         return { values: values, deferred: deferred };
       }
@@ -128,12 +181,7 @@ export class DeviceRowStore {
       let changes: Map<string, string | null> = new Map();
       for (let i = 0; i < ops.length; i++) {
         let op = ops[i];
-        let encoded: string | null = null;
-        if (op.value !== null) {
-          let nonce = naclRandomBytes(24);
-          let row: Record<string, string> = { 'host': this.hostId, 'table': table, 'key': op.key, 'value': op.value };
-          encoded = base64Encode(concatBytes([nonce, naclSecretbox(utf8Encode(JSON.stringify(row)), nonce, key)]));
-        }
+        let encoded = op.value === null ? null : this.encodeValue(table, op.key, op.value, key);
         changes.set(this.path(table, op.key), encoded);
       }
       let root = `${table === 'cache' ? this.context.cacheDir : this.context.filesDir}/orca-rows`;
@@ -153,19 +201,7 @@ export class DeviceRowStore {
       }
       let directory = this.root(table);
       if (!fs.accessSync(directory)) { fs.mkdirSync(directory, true); }
-      changes.forEach((value: string | null, path: string): void => {
-        if (value === null) { if (fs.accessSync(path)) { fs.unlinkSync(path); } return; }
-        let temp = `${path}.tmp`;
-        let committed = false;
-        try {
-          let file = fs.openSync(temp, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
-          try {
-            if (fs.writeSync(file.fd, value) !== value.length) { throw new Error('Device row write incomplete'); }
-            fs.fsyncSync(file.fd);
-          } finally { fs.closeSync(file); }
-          fs.renameSync(temp, path); committed = true;
-        } finally { if (!committed && fs.accessSync(temp)) { fs.unlinkSync(temp); } }
-      });
+      changes.forEach((value: string | null, path: string): void => this.commitValue(path, value));
       return { written: true };
     } catch (e) {
       return writing ? { written: false, refusal: 'unavailable' } : { refusal: 'unavailable' };
