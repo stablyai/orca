@@ -145,7 +145,7 @@ function OptionRow(props: {
       <NativeChatSessionSpeedButton
         label={label}
         standard={speed.standard}
-        faster={speed.faster}
+        tiers={speed.tiers}
         current={gone ? undefined : descriptor.kind.currentValue}
         disabled={off}
         onSet={onSet}
