@@ -8,7 +8,7 @@ import { styles } from './mobile-session-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { pressedStyle, spacing } from '../theme/mobile-theme'
 import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
-import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
+import { MOBILE_SESSION_STATUS_LABELS } from '../transport/connection/mobile-session-connection-copy'
 
 /** The session's title and status line. A tap opens a card with the full name, where it lives
  *  and its host, as desktop's tab card does, because a sideways phone cuts the title short. */
