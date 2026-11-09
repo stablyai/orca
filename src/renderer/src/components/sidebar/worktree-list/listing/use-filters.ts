@@ -47,7 +47,27 @@ type RevealContext = {
 /** Require every shared filter key to provide a reveal action so new filters cannot omit recovery. */
 const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContext) => void> = {
   filterRepoIds: ({ state, worktree }) => {
-    if (!worktree.id.startsWith('folder:') && !state.filterRepoIds.includes(worktree.repoId)) {
+    const folderScope = parseWorkspaceKey(worktree.id)
+    if (folderScope?.type === 'folder') {
+      const folder = selectFolderWorkspaces(state).find(
+        (candidate) => candidate.id === folderScope.folderWorkspaceId
+      )
+      if (!folder) {
+        return
+      }
+      // The filter stores repository ids; reveal the folder through a repo of its project group.
+      const groupRepo = state.repos.find((repo) => repo.projectGroupId === folder.projectGroupId)
+      if (groupRepo) {
+        if (!state.filterRepoIds.includes(groupRepo.id)) {
+          state.setFilterRepoIds([...state.filterRepoIds, groupRepo.id])
+        }
+      } else if (state.filterRepoIds.length > 0) {
+        // A group with no repo cannot be selected; clearing removes the only filter hiding it.
+        state.setFilterRepoIds([])
+      }
+      return
+    }
+    if (!state.filterRepoIds.includes(worktree.repoId)) {
       state.setFilterRepoIds([...state.filterRepoIds, worktree.repoId])
     }
   },
