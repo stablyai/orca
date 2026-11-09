@@ -79,7 +79,7 @@ export function registerHomeRecordScenarios(harness: AutoReleaseScenarioHarness)
       fromHome('orchestration.workerStop', { dispatch: dispatchId }, 'stop_off')
     ).resolves.toMatchObject({
       ok: true,
-      result: { state: 'stop_unknown', lastError: expect.stringContaining('Orca sends it') }
+      result: { state: 'stop_unknown', lastError: expect.stringContaining('Orca asks again') }
     })
     expect(harness.homeDb().getWorkerDispatch(dispatchId)).toMatchObject({
       state: 'stop_unknown',
@@ -96,20 +96,18 @@ export function registerHomeRecordScenarios(harness: AutoReleaseScenarioHarness)
     expect(harness.workerDb().getRemoteDispatchAttachment(dispatchId)?.state).toBe('stopped')
   })
 
-  it('takes a second worker-stop of a stop whose outcome was unknown', async () => {
+  it('takes a second worker-stop of a stop whose close went unproven on the server', async () => {
     const dispatchId = await harness.startRemoteWorker()
-    const call = harness.homeRuntime().callOrchestrationWorkerServer.bind(harness.homeRuntime())
-    const unproven = vi
-      .spyOn(harness.homeRuntime(), 'callOrchestrationWorkerServer')
-      .mockImplementation((environmentId, method, ...rest) =>
-        method === 'orchestration.federationStop'
-          ? Promise.resolve({ state: 'stopping', alreadySettled: false, processAction: 'unknown' })
-          : call(environmentId, method, ...rest)
-      )
+    // The first close cannot prove the process died; the terminal stays, so a second stop can close it.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop reads only ptyKilled.
+    vi.mocked(harness.workerRuntime().closeTerminal).mockResolvedValueOnce({
+      ptyKilled: false
+    } as never)
+
     await expect(
       fromHome('orchestration.workerStop', { dispatch: dispatchId }, 'stop_unproven')
     ).resolves.toMatchObject({ ok: true, result: { state: 'stop_unknown' } })
-    unproven.mockRestore()
+    expect(harness.workerDb().getRemoteDispatchAttachment(dispatchId)?.state).toBe('stop_unknown')
 
     await expect(
       fromHome('orchestration.workerStop', { dispatch: dispatchId }, 'stop_again')

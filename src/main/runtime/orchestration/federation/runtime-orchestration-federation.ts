@@ -45,7 +45,6 @@ export class RuntimeOrchestrationFederation {
   })
   private readonly syncs = new Map<string, { db: OrchestrationDb; promise: Promise<void> }>()
   private readonly warnings = new Set<string>()
-  private readonly stopResends = new Set<string>()
   private relayGeneration = 0
   private stopVerifiedWatch: (() => void) | null = null
   /** Worker server -> runtime incarnation that last proved the orchestration contract. */
@@ -211,15 +210,12 @@ export class RuntimeOrchestrationFederation {
     return sync
   }
 
-  /** The server answered, so a stop it never got is sent now; not awaited, as the stop resyncs this Dispatch. */
+  /** The server answered, so a stop it never answered is asked again; not awaited, as the stop resyncs this
+   *  Dispatch. The stop module keeps one stop in flight per Dispatch. */
   private resendOwedStop(dispatchId: string, db: OrchestrationDb): void {
-    if (
-      this.stopResends.has(dispatchId) ||
-      db.getWorkerDispatch(dispatchId)?.stage !== 'stop_owed'
-    ) {
+    if (db.getWorkerDispatch(dispatchId)?.stage !== 'stop_owed') {
       return
     }
-    this.stopResends.add(dispatchId)
     const runtime = this.runtime
     void resendOwedFederatedStop(
       {
@@ -230,11 +226,9 @@ export class RuntimeOrchestrationFederation {
         syncOrchestrationFederatedDispatchAfterCurrent: (id) => this.syncDispatchAfterCurrent(id)
       },
       dispatchId
-    )
-      .catch((error: unknown) => {
-        console.warn(`[orchestration] Resending the stop for ${dispatchId} failed:`, error)
-      })
-      .finally(() => this.stopResends.delete(dispatchId))
+    ).catch((error: unknown) => {
+      console.warn(`[orchestration] Resending the stop for ${dispatchId} failed:`, error)
+    })
   }
 
   async syncDispatchAfterCurrent(dispatchId: string): Promise<void> {
