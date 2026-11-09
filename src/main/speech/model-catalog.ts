@@ -1,9 +1,15 @@
 import type { SpeechModelManifest } from '../../shared/speech-types'
 import {
   DICTATION_LANGUAGES,
+  NEMOTRON_DICTATION_LANGUAGES,
   SENSE_VOICE_DICTATION_LANGUAGES
 } from '../../shared/dictation-language'
 import { getSpeechModelDownloadMetadata } from './model-download-catalog'
+import { getGgufSpeechModelDownload } from './speech-model-gguf-downloads'
+
+const legacy = (id: Parameters<typeof getSpeechModelDownloadMetadata>[0]) => ({
+  legacyDownloadFiles: getSpeechModelDownloadMetadata(id).downloadFiles
+})
 
 export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
   {
@@ -14,10 +20,10 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'transducer',
     provider: 'local',
     language: 'multilingual',
-    ...getSpeechModelDownloadMetadata('parakeet-tdt-0.6b-v3-int8'),
+    ...getGgufSpeechModelDownload('parakeet-tdt-0.6b-v3-int8'),
+    ...legacy('parakeet-tdt-0.6b-v3-int8'),
     sampleRate: 16000,
     streaming: false,
-    modelingUnit: 'bpe',
     recommended: true
   },
   {
@@ -28,10 +34,10 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'transducer',
     provider: 'local',
     language: 'en',
-    ...getSpeechModelDownloadMetadata('parakeet-tdt-0.6b-v2-int8'),
+    ...getGgufSpeechModelDownload('parakeet-tdt-0.6b-v2-int8'),
+    ...legacy('parakeet-tdt-0.6b-v2-int8'),
     sampleRate: 16000,
-    streaming: false,
-    modelingUnit: 'bpe'
+    streaming: false
   },
   {
     id: 'zipformer-bilingual-zh-en',
@@ -43,7 +49,9 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelDownloadMetadata('zipformer-bilingual-zh-en'),
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'cjkchar+bpe'
+    modelingUnit: 'cjkchar+bpe',
+    // transcribe-cpp has no zipformer; SenseVoice covers Chinese and English.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
   {
     id: 'paraformer-bilingual-zh-en',
@@ -55,7 +63,9 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'zh-en',
     ...getSpeechModelDownloadMetadata('paraformer-bilingual-zh-en'),
     sampleRate: 16000,
-    streaming: true
+    streaming: true,
+    // transcribe-cpp has no paraformer; SenseVoice covers Chinese and English.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
   {
     id: 'zipformer-streaming-en-20m',
@@ -81,7 +91,9 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelDownloadMetadata('zipformer-streaming-zh-14m'),
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'cjkchar'
+    modelingUnit: 'cjkchar',
+    // transcribe-cpp has no zipformer; SenseVoice beat Nemotron 3.5 on Korean and Chinese.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
   {
     id: 'zipformer-streaming-korean',
@@ -93,7 +105,9 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelDownloadMetadata('zipformer-streaming-korean'),
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'bpe'
+    modelingUnit: 'bpe',
+    // transcribe-cpp has no zipformer; SenseVoice beat Nemotron 3.5 on Korean and Chinese.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
   {
     id: 'parakeet-tdt-ctc-0.6b-ja-int8',
@@ -104,7 +118,9 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     language: 'ja',
     ...getSpeechModelDownloadMetadata('parakeet-tdt-ctc-0.6b-ja-int8'),
     sampleRate: 16000,
-    streaming: false
+    streaming: false,
+    // No GGUF conversion exists; SenseVoice covers Japanese.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
   {
     id: 'whisper-tiny',
@@ -113,7 +129,21 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'whisper',
     provider: 'local',
     language: 'multilingual',
-    ...getSpeechModelDownloadMetadata('whisper-tiny'),
+    ...getGgufSpeechModelDownload('whisper-tiny'),
+    ...legacy('whisper-tiny'),
+    dictationLanguages: DICTATION_LANGUAGES,
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'whisper-large-v3-turbo',
+    label: 'Whisper Large v3 Turbo',
+    description:
+      'Best accuracy for Japanese, Korean, and Chinese, and 90+ languages. Slower than Parakeet.',
+    type: 'whisper',
+    provider: 'local',
+    language: 'multilingual',
+    ...getGgufSpeechModelDownload('whisper-large-v3-turbo'),
     dictationLanguages: DICTATION_LANGUAGES,
     sampleRate: 16000,
     streaming: false
@@ -126,9 +156,24 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'senseVoice',
     provider: 'local',
     language: 'multilingual',
-    ...getSpeechModelDownloadMetadata('sense-voice-zh-en-ja-ko-yue'),
+    ...getGgufSpeechModelDownload('sense-voice-zh-en-ja-ko-yue'),
+    ...legacy('sense-voice-zh-en-ja-ko-yue'),
     dictationLanguages: SENSE_VOICE_DICTATION_LANGUAGES,
     sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'nemotron-3.5-asr-streaming-0.6b',
+    label: 'Nemotron 3.5',
+    description:
+      'English, Spanish, German and many more languages, with automatic language detection.',
+    type: 'transducer',
+    provider: 'local',
+    language: 'multilingual',
+    ...getGgufSpeechModelDownload('nemotron-3.5-asr-streaming-0.6b'),
+    dictationLanguages: NEMOTRON_DICTATION_LANGUAGES,
+    sampleRate: 16000,
+    // Decoded per chunk for now; live text arrives with the streaming engine path.
     streaming: false
   },
   {

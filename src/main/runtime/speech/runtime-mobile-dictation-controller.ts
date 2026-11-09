@@ -1,5 +1,6 @@
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
+import { speechModelNotReadyError } from '../../../shared/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../../speech/model-catalog'
 import {
@@ -58,7 +59,7 @@ export class RuntimeMobileDictationController {
     }
     const modelState = await getSpeechModelManager(store).getModelState(modelId)
     if (modelState.status !== 'ready') {
-      throw new Error(`voice_model_not_ready:${modelState.status}`)
+      throw new Error(speechModelNotReadyError(modelState))
     }
     const clientId = params.clientId
     if (!clientId) {

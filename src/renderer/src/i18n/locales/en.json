@@ -1148,16 +1148,14 @@
       "modelDescriptions": {
         "parakeetV3": "Highest accuracy for 25 European languages. Punctuation, capitalization, and word-level timestamps.",
         "parakeetV2": "English only. Faster than v3 with similar accuracy. Punctuation and capitalization.",
-        "zipformerBilingual": "Chinese + English with code-switching. Low-latency real-time streaming.",
-        "paraformerBilingual": "Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.",
         "zipformerStreamingEnRetired": "No longer offered: it drops the start of sentences. Delete it to free up space.",
-        "zipformerStreamingZh": "Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.",
-        "zipformerStreamingKo": "Korean only. Low-latency real-time streaming.",
-        "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
         "whisperTiny": "90+ languages. Lower accuracy than Parakeet but broadest language coverage.",
         "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
         "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key.",
-        "openAiCompatible": "Any service with an OpenAI-style transcription API, such as Groq, Mistral or a local server."
+        "openAiCompatible": "Any service with an OpenAI-style transcription API, such as Groq, Mistral or a local server.",
+        "whisperLargeV3Turbo": "Best accuracy for Japanese, Korean, and Chinese, and 90+ languages. Slower than Parakeet.",
+        "retiredForEngine": "No longer offered: the speech engine can no longer run it. Delete it to free up space.",
+        "nemotron": "English, Spanish, German and many more languages, with automatic language detection."
       }
     },
     "diagnostics": {
@@ -9811,7 +9809,8 @@
           "dictationModeAuto": "Auto",
           "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop.",
           "speechGpuLabel": "Use GPU",
-          "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer."
+          "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer.",
+          "updateToFasterVersion": "Update to the faster version ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -17433,6 +17432,7 @@
           "noModel": "No speech model selected. Download one in Settings > Voice.",
           "disabled": "Voice dictation is disabled. Enable it in Settings > Voice.",
           "notReady": "Speech model not ready. Download it in Settings > Voice.",
+          "modelNeedsUpdate": "Your speech model needs an update to keep working. Update it to the faster version in Settings > Voice.",
           "unknownModel": "Selected model is no longer available. Please choose another in Settings > Voice.",
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
@@ -24546,5 +24546,31 @@
     "stopped": "{{host}} stopped controlling browser tabs until Orca restarts.",
     "disallowed": "{{host}} can no longer control browser tabs. Turn it back on in Settings > SSH.",
     "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Update your speech model",
+    "updateDescription": "Dictation now runs on a faster engine. {{model}} needs a one-time download ({{size}} MB) before you can dictate again.",
+    "update": "Update",
+    "replacedTitle": "Your speech model was replaced",
+    "replacedDescription": "{{old}} can't run on the new speech engine. {{model}} replaces it ({{size}} MB).",
+    "downloadReplacement": "Download {{model}}",
+    "later": "Later",
+    "dismiss": "Dismiss",
+    "updatingTitle": "Updating {{model}}",
+    "downloadingTitle": "Downloading {{model}}",
+    "downloadingDescription": "You can keep working. Dictation is back when this finishes.",
+    "progress": "{{done}} of {{total}} MB",
+    "cancel": "Cancel",
+    "doneTitle": "Dictation is ready",
+    "doneDescription": "{{model}} is updated. The old files were removed.",
+    "doneRetiredDescription": "{{model}} is set up. The old {{old}} files are still on disk.",
+    "keep": "Keep",
+    "deleteOld": "Delete old model",
+    "deleteFailed": "Failed to delete {{model}}.",
+    "updateFailedTitle": "Couldn't update {{model}}",
+    "downloadFailedTitle": "Couldn't download {{model}}",
+    "failedAtDescription": "The download stopped at {{mb}} MB. Check your connection and try again.",
+    "failedDescription": "The download stopped. Check your connection and try again.",
+    "tryAgain": "Try again"
   }
 }
