@@ -166,6 +166,8 @@ export type PendingWorktreeCreation = {
   provisioningLog?: string
   /** VM creates: the provisioned VM's environment checks, run before the workspace is created. */
   environmentCheck?: PendingVmEnvironmentCheck
+  /** VM creates: the provisioned VM's runtime environment, known once it answers. */
+  vmEnvironmentId?: string
   // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.
   checkoutProgress?: WorktreeCheckoutProgress
   /** Phases entered so far with their start times, so the chat checklist can time each step. */

@@ -97,5 +97,8 @@ export const deviceCode = shot(
     { agent: 'codex' }
   )
 )
+export const signedOtherAccount = shot(
+  gate({ step: 'signed', email: 'nw@personal.dev', expectedEmail: 'nw@stably.ai' })
+)
 export const olderHost = shot(gate({ step: 'need' }, { codeOnly: true }))
 export const noPrompt = shot(gate({ step: 'need' }, { prompt: null, hostLabel: 'feature-x' }))
