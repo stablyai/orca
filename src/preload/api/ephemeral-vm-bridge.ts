@@ -20,5 +20,6 @@ export const ephemeralVmApi = {
   resumeWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:resumeWorkspace', args),
   cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
   stopCleanup: (args) => ipcRenderer.invoke('ephemeralVm:stopCleanup', args),
+  forgetRuntime: (args) => ipcRenderer.invoke('ephemeralVm:forgetRuntime', args),
   getCleanupCommand: (args) => ipcRenderer.invoke('ephemeralVm:getCleanupCommand', args)
 } satisfies PreloadApi['ephemeralVm']

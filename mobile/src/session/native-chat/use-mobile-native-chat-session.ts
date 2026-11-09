@@ -39,6 +39,8 @@ export type MobileNativeChatSession = {
   /** The read failed for good (damage, or a newer Orca's chat): the error says why, once, and
    *  there is nothing to send into. */
   readFailedFinally?: boolean
+  /** This phone's /clear is out and its divider has not landed: the old rows are hidden. */
+  clearing?: boolean
   hasMore: boolean
   /** `olderPages === 'loading'`, kept because recorded RPC fixtures read it. */
   loadingEarlier: boolean

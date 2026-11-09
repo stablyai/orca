@@ -17,7 +17,7 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/ele
 import { ORCAD_E2E_IDLE_TIMEOUT_ENV } from '../../../shared/orcad-idle-exit'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { RemoteRuntimeSharedControlConnection } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { readConfirmedRunningWslDistros } from '../discovery/wsl-background-distro-gate'
@@ -184,7 +184,7 @@ function pairedConnectionOf(connection: WslOrcadConnection) {
 
 function resultOf<T>(
   method: string,
-  response: Awaited<ReturnType<typeof sendRemoteRuntimeRequest<T>>>
+  response: Awaited<ReturnType<typeof sendRemoteRuntimeRequestOnSocket<T>>>
 ): T {
   if (!response.ok) {
     throw new Error(`${method} failed: ${response.error.code}: ${response.error.message}`)
@@ -193,14 +193,17 @@ function resultOf<T>(
 }
 
 async function rpc<T>(connection: WslOrcadConnection, method: string, params?: unknown) {
-  const response = await sendRemoteRuntimeRequest<T>(
+  const response = await sendRemoteRuntimeRequestOnSocket<T>(
     pairedConnectionOf(connection),
     method,
     params,
     30_000,
     undefined,
     undefined,
-    ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+    undefined,
+    ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+    undefined,
+    undefined
   )
   return resultOf(method, response)
 }

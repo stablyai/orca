@@ -8,7 +8,7 @@ export const SESSION_SEARCH_QUERY_MAX_LENGTH = 512
 export const SESSION_SEARCH_SNIPPET_MARK_OPEN = '[['
 export const SESSION_SEARCH_SNIPPET_MARK_CLOSE = ']]'
 
-/** Conversation searches user/assistant columns; all also searches tools and identifier tokens. */
+/** Conversation searches prose; all also searches conversation identifier tokens. */
 export type SessionSearchScope = 'conversation' | 'all'
 
 export type SessionSearchSort = 'relevance' | 'newest'

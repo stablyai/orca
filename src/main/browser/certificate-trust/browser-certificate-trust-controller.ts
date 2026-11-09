@@ -21,7 +21,7 @@ import {
   SUPPORTED_CERTIFICATE_ERROR,
   SUPPORTED_CERTIFICATE_ERROR_CODE
 } from './browser-certificate-identity'
-import { normalizeCertificateError } from '../../../shared/browser-certificate-errors'
+import { normalizeCertificateError } from '../../../shared/browser/certificate-trust/browser-certificate-errors'
 import { BrowserCertificateRequestGuard } from './browser-certificate-request-guard'
 
 export class BrowserCertificateTrustController {

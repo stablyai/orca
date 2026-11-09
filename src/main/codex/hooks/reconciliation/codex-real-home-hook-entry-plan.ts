@@ -1,8 +1,8 @@
-import {
-  removeManagedCommands,
-  type HookCommandConfig,
-  type HookDefinition
-} from '../../../agent-hooks/installer-utils'
+import { removeManagedCommands } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import type {
+  HookCommandConfig,
+  HookDefinition
+} from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import {
   buildCodexManagedHook,
   CODEX_EVENT_LABEL,

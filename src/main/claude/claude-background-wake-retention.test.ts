@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredRunningChildWork } from '../../shared/agent-status/child-work/agent-child-work-listing'
-import type { AgentHookServer } from '../agent-hooks/server'
+import type { AgentHookServer } from '../agent-hooks/server/agent-hook-server'
 import type { StructuredAgentSessionJournalProjections } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-journal-projection'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'

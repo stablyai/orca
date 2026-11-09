@@ -181,7 +181,12 @@ export async function deleteDictationModel(
 
 export async function setDictationConfig(
   client: RpcOperationSender,
-  params: { enabled?: boolean; modelId?: string; dictationMode?: 'toggle' | 'hold' }
+  params: {
+    enabled?: boolean
+    modelId?: string
+    dictationMode?: 'toggle' | 'hold'
+    dictationHoldToRecord?: boolean
+  }
 ): Promise<MobileSpeechSetup> {
   const reply = await dictationConfigWrite.request(client, params)
   return interpretOrThrowRefusalMessage(

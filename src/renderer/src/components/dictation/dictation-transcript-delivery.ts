@@ -4,27 +4,38 @@ import { describeClipboardWriteFailure } from '@/lib/clipboard-write-failure'
 import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
 import { insertText, type DictationInsertionTarget } from './dictation-insertion-target'
 
-export type DictationTranscriptDelivery = (
+export type DictationTranscriptDelivery = ((
   text: string,
   target: DictationInsertionTarget | null
-) => void
+) => void) & {
+  /** Everything this session has typed into its target so far. */
+  landedText: () => string
+  /** Waits for every final so far to land; false if any went to the clipboard instead. */
+  settled: () => Promise<boolean>
+}
 
 /** One session's finals, inserted in order; text that can't land goes to the clipboard so it isn't lost. */
 export function createDictationTranscriptDelivery(): DictationTranscriptDelivery {
   let lastLanded = ''
+  let allLanded = ''
   let missed = ''
   let queue = Promise.resolve()
-  return (text, target) => {
+  const deliver = (text: string, target: DictationInsertionTarget | null): void => {
     queue = queue.then(async () => {
       const landed = target ? await insertText(text, target, lastLanded).catch(() => false) : false
       if (landed) {
         lastLanded = text
+        allLanded += `${dictationSeparators(allLanded, text, '').leading}${text}`
         return
       }
       missed += `${dictationSeparators(missed, text, '').leading}${text}`
       await copyMissedDictation(missed, target !== null)
     })
   }
+  return Object.assign(deliver, {
+    landedText: () => allLanded,
+    settled: () => queue.then(() => missed === '')
+  })
 }
 
 async function copyMissedDictation(text: string, hadTarget: boolean): Promise<void> {

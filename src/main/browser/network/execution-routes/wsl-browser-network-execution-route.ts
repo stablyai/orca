@@ -2,14 +2,15 @@ import type { WslBrowserNetworkRelayChild } from './wsl-browser-network-relay-la
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
   BrowserNetworkTunnelStreamFrameWriter
-} from '../../../../shared/browser-network-tunnel-stream-framing'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-stream-framing'
 import { BrowserNetworkDeferredSocket } from './browser-network-deferred-socket'
 import { BrowserNetworkTunnelClient } from '../tunnels/browser-network-tunnel-client'
-import {
-  browserNetworkExecutionHostKey,
-  type BrowserNetworkExecutionRoute,
-  type BrowserNetworkExecutionRouteContext
-} from './browser-network-execution-route'
+import './browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type {
+  BrowserNetworkExecutionRoute,
+  BrowserNetworkExecutionRouteContext
+} from './browser-network-execution-route-contract'
 
 type WslBrowserNetworkExecutionRouteDependencies = {
   launchRelay?: (distro: string, signal: AbortSignal) => Promise<WslBrowserNetworkRelayChild>

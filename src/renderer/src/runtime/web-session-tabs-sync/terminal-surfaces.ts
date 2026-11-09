@@ -1,8 +1,9 @@
 import { readStructuredAgentLaunchRecord } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionAgentTab
-} from '../../../../shared/runtime-types'
+  RuntimeMobileSessionAgentTab,
+  RuntimeMobileSessionTerminalClientTab
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -21,7 +22,6 @@ import type {
   ReadyBrowserSurface,
   ReadyEditorSurface,
   ReadyTerminalSurface,
-  TerminalSurface,
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
@@ -42,7 +42,7 @@ export function isReadyTerminalTab(
 
 export function isTerminalSurfaceTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
-): tab is TerminalSurface {
+): tab is RuntimeMobileSessionTerminalClientTab {
   return tab.type === 'terminal'
 }
 
@@ -176,7 +176,7 @@ export function isMirroredTerminalSurfaceId(tabId: string): boolean {
 }
 
 export function chooseRemoteTerminalLayout(
-  surfaces: readonly TerminalSurface[],
+  surfaces: readonly RuntimeMobileSessionTerminalClientTab[],
   ptyIdsByLeafId: Record<string, string>,
   existingLayout?: TerminalLayoutSnapshot,
   requestedActiveLeafId?: string

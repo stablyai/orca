@@ -7,7 +7,7 @@ import {
   restoreOrcadStateSnapshotCommand
 } from './orcad-state-snapshot'
 
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const posix = getRemoteHostPlatform('linux-x64')
 

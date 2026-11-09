@@ -107,7 +107,11 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     worktreeDeleteIdentities: toWorktreeDeleteIdentities([target]),
     ...(hasLineageChildren
       ? {
-          lineageDeleteIdentities: toWorktreeDeleteIdentities(deleteLineage.deleteAllTargets)
+          lineageDeleteIdentities: toWorktreeDeleteIdentities(deleteLineage.deleteAllTargets),
+          lineagePreserveIdentities: toWorktreeDeleteIdentities([
+            target,
+            ...deleteLineage.descendants
+          ])
         }
       : {}),
     ...(hasLineageChildren ? { allowSkipConfirm: false } : {})
@@ -175,7 +179,11 @@ export function runWorktreeBatchDelete(
         ? {
             lineageDeleteIdentities: toWorktreeDeleteIdentities(
               singleTargetLineage.deleteAllTargets
-            )
+            ),
+            lineagePreserveIdentities: toWorktreeDeleteIdentities([
+              targets[0],
+              ...singleTargetLineage.descendants
+            ])
           }
         : {}),
       ...(options.forceConfirm || singleTargetHasLineageChildren

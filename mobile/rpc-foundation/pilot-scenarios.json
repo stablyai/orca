@@ -15597,6 +15597,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -15684,6 +15685,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -15733,6 +15735,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -15771,6 +15774,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -15825,6 +15829,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -15853,6 +15858,7 @@
           "params": {
             "force": true,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -15902,6 +15908,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -15952,6 +15959,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -21336,6 +21344,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {

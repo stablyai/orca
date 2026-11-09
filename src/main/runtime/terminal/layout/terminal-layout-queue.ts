@@ -116,6 +116,17 @@ export abstract class OrcaRuntimeWithPickMostRecentActor extends OrcaRuntimeWith
     })
   }
 
+  /** Settles queued layout work as pty-exited; the running slot settles its own waiters. */
+  protected dropLayoutQueue(ptyId: string): void {
+    const queue = this.layoutQueues.get(ptyId)
+    this.layoutQueues.delete(ptyId)
+    for (const { waiters } of queue?.pending ?? []) {
+      for (const waiter of waiters) {
+        waiter({ ok: false, reason: 'pty-exited' })
+      }
+    }
+  }
+
   protected async runLayoutSlot(
     ptyId: string,
     target: PtyLayoutTarget,

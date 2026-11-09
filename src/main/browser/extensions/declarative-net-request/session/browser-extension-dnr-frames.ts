@@ -1,5 +1,5 @@
 import type { DnrEngine, DnrFrameCommit } from '../engine'
-import type { DnrFrameAllowState } from '../extension-matcher'
+import type { DnrFrameAllowState } from '../matching/extension-matcher'
 import type { DnrResponseHeaders } from '../request-context'
 
 /** What a frame's navigation request carried, which its committed document is matched with. */
