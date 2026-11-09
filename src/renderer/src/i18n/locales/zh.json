@@ -12372,7 +12372,7 @@
           "setUpOnSshHost": "在 SSH 主机上设置 Orca",
           "setUp": "设置",
           "overYourSsh": "通过你的 SSH 连接",
-          "b159dc5efa": "Cloud VM"
+          "cloudVm": "Cloud VM"
         },
         "networkAddress": {
           "tailscale": "Tailscale · {{address}}",

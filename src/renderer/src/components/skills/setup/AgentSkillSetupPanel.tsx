@@ -90,6 +90,7 @@ function BundledAgentSkillSetupPanel({
       skillName={freshnessSkillName ?? activeSkillNames[0]}
       plan={plan ?? null}
       target={target}
+      installed={effectivelyInstalled}
     />
   )
 

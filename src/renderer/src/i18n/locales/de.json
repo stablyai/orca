@@ -12942,7 +12942,7 @@
           "setUpOnSshHost": "Orca auf einem SSH-Host einrichten",
           "setUp": "Einrichten",
           "overYourSsh": "Über die SSH-Verbindung",
-          "b159dc5efa": "Cloud-VM"
+          "cloudVm": "Cloud-VM"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} entfernt",

@@ -105,11 +105,13 @@ export function SkillUnsupportedStatusPill({
 export function SkillPlanStatusPill({
   plan,
   skillName,
-  target
+  target,
+  installed = true
 }: {
   plan: BundledSkillPlan | null
   skillName: string
   target?: BundledSkillTarget | null
+  installed?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const status = getSkillFreshnessDisplayStatus(plan, skillName)
@@ -119,16 +121,22 @@ export function SkillPlanStatusPill({
   const hasDetails = needsAttention || skillPlanHasDetails(plan, skillName)
   return (
     <span className="inline-flex items-center gap-2">
-      {statusPill(
-        needsAttention
-          ? 'needs-attention'
-          : status === 'up-to-date' &&
-              entry?.ops.some(
-                (op) => op.kind === 'write' || op.kind === 'link' || op.kind === 'copy'
-              )
-            ? 'installed'
-            : status,
-        t
+      {!needsAttention && !installed ? (
+        <IntegrationStatusPill tone="attention">
+          {t('auto.components.settings.AgentSkillSetupPanel.5289300939', 'Not installed')}
+        </IntegrationStatusPill>
+      ) : (
+        statusPill(
+          needsAttention
+            ? 'needs-attention'
+            : status === 'up-to-date' &&
+                entry?.ops.some(
+                  (op) => op.kind === 'write' || op.kind === 'link' || op.kind === 'copy'
+                )
+              ? 'installed'
+              : status,
+          t
+        )
       )}
       {hasDetails ? (
         <Button

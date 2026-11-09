@@ -12926,7 +12926,7 @@
           "setUpOnSshHost": "Bir SSH sunucusuna Orca kur",
           "setUp": "Kur",
           "overYourSsh": "SSH bağlantınız üzerinden",
-          "b159dc5efa": "Bulut sanal makinesi"
+          "cloudVm": "Bulut sanal makinesi"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} kaldırıldı",

@@ -13302,7 +13302,7 @@
           "setUpOnSshHost": "Настроить Orca на SSH-сервере",
           "setUp": "Настроить",
           "overYourSsh": "Через ваше SSH-подключение",
-          "b159dc5efa": "Облачная ВМ"
+          "cloudVm": "Облачная ВМ"
         },
         "sshBulkRemove": {
           "removedCount": "Удалено: {{count}}",

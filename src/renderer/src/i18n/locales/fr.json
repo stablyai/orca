@@ -12883,7 +12883,7 @@
           "setUpOnSshHost": "Configurer Orca sur un hôte SSH",
           "setUp": "Configurer",
           "overYourSsh": "Via votre connexion SSH",
-          "b159dc5efa": "Cloud VM"
+          "cloudVm": "Cloud VM"
         },
         "networkAddress": {
           "tailscale": "Tailscale · {{address}}",

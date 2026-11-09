@@ -130,7 +130,7 @@ export function RuntimeServersHeaderActions({
             ) : null}
             <AddServerMenuItem
               icon={<Cloud />}
-              label={t('auto.components.settings.serverList.b159dc5efa', 'Cloud vm')}
+              label={t('auto.components.settings.serverList.cloudVm', 'Cloud VM')}
               trailing={<ArrowUpRight className="ml-auto" />}
               description={t(
                 'auto.components.settings.serverList.cloudVmHelp',

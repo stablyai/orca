@@ -9217,7 +9217,7 @@
           "setUpOnSshHost": "Configurar Orca em um host SSH",
           "setUp": "Configurar",
           "overYourSsh": "Pela sua conexão SSH",
-          "b159dc5efa": "VM na nuvem"
+          "cloudVm": "VM na nuvem"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removidos",

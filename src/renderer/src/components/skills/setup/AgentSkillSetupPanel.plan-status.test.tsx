@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { doneResult, planEntry, planOf, planOp } from '../bundled-skill-plan-fixtures.test-support'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 
-const mocks = vi.hoisted(() => ({ plan: vi.fn(), execute: vi.fn() }))
+const mocks = vi.hoisted(() => ({ plan: vi.fn(), execute: vi.fn(), requestDetails: vi.fn() }))
 const TARGET = { kind: 'environment', environmentId: 'agents-host' } as const
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({ bundledSkillTarget: TARGET })
@@ -26,10 +26,50 @@ vi.mock('@/hooks/useSkillFreshness', () => ({
   refreshSkillFreshness: vi.fn(),
   useSkillFreshness: () => ({ plan: null, loading: false, error: null })
 }))
+vi.mock('../skill-freshness-update-dialog', () => ({
+  requestSkillFreshnessUpdateDialog: mocks.requestDetails
+}))
 afterEach(cleanup)
 beforeEach(() => {
   mocks.plan.mockReset()
   mocks.execute.mockReset()
+  mocks.requestDetails.mockReset()
+})
+
+it('keeps an absent skill installable with planned-location details', async () => {
+  const pending = planOf([
+    planEntry('orca-cli', [
+      planOp('write', '/home/u/.agents/skills/orca-cli'),
+      planOp('link', '/home/u/.codex/skills/orca-cli', { agents: ['codex'] })
+    ])
+  ])
+  mocks.plan.mockResolvedValue({ kind: 'plan', plan: pending })
+  mocks.execute.mockResolvedValue(doneResult(pending))
+  render(
+    <AgentSkillSetupPanel
+      title="Orca skill for agents"
+      description={null}
+      skillNames={['orca-cli']}
+      installed={false}
+      loading={false}
+      error={null}
+      variant="row"
+      onRecheck={vi.fn()}
+      target={TARGET}
+    />
+  )
+
+  const details = await screen.findByRole('button', { name: 'Details' })
+  const install = screen.getByRole('button', { name: 'Install', exact: true })
+  expect(install.hasAttribute('disabled')).toBe(false)
+  expect(screen.getByText('Not installed', { exact: true })).toBeDefined()
+  expect(screen.queryByText('Installed', { exact: true })).toBeNull()
+  fireEvent.click(details)
+  expect(mocks.requestDetails).toHaveBeenCalledWith(TARGET)
+  fireEvent.click(install)
+  await waitFor(() =>
+    expect(mocks.execute).toHaveBeenCalledWith(TARGET, 'b'.repeat(64), { names: ['orca-cli'] })
+  )
 })
 
 it.each([

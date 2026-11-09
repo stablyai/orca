@@ -12372,7 +12372,7 @@
           "setUpOnSshHost": "SSH 호스트에 Orca 설정",
           "setUp": "설정",
           "overYourSsh": "내 SSH 연결을 통해",
-          "b159dc5efa": "Cloud VM"
+          "cloudVm": "Cloud VM"
         },
         "networkAddress": {
           "tailscale": "Tailscale · {{address}}",

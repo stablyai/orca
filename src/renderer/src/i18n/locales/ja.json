@@ -12372,7 +12372,7 @@
           "setUpOnSshHost": "SSH ホストに Orca をセットアップ",
           "setUp": "セットアップ",
           "overYourSsh": "あなたの SSH 接続経由",
-          "b159dc5efa": "Cloud VM"
+          "cloudVm": "Cloud VM"
         },
         "networkAddress": {
           "tailscale": "Tailscale · {{address}}",

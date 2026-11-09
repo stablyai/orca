@@ -12763,7 +12763,7 @@
           "setUpOnSshHost": "在 SSH 主機上設定 Orca",
           "setUp": "設定",
           "overYourSsh": "透過 SSH 連線",
-          "b159dc5efa": "雲端 VM"
+          "cloudVm": "雲端 VM"
         },
         "sshBulkRemove": {
           "removedCount": "已移除 {{count}} 台",
