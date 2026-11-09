@@ -62,7 +62,7 @@ function read(
     case 'conversation-outline':
       return {
         kind: operation.kind,
-        outline: readJournalDomainOutline(scope, operation.budgetBytes)
+        ...readJournalDomainOutline(scope, operation.budgetBytes)
       }
     case 'request-failure':
     case 'running-request':

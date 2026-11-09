@@ -1,3 +1,4 @@
+import type { JournalOutlineCache } from './journal-domain-outline'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
@@ -34,7 +35,8 @@ export class JournalSqlReaderPool {
     private readonly workerPath = resolveWorkerThreadEntryPath(
       currentWorkerEntryLayout(__dirname),
       'journal-sql-reader-entry.js'
-    )
+    ),
+    private readonly cacheOutline?: (cache: JournalOutlineCache) => void
   ) {}
 
   async domainHistory(request: JournalDomainHistoryRequest): Promise<AgentSessionHistoryResult> {
@@ -72,6 +74,11 @@ export class JournalSqlReaderPool {
     const response = await this.slot().request({ kind: 'point', request })
     if (response.type !== 'point') {
       throw new Error('journal reader returned no point result')
+    }
+    if (response.result.kind === 'conversation-outline' && response.result.cache) {
+      const { cache, ...result } = response.result
+      this.cacheOutline?.(cache)
+      return result
     }
     return response.result
   }

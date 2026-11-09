@@ -16,8 +16,7 @@ export function discardJournalDomainImportPage(
   }
   let remaining = 512
   for (const [table, key] of [
-    ['journal_outline_members', 'epoch,item_id'],
-    ['journal_outline_replies', 'epoch,turn_key'],
+    ['journal_outline_cache', 'epoch'],
     ['journal_item_subagent_names', 'epoch,subagent_id,item_id'],
     ['journal_items', 'epoch,item_id'],
     ['journal_item_tombstones', 'epoch,item_id'],

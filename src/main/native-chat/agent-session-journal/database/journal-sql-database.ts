@@ -37,7 +37,16 @@ export class JournalSqlDatabase {
     this.readers = new JournalSqlReaderPool(
       journalDomainDatabasePath(stateDirectory),
       journalDatabasePath(stateDirectory),
-      options.readerPath
+      options.readerPath,
+      (cache) => {
+        if (!this.readOnly && !this.closed && !this.activity.isSessionActive(cache.sessionId)) {
+          void this.writer.maintain({ kind: 'outline-cache', cache }).catch((error: unknown) => {
+            if (!this.closed) {
+              options.onMaintenanceError(error, cache.sessionId)
+            }
+          })
+        }
+      }
     )
     this.conversions = new JournalSqlConversions(writer, this.readers, this.activity.waitForIdle)
     this.maintenance = new JournalSqlBackgroundMaintenance(

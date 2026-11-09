@@ -14,8 +14,6 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { projectStructuredItemToNativeChat } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import { nativeChatToolFoldKind } from '../../../shared/native-chat/tools/native-chat-tool-fold'
-import { isNoiseMessage } from '../../../shared/native-chat/native-chat-noise'
-import { nativeChatRowRendersContent } from '../../../shared/native-chat/transcript/native-chat-row-content'
 import type {
   NativeChatBlock,
   NativeChatMessage
@@ -98,26 +96,6 @@ export function journalDomainOutlineSource(item: AgentJournalRenderItem): string
     preview,
     reply: projected?.role === 'assistant' ? assistantReplyProse(projected.blocks) || null : null
   } satisfies JournalOutlineSource)
-}
-
-/** Source position and membership only; body revisions and prose do not regroup a turn. */
-export function journalOutlineStructure(source: JournalOutlineSource): string {
-  const { revision: _revision, ...item } = source.item
-  const { blocks: _blocks, ...message } = source.message ?? { blocks: [] }
-  return JSON.stringify({
-    item,
-    message,
-    fold: source.message && nativeChatToolFoldKind(source.message),
-    noise: source.message && isNoiseMessage(source.message),
-    renders: source.message && nativeChatRowRendersContent(source.message.blocks),
-    tools: source.message?.blocks.flatMap((block) =>
-      block.type === 'tool-call' || block.type === 'tool-result' ? [[block.type, block.callId]] : []
-    )
-  })
-}
-
-export function journalOutlineMessage(source: JournalOutlineSource): NativeChatMessage | null {
-  return source.message
 }
 
 export function journalDomainOutlineSubmission(submission: AgentJournalSubmission): string {

@@ -2,7 +2,6 @@ import { appendJournalRequestEvent } from './journal-writer-request-events'
 import type Database from '../../sqlite/sync-database'
 import type { JournalDomainEventChanges } from './journal-domain-schema'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
-import { refreshJournalDomainOutline } from './journal-domain-outline-write'
 
 export const JOURNAL_EVENT_HISTORY_MS = 24 * 60 * 60 * 1000
 const MAX_EVENT_SEQUENCES = 4096
@@ -18,12 +17,6 @@ export function appendJournalSqlEvent(
   activity?: { fence: number; observedAt: number }
 ): void {
   const prefix = [target.sessionId, target.epoch] as const
-  refreshJournalDomainOutline(
-    db,
-    target,
-    [...changes.items.map((item) => item.itemId), ...(changes.removedItemIds ?? [])],
-    changes.submissions.length > 0
-  )
   const json = JSON.stringify(changes)
   const oversized = Buffer.byteLength(json, 'utf8') > MAX_EVENT_BYTES
   if (changes.cards.length > 0 || changes.submissions.length > 0) {

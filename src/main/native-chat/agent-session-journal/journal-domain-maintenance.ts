@@ -25,12 +25,7 @@ const RETIRED_TABLES: readonly { name: string; key: string; payload?: readonly s
       'outline_source_json'
     ]
   },
-  {
-    name: 'journal_outline_members',
-    key: 'item_id',
-    payload: ['structure_json', 'entry_json', 'short_json', 'empty_json', 'reply']
-  },
-  { name: 'journal_outline_replies', key: 'turn_key', payload: ['reply'] },
+  { name: 'journal_outline_cache', key: '', payload: ['outline_json'] },
   { name: 'journal_item_subagent_names', key: 'subagent_id,item_id' },
   { name: 'journal_item_tombstones', key: 'item_id' },
   { name: 'journal_removed_turns', key: 'turn_id' },
@@ -63,7 +58,7 @@ export function pruneJournalDomainRetiredPage(
   let deleted = 0
   let bytes = 0
   for (const { name, key, payload } of RETIRED_TABLES) {
-    const columns = ['session_id', 'epoch', ...key.split(',')]
+    const columns = ['session_id', 'epoch', ...(key ? key.split(',') : [])]
     const sizes = [...columns, ...(payload ?? [])]
       .map((column) => `COALESCE(octet_length(${column}),0)`)
       .join('+')

@@ -1,3 +1,4 @@
+import type { JournalOutlineCache } from './journal-domain-outline'
 import type { JournalRequestFailureRead } from './journal-request-failure'
 import type { JournalRewindCut, JournalRewindSelection } from './journal-domain-rewind-cut'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
@@ -86,7 +87,11 @@ export type JournalSqlPointReadResult =
   | { kind: 'rewind-cut'; cut: JournalRewindCut | null }
   | { kind: 'fork-boundary'; boundary: JournalForkBoundary }
   | { kind: 'saved-content'; content: JournalSavedContent }
-  | { kind: 'conversation-outline'; outline: AgentSessionConversationOutline }
+  | {
+      kind: 'conversation-outline'
+      outline: AgentSessionConversationOutline
+      cache?: JournalOutlineCache
+    }
   | JournalRequestFailureResult
   | { kind: 'rewind-target'; target: JournalRewindTarget }
   | { kind: 'history-source-items'; items: AgentJournalRenderItem[] }

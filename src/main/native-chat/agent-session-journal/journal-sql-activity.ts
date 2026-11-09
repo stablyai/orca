@@ -13,6 +13,10 @@ export class JournalSqlActivity {
     }
   }
 
+  isSessionActive(sessionId: string): boolean {
+    return this.sessions.has(sessionId)
+  }
+
   hold(): () => void {
     this.foreground++
     let held = true

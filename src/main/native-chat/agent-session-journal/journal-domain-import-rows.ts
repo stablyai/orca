@@ -8,7 +8,6 @@ import type Database from '../../sqlite/sync-database'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
-import { rebuildJournalDomainOutline } from './journal-domain-outline-write'
 
 export type JournalDomainImportState =
   | { state: 'converting'; epoch: null }
@@ -253,6 +252,5 @@ export function finishJournalDomainImport(
   if (state.state !== 'ready') {
     throw new Error('journal domain import did not publish its chat head')
   }
-  rebuildJournalDomainOutline(db, header)
   return state.epoch
 }

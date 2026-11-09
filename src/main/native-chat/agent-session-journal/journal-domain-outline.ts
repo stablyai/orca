@@ -1,60 +1,126 @@
-import type { AgentSessionConversationOutlineEntry } from '../../../shared/agent-session/agent-session-conversation-outline'
+import {
+  projectAgentSessionConversationOutline,
+  type AgentSessionConversationOutline
+} from '../../../shared/agent-session/agent-session-conversation-outline'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type Database from '../../sqlite/sync-database'
+import { boundJournalConversationOutline } from './journal-outline-budget'
+import type { JournalOutlineSource } from './journal-domain-outline-source'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 
-/** Choose the global degradation before reading the admitted recent suffix. */
+export type JournalOutlineCache = {
+  sessionId: string
+  epoch: string
+  sequence: number
+  revision: number
+  budgetBytes: number
+  json: string
+}
+
+/** Cold reads reconstruct compact facts; ordinary writes never regroup the chat. */
 export function readJournalDomainOutline(scope: JournalSqlScope, budgetBytes: number) {
   const { db, prefix } = scope
-  const totals = db
-    .prepare(`SELECT COUNT(*) AS count,
-    COALESCE(SUM(member.entry_bytes + COALESCE(reply.reply_bytes,0)),0) AS with_reply,
-    COALESCE(SUM(member.entry_bytes),0) AS full,
-    COALESCE(SUM(member.short_bytes),0) AS short,
-    COALESCE(SUM(member.empty_bytes),0) AS empty
-    FROM journal_outline_members member INDEXED BY journal_outline_entries
-    LEFT JOIN journal_outline_replies reply ON reply.session_id=member.session_id
-      AND reply.epoch=member.epoch AND reply.turn_key=member.turn_key
-    WHERE member.session_id=? AND member.epoch=? AND member.entry_json IS NOT NULL`)
+  const head = db
+    .prepare(
+      'SELECT last_sequence,submissions_revision FROM journal_chat_state WHERE session_id=? AND epoch=?'
+    )
     .get(...prefix)!
-  const replies = Number(totals.with_reply) <= budgetBytes
-  const variant =
-    replies || Number(totals.full) <= budgetBytes
-      ? 'entry'
-      : Number(totals.short) <= budgetBytes
-        ? 'short'
-        : 'empty'
-  const json = variant === 'entry' ? 'entry_json' : `${variant}_json`
-  const bytes = variant === 'entry' ? 'entry_bytes' : `${variant}_bytes`
-  const entries: AgentSessionConversationOutlineEntry[] = []
-  let total = 0
-  for (const row of db
-    .prepare(`SELECT member.${json} AS entry_json,
-    member.${bytes} + ${replies ? 'COALESCE(reply.reply_bytes,0)' : '0'} AS bytes,
-    ${replies ? 'reply.reply' : 'NULL'} AS reply
-    FROM journal_outline_members member INDEXED BY journal_outline_entries
-    ${
-      replies
-        ? `LEFT JOIN journal_outline_replies reply ON reply.session_id=member.session_id
-      AND reply.epoch=member.epoch AND reply.turn_key=member.turn_key`
-        : ''
+  const sequence = Number(head.last_sequence)
+  const revision = Number(head.submissions_revision)
+  const stored = db
+    .prepare(`SELECT outline_json FROM journal_outline_cache
+    WHERE session_id=? AND epoch=? AND source_sequence=? AND source_revision=? AND budget_bytes=?`)
+    .get(...prefix, sequence, revision, budgetBytes)
+  if (stored) {
+    try {
+      return { outline: scope.decode<AgentSessionConversationOutline>(stored.outline_json) }
+    } catch {
+      // A damaged cache can be reconstructed from the current compact source.
     }
-    WHERE member.session_id=? AND member.epoch=? AND member.entry_json IS NOT NULL
-    ORDER BY member.sequence DESC,member.sequence_index DESC,member.ordinal DESC`)
-    .iterate(...prefix)) {
-    const next = Number(row.bytes)
-    if (total + next > budgetBytes) {
-      break
-    }
-    total += next
-    scope.examined(row)
-    const entry = scope.decode<AgentSessionConversationOutlineEntry>(row.entry_json)
-    entries.push(row.reply === null ? entry : { ...entry, reply: String(row.reply) })
   }
-  entries.reverse()
-  return {
-    sessionId: scope.sessionId,
-    cursor: journalDomainContextHead(db, scope),
+  const sources = db
+    .prepare(`SELECT outline_source_json FROM journal_items
+    INDEXED BY journal_items_visible_position WHERE session_id=? AND epoch=? AND hidden=0
+    AND outline_source_json IS NOT NULL ORDER BY sequence,sequence_index,ordinal`)
+    .all(...prefix)
+    .map((row) => scope.decode<JournalOutlineSource>(row.outline_source_json))
+  const byId = new Map(sources.map((source) => [source.item.itemId, source]))
+  const submissions = db
+    .prepare(`SELECT outline_json FROM journal_submission_attempts
+    INDEXED BY journal_submission_ordinal WHERE session_id=? AND epoch=? AND current=1 ORDER BY ordinal`)
+    .all(...prefix)
+    .map((row) => scope.decode<AgentJournalSubmission>(row.outline_json))
+  const entries = projectAgentSessionConversationOutline(
+    sources.map((source) => source.item),
+    submissions,
+    (messages, keys) => {
+      const replies = new Map<string, string>()
+      for (let index = messages.length - 1; index >= 0; index--) {
+        const key = keys[index]
+        const reply = byId.get(messages[index].id)?.reply
+        if (key !== undefined && reply && !replies.has(key)) {
+          replies.set(key, reply)
+        }
+      }
+      return replies
+    },
+    {
+      projectItems: (items) =>
+        items.flatMap((item) => {
+          const message = byId.get(item.itemId)?.message
+          return message ? [message] : []
+        }),
+      userPreview: (message) => byId.get(message.id)!.preview!
+    }
+  )
+  const outline = boundJournalConversationOutline(
+    { sessionId: scope.sessionId, cursor: journalDomainContextHead(db, scope) },
     entries,
-    omittedEntries: Number(totals.count) - entries.length
+    budgetBytes
+  )
+  return {
+    outline,
+    cache: {
+      sessionId: scope.sessionId,
+      epoch: scope.epoch,
+      sequence,
+      revision,
+      budgetBytes,
+      json: JSON.stringify(outline)
+    } satisfies JournalOutlineCache
   }
+}
+
+/** Cache admission is optional and rechecks the reader's exact source inside the sole writer. */
+export function saveJournalDomainOutlineCache(
+  db: Database.Database,
+  cache: JournalOutlineCache
+): boolean {
+  const prefix = [cache.sessionId, cache.epoch] as const
+  if (
+    db
+      .prepare(`SELECT 1 FROM journal_items INDEXED BY journal_items_unsettled
+    WHERE session_id=? AND epoch=? AND hidden=0
+    AND (lifecycle_state IN ('running','pending') OR live_work=1) LIMIT 1`)
+      .get(...prefix) ||
+    db
+      .prepare(`SELECT 1 FROM journal_submission_attempts INDEXED BY journal_submission_sending
+    WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state='pending' LIMIT 1`)
+      .get(...prefix)
+  ) {
+    return false
+  }
+  return (
+    Number(
+      db
+        .prepare(`INSERT INTO journal_outline_cache
+    (session_id,epoch,source_sequence,source_revision,budget_bytes,outline_json)
+    SELECT session_id,epoch,last_sequence,submissions_revision,?,? FROM journal_chat_state
+    WHERE session_id=? AND epoch=? AND last_sequence=? AND submissions_revision=?
+    ON CONFLICT(session_id,epoch) DO UPDATE SET source_sequence=excluded.source_sequence,
+    source_revision=excluded.source_revision,budget_bytes=excluded.budget_bytes,outline_json=excluded.outline_json`)
+        .run(cache.budgetBytes, cache.json, ...prefix, cache.sequence, cache.revision).changes
+    ) > 0
+  )
 }

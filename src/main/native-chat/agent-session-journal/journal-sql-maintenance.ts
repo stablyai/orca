@@ -1,3 +1,4 @@
+import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
 import type Database from '../../sqlite/sync-database'
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import {
@@ -21,6 +22,7 @@ import {
 } from './journal-domain-import-discard'
 
 export type JournalSqlMaintenance =
+  | { kind: 'outline-cache'; cache: JournalOutlineCache }
   | { kind: 'projection-state'; sessionId: string }
   | { kind: 'import-discard'; sessionId: string }
   | {
@@ -48,6 +50,8 @@ export function applyJournalSqlMaintenance(
   operation: JournalSqlMaintenance
 ): JournalSqlMaintenanceResult {
   switch (operation.kind) {
+    case 'outline-cache':
+      return saveJournalDomainOutlineCache(db, operation.cache)
     case 'projection-state':
       return journalDomainImportState(db, operation.sessionId)
     case 'import-discard':

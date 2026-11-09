@@ -1,3 +1,4 @@
+import { saveJournalDomainOutlineCache } from './journal-domain-outline'
 import { afterEach, expect, it } from 'vitest'
 import {
   domainLifecycleFixture,
@@ -438,4 +439,88 @@ it('observes a consumed automation card through its first root turn and only tha
     outputSnapshot: { content: 'Result', format: 'plain_text', truncated: false },
     error: null
   })
+})
+
+it('reuses a saved outline after reopen and refuses a cache result from an older source', async () => {
+  const f = domainLifecycleFixture(cleanup)
+  await f.run({
+    kind: 'item',
+    identity: identity('prompt'),
+    body: body('Original prompt'),
+    options
+  })
+  const read = () => {
+    const result = readJournalSqlPoint(f.db, {
+      sessionId: 'chat',
+      operation: { kind: 'conversation-outline', budgetBytes: 100_000 }
+    })
+    if (result.kind !== 'conversation-outline') {
+      throw new Error('outline unavailable')
+    }
+    return result
+  }
+  const cold = read()
+  if (!cold.cache) {
+    throw new Error('cold outline unavailable')
+  }
+  expect(saveJournalDomainOutlineCache(f.db, cold.cache)).toBe(true)
+  const source = f.db
+    .prepare("SELECT outline_source_json FROM journal_items WHERE item_id='orca:prompt'")
+    .get()!.outline_source_json
+  f.db
+    .prepare(
+      "UPDATE journal_items SET outline_source_json='unreadable source' WHERE item_id='orca:prompt'"
+    )
+    .run()
+  f.reopen()
+  expect(read().outline.entries).toEqual([
+    { itemId: 'orca:prompt', sequence: 1, preview: 'Original prompt', imageCount: 0 }
+  ])
+  f.db
+    .prepare("UPDATE journal_items SET outline_source_json=? WHERE item_id='orca:prompt'")
+    .run(source)
+  await f.run({ kind: 'item', identity: identity('later'), body: body('Changed prompt'), options })
+  expect(saveJournalDomainOutlineCache(f.db, cold.cache)).toBe(false)
+  const changed = read()
+  expect(changed.outline.entries).toEqual([
+    { itemId: 'orca:prompt', sequence: 1, preview: 'Original prompt', imageCount: 0 },
+    { itemId: 'orca:later', sequence: 2, preview: 'Changed prompt', imageCount: 0 }
+  ])
+  await f.run({
+    kind: 'item',
+    identity: identity('turn'),
+    options,
+    body: {
+      kind: 'turn',
+      turnId: 'turn',
+      state: 'running',
+      startedAt: 10,
+      userItemId: 'orca:prompt'
+    }
+  })
+  const running = read()
+  if (!running.cache) {
+    throw new Error('running outline unavailable')
+  }
+  expect(saveJournalDomainOutlineCache(f.db, running.cache)).toBe(false)
+  await f.run({
+    kind: 'item',
+    identity: identity('turn'),
+    options,
+    body: {
+      kind: 'turn',
+      turnId: 'turn',
+      state: 'completed',
+      startedAt: 10,
+      completedAt: 20,
+      userItemId: 'orca:prompt'
+    }
+  })
+  const idle = read()
+  if (!idle.cache) {
+    throw new Error('idle outline unavailable')
+  }
+  expect(saveJournalDomainOutlineCache(f.db, idle.cache)).toBe(true)
+  f.reopen()
+  expect(read().outline).toEqual(idle.outline)
 })
