@@ -2,7 +2,7 @@
 // becomes a RuntimeClientError with a stable `cloud_*` code and next steps, so `--json` callers
 // (agents) and people both get an actionable message.
 import { RuntimeClientError } from '../runtime/types'
-import type { CloudCredentials } from './cloud-credentials'
+import { jsonFields, type CloudCredentials } from './cloud-credentials'
 
 export type CloudFetch = (input: string, init: RequestInit) => Promise<Response>
 
@@ -68,11 +68,12 @@ export class CloudApiClient {
       }
     }
     if (!response.ok) {
-      throw cloudApiError(response.status, (body ?? {}) as CloudApiErrorBody, {
+      throw cloudApiError(response.status, jsonFields(body), {
         credentials: this.credentials,
         retryAfter: response.headers.get('retry-after')
       })
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the client's typed boundary; each caller names the control-plane response shape it reads
     return body as T
   }
 }

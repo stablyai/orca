@@ -101,6 +101,13 @@ export function normalizeCloudApiUrl(raw: string, label: string): string {
 
 type CredentialsFile = { apiUrl?: unknown; token?: unknown; workspaceId?: unknown }
 
+/** A parsed JSON value's own fields, or none when it is not an object. */
+export function jsonFields(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+    ? Object.fromEntries(Object.entries(value))
+    : {}
+}
+
 function readCredentialsFile(
   path: string,
   fs: CloudCredentialFs
@@ -111,7 +118,7 @@ function readCredentialsFile(
   }
   let parsed: CredentialsFile
   try {
-    parsed = JSON.parse(raw) as CredentialsFile
+    parsed = jsonFields(JSON.parse(raw))
   } catch {
     throw new RuntimeClientError('cloud_credentials_invalid', `${path} is not valid JSON.`, {
       path,
