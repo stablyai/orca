@@ -209,6 +209,11 @@ issuer `orca-billing-dev-test`, `aud=orca-billing`, `purpose=billing`; sandbox t
 self-sign billing tokens (sub = profile user, org/orgRole from the active org's live roster); packaged builds never
 read the file.
 
+**Staging auth (dev only).** orca-billing-dev also trusts Orca Cloud auth STAGING tokens
+(`BILLING_STAGING_JWKS_URL`/`BILLING_STAGING_AUTH_ISSUER` = https://auth-staging.onorca.dev; ignored when
+`BILLING_ENV=prod`) and reads seat counts from staging (`AUTH_INTERNAL_URL`). Orgs staging doesn't know (operator dev
+tokens) answer 404 there and fall back to the Checkout request's quantity / the stored count, in dev only.
+
 ## What the user sets
 
 | Where | Name | Value |

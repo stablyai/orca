@@ -46,6 +46,10 @@ export type Env = {
   // operator key set for e2e runs before auth mints billing tokens); prod never does.
   BILLING_ENV?: string
   BILLING_DEV_JWKS?: string
+  // Dev only: also trust Orca Cloud auth STAGING (its JWKS URL + issuer) so team/billing flows can be
+  // exercised against a non-production auth. Both must be set; ignored when BILLING_ENV is 'prod'.
+  BILLING_STAGING_JWKS_URL?: string
+  BILLING_STAGING_AUTH_ISSUER?: string
 
   // Sandbox control plane -> billing (usage reports, start checks). Secret; >= 32 chars.
   // Comma-separated during rotation. Replace with a service binding once the control plane is a Worker.

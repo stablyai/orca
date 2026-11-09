@@ -32,6 +32,11 @@
     "BILLING_RETURN_URL": "https://orca-billing-dev.lovecast.workers.dev/return",
     "BILLING_JWT_AUDIENCE": "orca-billing",
     "BILLING_JWKS_URL": "https://login.onorca.dev/.well-known/jwks.json",
-    "BILLING_AUTH_ISSUER": "https://login.onorca.dev"
+    "BILLING_AUTH_ISSUER": "https://login.onorca.dev",
+    // Dev only: also accept Orca Cloud auth STAGING tokens and pull seat counts from staging auth
+    // (secret MEMBERSHIP_SYNC_TOKEN must equal staging's ORCA_CLOUD_BILLING_MEMBERSHIP_TOKEN).
+    "BILLING_STAGING_JWKS_URL": "https://auth-staging.onorca.dev/.well-known/jwks.json",
+    "BILLING_STAGING_AUTH_ISSUER": "https://auth-staging.onorca.dev",
+    "AUTH_INTERNAL_URL": "https://auth-staging.onorca.dev"
   }
 }
