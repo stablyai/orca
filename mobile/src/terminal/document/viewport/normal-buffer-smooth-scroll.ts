@@ -2,6 +2,7 @@ import { getCellHeight, getTotalScale } from './cell-metrics'
 import { updateScrollIndicator } from './viewport-transform'
 import type { TerminalDocumentScope } from '../document-scope'
 import { cancelDocumentFrame, scheduleDocumentFrame } from '../document-frame-registry'
+import { shouldRouteScrollToTerminalInput } from '../surface-input/mouse-input-encoding'
 
 export function clampNormalScrollLines(scope: TerminalDocumentScope, lines: number) {
   if (!scope.term || !scope.term.buffer || !scope.term.buffer.active || lines === 0) {
@@ -106,9 +107,24 @@ export function releaseWouldCoastARow(scope: TerminalDocumentScope) {
   if (vel <= COAST_MIN_VEL) {
     return false
   }
-  const carry = (vel * COAST_FRAME_MS) / (1 - COAST_FRICTION)
+  // Mirror momentumStep: friction before each frame delta and a stop at the floor velocity that an endless geometric sum ignores.
+  let carry = 0
+  let v = vel
+  for (;;) {
+    v *= COAST_FRICTION
+    if (v < COAST_MIN_VEL) {
+      break
+    }
+    carry += v * COAST_FRAME_MS
+  }
+  // The release inherits the gesture’s uncommitted sub-row offset; only the part in the flick’s direction reaches a row.
+  const pending =
+    (shouldRouteScrollToTerminalInput(scope)
+      ? scope.touchGesture.accumDelta
+      : scope.pendingNormalScrollDeltaY - scope.smoothScrollOffsetY) *
+    Math.sign(scope.touchGesture.velY)
   const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
-  return effectiveCellH > 0 && carry >= effectiveCellH
+  return effectiveCellH > 0 && carry + Math.max(0, pending) >= effectiveCellH
 }
 
 export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
