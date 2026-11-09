@@ -112,11 +112,12 @@ export function CopyAllButton({
   text: string
   disabled: boolean
 }): React.JSX.Element {
-  const copyAllLabel = translate(
+  const t = useTranslate()
+  const copyAllLabel = t(
     'auto.components.right.sidebar.checks.panel.content.097012c048',
     'Copy all'
   )
-  const copiedLabel = translate(
+  const copiedLabel = t(
     'auto.components.right.sidebar.checks.panel.content.1e53e45072',
     'Copied'
   )
