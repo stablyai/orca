@@ -35,6 +35,6 @@ The source export uses an explicit file set. IDE state, staging copies, local si
 
 ## Pinned vendor updates
 
-Regenerate ArkTS vendor modules with `node tools/prepare-vendor.mjs`. `tools/patch-nacl-arkts.mjs` remains an alias. Regenerate the diagnostic xterm page with `node tools/build-spike-xterm.mjs`. A vendor update must retain licenses, update the provenance manifest and pass `tools/check.mjs`; clean SDK builds are required after vendored JS changes.
+Regenerate ArkTS vendor modules with `node tools/prepare-vendor.mjs`. `tools/patch-nacl-arkts.mjs` remains an alias. A vendor update must retain licenses, update the provenance manifest and pass `tools/check.mjs`. Run a clean SDK build after changing vendored JavaScript.
 
 The build/export commands fingerprint the explicit source set. A source change during SDK compilation or copying fails delivery instead of stamping a newer source fingerprint onto an older HAP. Keep the source stable for a final build. UI assets have separate pinned hashes and packaged licenses; the source checks validate them too.

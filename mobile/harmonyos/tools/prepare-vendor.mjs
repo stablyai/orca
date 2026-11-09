@@ -45,8 +45,6 @@ const notices = `${[
   'tools/vendor/tweetnacl/LICENSE',
   'tools/vendor/fflate/LICENSE',
   'tools/vendor/fflate/UMD-LICENSE',
-  'tools/vendor/xterm/LICENSE',
-  'tools/vendor/xterm-webgl/LICENSE',
   'entry/src/main/resources/rawfile/licenses/Geist-OFL.txt',
   'entry/src/main/resources/rawfile/licenses/Lucide-ISC.txt'
 ]

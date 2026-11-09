@@ -13,10 +13,6 @@
     "pages/About",
     "pages/Troubleshoot",
     "pages/VoicePanel",
-    "pages/Index",
-    "pages/SpikeXterm",
-    "pages/SpikePair",
-    "pages/SpikeBundle",
     "pages/BrowserSettings",
     "pages/NativeChatSettings",
     "pages/MobileOnboarding"

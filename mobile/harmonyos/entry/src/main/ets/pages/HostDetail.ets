@@ -1,6 +1,7 @@
 import { uiText } from '../settings/NativeUi';
 import { appendLog as recordConnection, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { HostSession, SessionPhase } from '../transport/HostSession';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { listHosts, getDeviceToken, getRelayCredential, updateHostNameAndEndpoint, HostMeta } from '../storage/HostStore';
@@ -91,7 +92,9 @@ struct HostDetail {
     try {
       let endpoint = this.endpoint.trim();
       if (!/^wss?:\/\//.test(endpoint)) { endpoint = `${this.endpointScheme}${endpoint}`; }
-      await updateHostNameAndEndpoint(getContext(this), this.hostId, this.personalName.trim(), endpoint);
+      let context = getContext(this) as common.UIAbilityContext;
+      await updateHostNameAndEndpoint(context, this.hostId, this.personalName.trim(), endpoint);
+      context.eventHub.emit('orcaHostEndpointSaved', this.hostId, endpoint);
       if (epoch !== this.editorEpoch) { return; }
       router.back();
     } catch (e) {

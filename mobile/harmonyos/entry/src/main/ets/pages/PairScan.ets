@@ -39,6 +39,7 @@ struct PairScan {
   @State logs: string[] = [];
   @State busy: boolean = false;
   @State scanning: boolean = false;
+  @State openedFromLink: boolean = false;
   @State advanced: boolean = false;
   @State showPaste: boolean = false;
   @State stage: string = '';
@@ -63,6 +64,7 @@ struct PairScan {
   aboutToAppear(): void {
     let params = (router.getParams() ?? {}) as Record<string, string>;
     if (params && typeof params['pairingCode'] === 'string') {
+      this.openedFromLink = true;
       this.pairingCode = params['pairingCode']; this.previewOffer(true);
     }
   }
@@ -114,7 +116,7 @@ struct PairScan {
   }
 
   onBackPress(): boolean {
-    if (this.confirming && !this.busy) { this.confirming = false; this.confirmedOffer = null; return true; }
+    if (this.openedFromLink) { router.back({ url: 'pages/Home' }); return true; }
     if (this.showPaste && !this.busy) { this.showPaste = false; this.pairingCode = ''; return true; }
     return false;
   }
@@ -369,7 +371,10 @@ struct PairScan {
           .onClick(() => { this.doPair().catch(() => {}); })
         Button(uiText('取消', this.uiLocale)).fontFamily('Geist').fontSize(16).width('100%').height(44)
           .fontColor(this.themeSecondary).backgroundColor(Color.Transparent).enabled(!this.busy)
-          .onClick(() => { this.confirming = false; this.confirmedOffer = null; })
+          .onClick(() => { this.onBackPress(); })
+      } else if (this.openedFromLink) {
+        Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(16).fontColor(this.themeWarning)
+          .textAlign(TextAlign.Center).padding({ top: 36, left: 12, right: 12 })
       } else {
         Column({ space: 12 }) {
           Text(uiText('在桌面 Orca 的设置 → 移动端生成二维码，然后扫码或粘贴配对链接。', this.uiLocale))

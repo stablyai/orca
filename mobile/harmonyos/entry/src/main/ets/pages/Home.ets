@@ -14,7 +14,7 @@ import { HostSession, SessionPhase } from '../transport/HostSession';
 import { HomeWorktree, readHomeCatalog, isHomeAttention, homeAttentionRank } from '../home/HomeCatalog';
 import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, readHomeUsage, readHomeAutomations,
   readHomeAutomationRuns, homeAutomationToggleParams } from '../home/HomeAccountUsage';
-import { SETTINGS_MENU_ITEMS, SettingsMenuItem } from '../settings/SettingsMenu';
+import { SETTINGS_LINK_ITEMS, SETTINGS_MENU_ITEMS, SettingsMenuItem } from '../settings/SettingsMenu';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { recoverRelayPairings } from '../transport/RelayPairing';
 import { HomeResume, readHomeResume, saveHomeResume, clearHomeResume } from '../home/HomeResume';
@@ -137,7 +137,7 @@ struct Home {
   @State summaries: Record<string, string> = {};
   @State loadError: string = '';
   @State agentsExpanded: boolean = false;
-  @State choosingHost: boolean = false;
+  @State hostPickerRoute: string = '';
   @State resume: HomeResume | null = null;
   @State usageByHost: Record<string, HomeUsageCard[]> = {};
   @State automationsByHost: Record<string, HomeAutomation[]> = {};
@@ -200,7 +200,7 @@ struct Home {
   }
 
   onBackPress(): boolean {
-    if (this.choosingHost) { this.choosingHost = false; return true; }
+    if (this.hostPickerRoute) { this.hostPickerRoute = ''; return true; }
     if (this.activeTab !== 'feed') { this.activeTab = 'feed'; return true; }
     return false;
   }
@@ -732,10 +732,10 @@ struct Home {
     router.pushUrl({ url: 'pages/PairScan' }).catch(() => {});
   }
 
-  openNewWorkspace(): void {
+  openOnConnectedHost(route: string): void {
     let hosts = this.hosts.filter((host: HostMeta): boolean => this.online[host.id] === true);
-    if (hosts.length === 1) { this.openHostRoute(hosts[0].id, '/new-workspace'); }
-    else if (hosts.length > 1) { this.choosingHost = true; }
+    if (hosts.length === 1) { this.openHostRoute(hosts[0].id, route); }
+    else if (hosts.length > 1) { this.hostPickerRoute = route; }
   }
 
   openNewAutomation(hostId: string): void {
@@ -1033,7 +1033,21 @@ struct Home {
             Button(uiText('配对另一台桌面', this.uiLocale)).fontFamily('Geist').fontSize(16).fontColor(this.pal().accentBlue)
               .backgroundColor(Color.Transparent).constraintSize({ minHeight: 44 })
               .onClick(() => this.openPairScan())
-              .margin({ bottom: TAB_BAR_HEIGHT + 24 })
+            Row({ space: 12 }) {
+              Image($r('app.media.lucide_list')).supportSvg2(true).width(18).height(18)
+                .colorFilter(lucideColorFilter(this.pal().textSecondary))
+              Column({ space: 3 }) {
+                Text(uiText('任务', this.uiLocale)).fontFamily('Geist').fontSize(16).fontColor(this.pal().textPrimary)
+                Text(uiText('浏览问题和评审', this.uiLocale)).fontFamily('Geist').fontSize(14)
+                  .fontColor(this.pal().textSecondary)
+              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+              Image($r('app.media.lucide_chevron_right')).supportSvg2(true).width(14).height(14)
+                .colorFilter(lucideColorFilter(this.pal().textMuted))
+            }.padding(16).width('100%').borderRadius(16).backgroundColor(this.pal().bgPanel)
+              .opacity(this.onlineCount() > 0 ? 1 : 0.5).enabled(this.onlineCount() > 0)
+              .accessibilityGroup(true).accessibilityText(uiText('任务', this.uiLocale))
+              .onClick(() => this.openOnConnectedHost('/tasks'))
+              .margin({ top: 8, bottom: TAB_BAR_HEIGHT + 24 })
           }
           .width('100%')
           .padding({ left: 16, right: 16 })
@@ -1336,44 +1350,55 @@ struct Home {
   }
 
   @Builder
+  settingsGroup(items: SettingsMenuItem[], external: boolean) {
+    Column() {
+      ForEach(items, (row: SettingsMenuItem, index: number) => {
+        Column() {
+          if (index > 0) {
+            this.hairline(46)
+          }
+          Row({ space: 11 }) {
+            Image(row.icon).supportSvg2(true)
+              .width(18).height(18)
+              .colorFilter(lucideColorFilter(this.pal().textSecondary))
+            Text(uiText(row.label, this.uiLocale))
+              .fontFamily('Geist').fontSize(16 * this.fontScale)
+              .fontColor(this.pal().textPrimary)
+              .maxLines(1)
+              .layoutWeight(1)
+            Image($r('app.media.lucide_chevron_right')).supportSvg2(true)
+              .width(14).height(14)
+              .colorFilter(lucideColorFilter(this.pal().textMuted))
+          }
+          .width('100%')
+          .padding({ top: 12, bottom: 12, left: 16, right: 14 })
+          .onClick(() => {
+            if (external) {
+              let context = getContext(this) as common.UIAbilityContext;
+              context.startAbility({ action: 'ohos.want.action.viewData', uri: row.target }).catch(() => {});
+            } else {
+              router.pushUrl({ url: row.target }).catch(() => {});
+            }
+          })
+        }
+        .width('100%')
+      }, (row: SettingsMenuItem, index: number) => `${index}-${row.target}`)
+    }
+    .width('100%')
+    .borderRadius(16)
+    .backgroundColor(this.pal().bgPanel)
+    .clip(true)
+    .margin({ top: 8 })
+  }
+
+  @Builder
   settingsTab() {
     Column() {
       this.tabHeader(uiText('设置', this.uiLocale))
       Scroll() {
-        Column() {
-          Column() {
-            ForEach(SETTINGS_MENU_ITEMS, (row: SettingsMenuItem, index: number) => {
-              Column() {
-                if (index > 0) {
-                  this.hairline(46)
-                }
-                Row({ space: 11 }) {
-                  Image(row.icon).supportSvg2(true)
-                    .width(18).height(18)
-                    .colorFilter(lucideColorFilter(this.pal().textSecondary))
-                  Text(uiText(row.label, this.uiLocale))
-                    .fontFamily('Geist').fontSize(16 * this.fontScale)
-                    .fontColor(this.pal().textPrimary)
-                    .maxLines(1)
-                    .layoutWeight(1)
-                  Image($r('app.media.lucide_chevron_right')).supportSvg2(true)
-                    .width(14).height(14)
-                    .colorFilter(lucideColorFilter(this.pal().textMuted))
-                }
-                .width('100%')
-                .padding({ top: 12, bottom: 12, left: 16, right: 14 })
-                .onClick(() => {
-                  router.pushUrl({ url: row.target }).catch(() => {});
-                })
-              }
-              .width('100%')
-            }, (row: SettingsMenuItem, index: number) => `${index}-${row.target}`)
-          }
-          .width('100%')
-          .borderRadius(16)
-          .backgroundColor(this.pal().bgPanel)
-          .clip(true)
-          .margin({ top: 8 })
+        Column({ space: 12 }) {
+          this.settingsGroup(SETTINGS_MENU_ITEMS, false)
+          this.settingsGroup(SETTINGS_LINK_ITEMS, true)
         }
         .width('100%')
         .padding({ left: 16, right: 16, bottom: TAB_BAR_HEIGHT + 24 })
@@ -1466,7 +1491,7 @@ struct Home {
       .accessibilityText('新建工作区')
       .onClick(() => {
         if (!this.fabDisabled()) {
-          this.openNewWorkspace();
+          this.openOnConnectedHost('/new-workspace');
         }
       })
     }
@@ -1496,24 +1521,25 @@ struct Home {
         .width('100%')
         .height('100%')
 
-        if (this.choosingHost) {
+        if (this.hostPickerRoute) {
           Column({ space: 12 }) {
             Text(uiText('选择桌面', this.uiLocale)).fontFamily('Geist').fontSize(18).fontColor(this.pal().textPrimary)
             ForEach(this.hosts, (host: HostMeta) => {
               if (this.online[host.id] === true) {
                 Button(host.name).width('100%').fontFamily('Geist').fontSize(16).fontColor(this.pal().textPrimary)
                   .backgroundColor(this.pal().bgPanel).onClick(() => {
-                    this.choosingHost = false; this.openHostRoute(host.id, '/new-workspace');
+                    let route = this.hostPickerRoute;
+                    this.hostPickerRoute = ''; this.openHostRoute(host.id, route);
                   })
               }
             }, (host: HostMeta) => host.id)
             Button(uiText('取消', this.uiLocale)).fontColor(this.pal().textSecondary).backgroundColor(Color.Transparent)
-              .onClick(() => { this.choosingHost = false; })
+              .onClick(() => { this.hostPickerRoute = ''; })
           }.width('100%').height('100%').padding(24).justifyContent(FlexAlign.Center)
             .backgroundColor(this.pal().bgBase)
         }
 
-        if (!this.choosingHost && this.activeTab === 'feed' && this.loaded && this.hosts.length > 0) {
+        if (!this.hostPickerRoute && this.activeTab === 'feed' && this.loaded && this.hosts.length > 0) {
           this.fab()
         }
       }

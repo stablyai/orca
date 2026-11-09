@@ -1,6 +1,7 @@
 import { utf8Encode, utf8Decode, base64Encode } from '../transport/crypto/Bytes';
 import { PageStorageStore } from '../storage/PageStorageStore';
 import { webview } from '@kit.ArkWeb';
+import { url } from '@kit.ArkTS';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { BundleManifest, BundleRoute } from '../transport/WebBundleFetcher';
 import {
@@ -88,6 +89,8 @@ interface BridgeRouteWire {
   pathname: string;
   params: Record<string, string>;
 }
+
+export type BridgeNativePage = 'edit-host' | 'connection-log';
 
 interface BridgeInitHostWire {
   personalName?: string;
@@ -195,19 +198,32 @@ export class BridgeHost {
   }
   private locale: string = 'en';
   private externalLink: ((url: string) => Promise<void>) | null = null;
+  private externalNavigationEnabled: boolean = false;
   private haptics: ((kind: string) => Promise<void>) | null = null;
   setUiLocale(locale: string): void {
     if (!['en', 'zh', 'zh-Hant', 'ko', 'ja', 'es', 'fr', 'pt', 'ru', 'tr', 'de'].includes(locale) || this.locale === locale) { return; }
     this.locale = locale; if (this.pushReady && !this.disposed) { this.sendInit(); }
   }
-  setDeviceNotifies(externalLink: (url: string) => Promise<void>, haptics: (kind: string) => Promise<void>): void {
-    this.externalLink = externalLink; this.haptics = haptics;
+  setDeviceNotifies(externalLink: (url: string) => Promise<void>, haptics: (kind: string) => Promise<void>,
+    externalNavigation: boolean = false): void {
+    this.externalLink = externalLink; this.haptics = haptics; this.externalNavigationEnabled = externalNavigation;
+  }
+  offerExternalNavigation(target: string, mainFrame: boolean, userGesture: boolean, redirect: boolean, method: string): void {
+    if (this.disposed || !this.pushReady || !this.externalLink || !mainFrame || !userGesture || redirect || method !== 'GET'
+      || target.length > 2048 || !this.routeGrants().includes('externalNavigation')) { return; }
+    try {
+      let parsed = url.URL.parseURL(target);
+      if (!['https:', 'http:', 'mailto:'].includes(parsed.protocol) || parsed.href.length > 2048) { return; }
+      this.externalLink(parsed.href).catch((): void => this.log('Unable to open external link'));
+    } catch (e) {}
   }
   private connectionPath: string = 'lan';
   setConnectionPath(path: string): void { this.connectionPath = path; }
   private scheme: string = 'dark';
   private locationSink: ((pathname: string, params: Record<string, string>) => void) | null = null;
+  private nativeNavigation: ((page: BridgeNativePage, replace: boolean) => void) | null = null;
   setLocationSink(sink: (pathname: string, params: Record<string, string>) => void): void { this.locationSink = sink; }
+  setNativeNavigation(sink: (page: BridgeNativePage, replace: boolean) => void): void { this.nativeNavigation = sink; }
 
   setStorage(store: PageStorageStore): void { this.storageStore = store; this.pageStorage = store.entries(); }
   setRouteParams(params: Record<string, string>): void { this.routeParams = params; }
@@ -325,6 +341,7 @@ export class BridgeHost {
     }
     if (grant === 'fault') { return this.faultSink !== null; }
     if (grant === 'externalLink') { return this.externalLink !== null; }
+    if (grant === 'externalNavigation') { return this.externalNavigationEnabled; }
     if (grant === 'haptics') { return this.haptics !== null; }
     return ['navigate', 'storage', 'rpcEnvelope', 'screencastBinary'].includes(grant);
   }
@@ -507,39 +524,69 @@ export class BridgeHost {
     if (name === 'back-claim') { this.backClaimed = msg['claimed'] === true; return; }
     if (name === 'painted') { if (this.onPaint) { this.onPaint(); } return; }
     if (name === 'navigate' || name === 'location') {
-      let href: string = msg['href'];
-      if (typeof href !== 'string') { return; }
-      if (name === 'navigate' && href === '/') { if (this.onBack) { this.onBack(true); } return; }
-      let queryAt = href.indexOf('?');
-      let pathname = queryAt >= 0 ? href.substring(0, queryAt) : href;
-      if (pathname.startsWith(`/h/${this.meta.id}`)
-        && (pathname.length === `/h/${this.meta.id}`.length || pathname.charAt(`/h/${this.meta.id}`.length) === '/')
-        && href.length < 2048 && !/[\\#\s]/.test(href)) {
-        let parts = pathname.split('/');
-        try {
-          for (let i = 1; i < parts.length; i++) {
-            let decoded = decodeURIComponent(parts[i]);
-            if (!decoded || decoded === '.' || decoded === '..' || /[\\/\x00-\x20]/.test(decoded)) { return; }
-          }
-          let params: Record<string, string> = {};
-          if (queryAt >= 0) {
-            let pairs = href.substring(queryAt + 1).split('&');
-            if (pairs.length > 32) { return; }
-            for (let i = 0; i < pairs.length; i++) {
-              let at = pairs[i].indexOf('=');
-              let key = decodeURIComponent(at < 0 ? pairs[i] : pairs[i].substring(0, at));
-              let value = decodeURIComponent(at < 0 ? '' : pairs[i].substring(at + 1));
-              if (!key || ['__proto__', 'constructor', 'prototype'].includes(key)) { return; }
-              params[key] = value;
-            }
-          }
-          this.routePathname = pathname; this.routeParams = params;
-          if (this.locationSink) { this.locationSink(pathname, params); }
-        } catch (e) { return; }
-      }
+      this.handleRouteNotify(name === 'navigate', msg['href'], msg['replace'] === true);
       return;
     }
     this.log(`notify: ${name}`);
+  }
+
+  private handleRouteNotify(navigate: boolean, href: string, replace: boolean): void {
+    if (typeof href !== 'string' || href.length > 2048 || /[\\#\s\x00-\x1f\x7f]/.test(href)) { return; }
+    if (navigate && !this.routeGrants().includes('navigate')) { return; }
+    if (navigate && href === '/') { if (this.onBack) { this.onBack(true); } return; }
+    let queryAt = href.indexOf('?');
+    let pathname = queryAt >= 0 ? href.substring(0, queryAt) : href;
+    let params = this.readRouteQuery(queryAt >= 0 ? href.substring(queryAt + 1) : '');
+    if (params === null) { return; }
+    let hostPath = `/h/${this.meta.id}`;
+    if (pathname === `${hostPath}/edit`) {
+      if (navigate && queryAt < 0 && this.nativeNavigation) { this.nativeNavigation('edit-host', replace); }
+      return;
+    }
+    if (pathname === '/connection-log') {
+      if (navigate && params['hostId'] === this.meta.id && Object.keys(params).length === 1 && this.nativeNavigation) {
+        this.nativeNavigation('connection-log', replace);
+      }
+      return;
+    }
+    if (pathname !== hostPath && !pathname.startsWith(`${hostPath}/`)) { return; }
+    if (!this.acceptsLocationPath(pathname)) { return; }
+    this.routePathname = pathname;
+    this.routeParams = params;
+    if (this.locationSink) { this.locationSink(pathname, params); }
+  }
+
+  private readRouteQuery(query: string): Record<string, string> | null {
+    let params: Record<string, string> = {};
+    if (query.length === 0) { return params; }
+    let pairs = query.split('&');
+    if (pairs.length > 32) { return null; }
+    try {
+      for (let i = 0; i < pairs.length; i++) {
+        let at = pairs[i].indexOf('=');
+        let key = decodeURIComponent(at < 0 ? pairs[i] : pairs[i].substring(0, at));
+        let value = decodeURIComponent(at < 0 ? '' : pairs[i].substring(at + 1));
+        if (!key || ['__proto__', 'constructor', 'prototype'].includes(key) || params[key] !== undefined) { return null; }
+        params[key] = value;
+      }
+      return params;
+    } catch (e) { return null; }
+  }
+
+  private acceptsLocationPath(pathname: string): boolean {
+    let parts = pathname.split('/');
+    try {
+      for (let i = 1; i < parts.length; i++) {
+        let decoded = decodeURIComponent(parts[i]);
+        if (!decoded || decoded === '.' || decoded === '..' || /[\x00-\x1f\x7f]/.test(decoded)) { return false; }
+        if (!/[\\/ ]/.test(decoded)) { continue; }
+        // Workspace IDs carry an absolute path, but the encoded segment stays opaque to routing.
+        let opaque = this.manifest.routes.some((route: BundleRoute): boolean =>
+          route.pathname.split('/')[i] === '[worktreeId]' && this.routeMatches(route.pathname, pathname));
+        if (!opaque) { return false; }
+      }
+      return true;
+    } catch (e) { return false; }
   }
 
   // ===== Page storage (page-storage-keys.ts rules, in-memory store) =====
@@ -758,7 +805,7 @@ export class BridgeHost {
       this.pendingIds.add(id);
       this.log(`→ ${method} (${id})`);
       let options: ESObject = msg['options'];
-      let timeout: number = options && typeof options['timeoutMs'] === 'number' ? options['timeoutMs'] : 15000;
+      let timeout: number = options && typeof options['timeoutMs'] === 'number' ? options['timeoutMs'] : 30000;
       this.client.requestRaw(id, wire, timeout).then((response: RpcResponse) => {
         if (!this.pendingIds.delete(id) || this.disposed) { return; }
         this.sendReply(id, response);

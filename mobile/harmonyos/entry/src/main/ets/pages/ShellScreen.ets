@@ -11,7 +11,7 @@ import { router } from '@kit.ArkUI';
 import { SpikeRpcClient } from '../transport/SpikeRpcClient';
 import { WebBundleFetcher, BundleManifest, isSafeBundlePath } from '../transport/WebBundleFetcher';
 import { ShellStartup } from '../webshell/ShellStartup';
-import { BridgeHost } from '../webshell/BridgeHost';
+import { BridgeHost, BridgeNativePage } from '../webshell/BridgeHost';
 import fflateModule from '../vendor/fflate-umd.js';
 import { listHosts, getDeviceToken, getRelayCredential, HostMeta } from '../storage/HostStore';
 import { AgentWatch } from '../notifications/AgentWatch';
@@ -152,6 +152,14 @@ struct ShellScreen {
   private foregroundListener: () => void = (): void => {
     this.foreground = true; this.updateViewing();
   };
+  private hostEndpointListener: (hostId: string, endpoint: string) => void = (hostId: string, endpoint: string): void => {
+    if (this.disposed || hostId !== this.hostId || this.hostMeta?.endpoint === endpoint) { return; }
+    this.startup.cancel(); this.releaseBridge();
+    let previous = this.supervisor;
+    this.supervisor = null;
+    if (previous) { previous.stop(); }
+    this.boot();
+  };
   private generation: number = 0;
   private backgroundListener: () => void = (): void => {
     this.foreground = false; this.notifier.setViewing('', '');
@@ -183,6 +191,7 @@ struct ShellScreen {
     this.nativeProxy.setLogSink((line: string): void => this.appendLog(line));
     (getContext(this) as common.UIAbilityContext).eventHub.on('orcaBackground', this.backgroundListener);
     (getContext(this) as common.UIAbilityContext).eventHub.on('orcaForeground', this.foregroundListener);
+    (getContext(this) as common.UIAbilityContext).eventHub.on('orcaHostEndpointSaved', this.hostEndpointListener);
     this.boot();
   }
 
@@ -198,6 +207,7 @@ struct ShellScreen {
     this.disposed = true; this.generation++; this.startup.cancel();
     (getContext(this) as common.UIAbilityContext).eventHub.off('orcaBackground', this.backgroundListener);
     (getContext(this) as common.UIAbilityContext).eventHub.off('orcaForeground', this.foregroundListener);
+    (getContext(this) as common.UIAbilityContext).eventHub.off('orcaHostEndpointSaved', this.hostEndpointListener);
     if (this.supervisor) { this.supervisor.stop(); this.supervisor = null; }
     this.releaseBridge();
   }
@@ -306,8 +316,10 @@ struct ShellScreen {
   }
 
   async boot(): Promise<void> {
+    let generation = ++this.generation;
     try {
       let hosts: HostMeta[] = await listHosts(getContext(this));
+      if (this.disposed || generation !== this.generation) { return; }
       let meta: HostMeta | null = null;
       for (let i = 0; i < hosts.length; i++) {
         if (hosts[i].id === this.hostId) {
@@ -320,21 +332,22 @@ struct ShellScreen {
         return;
       }
       let token = await getDeviceToken(getContext(this), meta.id);
+      if (this.disposed || generation !== this.generation) { return; }
       if (token === null) {
         this.publishPhase('凭证缺失 — 请重新配对');
         return;
       }
 
-      if (this.disposed) { return; }
       let context = getContext(this) as common.UIAbilityContext;
       let relayCredential = await getRelayCredential(context, meta.id);
-      if (this.disposed) { return; }
+      if (this.disposed || generation !== this.generation) { return; }
+      this.hostMeta = meta;
       let supervisor = new HostSession(meta, token, relayCredential ?? undefined, context); this.supervisor = supervisor;
       supervisor.setClientSetup((client: SpikeRpcClient): void => client.setFflate(fflateModule));
       supervisor.setLogSink((line: string): void => this.appendLog(line));
       let host = meta;
       supervisor.addListener((phase: SessionPhase, detail: string): void => {
-        if (this.disposed) { return; }
+        if (this.disposed || this.supervisor !== supervisor) { return; }
         if (phase === 'connected') {
           let client = supervisor.getClient();
           if (client) { this.loadConnected(client, host).catch(() => {}); }
@@ -346,7 +359,9 @@ struct ShellScreen {
         }
       });
       supervisor.start();
-    } catch (e) { this.publishPhase('失败：无法读取桌面凭证，请重新配对'); }
+    } catch (e) {
+      if (!this.disposed && generation === this.generation) { this.publishPhase('失败：无法读取桌面凭证，请重新配对'); }
+    }
   }
 
   private async loadConnected(client: SpikeRpcClient, meta: HostMeta): Promise<void> {
@@ -374,9 +389,16 @@ struct ShellScreen {
       bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale); bridge.setRouteParams(this.routeParams);
       if (this.supervisor) { bridge.setConnectionPath(this.supervisor.getActivePath()); }
       bridge.setLocationSink((pathname: string, params: Record<string, string>): void => this.recordResume(pathname, params));
+      bridge.setNativeNavigation((page: BridgeNativePage, replace: boolean): void => {
+        if (this.disposed || !this.pageVisible || generation !== this.generation || this.bridge !== bridge) { return; }
+        let url = page === 'edit-host' ? 'pages/HostDetail' : 'pages/ConnectionLog';
+        let params: Record<string, string> = { 'hostId': meta.id };
+        let navigation = replace ? router.replaceUrl({ url: url, params: params }) : router.pushUrl({ url: url, params: params });
+        navigation.catch(() => { this.appendLog('Could not open the native screen'); });
+      });
       this.recordResume(this.routePathname, this.routeParams);
       bridge.setDeviceNotifies((target: string): Promise<void> => nativeDevice.notifyExternalLink(target),
-        (kind: string): Promise<void> => nativeDevice.notifyHaptic(kind));
+        (kind: string): Promise<void> => nativeDevice.notifyHaptic(kind), true);
       bridge.setNativeHandler(nativeDevice.methods, (method: string, params: ESObject): Promise<Object> => nativeDevice.serve(method, params));
       bridge.setNavigation((home: boolean): void => { if (home) { router.back({ url: 'pages/Home' }); } else { router.back(); } }, (): void => this.pagePainted(client, generation));
       bridge.setFaultSink((_message: string): void => this.failStartup('会话页面发生错误，请重试'));
@@ -415,6 +437,7 @@ struct ShellScreen {
         if (this.phase.startsWith('失败')) {
           Button(uiText('重试', this.uiLocale)).height(28).fontFamily('Geist').fontSize(11).onClick(() => {
             if (this.supervisor) { this.supervisor.stop(); this.supervisor.start(); }
+            else { this.boot(); }
           })
         }
         Button(this.showLog ? '页面' : '日志')
@@ -446,7 +469,13 @@ struct ShellScreen {
               return items;
             })())
             .onLoadIntercept((event) => {
-              return !event.data.getRequestUrl().startsWith(`${SHELL_ORIGIN}/`);
+              let target = event.data.getRequestUrl();
+              if (target.startsWith(`${SHELL_ORIGIN}/`)) { return false; }
+              if (this.pageVisible && this.foreground && this.bridge) {
+                this.bridge.offerExternalNavigation(target, event.data.isMainFrame(), event.data.isRequestGesture(),
+                  event.data.isRedirect(), event.data.getRequestMethod());
+              }
+              return true;
             })
             .onPageEnd((event) => {
               if (event.url === this.webSrc && !this.painted && this.bridge) { this.publishPhase('页面已加载，正在初始化…'); }
@@ -482,7 +511,8 @@ struct ShellScreen {
               };
               if (relPath.endsWith('.html')) {
                 // Fenced document: script only from the bundle origin (upstream shell CSP policy).
-                headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'";
+                headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src blob:; font-src 'self' data:; connect-src 'none'";
+                headers['Referrer-Policy'] = 'no-referrer';
               }
               try {
                 let fd = fs.openSync(file, fs.OpenMode.READ_ONLY).fd;

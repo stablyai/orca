@@ -280,6 +280,141 @@ test('encoded workspace deep links retain their workspace boundary', () => {
   assert.equal(parseLaunchRoute('https://example.com'), null)
 })
 
+test('the bridge reports a workspace location without interpreting its encoded ID as a path', () => {
+  const peer = createRpcPeer()
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes })
+  const bridge = new BridgeHost(
+    new peer.SpikeRpcClient(),
+    createController(),
+    {
+      ...manifest,
+      routes: [
+        ...manifest.routes,
+        {
+          pathname: '/h/[hostId]/session/[worktreeId]',
+          canOwnHostArea: true,
+          grants: ['navigate'],
+          optionalGrants: []
+        }
+      ]
+    },
+    meta,
+    `/h/${hostId}`
+  )
+  const locations = []
+  bridge.setLocationSink((pathname, params) =>
+    locations.push([pathname, params.executionHost ?? ''])
+  )
+  const windowsPathname = `/h/${hostId}/session/repo%3A%3AC%3A%5CMy%20Project`
+  const posixPathname = `/h/${hostId}/session/repo%3A%3A%2FUsers%2Fme%2Fproject`
+  post(bridge, {
+    type: 'notify',
+    name: 'location',
+    href: `${windowsPathname}?executionHost=runtime%3Awsl`
+  })
+  post(bridge, { type: 'notify', name: 'location', href: posixPathname })
+  post(bridge, { type: 'notify', name: 'location', href: `/h/${hostId}/unserved/repo%2Ffolder` })
+  post(bridge, { type: 'notify', name: 'location', href: `/h/${hostId}/session/%2e%2e` })
+  post(bridge, {
+    type: 'notify',
+    name: 'location',
+    href: `/h/${'b'.repeat(32)}/session/repo%2Ffolder`
+  })
+  assert.deepEqual(locations, [
+    [windowsPathname, 'runtime:wsl'],
+    [posixPathname, '']
+  ])
+})
+
+test('the bridge opens only granted native edit and diagnostics destinations for its paired host', () => {
+  const peer = createRpcPeer()
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes })
+  const bridge = new BridgeHost(
+    new peer.SpikeRpcClient(),
+    createController(),
+    manifest,
+    meta,
+    `/h/${hostId}`
+  )
+  const nativePages = []
+  bridge.setNativeNavigation((page, replace) => nativePages.push([page, replace]))
+  post(bridge, { type: 'notify', name: 'navigate', href: `/h/${hostId}/edit` })
+  post(bridge, {
+    type: 'notify',
+    name: 'navigate',
+    href: `/connection-log?hostId=${hostId}`,
+    replace: true
+  })
+  post(bridge, { type: 'notify', name: 'location', href: `/h/${hostId}/edit` })
+  post(bridge, { type: 'notify', name: 'navigate', href: `/h/${'b'.repeat(32)}/edit` })
+  post(bridge, {
+    type: 'notify',
+    name: 'navigate',
+    href: `/connection-log?hostId=${'b'.repeat(32)}`
+  })
+  post(bridge, {
+    type: 'notify',
+    name: 'navigate',
+    href: `/connection-log?hostId=${'b'.repeat(32)}&hostId=${hostId}`
+  })
+  post(bridge, { type: 'notify', name: 'navigate', href: '/settings' })
+  assert.deepEqual(nativePages, [
+    ['edit-host', false],
+    ['connection-log', true]
+  ])
+  assert.equal(bridge.getRoute(), `/h/${hostId}`)
+
+  const ungranted = new BridgeHost(
+    new peer.SpikeRpcClient(),
+    createController(),
+    { ...manifest, routes: [] },
+    meta,
+    `/h/${hostId}`
+  )
+  ungranted.setNativeNavigation((page, replace) => nativePages.push([page, replace]))
+  post(ungranted, { type: 'notify', name: 'navigate', href: `/h/${hostId}/edit` })
+  assert.deepEqual(nativePages, [
+    ['edit-host', false],
+    ['connection-log', true]
+  ])
+})
+
+test('the bridge offers preview links only from a granted user navigation', () => {
+  const peer = createRpcPeer()
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], {
+    ...peer,
+    ...bytes,
+    url: { URL: { parseURL: (target) => new URL(target) } }
+  })
+  const bridge = new BridgeHost(
+    new peer.SpikeRpcClient(),
+    createController(),
+    { ...manifest, routes: [{ ...manifest.routes[0], optionalGrants: ['externalNavigation'] }] },
+    meta,
+    `/h/${hostId}`
+  )
+  const opened = []
+  const open = async (target) => {
+    opened.push(target)
+  }
+  const haptics = async () => {}
+  bridge.onPushChannelReady()
+  bridge.setDeviceNotifies(open, haptics)
+  bridge.offerExternalNavigation('https://unwired.example', true, true, false, 'GET')
+  bridge.setDeviceNotifies(open, haptics, true)
+  post(bridge, { type: 'ready' })
+  bridge.offerExternalNavigation('https://example.com', true, true, false, 'GET')
+  bridge.offerExternalNavigation('mailto:review@example.com', true, true, false, 'GET')
+  bridge.offerExternalNavigation('https://subframe.example', false, true, false, 'GET')
+  bridge.offerExternalNavigation('https://script.example', true, false, false, 'GET')
+  bridge.offerExternalNavigation('https://redirect.example', true, true, true, 'GET')
+  bridge.offerExternalNavigation('https://form.example', true, true, false, 'POST')
+  bridge.offerExternalNavigation('javascript:alert(1)', true, true, false, 'GET')
+  post(bridge, { type: 'notify', name: 'location', href: `/h/${hostId}/unserved` })
+  bridge.offerExternalNavigation('https://ungranted.example', true, true, false, 'GET')
+  assert.deepEqual(opened, ['https://example.com/', 'mailto:review@example.com'])
+})
+
 test('a socket close reconnects the supervised session and stop cancels further retries', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const peer = createRpcPeer()

@@ -9,3 +9,7 @@ export const SETTINGS_MENU_ITEMS: SettingsMenuItem[] = [
   { label: '故障排查', subtitle: '桌面连接与事件日志', icon: $r('app.media.lucide_wrench'), target: 'pages/Troubleshoot', tag: '' },
   { label: '关于', subtitle: '版本与开源许可', icon: $r('app.media.lucide_info'), target: 'pages/About', tag: '' }
 ];
+export const SETTINGS_LINK_ITEMS: SettingsMenuItem[] = [
+  { label: '隐私政策', subtitle: '', icon: $r('app.media.lucide_globe'), target: 'https://www.onorca.dev/privacy', tag: '' },
+  { label: '支持', subtitle: '', icon: $r('app.media.lucide_wrench'), target: 'https://github.com/stablyai/orca/issues', tag: '' }
+];

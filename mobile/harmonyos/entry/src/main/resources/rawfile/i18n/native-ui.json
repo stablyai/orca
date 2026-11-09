@@ -2377,5 +2377,39 @@
     "ru": "Setup could not be opened. Try again.",
     "tr": "Setup could not be opened. Try again.",
     "de": "Setup could not be opened. Try again."
+  },
+  "任务": {
+    "zh": "任务",
+    "en": "Tasks"
+  },
+  "浏览问题和评审": {
+    "zh": "浏览问题和评审",
+    "en": "Browse your issues and reviews"
+  },
+  "隐私政策": {
+    "zh": "隐私政策",
+    "en": "Privacy Policy",
+    "zh-Hant": "隱私權政策",
+    "ko": "개인정보 처리방침",
+    "ja": "プライバシーポリシー",
+    "es": "Política de privacidad",
+    "fr": "Politique de confidentialité",
+    "pt": "Política de Privacidade",
+    "ru": "Политика конфиденциальности",
+    "tr": "Gizlilik Politikası",
+    "de": "Datenschutzerklärung"
+  },
+  "支持": {
+    "zh": "支持",
+    "en": "Support",
+    "zh-Hant": "支援",
+    "ko": "지원",
+    "ja": "サポート",
+    "es": "Soporte",
+    "fr": "Assistance",
+    "pt": "Suporte",
+    "ru": "Поддержка",
+    "tr": "Destek",
+    "de": "Hilfe"
   }
 }

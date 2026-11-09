@@ -11,18 +11,6 @@
       "version": "0.8.3",
       "tarball": "https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz",
       "integrity": "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA=="
-    },
-    {
-      "name": "@xterm/xterm",
-      "version": "6.1.0-beta.336",
-      "tarball": "https://registry.npmjs.org/@xterm/xterm/-/xterm-6.1.0-beta.336.tgz",
-      "integrity": "sha512-QrvZZsffXsLW4Z3sba9GqimLvVwlb8b3W1NwZ+l6DdRnpH5pg5cFGWg2ceIburmfaGQ07YJHNekwxxlTcHZ3BA=="
-    },
-    {
-      "name": "@xterm/addon-webgl",
-      "version": "0.20.0-beta.329",
-      "tarball": "https://registry.npmjs.org/@xterm/addon-webgl/-/addon-webgl-0.20.0-beta.329.tgz",
-      "integrity": "sha512-bwqMma7X4cCBfwmWqKuhxNLkIXKW0lJTapaQ0g/9Kq7n6D6VCL4dYQCQ6DoeHv27ncJD4WzeoDTCEeSn0cspfg=="
     }
   ],
   "sha256": {
@@ -30,11 +18,6 @@
     "tools/vendor/fflate/UMD-LICENSE": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
     "tools/vendor/fflate/fflate-umd.js": "462ef8041fc970e3615a20a9dd2b2e3047a073b2da729ef4f02b634bba8b7b83",
     "tools/vendor/tweetnacl/LICENSE": "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd",
-    "tools/vendor/tweetnacl/nacl-fast.min.js": "3ec535c004aeeb225785d8e93fb33bf99f52e399bd7dfc01969b5629baea5131",
-    "tools/vendor/xterm/LICENSE": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd",
-    "tools/vendor/xterm/xterm.css": "4d9a1d50808997f097ccc6040a5da6f6cb06b14e5ee2402df5196a218bba838f",
-    "tools/vendor/xterm/xterm.js": "5cd7180ab862633d6dc0f1fd89d3ca7c5f1787c7ecfb4339947e7a2dd617e795",
-    "tools/vendor/xterm-webgl/LICENSE": "21b975c39532001d431dc3b2c29fbff691d83f370833a66b54698bda290fde0e",
-    "tools/vendor/xterm-webgl/addon-webgl.js": "8c0742ba77e934eb2423a23cb1fa574a8e28eedb39f24013fffb154daf3d7276"
+    "tools/vendor/tweetnacl/nacl-fast.min.js": "3ec535c004aeeb225785d8e93fb33bf99f52e399bd7dfc01969b5629baea5131"
   }
 }
