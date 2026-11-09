@@ -51,14 +51,23 @@ describe('resolvePosixPaneShellPath', () => {
     expect(await resolvePosixPaneShellPath('pwsh', '/usr/bin:/custom/bin')).toBe('/custom/bin/pwsh')
   })
 
-  it.each(['tools:/custom/bin', ':/custom/bin', '/usr/bin::/custom/bin'])(
-    'leaves the lookup to execvp at a cwd-relative PATH entry in %s',
-    async (spawnPath) => {
-      executables.add('/custom/bin/pwsh').add('/opt/homebrew/bin/pwsh')
+  it.each([
+    ['tools:/custom/bin', '/work/tools/pwsh'],
+    [':/custom/bin', '/work/pwsh'],
+    ['/usr/bin::/custom/bin', '/work/pwsh']
+  ])('resolves a cwd-relative PATH entry in %s against the spawn cwd', async (spawnPath, local) => {
+    executables.add(local).add('/custom/bin/pwsh')
 
-      expect(await resolvePosixPaneShellPath('pwsh', spawnPath)).toBe('pwsh')
-    }
-  )
+    expect(await resolvePosixPaneShellPath('pwsh', spawnPath, '/work')).toBe(local)
+  })
+
+  it('moves past a cwd-relative PATH entry without pwsh', async () => {
+    executables.add('/custom/bin/pwsh')
+
+    expect(await resolvePosixPaneShellPath('pwsh', 'tools::/custom/bin', '/work')).toBe(
+      '/custom/bin/pwsh'
+    )
+  })
 
   it.each([
     ['Homebrew on Apple silicon', '/opt/homebrew/bin/pwsh'],
