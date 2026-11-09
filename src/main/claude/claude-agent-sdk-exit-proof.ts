@@ -1,4 +1,4 @@
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
@@ -23,7 +23,7 @@ const TREE_VERDICT_TRUST: Record<DescendantTreeVerdict, number> = {
   exited: 2
 }
 
-type ReapableChild = Pick<SpawnedProcess, 'pid' | 'kill'>
+type ReapableChild = Pick<ChildProcess, 'pid' | 'kill'>
 
 // A missing or exited root may have reparented descendants; its walk cannot prove an empty tree.
 function admissibleTree(

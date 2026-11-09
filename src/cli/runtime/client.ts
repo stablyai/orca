@@ -194,8 +194,7 @@ export class RuntimeClient {
         effectiveTimeoutMs,
         envelope,
         expectedRuntimeSource,
-        // Only requestSelection and onProgress reach the socket; the rest shaped the envelope above.
-        options
+        options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
       )
     } catch (error) {
       // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.

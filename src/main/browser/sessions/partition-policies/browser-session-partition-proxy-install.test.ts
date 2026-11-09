@@ -106,6 +106,7 @@ describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
   })
 
   afterEach(() => {
+    setBrowserNetworkProxySettingsResolver(null)
     vi.unstubAllEnvs()
     identityState.unavailable = false
   })

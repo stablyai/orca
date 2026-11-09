@@ -26,10 +26,6 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
     'src/worktree/project-sections-owner-recovery.test.ts',
     'Node-side: imports the desktop runtime and RPC handlers; checked by config/tsconfig.node.json against Node libraries'
-  ],
-  [
-    'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop SQLite assignment projection, which does not check against RN libs, and its implementation sources keep their normal checks'
   ]
 ])
 

@@ -5,7 +5,6 @@ import original from '../mobile/vitest.config.ts'
 const nodeFiles = [
   'src/mobile-web-shell/mobile-web-shell-project-controls.test.ts',
   'src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts',
-  'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
   'scripts/check-tests-typecheck-incremental-cache.test.ts',
   'src/mock-server-key-pair.test.ts',
   'src/mobile-release/prepare-android-release-script.test.ts',

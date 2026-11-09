@@ -6152,8 +6152,6 @@
           "888b83bf78": "Kurulum betiği kaydedilemedi",
           "a49196d538": "Orca yeni bir worktree oluşturduğunda çalışır.",
           "savedSetupCommand": "Kurulum komutu kaydedildi.",
-          "savedWithSkippedFields_one": "Desteklenmeyen {{count}} alan atlandı. Kurulum komutu kaydedildi.",
-          "savedWithSkippedFields_other": "Desteklenmeyen {{count}} alan atlandı. Kurulum komutu kaydedildi.",
           "savedInProjectSettings": "Bu <settings>projenin ayarlarında</settings> kayıtlı"
         },
         "SetupScriptPromptCardViews": {
@@ -6166,13 +6164,12 @@
           "eefa756190": "Manuel yapılandır",
           "ca4efcbc25": "Kaydet",
           "fdbc6cb064": "Algılanan kurulum betiği",
-          "7275f674cc": "Algılanan kurulum",
           "822ff300ad": "Kapat",
           "5bfd5c8779": "Kurulum betiklerini kapat",
-          "detectedFromSource": "<source>{{source}}</source> kaynağından algılandı",
           "ignoresSharedSetup": "Bu repo, paylaşılan <yaml>orca.yaml</yaml> kurulum betiklerini yok sayıyor. Yerel bir komut ekleyin veya Ayarlar bölümünde kaynağı değiştirin.",
-          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin.",
-          "reviewSetupScript": "Kurulum betiğini incele"
+          "reviewSetupScript": "Kurulum betiğini incele",
+          "7275f674cc": "Algılanan kurulum",
+          "detectedFromSource": "<file>{{source}}</file> kaynağından algılandı"
         },
         "SetupScriptReviewDialog": {
           "title": "Kurulum betiğini incele",
@@ -16966,13 +16963,7 @@
           "lost": "Dikte eklenemedi ve kopyalanamadı."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Dikteyi durdur",
-          "7f3660a7ba": "Mikrofon başlatılıyor…",
-          "f082d0cb9d": "İşleniyor…",
-          "3de5a129e7": "Dinliyor",
-          "4977162383": "Çok yüksek sesli",
-          "25f2b7a6a5": "Konuşuyor",
-          "loadingModel": "Konuşma modeli yükleniyor…"
+          "4977162383": "Çok yüksek sesli"
         }
       },
       "dashboard": {

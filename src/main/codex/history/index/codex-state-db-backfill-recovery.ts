@@ -6,7 +6,7 @@ import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { withManagedHookInstallLock } from '../../../agent-hooks/installation/locking/managed-hook-install-lock'
 import { readManagedHookHostIdentity } from '../../../agent-hooks/installation/locking/managed-hook-owner-identity'
 import { resolveCodexCommand } from '../../../codex-cli/command'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
@@ -43,7 +43,7 @@ type RecoveryDependencies = {
   countSessions: (sessionsRoot: string, limit: number) => number
   now: () => number
   sleep: (ms: number, signal: AbortSignal) => Promise<void>
-  terminate: (child: ChildProcessHandle, supervised: boolean) => Promise<void>
+  terminate: (child: ChildProcess, supervised: boolean) => Promise<void>
 }
 
 const defaultDependencies: RecoveryDependencies = {

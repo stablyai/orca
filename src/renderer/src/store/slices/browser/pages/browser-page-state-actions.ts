@@ -1,6 +1,7 @@
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import type { AppState } from '../../../types'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/constants'
+import '../../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import {
   browserWorkspaceMirrorFieldsEqual,
   findPage,

@@ -1,8 +1,8 @@
 import type { LocalGitExecOptions } from '../../git/repo-default-base-ref'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
-import { RuntimeRecipeWorkspaceCreation } from '../workspaces/creation/runtime-recipe-workspace-creation'
+import { RuntimeProvisionedWorkspaceAdoption } from '../workspaces/creation/runtime-provisioned-workspace-adoption'
 
-export abstract class RuntimeRemoteFetchOperations extends RuntimeRecipeWorkspaceCreation {
+export abstract class RuntimeRemoteFetchOperations extends RuntimeProvisionedWorkspaceAdoption {
   async getCanonicalFetchKey(
     repoPath: string,
     remote: string,

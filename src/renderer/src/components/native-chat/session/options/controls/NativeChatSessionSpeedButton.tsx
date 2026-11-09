@@ -1,5 +1,4 @@
 import { ChevronDown, Zap } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { Toggle, toggleVariants } from '@/components/ui/toggle'
 import {
   DropdownMenu,
@@ -14,37 +13,41 @@ import type {
   SessionOptionValue
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
+import { isFastServiceTier } from '../../../../../../../shared/agent-session/options/structured-agent-session-discovered-model'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 
 const STANDARD_TIER = 'default'
 
-/** Standard plus the faster tiers, or null when the select is not a speed choice with any. */
+/** Standard plus the other tiers, or null when the select is not a speed choice with any. */
 export function speedButtonTiers(
   descriptor: SessionOptionDescriptor
-): { standard: SessionOptionSelectChoice; faster: SessionOptionSelectChoice[] } | null {
+): { standard: SessionOptionSelectChoice; tiers: SessionOptionSelectChoice[] } | null {
   if (descriptor.id !== 'serviceTier' || descriptor.kind.type !== 'select') {
     return null
   }
   const standard = descriptor.kind.choices.find((choice) => choice.value === STANDARD_TIER)
-  const faster = descriptor.kind.choices.filter((choice) => choice.value !== STANDARD_TIER)
-  return standard && faster.length > 0 ? { standard, faster } : null
+  const tiers = descriptor.kind.choices.filter((choice) => choice.value !== STANDARD_TIER)
+  return standard && tiers.length > 0 ? { standard, tiers } : null
 }
 
-/** One faster tier toggles like Claude's Fast; several open a list instead of a segmented switcher. */
+/** A lone Fast tier toggles like Claude's Fast; anything else opens a list instead of a segmented switcher. */
 export function NativeChatSessionSpeedButton(props: {
   label: string
   standard: SessionOptionSelectChoice
-  faster: SessionOptionSelectChoice[]
+  tiers: SessionOptionSelectChoice[]
   current: string | undefined
   disabled: boolean
   onSet: (value: SessionOptionValue) => void
 }): React.JSX.Element {
-  const { label, standard, faster, current, disabled, onSet } = props
-  const picked = faster.find((choice) => choice.value === current)
+  const { label, standard, tiers, current, disabled, onSet } = props
+  const picked = tiers.find((choice) => choice.value === current)
+  // An unknown tier names no choice, rather than claiming Standard.
+  const shown = picked ?? (current === standard.value ? standard : undefined)
   const nameOf = (choice: SessionOptionSelectChoice) =>
     nativeChatSessionChoiceLabel(choice, say, 'serviceTier')
-  if (faster.length === 1) {
-    const only = faster[0]
+  // Only Fast takes the toggle and bolt; Flex and other tiers are picked from the list.
+  if (tiers.length === 1 && isFastServiceTier(tiers[0])) {
+    const only = tiers[0]
     return (
       <Toggle
         variant="chip"
@@ -63,22 +66,19 @@ export function NativeChatSessionSpeedButton(props: {
       <DropdownMenuTrigger asChild disabled={disabled}>
         <button
           type="button"
-          aria-label={`${label}: ${nameOf(picked ?? standard)}`}
-          // Mirrors the chip's pressed fill; a menu trigger's data-state names open, not on.
-          className={cn(
-            toggleVariants({ variant: 'chip', size: 'xs' }),
-            'gap-1',
-            picked && 'border-transparent bg-foreground/12 text-foreground dark:bg-accent'
-          )}
+          aria-label={shown ? `${label}: ${nameOf(shown)}` : label}
+          // A menu trigger's data-state names open, not on, so pressed rides on data-pressed.
+          data-pressed={Boolean(picked && isFastServiceTier(picked))}
+          className={toggleVariants({ variant: 'chip', size: 'xs' })}
         >
-          <Zap className="size-3" />
-          {nameOf(picked ?? standard)}
+          {picked && isFastServiceTier(picked) ? <Zap className="size-3" /> : null}
+          {shown ? nameOf(shown) : label}
           <ChevronDown className="size-3 opacity-70" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" collisionPadding={8} className="min-w-56">
-        <DropdownMenuRadioGroup value={picked?.value ?? standard.value} onValueChange={onSet}>
-          {[standard, ...faster].map((choice) => (
+        <DropdownMenuRadioGroup aria-label={label} value={shown?.value ?? ''} onValueChange={onSet}>
+          {[standard, ...tiers].map((choice) => (
             <DropdownMenuRadioItem key={choice.value} value={choice.value}>
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span>{nameOf(choice)}</span>
