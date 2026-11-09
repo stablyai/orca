@@ -23,11 +23,18 @@ export async function rpc<T>(
     },
     { method, params }
   )
-  if (!answer.reply.ok && !options.allowRefusal) {
-    throw new Error(`${method} refused: ${JSON.stringify(answer.reply.error).slice(0, 400)}`)
+  // Some writes (create, fork) refuse inside a successful call: `{ ok: false, refusal }`.
+  const result = answer.reply.ok
+    ? (answer.reply.result as { ok?: unknown; refusal?: unknown })
+    : null
+  const inResult = result?.ok === false && 'refusal' in result
+  const refused = !answer.reply.ok || inResult
+  if (refused && !options.allowRefusal) {
+    const reason = answer.reply.ok ? result?.refusal : answer.reply.error
+    throw new Error(`${method} refused: ${JSON.stringify(reason).slice(0, 400)}`)
   }
   const value = (answer.reply.ok ? answer.reply.result : answer.reply.error) as T
-  return { value, refused: !answer.reply.ok, startedAt: answer.startedAt, hostMs: answer.hostMs }
+  return { value, refused, startedAt: answer.startedAt, hostMs: answer.hostMs }
 }
 
 /** Install once per page: records when text first appears in the chat root and every transcript mutation batch. */
