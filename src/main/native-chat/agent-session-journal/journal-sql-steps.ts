@@ -112,7 +112,7 @@ function writeStep(
       if (
         Atomics.load(resolution.permit, 0) !== 1 ||
         Date.now() >= resolution.deadline ||
-        cursor.epoch !== resolution.expectedCursor.epoch ||
+        target.epoch !== resolution.expectedCursor.epoch ||
         cursor.sequence !== resolution.expectedCursor.sequence
       ) {
         return { outcome: { kind: 'dropped' } }

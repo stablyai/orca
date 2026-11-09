@@ -18,6 +18,7 @@ import {
 } from '../../shared/agent-session/view/structured-agent-session-history-state'
 import { AgentJournalRenderItemSchema } from '../../shared/agent-session/journal/agent-session-journal-schemas'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { completeTestJournalRewind } from '../native-chat/agent-session-wire/rewind/structured-rewind-completion.test-support'
 import { dispatchClaudeTurn } from './structured/claude-structured-dispatch'
 import { claudePromptUuidForSubmission } from './structured/claude-structured-session-id'
 import {
@@ -260,6 +261,8 @@ describe('Claude chat catch-up', () => {
           nativeId: SID
         })
       ).not.toBeNull()
+      await completeTestJournalRewind(c.root, c.journal, opener)
+      expect((await c.journal.reads.item(key))?.turnScope).toEqual({ kind: 'unknown' })
       expect((await (await c.replay()).reads.item(key))?.turnScope).toEqual({ kind: 'unknown' })
     }
   )

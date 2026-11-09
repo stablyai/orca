@@ -74,8 +74,10 @@ export function createTrackedJournalOpener(
   fixture: { legacyInputs?: boolean } = {}
 ): TrackedJournalOpener {
   const journals: AgentSessionJournal[] = []
+  const directories = new Set<string>()
   return {
     open: async ({ stateDirectory, ...options }) => {
+      directories.add(resolve(stateDirectory))
       if (fixture.legacyInputs) {
         seedLegacyTestJournal(openTestJournalHostDatabase(stateDirectory), options)
       }
@@ -93,7 +95,10 @@ export function createTrackedJournalOpener(
     },
     closeAll: async () => {
       await Promise.allSettled(journals.splice(0).map((journal) => journal.close()))
-      await closeTestJournalHostDatabases()
+      for (const directory of directories) {
+        await closeTestJournalHostDatabase(directory)
+      }
+      directories.clear()
     }
   }
 }

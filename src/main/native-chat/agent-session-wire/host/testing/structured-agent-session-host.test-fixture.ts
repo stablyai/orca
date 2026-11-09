@@ -13,7 +13,10 @@ import {
   openTestAgentSessionRecordStore,
   openTestAgentSessionDatabase
 } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  createTrackedJournalOpener
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -180,6 +183,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await host.flushAllStreamedEvents()
   await journals.closeAll()
+  await closeTestJournalHostDatabase(root)
   // Replaced hosts may still hold recovery-capsule locks under root.
   await recoveryCapsule.settled()
   await rm(root, { recursive: true, force: true })

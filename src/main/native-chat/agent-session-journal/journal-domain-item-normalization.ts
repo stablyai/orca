@@ -7,6 +7,7 @@ import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { personStopDecidesTurn, turnEndAfterStop } from './context-epochs/journal-stop-turn-end'
 import { boundRunningToolOutput } from './item-lifecycle/journal-payload-bounds'
+import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage-schema'
 
 export function journalDomainLatestStop(
   db: Database.Database,
@@ -53,6 +54,14 @@ export function normalizeJournalDomainItemBody(
   stopSettle?: JournalStopSettleFact
 ): AgentJournalItemBody {
   let body = item.body
+  if (
+    body.kind === 'turn' &&
+    body.contextUsage !== undefined &&
+    !isAdmissibleAgentSessionContextUsage(body.contextUsage)
+  ) {
+    const { contextUsage: _unusable, ...usable } = body
+    body = usable
+  }
   if (body.kind === 'turn' && body.state === 'interrupted' && body.outcome === undefined) {
     const latestStop = journalDomainLatestStop(db, target, stopSettle)
     // A one-row policy input is temporary command data, never a reconstructed session.

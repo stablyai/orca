@@ -29,6 +29,7 @@ import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-sessio
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { structuredRewindCut } from '../../../native-chat/agent-session-wire/rewind/structured-rewind-cut'
+import { completeTestJournalRewind } from '../../../native-chat/agent-session-wire/rewind/structured-rewind-completion.test-support'
 
 export function registerCodexCatchUpEchoTests(input: {
   codexWith: typeof catchUpCodexWith
@@ -205,12 +206,7 @@ export function registerCodexCatchUpEchoTests(input: {
     expect(
       await structuredRewindCut(c.journal, { itemId: target, provider: 'codex', nativeId: THREAD })
     ).not.toBeNull()
-    const items = await readTestJournalItems(c.journal)
-    const cutAt = items.find((item) => item.itemId === target)!.sequence
-    await c.replaceEpoch(
-      'handle_forked',
-      items.filter((item) => item.sequence < cutAt)
-    )
+    await completeTestJournalRewind(c.root, c.journal, target)
     await c.reopen()
     const prompt = await c.journal.reads.item(key)
     expect(prompt?.body).toEqual(body)

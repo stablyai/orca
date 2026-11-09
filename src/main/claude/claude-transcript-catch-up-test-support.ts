@@ -123,6 +123,7 @@ export async function chat(project = '-work', cwd = '/work') {
   })
   const warn: Mock<(...args: unknown[]) => void> = vi.fn()
   return {
+    root,
     identity,
     get journal() {
       return journal

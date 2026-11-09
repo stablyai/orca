@@ -246,6 +246,7 @@ describe('permission changes with already admitted ACP input', () => {
       expect(framesOf(original, 'session/prompt')).toHaveLength(2)
       if (outcome === 'drained') {
         await waitFor(() => expect(original.exited).toBe(true))
+        await waitFor(() => expect(rig.child()).not.toBe(original))
         const promptC = await rig.frame('session/prompt')
         // The restarted agent receives C as its own delivery of the queued card.
         const deliveredC = promptIdOf(promptC).replace(/^prompt:/, '')
