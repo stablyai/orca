@@ -110,7 +110,8 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Repo-backed setups mirror safe fields onto the repo record.',
-      'Path and availability state changes are only supported for independent setup records.'
+      'Path and availability state changes are only supported for independent setup records.',
+      "If several servers share the setup id, --server picks that server's own setup."
     ],
     examples: [
       'orca project setup-update --setup github:stablyai/orca::gpu --display-name "GPU VM"',
@@ -126,7 +127,8 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Independent setups are removed directly.',
       'Repo-backed setups remove the registered repo compatibility record.',
-      'Refuses while the project has open terminals or saved workspace details; --force removes it anyway.'
+      'Refuses while the project has open terminals or saved workspace details; --force removes it anyway.',
+      "If several servers share the setup id, --server picks that server's own setup."
     ],
     examples: ['orca project setup-delete --setup github:stablyai/orca::gpu --json']
   }

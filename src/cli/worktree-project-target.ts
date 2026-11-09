@@ -101,6 +101,18 @@ function selectSetupOnHost(
   )
 }
 
+/** Legacy setup ids can repeat across hosts; a twin is picked by the same owner rule. */
+export function chooseSetupTwinHostId(
+  setups: readonly ProjectHostSetup[],
+  setupId: string,
+  context: SetupChoiceContext
+): ProjectHostSetup['hostId'] | undefined {
+  const twins = setups.filter((setup) => setup.id === setupId)
+  return twins.length <= 1
+    ? undefined
+    : selectSetupOnHost(twins, undefined, `--setup ${setupId}`, context)?.hostId
+}
+
 function summarizeSetup(setup: ProjectHostSetup): {
   id: string
   hostId: string

@@ -36,6 +36,7 @@ import { readOwnerContext } from '../row-owner-server'
 import { getOptionalRepoKind, getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { findProjectSetups, resolveProjectIdSelector } from '../project-selector'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
+import { chooseSetupTwinHostId } from '../worktree-project-target'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 
 async function callProjectHostSetup<TResult>(
@@ -88,12 +89,25 @@ async function getRequiredHostId(
   return resolved.id
 }
 
-// Older hosts drop hostId and pick the first setup twin; refuse unsupported host targeting.
+// Older hosts drop hostId and pick the first setup twin, so a twin choice needs host targeting.
 async function getOptionalSetupHostId(
   flags: Map<string, string | boolean>,
   client: HandlerContext['client']
 ): Promise<ExecutionHostId | undefined> {
-  if (!flags.has('host')) {
+  const hostId = flags.has('host')
+    ? // Unresolved, like the setup paths: a removed SSH target's stale setup must stay deletable.
+      await getRequiredHostId(flags, client)
+    : chooseSetupTwinHostId(
+        (
+          await callProjectHostSetup<{ setups: ProjectHostSetup[] }>(
+            client,
+            'projectHostSetup.list'
+          )
+        ).result.setups,
+        getRequiredStringFlag(flags, 'setup'),
+        { owners: readOwnerContext(client), explicitServer: flags.has('server') }
+      )
+  if (hostId === undefined) {
     return undefined
   }
   const status = await client.call<RuntimeStatus>('status.get')
@@ -103,8 +117,7 @@ async function getOptionalSetupHostId(
       'This Orca server cannot pick a project setup by host yet. Update Orca on the server and try again.'
     )
   }
-  // Unresolved, like the setup paths: a removed SSH target's stale setup must stay deletable.
-  return await getRequiredHostId(flags, client)
+  return hostId
 }
 
 export const PROJECT_HANDLERS: Record<string, CommandHandler> = {

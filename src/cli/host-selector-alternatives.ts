@@ -168,7 +168,10 @@ export async function resolveSshHostTargetId(
       `Ambiguous SSH target in ${flagSpelling}: ${ambiguous.length} targets share that label. Use the target id.`,
       {
         knownSshTargets: ambiguous,
-        nextSteps: [sshConnectionStep(targetId)]
+        nextSteps: [
+          ...ambiguous.map((target) => `SSH connection "${target.label}" has id ${target.id}.`),
+          sshConnectionStep(targetId)
+        ]
       }
     )
   }
