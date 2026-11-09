@@ -12,9 +12,32 @@ export type DictationQueuedSendKind = 'chat' | 'terminal'
 type ComposerSendQueue = (root: HTMLElement, send: () => void) => boolean
 let composerSendQueue: ComposerSendQueue | null = null
 
-/** A composer's Send while it's being dictated into: true when the send now waits for the words. */
-export function queueComposerSendAfterDictation(root: HTMLElement, send: () => void): boolean {
-  return composerSendQueue?.(root, send) ?? false
+/**
+ * A composer's Send: while it's being dictated into, it waits for the last words to land and render,
+ * then sends them too.
+ */
+export function useSendAfterDictation<Intent>(
+  root: RefObject<HTMLElement | null>,
+  sendMessage: (intent?: Intent) => void
+): (intent?: Intent) => void {
+  const pendingRef = useRef<{ intent?: Intent } | null>(null)
+  const [landedTick, setLandedTick] = useState(0)
+  useEffect(() => {
+    const pending = pendingRef.current
+    pendingRef.current = null
+    if (pending) {
+      sendMessage(pending.intent)
+    }
+  }, [landedTick, sendMessage])
+  return (intent) => {
+    const queue = (): void => {
+      pendingRef.current = { intent }
+      setLandedTick((tick) => tick + 1)
+    }
+    if (!root.current || !composerSendQueue?.(root.current, queue)) {
+      sendMessage(intent)
+    }
+  }
 }
 
 /** Enter or Send during a dictation stops it, then sends once its words have landed. */
