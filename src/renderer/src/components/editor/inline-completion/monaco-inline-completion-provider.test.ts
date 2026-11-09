@@ -2,6 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OnMount } from '@monaco-editor/react'
 import type { CancellationToken, editor, languages, Position } from 'monaco-editor'
+import {
+  INLINE_COMPLETION_PREFIX_MAX_CHARS,
+  INLINE_COMPLETION_SUFFIX_MAX_CHARS
+} from '../../../../../shared/plugins/events/plugin-hook-payloads'
 import { setupInlineCompletion } from './monaco-inline-completion-provider'
 
 const wanted = vi.hoisted(() => ({ value: true }))
@@ -18,15 +22,15 @@ const world: { version: number; cursor: { lineNumber: number; column: number } |
   cursor: null
 }
 
-function fakeModel(): editor.ITextModel {
-  const clamp = (offset: number): number => Math.min(Math.max(offset, 0), TEXT.length)
+function fakeModel(text: string): editor.ITextModel {
+  const clamp = (offset: number): number => Math.min(Math.max(offset, 0), text.length)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The provider reads only these offset and range methods.
   return {
     getVersionId: () => world.version,
     getOffsetAt: (position: Position) => position.column - 1,
     getPositionAt: (offset: number) => ({ lineNumber: 1, column: clamp(offset) + 1 }),
     getValueInRange: (range: { startColumn: number; endColumn: number }) =>
-      TEXT.slice(range.startColumn - 1, range.endColumn - 1)
+      text.slice(range.startColumn - 1, range.endColumn - 1)
   } as unknown as editor.ITextModel
 }
 
@@ -54,9 +58,9 @@ function fakeToken(): { token: CancellationToken; cancel: () => void } {
 
 let lastProvider: languages.InlineCompletionsProvider | undefined
 
-function mountProvider() {
+function mountProvider(text = TEXT, cursorColumn = CURSOR_COLUMN) {
   let provider: languages.InlineCompletionsProvider | undefined
-  const model = fakeModel()
+  const model = fakeModel(text)
   const api = {
     editor: {
       getEditors: () =>
@@ -81,7 +85,7 @@ function mountProvider() {
     languageRef: { current: 'typescript' },
     readOnlyRef: { current: false }
   })
-  const position = { lineNumber: 1, column: CURSOR_COLUMN } as Position
+  const position = { lineNumber: 1, column: cursorColumn } as Position
   return (token: CancellationToken) =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The provider ignores the inline completion context.
     provider!.provideInlineCompletions(
@@ -132,6 +136,22 @@ describe('inline completion provider', () => {
         range: { startLineNumber: 1, startColumn: 11, endLineNumber: 1, endColumn: 11 }
       }
     ])
+  })
+
+  it('sends only the capped text around the cursor, never the whole file', async () => {
+    const before = 'a'.repeat(INLINE_COMPLETION_PREFIX_MAX_CHARS + 500)
+    const after = 'b'.repeat(INLINE_COMPLETION_SUFFIX_MAX_CHARS + 500)
+    const ask = mountProvider(`${before}|${after}`, before.length + 2)
+    world.cursor = { lineNumber: 1, column: before.length + 2 }
+    const pending = ask(fakeToken().token)
+    await vi.advanceTimersByTimeAsync(300)
+    await pending
+
+    const sent = run.mock.calls[0][0] as { prefix: string; suffix: string }
+    expect(sent.prefix).toHaveLength(INLINE_COMPLETION_PREFIX_MAX_CHARS)
+    expect(sent.prefix.endsWith('|')).toBe(true)
+    expect(sent.suffix).toHaveLength(INLINE_COMPLETION_SUFFIX_MAX_CHARS)
+    expect(sent.suffix.startsWith('b')).toBe(true)
   })
 
   it('does not ask when no plugin lists the hook', async () => {
