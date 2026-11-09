@@ -15,7 +15,7 @@ const io = vi.hoisted<DiscoveryIO>(() => ({
 }))
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/pr40175-terminal-discovery', isPackaged: false },
-  ipcMain: { handle: io.handle }
+  ipcMain: { handle: io.handle, removeHandler: vi.fn() }
 }))
 vi.mock('node:fs/promises', async (original) => ({
   ...(await original<object>()),

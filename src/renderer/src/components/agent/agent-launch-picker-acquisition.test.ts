@@ -147,3 +147,46 @@ it('admits independent protocol jobs into the existing bounded queue and preserv
   stopTerminal?.()
   reopen()
 })
+
+it('admits the selected agent’s usable CLI job before another agent after its structured job finishes', async () => {
+  const selected: AgentPickerEntry = {
+    ...codex,
+    agent: 'antigravity',
+    surfaces: ['chat', 'terminal'],
+    defaultSurface: 'chat'
+  }
+  const entries: AgentPickerEntry[] = [codex, { ...codex, agent: 'claude' }, selected]
+  const structured = Promise.withResolvers<AgentPickerEntry['catalog']>()
+  const other = Promise.withResolvers<AgentPickerEntry['catalog']>()
+  const calls: string[] = []
+  const inventory = createAgentPickerInventorySource(entries)
+  const stop = observeAgentPickerAcquisition(
+    'selected-usable-job',
+    entries,
+    {
+      catalog: (entry, _wait, source) => {
+        calls.push(`${entry.agent}:${source}`)
+        return entry.agent === 'antigravity' && source === 'structured'
+          ? structured.promise
+          : other.promise
+      },
+      support: async () => undefined
+    },
+    {
+      selected: () => 'antigravity',
+      publish: () => {},
+      usesSource: inventory.usesSource,
+      subscribeDemand: inventory.subscribeDemand
+    }
+  )
+  const stopTerminal = inventory.observeSurface?.('antigravity', 'terminal')
+  try {
+    expect(calls).toEqual(['antigravity:structured', 'codex:structured'])
+    structured.resolve({ origin: 'probe', fetchedAt: 1, models: [model('base')] })
+    await expect.poll(() => calls[2]).toBe('antigravity:cli')
+  } finally {
+    stopTerminal?.()
+    stop()
+    other.resolve({ origin: 'unknown' })
+  }
+})

@@ -211,11 +211,12 @@ class AgentPickerAcquisition {
         break
       }
       const priorities = [...this.observers].map((o) => o.selected())
-      const preferred =
-        kind === 'catalog'
-          ? this.jobs.findIndex((job) => priorities.includes(this.entries[job.index].agent))
-          : this.entries.findIndex((e) => priorities.includes(e.agent))
-      const index = usable.includes(preferred) ? preferred : usable[0]
+      const index =
+        usable.find((index) =>
+          priorities.includes(
+            this.entries[kind === 'catalog' ? this.jobs[index].index : index].agent
+          )
+        ) ?? usable[0]
       if (index === undefined) {
         break
       }

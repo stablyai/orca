@@ -1,3 +1,4 @@
+import { ipcMain } from 'electron'
 import type { DiscoveryIO } from './terminal-model-discovery.test-fixture'
 import { expect, it, vi } from 'vitest'
 const io = vi.hoisted<DiscoveryIO>(() => ({
@@ -15,7 +16,7 @@ const io = vi.hoisted<DiscoveryIO>(() => ({
 }))
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/pr40175-terminal-discovery', isPackaged: false },
-  ipcMain: { handle: io.handle }
+  ipcMain: { handle: io.handle, removeHandler: vi.fn() }
 }))
 vi.mock('node:fs/promises', async (original) => ({
   ...(await original<object>()),
@@ -126,4 +127,28 @@ it('read-only floating selection never creates or trusts a missing fallback dire
   ).rejects.toThrow('floating_workspace_path_unavailable')
   expect(io.mutations).not.toHaveBeenCalled()
   spy.mockRestore()
+})
+
+it('replaces the discovery handler when the main window registers again', async () => {
+  const registered = new Set<string>()
+  io.handle.mockImplementation((channel: string) => {
+    if (registered.has(channel)) {
+      throw new Error('Attempted to register a second handler')
+    }
+    registered.add(channel)
+  })
+  vi.mocked(ipcMain.removeHandler).mockImplementation((channel) => {
+    registered.delete(channel)
+  })
+  try {
+    fixture({ platform: 'darwin' })
+    const reopened = fixture({ platform: 'darwin' })
+    await expect(reopened.ipc()).resolves.toMatchObject({
+      origin: 'probe',
+      models: [{ id: 'native-model' }]
+    })
+  } finally {
+    io.handle.mockReset()
+    vi.mocked(ipcMain.removeHandler).mockReset()
+  }
 })
