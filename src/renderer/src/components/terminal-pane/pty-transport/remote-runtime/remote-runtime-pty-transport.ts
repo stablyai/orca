@@ -4031,7 +4031,8 @@ export function createRemoteRuntimePtyTransport(
         tabId &&
         createdTerminal.tabId &&
         createEnvironmentId === currentRuntimeEnvironmentId &&
-        createPairingRevision === currentPaneRevision()
+        createPairingRevision === currentPaneRevision() &&
+        createPairingRevision === getRuntimeEnvironmentRevision(createEnvironmentId)
       ) {
         recordWebAgentSessionHandoff({
           environmentId: createEnvironmentId,

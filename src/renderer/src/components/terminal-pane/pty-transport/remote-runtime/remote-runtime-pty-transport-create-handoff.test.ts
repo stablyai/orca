@@ -190,58 +190,83 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
-  it('does not close a structured create after provisional pane handoff', async () => {
-    let resolveCreate: (value: unknown) => void = () => {}
-    runtimeCall.mockImplementation((args) => {
-      if (args.method === 'status.get') {
-        return Promise.resolve({
-          ok: true,
-          result: {
-            runtimeProtocolVersion: 3,
-            minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1']
-          }
-        })
-      }
-      if (args.method === 'terminal.createAgentSession') {
-        return new Promise((resolve) => {
-          resolveCreate = resolve
-        })
-      }
-      return Promise.resolve({ ok: true, result: {} })
-    })
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const transport = createRemoteRuntimePtyTransport('env-1', {
-      worktreeId: 'wt-1',
-      tabId: 'provisional-tab',
-      leafId: 'provisional-leaf',
-      launchAgent: 'codex'
-    })
-
-    const connect = transport.connect({ url: '', callbacks: {} })
-    await vi.waitFor(() =>
-      expect(runtimeCall).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'terminal.createAgentSession' })
-      )
-    )
-    transport.destroy?.()
-    resolveCreate({
-      ok: true,
-      result: {
-        disposition: 'created',
-        terminal: {
-          handle: 'terminal-live',
-          tabId: 'canonical-host-tab',
-          leafId: 'canonical-host-leaf'
+  it.each([false, true])(
+    'preserves host-owned create after provisional handoff; replacement=$0',
+    async (replaced) => {
+      let resolveCreate: (value: unknown) => void = () => {}
+      runtimeCall.mockImplementation((args) => {
+        if (args.method === 'status.get') {
+          return Promise.resolve({
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: ['agent-session.host-authority.v1']
+            }
+          })
         }
-      }
-    })
-    await connect
+        if (args.method === 'terminal.createAgentSession') {
+          return new Promise((resolve) => {
+            resolveCreate = resolve
+          })
+        }
+        return Promise.resolve({ ok: true, result: {} })
+      })
+      const { replaceRuntimeEnvironmentRevisions } =
+        await import('../../../../runtime/rpc/environment-revisions/runtime-environment-revision')
+      const { resolveWebAgentSessionHandoff } =
+        await import('../../../../runtime/hosted-terminals/creation/agent-launch/web-agent-session-handoff')
+      replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 1 }])
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'provisional-tab',
+        leafId: 'provisional-leaf',
+        launchAgent: 'codex'
+      })
 
-    expect(runtimeCall).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'terminal.close' })
-    )
-  })
+      const connect = transport.connect({ url: '', callbacks: {} })
+      await vi.waitFor(() =>
+        expect(runtimeCall).toHaveBeenCalledWith(
+          expect.objectContaining({ method: 'terminal.createAgentSession' })
+        )
+      )
+      transport.destroy?.()
+      if (replaced) {
+        replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 2 }], {
+          retired: ['env-1'],
+          sameHost: []
+        })
+      }
+      refreshSessionTabsSnapshot.mockClear()
+      resolveCreate({
+        ok: true,
+        result: {
+          disposition: 'created',
+          terminal: {
+            handle: 'terminal-live',
+            tabId: 'canonical-host-tab',
+            leafId: 'canonical-host-leaf'
+          }
+        }
+      })
+      await connect
+
+      expect(
+        resolveWebAgentSessionHandoff({
+          environmentId: 'env-1',
+          worktreeId: 'wt-1',
+          provisionalTabId: 'provisional-tab'
+        })
+      ).toBe(replaced ? null : 'canonical-host-tab')
+      if (replaced) {
+        expect(refreshSessionTabsSnapshot).not.toHaveBeenCalled()
+      }
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.close' })
+      )
+    }
+  )
 
   it('passes activation intent when creating the remote runtime terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
