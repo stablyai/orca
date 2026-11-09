@@ -120,16 +120,17 @@ export function CloudWorkspaceConfirmDialog({
                   )
                 : t(
                     'auto.components.cloudWorkspaces.reassignBody',
-                    'They can then share, archive or hand it on.'
+                    'They can then change who can see it, archive it or make someone else the owner.'
                   )}
             </DialogDescription>
           )}
         </DialogHeader>
         <DialogFooter>
-          <Button type="button" variant="ghost" onClick={onCancel}>
+          {/* Giving away your own access starts on Cancel, so Enter cannot do it by accident. */}
+          <Button type="button" variant="ghost" onClick={onCancel} autoFocus={losesManagement}>
             {t('auto.components.cloudWorkspaces.cancel', 'Cancel')}
           </Button>
-          <Button type="button" onClick={onConfirm} autoFocus>
+          <Button type="button" onClick={onConfirm} autoFocus={!losesManagement}>
             {pending.kind === 'private'
               ? t('auto.components.cloudWorkspaces.makePrivate', 'Make private')
               : t('auto.components.cloudWorkspaces.makeOwner', 'Make owner')}
