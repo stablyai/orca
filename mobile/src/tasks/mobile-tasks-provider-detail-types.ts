@@ -251,6 +251,7 @@ export type DetailPayload =
         name: string
         stage: string
         status: string
+        allowFailure?: boolean
         webUrl?: string | null
         duration?: number | null
       }>

@@ -9,10 +9,18 @@ import {
   GitPullRequest
 } from 'lucide-react'
 import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
 
 export const PullRequestIcon = GitPullRequest
 
+export function checkPresentationKey(check: PRCheckDetail): string {
+  return check.gitlabAllowedFailure === true && check.conclusion === 'neutral'
+    ? 'gitlabAllowedFailure'
+    : (check.conclusion ?? 'pending')
+}
+
 export const CHECK_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  gitlabAllowedFailure: AlertTriangle,
   success: CircleCheck,
   failure: CircleX,
   pending: LoaderCircle,
@@ -25,6 +33,7 @@ export const CHECK_ICON: Record<string, React.ComponentType<{ className?: string
 }
 
 export const CHECK_COLOR: Record<string, string> = {
+  gitlabAllowedFailure: 'text-amber-500',
   success: 'text-emerald-500',
   failure: 'text-rose-500',
   pending: 'text-amber-500',

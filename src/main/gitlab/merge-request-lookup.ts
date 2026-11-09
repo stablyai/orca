@@ -1,3 +1,16 @@
+import { getReviewBranchSource } from '../github/client/lookup/tracked-upstream-branch'
+import { createGitLabBranchDiscovery } from './branch-review-discovery'
+import { resolveReviewSourceProject } from './branch-review-source'
+import { forgetReviewProjectIdentity } from './review-project-identity'
+import { mergedMRContainsHead } from './merged-mr-commit-membership'
+import { readCurrentReviewHead } from '../source-control/review-current-head'
+import { shouldHideMergedImplicitReview } from '../source-control/branch-review-selection'
+import {
+  getRemoteHeadBranchName,
+  getRepoDefaultBranchName
+} from '../source-control/repo-default-branch'
+import { extractExecError } from '../git/exec-error'
+import { classifyGlabError } from './glab-error-classification'
 import type { MRInfo } from '../../shared/gitlab-types'
 import { derivePipelineStatus, mapMRInfo } from './mappers'
 import {
@@ -17,6 +30,11 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
+
+type BranchReviewOptions = HostedReviewExecutionOptions & {
+  currentHeadOid?: string | null
+  userRefresh?: boolean
+}
 
 type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
 
@@ -79,7 +97,7 @@ export async function getMergeRequestForBranch(
   branch: string,
   linkedMRIid?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {},
+  options: BranchReviewOptions = {},
   // Strict callers need failures distinguished from confirmed missing reviews.
   throwOnFailure = false
 ): Promise<MRInfo | null> {
@@ -96,7 +114,7 @@ export async function getMergeRequestForBranch(
   }
   await acquire()
   try {
-    const fetchByIid = async (iid: number): Promise<MRInfo> => {
+    const fetchByIid = async (iid: number) => {
       const { stdout } = await glabExecFileAsync(
         [
           'api',
@@ -105,40 +123,139 @@ export async function getMergeRequestForBranch(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the single-MR endpoint returns the MR fields and its optional pipeline.
-      const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0]
-      const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
-      return mapMRInfo(raw, pipelineStatus)
+      const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
+        target_project_id?: number
+        project_id?: number
+        source_project_id?: number
+        source_branch?: string
+      }
+      return {
+        raw,
+        info: mapMRInfo(raw, derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null))
+      }
     }
     if (typeof linkedMRIid === 'number') {
-      return await fetchByIid(linkedMRIid)
+      return (await fetchByIid(linkedMRIid)).info
     }
-    if (branchName) {
-      const { stdout } = await glabExecFileAsync(
-        [
-          'api',
-          ...glabHostnameArgs(projectRef, connectionId),
-          // List endpoints need asynchronous merge-status recheck; GitLab may restrict this to Developers.
-          `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true`
-        ],
-        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-      )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the branch-list endpoint returns MR summaries; only their identity is used.
-      const data = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0][]
-      if (Array.isArray(data) && data.length > 0) {
-        // List summaries omit head_pipeline; only detail can supply an authoritative check result.
-        const info = await fetchByIid(data[0].iid ?? data[0].number ?? 0)
-        const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
-          state: info.state,
-          reviewNumber: info.number,
-          branchName,
+    const source = await getReviewBranchSource(
+      repoPath,
+      branchName,
+      connectionId,
+      localGitOptions,
+      options.userRefresh
+    )
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const identityArgs = {
+        repoPath,
+        target: projectRef,
+        urls: source.urls,
+        connectionId,
+        localGitOptions,
+        force: options.userRefresh || attempt > 0
+      }
+      const sourceProject = await resolveReviewSourceProject(identityArgs)
+      try {
+        const discover = createGitLabBranchDiscovery({
           repoPath,
+          project: projectRef,
+          sourceProjectId: sourceProject.id,
           connectionId,
           localGitOptions
         })
-        if (!hideOnDefaultBranch) {
+        let candidate = await discover(source.branchName)
+        let usedTrackedName = false
+        if (!candidate && source.trackedBranchName && source.trackedUrls) {
+          const trackedSource = await resolveReviewSourceProject({
+            ...identityArgs,
+            urls: source.trackedUrls
+          })
+          if (trackedSource.id === sourceProject.id) {
+            candidate = await discover(source.trackedBranchName)
+            usedTrackedName = true
+          }
+        }
+        if (!candidate) {
+          return null
+        }
+        if (usedTrackedName && candidate.source_project_id === candidate.target_project_id) {
+          const defaultBranch =
+            source.remoteName === 'origin'
+              ? await getRepoDefaultBranchName(repoPath, connectionId, localGitOptions)
+              : await getRemoteHeadBranchName(
+                  repoPath,
+                  source.remoteName,
+                  connectionId,
+                  localGitOptions
+                )
+          if (candidate.source_branch === defaultBranch) {
+            return null
+          }
+        }
+        const { info, raw } = await fetchByIid(candidate.iid)
+        if (
+          info.number !== candidate.iid ||
+          raw.source_project_id !== candidate.source_project_id ||
+          raw.target_project_id !== candidate.target_project_id ||
+          raw.source_branch !== candidate.source_branch
+        ) {
+          throw new Error('GitLab merge request identity changed during lookup')
+        }
+        if (info.state === 'merged') {
+          const currentHead =
+            options.currentHeadOid?.trim() ||
+            (await readCurrentReviewHead(repoPath, connectionId, localGitOptions))
+          if (shouldHideMergedImplicitReview(info.state, linkedMRIid, info.headSha, currentHead)) {
+            if (!currentHead) {
+              return null
+            }
+            const targetProjectId = raw.target_project_id ?? raw.project_id
+            if (
+              !Number.isSafeInteger(targetProjectId) ||
+              !targetProjectId ||
+              targetProjectId <= 0
+            ) {
+              throw new Error('Invalid GitLab target project identity')
+            }
+            if (
+              (await mergedMRContainsHead({
+                repoPath,
+                project: projectRef,
+                targetProjectId,
+                iid: info.number,
+                headOid: currentHead,
+                connectionId,
+                localGitOptions,
+                userRefresh: options.userRefresh
+              })) !== 'contained'
+            ) {
+              return null
+            }
+          }
+        }
+        if (
+          !(await shouldHideNonOpenReviewOnDefaultBranch({
+            state: info.state,
+            reviewNumber: info.number,
+            branchName,
+            repoPath,
+            connectionId,
+            localGitOptions
+          }))
+        ) {
           return info
         }
+        return null
+      } catch (error) {
+        const detail = extractExecError(error)
+        if (
+          attempt > 0 ||
+          classifyGlabError(
+            [detail.stderr, detail.stdout, error instanceof Error ? error.message : ''].join('\n')
+          ).type !== 'not_found'
+        ) {
+          throw error
+        }
+        forgetReviewProjectIdentity(repoPath, sourceProject.project, connectionId, localGitOptions)
       }
     }
     return null
@@ -158,7 +275,7 @@ export function getMergeRequestForBranchOrThrow(
   branch: string,
   linkedMRIid?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: BranchReviewOptions = {}
 ): Promise<MRInfo | null> {
   return getMergeRequestForBranch(repoPath, branch, linkedMRIid, connectionId, options, true)
 }

@@ -261,4 +261,30 @@ describe('getWorkItemDetails', () => {
       ])
     }
   )
+  it.each(['mr', 'issue'] as const)(
+    'returns unavailable for a late %s discussion failure',
+    async (type) => {
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        const endpoint = args.at(-1) ?? ''
+        if (endpoint.includes('/discussions')) {
+          if (endpoint.includes('page=2')) {
+            throw new Error('offline')
+          }
+          return {
+            stdout: JSON.stringify(
+              Array.from({ length: 100 }, (_, i) => ({
+                id: String(i),
+                notes: [{ id: i, body: 'Existing note' }]
+              }))
+            )
+          }
+        }
+        if (endpoint === 'user') {
+          return { stdout: '{"username":"me"}' }
+        }
+        return { stdout: JSON.stringify({ iid: 12, title: 'Item', state: 'opened' }) }
+      })
+      await expect(getWorkItemDetails('/repo', 12, type)).resolves.toBeNull()
+    }
+  )
 })

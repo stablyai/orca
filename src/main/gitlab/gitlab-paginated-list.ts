@@ -35,7 +35,7 @@ export async function fetchAllGitLabPages<T>(
       const { body, headers } = await glabApiWithHeaders(
         [
           ...glabHostnameArgs(projectRef, connectionId),
-          `${endpoint}?per_page=${PAGE_SIZE}&page=${page}`
+          `${endpoint}${endpoint.includes('?') ? '&' : '?'}per_page=${PAGE_SIZE}&page=${page}`
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )

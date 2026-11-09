@@ -8,6 +8,9 @@ import type {
 } from '../../../../shared/github/check-types'
 
 export function getCheckStatusLabel(check: PRCheckDetail, t: Translate = translate): string {
+  if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {
+    return t('checks.gitlabAllowedFailure', 'Allowed to fail')
+  }
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
     return t('auto.components.github.prCheckPresentation.successful', 'Successful')
