@@ -14650,7 +14650,9 @@
             "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable",
             "revealInFinder": "Reveal in Finder",
             "openContainingFolder": "Open Containing Folder",
-            "revealInFileExplorer": "Reveal in File Explorer"
+            "revealInFileExplorer": "Reveal in File Explorer",
+            "downloadFolderZip": "Download as ZIP…",
+            "openLocally": "Open on This Computer"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -22922,6 +22924,44 @@
         "terminalOutput": "Saved output of {{title}}",
         "noGit": "No source control state was saved."
       }
+    },
+    "runtimeDownload": {
+      "collectingFiles": "Collecting files…",
+      "starting": "Starting…",
+      "amountOfTotal": "{{done}} of {{total}}",
+      "amountAndRate": "{{amount}} · {{rate}}/s",
+      "openFailedTitle": "Couldn’t open {{name}}",
+      "failedTitle": "Couldn’t download {{name}}",
+      "tooLargeToOpen": "Files over 1 GB can’t be opened directly. Download it instead.",
+      "tooLarge": "Folders over 2 GB can’t be downloaded at once. Download the folders inside it instead.",
+      "tooManyEntries": "Folders with more than 65,000 items can’t be downloaded at once. Download the folders inside it instead.",
+      "sandboxUpdateRequired": "This sandbox runs an older version of Orca. New cloud workspaces include downloads. Your files are safe.",
+      "hostUpdateRequired": "The remote host runs an older version of Orca. Update Orca there, then try again.",
+      "busy": "Too many downloads are running. Wait for one to finish, then try again.",
+      "notFoundInSandbox": "It was moved or deleted in the sandbox. Refresh the file explorer to see the latest files.",
+      "notFoundOnHost": "It was moved or deleted on the remote host. Refresh the file explorer to see the latest files.",
+      "changed": "It changed while Orca was reading it. Try again.",
+      "sandboxDisconnected": "The connection to the sandbox dropped. Nothing was saved on this computer.",
+      "hostDisconnected": "The connection to the remote host dropped. Nothing was saved on this computer.",
+      "transferFailed": "Something went wrong while copying it. Nothing was saved on this computer.",
+      "dismiss": "Dismiss",
+      "opening": "Opening {{name}}",
+      "downloading": "Downloading {{name}}",
+      "progressLabel": "Download progress",
+      "cancel": "Cancel",
+      "leftOutDefaultDirs": "Left out node_modules and .git.",
+      "skipped_one": "{{count}} item couldn’t be read and was left out.",
+      "skipped_other": "{{count}} items couldn’t be read and were left out.",
+      "downloaded": "Downloaded {{name}}",
+      "open": "Open",
+      "noAppTitle": "No app on this computer opens {{name}}",
+      "noAppDetail": "Orca saved a copy. Reveal it to choose an app.",
+      "retry": "Try again",
+      "downloadInstead": "Download",
+      "folderProgress_one": "{{files}} file · {{amount}}",
+      "folderProgress_other": "{{files}} files · {{amount}}",
+      "fileCount_one": "{{files}} file",
+      "fileCount_other": "{{files}} files"
     }
   },
   "dashboardPopout": {

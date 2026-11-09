@@ -73,7 +73,7 @@ function createCall(args: RuntimeDownloadStartArgs): RuntimeDownloadCall {
       options.timeoutMs,
       args.expectedEnvironmentPairingRevision,
       undefined,
-      { signal: options.signal }
+      { signal: options.signal, lane: 'download' }
     )
     if (!response.ok) {
       throw runtimeDownloadErrorFromResponse(response.error)

@@ -120,4 +120,43 @@ describe('transferRuntimeFolder', () => {
     }
     expect(calls).toEqual(['files.archiveStart', 'files.archiveRead', 'files.archiveCancel'])
   })
+
+  it('releases an archive whose start reply lands after the user canceled', async () => {
+    const controller = new AbortController()
+    const calls: { method: string; params: unknown }[] = []
+    let finishStart: (value: unknown) => void = () => {}
+    const call = (async (method: string, params: unknown) => {
+      calls.push({ method, params })
+      if (method === 'files.archiveStart') {
+        return new Promise<unknown>((resolve) => {
+          finishStart = resolve
+        })
+      }
+      return { released: true }
+    }) as RuntimeDownloadCall
+    const sink = await open(join(dir, 'late.zip'), 'w+')
+    try {
+      const transfer = transferRuntimeFolder({
+        call,
+        worktree: 'wt',
+        relativePath: 'src',
+        sink,
+        signal: controller.signal,
+        onProgress: () => {},
+        excludeDefaultDirs: true
+      })
+      controller.abort()
+      // Canceled at once, before the host has even finished walking.
+      await expect(transfer).rejects.toEqual(new RuntimeDownloadError('canceled'))
+      finishStart({ archiveId: 'late', totalBytes: 1, excludedDirCount: 0, fileCount: 1 })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    } finally {
+      await sink.close()
+    }
+    expect(calls.map((entry) => entry.method)).toEqual([
+      'files.archiveStart',
+      'files.archiveCancel'
+    ])
+    expect(calls[1].params).toEqual({ archiveId: 'late' })
+  })
 })

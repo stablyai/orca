@@ -1,18 +1,33 @@
+import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
-import { translate } from '@/i18n/i18n'
 import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
+import {
+  isKnownCloudEnvironment,
+  refreshCloudEnvironmentIds
+} from '@/lib/cloud-remote-desktop/cloud-environment-ids'
 import { getRemoteFileArgs } from '@/runtime/files/runtime-file-routing'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { trackRuntimeDownload } from '@/runtime/files/downloads/runtime-download-progress-store'
+import {
+  getRuntimeDownloadProgress,
+  subscribeRuntimeDownloadProgress,
+  trackRuntimeDownload
+} from '@/runtime/files/downloads/runtime-download-progress-store'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { formatBytes } from '../../../../../../shared/format-bytes'
 import type { RuntimeDownloadResult } from '../../../../../../shared/runtime-downloads/runtime-download-contract'
 import type { TreeNode } from '../tree/file-explorer-types'
-import { RuntimeDownloadProgressBody, runtimeDownloadErrorMessage } from './runtime-download-toast'
+import {
+  RuntimeDownloadToast,
+  type RuntimeDownloadToastAction,
+  type RuntimeDownloadToastIntent,
+  type RuntimeDownloadToastState
+} from './runtime-download-toast'
 
-export type RuntimeDownloadIntent = 'save' | 'open'
+export type RuntimeDownloadIntent = RuntimeDownloadToastIntent
+
+// Long enough to reach "Reveal in Finder" after a long download, short enough not to pile up.
+const DONE_TOAST_MS = 12_000
 
 /** Whether this desktop can stream the node straight from its runtime host. */
 export function canStreamRuntimeDownload(
@@ -29,6 +44,30 @@ function localName(destinationPath: string): string {
   return destinationPath.split(separator).pop() || destinationPath
 }
 
+/** Progress toast body bound to the live progress store. */
+function LiveProgressToast({
+  downloadId,
+  state,
+  onAction
+}: {
+  downloadId: string
+  state: Omit<Extract<RuntimeDownloadToastState, { kind: 'progress' }>, 'snapshot'>
+  onAction: (action: RuntimeDownloadToastAction) => void
+}): React.JSX.Element {
+  const snapshot = useSyncExternalStore(
+    (listener) => subscribeRuntimeDownloadProgress(downloadId, listener),
+    () => getRuntimeDownloadProgress(downloadId)
+  )
+  return (
+    <RuntimeDownloadToast
+      state={{ ...state, snapshot }}
+      revealLabel=""
+      onAction={onAction}
+      onDismiss={() => {}}
+    />
+  )
+}
+
 export async function startRuntimeDownload(
   node: TreeNode,
   context: RuntimeFileOperationArgs,
@@ -40,58 +79,45 @@ export async function startRuntimeDownload(
   if (!api || !remote) {
     return
   }
-  const kind = node.isDirectory ? 'folder' : 'file'
+  const environmentId = remote.target.environmentId
+  // Error copy says "sandbox" for cloud workspaces; the list is usually primed already.
+  void refreshCloudEnvironmentIds()
+  const itemKind = node.isDirectory ? 'folder' : 'file'
   const downloadId = createNonSecureContextUuid()
   const toastId = `runtime-download:${downloadId}`
   const release = trackRuntimeDownload(downloadId)
   const excludeDefaultDirs = options.excludeDefaultDirs !== false
+  // Timed from the first progress event so the save dialog doesn't count.
+  let startedAt = performance.now()
   const pending = api.start({
     downloadId,
-    environmentId: remote.target.environmentId,
+    environmentId,
     worktree: remote.worktreeSelector,
     relativePath: remote.relativePath,
     name: node.name,
-    kind,
+    kind: itemKind,
     intent,
     excludeDefaultDirs,
-    expectedEnvironmentPairingRevision: captureRuntimeEnvironmentRequestRevision(
-      remote.target.environmentId
-    )
+    expectedEnvironmentPairingRevision: captureRuntimeEnvironmentRequestRevision(environmentId)
   })
+  const progressName = itemKind === 'folder' ? `${node.name}.zip` : node.name
   // The save dialog comes first; show progress only after the user has picked a place.
   const showProgress = (): void => {
-    toast.loading(
-      intent === 'open'
-        ? translate(
-            'auto.components.right.sidebar.runtimeDownload.opening',
-            "Opening '{{value0}}'",
-            {
-              value0: node.name
-            }
-          )
-        : translate(
-            'auto.components.right.sidebar.runtimeDownload.downloading',
-            "Downloading '{{value0}}'",
-            { value0: kind === 'folder' ? `${node.name}.zip` : node.name }
-          ),
-      {
-        id: toastId,
-        description: <RuntimeDownloadProgressBody downloadId={downloadId} kind={kind} />,
-        duration: Infinity,
-        dismissible: false,
-        action: {
-          label: translate('auto.components.right.sidebar.runtimeDownload.cancel', 'Cancel'),
-          onClick: (event) => {
-            event.preventDefault()
-            void api.cancel({ downloadId })
-          }
-        }
-      }
+    toast.custom(
+      () => (
+        <LiveProgressToast
+          downloadId={downloadId}
+          state={{ kind: 'progress', intent, itemKind, name: progressName }}
+          onAction={() => void api.cancel({ downloadId })}
+        />
+      ),
+      { id: toastId, duration: Number.POSITIVE_INFINITY, dismissible: false }
     )
   }
-  const stopProgressWatch = window.api.runtimeDownloads!.onProgress((event) => {
+  const stopProgressWatch = api.onProgress((event) => {
     if (event.downloadId === downloadId) {
       stopProgressWatch()
+      startedAt = performance.now()
       showProgress()
     }
   })
@@ -108,118 +134,81 @@ export async function startRuntimeDownload(
     stopProgressWatch()
     release()
   }
-  showOutcome(result, { node, kind, intent, toastId, context, excludeDefaultDirs })
-}
-
-function showOutcome(
-  result: RuntimeDownloadResult,
-  input: {
-    node: TreeNode
-    kind: 'file' | 'folder'
-    intent: RuntimeDownloadIntent
-    toastId: string
-    context: RuntimeFileOperationArgs
-    excludeDefaultDirs: boolean
-  }
-): void {
-  const { node, kind, intent, toastId } = input
-  if (result.status === 'canceled') {
+  const elapsedMs = performance.now() - startedAt
+  const outcome = outcomeState(result, { node, itemKind, intent, environmentId, elapsedMs })
+  if (!outcome) {
     toast.dismiss(toastId)
     return
   }
   if (result.status === 'error') {
-    toast.error(
-      intent === 'open'
-        ? translate(
-            'auto.components.right.sidebar.runtimeDownload.openFailed',
-            "Couldn't open '{{value0}}'",
-            { value0: node.name }
-          )
-        : translate(
-            'auto.components.right.sidebar.runtimeDownload.failed',
-            "Couldn't download '{{value0}}'",
-            { value0: node.name }
-          ),
-      {
-        id: toastId,
-        description: runtimeDownloadErrorMessage(result.code, result.message),
-        duration: 8000,
-        dismissible: true,
-        action: undefined
-      }
-    )
-    return
+    // Host details stay out of the toast (plain words only) but remain debuggable.
+    console.warn('[runtime-download] failed', result.code, result.message)
   }
-  const reveal = {
-    label: getRevealInFileManagerLabel(),
-    onClick: () => void revealInFileManager(result.destinationPath, LOCAL_EXECUTION_HOST_ID)
+  if (result.status === 'done' && result.openError) {
+    console.warn('[runtime-download] open failed', result.openError)
+  }
+  const destinationPath = result.status === 'done' ? result.destinationPath : null
+  const onAction = (action: RuntimeDownloadToastAction): void => {
+    toast.dismiss(toastId)
+    if ((action === 'reveal' || action === 'open') && destinationPath) {
+      void (action === 'reveal'
+        ? revealInFileManager(destinationPath, LOCAL_EXECUTION_HOST_ID)
+        : window.api.shell.openPath(destinationPath, LOCAL_EXECUTION_HOST_ID))
+    } else if (action === 'retry') {
+      void startRuntimeDownload(node, context, intent, options)
+    } else if (action === 'download_instead') {
+      void startRuntimeDownload(node, context, 'save', options)
+    }
+  }
+  toast.custom(
+    () => (
+      <RuntimeDownloadToast
+        state={outcome}
+        revealLabel={getRevealInFileManagerLabel()}
+        onAction={onAction}
+        onDismiss={() => toast.dismiss(toastId)}
+      />
+    ),
+    { id: toastId, duration: DONE_TOAST_MS, dismissible: true }
+  )
+}
+
+/** The toast to leave behind, or null when it should just go away (canceled, opened fine). */
+export function outcomeState(
+  result: RuntimeDownloadResult,
+  input: {
+    node: Pick<TreeNode, 'name'>
+    itemKind: 'file' | 'folder'
+    intent: RuntimeDownloadIntent
+    environmentId: string
+    elapsedMs: number
+  }
+): RuntimeDownloadToastState | null {
+  const { node, itemKind, intent } = input
+  if (result.status === 'canceled') {
+    return null
+  }
+  if (result.status === 'error') {
+    return {
+      kind: 'failed',
+      intent,
+      itemKind,
+      name: node.name,
+      code: result.code,
+      place: isKnownCloudEnvironment(input.environmentId) ? 'sandbox' : 'host'
+    }
   }
   if (intent === 'open') {
-    if (!result.openError) {
-      toast.dismiss(toastId)
-      return
-    }
-    toast.error(
-      translate(
-        'auto.components.right.sidebar.runtimeDownload.noAppToOpen',
-        "No app could open '{{value0}}'",
-        { value0: node.name }
-      ),
-      {
-        id: toastId,
-        description: result.openError,
-        duration: 8000,
-        dismissible: true,
-        action: reveal
-      }
-    )
-    return
+    return result.openError ? { kind: 'no_app', name: node.name } : null
   }
-  const parts = [formatBytes(result.bytes)]
-  if (kind === 'folder' && result.fileCount !== undefined) {
-    parts.push(
-      translate('auto.components.right.sidebar.runtimeDownload.fileCount', '{{count}} files', {
-        count: result.fileCount,
-        defaultValue_one: '{{count}} file'
-      })
-    )
+  return {
+    kind: 'done',
+    itemKind,
+    name: localName(result.destinationPath),
+    bytes: result.bytes,
+    elapsedMs: input.elapsedMs,
+    ...(result.fileCount !== undefined ? { fileCount: result.fileCount } : {}),
+    excludedDefaultDirs: (result.excludedDirCount ?? 0) > 0,
+    ...(result.skippedCount ? { skippedCount: result.skippedCount } : {})
   }
-  if (kind === 'folder' && (result.excludedDirCount ?? 0) > 0) {
-    parts.push(
-      translate(
-        'auto.components.right.sidebar.runtimeDownload.excludedDefaultDirs',
-        'without node_modules and .git'
-      )
-    )
-  }
-  if ((result.skippedCount ?? 0) > 0) {
-    parts.push(
-      translate(
-        'auto.components.right.sidebar.runtimeDownload.skipped',
-        '{{count}} unreadable items skipped',
-        { count: result.skippedCount, defaultValue_one: '{{count}} unreadable item skipped' }
-      )
-    )
-  }
-  toast.success(
-    translate('auto.components.right.sidebar.runtimeDownload.done', "Downloaded '{{value0}}'", {
-      value0: localName(result.destinationPath)
-    }),
-    {
-      id: toastId,
-      description: parts.join(' · '),
-      duration: 8000,
-      dismissible: true,
-      action: reveal,
-      ...(kind === 'file'
-        ? {
-            cancel: {
-              label: translate('auto.components.right.sidebar.runtimeDownload.open', 'Open'),
-              onClick: () =>
-                void window.api.shell.openPath(result.destinationPath, LOCAL_EXECUTION_HOST_ID)
-            }
-          }
-        : {})
-    }
-  )
 }

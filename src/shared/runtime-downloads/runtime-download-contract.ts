@@ -37,6 +37,8 @@ export type RuntimeDownloadProgressEvent = {
   receivedBytes: number
   totalBytes: number | null
   processedBytes: number
+  /** Folder downloads: files in the archive, known once the host has listed the folder. */
+  fileCount?: number
   /** Present once a save location is chosen. */
   destinationPath?: string
 }

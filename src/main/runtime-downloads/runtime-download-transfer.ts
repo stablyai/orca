@@ -9,8 +9,8 @@ import type { RuntimeDownloadErrorCode } from '../../shared/runtime-downloads/ru
 
 /** files.readChunk's schema ceiling; older hosts accept nothing larger. */
 const FILE_CHUNK_BYTES = 512 * 1024
-// The main-process bulk-read lane admits two calls per host, so a third would only queue.
-const FILE_CHUNK_CONCURRENCY = 2
+// Matches the main-process download lane: four pages in flight hide ~65 ms of RTT.
+const FILE_CHUNK_CONCURRENCY = 4
 const CHUNK_TIMEOUT_MS = 60_000
 // The walk of a large tree runs before the first byte; give it room.
 const ARCHIVE_START_TIMEOUT_MS = 120_000
@@ -37,6 +37,8 @@ export type RuntimeDownloadProgress = {
   totalBytes: number | null
   /** Source bytes covered so far, comparable with totalBytes. */
   processedBytes: number
+  /** Folder downloads only. */
+  fileCount?: number
 }
 
 type TransferInput = {
@@ -127,14 +129,19 @@ export type FolderTransferResult = {
 export async function transferRuntimeFolder(
   input: TransferInput & { excludeDefaultDirs: boolean }
 ): Promise<FolderTransferResult> {
-  const started = await input.call<FileArchiveStartResult>(
+  // Not tied to the user's cancel: the host only learns of a cancel through archiveCancel, so a
+  // start canceled mid-walk must still deliver its id for release (else it holds a slot until idle).
+  const startRequest = input.call<FileArchiveStartResult>(
     'files.archiveStart',
     {
       worktree: input.worktree,
       relativePath: input.relativePath,
       excludeDefaultDirs: input.excludeDefaultDirs
     },
-    { timeoutMs: ARCHIVE_START_TIMEOUT_MS, signal: input.signal }
+    { timeoutMs: ARCHIVE_START_TIMEOUT_MS, signal: new AbortController().signal }
+  )
+  const started = await raceAbort(startRequest, input.signal, (late) =>
+    releaseArchive(input.call, late.archiveId)
   )
   let finished = false
   let received = 0
@@ -156,7 +163,8 @@ export async function transferRuntimeFolder(
       input.onProgress({
         receivedBytes: received,
         totalBytes: started.totalBytes,
-        processedBytes: page.processedBytes
+        processedBytes: page.processedBytes,
+        fileCount: started.fileCount
       })
       if (page.eof) {
         finished = true
@@ -170,18 +178,48 @@ export async function transferRuntimeFolder(
     }
   } finally {
     if (!finished) {
-      // Best effort: the host's idle timer frees the session if this never arrives.
-      const release = new AbortController()
-      void input
-        .call(
-          'files.archiveCancel',
-          { archiveId: started.archiveId },
-          {
-            timeoutMs: 10_000,
-            signal: release.signal
-          }
-        )
-        .catch(() => {})
+      releaseArchive(input.call, started.archiveId)
     }
   }
+}
+
+/** Best effort: the host's idle timer frees the session if this never arrives. */
+function releaseArchive(call: RuntimeDownloadCall, archiveId: string): void {
+  void call(
+    'files.archiveCancel',
+    { archiveId },
+    { timeoutMs: 10_000, signal: new AbortController().signal }
+  ).catch(() => {})
+}
+
+/** Rejects with `canceled` as soon as `signal` aborts; a result that lands later goes to `onLate`. */
+function raceAbort<T>(
+  request: Promise<T>,
+  signal: AbortSignal,
+  onLate: (value: T) => void
+): Promise<T> {
+  if (signal.aborted) {
+    void request.then(onLate, () => {})
+    return Promise.reject(new RuntimeDownloadError('canceled'))
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      void request.then(onLate, () => {})
+      reject(new RuntimeDownloadError('canceled'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    request.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        if (signal.aborted) {
+          return
+        }
+        resolve(value)
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      }
+    )
+  })
 }

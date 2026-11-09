@@ -230,7 +230,7 @@ export class FolderArchiveZipStream {
     }
   }
 
-  private addFileEntry(entry: FolderArchiveEntry): ZipInputFile {
+  private addFileEntry(entry: FolderArchiveEntry): ZipPassThrough | ZipDeflate {
     const file = withAttributes(
       STORED_EXTENSIONS.has(extname(entry.archivePath).toLowerCase())
         ? new ZipPassThrough(entry.archivePath)
