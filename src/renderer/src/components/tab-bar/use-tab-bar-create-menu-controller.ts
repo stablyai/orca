@@ -14,6 +14,7 @@ import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
+import { useNewTabMenuShownItems } from './use-new-tab-menu-shown-items'
 import type {
   getProjectRuntimeShellMenuMode,
   resolveWindowsPowerShellImplementationSetting
@@ -154,19 +155,21 @@ export function useTabBarCreateMenuController({
     windowsTerminalCapabilities.gitBashAvailable,
     windowsTerminalCapabilities.wslAvailable
   ])
+  const shownItems = useNewTabMenuShownItems()
   const createMenuOptions = useMemo(
     () =>
       buildTabCreateMenuOptions({
         terminalOnly,
         windowsShellEntries,
-        hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
-        hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
-        hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
+        hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled && shownItems.browser,
+        hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab) && shownItems['new-markdown'],
+        hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab) && shownItems['open-markdown'],
         hasSimulator:
           !terminalOnly &&
           mobileEmulatorEnabled &&
           mobileEmulatorCreationEnabled &&
-          Boolean(onNewSimulatorTab),
+          Boolean(onNewSimulatorTab) &&
+          shownItems['mobile-emulator'],
         simulatorIsGoTo: workspaceHasSimulatorTab
       }),
     [
@@ -176,6 +179,7 @@ export function useTabBarCreateMenuController({
       onNewFileTab,
       onNewSimulatorTab,
       onOpenFileTab,
+      shownItems,
       terminalOnly,
       windowsShellEntries,
       workspaceHasSimulatorTab

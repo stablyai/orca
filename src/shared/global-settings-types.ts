@@ -31,6 +31,7 @@ import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalQuickCommand } from './terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from './zcode-plan-sites'
+import type { NewTabMenuHideableItem } from './new-tab-menu-items'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -411,6 +412,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   confirmClosePinnedTab: boolean
   /** Why: preview tabs reuse one slot per group, so browsing replaces the open file; off makes every open its own tab. Defaults on. */
   editorPreviewTabsEnabled: boolean
+  /** Tab-bar "+" menu rows the user hid; absent or empty shows every available row. */
+  newTabMenuHiddenItems?: NewTabMenuHideableItem[]
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */

@@ -9,9 +9,11 @@ import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSecti
 import {
   getGeneralCliSearchEntries,
   getGeneralNavigationSearchEntries,
+  getGeneralNewTabMenuSearchEntries,
   getGeneralUpdateSearchEntries,
   getGeneralWorkspaceSearchEntries
 } from './general-search'
+import { NewTabMenuItemsSetting } from './NewTabMenuItemsSetting'
 import { getGeneralEditorSearchEntries } from '../editor/general-editor-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
@@ -204,6 +206,13 @@ export function GeneralPane({
           />
         </SearchableSetting>
       </SettingsGroup>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getGeneralNewTabMenuSearchEntries()) ? (
+      <NewTabMenuItemsSetting
+        key="new-tab-menu"
+        hiddenItems={settings.newTabMenuHiddenItems}
+        updateSettings={updateSettings}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
       <GeneralWorkspaceSettingsSection
