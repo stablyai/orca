@@ -222,6 +222,6 @@ export function mayBeClaudeConversationRecord(line: string): boolean {
   if (!record || typeof record !== 'object' || Array.isArray(record) || 'message' in record) {
     return true
   }
-  const type = (record as { type?: unknown }).type
+  const type = 'type' in record ? record.type : undefined
   return typeof type !== 'string' || !type.trim() || type === 'user' || type === 'assistant'
 }
