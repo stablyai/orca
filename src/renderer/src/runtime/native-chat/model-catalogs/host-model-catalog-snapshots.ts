@@ -13,8 +13,37 @@ import { structuredAgentSessionHostKey } from '../host-capabilities/structured-a
 const snapshots = new Map<string, HostModelCatalogSnapshot>()
 // Bumped when a host's answers are dropped, so a preload sent before then records nothing.
 const generations = new Map<string, number>()
+const catalogGenerations = new Map<string, number>()
 // Bumped per host and agent by each chat's answer, so an older preload never replaces it.
 const chatAnswers = new Map<string, number>()
+
+type CatalogListener = (forgotten: boolean) => void
+const listeners = new Map<string, Set<CatalogListener>>()
+
+export function subscribeHostModelCatalogSnapshot(
+  target: RuntimeClientTarget,
+  agent: string,
+  listener: CatalogListener
+): () => void {
+  const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
+  const scoped = listeners.get(key) ?? new Set<CatalogListener>()
+  listeners.set(key, scoped)
+  scoped.add(listener)
+  return () => {
+    scoped.delete(listener)
+    if (!scoped.size) {
+      listeners.delete(key)
+    }
+  }
+}
+
+export function hostModelCatalogGeneration(target: RuntimeClientTarget, agent: string): number {
+  const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
+  if (!catalogGenerations.has(key)) {
+    catalogGenerations.set(key, 0)
+  }
+  return catalogGenerations.get(key)!
+}
 
 function snapshotKey(hostKey: string, agent: string): string {
   return `${hostKey}\u0000${agent}`
@@ -40,15 +69,24 @@ export function recordHostModelCatalogSnapshot(
   catalog: AgentSessionModelCatalogResult
 ): void {
   const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
-  const next = withHostModelCatalogAnswer(snapshots.get(key), worktree, catalog)
+  const previous = snapshots.get(key)
+  const next = withHostModelCatalogAnswer(previous, worktree, catalog)
   if (worktree !== null && next !== snapshots.get(key) && next?.byWorktree.has(worktree)) {
     chatAnswers.set(key, (chatAnswers.get(key) ?? 0) + 1)
+  }
+  if (
+    JSON.stringify(previous?.account) === JSON.stringify(next?.account) &&
+    JSON.stringify([...(previous?.byWorktree ?? [])]) ===
+      JSON.stringify([...(next?.byWorktree ?? [])])
+  ) {
+    return
   }
   if (next) {
     snapshots.set(key, next)
   } else {
     snapshots.delete(key)
   }
+  listeners.get(key)?.forEach((listener) => listener(false))
 }
 
 /** Drop all or selected agents’ host answers when the account a new chat pins may change. */
@@ -58,10 +96,22 @@ export function forgetHostModelCatalogSnapshots(
 ): void {
   const hostKey = structuredAgentSessionHostKey(target)
   generations.set(hostKey, (generations.get(hostKey) ?? 0) + 1)
+  for (const [key, generation] of catalogGenerations) {
+    const [keyHost, keyAgent] = key.split('\u0000')
+    if (keyHost === hostKey && (!agents || agents.includes(keyAgent ?? ''))) {
+      catalogGenerations.set(key, generation + 1)
+    }
+  }
   for (const key of snapshots.keys()) {
     const [keyHost, keyAgent] = key.split('\u0000')
     if (keyHost === hostKey && (!agents || agents.includes(keyAgent ?? ''))) {
       snapshots.delete(key)
+    }
+  }
+  for (const [key, scoped] of listeners) {
+    const [keyHost, keyAgent] = key.split('\u0000')
+    if (keyHost === hostKey && (!agents || agents.includes(keyAgent ?? ''))) {
+      scoped.forEach((listener) => listener(true))
     }
   }
 }
@@ -107,5 +157,6 @@ export async function preloadHostModelCatalogSnapshots(
 export function resetHostModelCatalogSnapshotsForTests(): void {
   snapshots.clear()
   generations.clear()
+  catalogGenerations.clear()
   chatAnswers.clear()
 }

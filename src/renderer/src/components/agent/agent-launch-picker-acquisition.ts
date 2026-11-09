@@ -1,22 +1,17 @@
-import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
+export {
+  createAgentPickerInventorySource,
+  useAgentPickerInventoryEntries,
+  type AgentPickerInventorySource
+} from './agent-picker-inventory-source'
 import { shallow } from 'zustand/shallow'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type {
+  AgentPickerAcquisitionObserver as Observer,
+  AgentPickerAcquisitionReads as Reads
+} from './agent-picker-inventory-source'
 
 /** Pending local IPC outlives observers; matching menus must retain its physical owner. */
 const pending = new Map<string, AgentPickerAcquisition>()
-type Observer = {
-  publish: (entries: AgentPickerEntry[]) => void
-  selected: () => TuiAgent | undefined
-}
-type Reads = {
-  settings?: () => Promise<AgentPickerEntry[] | undefined>
-  catalog: (
-    entry: AgentPickerEntry,
-    waitForListing: boolean
-  ) => Promise<AgentPickerEntry['catalog'] | undefined>
-  support: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['structured'] | undefined>
-}
 type SupportRead = {
   state: 'queued' | 'pending' | 'settled'
   value?: AgentPickerEntry['structured']
@@ -31,6 +26,7 @@ class AgentPickerAcquisition {
   private deferredCatalogs = new Set<number>()
   private supports = new Map<number, SupportRead>()
   private defaults: AgentPickerEntry[]
+  private catalogSubscriptions: (() => void)[] = []
 
   constructor(
     readonly key: string,
@@ -60,6 +56,25 @@ class AgentPickerAcquisition {
     const first = this.observers.size === 0
     this.observers.add(observer)
     if (first) {
+      this.catalogSubscriptions = this.entries.map(
+        (entry, index) =>
+          this.reads.observeCatalog?.(entry, ({ answer, pending, invalidated }) => {
+            this.entries = this.entries.map((row, i) =>
+              i === index
+                ? {
+                    ...row,
+                    catalog: answer ?? { origin: 'unknown' },
+                    catalogRead: pending || invalidated ? 'pending' : 'settled'
+                  }
+                : row
+            )
+            if (invalidated) {
+              this.queued.catalog.add(index)
+            }
+            this.publish()
+            this.admit('catalog')
+          }) ?? (() => {})
+      )
       for (const [i, entry] of this.entries.entries()) {
         if (
           this.initial[i].catalogRead !== 'unsupported' &&
@@ -93,6 +108,10 @@ class AgentPickerAcquisition {
     this.admit('support')
     return () => {
       this.observers.delete(observer)
+      if (!this.observers.size) {
+        this.catalogSubscriptions.forEach((stop) => stop())
+        this.catalogSubscriptions = []
+      }
       this.retire()
     }
   }
@@ -274,48 +293,4 @@ export function currentAgentPickerAcquisition(key: string) {
 
 export function agentPickerAcquisitionDiagnostics() {
   return [...pending.values()].map((resource) => ({ key: resource.key, ...resource.diagnostics() }))
-}
-
-/**
- * Live picker entries for one (inventory key, open) generation. Catalog and seed reads land one
- * at a time for several seconds after the menu opens; holding them here instead of in the
- * owner's React state lets only the components that render entries re-render as they land.
- */
-export type AgentPickerInventorySource = {
-  getSnapshot: () => AgentPickerEntry[]
-  subscribe: (listener: () => void) => () => void
-}
-
-type WritableAgentPickerInventorySource = AgentPickerInventorySource & {
-  publish: (entries: readonly AgentPickerEntry[]) => void
-}
-
-export function createAgentPickerInventorySource(
-  initial: AgentPickerEntry[]
-): WritableAgentPickerInventorySource {
-  let entries = initial
-  const listeners = new Set<() => void>()
-  return {
-    getSnapshot: () => entries,
-    subscribe: (listener) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
-    },
-    publish: (next) => {
-      // Why: a read that changed nothing (e.g. an unavailable catalog) must not re-render the menu.
-      if (next.length === entries.length && next.every((entry, i) => entry === entries[i])) {
-        return
-      }
-      entries = [...next]
-      for (const listener of listeners) {
-        listener()
-      }
-    }
-  }
-}
-
-export function useAgentPickerInventoryEntries(
-  source: AgentPickerInventorySource
-): AgentPickerEntry[] {
-  return useAppViewExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
 }

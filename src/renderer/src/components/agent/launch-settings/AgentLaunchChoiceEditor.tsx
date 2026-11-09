@@ -12,6 +12,7 @@ import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
 import { reconcileAgentChoiceArgs } from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAgentModelMenu, type AgentModelMenuSource } from './use-agent-model-menu'
 import { AgentChoiceFields } from './AgentChoiceControls'
 
 export function AgentLaunchChoiceEditor({
@@ -22,8 +23,10 @@ export function AgentLaunchChoiceEditor({
   permission,
   permissionControlRef,
   save,
+  catalogSource,
   showArguments = true
 }: {
+  catalogSource?: AgentModelMenuSource
   showArguments?: boolean
   agent: TuiAgent
   label: string
@@ -34,6 +37,8 @@ export function AgentLaunchChoiceEditor({
   save: (patch: AgentChoicePatch | undefined, userArgs: string) => Promise<void>
 }): React.JSX.Element {
   const t = useTranslate()
+  const [modelOpen, setModelOpen] = useState(false)
+  const modelMenu = useAgentModelMenu(agent, choices, catalogSource, modelOpen)
   const menu = useRef({ open: false, committed: false })
   const editorRef = useRef<HTMLDivElement>(null)
   const [draft, setDraft] = useState<string | null>(null)
@@ -51,6 +56,7 @@ export function AgentLaunchChoiceEditor({
     )
   }
   const onOpenChange = (open: boolean): void => {
+    setModelOpen(open)
     if (!open && !menu.current.committed) {
       saveArgs(text.trim())
     }
@@ -98,6 +104,7 @@ export function AgentLaunchChoiceEditor({
       <div className="space-y-2">
         <AgentChoiceFields
           agent={agent}
+          modelMenu={modelMenu}
           value={choices}
           disabled={pending}
           layout="rows"

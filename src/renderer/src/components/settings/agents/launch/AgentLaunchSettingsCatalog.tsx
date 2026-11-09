@@ -1,5 +1,5 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
+import { HostAgentLaunchChoiceEditor } from './HostAgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
@@ -251,7 +251,9 @@ export function AgentLaunchSettingsCatalog({
     launchChoiceEditor:
       choicesSupported && settings.agentChoices && (isDetected || chatOnly.has(agent.id))
         ? (permissionControlRef) => (
-            <AgentLaunchChoiceEditor
+            <HostAgentLaunchChoiceEditor
+              detectionTarget={detectionTarget}
+              commandOverride={settings.agentCmdOverrides[agent.id]}
               permissionControlRef={permissionControlRef}
               showArguments={isDetected}
               agent={agent.id}

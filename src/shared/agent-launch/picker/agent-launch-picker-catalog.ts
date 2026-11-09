@@ -1,3 +1,4 @@
+import { modelMenuOptions } from '../../agent-session/options/model-menu-options'
 import {
   discoveredModel,
   structuredModelEfforts
@@ -43,9 +44,12 @@ export function agentPickerEntryOptions(
       : []
   }
   let options = agentPickerOptions(entry.agent, model, surface)
-  const live = agentPickerModels(entry).find(
+  const live = agentPickerModelMenu(entry, surface).rows.find(
     (row) => row.id === model || (model === undefined && row.isDefault)
   )
+  if (!live && model) {
+    return []
+  }
   if (entry.catalog.origin === 'unknown' || !live) {
     return options.filter(
       (option) => option.kind.type !== 'select' || option.kind.choices.length > 0
@@ -81,7 +85,7 @@ export function agentPickerEntryOptions(
       return [option]
     }
     if (!live.efforts.length) {
-      return live.effortsKnown === false ? [option] : []
+      return []
     }
     return [
       {
@@ -102,17 +106,26 @@ export function agentPickerPermissions(agent: TuiAgent, surface: AgentPickerSurf
   )
 }
 
+export function agentPickerModelMenu(
+  entry: AgentPickerEntry,
+  surface: AgentPickerSurface = entry.defaultSurface,
+  saved?: Readonly<Record<string, string>>
+) {
+  return modelMenuOptions(entry.catalog, {
+    agent: entry.agent,
+    surface: entry.textGeneration ? 'textGeneration' : surface,
+    seed: getAgentSessionOptionLaunchCatalog(entry.agent) ?? { models: [], modelApply: {} },
+    pending: entry.catalogRead === 'pending',
+    coherentCatalog: entry.coherentCatalog,
+    newLaunch: true,
+    seedsModel: true,
+    saved
+  })
+}
+
 export function agentPickerModels(entry: AgentPickerEntry): AgentPickerModel[] {
-  if (entry.catalog.origin !== 'unknown') {
+  if (entry.textGeneration && entry.catalog.origin !== 'unknown') {
     return entry.catalog.models
   }
-  return (getAgentSessionOptionLaunchCatalog(entry.agent)?.models ?? []).map((model) => ({
-    id: model.id,
-    label: model.label,
-    description: model.description,
-    isDefault: model.isDefault === true,
-    efforts: model.options.flatMap((option) =>
-      option.id === 'effort' && option.kind.type === 'select' ? option.kind.choices : []
-    )
-  }))
+  return agentPickerModelMenu(entry).rows
 }
