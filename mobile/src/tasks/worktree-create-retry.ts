@@ -127,7 +127,9 @@ export async function createWorktreeWithNameRetry(
     }
     lastError = response.error.message
     lastReplayed = sent.replayed
+    // A replayed refusal may follow a create whose reply was lost; another name could be a second worktree.
     if (
+      sent.replayed ||
       candidateParams.branchIntent === 'open-existing-v2' ||
       launch?.replay ||
       !isRetryableWorktreeCreateConflict(lastError ?? '')

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { markRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 
 import { createWorktreeWithNameRetry } from './worktree-create-retry'
 
@@ -69,6 +70,37 @@ describe('createWorktreeWithNameRetry parent', () => {
         parentWorkspace: 'folder:f-1',
         parentWorkspaceOrigin: 'manual'
       }
+    ])
+  })
+})
+
+describe('createWorktreeWithNameRetry after a lost reply', () => {
+  it('tries no other name when the resend is refused as taken', async () => {
+    const client = new FakeSession('connected')
+    client.sendRequest
+      .mockImplementationOnce(async () => {
+        client.publishState('reconnecting')
+        setTimeout(() => client.publishState('connected'), 0)
+        throw markRpcDeliveryUnknown(new Error('connection lost'))
+      })
+      .mockResolvedValue({
+        id: '1',
+        ok: false,
+        error: { code: 'x', message: 'already exists locally' },
+        _meta: { runtimeId: 'r' }
+      })
+
+    const result = await createWorktreeWithNameRetry({
+      client,
+      baseName: 'topic',
+      buildParams: (name) => ({ repo: 'id:r', name }),
+      worktreeCreateIdempotency: { dedupeTtlMs: 60_000 }
+    })
+
+    expect(result).toMatchObject({ replayed: true })
+    expect(client.sendRequest.mock.calls.map(([, params]) => params)).toEqual([
+      expect.objectContaining({ name: 'topic' }),
+      expect.objectContaining({ name: 'topic' })
     ])
   })
 })

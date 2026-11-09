@@ -44,6 +44,9 @@ type CreateOptions = {
 
 type Composer = ReturnType<typeof useMobileComposerSource>
 
+const UNCERTAIN_FOLDER_CREATE =
+  'This worktree may have been created. Check the folder before creating another.'
+
 export function useNewWorkspaceCreateSubmit(args: {
   client: RpcClient | null
   repos: readonly MobileWorkspaceRepo[]
@@ -222,7 +225,12 @@ export function useNewWorkspaceCreateSubmit(args: {
             parent: folder?.parent
           })
       if ('error' in result) {
-        outcome = 'failed'
+        // Refused on a resend after a lost reply: the first send may have created it.
+        outcome = result.replayed ? 'uncertain' : 'failed'
+        if (folder && outcome === 'uncertain') {
+          args.setError(UNCERTAIN_FOLDER_CREATE)
+          return
+        }
         if (presenting()) {
           triggerError()
         }
@@ -240,9 +248,7 @@ export function useNewWorkspaceCreateSubmit(args: {
       outcome = isRpcDeliveryUnknown(error) ? 'uncertain' : 'failed'
       if (folder && outcome === 'uncertain') {
         // The folder screen refreshes and holds it until its list shows it; sending again could create a second one.
-        args.setError(
-          'This worktree may have been created. Check the folder before creating another.'
-        )
+        args.setError(UNCERTAIN_FOLDER_CREATE)
         return
       }
       if (presenting()) {
