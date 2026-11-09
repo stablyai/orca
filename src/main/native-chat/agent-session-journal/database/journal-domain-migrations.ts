@@ -26,6 +26,19 @@ export const JOURNAL_DOMAIN_MIGRATIONS: readonly {
       ) VIRTUAL;
       CREATE INDEX agent_session_operations_expiry ON agent_session_operations(expires_at,operation_key);
     `)
+  },
+  {
+    version: 4,
+    migrate: (db) =>
+      db.exec(`
+      ALTER TABLE agent_session_records ADD COLUMN adopted_native_id TEXT GENERATED ALWAYS AS (
+        CASE WHEN json_valid(record_json) THEN COALESCE(
+          json_extract(record_json,'$.providerHandleChain[#-1].handle.nativeId'),
+          json_extract(record_json,'$.providerHandleChain[#-1].handle.sessionId'),
+          json_extract(record_json,'$.providerHandleChain[#-1].handle.threadId')) END
+      ) VIRTUAL;
+      CREATE INDEX agent_session_records_adopted_native ON agent_session_records(adopted_native_id);
+    `)
   }
 ]
 

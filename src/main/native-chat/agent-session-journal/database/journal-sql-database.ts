@@ -128,7 +128,11 @@ export class JournalSqlDatabase {
     return this.serialize(sessionId, () => this.conversions.ensure(sessionId))
   }
 
-  openSession(identity: AgentSessionJournalIdentity, savedAt = Date.now()) {
+  openSession(
+    identity: AgentSessionJournalIdentity,
+    savedAt = Date.now(),
+    recover?: { fence: number }
+  ) {
     return this.serialize(identity.sessionId, async () => {
       let epoch = await this.conversions.ensure(identity.sessionId)
       if (epoch === null) {
@@ -158,7 +162,11 @@ export class JournalSqlDatabase {
       }
       const target = { sessionId: identity.sessionId, epoch, ownerToken: randomUUID() }
       if (!this.readOnly) {
-        const commit = await this.writer.write({ target, operation: { kind: 'open' }, savedAt })
+        const commit = await this.writer.write({
+          target,
+          operation: { kind: 'open', recover },
+          savedAt
+        })
         return { target, commit }
       }
       const head = await this.readers.point({

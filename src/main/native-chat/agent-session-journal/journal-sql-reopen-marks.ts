@@ -9,6 +9,10 @@ export class SqlJournalReopenMarks {
 
   floor = (): AgentJournalCursor | null => this.unmarked && { ...this.unmarked }
 
+  adopt(floor: AgentJournalCursor | null): void {
+    this.unmarked = floor && { ...floor }
+  }
+
   /**
    * As on the in-memory journal, the floor stands while the mark is written, so a failed write
    * keeps a conservative boundary and throws. A committed mark at or past it retires the floor.

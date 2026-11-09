@@ -139,7 +139,7 @@ export type JournalWriterInputOperation =
       body: AgentJournalMessageItem
       options: JournalItemAppendOptions
     }
-  | { kind: 'open' }
+  | { kind: 'open'; recover?: { fence: number } }
   | JournalWriterContextOperation
   | JournalWriterSettlementOperation
 

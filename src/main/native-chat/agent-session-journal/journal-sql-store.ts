@@ -1,3 +1,4 @@
+import type { AgentSessionJournalOptions } from './journal-store-contracts'
 import { writeJournalAutomaticSubmission } from './journal-sql-automatic-submission'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
@@ -88,18 +89,34 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     // The open operation returns its physical position before ordinary recovery.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the open command returns the physical cursor captured before recovery.
     this.openedThrough = { ...(opened.value as AgentJournalCursor) }
+    this.reopenMarks.adopt(opened.openRecovery?.reopenFloor ?? null)
     this.acknowledged = { ...opened.cursor }
     this.queuedMessages.editLeases.adoptDeadline(opened.publication?.editDeadline ?? null)
   }
 
-  static async open(options: {
-    database: JournalSqlDatabase
-    identity: AgentSessionJournalIdentity
-    now?: () => number
-  }): Promise<SqlAgentSessionJournal> {
+  static async open(
+    options: Pick<
+      AgentSessionJournalOptions,
+      'database' | 'identity' | 'now' | 'recover' | 'onRecoveryFailure'
+    >
+  ): Promise<SqlAgentSessionJournal> {
     const now = options.now ?? Date.now
-    const { target, commit } = await options.database.openSession(options.identity, now())
-    return new SqlAgentSessionJournal(options.database, options.identity, target, now, commit)
+    const { target, commit } = await options.database.openSession(
+      options.identity,
+      now(),
+      options.recover
+    )
+    const journal = new SqlAgentSessionJournal(
+      options.database,
+      options.identity,
+      target,
+      now,
+      commit
+    )
+    for (const failure of commit.openRecovery?.failures ?? []) {
+      options.onRecoveryFailure?.(failure)
+    }
+    return journal
   }
 
   /** The immutable physical position this handle opened at; never the reopen floor. */

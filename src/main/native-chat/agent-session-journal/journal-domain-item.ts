@@ -263,7 +263,7 @@ export function applyJournalDomainItem(
       result.acceptedInputs = readJournalSqlAcceptedInputs(db, prefix)
     }
   }
-  Object.assign(result, spendJournalSqlCommandCards(db, prefix, savedAt))
+  Object.assign(result, spendJournalSqlCommandCards(db, prefix, savedAt, [itemId]))
   result.inputChanged ||= result.cards.length > 0
   if (isJournalProviderActivity(row.recovered, rawId, row.body)) {
     db.prepare(`INSERT INTO journal_provider_activity(session_id,epoch,fence,last_activity_at) VALUES(?,?,?,?)

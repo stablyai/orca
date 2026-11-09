@@ -6,10 +6,7 @@
 import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../../agent-session-journal/journal-store-factory'
-import {
-  restoreJournalSqlFailure,
-  type JournalWriterSettled
-} from '../../agent-session-journal/journal-sql-failure'
+import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
@@ -22,7 +19,6 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import '../termination/structured-agent-session-dead-generation-settlement'
 import { settleStaleStructuredAgentSessionState } from '../termination/structured-agent-session-stale-state-settlement'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
-import { markStructuredQueueReopen } from '../delivery/structured-agent-session-queued-pause'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -102,6 +98,19 @@ export async function openStructuredAgentSessionConversationJournal(
   const journal = await openAgentSessionJournal({
     identity,
     database: deps.journalDatabase,
+    recover: { fence },
+    onRecoveryFailure: ({ step, failure }) => {
+      const messages = {
+        'pending-unknown': 'marking pending sends unknown on open failed',
+        'hold-unsent': 'settling sends an earlier process left queued failed on open',
+        'queue-reopen': 'marking a reopened queue failed'
+      }
+      deps.logger.warn(messages[step], {
+        scope: `open-${step}`,
+        sessionId,
+        error: restoreJournalSqlFailure(failure)
+      })
+    },
     // Without a record store (acquisition-only opens) there is no continuation to withdraw.
     ...(store
       ? {
@@ -110,43 +119,6 @@ export async function openStructuredAgentSessionConversationJournal(
         }
       : {})
   })
-  try {
-    // A handed-over row found here stays doubt: it reads as sent, and nothing narrows it later.
-    const commit = await journal.write({ kind: 'pending-unknown', fence })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pending-unknown returns the writer recovery result.
-    const result = commit.value as JournalWriterSettled
-    if ('failure' in result) {
-      throw restoreJournalSqlFailure(result.failure)
-    }
-  } catch (error) {
-    deps.logger.warn('marking pending sends unknown on open failed', {
-      scope: 'open-pending-unknown',
-      sessionId,
-      error
-    })
-  }
-  try {
-    // Preserve leftover personal sends before any Stop can withdraw them.
-    const commit = await journal.write({
-      kind: 'hold-unsent',
-      fence,
-      hold: { cause: 'hostRestarted' }
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hold-unsent returns the writer recovery result.
-    const result = commit.value as JournalWriterSettled
-    if ('failure' in result) {
-      throw restoreJournalSqlFailure(result.failure)
-    }
-  } catch (error) {
-    // Failed leftovers stay queued; delivery retries before handover or rejects all if recovery still fails.
-    deps.logger.warn('settling sends an earlier process left queued failed on open', {
-      scope: 'open-leftover-sends',
-      sessionId,
-      error
-    })
-  }
-  // Mark after recovering cards; idle sweeping never closes handles while cards wait.
-  await markStructuredQueueReopen(sessionId, journal, fence, deps.logger)
   // No local child writes unopened journals; settle the gone generation before readers/new children.
   if (!options.acquisition) {
     await settleGoneGeneration(deps, record, journal)

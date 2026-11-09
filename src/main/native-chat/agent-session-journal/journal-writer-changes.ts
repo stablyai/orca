@@ -1,4 +1,5 @@
 import type { JournalRequestEvent } from './journal-request-failure'
+import type { JournalOpenRecoveryResult } from './journal-sql-open-command'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attachment-inverse'
@@ -25,6 +26,7 @@ export type JournalWriterPublication = {
 }
 
 export type JournalWriterCommit = {
+  openRecovery?: JournalOpenRecoveryResult
   requestEvents?: JournalRequestEvent[]
   publication?: JournalWriterPublication
   cursor: AgentJournalCursor

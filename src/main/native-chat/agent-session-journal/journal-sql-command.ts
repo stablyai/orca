@@ -1,4 +1,5 @@
 import { applyJournalSqlSendAdmission } from './journal-sql-send-admission'
+import { applyJournalSqlOpenCommand } from './journal-sql-open-command'
 import { beginJournalRequestEvents } from './journal-writer-request-events'
 import { applyJournalDomainControlCommand } from './journal-domain-control-command'
 import type Database from '../../sqlite/sync-database'
@@ -65,6 +66,7 @@ export class JournalSqlCommand {
           savedAt
         )
       case 'open':
+        return applyJournalSqlOpenCommand(db, stateDirectory, { ...command, operation }, savedAt)
       case 'edit-lease':
         return applyJournalSqlEditLeaseCommand(
           db,

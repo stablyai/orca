@@ -206,7 +206,12 @@ export function applyJournalDomainCommandTurn(
       }
       Object.assign(
         step,
-        spendJournalSqlCommandCards(db, [target.sessionId, target.epoch], savedAt)
+        spendJournalSqlCommandCards(
+          db,
+          [target.sessionId, target.epoch],
+          savedAt,
+          step.items.map((item) => item.itemId)
+        )
       )
       step.inputChanged = step.cards.length > 0
       appendJournalSqlEvent(

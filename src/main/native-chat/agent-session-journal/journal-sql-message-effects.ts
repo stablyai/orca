@@ -118,16 +118,18 @@ export function acceptJournalSqlMessageEcho(
 export function spendJournalSqlCommandCards(
   db: Database.Database,
   prefix: readonly [string, string],
-  savedAt: number
+  savedAt: number,
+  itemIds: readonly string[]
 ): { cards: QueuedMessageRow[]; editDeadline?: number | null } {
   const target = { sessionId: prefix[0], epoch: prefix[1] }
   const cards = db
     .prepare(`UPDATE journal_queue_cards AS card SET state='withdrawn', revision=revision+1,
       command_turn_item_id=NULL
-    WHERE session_id=? AND epoch=? AND state='returned' AND EXISTS(SELECT 1 FROM journal_items AS item
+    WHERE session_id=? AND epoch=? AND state='returned'
+      AND command_turn_item_id IN (SELECT value FROM json_each(?)) AND EXISTS(SELECT 1 FROM journal_items AS item
       WHERE item.session_id=card.session_id AND item.epoch=card.epoch AND item.item_id=card.command_turn_item_id)
     RETURNING message_id, revision, state, position, payload_json`)
-    .all(...prefix)
+    .all(...prefix, JSON.stringify(itemIds))
     .map((row) => readJournalDomainQueueRow(target.sessionId, row).card)
   return retireJournalDomainEditHolds(
     db,

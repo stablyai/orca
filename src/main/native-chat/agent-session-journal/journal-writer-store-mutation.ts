@@ -1,3 +1,4 @@
+import { pruneJournalWriterOperations } from './journal-writer-operation-expiry'
 import { copyAgentSessionStoreCache } from '../../runtime/agent-session/records/agent-session-store-cache'
 import { journalDomainPublicCursor } from './journal-domain-context-replacement'
 import {
@@ -65,10 +66,7 @@ export function resolveJournalWriterStoreMutation(
   ]
   const extraPredicates: string[] = []
   if (identity.adoptedNativeId !== undefined) {
-    extraPredicates.push(`CASE WHEN json_valid(record_json) THEN COALESCE(
-      json_extract(record_json,'$.providerHandleChain[#-1].handle.nativeId'),
-      json_extract(record_json,'$.providerHandleChain[#-1].handle.sessionId'),
-      json_extract(record_json,'$.providerHandleChain[#-1].handle.threadId')) END = ?`)
+    extraPredicates.push('adopted_native_id = ?')
   }
   if (identity.missingPermission) {
     extraPredicates.push(`CASE WHEN json_valid(record_json)
@@ -104,21 +102,7 @@ export function resolveJournalWriterStoreMutation(
     )
   }
   if (identity.pruneAt !== undefined) {
-    const expired = db
-      .prepare(`SELECT operation_key,row_json FROM agent_session_operations
-      WHERE expires_at<=? ORDER BY expires_at,operation_key LIMIT 128`)
-      .all(identity.pruneAt)
-    const keys = expired.flatMap((row) => {
-      const key = String(row.operation_key)
-      return isReadableAgentSessionStoreOperation(key, JSON.parse(String(row.row_json)))
-        ? [key]
-        : []
-    })
-    if (keys.length) {
-      db.prepare(`DELETE FROM agent_session_operations
-        WHERE operation_key IN (SELECT value FROM json_each(?))`).run(JSON.stringify(keys))
-      touched.operations.remove.push(...keys)
-    }
+    touched.operations.remove.push(...pruneJournalWriterOperations(db, identity.pruneAt))
   }
   const operationKeys =
     identity.allCallers && identity.operationId !== undefined

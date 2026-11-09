@@ -1,3 +1,4 @@
+import type { JournalOpenRecoveryResult } from './journal-sql-open-command'
 import type { JournalItemEcho } from './projection/journal-item-echo'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type {
@@ -71,6 +72,8 @@ export type AgentSessionJournalOptions = {
   database: JournalSqlDatabase
   now?: () => number
   mintEpoch?: () => string
+  recover?: { fence: number }
+  onRecoveryFailure?: (failure: JournalOpenRecoveryResult['failures'][number]) => void
   /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
   withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
 }

@@ -205,7 +205,12 @@ export function applyJournalDomainLifecycle(
         observeJournalDomainInputItem(db, target, item, source)
       }
     }
-    const spent = spendJournalSqlCommandCards(db, [target.sessionId, target.epoch], savedAt)
+    const spent = spendJournalSqlCommandCards(
+      db,
+      [target.sessionId, target.epoch],
+      savedAt,
+      changedItems.map((item) => item.itemId)
+    )
     result.cards.push(...spent.cards)
     result.inputChanged ||= spent.cards.length > 0
     if (spent.editDeadline !== undefined) {
