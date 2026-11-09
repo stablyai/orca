@@ -1,4 +1,5 @@
 import { uiText } from '../settings/NativeUi';
+import { readPagePreferencesSync } from '../settings/SettingsStore';
 import { SessionPhase } from '../transport/HostSession';
 import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
 import { readHomeResume, saveHomeResume, resumeFromLocation } from '../home/HomeResume';
@@ -102,6 +103,7 @@ export struct ShellSurface {
   private disposed: boolean = false;
   private pageVisible: boolean = true;
   private foreground: boolean = true;
+  private returningFromTerminalSettings: boolean = false;
   private navigation: ShellNavigationFence = new ShellNavigationFence();
   private nativePageIndex: number = 0;
   private nativePageName: string = '';
@@ -239,6 +241,11 @@ export struct ShellSurface {
     this.navigation.visit();
     if (this.pageVisible) {
       this.captureNativePage();
+      if (this.returningFromTerminalSettings) {
+        this.returningFromTerminalSettings = false;
+        try { this.bridge?.refreshTerminalSettings(readPagePreferencesSync(getContext(this))); }
+        catch (e) {}
+      }
       this.publishKeyboardInset(); this.publishPageRegions(); this.updateViewing(); this.flushDrawerRoute();
     }
     else {
@@ -661,6 +668,10 @@ export struct ShellSurface {
     });
     bridge.setNativeNavigation((page: BridgeNativePage, replace: boolean): void => {
       if (this.bridge !== bridge) { return; }
+      if (page === 'terminal-settings') {
+        this.returningFromTerminalSettings = this.openNativePage('pages/TerminalSettings', {});
+        return;
+      }
       let url = page === 'edit-host' ? 'pages/HostDetail' : 'pages/ConnectionLog';
       this.openNativePage(url, { 'hostId': meta.id }, replace);
     });

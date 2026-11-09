@@ -3,7 +3,7 @@ import { common } from '@kit.AbilityKit';
 import { lucideColorFilter } from '../settings/LucideColor';
 import { SettingsNavBar } from '../settings/SettingsNavBar';
 import { readPagePreferencesSync, writePagePreferenceSync, KEY_TERMINAL_TEXT_SCALE, TERMINAL_TEXT_SCALES } from '../settings/SettingsStore';
-import { TERMINAL_SHORTCUTS, CustomShortcut, shortcutLabel, TerminalShortcut } from '../settings/TerminalShortcuts';
+import { TerminalShortcutSettings } from '../settings/TerminalShortcutSettings';
 import { listHosts, HostMeta } from '../storage/HostStore';
 import { SessionPhase } from '../transport/HostSession';
 import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
@@ -28,22 +28,18 @@ struct TerminalSettings {
   @StorageProp('themeText') themeText: string = '#fafafa';
   @StorageProp('themeMuted') themeMuted: string = '#898989';
   @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
-  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
   @StorageProp('themeScheme') themeScheme: string = 'dark';
   @StorageProp('shellWindowRegions') @Watch('updateDirectionPad') windowRegions: string = '';
   @State terminalScale: number = 1;
   @State pickerOpen: boolean = false;
   @State pickerHostId: string = '';
   @State error: string = '';
-  @State ordered: string[] = TERMINAL_SHORTCUTS.map((key: TerminalShortcut): string => key.id);
-  @State visible: string[] = TERMINAL_SHORTCUTS.map((key: TerminalShortcut): string => key.id);
-  @State directionPad: boolean = true;
   @State directionPadAvailable: boolean = false;
-  @State custom: CustomShortcut[] = [];
-  @State customLabel: string = '';
-  @State customBytes: string = '';
-  @State customEnter: boolean = false;
-  @State editing: string = '';
+  @State shortcutsRevision: number = 0;
+  @State shortcutsCanScroll: boolean = true;
+  @State viewportTop: number = 0;
+  @State viewportBottom: number = 0;
+  private settingsScroller: Scroller = new Scroller();
   @State fits: HostFit[] = [];
   private sessions: Map<string, FitConnection> = new Map();
   private epoch = 0;
@@ -68,25 +64,11 @@ struct TerminalSettings {
     this.stopSessions();
     const epoch = this.epoch;
     this.error = '';
+    this.shortcutsRevision++;
     const context = getContext(this) as common.UIAbilityContext;
     try {
       let stored = readPagePreferencesSync(context);
       this.terminalScale = Number(stored.get(KEY_TERMINAL_TEXT_SCALE) ?? '1');
-      let layout: ESObject = JSON.parse(stored.get('orca:terminal-accessory-layout') ?? 'null');
-      if (layout && Array.isArray(layout.orderedBuiltInIds) && Array.isArray(layout.visibleBuiltInIds)) {
-        let known = TERMINAL_SHORTCUTS.map((key: TerminalShortcut): string => key.id);
-        let ordered: string[] = layout.orderedBuiltInIds.filter((id: ESObject): boolean => typeof id === 'string' && known.includes(id));
-        this.ordered = Array.from(new Set(ordered.concat(known)));
-        this.visible = layout.visibleBuiltInIds.filter((id: ESObject): boolean => typeof id === 'string' && known.includes(id));
-        this.directionPad = layout.directionPadEnabled !== false;
-      }
-      let custom: ESObject = JSON.parse(stored.get('orca:custom-accessory-keys') ?? '[]');
-      if (Array.isArray(custom)) {
-        this.custom = custom.filter((key: ESObject): boolean => key && typeof key.id === 'string' && typeof key.label === 'string'
-          && typeof key.bytes === 'string' && typeof key.enter === 'boolean').map((key: ESObject): CustomShortcut => {
-            return { id: key.id, label: key.label, bytes: key.bytes, enter: key.enter, visible: key.visible !== false };
-          });
-      }
     } catch (e) { this.error = '无法读取终端设置'; }
     listHosts(context).then((hosts: HostMeta[]): void => {
       if (epoch !== this.epoch) { return; }
@@ -200,51 +182,6 @@ struct TerminalSettings {
     }
   }
 
-  private saveLayout(ordered: string[], visible: string[], directionPad: boolean): void {
-    try {
-      writePagePreferenceSync(getContext(this), 'orca:terminal-accessory-layout', JSON.stringify({ version: 2,
-        orderedBuiltInIds: ordered, visibleBuiltInIds: visible, directionPadEnabled: directionPad }));
-      this.ordered = ordered; this.visible = visible; this.directionPad = directionPad; this.error = '';
-    } catch (e) { this.error = '无法保存快捷键，请重试'; }
-  }
-
-  private moveKey(id: string, delta: number): void {
-    let ordered = this.ordered.slice(); let at = ordered.indexOf(id); let next = at + delta;
-    if (next < 0 || next >= ordered.length) { return; }
-    let displaced = ordered[next]; ordered[next] = id; ordered[at] = displaced;
-    this.saveLayout(ordered, this.visible, this.directionPad);
-  }
-
-  private saveCustom(keys: CustomShortcut[]): void {
-    try { writePagePreferenceSync(getContext(this), 'orca:custom-accessory-keys', JSON.stringify(keys)); this.custom = keys; this.error = ''; }
-    catch (e) { this.error = '无法保存自定义快捷键，请重试'; }
-  }
-
-  private moveCustom(id: string, delta: number): void {
-    let keys = this.custom.slice(); let at = keys.findIndex((item: CustomShortcut): boolean => item.id === id); let next = at + delta;
-    if (at < 0 || next < 0 || next >= keys.length) { return; }
-    let displaced = keys[next]; keys[next] = keys[at]; keys[at] = displaced; this.saveCustom(keys);
-  }
-
-  private editCustom(key: CustomShortcut): void {
-    this.editing = key.id; this.customLabel = key.label; this.customBytes = key.bytes; this.customEnter = key.enter;
-  }
-
-  private addCustom(): void {
-    if (this.customLabel.trim().length === 0 || this.customBytes.length === 0 || (this.editing.length === 0 && this.custom.length >= 32)) {
-      this.error = '填写快捷键名称和内容（最多 32 项）'; return;
-    }
-    let editing = this.editing;
-    let key: CustomShortcut = { id: editing || `custom-${Date.now()}`, label: this.customLabel.trim(), bytes: this.customBytes, enter: this.customEnter, visible: true };
-    let keys = editing.length > 0 ? this.custom.map((item: CustomShortcut): CustomShortcut => item.id === editing
-      ? { id: key.id, label: key.label, bytes: key.bytes, enter: key.enter, visible: item.visible } : item) : this.custom.concat([key]);
-    this.saveCustom(keys);
-    if (this.error.length === 0) { this.customLabel = ''; this.customBytes = ''; this.customEnter = false; this.editing = ''; }
-  }
-
-  @Builder
-  private sectionTitle(title: string) { Text(title).fontFamily('Geist').fontSize(11).fontWeight(FontWeight.Medium).fontColor(this.themeMuted).width('100%').padding({ top: 16, bottom: 8 }); }
-
   private restoreLabel(ms: number | null | undefined): string {
     if (ms === undefined) { return '…'; }
     if (ms === null) { return this.t('keepPhoneSize'); }
@@ -348,7 +285,7 @@ struct TerminalSettings {
   build() {
     Column() {
       SettingsNavBar({ title: this.t('title') })
-      Scroll() {
+      Scroll(this.settingsScroller) {
         Column() {
           if (this.error.length > 0) { Text(this.error).fontFamily('Geist').fontSize(13).fontColor(this.themeText).width('100%').padding(12).backgroundColor(this.themeSurface) }
           this.settingsHeading(this.t('leaveAppHeading'), 0)
@@ -370,59 +307,16 @@ struct TerminalSettings {
           }.width('100%').constraintSize({ minHeight: 60 }).backgroundColor(this.themeSurface).borderRadius(16)
             .onClick((): void => { this.pickerHostId = ''; this.pickerOpen = true; })
           this.settingsFooter(this.t('textSizeDescription'))
-          if (this.directionPadAvailable) {
-            this.sectionTitle('方向键盘')
-            Row({ space: 12 }) {
-              Column({ space: 4 }) {
-                Text(uiText('显示方向键盘', this.uiLocale)).fontFamily('Geist').fontSize(16).fontColor(this.themeText)
-                Text(uiText('将方向键盘固定在侧栏。关闭后，侧栏会列出各个方向键。', this.uiLocale))
-                  .fontFamily('Geist').fontSize(13).fontColor(this.themeMuted)
-              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.directionPad }).selectedColor(this.themeAccent)
-                .accessibilityText(uiText('显示方向键盘', this.uiLocale)).id('terminal-direction-pad-setting')
-                .onChange((on: boolean): void => { this.saveLayout(this.ordered, this.visible, on); })
-            }.width('100%').padding(16).backgroundColor(this.themeSurface).borderRadius(16)
-          }
-          this.sectionTitle('快捷键 · 拖动或使用箭头调整顺序')
-          Column() {
-            ForEach(this.ordered, (id: string) => {
-              Row({ space: 8 }) {
-                Text(shortcutLabel(id)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).layoutWeight(1)
-                Button('↑').width(44).height(44).backgroundColor(Color.Transparent).fontColor(this.themeMuted).accessibilityText('上移').onClick((): void => { this.moveKey(id, -1); })
-                Button('↓').width(44).height(44).backgroundColor(Color.Transparent).fontColor(this.themeMuted).accessibilityText('下移').onClick((): void => { this.moveKey(id, 1); })
-                Toggle({ type: ToggleType.Switch, isOn: this.visible.includes(id) }).selectedColor(this.themeAccent).accessibilityText(`显示 ${shortcutLabel(id)}`)
-                  .onChange((on: boolean): void => { this.saveLayout(this.ordered, on ? this.visible.concat([id]) : this.visible.filter((item: string): boolean => item !== id), this.directionPad); })
-              }.width('100%').padding({ left: 16, right: 16 }).height(48)
-              .gesture(PanGesture({ direction: PanDirection.Vertical }).onActionEnd((event: GestureEvent): void => { if (Math.abs(event.offsetY) >= 24) { this.moveKey(id, event.offsetY > 0 ? 1 : -1); } }))
-            }, (id: string): string => id)
-          }.width('100%').backgroundColor(this.themeSurface).borderRadius(12)
-          this.sectionTitle('自定义快捷键')
-          Column({ space: 8 }) {
-            ForEach(this.custom, (key: CustomShortcut, index: number) => {
-              Row() {
-                Column() { Text(key.label).fontFamily('Geist').fontSize(14).fontColor(this.themeText); Text(key.bytes).fontFamily('Geist').fontSize(12).fontColor(this.themeMuted).maxLines(1) }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                Toggle({ type: ToggleType.Switch, isOn: key.visible }).selectedColor(this.themeAccent).onChange((on: boolean): void => {
-                  this.saveCustom(this.custom.map((item: CustomShortcut): CustomShortcut => item.id === key.id ? { id: item.id, label: item.label, bytes: item.bytes, enter: item.enter, visible: on } : item));
-                })
-                Button(uiText('编辑', this.uiLocale)).fontColor(this.themeMuted).backgroundColor(Color.Transparent).height(44).onClick((): void => { this.editCustom(key); })
-                Button(uiText('移除', this.uiLocale)).fontColor(this.themeMuted).backgroundColor(Color.Transparent).height(44).onClick((): void => { this.saveCustom(this.custom.filter((item: CustomShortcut): boolean => item.id !== key.id)); })
-              }.width('100%').padding(8)
-              Row() {
-                Button('↑').fontColor(this.themeMuted).backgroundColor(Color.Transparent).width(44).height(44).onClick((): void => { this.moveCustom(key.id, -1); })
-                Button('↓').fontColor(this.themeMuted).backgroundColor(Color.Transparent).width(44).height(44).onClick((): void => { this.moveCustom(key.id, 1); })
-              }.width('100%')
-              .gesture(PanGesture({ direction: PanDirection.Vertical }).onActionEnd((event: GestureEvent): void => { if (Math.abs(event.offsetY) >= 24) { this.moveCustom(key.id, event.offsetY > 0 ? 1 : -1); } }))
-            }, (key: CustomShortcut): string => key.id)
-            TextInput({ text: this.customLabel, placeholder: '名称' }).maxLength(64).onChange((value: string): void => { this.customLabel = value; })
-            TextInput({ text: this.customBytes, placeholder: '发送到终端的内容' }).maxLength(1024).onChange((value: string): void => { this.customBytes = value; })
-            Row() { Text(uiText('内容后发送回车', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.customEnter }).selectedColor(this.themeAccent).onChange((on: boolean): void => { this.customEnter = on; })
-            }.width('100%').height(44)
-            Button(this.editing.length > 0 ? '保存快捷键' : '添加快捷键').backgroundColor(this.themeAccent).fontColor('#ffffff').onClick((): void => { this.addCustom(); })
-            if (this.editing.length > 0) { Button(uiText('取消编辑', this.uiLocale)).backgroundColor(Color.Transparent).fontColor(this.themeMuted).onClick((): void => { this.editing = ''; this.customLabel = ''; this.customBytes = ''; this.customEnter = false; }) }
-          }.width('100%').padding(16).backgroundColor(this.themeSurface).borderRadius(12)
+          TerminalShortcutSettings({ directionPadAvailable: this.directionPadAvailable,
+            settingsRevision: this.shortcutsRevision, scrollingEnabled: $shortcutsCanScroll,
+            scroller: this.settingsScroller, viewportTop: this.viewportTop, viewportBottom: this.viewportBottom })
         }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 24 })
       }.layoutWeight(1).width('100%').scrollBar(BarState.Off).align(Alignment.Top)
+        .enableScrollInteraction(this.shortcutsCanScroll)
+        .onAreaChange((_previous: Area, area: Area): void => {
+          this.viewportTop = Number(area.globalPosition.y);
+          this.viewportBottom = this.viewportTop + Number(area.height);
+        })
     }.width('100%').height('100%').backgroundColor(this.themeBg)
       .bindSheet(this.pickerOpen, this.picker, { height: SheetSize.FIT_CONTENT, backgroundColor: this.themeSheet,
         maskColor: 'rgba(0,0,0,0.55)', showClose: false, onDisappear: (): void => { this.pickerOpen = false; } })

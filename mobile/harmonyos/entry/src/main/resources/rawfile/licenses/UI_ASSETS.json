@@ -279,6 +279,13 @@
       "package": "lucide-static",
       "version": "0.577.0",
       "source": "package/icons/type.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_grip_vertical.svg",
+      "sha256": "bd3ac1707401348b581783cfe5043101e64f3a75ca9c9485833732c55f2abc65",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/grip-vertical.svg"
     }
   ]
 }

@@ -65,6 +65,10 @@ const NEGOTIATED_PAGE_STORAGE_KEY = 'orca:terminalSplitLayout';
 const PAGE_STORAGE_MAX_VALUE_CHARS = 16 * 1024;
 const PAGE_STORAGE_MAX_KEY_CHARS = 256;
 const PAGE_STORAGE_MAX_ENTRIES = 32;
+const TERMINAL_SETTINGS_STORAGE_KEYS: string[] = [
+  'orca:terminal-accessory-layout', 'orca:custom-accessory-keys', 'orca:terminalTextScale',
+  'orca:terminalAutocompleteEnabled', 'orca:terminalLinkOpenMode'
+];
 // bridge-caps.ts viewport bounds (terminalViewport notify envelope).
 const BRIDGE_MAX_VIEWPORT_COLS = 1000;
 const BRIDGE_MAX_VIEWPORT_ROWS = 500;
@@ -110,7 +114,7 @@ interface BridgeRouteWire {
   params: Record<string, string>;
 }
 
-export type BridgeNativePage = 'edit-host' | 'connection-log';
+export type BridgeNativePage = 'edit-host' | 'connection-log' | 'terminal-settings';
 
 interface BridgeInitHostWire {
   personalName?: string;
@@ -141,6 +145,7 @@ interface BridgeInitWire {
   host: BridgeInitHostWire;
   storage: Record<string, string>;
   storageOversize: string[];
+  refreshTerminalShortcuts?: boolean;
   ownsHostArea: boolean;
   safeAreaInsets: BridgeSafeAreaInsets;
   keyboardInset: number;
@@ -307,6 +312,17 @@ export class BridgeHost {
   setWideLayout(wide: boolean): void { this.wideLayout = wide; }
 
   setStorage(store: PageStorageStore): void { this.storageStore = store; this.pageStorage = store.entries(); }
+  refreshTerminalSettings(settings: Map<string, string>): void {
+    let changed = false;
+    TERMINAL_SETTINGS_STORAGE_KEYS.forEach((key: string): void => {
+      const value = settings.get(key);
+      if (value === this.pageStorage.get(key)) { return; }
+      if (value === undefined) { this.pageStorage.delete(key); }
+      else { this.pageStorage.set(key, value); }
+      changed = true;
+    });
+    if (changed && this.navigationReady()) { this.sendInit(true); }
+  }
   setRouteParams(params: Record<string, string>): void {
     this.routeParams = params; this.requestedOpen = params['open'] ?? '';
   }
@@ -745,6 +761,12 @@ export class BridgeHost {
     if (pathname === '/connection-log') {
       if (navigate && params['hostId'] === this.meta.id && Object.keys(params).length === 1 && this.nativeNavigation) {
         this.nativeNavigation('connection-log', replace);
+      }
+      return;
+    }
+    if (pathname === '/terminal-settings') {
+      if (navigate && queryAt < 0 && BridgeHost.routeMatches('/h/[hostId]/session/[worktreeId]', this.routePathname)) {
+        this.nativeNavigation?.('terminal-settings', false);
       }
       return;
     }
@@ -1296,7 +1318,7 @@ export class BridgeHost {
     }
   }
 
-  private sendInit(): void {
+  private sendInit(refreshTerminalShortcuts: boolean = false): void {
     // A desktop document can show a session without changing its entry route.
     let ownsHostArea = this.ownsHostArea(this.entryPathname);
     let grants = this.routeGrants(ownsHostArea ? this.entryPathname : this.routePathname);
@@ -1370,6 +1392,7 @@ export class BridgeHost {
       host: hostValue,
       storage: storage,
       storageOversize: oversize,
+      refreshTerminalShortcuts: refreshTerminalShortcuts ? true : undefined,
       ownsHostArea: ownsHostArea,
       safeAreaInsets: this.safeAreaInsets,
       keyboardInset: this.keyboardInset,

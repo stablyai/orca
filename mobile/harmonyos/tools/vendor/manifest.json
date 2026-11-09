@@ -24,7 +24,8 @@
     "entry/src/main/ets/vendor/terminal-rail.js": "172f7f933854c677cdcdc2fd00c373a79b07973ba51777c10d205d5c4160e5b7",
     "entry/src/main/ets/vendor/bundle-compat.js": "7ad72dd427a2f052a164eccc08e587b02a27413be1a404084a9357a3987d4162",
     "entry/src/main/ets/vendor/host-machine.js": "f79bd3087ce9537ac4ffa7d3dab1d46ea0fe9d0bffe139cf89d7ae6b19b7b4eb",
-    "entry/src/main/ets/vendor/dictation-shortcut-mode.js": "17daa29155497ff7120bda3436fe3f2b3d27fd720ba6fd168cc8205b72b04d48"
+    "entry/src/main/ets/vendor/dictation-shortcut-mode.js": "17daa29155497ff7120bda3436fe3f2b3d27fd720ba6fd168cc8205b72b04d48",
+    "entry/src/main/ets/vendor/terminal-shortcuts.js": "b58b7ed80f0293100ec1fd2c857e3dbed94ca6cd115d989d2f09509a8d779845"
   },
   "orcaAgentList": {
     "revision": "cba8f0efcc3588a4f6606d9834555a8b3860a39c",
@@ -104,6 +105,16 @@
     "esbuild": "0.28.2",
     "sources": [
       "src/shared/dictation-shortcut-mode.ts"
+    ]
+  },
+  "orcaTerminalShortcuts": {
+    "revision": "a6538f08e1c9af93940eb368241c0cfa54a6e7e7",
+    "esbuild": "0.28.2",
+    "sources": [
+      "mobile/src/terminal/terminal-accessory-keys.ts",
+      "mobile/src/terminal/terminal-accessory-layout.ts",
+      "mobile/src/terminal/terminal-key-definitions.ts",
+      "src/shared/terminal/protocol/input-modes/terminal-modified-enter-encoding.ts"
     ]
   }
 }

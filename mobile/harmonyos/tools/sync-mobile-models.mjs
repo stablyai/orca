@@ -33,6 +33,25 @@ const models = [
     `
   },
   {
+    file: 'terminal-shortcuts',
+    provenance: 'orcaTerminalShortcuts',
+    contents: `
+      export { buildTerminalShortcutKey, normalizeShortcutKeyInput, TERMINAL_SHORTCUT_SPECIAL_KEYS } from './mobile/src/terminal/terminal-accessory-keys'
+      import { TERMINAL_ACCESSORY_KEYS } from './mobile/src/terminal/terminal-accessory-keys'
+      import { normalizeTerminalAccessoryLayoutPreference } from './mobile/src/terminal/terminal-accessory-layout'
+      import { withTranslation } from 'orca-diagnostic-translation'
+      export function terminalAccessoryLayout(value, directionPadAvailable) {
+        return normalizeTerminalAccessoryLayoutPreference(value, undefined, directionPadAvailable)
+      }
+      export function describeBuiltInShortcut(id, translator) {
+        const key = TERMINAL_ACCESSORY_KEYS.find((entry) => entry.id === id)
+        return withTranslation(translator, () => key
+          ? { label: key.label, title: key.accessibilityLabel ?? key.label }
+          : { label: id, title: id })
+      }
+    `
+  },
+  {
     file: 'dictation-shortcut-mode',
     provenance: 'orcaDictationShortcutMode',
     contents: `
@@ -100,6 +119,7 @@ for (const model of models) {
   }
   const source = `orca-${model.file}-entry.ts`
   const output = `entry/src/main/ets/vendor/${model.file}.js`
+  const localizes = model.file === 'connection-diagnostics' || model.file === 'terminal-shortcuts'
   const result = await build({
     absWorkingDir: upstream,
     stdin: { contents: model.contents, resolveDir: upstream, sourcefile: source },
@@ -120,10 +140,20 @@ for (const model of models) {
             namespace: 'orca'
           }))
           builder.onResolve({ filter: /\/i18n\/mobile-i18n$/ }, ({ path }) =>
-            model.file === 'connection-diagnostics'
+            localizes
               ? { path: translation, namespace: 'orca' }
               : { path, external: true, sideEffects: false }
           )
+          if (model.file === 'terminal-shortcuts') {
+            builder.onResolve(
+              { filter: /^@react-native-async-storage\/async-storage$/ },
+              ({ path }) => ({
+                path,
+                external: true,
+                sideEffects: false
+              })
+            )
+          }
           builder.onLoad({ filter: /^orca-diagnostic-translation$/, namespace: 'orca' }, () => ({
             contents: `
               let translator
