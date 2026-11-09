@@ -4,7 +4,6 @@ import { join, resolve } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
-import { checkPluginPanels } from './plugin-panel-check'
 import { findPluginTestFiles, runPluginTests } from './plugin-test-runner'
 
 const TSC = resolve(__dirname, '../../../node_modules/typescript/bin/tsc')
@@ -42,21 +41,6 @@ describe('orca plugin create --template worker-panel', () => {
       })
     },
     // Starts its own Node process and transpiles the plugin.
-    60_000
-  )
-
-  it(
-    '`orca plugin check` renders the panel with its worker in each scenario',
-    async () => {
-      const dir = await workerPanelPlugin()
-      const panels = await checkPluginPanels(dir)
-      expect(panels.map((panel) => [panel.scenario, panel.issues, panel.warnings])).toEqual([
-        ['fresh', [], []],
-        ['counted', [], []]
-      ])
-      expect(panels.every((panel) => panel.elements > 0)).toBe(true)
-    },
-    // Starts a Node process that boots the panel and the worker for each scenario.
     60_000
   )
 

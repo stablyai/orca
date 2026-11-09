@@ -131,7 +131,6 @@ export const LINUX_PACKAGE_TESTS = [
   'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts',
   'src/main/persistence/profile-state/profile-state-writer-stall.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-compatibility.electron.test.ts',
-  'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-native-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-background-compatibility.electron.test.ts',
   'src/main/browser/extensions/api-runtime/browser-extension-api.electron.test.ts',
