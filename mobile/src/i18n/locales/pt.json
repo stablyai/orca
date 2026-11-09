@@ -1341,6 +1341,30 @@
       "sessionLimit": "Há dispositivos demais ditando neste computador. Tente de novo quando um deles terminar.",
       "sessionLost": "O ditado perdeu a conexão com o computador. Tente novamente.",
       "updateFailed": "Falha ao atualizar as configurações de ditado"
+    },
+    "controls": {
+      "start": "Ditar",
+      "starting": "Iniciando o ditado",
+      "stop": "Parar e inserir",
+      "finishing": "Finalizando o ditado",
+      "cancel": "Cancelar ditado",
+      "meterOnPhone": "Gravando, {{duration}}, neste telefone",
+      "meterOn": "Gravando, {{duration}}, em {{computer}}",
+      "meterOnComputer": "Gravando, {{duration}}, no computador",
+      "meter": "Gravando, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} segundo",
+      "durationSeconds_other": "{{count}} segundos",
+      "durationSeconds_many": "{{count}} segundos",
+      "durationMinutes_one": "{{count}} minuto",
+      "durationMinutes_other": "{{count}} minutos",
+      "durationMinutes_many": "{{count}} minutos"
+    },
+    "status": {
+      "finishingOn": "Finalizando em {{computer}}",
+      "finishingOnComputer": "Finalizando no computador",
+      "movedTo": "Passou para {{computer}}",
+      "movedToComputer": "Passou para o computador"
     }
   },
   "files": {
@@ -1573,6 +1597,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Excluir \"{{name}}\" ({{branch}})?",
+      "deleteDestroysEnvironment": "Isto também destrói o ambiente \"{{environment}}\" que o Orca criou para ele, com as alterações não confirmadas e os terminais em execução nele.",
+      "deleteKeepsEnvironment": "O ambiente \"{{environment}}\" que o Orca criou para ele continua em execução: a receita não tem um passo de destruição.",
       "deleteWorktree": "Excluir Worktree",
       "pin": "Fixar",
       "primaryWorktreeDeleteHint": "Worktree primária — não pode ser excluída. Remova o projeto em vez disso.",
@@ -2470,11 +2496,7 @@
     "terminalInputActions": {
       "attachFileHint": "Mantenha pressionado para anexar um arquivo em vez de uma foto",
       "attachPhoto": "Anexar uma foto",
-      "sendingImage": "Enviando imagem",
-      "startDictation": "Iniciar ditado por voz",
-      "startingDictation": "Iniciando ditado por voz",
-      "stopDictation": "Parar ditado por voz",
-      "transcribingDictation": "Transcrevendo ditado por voz"
+      "sendingImage": "Enviando imagem"
     },
     "terminalLiveInputStatus": {
       "listening": "Ouvindo",
@@ -2483,8 +2505,6 @@
       "processing": "Processando",
       "releaseMicHint": "Solte o microfone para parar",
       "startingMic": "Ativando microfone",
-      "stopHint": "Toque no microfone para parar",
-      "transcribing": "Transcrevendo no desktop",
       "uploadingImage": "Enviando imagem para o host",
       "uploadingImageTitle": "Enviando imagem"
     },
@@ -2578,7 +2598,8 @@
       "insertFailed": "Não foi possível inserir o ditado",
       "insertFailedCopied": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência",
       "inserted": "Ditado inserido",
-      "stoppedAfterSilence": "Parou após um minuto de silêncio"
+      "stoppedAfterSilence": "Parou após um minuto de silêncio",
+      "stoppedAtCloudLimit": "O ditado foi interrompido no limite de 10 minutos da nuvem."
     },
     "useNativeChatStop": {
       "stopNotSent": "Comando de parada não enviado",
@@ -2903,6 +2924,8 @@
       "dictationHeading": "DITADO",
       "dictationMode": "Modo de Ditado",
       "dictationModeDescription": "Alternar: pressione uma vez para iniciar e novamente para parar. Manter pressionado: pressione e segure para ditar.",
+      "dictationModeWithAutoDescription": "Automático: toque para iniciar e parar; no computador, manter o atalho pressionado grava até você soltar. Manter pressionado: pressione e segure para ditar. Alternar: pressione uma vez para iniciar e novamente para parar.",
+      "autoMode": "Automático",
       "downloadFailed": "Falha no download",
       "enableDictation": "Ativar Ditado por Voz",
       "holdMode": "Manter Pressionado",

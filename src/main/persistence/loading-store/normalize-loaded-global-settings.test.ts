@@ -36,18 +36,24 @@ it('keeps existing Antigravity profiles personal and preserves explicit or malfo
   expect(() => resolveAntigravityChatAuthConfig(malformed)).toThrow('account settings')
 })
 
-it('moves the old Toggle dictation default to Auto once and keeps Hold and later choices', () => {
-  const voice = (dictationMode: string) => ({ ...getDefaultVoiceSettings(), dictationMode })
-  const legacy = { voiceDictationModeDefaultedToAuto: undefined }
+it('stores Auto as Toggle plus hold-to-record so older builds keep a working shortcut', () => {
+  const { dictationHoldToRecord: _absentBeforeAuto, ...legacyVoice } = getDefaultVoiceSettings()
+  const load = (voice: Record<string, unknown>, marked: boolean) => {
+    const settings = normalizeLegacyProfile({
+      voiceDictationModeDefaultedToAuto: marked ? true : undefined,
+      voice: { ...legacyVoice, ...voice }
+    })
+    return [settings.voice?.dictationMode, settings.voice?.dictationHoldToRecord]
+  }
 
-  const migrated = normalizeLegacyProfile({ ...legacy, voice: voice('toggle') })
-  expect(migrated.voice?.dictationMode).toBe('auto')
-  expect(migrated.voiceDictationModeDefaultedToAuto).toBe(true)
-  expect(normalizeLegacyProfile({ ...legacy, voice: voice('hold') }).voice?.dictationMode).toBe(
-    'hold'
-  )
-  expect(
-    normalizeLegacyProfile({ voiceDictationModeDefaultedToAuto: true, voice: voice('toggle') })
-      .voice?.dictationMode
-  ).toBe('toggle')
+  // The old Toggle default becomes Auto; Hold was always a choice.
+  expect(load({ dictationMode: 'toggle' }, false)).toEqual(['toggle', true])
+  expect(load({ dictationMode: 'hold' }, false)).toEqual(['hold', false])
+  // Builds that stored Auto as 'auto', or a Toggle picked there, keep what the user had.
+  expect(load({ dictationMode: 'auto' }, true)).toEqual(['toggle', true])
+  expect(load({ dictationMode: 'toggle' }, true)).toEqual(['toggle', false])
+  expect(load({ dictationMode: 'toggle', dictationHoldToRecord: false }, false)).toEqual([
+    'toggle',
+    false
+  ])
 })

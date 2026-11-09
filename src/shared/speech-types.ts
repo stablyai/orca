@@ -73,8 +73,8 @@ export type UserModelConfig = {
   sampleRate?: number
 }
 
-// Auto: holding the shortcut records until release, a tap toggles.
-export type DictationMode = 'auto' | 'hold' | 'toggle'
+// See dictation-shortcut-mode.ts for Auto.
+export type DictationMode = 'toggle' | 'hold'
 
 export type VoiceSettings = {
   enabled: boolean
@@ -83,6 +83,7 @@ export type VoiceSettings = {
   /** 'auto' or an ISO-639-1 code. Not `language`: its stored 'en' default never came from the user. */
   dictationLanguage: string
   dictationMode: DictationMode
+  dictationHoldToRecord: boolean
   /** Drops "um", "uh" and their equivalents in the dictation language before text is inserted. */
   removeFillerWords: boolean
   terminalConfirmBeforeInsert: boolean

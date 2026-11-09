@@ -1,4 +1,4 @@
-import { COMPOSED_TREE_SCRIPT } from '../../../shared/browser-composed-tree-script'
+import { COMPOSED_TREE_SCRIPT } from '../../../shared/browser/element-grab/browser-composed-tree-script'
 import { GRAB_GUEST_CONTENT_SCRIPT } from './grab-guest-content-script'
 import { GRAB_GUEST_ELEMENT_CONTEXT_SCRIPT } from './grab-guest-element-context-script'
 import { GRAB_GUEST_FOUNDATION_SCRIPT } from './grab-guest-foundation-script'

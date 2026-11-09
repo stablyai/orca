@@ -3,13 +3,16 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { DictationIndicator } from './DictationIndicator'
 import { publishDictationMeter, resetDictationMeter } from './dictation-meter-store'
 import type { DictationFailureKind } from './dictation-toasts'
+import type { DictationQueuedSendKind } from './use-dictation-queued-send'
 
 function PaneWithPill({
   captureLive = true,
-  failure = null
+  failure = null,
+  queued = null
 }: {
   captureLive?: boolean
   failure?: DictationFailureKind | null
+  queued?: DictationQueuedSendKind | null
 }) {
   const [pane, setPane] = useState<HTMLElement | null>(null)
   const anchor = useMemo(
@@ -19,7 +22,12 @@ function PaneWithPill({
   return (
     <div ref={setPane} className="relative h-28 w-full bg-background">
       {anchor ? (
-        <DictationIndicator captureLive={captureLive} anchor={anchor} failure={failure} />
+        <DictationIndicator
+          captureLive={captureLive}
+          anchor={anchor}
+          failure={failure}
+          queued={queued}
+        />
       ) : null}
     </div>
   )
@@ -74,4 +82,18 @@ export const modelFailed = defineFixture({
   width: 520,
   store: { dictationState: 'error' },
   render: () => <PaneWithPill failure="settings" />
+})
+
+export const queuedChatSend = defineFixture({
+  width: 520,
+  store: { dictationState: 'stopping' },
+  setup: resetDictationMeter,
+  render: () => <PaneWithPill queued="chat" />
+})
+
+export const queuedTerminalEnter = defineFixture({
+  width: 520,
+  store: { dictationState: 'stopping' },
+  setup: resetDictationMeter,
+  render: () => <PaneWithPill queued="terminal" />
 })

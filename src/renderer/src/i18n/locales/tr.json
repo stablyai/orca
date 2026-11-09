@@ -3696,7 +3696,6 @@
             "a3346fc6ed": "Worktree oluşturmayı iptal et",
             "532aea14ce": "İptal",
             "767951265d": "Worktree oluşturulurken bir şeyler ters gitti.",
-            "vmProvisioningTitle": "VM Hazırlanıyor",
             "cancelProvisioning": "İptal",
             "vmProvisioningLogEmpty": "Kurulum çıktısı bekleniyor…"
           }
@@ -16927,7 +16926,8 @@
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
           "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu.",
           "cloudLimitReached": "Dikte, 10 dakikalık bulut sınırında durduruldu.",
-          "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu"
+          "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu",
+          "retryUnmatched": "Yeniden deneme hangi kelimelerin zaten yazıldığını anlayamadı, bu yüzden hepsini ekledi."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Dikte eklenemedi, bu yüzden panoya kopyalandı.",
@@ -16935,7 +16935,21 @@
           "lost": "Dikte eklenemedi ve kopyalanamadı."
         },
         "DictationIndicator": {
-          "4977162383": "Çok yüksek sesli"
+          "4977162383": "Çok yüksek sesli",
+          "finishing": "Tamamlanıyor…",
+          "listening": "Dinleniyor…",
+          "cancel": "İptal",
+          "finish": "Bitir",
+          "oneMinuteLeft": "Bir dakika kaldı.",
+          "sendsWhenLanded": "Metin gelince gönderilecek",
+          "entersWhenLanded": "Metin gelince Enter'a basılacak"
+        },
+        "DictationPillFailure": {
+          "discard": "Kaydı sil",
+          "modelFailed": "Model yüklenemedi.",
+          "transcribeFailed": "Yazıya dökülemedi. Kayıt saklandı.",
+          "openSettings": "Ayarlar",
+          "retry": "Yeniden dene"
         }
       },
       "dashboard": {

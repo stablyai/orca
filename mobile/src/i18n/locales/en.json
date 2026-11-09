@@ -142,6 +142,8 @@
       "dictationDescription": "Dictate text into any focused pane on your desktop.",
       "dictationMode": "Dictation Mode",
       "dictationModeDescription": "Toggle: press once to start, again to stop. Hold: dictate while held.",
+      "dictationModeWithAutoDescription": "Auto: tap to start and stop; on your computer, holding the shortcut records until you let go. Hold: dictate while held. Toggle: press once to start, again to stop.",
+      "autoMode": "Auto",
       "speechModelHeading": "SPEECH MODEL",
       "speechModel": "Speech Model",
       "loading": "Loading voice settings…"
@@ -517,6 +519,28 @@
       "deleteFailed": "Failed to delete model",
       "updateFailed": "Failed to update dictation settings",
       "cloudModelNeedsKey": "Needs an OpenAI key"
+    },
+    "controls": {
+      "start": "Dictate",
+      "starting": "Starting dictation",
+      "stop": "Stop and insert",
+      "finishing": "Finishing dictation",
+      "cancel": "Cancel dictation",
+      "durationSeconds_one": "{{count}} second",
+      "durationSeconds_other": "{{count}} seconds",
+      "durationMinutes_one": "{{count}} minute",
+      "durationMinutes_other": "{{count}} minutes",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "meterOnPhone": "Recording, {{duration}}, on this phone",
+      "meterOn": "Recording, {{duration}}, on {{computer}}",
+      "meterOnComputer": "Recording, {{duration}}, on the computer",
+      "meter": "Recording, {{duration}}"
+    },
+    "status": {
+      "finishingOn": "Finishing on {{computer}}",
+      "finishingOnComputer": "Finishing on the computer",
+      "movedTo": "Moved to {{computer}}",
+      "movedToComputer": "Moved to the computer"
     }
   },
   "home": {
@@ -647,6 +671,8 @@
     "hostScreenOverlays": {
       "deleteWorktree": "Delete Worktree",
       "deleteConfirmMessage": "Delete \"{{name}}\" ({{branch}})?",
+      "deleteDestroysEnvironment": "This also destroys the environment \"{{environment}}\" that Orca created for it, with any uncommitted work and running terminals on it.",
+      "deleteKeepsEnvironment": "The environment \"{{environment}}\" that Orca created for it keeps running: its recipe has no destroy step.",
       "sleep": "Sleep",
       "unpin": "Unpin",
       "pin": "Pin",
@@ -1954,8 +1980,6 @@
       "liveInput": "Live input",
       "uploadingImageTitle": "Uploading image",
       "releaseMicHint": "Release mic to stop",
-      "stopHint": "Tap mic to stop",
-      "transcribing": "Transcribing on desktop",
       "preparingMic": "Preparing microphone",
       "uploadingImage": "Uploading image to host"
     },
@@ -2126,11 +2150,7 @@
     "terminalInputActions": {
       "sendingImage": "Sending image",
       "attachPhoto": "Attach a photo",
-      "attachFileHint": "Long press to attach a file instead",
-      "stopDictation": "Stop voice dictation",
-      "transcribingDictation": "Transcribing voice dictation",
-      "startingDictation": "Starting voice dictation",
-      "startDictation": "Start voice dictation"
+      "attachFileHint": "Long press to attach a file instead"
     },
     "quickCommandEditorForm": {
       "terminalCommand": "Terminal Command",
@@ -2343,7 +2363,8 @@
       "insertFailedCopied": "Couldn't insert dictation, so it was copied to the clipboard",
       "insertFailed": "Couldn't insert dictation",
       "inserted": "Dictation inserted",
-      "stoppedAfterSilence": "Stopped after a minute of silence"
+      "stoppedAfterSilence": "Stopped after a minute of silence",
+      "stoppedAtCloudLimit": "Dictation stopped at the 10-minute cloud limit."
     },
     "quickCommandLaunch": {
       "editBeforeRunning": "Edit this quick command before running it",

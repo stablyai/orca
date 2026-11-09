@@ -11,6 +11,7 @@ import {
   type DictationKeptRecording
 } from './dictation-kept-recording'
 import { useDictationControls } from './use-dictation-controls'
+import { useDictationQueuedSend } from './use-dictation-queued-send'
 import { createDictationTranscriptDelivery } from './dictation-transcript-delivery'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import {
@@ -70,6 +71,8 @@ export function DictationController() {
   const [failure, setFailure] = useState<DictationFailureKind | null>(null)
   // A new recording gets a fresh pill (timer and all); a retry keeps the one it failed in.
   const [recordingKey, setRecordingKey] = useState(0)
+  const queuedSend = useDictationQueuedSend(sessionRef, keptRef)
+  const { clear: clearQueuedSend, release: releaseQueuedSend } = queuedSend
 
   const dispatch = useCallback(
     (event: DictationSessionEvent): DictationSession => {
@@ -88,13 +91,16 @@ export function DictationController() {
           setPillAnchor(null)
           keptRef.current = null
         }
+        if (next.phase === 'idle' || next.phase === 'error') {
+          clearQueuedSend()
+        }
         if (next.phase !== 'error') {
           setFailure(null)
         }
       }
       return next
     },
-    [setDictationState, setPartialTranscript]
+    [setDictationState, setPartialTranscript, clearQueuedSend]
   )
 
   const drainStoppedSession = useCallback((sessionId: string) => {
@@ -125,9 +131,12 @@ export function DictationController() {
         showNoSpeechDetectedToast()
       }
       beforeEnd?.()
-      dispatch({ type: 'ended' })
+      await releaseQueuedSend(run)
+      if (sessionRef.current.run === run) {
+        dispatch({ type: 'ended' })
+      }
     },
-    [dispatch, finishCapture, getCapturedChunkCount]
+    [dispatch, finishCapture, getCapturedChunkCount, releaseQueuedSend]
   )
 
   /** The error pill when the recording can be retried; otherwise the toast, as nothing is left to retry. */
@@ -346,6 +355,7 @@ export function DictationController() {
     cancel: cancelDictation,
     toggle: toggleDictation,
     retry: () => void retryDictation(),
+    enterQueues: (event) => queuedSend.queueTerminalEnter(event.target),
     // The error pill leaves Esc to Settings and dialogs; only its ✕ discards the recording.
     escCancels: () =>
       isDictationUnderway(sessionRef.current.phase) || sessionRef.current.phase === 'stopping'
@@ -398,6 +408,7 @@ export function DictationController() {
       captureLive={captureLive}
       anchor={pillAnchor}
       failure={failure}
+      queued={queuedSend.queuedKind}
     />
   )
 }

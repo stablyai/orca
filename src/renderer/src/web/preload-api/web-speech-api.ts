@@ -16,10 +16,9 @@ import { createNonSecureContextUuid } from '../../../../shared/non-secure-contex
 import { errorMessage } from '../../../../shared/error-message'
 import { callRuntimeResult } from './web-runtime-calls'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { pairedDictationFinishTimeoutMs } from '../../../../shared/dictation-finish-deadlines'
 
 const MAX_CHUNK_SAMPLES = MAX_DICTATION_AUDIO_CHUNK_BYTES / PCM_BYTES_PER_SAMPLE
-// Matches the phone: a long recording can take a while to transcribe on the host.
-const FINISH_TIMEOUT_MS = 75_000
 // A slow link can leave a backlog of chunks behind Stop; past this, keep the text so far instead.
 const STOP_DRAIN_TIMEOUT_MS = 10_000
 
@@ -28,10 +27,13 @@ type HostDictation = {
   dictationId: string
   seq: number
   sampleRate: number
+  sentAudioSeconds: number
   pending: Float32Array[]
   sending: Promise<void> | null
   failed: boolean
   textSoFar: string
+  // The host's cloud upload filled up; reported to capture once so it stops like the desktop does.
+  audioLimit: 'not-reached' | 'reached' | 'reported'
 }
 
 type Listeners<T> = Set<(data: T) => void>
@@ -114,12 +116,20 @@ export function createWebSpeechApi(): Pick<
   const sendPendingAudio = async (dictation: HostDictation): Promise<void> => {
     while (dictation.pending.length > 0 && !dictation.failed) {
       try {
-        const reply = await callRuntimeResult<{ text?: string }>('speech.dictation.chunk', {
+        const audio = takePendingAudio(dictation)
+        dictation.sentAudioSeconds += audio.length / dictation.sampleRate
+        const reply = await callRuntimeResult<{
+          text?: string
+          audioLimitReached?: boolean
+        }>('speech.dictation.chunk', {
           dictationId: dictation.dictationId,
-          audioBase64: encodePcm16Base64(takePendingAudio(dictation)),
+          audioBase64: encodePcm16Base64(audio),
           sampleRate: dictation.sampleRate,
           seq: dictation.seq++
         })
+        if (reply?.audioLimitReached && dictation.audioLimit === 'not-reached') {
+          dictation.audioLimit = 'reached'
+        }
         // The host repeats unchanged text about once a second in case a reply was lost.
         if (reply?.text && reply.text !== dictation.textSoFar) {
           dictation.textSoFar = reply.text
@@ -145,10 +155,12 @@ export function createWebSpeechApi(): Pick<
         dictationId: `web-${createNonSecureContextUuid()}`,
         seq: 0,
         sampleRate: 0,
+        sentAudioSeconds: 0,
         pending: [],
         sending: null,
         failed: false,
-        textSoFar: ''
+        textSoFar: '',
+        audioLimit: 'not-reached'
       }
       active = dictation
       try {
@@ -166,7 +178,7 @@ export function createWebSpeechApi(): Pick<
         throw error
       }
     },
-    // The host's chunk RPC doesn't report the cloud upload cap, so the web client never sees it reached.
+    // A chunk reply reports the cap after its audio was sent, so a later feed passes it on.
     feedAudio: async (samples, sampleRate, sessionId) => {
       const dictation = active
       if (!dictation || dictation.sessionId !== sessionId || dictation.failed) {
@@ -175,7 +187,11 @@ export function createWebSpeechApi(): Pick<
       dictation.pending.push(samples)
       dictation.sampleRate = sampleRate
       dictation.sending ??= sendPendingAudio(dictation)
-      return false
+      if (dictation.audioLimit !== 'reached') {
+        return false
+      }
+      dictation.audioLimit = 'reported'
+      return true
     },
     stopDictation: async (sessionId = '') => {
       const dictation = active?.sessionId === sessionId ? active : null
@@ -203,7 +219,7 @@ export function createWebSpeechApi(): Pick<
         const { text } = await callRuntimeResult<{ text: string }>(
           'speech.dictation.finish',
           { dictationId: dictation.dictationId },
-          FINISH_TIMEOUT_MS
+          pairedDictationFinishTimeoutMs(dictation.sentAudioSeconds)
         )
         if (text) {
           emit(finalListeners, { sessionId, text })

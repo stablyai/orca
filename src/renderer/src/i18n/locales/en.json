@@ -2209,7 +2209,9 @@
         "settingUpWorkspace": "Setting up your workspace…",
         "preparingWorkspace": "Preparing workspace…",
         "creatingWorktree": "Creating worktree…",
-        "fetchingBaseBranch": "Fetching base branch…"
+        "fetchingBaseBranch": "Fetching base branch…",
+        "checkingVmEnvironment": "Checking VM environment…",
+        "vmChecksFailed": "Environment checks failed"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -2242,6 +2244,15 @@
         "title": "Add Windows drive folders on this computer",
         "descriptionWithPath": "{{value0}} is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly.",
         "description": "This folder is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly."
+      },
+      "environmentSetupAgentLaunch": {
+        "noAgent": "No enabled AI agent was detected for this workspace.",
+        "noWorkspace": "Open a workspace for this project first, then try again."
+      },
+      "ephemeralVmEnvironmentCheck": {
+        "backgroundFailed": "Environment checks failed for a new VM workspace. Open it in the sidebar to continue.",
+        "openedDegraded": "Creating the workspace on a VM whose environment checks failed.",
+        "unreachable": "The environment checks could not finish: {{error}}"
       }
     },
     "hooks": {
@@ -4061,7 +4072,6 @@
             "a3346fc6ed": "Cancel worktree creation",
             "532aea14ce": "Cancel",
             "767951265d": "Something went wrong while creating the worktree.",
-            "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
             "vmProvisioningLogEmpty": "Waiting for recipe output…"
           },
@@ -4076,6 +4086,18 @@
             "create": "Create worktree",
             "setup": "Set up workspace",
             "startAgent": "Start {{agent}}"
+          },
+          "VmBuildSheet": {
+            "checks": "Check environment",
+            "checksFailed": "The VM is up, but its environment checks failed",
+            "create": "Create workspace",
+            "editRecipe": "Edit recipe",
+            "fixWithAgent": "Fix with agent",
+            "openAnyway": "Open anyway",
+            "openAnywayHint": "Open anyway keeps this VM and creates the workspace on it as is. Dismiss destroys the VM.",
+            "provision": "Provision VM",
+            "retryChecks": "Retry checks",
+            "title": "Building your VM"
           }
         }
       },
@@ -12125,7 +12147,10 @@
           "checking": "Checking recipes...",
           "none": "No recipes found yet.",
           "cloudVmSkillTitle": "Cloud VM setup skill",
-          "cloudVmRefresh": "Refresh Cloud VM recipes"
+          "cloudVmRefresh": "Refresh Cloud VM recipes",
+          "setUpWithAgent": "Set up with an agent",
+          "setUpWithAgentHint": "Starts your default agent in {{repo}}. It edits orca.yaml, runs the doctors until they pass, and opens a PR.",
+          "setUpWithAgentNoRepo": "Add a project first."
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
@@ -17493,7 +17518,9 @@
           "listening": "Listening…",
           "cancel": "Cancel",
           "finish": "Finish",
-          "oneMinuteLeft": "One minute left."
+          "oneMinuteLeft": "One minute left.",
+          "sendsWhenLanded": "Sends when the text lands",
+          "entersWhenLanded": "Presses Enter when the text lands"
         },
         "DictationPillFailure": {
           "discard": "Discard recording",
@@ -24008,7 +24035,8 @@
     "catalogUnresolved": "{{agent}} models have not loaded. Close and reopen the agent picker to try again.",
     "catalogEmpty": "{{agent}} has no available models.",
     "workspaceStartupFailed": "Could not start {{agent}}. Check Arguments in this setup and try again.",
-    "search": "Search agents and setups…",
+    "search": "Search, e.g. Opus 5.5…",
+    "searchAgents": "Search agents…",
     "configure": "Configure {{agent}}",
     "arguments": "Arguments",
     "argumentsHint": "Applies only to CLI launches.",
@@ -24439,6 +24467,7 @@
     }
   },
   "checks": {
+    "gitlabAllowedFailure": "Allowed to fail",
     "rerunUnsuccessful": "Rerun unsuccessful"
   },
   "gitGraph": {

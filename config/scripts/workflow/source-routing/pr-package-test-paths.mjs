@@ -160,7 +160,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/windows/windows-registry-addon.test.ts',
   'src/main/daemon/executable-host/windows/testing/daemon-host-process-package.test.ts',
   'src/shared/windows-security-addon.win32.test.ts',
-  'src/shared/windows-private-credential-file.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/electron-builder-runtime-resources.test.mjs',
   'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts',

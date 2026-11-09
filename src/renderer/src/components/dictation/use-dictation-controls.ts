@@ -6,8 +6,21 @@ import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictatio
 import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
+function isPlainEnterKeyEvent(event: KeyboardEvent): boolean {
+  return (
+    event.key === 'Enter' &&
+    !event.repeat &&
+    !event.shiftKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey
+  )
+}
+
 type DictationControlHandlers = Record<DictationControlAction, () => void> & {
   escCancels: () => boolean
+  /** True when a plain Enter is held until the dictated words land, then pressed. */
+  enterQueues: (event: KeyboardEvent) => boolean
 }
 
 /** Routes the shortcut, the pill's buttons, the composer mic and Esc to the session controller. */
@@ -18,9 +31,10 @@ export function useDictationControls(
 ): void {
   const run = useEffectEvent((action: DictationControlAction) => handlers[action]())
   const escCancels = useEffectEvent(() => handlers.escCancels())
+  const enterQueues = useEffectEvent((event: KeyboardEvent) => handlers.enterQueues(event))
   // A failed recording stays retryable even after voice is turned off in Settings.
   const enabled = voice?.enabled === true || phase !== 'idle'
-  const mainShortcut = voice?.enabled === true && (voice.dictationMode ?? 'auto') !== 'hold'
+  const mainShortcut = voice?.enabled === true && voice.dictationMode !== 'hold'
 
   // Main intercepts Toggle presses and Auto double taps so the chord never reaches xterm.
   useEffect(() => {
@@ -41,14 +55,20 @@ export function useDictationControls(
   }, [enabled])
 
   // Esc cancels a dictation and goes no further, so it can't also interrupt the agent.
+  // Enter in the pane being dictated into waits for the words instead of sending a half-typed line.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (!isPlainEscapeKeyEvent(event) || isImeOwnedKeyboardEvent(event) || !escCancels()) {
+      if (isImeOwnedKeyboardEvent(event)) {
         return
       }
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      run('cancel')
+      if (isPlainEscapeKeyEvent(event) && escCancels()) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        run('cancel')
+      } else if (isPlainEnterKeyEvent(event) && enterQueues(event)) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
     }
     addAppKeyListener('keydown', handleKeyDown, { first: true })
     return () => removeAppKeyListener('keydown', handleKeyDown)

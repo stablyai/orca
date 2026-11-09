@@ -28,6 +28,7 @@ import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
 import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
 import { isRecipeVmEnvironmentAsleep } from '../../ephemeral-vm/recipe-vm-asleep'
+import { noteRuntimeEnvironmentStatusContact } from './runtime-environment-contact-loss'
 import {
   RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
   RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
@@ -76,67 +77,81 @@ export function createRuntimeEnvironmentStatusOwner(
 ): RuntimeHostStatusOwner {
   const connection = getPreferredPairedRuntimeConnection(environment)
   let evidence = captureRuntimeEnvironmentCapabilityEvidence(environment.id, connection)
-  return new RuntimeHostStatusOwner({
-    environmentId: environment.id,
-    pairingRevision: environment.pairingRevision ?? environment.createdAt,
-    request: async (signal) => {
-      const incarnation = getRuntimeEnvironmentCapabilityIncarnation(environment.id)
-      const isCurrent = (): boolean =>
-        getRuntimeEnvironmentCapabilityIncarnation(environment.id) === incarnation
-      // A sleeping VM's health probe would be the dial that wakes it; answer without dialing.
-      // (A tunnelled server is refused the same way by its preparation below.)
-      if (isRecipeVmEnvironmentAsleep(userDataPath, environment.id)) {
-        return runtimeHostStatusFailure(
-          RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
-          RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
-        )
-      }
-      if (environment.connectionDependency === 'ssh-tunnel') {
-        try {
-          await resolveManagedRuntimeEnvironment(userDataPath, environment.id)
-        } catch (error) {
-          const code = managedOrcadRefusalNeedingUserCode(error)
-          if (code && error instanceof Error) {
-            return runtimeHostStatusFailure(code, error.message)
-          }
-          throw error
-        }
-        if (!isCurrent()) {
-          return runtimeEnvironmentChangedFailure(environment, 'status.get')
-        }
-        signal.throwIfAborted()
-      }
-      evidence = captureRuntimeEnvironmentCapabilityEvidence(environment.id, connection)
-      let response: RuntimeHostStatusResponse
+  const probe = async (signal: AbortSignal): Promise<RuntimeHostStatusResponse> => {
+    const incarnation = getRuntimeEnvironmentCapabilityIncarnation(environment.id)
+    const isCurrent = (): boolean =>
+      getRuntimeEnvironmentCapabilityIncarnation(environment.id) === incarnation
+    // A sleeping VM's health probe would be the dial that wakes it; answer without dialing.
+    // (A tunnelled server is refused the same way by its preparation below.)
+    if (isRecipeVmEnvironmentAsleep(userDataPath, environment.id)) {
+      return runtimeHostStatusFailure(
+        RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
+        RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
+      )
+    }
+    if (environment.connectionDependency === 'ssh-tunnel') {
       try {
-        response = await (transport.isReady() &&
-        getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
-          'supported'
-          ? transport.request(signal)
-          : sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
-              connection,
-              'status.get',
-              undefined,
-              15_000,
-              undefined,
-              undefined,
-              signal,
-              ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-              undefined,
-              undefined
-            ))
+        await resolveManagedRuntimeEnvironment(userDataPath, environment.id)
       } catch (error) {
-        response = runtimeHostStatusError(error)
-        if (response.ok || response.error.code !== 'unauthorized') {
-          throw error
+        const code = managedOrcadRefusalNeedingUserCode(error)
+        if (code && error instanceof Error) {
+          return runtimeHostStatusFailure(code, error.message)
         }
+        throw error
       }
       if (!isCurrent()) {
         return runtimeEnvironmentChangedFailure(environment, 'status.get')
       }
-      return !response.ok && response.error.code === 'unauthorized'
-        ? answerRefusedPairing(environment, response)
-        : response
+      signal.throwIfAborted()
+    }
+    evidence = captureRuntimeEnvironmentCapabilityEvidence(environment.id, connection)
+    let response: RuntimeHostStatusResponse
+    try {
+      response = await (transport.isReady() &&
+      getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
+        'supported'
+        ? transport.request(signal)
+        : sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
+            connection,
+            'status.get',
+            undefined,
+            15_000,
+            undefined,
+            undefined,
+            signal,
+            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+            undefined,
+            undefined
+          ))
+    } catch (error) {
+      response = runtimeHostStatusError(error)
+      if (response.ok || response.error.code !== 'unauthorized') {
+        throw error
+      }
+    }
+    if (!isCurrent()) {
+      return runtimeEnvironmentChangedFailure(environment, 'status.get')
+    }
+    return !response.ok && response.error.code === 'unauthorized'
+      ? answerRefusedPairing(environment, response)
+      : response
+  }
+  return new RuntimeHostStatusOwner({
+    environmentId: environment.id,
+    pairingRevision: environment.pairingRevision ?? environment.createdAt,
+    // Each probe's outcome is evidence for whether the server's host is still there (#34089).
+    request: async (signal) => {
+      try {
+        const response = await probe(signal)
+        noteRuntimeEnvironmentStatusContact(environment.id, response)
+        return response
+      } catch (error) {
+        // A malformed reply still came from the server; the owner blocks on it.
+        if (!signal.aborted && !(error instanceof TypeError || error instanceof SyntaxError)) {
+          noteRuntimeEnvironmentStatusContact(environment.id, runtimeHostStatusError(error))
+        }
+        throw error
+      }
     },
     verified: (response, active) => {
       const capable =

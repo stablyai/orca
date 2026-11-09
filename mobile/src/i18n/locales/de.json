@@ -1302,6 +1302,28 @@
       "sessionLimit": "Auf diesem Computer diktieren zu viele Geräte. Erneut versuchen, sobald eines fertig ist.",
       "sessionLost": "Die Verbindung zum Computer wurde beim Diktat unterbrochen. Erneut versuchen.",
       "updateFailed": "Diktateinstellungen konnten nicht aktualisiert werden"
+    },
+    "controls": {
+      "start": "Diktieren",
+      "starting": "Diktat wird gestartet",
+      "stop": "Stoppen und einfügen",
+      "finishing": "Diktat wird abgeschlossen",
+      "cancel": "Diktat abbrechen",
+      "meterOnPhone": "Aufnahme, {{duration}}, auf diesem Telefon",
+      "meterOn": "Aufnahme, {{duration}}, auf {{computer}}",
+      "meterOnComputer": "Aufnahme, {{duration}}, auf dem Computer",
+      "meter": "Aufnahme, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} Sekunde",
+      "durationSeconds_other": "{{count}} Sekunden",
+      "durationMinutes_one": "{{count}} Minute",
+      "durationMinutes_other": "{{count}} Minuten"
+    },
+    "status": {
+      "finishingOn": "Wird auf {{computer}} abgeschlossen",
+      "finishingOnComputer": "Wird auf dem Computer abgeschlossen",
+      "movedTo": "Zu {{computer}} gewechselt",
+      "movedToComputer": "Zum Computer gewechselt"
     }
   },
   "files": {
@@ -1534,6 +1556,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "„{{name}}“ ({{branch}}) löschen?",
+      "deleteDestroysEnvironment": "Dadurch wird auch die Umgebung „{{environment}}“ gelöscht, die Orca dafür erstellt hat, samt nicht committeter Änderungen und laufender Terminals.",
+      "deleteKeepsEnvironment": "Die Umgebung „{{environment}}“, die Orca dafür erstellt hat, läuft weiter: Ihr Rezept hat keinen Löschschritt.",
       "deleteWorktree": "Worktree löschen",
       "pin": "Anheften",
       "primaryWorktreeDeleteHint": "Primärer Worktree — kann nicht gelöscht werden. Stattdessen das Projekt entfernen.",
@@ -2402,11 +2426,7 @@
     "terminalInputActions": {
       "attachFileHint": "Lange drücken, um stattdessen eine Datei anzuhängen",
       "attachPhoto": "Foto anhängen",
-      "sendingImage": "Bild wird gesendet",
-      "startDictation": "Diktat starten",
-      "startingDictation": "Diktat wird gestartet",
-      "stopDictation": "Diktat beenden",
-      "transcribingDictation": "Diktat wird transkribiert"
+      "sendingImage": "Bild wird gesendet"
     },
     "terminalLiveInputStatus": {
       "listening": "Hört zu",
@@ -2415,8 +2435,6 @@
       "processing": "Wird verarbeitet",
       "releaseMicHint": "Zum Stoppen Mikrofon loslassen",
       "startingMic": "Mikrofon wird gestartet",
-      "stopHint": "Zum Stoppen Mikrofon antippen",
-      "transcribing": "Transkription auf dem Desktop",
       "uploadingImage": "Bild wird auf den Host hochgeladen",
       "uploadingImageTitle": "Bild wird hochgeladen"
     },
@@ -2510,7 +2528,8 @@
       "insertFailed": "Diktat konnte nicht eingefügt werden",
       "insertFailedCopied": "Diktat konnte nicht eingefügt werden und wurde daher in die Zwischenablage kopiert",
       "inserted": "Diktat eingefügt",
-      "stoppedAfterSilence": "Nach einer Minute Stille beendet"
+      "stoppedAfterSilence": "Nach einer Minute Stille beendet",
+      "stoppedAtCloudLimit": "Diktat am 10-Minuten-Limit der Cloud gestoppt."
     },
     "useNativeChatStop": {
       "stopNotSent": "Stoppbefehl nicht gesendet",
@@ -2831,6 +2850,8 @@
       "dictationHeading": "DIKTAT",
       "dictationMode": "Diktatmodus",
       "dictationModeDescription": "Umschalten: einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: währenddessen diktieren.",
+      "dictationModeWithAutoDescription": "Automatisch: Tippen zum Starten und Stoppen; am Computer nimmt das Gedrückthalten des Kürzels auf, bis Sie loslassen. Gedrückt halten: währenddessen diktieren. Umschalten: einmal zum Starten und erneut zum Stoppen drücken.",
+      "autoMode": "Automatisch",
       "downloadFailed": "Download fehlgeschlagen",
       "enableDictation": "Diktat aktivieren",
       "holdMode": "Gedrückt halten",

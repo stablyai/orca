@@ -4,7 +4,7 @@ import {
   BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL
 } from '../../../../browser/network/tunnels/browser-network-tunnel-stream-state'
-import '../../../../browser/network/execution-routes/browser-network-execution-route'
+import { guardRemoteBrowserNetworkConnect } from '../../../../browser/network/execution-routes/browser-network-execution-route'
 import { browserNetworkExecutionHostKey } from '../../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserNetworkExecutionRouteResolver } from '../../../../browser/network/execution-routes/browser-network-execution-route-contract'
 import { resolveBrowserNetworkExecutionRoute } from '../../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
@@ -15,7 +15,7 @@ import {
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY
-} from '../../../../../shared/browser-runtime-capabilities'
+} from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { defineStreamingMethod } from '../../core'
 
@@ -195,7 +195,10 @@ export function createBrowserNetworkTunnelMethods(
         try {
           session = new BrowserNetworkTunnelSession({
             tunnelGeneration: route.tunnelGeneration,
-            connect: executionRoute.connect,
+            connect:
+              params.executionHost.kind === 'native'
+                ? executionRoute.connect
+                : guardRemoteBrowserNetworkConnect(executionRoute.connect),
             sendBinary: (bytes) => sendBinary(bytes) !== false,
             flowControl: windowV2
               ? BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL

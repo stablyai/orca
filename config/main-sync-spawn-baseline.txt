@@ -9,7 +9,7 @@
 1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 1 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 1 src/main/claude-accounts/runtime-auth-service.ts
-3 src/main/codex-accounts/fs-utils.ts
+3 src/main/filesystem/atomic-file-publication.ts
 2 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 2 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
 1 src/main/codex-accounts/runtime-home-service-home-routing.ts
