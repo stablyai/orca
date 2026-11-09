@@ -695,6 +695,33 @@ describe('SttService', () => {
     }
   })
 
+  it('lets a finish run past the stop timeout while the engine keeps sending its text', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new SttService(readyModels(), spawnMockWorker)
+      const sink = vi.fn()
+      await service.startDictation('model-a', sink, undefined, 'desktop')
+      const worker = getLastWorker()!
+      worker.emitStoppedOnStop = false
+
+      const stopPromise = service.stopDictation('desktop')
+      const { streamId } = stoppedReply(worker)
+      await vi.advanceTimersByTimeAsync(50_000)
+      worker.emit('message', { type: 'final', streamId, text: 'first phrase' })
+      await vi.advanceTimersByTimeAsync(50_000)
+      worker.emit('message', { type: 'final', streamId, text: 'second phrase' })
+      await vi.advanceTimersByTimeAsync(50_000)
+      worker.emit('message', stoppedReply(worker))
+      await stopPromise
+
+      expect(worker.terminated).toBe(false)
+      expect(sink).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }))
+      expect(sink).toHaveBeenCalledWith({ type: 'final', text: 'second phrase' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('settles stop when the worker exits during stop and does not reuse it', async () => {
     const service = new SttService(readyModels(), spawnMockWorker)
     const events: { type: string }[] = []
