@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 export const MobileDiffReviewSchema = z.object({
   version: z.literal(1),

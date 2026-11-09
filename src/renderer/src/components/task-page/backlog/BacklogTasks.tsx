@@ -19,9 +19,9 @@ import {
   callBacklog,
   supportsBacklog
 } from '@/lib/backlog-task-source'
-import { buildExecutionHostRegistry } from '../../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../../shared/execution-host/execution-host-registry'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 import { BacklogTaskEditor } from './BacklogTaskEditor'
 
 /** Selects supported repo or folder projects and remounts task state when host, repo, or path changes. */
@@ -85,7 +85,17 @@ function BacklogProjectTasks({ repo }: { repo: Repo }): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const request = useRef(0)
+  const newTaskButton = useRef<HTMLButtonElement>(null)
+  const focusNewTaskAfterReload = useRef(false)
   const hostId = getRepoExecutionHostId(repo)
+
+  // Why: a confirmed save closes the editor while its invoker is disabled or unmounted by the reload.
+  useEffect(() => {
+    if (!loading && focusNewTaskAfterReload.current) {
+      focusNewTaskAfterReload.current = false
+      newTaskButton.current?.focus()
+    }
+  }, [loading])
 
   useEffect(() => {
     const ticket = ++request.current
@@ -230,6 +240,7 @@ function BacklogProjectTasks({ repo }: { repo: Repo }): React.JSX.Element {
               </SelectContent>
             </Select>
             <Button
+              ref={newTaskButton}
               disabled={loading || unconfirmed || !list || Boolean(list.mutationUnavailable)}
               onClick={() => setEditing(true)}
             >
@@ -337,6 +348,7 @@ function BacklogProjectTasks({ repo }: { repo: Repo }): React.JSX.Element {
             setUnconfirmed(true)
           }}
           onSaved={() => {
+            focusNewTaskAfterReload.current = true
             setEditing(false)
             setTask(null)
             setRevision((value) => value + 1)

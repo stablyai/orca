@@ -27,7 +27,7 @@ export function profileStateDatabaseBackupPath(databaseFile: string, id: string)
   return `${databaseFile}.backup.${id}.db`
 }
 
-/** Enumerate immutable recovery artifacts without opening the possibly damaged primary. */
+/** Enumerate immutable artifacts even when the primary cannot open. */
 export function profileStateDatabaseBackups(
   databaseFile: string
 ): readonly ProfileStateDatabaseBackup[] {
@@ -80,7 +80,7 @@ function parseBackupCreatedAt(id: string): number | undefined {
   return Number.isSafeInteger(timestamp) && timestamp > 0 ? timestamp : undefined
 }
 
-/** Preserve sidecars too if an external writer has opened an otherwise immutable backup. */
+/** External writers can create sidecars beside otherwise immutable backups. */
 export function profileStateDatabaseBackupFiles(databaseFile: string): readonly string[] {
   return profileStateDatabaseBackups(databaseFile).flatMap(({ path }) =>
     profileStateDatabaseFiles(path).filter(existsSync)

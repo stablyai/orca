@@ -1,19 +1,15 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { getManagedOrcadSshTargetId } from '../../../../shared/execution-host/managed-orcad-execution-host'
 import type {
   AutomationCatalogRuntimeSource,
   AutomationCatalogSshSource,
   AutomationHostCatalogSource
 } from './automation-host-catalog-source'
 
-/**
- * Reads the mirrored SSH and runtime state the catalog projects from.
- *
- * Split out of `use-automation-host-catalog` so the store subscriptions stay in
- * one place: every map here is a live store reference whose identity changes on
- * each write, and the catalog memo below depends on all of them.
- */
+/** Centralize live mirrored SSH/runtime subscriptions whose reference identities drive catalog memoization. */
 
 type AutomationHostCatalogSourceStateInput = {
   /** Desktop SSH registration generations, mirrored by the store alongside the maps below. */
@@ -23,7 +19,7 @@ type AutomationHostCatalogSourceStateInput = {
 
 export type AutomationHostCatalogSourceState = Pick<
   AutomationHostCatalogSource,
-  'desktopSsh' | 'runtimes' | 'runtimeCatalogSettled'
+  'desktopSsh' | 'runtimes' | 'desktopAliasEnvironmentId' | 'runtimeCatalogSettled'
 >
 
 export function useAutomationHostCatalogSourceState({
@@ -60,11 +56,11 @@ export function useAutomationHostCatalogSourceState({
       runtimeEnvironments.map((environment) => {
         const bucket = sshStateByEnvironment.get(environment.id)
         const status = runtimeStatusByEnvironmentId.get(environment.id)
+        const managedSshTargetId = getManagedOrcadSshTargetId(environment)
         return {
           environmentId: environment.id,
           label: environment.name,
-          // Mirrors the owner ref's own rule: creation time stands in until the
-          // server reports a revision, so a re-pair still changes the value.
+          // Use creation time until a pairing revision exists, matching owner refs so re-pairs still change identity.
           pairingRevision: environment.pairingRevision ?? environment.createdAt,
           status: status ? { status: status.status } : undefined,
           ssh: bucket
@@ -75,15 +71,19 @@ export function useAutomationHostCatalogSourceState({
                 removedTargetLabels: bucket.removedTargetLabels,
                 connectionStates: bucket.connectionStates
               }
-            : undefined
+            : undefined,
+          ...(managedSshTargetId ? { managedSshTargetId } : {})
         }
       }),
     [runtimeEnvironments, runtimeStatusByEnvironmentId, sshStateByEnvironment]
   )
 
+  // A web client's local calls are its paired server's, so Desktop and that runtime are one authority.
+  const desktopAliasEnvironmentId = getPairedWebClientEnvironmentId({ runtimeEnvironments })
+
   // Memoized: consumers key whole-catalog rebuilds on this object's identity.
   return useMemo(
-    () => ({ desktopSsh, runtimes, runtimeCatalogSettled }),
-    [desktopSsh, runtimes, runtimeCatalogSettled]
+    () => ({ desktopSsh, runtimes, desktopAliasEnvironmentId, runtimeCatalogSettled }),
+    [desktopSsh, runtimes, desktopAliasEnvironmentId, runtimeCatalogSettled]
   )
 }

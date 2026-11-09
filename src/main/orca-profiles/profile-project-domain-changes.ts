@@ -33,7 +33,7 @@ export function profileProjectDomainDigests(
 export function prepareProfileProjectDomainChanges(
   revision: number,
   documents: readonly ProfileStateParsedDocument[],
-  state: PersistedState
+  state: PersistedState | Readonly<Record<string, unknown>>
 ): ProfileProjectDomainChanges {
   const originals = new Map(documents.map((document) => [document.domain, document]))
   const replacements: ProfileProjectDomainChanges['replacements'] = []

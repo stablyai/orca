@@ -1,29 +1,27 @@
 import type { TerminalDocumentScope } from './document-scope'
 import type { TerminalEngineError } from './document-host-seams'
 
-// Declared beside the seam that hands it out, and re-exported here because this is where the
-// document's readers name it.
 export type { TerminalEngineError } from './document-host-seams'
 
-/**
- * The postMessage bridge to the host, and the engine error reporting that rides on it.
- *
- * They are one module because the document declares them together, ahead of the message router
- * that both serve.
- */
-
 export function notify(scope: TerminalDocumentScope, msg: Record<string, unknown>) {
+  if (!scope.interactionActive && (msg.type === 'terminal-input' || msg.type === 'terminal-tap')) {
+    return
+  }
   scope.postToHost(msg)
 }
 
-export function engineErrorText(err: TerminalEngineError) {
+export function engineErrorText(err: unknown) {
   if (!err) {
     return ''
   }
   if (typeof err === 'string') {
     return err
   }
-  if (err && typeof err.message === 'string') {
+  if (
+    (typeof err === 'object' || typeof err === 'function') &&
+    'message' in err &&
+    typeof err.message === 'string'
+  ) {
     return err.message
   }
   try {
@@ -41,13 +39,12 @@ export function chromeVersionText() {
 export function reportEngineError(
   scope: TerminalDocumentScope,
   context: string,
-  err: TerminalEngineError,
+  err: unknown,
   fatal?: unknown
 ) {
   const isFatal = fatal === undefined ? !scope.everReady : !!fatal
   if (!isFatal) {
-    // Why: a constructed-but-degraded engine can throw per frame; cap
-    // non-fatal notifies so RN isn't flooded. Fatal reports always emit.
+    // Degraded engines can throw per frame; cap nonfatal reports while always delivering fatal errors.
     scope.nonFatalErrorNotifies++
     if (scope.nonFatalErrorNotifies > 5) {
       return
@@ -79,8 +76,7 @@ export function startHostNotify(scope: TerminalDocumentScope) {
     err?: TerminalEngineError
   ) {
     const captured = scope.capturedEngineErrors()
-    // Why: a degraded engine can throw per frame; cap so the buffer stays bounded for the
-    // document's lifetime, which is the same cap the shell's pre-document handler holds itself to.
+    // Bound captured engine errors for the document lifetime, matching the shell’s pre-document cap.
     if (captured.length < 20) {
       captured.push(String(msg))
     }

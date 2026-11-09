@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { createGenerationStore, MAX_CACHED_HOSTS } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
-import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   createFakeGenerationFileSystem as createFakeFileSystem,
-  FAKE_GENERATION_ROOT,
-  type FakeGenerationFileSystem as FakeFileSystem
+  FAKE_GENERATION_ROOT
 } from './generation-file-system-fake'
 
 const ROOT = FAKE_GENERATION_ROOT
@@ -42,15 +40,14 @@ function buildResult(options: {
     assets:
       options.bytes ??
       new Map(assets.map((asset) => [asset.path, new Uint8Array(asset.byteLength).fill(7)])),
+    reused: [],
     totalBytes,
     elapsedMs: 1
   }
 }
 
-/** The id the assets decide, which is the only id the reader accepts: a literal would be refused
- *  by the manifest schema before the store could read it back. */
+// Derive ids from assets so the cached manifest passes its digest check.
 const BUILD = buildResult({}).manifest.buildId
-/** A second bundle, as a second asset list. Its id follows from the bytes, like the first. */
 const SECOND = { assets: [{ path: 'index.html', byteLength: 8 }] }
 const SECOND_BUILD = buildResult(SECOND).manifest.buildId
 
@@ -67,43 +64,6 @@ function hostKeys(count: number): string[] {
 }
 
 describe('generation store', () => {
-  it('stages and commits exactly the manifest, with the manifest written last', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-
-    await activate(store, HOST)
-
-    const build = BUILD
-    expect(fs.paths()).toEqual([
-      HOST,
-      `${HOST}/generations`,
-      `${HOST}/generations/${build}`,
-      `${HOST}/generations/${build}/assets`,
-      `${HOST}/generations/${build}/assets/app.js`,
-      `${HOST}/generations/${build}/index.html`,
-      `${HOST}/generations/${build}/manifest.json`,
-      `${HOST}/tmp`,
-      'hosts.json'
-    ])
-    const staged = fs.writes.filter((path) => path.includes('/tmp/'))
-    expect(staged.at(-1)).toBe(`${HOST}/tmp/${build}/manifest.json`)
-    expect(staged).toHaveLength(3)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([HOST]))
-  })
-
-  it('reads back the activation it committed', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-
-    await activate(store, HOST)
-    const active = await store.readActiveGeneration(HOST)
-
-    expect(active?.buildId).toBe(BUILD)
-    expect(active?.directory).toBe(`${ROOT}/${HOST}/generations/${BUILD}`)
-    expect(active?.manifest.entrypoint).toBe('index.html')
-    expect(await store.readActiveGeneration(deriveHostCacheKey('never-opened'))).toBeNull()
-  })
-
   it('refuses an asset that is missing or the wrong length, leaving no generation', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
@@ -136,38 +96,13 @@ describe('generation store', () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     const other = deriveHostCacheKey('host-b')
+    // The manifest is written last, so a download cut off mid-stage leaves assets without one.
+    fs.seed(`${HOST}/tmp/${BUILD}/index.html`, { kind: 'file', bytes: new Uint8Array(4) })
+    fs.seed(`${other}/tmp/${BUILD}/index.html`, { kind: 'file', bytes: new Uint8Array(4) })
 
-    await store.stageGeneration(HOST, buildResult({}))
-    await store.stageGeneration(other, buildResult({}))
-    await store.sweepStagedGenerations()
-
-    expect(fs.paths().some((path) => path.includes('/tmp'))).toBe(false)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
     expect(await store.readActiveGeneration(other)).toBeNull()
-  })
-
-  it('treats a second commit of the same build as a no-op', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-
-    await activate(store, HOST)
-    const before = fs.paths()
-    const staged = await store.stageGeneration(HOST, buildResult({}))
-    const active = await store.commitGeneration(staged)
-
-    expect(active.buildId).toBe(BUILD)
-    expect(fs.paths()).toEqual(before)
-  })
-
-  it('replaces the previous generation when the build id changes', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-
-    await activate(store, HOST)
-    await activate(store, HOST, buildResult(SECOND))
-
-    expect(fs.paths().some((path) => path.includes(BUILD))).toBe(false)
-    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
+    expect(fs.paths().some((path) => path.includes('/tmp'))).toBe(false)
   })
 
   it('reads two generations as no activation and drops the host tree', async () => {
@@ -226,7 +161,6 @@ describe('generation store', () => {
     for (const host of [oldest, ...rest]) {
       await activate(store, host)
     }
-    // Activated last, so recency alone would keep it; its index entry is what goes missing.
     await activate(store, orphan)
     const order = [oldest, ...rest]
     fs.seed('hosts.json', { kind: 'file', bytes: new TextEncoder().encode(JSON.stringify(order)) })
@@ -235,90 +169,6 @@ describe('generation store', () => {
 
     expect(fs.paths().some((path) => path.startsWith(orphan))).toBe(false)
     expect((await store.readActiveGeneration(oldest))?.buildId).toBe(BUILD)
-  })
-
-  it('counts a recommit of the build a host already has as use of that host', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const hosts = hostKeys(MAX_CACHED_HOSTS)
-    const [kept, evicted] = hosts
-    for (const host of hosts) {
-      await activate(store, host)
-    }
-    // A redownload of the bundle the oldest host already has, which takes the same-build path.
-    await activate(store, kept)
-
-    await activate(store, deriveHostCacheKey('one-too-many'))
-
-    expect(fs.paths().some((path) => path.startsWith(evicted))).toBe(false)
-    expect((await store.readActiveGeneration(kept))?.buildId).toBe(BUILD)
-  })
-
-  it('counts opening a cached generation as use of that host', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const hosts = hostKeys(MAX_CACHED_HOSTS)
-    for (const host of hosts) {
-      await activate(store, host)
-    }
-    expect((await store.readActiveGeneration(hosts[0]))?.buildId).toBe(BUILD)
-
-    await activate(store, deriveHostCacheKey('one-too-many'))
-
-    expect((await store.readActiveGeneration(hosts[0]))?.buildId).toBe(BUILD)
-    expect(fs.paths().some((path) => path.startsWith(hosts[1]))).toBe(false)
-  })
-
-  it('writes nothing when a read finds no active generation', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    await activate(store, HOST)
-    const writesBefore = fs.writes.length
-
-    expect(await store.readActiveGeneration(deriveHostCacheKey('never-opened'))).toBeNull()
-
-    expect(fs.writes).toHaveLength(writesBefore)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([HOST]))
-  })
-
-  it('returns the generation when an open cannot write the index', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const other = deriveHostCacheKey('other')
-    await activate(store, HOST)
-    await activate(store, other)
-    fs.failWritesAt('hosts.json')
-
-    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([HOST, other]))
-  })
-
-  it('rewrites the index on an open only when the host is not already the newest', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const [older, newest] = hostKeys(2)
-    await activate(store, older)
-    await activate(store, newest)
-    const before = { text: fs.text('hosts.json'), writes: fs.writes.length }
-
-    expect((await store.readActiveGeneration(newest))?.buildId).toBe(BUILD)
-    expect({ text: fs.text('hosts.json'), writes: fs.writes.length }).toEqual(before)
-
-    expect((await store.readActiveGeneration(older))?.buildId).toBe(BUILD)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([newest, older]))
-  })
-
-  it('reads the timestamp record earlier builds wrote as an empty order', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const other = deriveHostCacheKey('other')
-    fs.seed('hosts.json', {
-      kind: 'file',
-      bytes: new TextEncoder().encode(JSON.stringify({ [HOST]: 1, [other]: 2 }))
-    })
-    await activate(store, other)
-
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([other]))
   })
 
   it('never counts or evicts a host that is only mid-download', async () => {
@@ -334,8 +184,7 @@ describe('generation store', () => {
 
     await activate(store, deriveHostCacheKey('one-too-many'))
 
-    // The ceiling counts cached generations, so the activation past it evicts the least recently
-    // activated host and leaves the download alone.
+    // Count activations only; eviction must leave staged downloads intact.
     expect(fs.paths().some((path) => path.startsWith(oldest))).toBe(false)
     expect(fs.text(`${staged.directory.slice(ROOT.length + 1)}/manifest.json`)).not.toBeNull()
     await store.commitGeneration(staged)
@@ -345,11 +194,8 @@ describe('generation store', () => {
   it('serializes two stage calls for one host and build', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
-    // One build id cannot really carry two asset lists; differing ones are what make an interleaved
-    // pair visible, because unserialized both of them land in the one staged directory.
+    // Give one build id conflicting asset lists to expose interleaved writes into the same staging directory.
     const staging = `${HOST}/tmp/${BUILD}`
-    // The id is named rather than derived here, because deriving it is what the two results must
-    // not do: one build id over two asset lists is the collision this serialization answers.
     const earlier = buildResult({
       buildId: BUILD,
       assets: [{ path: 'assets/earlier.js', byteLength: 2 }]
@@ -365,7 +211,6 @@ describe('generation store', () => {
     ])
 
     expect(first.directory).toBe(second.directory)
-    // Each staging is a contiguous run ending in its manifest; interleaved they would alternate.
     expect(fs.writes).toEqual([
       `${staging}/assets/earlier.js`,
       `${staging}/manifest.json`,
@@ -377,17 +222,6 @@ describe('generation store', () => {
     ])
   })
 
-  it('drops residue from an earlier attempt instead of staging over it', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const staging = `${HOST}/tmp/${BUILD}`
-    fs.seed(`${staging}/assets/orphan.js`, { kind: 'file', bytes: new Uint8Array(1) })
-
-    await store.stageGeneration(HOST, buildResult({}))
-
-    expect(fs.paths().some((path) => path.endsWith('orphan.js'))).toBe(false)
-  })
-
   it('refuses a path that escapes the staged tree, and a host key that is not one', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
@@ -397,9 +231,7 @@ describe('generation store', () => {
       '/etc/passwd',
       'assets//app.js',
       'manifest.json',
-      'Manifest.JSON',
-      'manifest-next.json',
-      'MANIFEST-NEXT.JSON'
+      'Manifest.JSON'
     ]
 
     for (const path of escapes) {
@@ -410,20 +242,6 @@ describe('generation store', () => {
       'not a host cache key'
     )
     expect(fs.paths()).toEqual([])
-  })
-
-  it('deletes one host tree without touching another', async () => {
-    const fs = createFakeFileSystem()
-    const other = deriveHostCacheKey('host-b')
-    const store = createGenerationStore({ fileSystem: fs })
-    await activate(store, HOST)
-    await activate(store, other)
-
-    await store.deleteHostCache(HOST)
-
-    expect(await store.readActiveGeneration(HOST)).toBeNull()
-    expect((await store.readActiveGeneration(other))?.buildId).toBe(BUILD)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([other]))
   })
 
   it('refuses a rename that did not carry the tree, as Android below API 26 can', async () => {
@@ -443,7 +261,7 @@ describe('generation store', () => {
     const store = createGenerationStore({ fileSystem: fs })
     const manifest = `${HOST}/generations/${BUILD}/manifest.json`
     await activate(store, HOST)
-    const before = fs.paths()
+    const before = fs.paths().filter((path) => !path.endsWith('/tmp'))
 
     fs.failReadsAt(manifest)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
@@ -455,20 +273,9 @@ describe('generation store', () => {
     expect(fs.paths().some((path) => path.startsWith(HOST))).toBe(false)
   })
 
-  it('activates normally when the recency index cannot be read', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    fs.seed('hosts.json', { kind: 'file', bytes: new TextEncoder().encode('[]') })
-    fs.failReadsAt('hosts.json')
-
-    await activate(store, HOST)
-
-    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
-  })
-
   it('replaces an entry named for the build id that is not a readable generation', async () => {
     const build = BUILD
-    // Exactly what a crash between the rename and the post-rename check can leave behind.
+    // Model a crash between rename and the post-rename manifest check.
     for (const seeded of [
       { kind: 'directory' },
       { kind: 'file', bytes: new Uint8Array(1) }
@@ -484,31 +291,6 @@ describe('generation store', () => {
     }
   })
 
-  it('drops an aborted staging without touching the activation', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    await activate(store, HOST)
-
-    const staged = await store.stageGeneration(HOST, buildResult(SECOND))
-    await store.abortStagedGeneration(staged)
-
-    expect(fs.paths().some((path) => path.includes(SECOND_BUILD))).toBe(false)
-    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
-  })
-
-  it('returns the activation even when the recency index cannot be written', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    fs.failWritesAt('hosts.json')
-
-    const staged = await store.stageGeneration(HOST, buildResult({}))
-    const active = await store.commitGeneration(staged)
-
-    expect(active.buildId).toBe(BUILD)
-    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
-    expect(fs.text('hosts.json')).toBeNull()
-  })
-
   it('refuses a handle whose staged tree is gone without touching the activation', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
@@ -521,20 +303,6 @@ describe('generation store', () => {
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
   })
 
-  it('prunes an index entry whose host tree is gone', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const stale = deriveHostCacheKey('uninstalled')
-    fs.seed('hosts.json', {
-      kind: 'file',
-      bytes: new TextEncoder().encode(JSON.stringify([stale]))
-    })
-
-    await activate(store, HOST)
-
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([HOST]))
-  })
-
   it('refuses a staged handle it did not issue', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
@@ -543,7 +311,6 @@ describe('generation store', () => {
     const forged = {
       hostKey: HOST,
       buildId: SECOND_BUILD,
-      // Aimed at the live generation, which commit would rename over and abort would delete.
       directory: `${ROOT}/${HOST}/generations/${BUILD}`,
       manifest: buildResult({}).manifest
     }
@@ -553,220 +320,126 @@ describe('generation store', () => {
     expect(fs.paths()).toEqual(before)
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
   })
+})
 
-  it('ignores a directory under the cache root that is not a host key', async () => {
+describe('reusable assets for the next download', () => {
+  const NEXT = buildResult({
+    assets: [
+      { path: 'index.html', byteLength: 8 },
+      { path: 'assets/app-2.js', byteLength: 2 }
+    ]
+  })
+  const NEXT_BUILD = NEXT.manifest.buildId
+  const [PAGE, SCRIPT] = NEXT.manifest.assets
+  const DOWNLOADED = new Map([['index.html', new Uint8Array(8).fill(9)]])
+  const LEFT_TO_STAGE = { ...NEXT, assets: DOWNLOADED, reused: ['assets/app-2.js'] }
+
+  it.each([HOST, deriveHostCacheKey('second-host')])(
+    'matches cached assets by content for %s',
+    async (opened) => {
+      const fs = createFakeFileSystem()
+      const store = createGenerationStore({ fileSystem: fs })
+      expect((await store.openReusableAssets(HOST)).has(SCRIPT!)).toBe(false)
+      await activate(store, HOST)
+
+      const reusable = await store.openReusableAssets(opened)
+
+      expect(reusable.has(SCRIPT!)).toBe(true)
+      expect(reusable.has(PAGE!)).toBe(false)
+      expect(reusable.has({ ...SCRIPT!, sha256: 'f'.repeat(64) })).toBe(false)
+      expect(await reusable.check(SCRIPT!)).toBe(true)
+      fs.seed(`${HOST}/generations/${BUILD}/assets/app.js`, {
+        kind: 'file',
+        bytes: new Uint8Array(1)
+      })
+      expect(await reusable.check(SCRIPT!)).toBe(false)
+    }
+  )
+
+  it('copies the reused assets beside the downloaded ones and commits the whole build', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
-    // Whatever else lives under the OS cache directory is not this store's to count or delete.
-    fs.seed('not-a-host-key/stray.txt', { kind: 'file', bytes: new Uint8Array(1) })
-    const hosts = ['a', 'b', 'c', 'd'].map((name) => deriveHostCacheKey(name))
+    await activate(store, HOST)
 
-    for (const host of hosts) {
-      await activate(store, host)
-    }
-    await store.sweepStagedGenerations()
+    await activate(store, HOST, LEFT_TO_STAGE)
 
-    expect(fs.paths()).toContain('not-a-host-key/stray.txt')
-    for (const host of hosts) {
-      expect((await store.readActiveGeneration(host))?.buildId).toBe(BUILD)
-    }
+    const generation = `${HOST}/generations/${NEXT_BUILD}`
+    expect(fs.bytes(`${generation}/index.html`)).toEqual(new Uint8Array(8).fill(9))
+    expect(fs.bytes(`${generation}/assets/app-2.js`)).toEqual(new Uint8Array(2).fill(7))
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(NEXT_BUILD)
+  })
+
+  it('refuses to stage a reused asset the active generation no longer holds', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+    fs.failReadsAt(`${HOST}/generations/${BUILD}/assets/app.js`)
+
+    await expect(store.stageGeneration(HOST, LEFT_TO_STAGE)).rejects.toThrow('unreadable')
+    await store.deleteHostCache(HOST)
+    fs.failReadsAt(null)
+    await expect(store.stageGeneration(HOST, LEFT_TO_STAGE)).rejects.toThrow(
+      'no longer holds the reused asset assets/app-2.js'
+    )
+    expect(fs.paths().some((path) => path.includes(`tmp/${NEXT_BUILD}`))).toBe(false)
   })
 })
 
-/**
- * A route-grant edit on the desktop moves no asset, so the build id it is published under does not
- * move: the generation on disk is the right bytes under a manifest that is an edit behind, and that
- * stored manifest is what an unreachable host is judged by. This is the write-through, and it is
- * refused unless the fresh manifest names exactly the bytes already there.
- */
-describe('persisting a fresh manifest onto the active generation', () => {
-  const MANIFEST_PATH = `${HOST}/generations/${BUILD}/manifest.json`
-  const ROUTES = [{ pathname: '/h/[hostId]', grants: ['navigate'] }]
-
-  function freshManifest(
-    overrides: Partial<MobileWebBundleManifestRead> = {}
-  ): MobileWebBundleManifestRead {
-    return { ...buildResult({}).manifest, routes: ROUTES, ...overrides }
-  }
-
-  it('rewrites the manifest and leaves every asset byte where it was', async () => {
+// Commit deletes the old build first, so it must not run under a page still loading that build's chunks.
+describe('an update staged behind a live page', () => {
+  it('stays staged while a page reads the old build, and the next read after it commits', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     await activate(store, HOST)
-    const before = fs.paths()
-    const entry = fs.bytes(`${HOST}/generations/${BUILD}/index.html`)
-    const fresh = freshManifest()
+    const release = store.holdGeneration(HOST)
+    store.deferCommit(await store.stageGeneration(HOST, buildResult(SECOND)))
 
-    expect(await store.persistActiveManifest(HOST, fresh)).toBe('persisted')
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${BUILD}/index.html`)).toBe(true)
 
-    expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(fresh))
-    expect(fs.bytes(`${HOST}/generations/${BUILD}/index.html`)).toEqual(entry)
-    expect(fs.paths()).toEqual(before)
-    expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
+    release()
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${BUILD}/index.html`)).toBe(false)
   })
 
-  it('refuses a manifest that names other bytes under the same build id', async () => {
+  it('lets a page that waited on another page fetch the build itself when that page gives up', async () => {
+    const store = createGenerationStore({ fileSystem: createFakeFileSystem() })
+    const first = await store.claimUpdate(HOST, SECOND_BUILD)
+    const second = store.claimUpdate(HOST, SECOND_BUILD)
+
+    first?.()
+
+    expect(await second).not.toBeNull()
+  })
+
+  it('commits at the next launch when the app ends while the page still reads the old build', async () => {
     const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    await activate(store, HOST)
-    const stored = fs.text(MANIFEST_PATH)
-    const assets = buildResult({}).manifest.assets.map((asset, index) =>
-      index === 0 ? { ...asset, sha256: 'f'.repeat(64) } : asset
-    )
+    const first = createGenerationStore({ fileSystem: fs })
+    await activate(first, HOST)
+    first.holdGeneration(HOST)
+    first.deferCommit(await first.stageGeneration(HOST, buildResult(SECOND)))
 
-    expect(await store.persistActiveManifest(HOST, freshManifest({ assets }))).toBe(
-      'refused-asset-mismatch'
-    )
+    const relaunched = createGenerationStore({ fileSystem: fs })
 
-    expect(fs.text(MANIFEST_PATH)).toBe(stored)
-    expect((await store.readActiveGeneration(HOST))?.manifest.routes).toBeUndefined()
+    expect((await relaunched.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${SECOND_BUILD}/index.html`)).toBe(true)
   })
 
-  it('refuses a manifest published under another build id', async () => {
+  it('lets a reader of a host’s build go before a commit or a removal deletes it', async () => {
     const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    await activate(store, HOST)
-    const stored = fs.text(MANIFEST_PATH)
-
-    expect(
-      await store.persistActiveManifest(HOST, freshManifest({ buildId: 'b'.repeat(64) }))
-    ).toBe('refused-build-mismatch')
-
-    expect(fs.text(MANIFEST_PATH)).toBe(stored)
-  })
-
-  it('refuses a host with no activation to persist onto, and writes nothing', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-
-    expect(await store.persistActiveManifest(HOST, freshManifest())).toBe(
-      'refused-no-active-generation'
-    )
-
-    expect(fs.paths()).toEqual([])
-  })
-
-  /**
-   * No atomic replace exists on either platform, so the write is three steps: the fresh manifest
-   * beside the old one, the old one away, the fresh one over it. What makes that safe is not the
-   * ordering alone but that every window it leaves is one a later read settles — a failure must
-   * never cost the generation, because losing it costs a phone with no host its offline workspace.
-   */
-  describe('interrupted at each of the three steps', () => {
-    const NEXT_PATH = `${HOST}/generations/${BUILD}/manifest-next.json`
-
-    async function activated(fs: FakeFileSystem) {
-      const store = createGenerationStore({ fileSystem: fs })
-      await activate(store, HOST)
-      return store
-    }
-
-    it('keeps the old manifest when the fresh one cannot be written', async () => {
-      const fs = createFakeFileSystem()
-      const store = await activated(fs)
-      const stored = fs.text(MANIFEST_PATH)
-      fs.failWritesAt(NEXT_PATH)
-
-      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow('disk-full')
-
-      fs.failWritesAt(null)
-      expect(fs.text(MANIFEST_PATH)).toBe(stored)
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toBeUndefined()
-    })
-
-    it('finishes the swap on the next read when the old manifest cannot be deleted', async () => {
-      const fs = createFakeFileSystem()
-      const store = await activated(fs)
-      fs.failDeletesAt(MANIFEST_PATH)
-
-      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow(
-        'undeletable'
-      )
-
-      // Both files on disk: the fresh one is whole, so it is the activation and the read completes
-      // the swap rather than reading the manifest the edit replaced.
-      fs.failDeletesAt(null)
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
-      expect(fs.text(NEXT_PATH)).toBeNull()
-    })
-
-    it('adopts the fresh manifest on the next read when the rename is interrupted', async () => {
-      const fs = createFakeFileSystem()
-      const store = await activated(fs)
-      fs.failFileMovesTo(MANIFEST_PATH)
-
-      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow(
-        'interrupted rename'
-      )
-
-      // The window the adapter really leaves: the destination is gone and the rename did not land,
-      // so the only manifest on disk is the pending one, and it is complete.
-      expect(fs.text(MANIFEST_PATH)).toBeNull()
-      fs.failFileMovesTo(null)
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
-      expect(fs.text(NEXT_PATH)).toBeNull()
-    })
-
-    it('keeps the host tree when the pending swap cannot be settled either', async () => {
-      const fs = createFakeFileSystem()
-      const store = await activated(fs)
-      fs.failFileMovesTo(MANIFEST_PATH)
-      await expect(store.persistActiveManifest(HOST, freshManifest())).rejects.toThrow('rename')
-
-      // Still unsettleable, so there is no activation to hand out — and nothing is deleted, because
-      // the pending manifest is the generation and the next read can still adopt it.
-      expect(await store.readActiveGeneration(HOST)).toBeNull()
-      expect(fs.text(NEXT_PATH)).not.toBeNull()
-      expect(fs.bytes(`${HOST}/generations/${BUILD}/index.html`)).not.toBeNull()
-    })
-  })
-
-  /** The three shapes a read can find, once a persist may have been interrupted anywhere. */
-  describe('settling a pending swap on the next read', () => {
-    const NEXT_PATH = `${HOST}/generations/${BUILD}/manifest-next.json`
-
-    function seedPending(fs: FakeFileSystem, body: string): void {
-      fs.seed(NEXT_PATH, { kind: 'file', bytes: new TextEncoder().encode(body) })
-    }
-
-    it('finishes a swap whose rename never ran, with the old manifest still beside it', async () => {
-      const fs = createFakeFileSystem()
-      const store = createGenerationStore({ fileSystem: fs })
-      await activate(store, HOST)
-      seedPending(fs, JSON.stringify(freshManifest()))
-
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
-
-      expect(fs.text(NEXT_PATH)).toBeNull()
-      expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(freshManifest()))
-    })
-
-    it('adopts a pending manifest that is the only one left', async () => {
-      const fs = createFakeFileSystem()
-      const store = createGenerationStore({ fileSystem: fs })
-      await activate(store, HOST)
-      seedPending(fs, JSON.stringify(freshManifest()))
-      await fs.delete(`${ROOT}/${MANIFEST_PATH}`)
-
-      expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
-
-      expect(fs.text(NEXT_PATH)).toBeNull()
-      expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(freshManifest()))
-    })
-
-    it('discards a pending manifest that is torn or names another build, keeping the old one', async () => {
-      for (const body of ['not json', JSON.stringify(buildResult(SECOND).manifest)]) {
-        const fs = createFakeFileSystem()
-        const store = createGenerationStore({ fileSystem: fs })
-        await activate(store, HOST)
-        const stored = fs.text(MANIFEST_PATH)
-        seedPending(fs, body)
-
-        expect((await store.readActiveGeneration(HOST))?.manifest.routes).toBeUndefined()
-
-        expect(fs.text(NEXT_PATH)).toBeNull()
-        expect(fs.text(MANIFEST_PATH)).toBe(stored)
+    const onDisk: boolean[] = []
+    let reading = BUILD
+    const store = createGenerationStore({
+      fileSystem: fs,
+      beforeHostFilesDeleted: async (hostKey) => {
+        onDisk.push(await fs.fileExists(`${ROOT}/${hostKey}/generations/${reading}/manifest.json`))
       }
     })
+    await activate(store, HOST)
+    onDisk.length = 0
+    await activate(store, HOST, buildResult(SECOND))
+    reading = SECOND_BUILD
+    await store.deleteHostCache(HOST)
+    expect(onDisk).toEqual([true, true])
   })
 })

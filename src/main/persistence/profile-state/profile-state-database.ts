@@ -1,4 +1,5 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
+import { ensureProfileStateDocumentPartsTables } from './profile-state-document-parts'
 import { hasProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import Database, { isSqliteAvailable } from '../../sqlite/sync-database'
 import { migrateAutomationRunsStorage } from './profile-state-automation-runs-migration'
@@ -55,13 +56,7 @@ export function openWritableProfileStateDatabase(
   return opened
 }
 
-/**
- * Open the database belonging to one profile.
- *
- * The schema version is read before WAL, busy-timeout, or DDL configuration so
- * a newer build can leave the database byte-for-byte untouched and read it
- * without accidentally writing through an unknown schema.
- */
+/** Validate schema before WAL/DDL setup so unknown or malformed databases remain untouched. */
 export function openProfileStateDatabase(
   dbPath: string,
   profileId: string
@@ -108,8 +103,7 @@ export function openProfileStateDatabase(
     }
 
     if (storedVersion > 0) {
-      // Validate the complete current shape before WAL setup. A structurally
-      // valid but incomplete database should fail without changing its header.
+      // Reject incomplete schemas before any pragma can change the header.
       verifyProfileStateSchema(probe, profileId, storedVersion)
     } else if (storedVersion === 0) {
       verifyEmptyProfileStateSchema(probe)
@@ -117,10 +111,11 @@ export function openProfileStateDatabase(
       throw new Error(`Unsupported profile state database schema: ${storedVersion}`)
     }
 
-    // The journal-mode pragma can update the SQLite header even when no state
-    // row is written, so all known-shape validation happens before this point.
+    // journal_mode can change the header even without row writes; validate everything first.
     migrateProfileStateSchema(probe, storedVersion, profileId)
     configureProfileStatePragmas(probe)
+    // Additive tables older v3 builds ignore (no schema bump); after busy_timeout is set.
+    ensureProfileStateDocumentPartsTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false, profileId }
@@ -140,11 +135,7 @@ export function openProfileStateDatabase(
   }
 }
 
-/**
- * Open an existing profile database without applying migrations or changing
- * its journal mode. Callers use this for best-effort reads during GC, where a
- * present database is authoritative and any failure must fail closed.
- */
+/** No migrations or journal changes; GC must fail closed when an authoritative database cannot be read. */
 export function openProfileStateDatabaseReadOnly(
   dbPath: string,
   profileId: string
@@ -219,10 +210,11 @@ function configureProfileStatePragmas(db: Database.Database): void {
   }
   db.pragma(`busy_timeout = ${PROFILE_STATE_BUSY_TIMEOUT_MS}`)
   db.pragma('foreign_keys = ON')
-  // Profile commits are user-visible state. Keep the same power-loss contract
-  // as the current temp-file + fsync writer rather than the orchestration DB's
-  // cache-oriented NORMAL setting.
+  // User state needs FULL durability; macOS checkpoints also need F_FULLFSYNC to flush drive caches.
   db.pragma('synchronous = FULL')
+  db.pragma('checkpoint_fullfsync = ON')
+  // Without a limit the WAL keeps the size of the largest transaction ever written.
+  db.pragma('journal_size_limit = 8388608')
 }
 
 function migrateProfileStateSchema(

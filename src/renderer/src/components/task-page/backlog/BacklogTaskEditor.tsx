@@ -43,6 +43,10 @@ export function BacklogTaskEditor({
   const [status, setStatus] = useState(task?.status ?? statuses[0])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Why: opened from state, not a DialogTrigger, so Radix has no trigger to refocus on close.
+  const [invoker] = useState(() =>
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  )
   /** Reports only confirmed saves; any failure locks this editor and notifies the parent to require inspection. */
   async function save(): Promise<void> {
     if (saving || error) {
@@ -78,7 +82,12 @@ export function BacklogTaskEditor({
         }
       }}
     >
-      <DialogContent>
+      <DialogContent
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          invoker?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {task

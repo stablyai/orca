@@ -1,126 +1,45 @@
-/**
- * Shared helpers for dead-terminal reproduction tests.
- *
- * These helpers exercise the real production worktree-creation-with-setup-split
- * flow and verify that terminal panes render content after the split.
- */
-
+/** Regression fixtures for manual split rendering, switching and WebGL recovery. */
 import { expect } from '@playwright/test'
-import { execFileSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
-import path from 'node:path'
 import type { getActiveWorktreeId } from './store'
+import { splitActiveTerminalPane, waitForActiveTerminalManager } from './terminal'
 
 type TestPage = Parameters<typeof getActiveWorktreeId>[0]
 
-const SETUP_HOOK_CONTENT = 'scripts:\n  setup: echo SETUP_COMPLETE\n'
-
-async function ensureSetupHookCommitted(page: TestPage): Promise<void> {
-  const activeWorktreePath = await page.evaluate(() => {
-    const state = window.__store?.getState()
-    if (!state?.activeWorktreeId) {
-      throw new Error('No active worktree')
-    }
-    const activeWorktree = Object.values(state.worktreesByRepo)
-      .flat()
-      .find((wt) => wt.id === state.activeWorktreeId)
-    if (!activeWorktree) {
-      throw new Error('Active worktree not found in store')
-    }
-    return activeWorktree.path
-  })
-
-  writeFileSync(path.join(activeWorktreePath, 'orca.yaml'), SETUP_HOOK_CONTENT, 'utf-8')
-  execFileSync('git', ['add', 'orca.yaml'], { cwd: activeWorktreePath, stdio: 'pipe' })
-
-  try {
-    execFileSync('git', ['diff', '--cached', '--quiet'], { cwd: activeWorktreePath, stdio: 'pipe' })
-  } catch {
-    // Why: worktree creation reads orca.yaml from the created worktree, so the
-    // temp repo must commit this hook before `git worktree add` copies it.
-    execFileSync('git', ['commit', '-m', 'Add e2e setup hook'], {
-      cwd: activeWorktreePath,
-      stdio: 'pipe'
-    })
-  }
-}
-
-/**
- * Create a worktree with setup via the real IPC flow, then activate it
- * replicating the exact activateAndRevealWorktree + ensureWorktreeHasInitialTerminal
- * path. The setup split is queued on the tab BEFORE the TerminalPane mounts,
- * matching production timing.
- */
-export async function createAndActivateWorktreeWithSetup(
+export async function createAndActivateWorktreeWithManualSplit(
   page: TestPage,
   suffix: string,
   direction: 'vertical' | 'horizontal'
 ): Promise<string> {
-  await ensureSetupHookCommitted(page)
-
   const name = `e2e-dead-term-${suffix}-${Date.now()}`
-  return page.evaluate(
-    async ({ worktreeName, direction }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-
-      const state = store.getState()
-      const activeWorktreeId = state.activeWorktreeId
-      if (!activeWorktreeId) {
-        throw new Error('No active worktree')
-      }
-
-      const activeWorktree = Object.values(state.worktreesByRepo)
-        .flat()
-        .find((wt) => wt.id === activeWorktreeId)
-      if (!activeWorktree) {
-        throw new Error('Active worktree not found in store')
-      }
-
-      const result = await state.createWorktree(
-        activeWorktree.repoId,
-        worktreeName,
-        undefined,
-        'run'
-      )
-      await state.fetchWorktrees(activeWorktree.repoId)
-      const worktreeId = result.worktree.id
-
-      if (activeWorktree.repoId !== state.activeRepoId) {
-        state.setActiveRepo(activeWorktree.repoId)
-      }
-      if (store.getState().activeView !== 'terminal') {
-        state.setActiveView('terminal')
-      }
-      state.setActiveWorktree(worktreeId)
-
-      const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-      if (renderableTabCount > 0) {
-        return worktreeId
-      }
-
-      const tab = state.createTab(worktreeId, undefined, undefined, {
+  const worktreeId = await page.evaluate(async (worktreeName) => {
+    const store = window.__store
+    const state = store?.getState()
+    const activeWorktree = state?.getKnownWorktreeById(state.activeWorktreeId ?? '')
+    if (!store || !state || !activeWorktree) {
+      throw new Error('No active worktree')
+    }
+    const result = await state.createWorktree(
+      activeWorktree.repoId,
+      worktreeName,
+      undefined,
+      'skip'
+    )
+    await state.fetchWorktrees(activeWorktree.repoId)
+    state.setActiveRepo(activeWorktree.repoId)
+    state.setActiveView('terminal')
+    state.setActiveWorktree(result.worktree.id)
+    if (state.reconcileWorktreeTabModel(result.worktree.id).renderableTabCount === 0) {
+      const tab = state.createTab(result.worktree.id, undefined, undefined, {
         pendingActivationSpawn: true
       })
       state.setActiveTab(tab.id)
-
-      if (result.setup) {
-        const runnerPath = result.setup.runnerScriptPath
-        const command = `bash ${runnerPath}`
-        state.queueTabSetupSplit(tab.id, {
-          command,
-          env: result.setup.envVars,
-          direction
-        })
-      }
-
-      state.revealWorktreeInSidebar(worktreeId)
-      return worktreeId
-    },
-    { worktreeName: name, direction }
-  )
+    }
+    state.revealWorktreeInSidebar(result.worktree.id)
+    return result.worktree.id
+  }, name)
+  await waitForActiveTerminalManager(page)
+  await splitActiveTerminalPane(page, direction)
+  return worktreeId
 }
 
 export async function removeWorktreeViaStore(page: TestPage, worktreeId: string): Promise<void> {
@@ -143,11 +62,7 @@ export async function removeWorktreeViaStore(page: TestPage, worktreeId: string)
   }, worktreeId)
 }
 
-/**
- * Poll until every pane in the active tab's PaneManager has non-empty buffer
- * content. A dead terminal has an empty serialize() result because the WebGL
- * canvas never painted the shell prompt.
- */
+// Wait for nonempty buffers in every pane; inspect rendering separately through canvas diagnostics.
 export async function waitForAllPanesToHaveContent(
   page: TestPage,
   label: string,
@@ -202,10 +117,7 @@ export async function waitForAllPanesToHaveContent(
     .toMatchObject({ ok: true })
 }
 
-/**
- * Log WebGL canvas state for diagnostics. In headful mode, visible panes
- * should have WebGL canvases; hidden panes (suspended rendering) should not.
- */
+// Inspect WebGL canvases: visible headful panes should render, while suspended panes should have none.
 export async function checkWebglState(page: TestPage, label: string): Promise<void> {
   const paneStates = await page.evaluate(() => {
     const containers = document.querySelectorAll('.pane[data-pane-id]')

@@ -1,4 +1,4 @@
-import type { HostedReviewState } from './hosted-review'
+import type { HostedReviewState } from './source-control/hosted-review/hosted-review-contracts'
 import type { CheckStatus } from './github/pull-request-types'
 
 export const REVIEW_REFRESH_COOLDOWN_MS = 10_000
@@ -21,13 +21,4 @@ export function reviewRefreshIntervalMs(input: {
     return CLOSED_REVIEW_REFRESH_INTERVAL_MS
   }
   return input.selected ? 60_000 : 120_000
-}
-
-export function finishedReviewRefreshIntervalMs(
-  state: HostedReviewState | null | undefined,
-  status: CheckStatus | null | undefined
-): number | null {
-  return state === 'merged' || state === 'closed'
-    ? reviewRefreshIntervalMs({ state, checksStatus: status })
-    : null
 }

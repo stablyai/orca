@@ -2,6 +2,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { RateLimitRuntimeTarget } from '../../../../shared/rate-limit-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
 import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
+import { translate } from '@/i18n/i18n'
+import { getHostRuntimeLabel } from '../../lib/provider-accounts/account-runtime-label'
 
 export type CodexStatusRuntimeTarget = {
   runtime: 'host' | 'wsl'
@@ -10,7 +12,11 @@ export type CodexStatusRuntimeTarget = {
 
 export type CodexStatusSwitchTarget = {
   id: string | null
+  /** Full one-line label, e.g. for the details header. */
   label: string
+  /** Row title and its secondary line; `detail` holds the workspace or disambiguating ID. */
+  name: string
+  detail: string | null
   active: boolean
   runtimeTarget: CodexStatusRuntimeTarget
 }
@@ -47,10 +53,6 @@ export type StatusSwitchGroupOptions = {
   hostLabel?: string
 }
 
-function getHostRuntimeLabel(): string {
-  return navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
-}
-
 export function getCodexStatusWslKey(wslDistro: string | null | undefined): string {
   const trimmed = wslDistro?.trim()
   return trimmed ? trimmed : '__default__'
@@ -63,7 +65,9 @@ export function getCodexStatusRuntimeLabel(
   if (target.runtime === 'host') {
     return hostLabel
   }
-  return target.wslDistro ? `WSL ${target.wslDistro}` : 'WSL default'
+  return target.wslDistro
+    ? `WSL ${target.wslDistro}`
+    : translate('auto.components.status.bar.runtimeTargets.wslDefault', 'WSL default')
 }
 
 export function getCodexStatusRuntimeKey(target: CodexStatusRuntimeTarget): string {

@@ -4,7 +4,7 @@ import {
   CommentMarkdownAsync,
   preloadCommentMarkdown
 } from '@/components/sidebar/comment-markdown-lazy'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type DashboardAgentRowMessageProps = {
   expanded: boolean
@@ -21,11 +21,10 @@ export function DashboardAgentRowMessage({
   stoppedByUser,
   lastAssistantMessage
 }: DashboardAgentRowMessageProps): React.JSX.Element | null {
-  // These rows are the sidebar's only boot-visible markdown, so warm the chunk as
-  // soon as one mounts rather than waiting for text to arrive.
+  const t = useTranslate()
+  // Warm the sidebar’s only boot-visible markdown chunk on mount rather than waiting for text.
   useEffect(preloadCommentMarkdown, [])
-  // Why: message slot is always reserved in collapsed view so the row height
-  // stays fixed as assistant text arrives or clears.
+  // Reserve the collapsed message slot so incoming/cleared assistant text cannot shift row height.
   if (!isInterrupted && !lastAssistantMessage) {
     return expanded ? null : (
       <div className="mt-0.5 pl-5 text-[10px] leading-snug text-muted-foreground/70"> </div>
@@ -39,27 +38,20 @@ export function DashboardAgentRowMessage({
           className="shrink-0 text-[10px] leading-snug text-muted-foreground/80"
           aria-label={
             stoppedByUser
-              ? translate(
+              ? t(
                   'auto.components.dashboard.DashboardAgentRowMessage.1ec01cef03',
                   'Interrupted by user'
                 )
-              : translate(
-                  'auto.components.activity.ActivityPrototypePage.interrupted',
-                  'Interrupted'
-                )
+              : t('auto.components.activity.ActivityPrototypePage.interrupted', 'Interrupted')
           }
         >
-          {translate(
-            'auto.components.dashboard.DashboardAgentRowMessage.0a01046763',
-            'interrupted'
-          )}
+          {t('auto.components.dashboard.DashboardAgentRowMessage.0a01046763', 'interrupted')}
         </span>
       ) : null}
       {lastAssistantMessage ? (
         <CommentMarkdownAsync
           content={lastAssistantMessage}
-          // Why: animate between a clipped preview and natural height without
-          // measuring markdown content in JS.
+          // Animate natural markdown height with CSS instead of JS measurement.
           className={cn(
             'min-w-0 flex-1 overflow-hidden text-[10px] leading-snug text-muted-foreground/80',
             'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',

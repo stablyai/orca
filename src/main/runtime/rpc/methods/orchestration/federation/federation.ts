@@ -1,17 +1,14 @@
-import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
-import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
-import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
+import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
+import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
+import { createWorkerBriefWriteGuard } from '../../../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
-import {
-  appendFederationSetupEffect,
-  appendFederationTerminalEffects,
-  type FederationEffect
-} from './federation-effects'
+import type { FederationEffect } from './federation-effects'
+import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import {
   monitorFederatedSetup,
@@ -19,21 +16,26 @@ import {
   persistFederatedSetupSpawnFailure,
   persistFederatedSetupWaitOutcome
 } from './federation-setup'
-import { FederationAttachStartParams } from './federation-start-schema'
+import { FederationAttachStartParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
 import { prepareFederationWorkerLaunchOnHost } from '../worker/worker-opencode-model-preflight'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
-} from '../../../../../../shared/orchestration-timing-budgets'
+} from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../../workspace-creator-context'
+import { claimTerminalForRemoteAttach } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
     name: 'orchestration.federationAttachStart',
+    requires: ['accounts'],
+    permission: 'workspace',
     params: FederationAttachStartParams,
-    handler: async (params, { runtime, orchestrationMutation }) => {
+    handler: async (params, context) => {
+      const { runtime, orchestrationMutation } = context
       if (!orchestrationMutation) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -69,20 +71,31 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       }
 
       const db = runtime.getOrchestrationDb()
-      db.createRemoteDispatchAttachment({
-        runId: params.runId,
+      // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.
+      const releaseTerminalClaim = claimTerminalForRemoteAttach(db, params.terminal, runtime, {
         dispatchId: params.dispatchId,
-        taskId: params.taskId,
-        homePeerFingerprint: orchestrationMutation.callerFingerprint,
-        protocolVersion: params.protocolVersion,
-        runtimeEpoch: runtime.getRuntimeId(),
-        depth: params.depth,
-        mutationReceipt: orchestrationMutation
+        taskId: params.taskId
       })
+      try {
+        db.createRemoteDispatchAttachment({
+          runId: params.runId,
+          dispatchId: params.dispatchId,
+          taskId: params.taskId,
+          homePeerFingerprint: orchestrationMutation.callerFingerprint,
+          protocolVersion: params.protocolVersion,
+          runtimeEpoch: runtime.getRuntimeId(),
+          depth: params.depth,
+          mutationReceipt: orchestrationMutation
+        })
+      } catch (error) {
+        releaseTerminalClaim()
+        throw error
+      }
       const effects: FederationEffect[] = []
       let failedStage = createsWorktree ? 'worktree_create' : 'worktree_resolve'
       let worktree
       let terminalHandle = params.terminal
+      let terminalCreation: RuntimeTerminalCreate | undefined
       const setupSource = createsWorktree
         ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
         : 'existing_worktree'
@@ -95,61 +108,27 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         state: createsWorktree ? 'not_configured' : 'not_applicable'
       }
       try {
-        if (createsWorktree) {
-          db.recordRemoteAttachmentStage({
-            dispatchId: params.dispatchId,
-            stage: 'worktree_creating'
-          })
-          const setupDecision = params.setup ?? 'run'
-          const created = await runtime.createManagedWorktree({
-            repoSelector: params.repo as string,
-            name: params.name as string,
-            baseBranch: params.baseBranch,
-            displayName: params.displayName,
-            displayNameKind: params.displayNameKind,
-            comment: params.comment,
-            // setupDecision runs setup without the legacy runHooks activation side effect.
-            runHooks: false,
-            setupDecision,
-            awaitTerminalProvisioning: true,
-            observeSetupCompletion: true,
-            createdWithAgent: agent as TuiAgent,
-            startupAgent: agent as TuiAgent,
-            startupLaunchSource: 'orchestration',
-            ...(launch.preferences ? { startupLaunchPreferences: launch.preferences } : {}),
-            activate: false,
-            lineage: { noParent: true }
-          })
-          worktree = created.worktree
-          terminalHandle = created.startupTerminal?.handle
-          effects.push({
-            kind: 'worktree',
-            action: 'created_top_level',
-            id: created.worktree.id
-          })
-          setup = {
-            requested: setupDecision,
-            effective: setupDecision,
-            source: setupSource,
-            hookFound: created.setupReceipt?.hookFound ?? false,
-            startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
-            state: created.setupReceipt?.state ?? 'not_configured'
-          }
-          if (!terminalHandle) {
-            throw new Error(
-              created.warning ?? 'Agent-first worktree creation returned no terminal.'
-            )
-          }
-          const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
-            includeVisualLayouts: false
-          })
-          appendFederationTerminalEffects(
+        const launchAgent = (existing?: { id: string }) =>
+          launchFederatedWorkerAgent({
+            runtime,
+            db,
+            params,
+            agent,
+            launchPreferences: launch.preferences,
+            ...(existing
+              ? { worktree: existing }
+              : { creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context) }),
+            setupSource,
             effects,
-            listed.terminals,
-            terminalHandle,
-            created.setupReceipt?.terminalHandle
-          )
-          appendFederationSetupEffect(effects, setup)
+            onSetup: (created) => {
+              setup = created
+            },
+            onStage: (stage) => {
+              failedStage = stage
+            }
+          })
+        if (createsWorktree) {
+          ;({ worktree, terminalHandle, terminalCreation } = await launchAgent())
         } else {
           worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
             throw new OrchestrationError(
@@ -183,22 +162,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             })
           } else {
             failedStage = 'terminal_create'
-            const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
-              // Why: agent ids are not shell commands (`cursor` is the desktop app,
-              // its CLI is `cursor-agent`); resolve through the TUI agent config.
-              startupAgent: agent as TuiAgent,
-              launchSource: 'orchestration',
-              ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
-              title: `worker-${params.taskId}`,
-              presentation: 'background'
-            })
-            terminalHandle = terminal.handle
-            effects.push({
-              kind: 'terminal',
-              role: 'agent',
-              action: 'created',
-              id: terminal.handle
-            })
+            ;({ terminalHandle, terminalCreation } = await launchAgent(worktree))
           }
         }
         if (!worktree || !terminalHandle) {
@@ -221,6 +185,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         const wait = await waitForWorkerAgentReady(runtime, terminalHandle, {
           agent,
           reusesTerminal: Boolean(params.terminal),
+          creation: terminalCreation,
           timeoutMs: readinessTimeoutMs
         })
         persistFederatedSetupWaitOutcome({ ...setupStage, wait })
@@ -262,9 +227,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               coordinatorHandle: 'Run home (relayed by Orca)',
               workerHandle: terminalHandle,
               devMode: params.devMode,
-              // Why the worker host's own setting: enforcement runs here, with this
-              // host's code, against this host's cap.
+              // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
+              subWorkersInOwnRun: true,
               cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
             })
           }
@@ -300,6 +265,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           setup,
           launch: launch.receipt
         })
+      } finally {
+        releaseTerminalClaim()
       }
     }
   })

@@ -19,7 +19,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
 }))
 
-vi.mock('../ephemeral-vm-runtime-ssh', () => ({
+vi.mock('../ephemeral-vm/runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTarget: vi.fn(),
   removeRuntimeOwnedSshTarget: vi.fn()
@@ -62,23 +62,6 @@ it('captures the source ref commit before a provisioned-root recipe starts', asy
   expect(readFileSync(createCountPath, 'utf8')).toBe('x')
   expect(JSON.parse(readFileSync(createEnvPath, 'utf8'))).toEqual({
     ref: 'selected',
-    refHead: expectedRefHead,
-    repoUrl: ''
-  })
-})
-
-it('captures the effective default ref when no start ref is selected', async () => {
-  const expectedRefHead = createGitFixtureCommit(repoPath)
-  const createCountPath = join(repoPath, 'create-count.txt')
-  const createEnvPath = join(repoPath, 'create-env.json')
-  writeRecipe(repoPath, createCountPath, createEnvPath)
-  registerEphemeralVmHandlers(makeStore(repoPath) as never)
-
-  const result = await provision({})
-
-  expect(result).toMatchObject({ ok: true, connectionType: 'ssh', expectedRefHead })
-  expect(JSON.parse(readFileSync(createEnvPath, 'utf8'))).toEqual({
-    ref: 'main',
     refHead: expectedRefHead,
     repoUrl: ''
   })

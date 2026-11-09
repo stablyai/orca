@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { resolveProviderChildEnv } from '../provider-process/provider-process-launch'
-import { buildPiRpcLaunch } from './rpc-launch'
+import { sealStructuredSessionChild } from '../runtime/agent-session/environment/structured-session-child-env'
+import {
+  buildPiRpcLaunch,
+  PI_RPC_SESSION_ENV_TO_DELETE,
+  piRpcSessionlessEnvironment,
+  withoutPiCallerEnv
+} from './rpc-launch'
 
 const options = { command: 'host-resolved-pi', cwd: '/host/folder', fullAccess: true }
 describe('Pi RPC launch', () => {
-  it('uses the supplied host binary and folder, and lets Pi choose its own session store', () => {
-    expect(buildPiRpcLaunch(options)).toMatchObject({
-      command: options.command,
-      cwd: options.cwd,
-      args: ['--mode', 'rpc']
-    })
-  })
-
   it.each([
     '/host/.pi/agent/sessions/session.jsonl',
     'C:\\Users\\dev\\.pi\\agent\\sessions\\session.jsonl'
@@ -28,11 +26,11 @@ describe('Pi RPC launch', () => {
     const launch = buildPiRpcLaunch({
       ...options,
       extraArgs: ['--extension', '/host/my extension.ts'],
-      env: {
+      ...piRpcSessionlessEnvironment({
         PI_CODING_AGENT_DIR: '/host/account',
         ORCA_PANE_KEY: 'other-pane',
         ORCA_AGENT_PANE: 'alias'
-      }
+      })
     })
     const env = resolveProviderChildEnv(launch, {
       ORCA_AGENT_HOOK_TOKEN: 'inherited',
@@ -91,12 +89,22 @@ describe('Pi RPC launch', () => {
       ORCA_TERMINAL_HANDLE: 'structworker_stale',
       ORCA_AGENT_SESSION_SPAWN_TOKEN: 'old-token'
     }
-    expect(resolveProviderChildEnv(buildPiRpcLaunch(options), inherited)).toEqual({})
+    expect(
+      resolveProviderChildEnv(
+        buildPiRpcLaunch({ ...options, ...piRpcSessionlessEnvironment({}) }),
+        inherited
+      )
+    ).toEqual({})
+    // Seal inherited caller identity with this structured session's identity.
     const childEnv = resolveProviderChildEnv(
       buildPiRpcLaunch({
         ...options,
-        env: inherited,
-        structuredSession: { id: 'this-session', spawnToken: 'this-token' }
+        ...sealStructuredSessionChild({
+          sessionId: 'this-session',
+          spawnToken: 'this-token',
+          env: withoutPiCallerEnv(inherited),
+          inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
+        })
       }),
       inherited
     )

@@ -3,9 +3,7 @@ import { z } from 'zod'
 export const BACKLOG_CLI_VERSION = '1.48.0'
 // Execution includes scanning and the 30-second CLI; transports leave room for cleanup.
 export const BACKLOG_OPERATION_TIMEOUT_MS = 45000
-export const BACKLOG_RELAY_TIMEOUT_MS = 55000
 export const BACKLOG_RPC_TIMEOUT_MS = 65000
-export const BACKLOG_CAPABILITY_TIMEOUT_MS = 5000
 
 const TaskId = z
   .string()

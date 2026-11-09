@@ -9,8 +9,9 @@ import type {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { isMacUserAgent } from '../terminal-pane/pane-helpers'
+import { isMacUserAgent } from '../../lib/user-agent-platform'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type FullDiskAccessStatusState = {
   status: DeveloperPermissionStatus | undefined
@@ -26,7 +27,6 @@ const FULL_DISK_ACCESS_PERMISSION_ID: DeveloperPermissionId = 'full-disk-access'
 export function isFullDiskAccessSetupVisible(
   status: DeveloperPermissionStatus | undefined
 ): boolean {
-  // Why: once granted there is nothing left to do, so the card would only take space.
   return status !== undefined && status !== 'unsupported' && !isFullDiskAccessReady(status)
 }
 
@@ -40,27 +40,24 @@ function getFullDiskAccessStatus(
   return states.find((state) => state.id === FULL_DISK_ACCESS_PERMISSION_ID)?.status
 }
 
-function getFullDiskAccessStatusLabel(args: FullDiskAccessStatusState): string {
+function getFullDiskAccessStatusLabel(
+  args: FullDiskAccessStatusState,
+  t: Translate = translate
+): string {
   if (args.checking) {
-    return translate(
-      'auto.components.feature.wall.FullDiskAccessSetupPrompt.bbb3f1e404',
-      'Checking'
-    )
+    return t('auto.components.feature.wall.FullDiskAccessSetupPrompt.bbb3f1e404', 'Checking')
   }
-  return translate(
-    'auto.components.feature.wall.FullDiskAccessSetupPrompt.6db9a69f4e',
-    'Recommended'
-  )
+  return t('auto.components.feature.wall.FullDiskAccessSetupPrompt.6db9a69f4e', 'Recommended')
 }
 
-function getFullDiskAccessButtonLabel(args: FullDiskAccessButtonState): string {
+function getFullDiskAccessButtonLabel(
+  args: FullDiskAccessButtonState,
+  t: Translate = translate
+): string {
   if (args.requesting) {
-    return translate(
-      'auto.components.feature.wall.FullDiskAccessSetupPrompt.dac08ec03e',
-      'Opening...'
-    )
+    return t('auto.components.feature.wall.FullDiskAccessSetupPrompt.dac08ec03e', 'Opening...')
   }
-  return translate(
+  return t(
     'auto.components.feature.wall.FullDiskAccessSetupPrompt.6e3d62b816',
     'Open Full Disk Access'
   )
@@ -127,8 +124,7 @@ function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () =>
     if (!isMac) {
       return
     }
-    // Why: users grant Full Disk Access outside Orca, so focus is the first
-    // cheap signal that System Settings may have changed the permission state.
+    // Refresh on focus because users grant permission outside Orca.
     window.addEventListener('focus', refreshIfLive)
     return () => {
       window.removeEventListener('focus', refreshIfLive)
@@ -139,6 +135,7 @@ function useFullDiskAccessStatus(): FullDiskAccessStatusState & { refresh: () =>
 }
 
 export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
+  const t = useTranslate()
   const { checking, refresh, status } = useFullDiskAccessStatus()
   const mountedRef = useMountedRef()
   const [requesting, setRequesting] = useState(false)
@@ -193,15 +190,15 @@ export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-foreground">
-              {translate(
+              {t(
                 'auto.components.feature.wall.FullDiskAccessSetupPrompt.c566bca278',
                 'Full Disk Access'
               )}
             </span>
-            <Badge variant="outline">{getFullDiskAccessStatusLabel({ checking, status })}</Badge>
+            <Badge variant="outline">{getFullDiskAccessStatusLabel({ checking, status }, t)}</Badge>
           </div>
           <p className="text-xs leading-snug text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.feature.wall.FullDiskAccessSetupPrompt.0d6efe9cf4',
               'Recommended on macOS when projects or worktrees live in protected folders.'
             )}
@@ -217,7 +214,7 @@ export function FullDiskAccessSetupPrompt(): React.JSX.Element | null {
         onClick={() => void handleOpenFullDiskAccess()}
       >
         <FullDiskAccessButtonIcon requesting={requesting} />
-        {getFullDiskAccessButtonLabel({ requesting })}
+        {getFullDiskAccessButtonLabel({ requesting }, t)}
       </Button>
     </div>
   )

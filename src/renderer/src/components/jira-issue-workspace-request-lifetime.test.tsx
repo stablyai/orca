@@ -3,13 +3,14 @@
 import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraComment, JiraIssue } from '../../../shared/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { JiraComment, JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { AppState } from '../store/types'
 import type {
   JiraIssueCommentComposer,
   JiraIssueWorkspaceContent
 } from './jira-issue-workspace-content'
+import type { JiraIssueMetadataBar } from './jira-issue-workspace-chrome'
 import JiraIssueWorkspace from './JiraIssueWorkspace'
 
 type PendingRead<T> = {
@@ -18,6 +19,8 @@ type PendingRead<T> = {
   reject: (error: Error) => void
 }
 type ComposerProps = ComponentProps<typeof JiraIssueCommentComposer>
+type ContentProps = ComponentProps<typeof JiraIssueWorkspaceContent>
+type MetadataProps = ComponentProps<typeof JiraIssueMetadataBar>
 type JiraStoreBoundary = Pick<AppState, 'patchJiraIssue'> & {
   settings: Pick<NonNullable<AppState['settings']>, 'activeRuntimeEnvironmentId'>
 }
@@ -26,8 +29,18 @@ const boundary = vi.hoisted(
   (): {
     issues: PendingRead<JiraIssue | null>[]
     comments: PendingRead<JiraComment[]>[]
+    transitions: PendingRead<JiraTransition[]>[]
     composer: ComposerProps | null
-  } => ({ issues: [], comments: [], composer: null })
+    content: ContentProps | null
+    metadata: MetadataProps | null
+  } => ({
+    issues: [],
+    comments: [],
+    transitions: [],
+    composer: null,
+    content: null,
+    metadata: null
+  })
 )
 
 vi.mock('@/store', () => {
@@ -40,20 +53,24 @@ vi.mock('@/store', () => {
   }
 })
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-jira-client', () => {
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => {
   function request<T>(queue: PendingRead<T>[], key: string): Promise<T> {
     return new Promise((resolve, reject) => queue.push({ key, resolve, reject }))
   }
   return {
-    jiraGetIssue: (_settings: unknown, key: string) => request(boundary.issues, key),
-    jiraIssueComments: (_settings: unknown, key: string) => request(boundary.comments, key),
-    jiraListTransitions: async () => [],
-    jiraListPriorities: async () => [],
-    jiraListAssignableUsers: async () => [],
-    jiraUpdateIssue: async () => ({ ok: true }),
-    jiraAddIssueComment: async () => ({ ok: true, id: 'added' })
+    jiraGetIssueForTarget: (_settings: unknown, key: string) => request(boundary.issues, key),
+    jiraIssueCommentsForTarget: (_settings: unknown, key: string) =>
+      request(boundary.comments, key),
+    jiraListTransitionsForTarget: (_owner: unknown, key: string) =>
+      request(boundary.transitions, key),
+    jiraListPrioritiesForTarget: async () => [],
+    jiraUpdateIssueForTarget: async () => ({ ok: true }),
+    jiraAddIssueCommentForTarget: async () => ({ ok: true, id: 'added' })
   }
 })
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: async () => []
+}))
 vi.mock('@/components/ui/sheet', () => {
   const Content = ({ children }: { children: ReactNode }) => <div>{children}</div>
   return {
@@ -70,12 +87,27 @@ vi.mock('./jira-issue-workspace-chrome', () => ({
   JiraIssueWorkspaceHeader: ({ issueLoading }: { issueLoading: boolean }) => (
     <div data-testid="issue-loading">{String(issueLoading)}</div>
   ),
-  JiraIssueMetadataBar: () => null
+  JiraIssueMetadataBar: (props: MetadataProps) => (
+    <div
+      data-testid="transitions"
+      ref={(node) => {
+        boundary.metadata = node ? props : null
+      }}
+    >
+      {props.transitions.map((transition) => transition.id).join(',')}
+    </div>
+  )
 }))
 vi.mock('./jira-issue-workspace-content', () => ({
   JiraIssueWorkspaceContent: (props: ComponentProps<typeof JiraIssueWorkspaceContent>) => (
-    <div data-testid="detail">
+    <div
+      data-testid="detail"
+      ref={(node) => {
+        boundary.content = node ? props : null
+      }}
+    >
       <span data-testid="title">{props.displayed.title}</span>
+      <span data-testid="labels">{props.displayed.labels.join(',')}</span>
       <span data-testid="description">{props.displayed.description}</span>
       <span data-testid="comments">{props.comments.map((comment) => comment.id).join(',')}</span>
       <span data-testid="comments-loading">{String(props.commentsLoading)}</span>
@@ -165,6 +197,7 @@ async function retryComments(): Promise<void> {
 beforeEach(() => {
   boundary.issues.length = 0
   boundary.comments.length = 0
+  boundary.transitions.length = 0
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -177,41 +210,58 @@ afterEach(async () => {
   }
   root = null
   await act(async () => {
-    for (const pending of [...boundary.issues, ...boundary.comments]) {
+    for (const pending of [...boundary.issues, ...boundary.comments, ...boundary.transitions]) {
       pending.reject(new Error('Test cleanup'))
     }
   })
   boundary.issues.length = 0
   boundary.comments.length = 0
+  boundary.transitions.length = 0
   boundary.composer = null
+  boundary.content = null
+  boundary.metadata = null
   document.body.replaceChildren()
 })
 
 describe('Jira issue workspace request lifetime', () => {
-  it('discards late detail and comments after closing the mounted workspace', async () => {
+  it('keeps same-issue transitions when their post-save reload fails', async () => {
     await render(issue())
-    await render(null)
     await act(async () => {
-      take(boundary.issues).resolve({ ...issue(), description: 'Screenshot data'.repeat(32_768) })
-      take(boundary.comments).resolve([{ ...comment('late'), body: 'Image data'.repeat(32_768) }])
+      take(boundary.issues).resolve(issue())
+      take(boundary.transitions).resolve([
+        { id: 'existing-transition', name: 'Existing transition', to: issue().status }
+      ])
     })
-    expect(container.querySelector('[data-open]')?.getAttribute('data-open')).toBe('false')
-    expect(container.querySelector('[data-testid="detail"]')).toBeNull()
-    expect(boundary.composer).toBeNull()
+    await act(async () => {
+      if (!boundary.metadata) {
+        throw new Error('Missing issue metadata')
+      }
+      void boundary.metadata.mutateIssue(
+        'status',
+        { transitionId: 'existing-transition' },
+        { status: issue().status }
+      )
+    })
+    await act(async () => take(boundary.issues).resolve(issue()))
+    expect(text('transitions')).toBe('existing-transition')
+    await act(async () => take(boundary.transitions).reject(new Error('Transition reload failed')))
+    expect(text('transitions')).toBe('existing-transition')
   })
 
-  it('clears an already hydrated issue and comments when it closes', async () => {
+  it('clears old issue transitions even when the new issue transition read fails', async () => {
     await render(issue())
-    await act(async () => {
-      take(boundary.issues).resolve(issue('JIR-1', 'Hydrated'))
-      take(boundary.comments).resolve([comment('loaded')])
-    })
-    expect(text('title')).toBe('Hydrated')
-    expect(text('comments')).toBe('loaded')
-    expect(text('issue-loading')).toBe('false')
-    expect(text('comments-loading')).toBe('false')
-    await render(null)
-    expect(container.querySelector('[data-testid="detail"]')).toBeNull()
+    await act(async () =>
+      take(boundary.transitions).resolve([
+        { id: 'old-transition', name: 'Old transition', to: issue().status }
+      ])
+    )
+    expect(text('transitions')).toBe('old-transition')
+    await render(issue('JIR-2'))
+    const duringNewRead = text('transitions')
+    await act(async () => take(boundary.transitions).reject(new Error('Transition read failed')))
+
+    expect(duringNewRead).toBe('')
+    expect(text('transitions')).toBe('')
   })
 
   it('ignores old replies and accepts the reopened issue replies', async () => {

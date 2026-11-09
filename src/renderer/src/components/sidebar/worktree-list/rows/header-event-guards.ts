@@ -1,5 +1,7 @@
 import type React from 'react'
-import { isRepoHeaderActionTarget } from '../../project-header-drag'
+import '../drag/project-header-drag'
+import { isRepoHeaderActionTarget } from '../drag/project-header-drag-contract'
+import { isProjectOrPinnedSectionGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
 
 export function stopRepoHeaderKeyboardToggle(event: React.KeyboardEvent<HTMLElement>): void {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -18,7 +20,6 @@ export function handleRepoHeaderActionPointerDown(event: React.PointerEvent<HTML
 export function handleRepoHeaderCollapseAffordancePointerDown(
   event: React.PointerEvent<HTMLElement>
 ): void {
-  // Why: keep collapse-chevron clicks from arming the repo-header row drag.
   event.stopPropagation()
 }
 
@@ -28,4 +29,17 @@ export function stopRepoHeaderMenuEvent(event: React.SyntheticEvent<HTMLElement>
 
 export function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLElement>): boolean {
   return isRepoHeaderActionTarget(event.target, event.currentTarget)
+}
+
+// Alt/Option-click toggles all projects and Pinned together.
+export function toggleSectionHeaderCollapse(
+  event: React.MouseEvent | React.KeyboardEvent,
+  collapseKey: string,
+  ctx: { toggleGroupWithScrollAnchor: (key: string) => void; toggleAllProjects?: () => void }
+): void {
+  if (event.altKey && ctx.toggleAllProjects && isProjectOrPinnedSectionGroupKey(collapseKey)) {
+    ctx.toggleAllProjects()
+    return
+  }
+  ctx.toggleGroupWithScrollAnchor(collapseKey)
 }

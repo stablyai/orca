@@ -16,20 +16,24 @@ import {
   type ProfileStateWriterInitialization
 } from './profile-state-writer-protocol'
 import { recordProfileStateWriterFault } from './profile-state-writer-diagnostics'
+import {
+  PROFILE_STATE_WRITER_SLOW_WARNING_MS,
+  startProfileStateWriterSlowWarning
+} from './profile-state-writer-slow-warning'
 import { ProfileStateWriterThread } from './profile-state-writer-thread'
-
-const REQUEST_TIMEOUT_MS = 30_000
 
 export type ProfileStateWriterConnectionOptions = {
   workerPath?: string
-  timeoutMs?: number
+  /** One diagnostic warning; delay alone never fails the request. */
+  slowWarningMs?: number
   onFailure?: (error: Error) => void
+  onSaveDelayChanged?: (delayed: boolean) => void
   reportInitializationFailure?: boolean
-  /** Monotonic milliseconds; tests replace it to model a stalled main loop. */
+  /** Monotonic clock; replace in tests to model stalled main loops. */
   clock?: () => number
 }
 
-/** One materialized command; Store owns coalescing and never queues snapshots here. */
+/** Store coalesces snapshots; this connection admits one materialized command. */
 export class ProfileStateWriterConnection {
   readonly ready: Promise<void>
   private thread: ProfileStateWriterThread | undefined
@@ -39,7 +43,8 @@ export class ProfileStateWriterConnection {
   private draining = false
   private closePromise: Promise<void> | undefined
   private closeAcknowledged = false
-  private readonly timeoutMs: number
+  private saveDelayed = false
+  private readonly slowWarningMs: number
   private readonly initialRevision: number
   private latestRevision: number | undefined
 
@@ -48,11 +53,11 @@ export class ProfileStateWriterConnection {
     private readonly options: ProfileStateWriterConnectionOptions = {}
   ) {
     this.initialRevision = initialization.revision
-    this.timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS
+    this.slowWarningMs = options.slowWarningMs ?? PROFILE_STATE_WRITER_SLOW_WARNING_MS
     const pending = this.createPending(0, 'initialize')
     this.active = pending
     this.ready = pending.promise.then(() => {})
-    // Initialization failures remain observable through ready without an unhandled rejection.
+    // Preserve rejection through ready while preventing an unhandled rejection.
     void this.ready.catch(() => {})
     try {
       this.thread = new ProfileStateWriterThread(
@@ -68,8 +73,7 @@ export class ProfileStateWriterConnection {
               this.faultWith('profile-state-writer-exit', message, { exitCode: code })
             }
           }
-        },
-        { timeoutMs: this.timeoutMs, now: options.clock }
+        }
       )
     } catch (cause) {
       this.faultWith('profile-state-writer-unavailable', 'Profile state writer could not start', {
@@ -79,7 +83,7 @@ export class ProfileStateWriterConnection {
     }
   }
 
-  /** Abandoning an active wait cannot establish whether SQLite committed. */
+  /** Aborting cannot prove whether the active SQLite write committed. */
   async abort(): Promise<void> {
     this.faultWith('profile-state-writer-aborted', 'Profile state writer was aborted')
     await this.thread?.exitPromise
@@ -89,9 +93,9 @@ export class ProfileStateWriterConnection {
     this.draining = true
   }
 
-  close(): Promise<void> {
+  close(options: { refreshLegacyDocuments?: boolean } = {}): Promise<void> {
     this.stopAdmission()
-    this.closePromise ??= this.finishClose()
+    this.closePromise ??= this.finishClose(options.refreshLegacyDocuments === true)
     return this.closePromise
   }
 
@@ -105,7 +109,7 @@ export class ProfileStateWriterConnection {
     return this.latestRevision
   }
 
-  /** The last revision this worker confirmed, kept after a fault for diagnostics. */
+  /** Retain the last confirmed revision after faults for diagnostics. */
   get lastAcknowledgedRevision(): number {
     return this.latestRevision ?? this.initialRevision
   }
@@ -114,27 +118,43 @@ export class ProfileStateWriterConnection {
     return this.thread?.exited ?? true
   }
 
-  private async finishClose(): Promise<void> {
+  private async finishClose(refreshLegacyDocuments: boolean): Promise<void> {
     await this.active?.promise.catch(() => {})
     if (!this.failure && !this.didExit) {
+      const closeRequestId = this.nextId
       try {
-        await this.dispatch({ command: 'close' })
+        await this.dispatch({ command: 'close', refreshLegacyDocuments })
       } finally {
-        if (!(await (this.thread?.waitForExit() ?? true))) {
-          this.faultWith(
-            'profile-state-writer-close-timeout',
-            'Profile state writer did not exit after close',
-            { outcome: 'indeterminate' }
-          )
-        }
-        // Termination is asynchronous; close must retain ownership until exit is confirmed.
-        await this.thread?.exitPromise
+        // Ownership requires observed exit, not timeout or termination request.
+        await this.awaitExit(closeRequestId)
       }
       if (this.failure) {
         throw this.failure
       }
     } else {
       await this.thread?.exitPromise
+    }
+  }
+
+  private async awaitExit(requestId: number): Promise<void> {
+    const thread = this.thread
+    if (!thread || thread.exited) {
+      return
+    }
+    const clearSlowWarning = startProfileStateWriterSlowWarning({
+      warningMs: this.slowWarningMs,
+      phase: 'awaiting-exit',
+      now: this.options.clock,
+      request: {
+        command: 'close',
+        requestId,
+        acknowledgedRevision: this.lastAcknowledgedRevision
+      }
+    })
+    try {
+      await thread.exitPromise
+    } finally {
+      clearSlowWarning()
     }
   }
 
@@ -171,7 +191,7 @@ export class ProfileStateWriterConnection {
     try {
       this.thread?.post({ ...command, id: pending.id })
     } catch (cause) {
-      // postMessage did not dispatch a message when serialization fails.
+      // Serialization failure means postMessage dispatched nothing.
       this.settle(
         undefined,
         new ProfileStateWriterError(
@@ -189,17 +209,28 @@ export class ProfileStateWriterConnection {
     id: number,
     command: PendingProfileStateWriterRequest['command']
   ): PendingProfileStateWriterRequest {
-    const pending = createProfileStateWriterRequest(id, command, this.timeoutMs, {
+    return createProfileStateWriterRequest(id, command, this.slowWarningMs, {
       now: this.options.clock,
-      acknowledgedRevision: () => this.lastAcknowledgedRevision,
-      onTimeout: () => {
-        // A cleared or superseded request must never fault its successor.
-        if (this.active === pending) {
-          this.faultWith('profile-state-writer-timeout', 'Profile state writer command timed out')
+      acknowledgedRevision: this.lastAcknowledgedRevision,
+      onSlow: () => {
+        // Reads/exports share the worker and can delay later saves.
+        if (this.active?.id === id && command !== 'initialize' && command !== 'close') {
+          this.reportSaveDelay(true)
         }
       }
     })
-    return pending
+  }
+
+  private reportSaveDelay(delayed: boolean): void {
+    if (this.saveDelayed === delayed) {
+      return
+    }
+    this.saveDelayed = delayed
+    try {
+      this.options.onSaveDelayChanged?.(delayed)
+    } catch (error) {
+      console.error('[persistence] Could not report delayed saving:', error)
+    }
   }
 
   private receive(value: unknown): void {
@@ -243,7 +274,8 @@ export class ProfileStateWriterConnection {
     if (!pending) {
       return
     }
-    pending.clearDeadline()
+    pending.clearSlowWarning()
+    this.reportSaveDelay(false)
     if (response) {
       pending.resolve(response)
     } else {
@@ -280,7 +312,7 @@ export class ProfileStateWriterConnection {
     recordProfileStateWriterFault(error, this.active, this.lastAcknowledgedRevision, exitCode)
     this.settle(undefined, error)
     this.thread?.terminate()
-    // Startup failures already reject ready; admitted writers must also alert idle callers.
+    // Startup rejects ready; admitted writers also need failure notification while idle.
     if (this.latestRevision !== undefined || this.options.reportInitializationFailure) {
       try {
         this.options.onFailure?.(error)

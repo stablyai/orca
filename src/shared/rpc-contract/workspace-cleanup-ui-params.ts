@@ -1,6 +1,8 @@
 import { z } from 'zod'
-import { normalizeWorkspaceCleanupBrowseState } from '../workspace-cleanup-browse-state'
-import type { WorkspaceCleanupBrowseState } from '../workspace-cleanup-browse-state'
+import {
+  normalizeWorkspaceCleanupBrowseState,
+  type WorkspaceCleanupBrowseState
+} from '../workspace-cleanup/workspace-cleanup-browse-state'
 
 export const WorkspaceCleanupDismissal = z.object({
   worktreeId: z.string(),
@@ -10,14 +12,7 @@ export const WorkspaceCleanupDismissal = z.object({
   executionHostId: z.string().min(1).optional()
 })
 
-/**
- * Deliberately unvalidated shape, then normalized: the filter groups must NOT be
- * strict or enumerated here. A newer client sends filters this build has never
- * heard of, and a per-field zod shape would reject the whole `ui.set` payload
- * instead of persisting the parts the host does understand. The shared
- * normalizer never throws and degrades field by field, so an older host narrows
- * the state rather than refusing it.
- */
+/** Normalize filters field by field: strict/enumerated input would reject all ui.set state when newer clients add filters. */
 export const WorkspaceCleanupBrowse = z
   .custom<WorkspaceCleanupBrowseState>()
   .transform((value) => normalizeWorkspaceCleanupBrowseState(value))

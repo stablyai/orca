@@ -2,25 +2,17 @@ import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as FsUtils from '../codex-accounts/fs-utils'
+import type * as FsUtils from '../filesystem/atomic-file-publication'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 vi.mock('node:fs', async (original) => {
   const actual = await original<typeof fs>()
   return { ...actual, symlinkSync: vi.fn(actual.symlinkSync) }
 })
-vi.mock('../codex-accounts/fs-utils', async (original) => {
+vi.mock('../filesystem/atomic-file-publication', async (original) => {
   const actual = await original<typeof FsUtils>()
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
 })
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { provisionClaudeProfile } from './claude-profile-provisioning'
-
-const USER_HOOK = { matcher: '', hooks: [{ type: 'command', command: 'notify-me' }] }
-const ORCA_HOOK = {
-  matcher: '',
-  hooks: [{ type: 'command', command: '"$HOME/.orca/agent-hooks/claude-hook.sh"' }]
-}
-// What Claude writes on a finished sign-in.
 const LOGIN = { emailAddress: 'p@example.com' }
 const roots: string[] = []
 function fixture() {
@@ -44,10 +36,10 @@ afterEach(() => {
   }
 })
 
-// Why: these create real symlinks, which Windows needs privilege for.
+// Real symlinks require additional privileges on Windows.
 const itLinks = it.skipIf(process.platform === 'win32')
 
-describe('dormant Claude profile provisioning', () => {
+describe('Claude profile refresh from the default home', () => {
   itLinks('links resources, keeps private directories and sees later global installs', async () => {
     const f = fixture()
     const linked = [
@@ -78,35 +70,8 @@ describe('dormant Claude profile provisioning', () => {
       expect(fs.readFileSync(join(f.profileHome, name, 'mine.md'), 'utf8')).toBe('private')
     }
   })
-  itLinks(
-    'shares personal rules, themes and workflows that later appear in the default home',
-    async () => {
-      const f = fixture()
-      await provision(f)
-      fs.mkdirSync(join(f.source, 'rules'))
-      fs.writeFileSync(join(f.source, 'rules/style.md'), 'use tabs')
-      fs.mkdirSync(join(f.source, 'themes'))
-      fs.writeFileSync(join(f.source, 'themes/dusk.json'), '{"base":"dark"}')
-      fs.mkdirSync(join(f.source, 'workflows'))
-      fs.writeFileSync(join(f.source, 'workflows/review.js'), 'export const meta = {}')
-      const report = await provision(f)
-      expect(report.surfaces).toMatchObject({
-        rules: 'linked',
-        themes: 'linked',
-        workflows: 'linked'
-      })
-      expect(fs.readFileSync(join(f.profileHome, 'rules/style.md'), 'utf8')).toBe('use tabs')
-      expect(fs.readFileSync(join(f.profileHome, 'themes/dusk.json'), 'utf8')).toBe(
-        '{"base":"dark"}'
-      )
-      expect(fs.readFileSync(join(f.profileHome, 'workflows/review.js'), 'utf8')).toBe(
-        'export const meta = {}'
-      )
-      fs.writeFileSync(join(f.profileHome, 'workflows/saved.js'), 'saved in profile')
-      expect(fs.readFileSync(join(f.source, 'workflows/saved.js'), 'utf8')).toBe('saved in profile')
-    }
-  )
-  it('copies keybindings, keeps a profile edit and follows the default while unedited', async () => {
+
+  it('copies top-level files over the profile copy, edited or not', async () => {
     const f = fixture()
     const source = join(f.source, 'keybindings.json')
     const copy = join(f.profileHome, 'keybindings.json')
@@ -114,196 +79,146 @@ describe('dormant Claude profile provisioning', () => {
     expect((await provision(f)).surfaces['keybindings.json']).toBe('synced')
     expect(fs.lstatSync(copy).isSymbolicLink()).toBe(false)
     expect(fs.readFileSync(copy, 'utf8')).toBe('{"bindings":[]}')
-    fs.writeFileSync(source, '{"bindings":[1]}')
-    expect((await provision(f)).surfaces['keybindings.json']).toBe('synced')
-    expect(fs.readFileSync(copy, 'utf8')).toBe('{"bindings":[1]}')
+    expect((await provision(f)).surfaces['keybindings.json']).toBe('unchanged')
     fs.writeFileSync(copy, '{"bindings":["profile"]}')
     fs.writeFileSync(source, '{"bindings":[2]}')
-    expect((await provision(f)).surfaces['keybindings.json']).toBe('user-owned')
-    expect(fs.readFileSync(copy, 'utf8')).toBe('{"bindings":["profile"]}')
-    expect(fs.readFileSync(source, 'utf8')).toBe('{"bindings":[2]}')
+    expect((await provision(f)).surfaces['keybindings.json']).toBe('synced')
+    expect(fs.readFileSync(copy, 'utf8')).toBe('{"bindings":[2]}')
+    fs.writeFileSync(join(f.source, 'statusline.sh'), 'echo hi')
+    fs.chmodSync(join(f.source, 'statusline.sh'), 0o755)
+    await provision(f)
+    expect(fs.statSync(join(f.profileHome, 'statusline.sh')).mode & 0o777).toBe(0o755)
   })
-  it('shares future settings keys and hooks but excludes auth; profile edits survive reprovision', async () => {
+
+  it('keeps settings Claude saved in the account while later default-home edits still arrive', async () => {
     const f = fixture()
-    f.json(join(f.source, 'settings.json'), {
-      futureFeature: true,
-      model: 'a',
-      hooks: { Stop: [USER_HOOK, ORCA_HOOK], SessionStart: [ORCA_HOOK] },
-      apiKeyHelper: 'secret',
-      awsAuthRefresh: 'secret',
-      awsCredentialExport: 'secret',
-      forceLoginMethod: 'secret',
-      forceLoginOrgUUID: 'secret',
-      env: {
-        ANTHROPIC_API_KEY: 'secret',
-        ANTHROPIC_AUTH_TOKEN: 'secret',
-        CLAUDE_CODE_OAUTH_TOKEN: 'secret',
-        NORMAL: 'yes'
-      }
-    })
-    fs.writeFileSync(join(f.source, 'CLAUDE.md'), 'source')
+    const settings = { effortLevel: 'medium', env: { ANTHROPIC_BASE_URL: 'https://a.test' } }
+    f.json(join(f.source, 'settings.json'), settings)
     await provision(f)
-    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
-      futureFeature: true,
-      model: 'a',
-      hooks: { Stop: [USER_HOOK, ORCA_HOOK], SessionStart: [ORCA_HOOK] },
-      env: { NORMAL: 'yes' }
-    })
-    f.json(join(f.profileHome, 'settings.json'), {
-      futureFeature: true,
-      model: 'private',
-      env: { NORMAL: 'yes' }
-    })
-    fs.writeFileSync(join(f.profileHome, 'CLAUDE.md'), 'private instructions')
-    f.json(join(f.source, 'settings.json'), { model: 'b', futureFeature: false })
-    fs.writeFileSync(join(f.source, 'CLAUDE.md'), 'updated source')
-    await provision(f)
-    expect(f.read(join(f.profileHome, 'settings.json'))).toMatchObject({
-      model: 'private',
-      futureFeature: false
-    })
-    expect(fs.readFileSync(join(f.profileHome, 'CLAUDE.md'), 'utf8')).toBe('private instructions')
-  })
-  itLinks(
-    're-adds a shared key the profile deleted and leaves a linked settings file alone',
-    async () => {
-      const f = fixture()
-      f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })
-      await provision(f)
-      f.json(join(f.profileHome, 'settings.json'), { theme: 'x' })
-      await provision(f)
-      expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ model: 'a', theme: 'x' })
-      const elsewhere = join(f.root, 'elsewhere.json')
-      f.json(elsewhere, { mine: true })
-      fs.rmSync(join(f.profileHome, 'settings.json'))
-      fs.symlinkSync(elsewhere, join(f.profileHome, 'settings.json'))
-      expect((await provision(f)).surfaces['settings.json']).toBe('user-owned')
-      expect(f.read(elsewhere)).toEqual({ mine: true })
+    // What Claude 2.1.318 saves for `/model opus` then `/effort high`.
+    const saved = {
+      ...settings,
+      model: 'opus',
+      effortLevel: 'high',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } }
     }
-  )
-  it('removes a key the default dropped unless the profile changed it, and only keys Orca shared', async () => {
-    const f = fixture()
-    const settings = join(f.source, 'settings.json')
-    f.json(settings, { model: 'a', theme: 'x', apiKeyHelper: 'source-secret' })
-    await provision(f)
-    f.json(join(f.profileHome, 'settings.json'), {
-      ...f.read(join(f.profileHome, 'settings.json')),
-      theme: 'mine',
-      local: true,
-      apiKeyHelper: 'profile-helper'
-    })
-    f.json(settings, { apiKeyHelper: 'source-secret' })
-    expect((await provision(f)).surfaces['settings.json']).toBe('merged')
-    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
-      theme: 'mine',
-      local: true,
-      apiKeyHelper: 'profile-helper'
-    })
+    f.json(join(f.profileHome, 'settings.json'), saved)
     expect((await provision(f)).surfaces['settings.json']).toBe('unchanged')
-    f.json(settings, { model: 'b' })
-    await provision(f)
-    fs.rmSync(settings)
-    await provision(f)
+    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual(saved)
+    f.json(join(f.source, 'settings.json'), {
+      ...settings,
+      env: { ANTHROPIC_BASE_URL: 'https://b.test' },
+      apiKeyHelper: 'helper'
+    })
+    expect((await provision(f)).surfaces['settings.json']).toBe('synced')
     expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({
-      theme: 'mine',
-      local: true,
-      apiKeyHelper: 'profile-helper'
+      effortLevel: 'high',
+      env: { ANTHROPIC_BASE_URL: 'https://b.test' },
+      model: 'opus',
+      modelSettings: { 'claude-opus-5-5': { effortLevel: 'high' } },
+      apiKeyHelper: 'helper'
     })
-    const ledger = f.read(join(f.profileHome, '.orca-profile.json'))
-    expect(JSON.stringify(ledger)).not.toContain('apiKeyHelper')
   })
-  it('removes nothing while the default settings or state are unreadable', async () => {
+
+  itLinks('leaves a linked settings file alone', async () => {
     const f = fixture()
-    f.json(join(f.source, 'settings.json'), { model: 'a' })
-    f.json(join(f.userHome, '.claude.json'), { mcpServers: { a: {} }, theme: 'dark' })
-    f.json(join(f.profileHome, '.claude.json'), { userID: 'p', oauthAccount: LOGIN })
+    f.json(join(f.source, 'settings.json'), { model: 'a', theme: 'x' })
     await provision(f)
-    fs.writeFileSync(join(f.source, 'settings.json'), '{bad')
-    fs.writeFileSync(join(f.userHome, '.claude.json'), '{bad')
-    await provision(f)
-    expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ model: 'a' })
-    expect(f.read(join(f.profileHome, '.claude.json'))).toMatchObject({
-      mcpServers: { a: {} },
-      theme: 'dark'
-    })
-    f.json(join(f.userHome, '.claude.json'), { theme: 'dark' })
-    await provision(f)
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
-      userID: 'p',
-      oauthAccount: LOGIN,
-      theme: 'dark',
-      hasCompletedOnboarding: true
-    })
+    const elsewhere = join(f.root, 'elsewhere.json')
+    f.json(elsewhere, { mine: true })
+    fs.rmSync(join(f.profileHome, 'settings.json'))
+    fs.symlinkSync(elsewhere, join(f.profileHome, 'settings.json'))
+    expect((await provision(f)).surfaces['settings.json']).toBe('user-owned')
+    expect(f.read(elsewhere)).toEqual({ mine: true })
   })
-  it('requires existing state, merges MCP/theme/onboarding and never copies or writes credentials', async () => {
+  it('copies state except the login, caches and install ids, and never copies credentials', async () => {
     const f = fixture()
     fs.writeFileSync(join(f.source, '.credentials.json'), 'SOURCE_CREDENTIAL_BYTES')
-    f.json(join(f.userHome, '.claude.json'), {
+    const shared = {
       mcpServers: { local: { command: 'example' } },
       theme: 'dark',
+      hasCompletedOnboarding: true,
+      autoModeAccepted: true,
+      projects: { '/work': { hasTrustDialogAccepted: true } }
+    }
+    f.json(join(f.userHome, '.claude.json'), {
+      ...shared,
       oauthAccount: { emailAddress: 'source@example.com' },
-      userID: 'source-id'
+      primaryApiKey: 'sk-source',
+      userID: 'source-id',
+      machineID: 'source-machine',
+      firstStartTime: 'source-start',
+      firstStartVersion: '1.0.0',
+      groveConfigCache: { a: 1 },
+      cachedArtifactRoster: [],
+      clientDataCacheSlots: {},
+      passesEligibilityCache: {},
+      passesLastSeen: 1,
+      claudeCodeFirstTokenDate: 'source-date',
+      startupPrefetchedAt: 1,
+      additionalModelOptionsAnsweredAt: 1,
+      artifactRosterDenied: true,
+      lastSeenOrgDefaultUpdatedAt: 1,
+      hasAvailableSubscription: true,
+      subscriptionNoticeCount: 2
     })
-    await provision(f)
-    expect(fs.existsSync(join(f.profileHome, '.claude.json'))).toBe(false)
+    expect((await provision(f)).surfaces['.claude.json']).toBe('synced')
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual(shared)
+    expect(fs.readdirSync(f.profileHome).filter((name) => name.endsWith('.tmp'))).toEqual([])
     expect(fs.existsSync(join(f.profileHome, '.credentials.json'))).toBe(false)
+
     fs.writeFileSync(join(f.profileHome, '.credentials.json'), 'PROFILE_CREDENTIAL_BYTES')
     f.json(join(f.profileHome, '.claude.json'), {
       oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
-      projects: { '/work': { allowedTools: ['Read'] } }
+      groveConfigCache: { b: 2 },
+      theme: 'light',
+      onlyHere: true
     })
-    await provision(f)
+    expect((await provision(f)).surfaces['.claude.json']).toBe('merged')
     expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
       oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
-      mcpServers: { local: { command: 'example' } },
-      theme: 'dark',
-      hasCompletedOnboarding: true,
-      projects: { '/work': { allowedTools: ['Read'] } }
+      groveConfigCache: { b: 2 },
+      onlyHere: true,
+      ...shared
     })
+    expect((await provision(f)).surfaces['.claude.json']).toBe('unchanged')
     expect(fs.readFileSync(join(f.source, '.credentials.json'), 'utf8')).toBe(
       'SOURCE_CREDENTIAL_BYTES'
     )
     expect(fs.readFileSync(join(f.profileHome, '.credentials.json'), 'utf8')).toBe(
       'PROFILE_CREDENTIAL_BYTES'
     )
-    for (const name of fs.readdirSync(f.profileHome)) {
-      const file = join(f.profileHome, name)
-      if (fs.lstatSync(file).isFile()) {
-        expect(fs.readFileSync(file, 'utf8')).not.toContain('SOURCE_CREDENTIAL_BYTES')
-      }
-    }
   })
-  it('leaves a folder Claude has not signed in yet to Claude’s own onboarding', async () => {
+
+  it('merges trusted folders and MCP servers per entry, never untrusting an account folder', async () => {
     const f = fixture()
-    f.json(join(f.userHome, '.claude.json'), { theme: 'dark', mcpServers: { a: {} } })
-    // Claude writes its state file at the theme pick, before the sign-in.
-    f.json(join(f.profileHome, '.claude.json'), { theme: 'light' })
-    expect((await provision(f)).surfaces['.claude.json']).toBe('absent')
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({ theme: 'light' })
-    f.json(join(f.profileHome, '.claude.json'), { theme: 'light', oauthAccount: LOGIN })
-    expect((await provision(f)).surfaces['.claude.json']).toBe('merged')
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
-      theme: 'light',
-      oauthAccount: LOGIN,
-      mcpServers: { a: {} },
-      hasCompletedOnboarding: true
+    f.json(join(f.userHome, '.claude.json'), {
+      projects: {
+        '/shared': { hasTrustDialogAccepted: false, allowedTools: ['Read'] },
+        '/default-only': { hasTrustDialogAccepted: true }
+      },
+      mcpServers: { shared: { command: 'default' } }
     })
-  })
-  it('still forces onboarding when the personal state is unreadable', async () => {
-    const f = fixture()
-    fs.writeFileSync(join(f.userHome, '.claude.json'), '{"theme": "da')
-    f.json(join(f.profileHome, '.claude.json'), { userID: 'p', oauthAccount: LOGIN })
-    const report = await provision(f)
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
-      userID: 'p',
+    f.json(join(f.profileHome, '.claude.json'), {
       oauthAccount: LOGIN,
-      hasCompletedOnboarding: true
+      projects: {
+        '/shared': { hasTrustDialogAccepted: true },
+        '/account-only': { hasTrustDialogAccepted: true, allowedTools: ['Bash'] }
+      },
+      mcpServers: { shared: { command: 'account' }, mine: { command: 'mine' } }
     })
-    expect(report.warnings).toContainEqual(
-      expect.objectContaining({ surface: '.claude.json', code: 'unreadable' })
-    )
+    await provision(f)
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
+      oauthAccount: LOGIN,
+      projects: {
+        '/shared': { hasTrustDialogAccepted: true, allowedTools: ['Read'] },
+        '/account-only': { hasTrustDialogAccepted: true, allowedTools: ['Bash'] },
+        '/default-only': { hasTrustDialogAccepted: true }
+      },
+      mcpServers: { shared: { command: 'default' }, mine: { command: 'mine' } }
+    })
   })
   it('skips the state write while Claude holds its lock and records nothing for it', async () => {
     const f = fixture()
@@ -323,101 +238,10 @@ describe('dormant Claude profile provisioning', () => {
     expect((await provision(f)).surfaces['.claude.json']).toBe('merged')
     expect(f.read(join(f.profileHome, '.claude.json')).theme).toBe('dark')
   })
-  it('records a shared value only after its write succeeded', async () => {
-    const f = fixture()
-    f.json(join(f.source, 'settings.json'), { theme: 'dark' })
-    await provision(f)
-    f.json(join(f.source, 'settings.json'), { theme: 'light' })
-    vi.mocked(writeFileAtomically).mockImplementationOnce(() => {
-      throw Object.assign(new Error('busy'), { code: 'EBUSY' })
-    })
-    expect((await provision(f)).surfaces['settings.json']).toBe('failed')
-    expect((await provision(f)).surfaces['settings.json']).toBe('merged')
-    expect(f.read(join(f.profileHome, 'settings.json')).theme).toBe('light')
-  })
-  itLinks('resets an unreadable ledger instead of blocking every surface', async () => {
-    const f = fixture()
-    fs.mkdirSync(join(f.source, 'skills'))
-    f.json(join(f.source, 'settings.json'), { model: 'a' })
-    fs.writeFileSync(join(f.profileHome, '.orca-profile.json'), '')
-    const report = await provision(f)
-    expect(report.surfaces.skills).toBe('linked')
-    expect(report.surfaces['settings.json']).toBe('merged')
-    expect(report.warnings).toEqual([])
-    expect(f.read(join(f.profileHome, '.orca-profile.json')).keys).toEqual({
-      'settings.json': { model: '"a"' }
-    })
-  })
-  itLinks(
-    'keys shared values by surface, so another spelling of the profile keeps sharing',
-    async () => {
-      const f = fixture()
-      fs.writeFileSync(join(f.source, 'keybindings.json'), 'v1')
-      f.json(join(f.source, 'settings.json'), { model: 'a' })
-      await provision(f)
-      fs.writeFileSync(join(f.source, 'keybindings.json'), 'v2')
-      f.json(join(f.source, 'settings.json'), { model: 'b' })
-      const aliasRoot = fs.mkdtempSync(join(tmpdir(), 'claude-profile-alias-'))
-      roots.push(aliasRoot)
-      const alias = join(aliasRoot, 'link')
-      fs.symlinkSync(f.root, alias)
-      const report = await provisionClaudeProfile({
-        profileHome: join(alias, 'profile'),
-        userHome: f.userHome,
-        platform: 'linux'
-      })
-      expect(report.surfaces['keybindings.json']).toBe('synced')
-      expect(f.read(join(f.profileHome, 'settings.json')).model).toBe('b')
-    }
-  )
-  it('imports the personal CLAUDE.md instead of copying it, so Claude loads it once', async () => {
-    const f = fixture()
-    await provision(f)
-    expect(fs.existsSync(join(f.profileHome, 'CLAUDE.md'))).toBe(false)
-    fs.writeFileSync(join(f.source, 'CLAUDE.md'), 'personal instructions')
-    expect((await provision(f)).surfaces['CLAUDE.md']).toBe('synced')
-    expect(fs.readFileSync(join(f.profileHome, 'CLAUDE.md'), 'utf8')).toBe('@~/.claude/CLAUDE.md\n')
-    fs.writeFileSync(join(f.source, 'CLAUDE.md'), 'edited personal instructions')
-    expect((await provision(f)).surfaces['CLAUDE.md']).toBe('unchanged')
-  })
-  itLinks(
-    "shares from the user's own CLAUDE_CONFIG_DIR, copying its CLAUDE.md and state",
-    async () => {
-      const f = fixture()
-      const userConfigDir = join(f.userHome, 'custom-claude')
-      fs.mkdirSync(join(userConfigDir, 'skills'), { recursive: true })
-      fs.writeFileSync(join(userConfigDir, 'CLAUDE.md'), 'custom instructions')
-      f.json(join(userConfigDir, 'settings.json'), { model: 'custom' })
-      f.json(join(userConfigDir, '.claude.json'), { theme: 'custom' })
-      f.json(join(f.userHome, '.claude.json'), { theme: 'home' })
-      f.json(join(f.profileHome, '.claude.json'), { userID: 'p', oauthAccount: LOGIN })
-      await provisionClaudeProfile({ ...f, userConfigDir, platform: 'linux' })
-      expect(fs.realpathSync(join(f.profileHome, 'skills'))).toBe(join(userConfigDir, 'skills'))
-      expect(fs.readFileSync(join(f.profileHome, 'CLAUDE.md'), 'utf8')).toBe('custom instructions')
-      expect(f.read(join(f.profileHome, 'settings.json'))).toEqual({ model: 'custom' })
-      expect(f.read(join(f.profileHome, '.claude.json')).theme).toBe('custom')
-    }
-  )
-  itLinks("links to the default home's own entry, not where a user link of it points", async () => {
-    const f = fixture()
-    fs.mkdirSync(join(f.root, 'dotfiles-skills'))
-    fs.symlinkSync(join(f.root, 'dotfiles-skills'), join(f.source, 'skills'))
-    expect((await provision(f)).surfaces.skills).toBe('linked')
-    expect(fs.readlinkSync(join(f.profileHome, 'skills'))).toBe(join(f.source, 'skills'))
-    expect((await provision(f)).surfaces.skills).toBe('unchanged')
-  })
-  it('uses Windows junctions through platform injection (native Windows remains unverified)', async () => {
-    const f = fixture()
-    fs.mkdirSync(join(f.source, 'skills'))
-    await provisionClaudeProfile({ ...f, platform: 'win32' })
-    expect(fs.symlinkSync).toHaveBeenCalledWith(
-      join(f.source, 'skills'),
-      join(f.profileHome, 'skills'),
-      'junction'
-    )
-  })
+
   it('leaves malformed profile state unchanged', async () => {
     const f = fixture()
+    f.json(join(f.userHome, '.claude.json'), { theme: 'dark' })
     fs.writeFileSync(join(f.profileHome, '.claude.json'), '{bad')
     expect((await provision(f)).warnings).toContainEqual(
       expect.objectContaining({ surface: '.claude.json', code: 'unreadable' })

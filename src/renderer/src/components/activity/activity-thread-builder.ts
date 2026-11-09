@@ -3,18 +3,14 @@ import {
   paneTitleForEvent,
   statusPreviewForEntry
 } from './activity-thread-presentation'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   ActivityEvent,
   ActivityLiveAgentSnapshot,
   AgentPaneThread
 } from './activity-thread-types'
 
-/**
- * Caller-owned reuse cache: threads whose derived content is unchanged keep their
- * previous object (and the whole list keeps its array) identity, so memo'd rows and
- * the search-text cache survive unrelated store writes.
- */
+/** Reuse unchanged thread objects and list identity so memoized rows/search caches survive unrelated store writes. */
 export type AgentPaneThreadReuseCache = {
   previousByPaneKey: Map<string, AgentPaneThread>
   previousList: AgentPaneThread[]
@@ -36,8 +32,7 @@ function arrayItemsEqual<T>(a: readonly T[], b: readonly T[]): boolean {
   return true
 }
 
-// Why: event and live-snapshot identities are preserved upstream (activity-event-builder
-// cache), so identity comparison on the referenced objects is a correct change detector.
+// Upstream preserves event/snapshot identity, making reference equality a valid change detector.
 function reuseThreadIfEqual(
   previous: AgentPaneThread | undefined,
   next: AgentPaneThread
@@ -135,6 +130,7 @@ export function buildAgentPaneThreads(
         latestTimestamp: liveAgent.timestamp,
         latestEvent: null,
         events: [],
+        migrationUnsupportedPtyId: liveAgent.migrationUnsupportedPtyId,
         unread: false
       })
       continue
@@ -147,6 +143,7 @@ export function buildAgentPaneThreads(
     existing.agentType = liveAgent.agentType
     existing.currentAgentState = liveAgent.state
     existing.currentAgentEntry = liveAgent.entry
+    existing.migrationUnsupportedPtyId ??= liveAgent.migrationUnsupportedPtyId
     existing.responsePreview = statusPreviewForEntry(
       liveAgent.entry,
       liveAgent.entry.state,
@@ -168,7 +165,6 @@ export function buildAgentPaneThreads(
   if (!reuseCache) {
     return built
   }
-  // Why: keep the list's array identity too, so downstream memos keyed on the list bail out.
   const result = arrayItemsEqual(reuseCache.previousList, built) ? reuseCache.previousList : built
   reuseCache.previousList = result
   reuseCache.previousByPaneKey = new Map(result.map((thread) => [thread.paneKey, thread]))

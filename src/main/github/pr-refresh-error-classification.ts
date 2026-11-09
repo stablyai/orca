@@ -2,27 +2,9 @@ import type { PRRefreshErrorType } from '../../shared/github/pull-request-refres
 import { classifyGitHubUnavailable } from '../../shared/github/api-availability'
 import { extractExecError } from '../git/exec-error'
 
-/**
- * Sanitization boundary for GitHub PR-refresh failures. Maps a raw runner/CLI
- * error to a stable {@link PRRefreshErrorType}; the renderer turns that into
- * classified copy so raw stderr / env values never reach the UI.
- *
- * Classification order (see docs/reference/pr-panel-refresh-guidance.md):
- * HTTP 429 / secondary rate limit → primary rate limit → repo_unavailable (404) →
- * network → permission (403) → gh_unavailable → auth → unknown. GitHub returns
- * 403 OR 429 for both primary and secondary limits, so the http-403 permission
- * branch must run only after the rate-limit checks. 404 is matched before the
- * network branch so a repository error whose message happens to contain a
- * substring like "network" is not misread as a connectivity failure. Auth and
- * network detection avoid broad substrings (e.g. "auth" inside "author", or a
- * repo name containing "network") in favor of structured codes and full phrases.
- */
+/** Classify runner failures before UI rendering; rate-limit 403s precede permissions, and repo 404s precede network heuristics. */
 export function classifyPRRefreshError(err: unknown): PRRefreshErrorType {
-  // Why: the git/gh runner keeps diagnostics on `.stderr`/`.stdout` separate
-  // from `.message` (which can be just "gh exited with 1."). Reading message
-  // alone would misclassify a real "HTTP 403" / "HTTP 404" as `unknown`, so a
-  // hard error would be treated as transient. Combine all three for substring
-  // detection while still preferring the structured spawn `code`.
+  // Runner diagnostics may live only on stdout/stderr; retain structured spawn codes too.
   const { stderr, stdout } = extractExecError(err)
   const message = err instanceof Error ? err.message : String(err)
   const lower = `${message}\n${stderr}\n${stdout}`.toLowerCase()
@@ -31,9 +13,7 @@ export function classifyPRRefreshError(err: unknown): PRRefreshErrorType {
       ? String((err as { code?: unknown }).code ?? '').toLowerCase()
       : ''
 
-  // Rate limits first: a 429 is always a rate-limit signal; secondary limits also
-  // arrive as abuse-mechanism phrasing or a 403/429 carrying Retry-After, none of
-  // which contain "rate limit".
+  // Secondary limits may mention abuse or Retry-After without the phrase rate limit.
   const isHttp429 = lower.includes('http 429') || lower.includes('429 too many requests')
   const isHttp403 = lower.includes('http 403')
   const hasRetryAfter = lower.includes('retry-after')
@@ -49,20 +29,15 @@ export function classifyPRRefreshError(err: unknown): PRRefreshErrorType {
   ) {
     return 'rate_limited'
   }
-  // Repository resolution failures (404) rank before the network branch: a "could
-  // not resolve to a Repository" message must not be captured by a connectivity
-  // heuristic, and matching 404 first isolates it from any incidental substring.
+  // Match repository failures before incidental connectivity wording.
   if (lower.includes('http 404') || lower.includes('could not resolve to a repository')) {
     return 'repo_unavailable'
   }
-  // Why: keep GitHub 5xx/network attribution aligned with other GitHub surfaces.
   const unavailable = classifyGitHubUnavailable(lower)
   if (unavailable) {
     return unavailable
   }
-  // Network: structured error codes and full connectivity phrases only. Never a
-  // bare "network" substring — a repo/branch/message containing "network" is not
-  // evidence of a connectivity failure.
+  // Require structured codes or full phrases; a repository named network-* is not a network failure.
   const networkCodes = new Set([
     'etimedout',
     'econnreset',
@@ -94,8 +69,7 @@ export function classifyPRRefreshError(err: unknown): PRRefreshErrorType {
   if (isHttp403 || lower.includes('resource not accessible')) {
     return 'permission'
   }
-  // gh CLI launch failure: prefer the structured spawn error code over a broad
-  // substring so a repo path merely containing "gh" is not misclassified.
+  // Prefer structured launch codes so paths containing gh cannot imply a missing executable.
   if (
     code === 'enoent' ||
     lower.includes('spawn gh enoent') ||
@@ -104,9 +78,7 @@ export function classifyPRRefreshError(err: unknown): PRRefreshErrorType {
   ) {
     return 'gh_unavailable'
   }
-  // Auth last: match full auth phrases and a 401, never a bare "auth" substring
-  // that also fires on "author"/"authored". "unauthorized"/"authorization" are
-  // long enough not to collide with "author".
+  // Full auth phrases avoid matching author/authored.
   if (
     lower.includes('http 401') ||
     lower.includes('unauthorized') ||
@@ -121,7 +93,6 @@ export function classifyPRRefreshError(err: unknown): PRRefreshErrorType {
   return 'unknown'
 }
 
-/** Stable, non-destructive fallback message for a classified refresh error. */
 export function safePRRefreshErrorMessage(errorType: PRRefreshErrorType): string {
   switch (errorType) {
     case 'rate_limited':

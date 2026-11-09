@@ -2,39 +2,41 @@ import React from 'react'
 import { CheckCircle2, CircleAlert } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { describeAutomationSchedule } from '../../../../shared/automation-schedules'
-import { getAutomationCronExpressionFields } from '../../../../shared/automation-schedule-parsing'
+import { describeAutomationSchedule } from '../../../../shared/automations/scheduling/automation-schedules'
+import { getAutomationCronExpressionFields } from '../../../../shared/automations/scheduling/automation-schedule-parsing'
 import { formatUiAutomationScheduleDescriptor } from './automation-schedule-label'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { Field } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
 
-// Why: chip identity is the cron field position, not the copy — two locales may render two fields
-// with the same word, and a React key must not change when the UI language does.
+// Key chips by cron position; translated labels can collide or change with language.
 const AUTOMATION_CRON_FIELD_IDS = ['minute', 'hour', 'day', 'month', 'weekday'] as const
 
 /** Cron field headers in cron field order, in the configured UI language. */
-export function getAutomationCronFieldLabels(): readonly string[] {
+export function getAutomationCronFieldLabels(t: Translate = translate): readonly string[] {
   return [
-    translate('auto.components.automations.AutomationCustomCronPanel.a226dbdd40', 'Minute'),
-    translate('auto.components.automations.AutomationCustomCronPanel.ec9c1e35df', 'Hour'),
-    translate('auto.components.automations.AutomationCustomCronPanel.2d82246d23', 'Day'),
-    translate('auto.components.automations.AutomationCustomCronPanel.0e1de0358b', 'Month'),
-    translate('auto.components.automations.AutomationCustomCronPanel.77e96bded6', 'Weekday')
+    t('auto.components.automations.AutomationCustomCronPanel.a226dbdd40', 'Minute'),
+    t('auto.components.automations.AutomationCustomCronPanel.ec9c1e35df', 'Hour'),
+    t('auto.components.automations.AutomationCustomCronPanel.2d82246d23', 'Day'),
+    t('auto.components.automations.AutomationCustomCronPanel.0e1de0358b', 'Month'),
+    t('auto.components.automations.AutomationCustomCronPanel.77e96bded6', 'Weekday')
   ]
 }
 
 export function getCronScheduleStatusLabel(
   schedule: string,
-  validateSchedule: (schedule: string) => boolean
+  validateSchedule: (schedule: string) => boolean,
+  t: Translate = translate,
+  intlLocale?: string
 ): { kind: 'empty' | 'invalid' | 'valid'; label: string } {
   const trimmed = schedule.trim()
   if (!trimmed) {
     return {
       kind: 'empty',
-      label: translate(
+      label: t(
         'auto.components.automations.AutomationCustomCronPanel.968e66d686',
         'Enter a five-field cron.'
       )
@@ -43,7 +45,7 @@ export function getCronScheduleStatusLabel(
   if (!validateSchedule(trimmed)) {
     return {
       kind: 'invalid',
-      label: translate(
+      label: t(
         'auto.components.automations.AutomationCustomCronPanel.e81a02d61b',
         'Enter a valid five-field cron before saving.'
       )
@@ -54,13 +56,13 @@ export function getCronScheduleStatusLabel(
   if (descriptor.kind === 'custom') {
     return {
       kind: 'valid',
-      label: translate(
+      label: t(
         'auto.components.automations.AutomationCustomCronPanel.f6ca30da23',
         'Valid custom cron'
       )
     }
   }
-  return { kind: 'valid', label: formatUiAutomationScheduleDescriptor(descriptor) }
+  return { kind: 'valid', label: formatUiAutomationScheduleDescriptor(descriptor, t, intlLocale) }
 }
 
 export function getCronFieldValues(schedule: string): readonly string[] {
@@ -79,17 +81,21 @@ export function AutomationCustomCronPanel({
   validateAdvancedSchedule: (schedule: string) => boolean
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const customScheduleStatus = getCronScheduleStatusLabel(
     draft.customSchedule,
-    validateAdvancedSchedule
+    validateAdvancedSchedule,
+    t,
+    intlLocale
   )
   const cronFieldValues = getCronFieldValues(draft.customSchedule)
-  const cronFieldLabels = getAutomationCronFieldLabels()
+  const cronFieldLabels = getAutomationCronFieldLabels(t)
 
   return (
     <div className="grid gap-3">
       <Field
-        label={translate(
+        label={t(
           'auto.components.automations.AutomationCustomCronPanel.3e3b2c369f',
           'Cron expression'
         )}

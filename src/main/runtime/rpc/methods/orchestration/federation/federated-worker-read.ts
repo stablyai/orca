@@ -1,12 +1,12 @@
 import type {
   ORCHESTRATION_WORKER_READ_SOURCES,
   OrchestrationWorkerReadResult
-} from '../../../../../../shared/orchestration-worker-output'
-import { ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
+import { ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/orchestration-peer-capability-cache'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
+import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/federation/orchestration-peer-capability-cache'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { readLegacyFederatedTerminal } from '../worker/worker-legacy-federated-read'
 import type { resolvePinnedFederatedServer } from '../worker/worker-observation'
@@ -29,8 +29,7 @@ export async function readFederatedWorkerOutput(args: {
     )
   }
   const capabilities = getOrchestrationPeerCapabilityCache(args.runtime)
-  // Hosts that serve `orchestration.federationReadOutput` shipped before the capability string
-  // did, so ask the method itself and let `method_not_found` be the only downgrade signal.
+  // Older hosts shipped federationReadOutput before its capability; downgrade only on method_not_found.
   const known = capabilities.knownSupport(
     args.federated.peer_fingerprint,
     args.federated.remote_runtime_epoch,

@@ -1,5 +1,6 @@
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
-import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import '../../shared/protocol-version'
+import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import type { CommandHandler } from '../dispatch'
 import { formatTerminalSend, printResult, terminalSendWarnings } from '../format'
 import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../flags'
@@ -100,7 +101,6 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
       baselineWorkingSequence: 0
     }
   }
-  // Why: the delivery warnings only existed in the text formatter, so --json callers never saw them.
   const warnings = terminalSendWarnings(result.result.send)
   printResult(
     warnings.length > 0 ? { ...result, result: { ...result.result, warnings } } : result,

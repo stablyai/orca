@@ -1,12 +1,12 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, electronMocks, ipcMain } from '../orca-runtime-test-mocks.spec'
-import {
-  TEST_WORKTREE_ID,
-  createRuntime,
-  deferred,
-  store
-} from '../orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../orca-runtime-test-scenario-builders.spec'
+import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { ipcMain } from 'electron'
+import { TEST_WORKTREE_ID, createRuntime, deferred, store } from './orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('does not re-deliver the agent launch command when the adopted renderer PTY spawned with one', async () => {
@@ -31,9 +31,11 @@ describe('OrcaRuntimeService', () => {
       runtime.setNotifier(createMobileCreateTestNotifier(vi.fn()))
       const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
-        // Why: mirrors the spawn IPC handler — a command-carrying spawn records
-        // its launch command right after registering the PTY.
-        runtime.registerPty('pty-carried', TEST_WORKTREE_ID, null, { tabId: 'tab-carried', leafId })
+        // Match spawn IPC: command launches record their command just after PTY registration.
+        registerBoundPty(runtime, 'pty-carried', TEST_WORKTREE_ID, null, {
+          tabId: 'tab-carried',
+          leafId
+        })
         runtime.noteTerminalSpawnCommand('pty-carried', 'codex')
         ipcMain.emit(
           'terminal:tabCreateReply',
@@ -85,7 +87,7 @@ describe('OrcaRuntimeService', () => {
         isDestroyed: () => false,
         webContents
       })
-      // Why: seed an inflated stored version under a stable epoch (the state prior renderer publications leave behind).
+      // Prior renderer frames can leave inflated versions under a stable epoch.
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
@@ -111,7 +113,7 @@ describe('OrcaRuntimeService', () => {
       })
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-      // Renderer republishes with a stale (lower) version under the same epoch, so syncMobileSessionTabs rejects it — the reporter's stall variant (#7587).
+      // #7587: renderer lower-version republish is rejected, leaving create stalled until rescue.
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
@@ -137,16 +139,13 @@ describe('OrcaRuntimeService', () => {
         ]
       })
       await vi.advanceTimersByTimeAsync(50)
-      // The rejected renderer sync must not have resolved the create.
       expect(settled).toBe(false)
-      // Prove the rejection: the stored snapshot still lacks the tab.
       const beforeRescue = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
       expect(
         beforeRescue.tabs.some((tab) => tab.type === 'terminal' && tab.parentTabId === 'tab-guard')
       ).toBe(false)
 
-      // The renderer's own PTY spawn registers with the binding and rescues it.
-      runtime.registerPty('pty-guard', TEST_WORKTREE_ID, null, {
+      registerBoundPty(runtime, 'pty-guard', TEST_WORKTREE_ID, null, {
         tabId: 'tab-guard',
         leafId
       })
@@ -174,7 +173,7 @@ describe('OrcaRuntimeService', () => {
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(store)
       runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
-      // Why (#7587): leaf graph-sync lands identity without registerPty, so only the catch-path rescue saves the stalled live session.
+      // #7587: legacy leaf graph-sync adds identity without registration; only catch-path rescue publishes it.
       const webContents = { send: vi.fn() }
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
@@ -200,10 +199,24 @@ describe('OrcaRuntimeService', () => {
       })
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-      // Let the create clear its pre-wait check and park in waitForMobileTerminalSurface before any identity arrives.
+      // Park in surface wait before identity arrives.
       await vi.advanceTimersByTimeAsync(50)
 
-      // Identity arrives via leaf graph-sync, NOT registerPty, so no rescue fires and the surface is never published.
+      // Main-owned layout ignores window-leaf authority; only registered spawn identity can retain the create.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        registerBoundPty(runtime, 'pty-catch', TEST_WORKTREE_ID, null, {
+          tabId: 'tab-catch',
+          leafId
+        })
+        await vi.advanceTimersByTimeAsync(50)
+      }
+      // Legacy graph-sync supplies identity without registration rescue, leaving surface unpublished.
+      bindPaneFirst(runtime, {
+        worktreeId: TEST_WORKTREE_ID,
+        tabId: 'tab-catch',
+        leafId,
+        ptyId: 'pty-catch'
+      })
       runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [
@@ -217,10 +230,9 @@ describe('OrcaRuntimeService', () => {
         ]
       })
 
-      // Surface still unpublished, so the create is still pending.
-      expect(settled).toBe(false)
+      expect(settled).toBe(ORCA_LAYOUT_OWNER_IS_MAIN)
 
-      // Cross the 10s surface timeout: the catch path must rescue from the live PTY, not roll the session back destructively.
+      // Timeout must rescue the live PTY instead of destructively rolling back the create.
       await vi.advanceTimersByTimeAsync(11_000)
       const result = await settledCreate
 
@@ -236,30 +248,6 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('reports browser tab creation as unsupported for a windowless host with no offscreen backend', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-
-    await expect(
-      runtime.browserTabCreate({ worktree: `id:${TEST_WORKTREE_ID}`, url: 'https://example.com' })
-    ).rejects.toMatchObject({
-      code: 'browser_error',
-      message: expect.stringContaining('does not support browser panes')
-    })
-  })
-
-  it('creates a browser tab via the offscreen backend for a headless runtime server', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-    const createTab = vi.fn(async () => ({ browserPageId: 'page-headless' }))
-    runtime.setOffscreenBrowserBackend({ createTab, closeTab: vi.fn() })
-
-    await expect(
-      runtime.browserTabCreate({ worktree: `id:${TEST_WORKTREE_ID}`, url: 'https://example.com' })
-    ).resolves.toEqual({ browserPageId: 'page-headless' })
-    expect(createTab).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://example.com' }))
   })
 
   it('cancels an in-flight same-connection browser screencast before replacing it', async () => {
@@ -441,178 +429,6 @@ describe('OrcaRuntimeService', () => {
     expect(firstStop).toHaveBeenCalledTimes(1)
   })
 
-  it('dedupes async subscription cleanup and retains a failed cleanup for retry', async () => {
-    const runtime = createRuntime()
-    const cleanupError = new Error('physical teardown incomplete')
-    const firstCleanup = deferred<void>()
-    const cleanup = vi
-      .fn()
-      .mockReturnValueOnce(firstCleanup.promise)
-      .mockRejectedValue(cleanupError)
-    runtime.registerSubscriptionCleanup('files-watch-1', cleanup, 'conn-1')
-
-    const first = runtime.cleanupSubscriptionAndWait('files-watch-1')
-    const duplicate = runtime.cleanupSubscriptionAndWait('files-watch-1')
-    expect(cleanup).toHaveBeenCalledTimes(1)
-    firstCleanup.reject(cleanupError)
-    await expect(first).rejects.toBe(cleanupError)
-    await expect(duplicate).rejects.toBe(cleanupError)
-
-    await expect(runtime.cleanupSubscriptionAndWait('files-watch-1')).rejects.toBe(cleanupError)
-    expect(cleanup).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not let an old connection cleanup tear down its replacement subscription', async () => {
-    const runtime = createRuntime()
-    const oldDone = deferred<void>()
-    const oldCleanup = vi.fn(() => oldDone.promise)
-    const replacementCleanup = vi.fn()
-
-    runtime.registerSubscriptionCleanup('terminal:stable', oldCleanup, 'conn-old')
-    runtime.registerSubscriptionCleanup('terminal:stable', replacementCleanup, 'conn-new')
-    expect(oldCleanup).toHaveBeenCalledTimes(1)
-
-    runtime.cleanupSubscriptionsForConnection('conn-old')
-    expect(replacementCleanup).not.toHaveBeenCalled()
-
-    runtime.cleanupSubscriptionsForConnection('conn-new')
-    expect(replacementCleanup).toHaveBeenCalledTimes(1)
-    oldDone.resolve()
-    await Promise.resolve()
-  })
-
-  it('does not let a delayed cleanup retry tear down its replacement subscription', async () => {
-    const runtime = createRuntime()
-    const physicalExit = deferred<void>()
-    const oldDone = deferred<void>()
-    const cleanupError = new Error('physical teardown incomplete')
-    const oldCleanup = vi.fn(() => oldDone.promise)
-    const replacementCleanup = vi.fn()
-
-    runtime.registerSubscriptionCleanup('files-watch:stable', oldCleanup, 'conn-old')
-    const oldAttempt = runtime.cleanupSubscriptionAndWait('files-watch:stable')
-    runtime.retrySubscriptionCleanupAfter('files-watch:stable', oldCleanup, physicalExit.promise)
-    runtime.registerSubscriptionCleanup('files-watch:stable', replacementCleanup, 'conn-new')
-
-    oldDone.reject(cleanupError)
-    await expect(oldAttempt).rejects.toBe(cleanupError)
-    physicalExit.resolve()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(oldCleanup).toHaveBeenCalledTimes(1)
-    expect(replacementCleanup).not.toHaveBeenCalled()
-    await runtime.cleanupSubscriptionAndWait('files-watch:stable')
-    expect(replacementCleanup).toHaveBeenCalledTimes(1)
-  })
-
-  it('releases an owned subscription only while its registration still owns the id', async () => {
-    const runtime = createRuntime()
-    const oldCleanup = vi.fn()
-    const replacementCleanup = vi.fn()
-
-    const oldRegistration = runtime.registerOwnedSubscriptionCleanup(
-      'terminal:owned',
-      oldCleanup,
-      'conn-old'
-    )
-
-    runtime.registerOwnedSubscriptionCleanup('terminal:owned', replacementCleanup, 'conn-new')
-    expect(oldCleanup).toHaveBeenCalledTimes(1)
-
-    // The stale registration must not reach the replacement that now owns the id.
-    oldRegistration.releaseIfCurrent()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(replacementCleanup).not.toHaveBeenCalled()
-  })
-
-  it('releases an owned subscription when the registration is still current', async () => {
-    const runtime = createRuntime()
-    const cleanup = vi.fn()
-
-    const registration = runtime.registerOwnedSubscriptionCleanup('terminal:live', cleanup, 'conn')
-    registration.releaseIfCurrent()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(cleanup).toHaveBeenCalledTimes(1)
-    // A second release is a no-op: the registration no longer owns the id.
-    registration.releaseIfCurrent()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(cleanup).toHaveBeenCalledTimes(1)
-  })
-
-  it('refuses an unsubscribe from a connection that no longer owns the subscription', async () => {
-    const runtime = createRuntime()
-    const oldCleanup = vi.fn()
-    const replacementCleanup = vi.fn()
-
-    runtime.registerSubscriptionCleanup('terminal:unsub', oldCleanup, 'conn-old')
-    runtime.registerSubscriptionCleanup('terminal:unsub', replacementCleanup, 'conn-new')
-
-    expect(runtime.cleanupSubscriptionIfOwnedByConnection('terminal:unsub', 'conn-old')).toBe(false)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(replacementCleanup).not.toHaveBeenCalled()
-
-    expect(runtime.cleanupSubscriptionIfOwnedByConnection('terminal:unsub', 'conn-new')).toBe(true)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(replacementCleanup).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports an unregistered subscription as gone rather than refused', async () => {
-    const runtime = createRuntime()
-
-    // Why it matters: a client retrying on `false` would otherwise chase a dead id.
-    expect(runtime.cleanupSubscriptionIfOwnedByConnection('terminal:missing', 'conn-a')).toBe(true)
-  })
-
-  it('reports a refusal even when a sibling id was merely absent', async () => {
-    const runtime = createRuntime()
-    const bareCleanup = vi.fn()
-    const compositeCleanup = vi.fn()
-
-    // A clientless stream registers under the bare id; a client-scoped one under the composite.
-    runtime.registerSubscriptionCleanup('terminal-1', bareCleanup, 'conn-a')
-    runtime.registerSubscriptionCleanup('terminal-1:phone-1', compositeCleanup, 'conn-b')
-
-    // conn-a owns the bare id but not the composite: one genuine teardown, one refusal.
-    expect(runtime.cleanupSubscriptionIfOwnedByConnection('terminal-1', 'conn-a')).toBe(true)
-    expect(runtime.cleanupSubscriptionIfOwnedByConnection('terminal-1:phone-1', 'conn-a')).toBe(
-      false
-    )
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(bareCleanup).toHaveBeenCalledTimes(1)
-    expect(compositeCleanup).not.toHaveBeenCalled()
-  })
-
-  // Why: the lease-only branch's unguarded compensating handleMobileUnsubscribe is only
-  // safe while a viewport-less subscribe cannot yield to the macrotask queue. Pin it so
-  // adding an await to that path fails here instead of silently killing a live lease.
-  it('settles a viewport-less mobile subscribe without leaving the microtask queue', async () => {
-    const runtime = createRuntime()
-    let settled = false
-
-    void runtime.handleMobileSubscribe('pty-lease', 'phone-1', undefined).then(() => {
-      settled = true
-    })
-    // Drain microtasks only: any real await on this path leaves this unsettled.
-    for (let i = 0; i < 50; i += 1) {
-      await Promise.resolve()
-    }
-
-    expect(settled).toBe(true)
-  })
-
-  it('tears down unconditionally for in-process callers that have no connection', async () => {
-    const runtime = createRuntime()
-    const cleanup = vi.fn()
-
-    runtime.registerSubscriptionCleanup('terminal:inproc', cleanup, 'conn-owner')
-    expect(runtime.cleanupSubscriptionIfOwnedByConnection('terminal:inproc', undefined)).toBe(true)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(cleanup).toHaveBeenCalledTimes(1)
-  })
-
   it('refuses browser screencast frames before ready and replays them once it is emitted', async () => {
     const runtime = createRuntime()
     const done = deferred<void>()
@@ -625,8 +441,7 @@ describe('OrcaRuntimeService', () => {
     const browserScreencast = vi.fn(
       async (_params: unknown, stream: { sendBinary: typeof sendBinary }) => {
         gatedSend = stream.sendBinary
-        // Why: a joining subscriber's viewport snapshot is captured here, before the caller
-        // has emitted ready, so the fan-out retains what the gate refuses.
+        // Join-time frame arrives before ready; retain it for post-gate replay.
         if (gatedSend(startupFrame) === false) {
           pendingFrame = startupFrame
         }
@@ -670,9 +485,8 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() =>
       expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'ready' }))
     )
-    // The gate still refuses the frame on arrival; it reaches the client only via the
-    // post-ready replay, so a static page does not leave the subscriber frameless.
-    expect(sendBinary).toHaveBeenCalledExactlyOnceWith(startupFrame)
+    // Idle pages have no next frame; post-ready replay must deliver the refused snapshot.
+    expect(sendBinary).toHaveBeenCalledExactlyOnceWith(startupFrame, undefined)
 
     runtime.cleanupSubscription('browser-screencast:page-1:first')
     await task

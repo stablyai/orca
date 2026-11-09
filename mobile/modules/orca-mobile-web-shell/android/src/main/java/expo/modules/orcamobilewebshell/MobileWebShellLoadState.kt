@@ -8,39 +8,34 @@ internal enum class MobileWebShellFailureReason(val wireName: String) {
   RENDER_PROCESS_GONE("render-process-gone")
 }
 
-internal data class MobileWebShellLoadEmission(val state: String, val reason: String?) {
-  fun toPayload(): Map<String, Any> = if (reason == null) {
-    mapOf("state" to state)
-  } else {
-    mapOf("state" to state, "reason" to reason)
+/** Renderer losses also say whether Orca was off screen and whether the renderer crashed or the OS reclaimed it. */
+internal data class MobileWebShellLoadEmission(
+  val state: String,
+  val reason: String?,
+  val background: Boolean? = null,
+  val crashed: Boolean? = null
+) {
+  fun toPayload(): Map<String, Any> = buildMap {
+    put("state", state)
+    reason?.let { put("reason", it) }
+    background?.let { put("background", it) }
+    crashed?.let { put("crashed", it) }
   }
 }
 
-/**
- * What a mount is still allowed to report. A failure is terminal: Chromium commits its own error
- * document after `onReceivedError` returns, and a rule list can fail to compile long after the
- * generation was already refused, so without this a `ready` or a second reason lands on top of a
- * failure the caller has already acted on. Consecutive duplicates are dropped as well.
- *
- * Pure, and the same rule on both platforms, so a JVM test and a `swiftc` check can hold it. The
- * two fields a caller reads directly are volatile: Android decides a document failure from
- * `shouldInterceptRequest`, which Chromium does not run on the UI thread.
- */
+/** Failure is terminal and duplicate reports are dropped: late error-document/rule-list callbacks must never restore ready. Cross-thread readers require volatile state. */
 internal class MobileWebShellLoadStateMachine {
   private var terminal = false
+  val isTerminal: Boolean get() = terminal
   private var last: MobileWebShellLoadEmission? = null
+  private var rendererLoss: Pair<Boolean, Boolean>? = null
 
   /** Which load this machine is reporting on. Read before deferring work, checked on delivery. */
   @Volatile
   var epoch: Int = 0
     private set
 
-  /**
-   * Whether a document under the current prop triple has committed. The document a load replaces
-   * stays alive between `stopLoading` and the next commit, and it is same-origin whenever only the
-   * directory or the bridge prop changed, so without this it passes every origin check and speaks
-   * for a load the caller has already been told is `loading`.
-   */
+  /** Accept messages only after the current props’ document commits; the replaced same-origin document can still speak before then. */
   @Volatile
   var hasCommittedDocument = false
     private set
@@ -65,31 +60,33 @@ internal class MobileWebShellLoadStateMachine {
 
   fun started(): MobileWebShellLoadEmission? = emit(MobileWebShellLoadEmission("loading", null))
 
-  /**
-   * A load that never committed did not finish.
-   *
-   * This is the whole guard, and it is deliberately not the document's URL: the page rewrites its
-   * own path with `history.replaceState` before its first render, so the document that committed at
-   * "/" reports finishing at "/h/<hostId>". Reading the path here withheld `ready` forever and left
-   * the WebView hidden behind it.
-   */
+  /** Require a commit, not URL equality: history.replaceState changes / to /h/<hostId> before finish, otherwise ready never arrives. */
   fun finished(): MobileWebShellLoadEmission? {
     if (!hasCommittedDocument) return null
     return emit(MobileWebShellLoadEmission("ready", null))
   }
 
-  fun failed(reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? {
-    val emission = emit(MobileWebShellLoadEmission("failed", reason.wireName))
+  fun failed(
+    reason: MobileWebShellFailureReason,
+    background: Boolean? = null,
+    crashed: Boolean? = null
+  ): MobileWebShellLoadEmission? {
+    val emission = emit(MobileWebShellLoadEmission("failed", reason.wireName, background, crashed))
     terminal = true
     documentEnded()
     return emission
   }
 
-  /**
-   * A failure decided during one load and reported after the next one started belongs to neither:
-   * Android has to defer its report past Chromium's error document, and a prop update can land in
-   * between, which would fail the generation that just replaced the one that actually failed.
-   */
+  /** A renderer loss, remembered across reset(): a prop update on the dead view reports the same loss, not a crash. */
+  fun rendererGone(background: Boolean, crashed: Boolean): MobileWebShellLoadEmission? {
+    rendererLoss = background to crashed
+    return failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE, background, crashed)
+  }
+
+  fun rendererStillGone(): MobileWebShellLoadEmission? =
+    failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE, rendererLoss?.first, rendererLoss?.second)
+
+  /** Deferred failures belong to their original load; a prop update may replace it before delivery. */
   fun failedDuring(epoch: Int, reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? =
     if (epoch != this.epoch) null else failed(reason)
 

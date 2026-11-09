@@ -2,15 +2,14 @@ import React from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
-import type { AutomationCreateTarget, AutomationDraft } from './AutomationEditorDialog'
+import type { AutomationDraft } from './AutomationEditorDialog'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 
 type AutomationSetupDecisionFieldProps = {
-  createTarget: AutomationCreateTarget
   draft: AutomationDraft
   repos: readonly Repo[]
   projectHostSetups: readonly ProjectHostSetup[]
@@ -20,7 +19,6 @@ type AutomationSetupDecisionFieldProps = {
 }
 
 export function AutomationSetupDecisionField({
-  createTarget,
   draft,
   repos,
   projectHostSetups,
@@ -28,9 +26,9 @@ export function AutomationSetupDecisionField({
   onDraftChange,
   onSetupDecisionTouched
 }: AutomationSetupDecisionFieldProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [advancedOpen, setAdvancedOpen] = React.useState(false)
   const defaultDecision = getVisibleAutomationSetupDecision({
-    createTarget,
     workspaceMode: draft.workspaceMode,
     repoId: draft.projectId,
     repos,
@@ -41,13 +39,12 @@ export function AutomationSetupDecisionField({
     return null
   }
   const checked = (draft.setupDecision ?? defaultDecision) === 'run'
-  const label = translate(
+  const label = t(
     'auto.components.automations.AutomationSetupDecisionField.5a7863909c',
     'Run setup for each new workspace'
   )
   return (
-    // Why: the setup choice is a power-user knob, so tuck it behind the same
-    // Advanced disclosure grammar the New Workspace composer uses.
+    // Keep the advanced setup option behind the New Workspace composer’s disclosure pattern.
     <div className="mt-1">
       <Button
         type="button"
@@ -56,10 +53,7 @@ export function AutomationSetupDecisionField({
         onClick={() => setAdvancedOpen((open) => !open)}
         className="-ml-2 text-xs"
       >
-        {translate(
-          'auto.components.automations.AutomationSetupDecisionField.18f000ad4e',
-          'Advanced'
-        )}
+        {t('auto.components.automations.AutomationSetupDecisionField.18f000ad4e', 'Advanced')}
         <ChevronDown className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')} />
       </Button>
       <div
@@ -106,7 +100,7 @@ export function AutomationSetupDecisionField({
               <span>{label}</span>
             </label>
             <p className="pl-6 text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.automations.AutomationSetupDecisionField.874b72195b',
                 "When this automation creates a workspace, prepare it the same way creating a worktree by hand does — run the project's setup and open its terminal tabs."
               )}

@@ -6,7 +6,7 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { sendToTrustedUIRenderer } from '../ipc/ui'
+import { prRefreshRenderers } from './pr-refresh-renderer-port'
 
 export type PRRefreshOutcomeObserver = (
   candidate: GitHubPRRefreshCandidate,
@@ -17,15 +17,25 @@ const DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
 export class PRRefreshEventPublisher {
   private sequence = 0
-  private observer: PRRefreshOutcomeObserver | null = null
+  private readonly observers = new Set<PRRefreshOutcomeObserver>()
   private readonly counters = { enqueued: 0, coalesced: 0, skipped: 0, backgroundPauses: 0 }
 
-  setOutcomeObserver(observer: PRRefreshOutcomeObserver | null): void {
-    this.observer = observer
+  addOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
+    const registered: PRRefreshOutcomeObserver = (...args) => observer(...args)
+    this.observers.add(registered)
+    return () => this.observers.delete(registered)
   }
 
+  /** Every read of a PR reaches every observer once, whatever surface caused it. */
   observe(candidate: GitHubPRRefreshCandidate, outcome: PRRefreshOutcome): void {
-    this.observer?.(candidate, outcome)
+    for (const observer of this.observers) {
+      try {
+        observer(candidate, outcome)
+      } catch (error) {
+        // One observer's failure must not hide the read from the others or fail the refresh.
+        console.warn('[pr-refresh] outcome observer failed', error)
+      }
+    }
   }
 
   nextSequence(): number {
@@ -38,7 +48,7 @@ export class PRRefreshEventPublisher {
       ...event,
       sequence: sequenceOverride ?? this.nextSequence()
     } as GitHubPRRefreshEvent
-    sendToTrustedUIRenderer('gh:prRefreshEvent', payload)
+    prRefreshRenderers().sendToTrustedUI('gh:prRefreshEvent', payload)
   }
 
   record(

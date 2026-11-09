@@ -3,10 +3,10 @@ import type {
   GitHubPRFile,
   GitHubPRFileContents
 } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
@@ -50,7 +50,7 @@ function touchPRFileContentCache(
 
   const existing = prFileContentCache.get(key)
   prFileContentCacheBytes -= existing?.byteCount ?? 0
-  // Why: re-insert moves the key to MRU; Map insertion order makes the oldest key first when evicting.
+  // Reinsert to mark MRU; insertion order identifies the oldest eviction candidate.
   prFileContentCache.delete(key)
   const byteCount = retainedByteCount
   prFileContentCache.set(key, { value, byteCount })

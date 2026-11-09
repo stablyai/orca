@@ -1,6 +1,4 @@
-// Claude CLI 2.1.280 stream-json captures, cut to the frames and fields the child-work path reads.
-// Ids, paths and prompts are replaced; the frame order and the relative clock (`at`, ms after the
-// first user message) are the captured ones.
+// CLI 2.1.280 captures: sanitized IDs/paths/prompts; original frame order and send-relative times.
 
 import {
   result,
@@ -11,8 +9,7 @@ import {
   type CapturedFrame
 } from './claude-captured-frame-builders.test-fixture'
 
-/** A foreground agent runs a 45 s shell; the user moves the agent to the background mid-run.
- *  The parent's turn ends at +12,610 ms while the agent's own shell runs until +51,275 ms. */
+/** Parent finishes while the backgrounded agent's shell keeps running. */
 export const MOVED_TO_BACKGROUND: CapturedFrame[] = [
   {
     at: 3_259,
@@ -112,8 +109,7 @@ export const MOVED_TO_BACKGROUND: CapturedFrame[] = [
   { at: 54_450, frame: result('success') }
 ]
 
-/** A background agent finishes; the next turn asks Claude to message it, which resumes it. The
- *  revived run starts again under the message call, after a roster that lists it. */
+/** Messaging a finished agent resumes it under the message call, after its roster entry. */
 export const RESUMED_BY_MESSAGE: CapturedFrame[] = [
   {
     at: 3_279,

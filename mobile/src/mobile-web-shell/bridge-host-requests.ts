@@ -1,7 +1,15 @@
-import type { RpcClient } from '../transport/rpc-client'
-import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import type { RpcResponse } from '../transport/types'
-import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
+import { classifyExactGitHubOperation } from '../../../src/shared/github/exact-work-item-operation'
+import {
+  captureGitHubInvocation,
+  GITHUB_TARGET_CHECK_TIMED_OUT,
+  requireExactGitHubOperations,
+  githubOperationResponse
+} from '../source-control/review/github-target-invocation'
+import { openRpcRequestBudget } from '../transport/rpc/rpc-request-budget'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { markRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import { bridgePendingRequestCap } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeHostDisposedError } from './bridge-host-errors'
 import { isBridgeNativeMethod } from './bridge/bridge-native-verbs'
@@ -9,30 +17,20 @@ import { substituteBridgePageClientIdentity } from './bridge/bridge-page-client-
 
 type RequestMessage = Extract<BridgeClientMessage, { type: 'request' }>
 
-/** Live until something settles it; the flag is what keeps a cancelled request's late answer from
- *  being posted under an id the page has moved on from. */
-type PendingRequest = { live: boolean }
+// Suppress cancelled requests’ late replies so an id the page abandoned cannot receive an old answer.
+type PendingRequest = { live: boolean; retire?: () => void }
 
 export type BridgeHostRequestDeps = {
   client: RpcClient
-  /** True when a subscription already holds this id; the two share one id space. */
   isIdTaken: (id: string) => boolean
   sendReply: (id: string, payload: RpcResponse) => void
   sendError: (id: string, error: unknown) => void
   capExceeded: (message: string) => Error
-  /** Answers a `native.` method on this device. Rejecting is how the seam refuses one. */
   serveNative: (id: string, method: string, params: unknown) => Promise<RpcResponse>
-  /** This device's identity to the host, swapped in for the page's placeholder. */
   readClientIdentity: () => string | null
 }
 
-/**
- * The requests one page document has in flight, forwarded to the shell's client and settled back.
- *
- * `pending` is the page's view and empties on a cancel or a `close`; `inFlight` is the client's and
- * does not, because `sendRequest` has no cancel. The call keeps its slot on the wire until it
- * settles, and a page that closed between batches would otherwise be handed the cap over again.
- */
+// pending tracks what the page still awaits; inFlight retains uncancellable desktop calls through close/cancel so a replacement document cannot regain their occupied slots.
 export class BridgeHostRequests {
   private readonly pending = new Map<string, PendingRequest>()
   private inFlight = 0
@@ -43,8 +41,7 @@ export class BridgeHostRequests {
     return this.pending.has(id)
   }
 
-  /** `sendRequest` has no cancel: the desktop still runs it, and this only stops the host from
-   *  posting an answer under an id the page has stopped waiting on. */
+  // sendRequest cannot cancel desktop execution; only suppress its now-unwanted reply.
   cancel(id: string): void {
     const record = this.pending.get(id)
     if (record !== undefined) {
@@ -57,52 +54,97 @@ export class BridgeHostRequests {
       return false
     }
     record.live = false
+    record.retire?.()
     this.pending.delete(id)
     return true
   }
 
-  /** The arity the page used, replayed exactly: `sendRequest(m)` and `sendRequest(m, undefined)`
-   *  are different calls to the golden recorder.
-   *
-   *  The `native.` fence is here because this is the one place a *request* reaches the client. A
-   *  `subscribe` reaches it by another door and is fenced in `handleSubscribe`; the two together
-   *  are the whole boundary, and a test that reads only `client.requests` sees only this half. */
-  private forward(message: RequestMessage): Promise<RpcResponse> {
+  // Replay the exact argument arity for the golden recorder. Fence native requests here; native subscriptions are fenced separately in handleSubscribe.
+  private forward(message: RequestMessage, record: PendingRequest): Promise<RpcResponse> {
     const { client } = this.deps
     if (isBridgeNativeMethod(message.method)) {
       return this.deps.serveNative(message.id, message.method, message.params)
     }
-    // One of the two doors to the client, and the placeholder must not survive either. A throw
-    // here lands in `open`'s catch, which answers the page the way every other refusal does.
+    // Replace the page’s identity placeholder on this request path too; failures reach open’s normal refusal catch.
     const params = substituteBridgePageClientIdentity(
       message.params,
       this.deps.readClientIdentity()
     )
-    if (message.options !== undefined) {
-      return client.sendRequest(message.method, params, message.options)
+    const options =
+      message.envelope === undefined
+        ? message.options
+        : { ...message.options, envelope: message.envelope }
+    const bound = classifyExactGitHubOperation(message.method, params, message.envelope)
+    if (bound) {
+      return this.forwardExact(message, params, record)
+    }
+    if (options !== undefined) {
+      return client.sendRequest(message.method, params, options)
     }
     return 'params' in message
       ? client.sendRequest(message.method, params)
       : client.sendRequest(message.method)
   }
 
+  private async forwardExact(
+    message: RequestMessage,
+    params: unknown,
+    record: PendingRequest
+  ): Promise<RpcResponse> {
+    const { client } = this.deps
+    const invocation = captureGitHubInvocation(
+      client,
+      () => record.live && this.pending.get(message.id) === record
+    )
+    record.retire = invocation.retire
+    const options = { timeoutMs: 30_000, ...message.options }
+    // The check and the action share the page's one deadline, as on native; only the budget spans both legs.
+    const budget = openRpcRequestBudget({ ...options, budgetSpansConnect: true })
+    const remaining = () => {
+      if (budget.deadline === null) {
+        return options.timeoutMs
+      }
+      const ms = budget.deadline - Date.now()
+      if (ms <= 0) {
+        throw new Error(GITHUB_TARGET_CHECK_TIMED_OUT)
+      }
+      return ms
+    }
+    try {
+      // This is the native first hop, not the final executionHost named by the operation.
+      const status = await invocation.status({ ...options, timeoutMs: remaining() })
+      requireExactGitHubOperations(status)
+      invocation.assertCurrent()
+      return githubOperationResponse(
+        await client.sendRequest(message.method, params, {
+          ...options,
+          timeoutMs: remaining(),
+          envelope: message.envelope,
+          beforeSend: invocation.assertCurrent
+        })
+      )
+    } finally {
+      invocation.retire()
+    }
+  }
+
   open(message: RequestMessage): void {
     const { id } = message
-    // An id already in flight is a page bug; refusing the newcomer leaves the exchange it collided
-    // with intact, which settling it would not.
+    // Refuse a colliding newcomer without settling the existing request under that id.
     if (this.pending.has(id) || this.deps.isIdTaken(id)) {
       this.deps.sendError(id, this.deps.capExceeded('that id is already in flight'))
       return
     }
-    if (this.inFlight >= BRIDGE_MAX_PENDING_REQUESTS) {
-      this.deps.sendError(id, this.deps.capExceeded(`over ${BRIDGE_MAX_PENDING_REQUESTS} requests`))
+    const cap = bridgePendingRequestCap(isBridgeNativeMethod(message.method))
+    if (this.inFlight >= cap) {
+      this.deps.sendError(id, this.deps.capExceeded(`over ${cap} requests`))
       return
     }
     const record: PendingRequest = { live: true }
     this.pending.set(id, record)
     let answer: Promise<RpcResponse>
     try {
-      answer = this.forward(message)
+      answer = this.forward(message, record)
     } catch (error) {
       this.settle(id, record)
       this.deps.sendError(id, error)
@@ -125,12 +167,11 @@ export class BridgeHostRequests {
     )
   }
 
-  /** `notify` is false for the page's own `close`, which has already settled what it owned. */
   closeAll(notify: boolean): void {
     for (const [id, record] of this.pending) {
       record.live = false
-      // In flight when the door shut: the desktop may already have run it, and a page told this was
-      // a definite send failure would offer to retry something that already happened.
+      record.retire?.()
+      // Use delivery-unknown because desktop execution may have happened; definite failure would invite unsafe retry.
       if (notify) {
         this.deps.sendError(id, markRpcDeliveryUnknown(new BridgeHostDisposedError()))
       }

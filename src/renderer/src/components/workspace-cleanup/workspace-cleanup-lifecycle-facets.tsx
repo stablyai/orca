@@ -1,11 +1,11 @@
 import React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   WORKSPACE_CLEANUP_AGENT_STATE_VALUES,
   WORKSPACE_CLEANUP_IDLE_SIGNAL_VALUES,
   WORKSPACE_CLEANUP_PRESENCE_VALUES,
   WORKSPACE_CLEANUP_TRI_STATE_VALUES
-} from '../../../../shared/workspace-cleanup-facet-rankings'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-facet-rankings'
 import {
   FacetCheckbox,
   FacetChoice,
@@ -25,7 +25,6 @@ import {
   type WorkspaceCleanupFacetGroupProps
 } from './workspace-cleanup-facet-panel-model'
 
-/** Activity, size, workspace status, agent state, and local context. */
 export function WorkspaceCleanupLifecycleFacets({
   filters,
   counts,
@@ -33,56 +32,57 @@ export function WorkspaceCleanupLifecycleFacets({
   options,
   onPatch
 }: WorkspaceCleanupFacetGroupProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.activity', 'Activity')}
+        title={t('components.workspace.cleanup.browse.facet.activity', 'Activity')}
         matchCount={counts.activity}
         totalCount={totalCount}
       >
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.idleSignalField', 'Idle signal')}
+          label={t('components.workspace.cleanup.browse.idleSignalField', 'Idle signal')}
           value={filters.activity.idleSignal}
           options={WORKSPACE_CLEANUP_IDLE_SIGNAL_VALUES}
           getLabel={getWorkspaceCleanupIdleSignalLabel}
           onChange={(idleSignal) => onPatch('activity', { idleSignal })}
         />
         <FacetNumberField
-          label={translate('components.workspace.cleanup.browse.idleMinDays', 'Idle for at least')}
+          label={t('components.workspace.cleanup.browse.idleMinDays', 'Idle for at least')}
           value={filters.activity.idleMinDays}
           placeholder="30"
-          suffix={translate('components.workspace.cleanup.browse.days', 'days')}
+          suffix={t('components.workspace.cleanup.browse.days', 'days')}
           onChange={(idleMinDays) => onPatch('activity', { idleMinDays })}
         />
         <FacetCheckbox
           id="activity-never-visited"
-          label={translate('components.workspace.cleanup.browse.neverVisited', 'Never opened')}
+          label={t('components.workspace.cleanup.browse.neverVisited', 'Never opened')}
           checked={filters.activity.neverVisited}
           onChange={(neverVisited) => onPatch('activity', { neverVisited })}
         />
       </FacetSection>
 
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.size', 'Size on disk')}
+        title={t('components.workspace.cleanup.browse.facet.size', 'Size on disk')}
         matchCount={counts.size}
         totalCount={totalCount}
       >
         <FacetNumberField
-          label={translate('components.workspace.cleanup.browse.minSize', 'At least')}
+          label={t('components.workspace.cleanup.browse.minSize', 'At least')}
           value={toMegabytes(filters.size.minBytes)}
           placeholder="0"
           suffix="MB"
           onChange={(megabytes) => onPatch('size', { minBytes: fromMegabytes(megabytes) })}
         />
         <FacetNumberField
-          label={translate('components.workspace.cleanup.browse.maxSize', 'At most')}
+          label={t('components.workspace.cleanup.browse.maxSize', 'At most')}
           value={toMegabytes(filters.size.maxBytes)}
           suffix="MB"
           onChange={(megabytes) => onPatch('size', { maxBytes: fromMegabytes(megabytes) })}
         />
         <FacetCheckbox
           id="size-include-unsized"
-          label={translate(
+          label={t(
             'components.workspace.cleanup.browse.includeUnsized',
             'Include unmeasured workspaces'
           )}
@@ -92,7 +92,7 @@ export function WorkspaceCleanupLifecycleFacets({
       </FacetSection>
 
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.status', 'Workspace status')}
+        title={t('components.workspace.cleanup.browse.facet.status', 'Workspace status')}
         matchCount={counts.status}
         totalCount={totalCount}
       >
@@ -108,7 +108,7 @@ export function WorkspaceCleanupLifecycleFacets({
         ) : null}
         <FacetCheckbox
           id="status-match-statusless"
-          label={translate(
+          label={t(
             'components.workspace.cleanup.browse.matchStatusless',
             'Include workspaces with no status'
           )}
@@ -116,28 +116,28 @@ export function WorkspaceCleanupLifecycleFacets({
           onChange={(matchStatusless) => onPatch('status', { matchStatusless })}
         />
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.archived', 'Archived')}
+          label={t('components.workspace.cleanup.browse.archived', 'Archived')}
           value={filters.status.archived}
           options={WORKSPACE_CLEANUP_TRI_STATE_VALUES}
           getLabel={getWorkspaceCleanupTriStateLabel}
           onChange={(archived) => onPatch('status', { archived })}
         />
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.pinned', 'Pinned')}
+          label={t('components.workspace.cleanup.browse.pinned', 'Pinned')}
           value={filters.status.pinned}
           options={WORKSPACE_CLEANUP_TRI_STATE_VALUES}
           getLabel={getWorkspaceCleanupTriStateLabel}
           onChange={(pinned) => onPatch('status', { pinned })}
         />
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.unread', 'Unread')}
+          label={t('components.workspace.cleanup.browse.unread', 'Unread')}
           value={filters.status.unread}
           options={WORKSPACE_CLEANUP_TRI_STATE_VALUES}
           getLabel={getWorkspaceCleanupTriStateLabel}
           onChange={(unread) => onPatch('status', { unread })}
         />
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.comment', 'Has comment')}
+          label={t('components.workspace.cleanup.browse.comment', 'Has comment')}
           value={filters.status.comment}
           options={WORKSPACE_CLEANUP_TRI_STATE_VALUES}
           getLabel={getWorkspaceCleanupTriStateLabel}
@@ -146,7 +146,7 @@ export function WorkspaceCleanupLifecycleFacets({
       </FacetSection>
 
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.agent', 'Agent')}
+        title={t('components.workspace.cleanup.browse.facet.agent', 'Agent')}
         matchCount={counts.agent}
         totalCount={totalCount}
       >
@@ -157,7 +157,7 @@ export function WorkspaceCleanupLifecycleFacets({
           onChange={(states) => onPatch('agent', { states })}
         />
         <FacetChoice
-          label={translate(
+          label={t(
             'components.workspace.cleanup.browse.retainedDoneAgents',
             'Finished agent transcripts'
           )}
@@ -169,12 +169,12 @@ export function WorkspaceCleanupLifecycleFacets({
       </FacetSection>
 
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.context', 'Local context')}
+        title={t('components.workspace.cleanup.browse.facet.context', 'Local context')}
         matchCount={counts.context}
         totalCount={totalCount}
       >
         <FacetChoice
-          label={translate(
+          label={t(
             'components.workspace.cleanup.browse.contextPresence',
             'Open tabs, terminals, comments'
           )}
@@ -185,10 +185,7 @@ export function WorkspaceCleanupLifecycleFacets({
         />
         <FacetCheckbox
           id="context-completely-empty"
-          label={translate(
-            'components.workspace.cleanup.browse.completelyEmpty',
-            'Nothing left to lose'
-          )}
+          label={t('components.workspace.cleanup.browse.completelyEmpty', 'Nothing left to lose')}
           checked={filters.context.completelyEmpty}
           onChange={(completelyEmpty) => onPatch('context', { completelyEmpty })}
         />

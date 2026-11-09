@@ -4,8 +4,9 @@ import type { PtyManagementFolderAccessMismatch } from '../../../../preload/api-
 import { isMacTccFolderClass } from '../../../../shared/daemon-adoption-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { track } from '@/lib/telemetry'
-import { useMacFolderAccessFixStore } from '@/store/mac-folder-access-fix'
+import { useMacFolderAccessFixStore } from '@/store/terminals/folder-access/mac-folder-access-fix'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -47,26 +48,25 @@ function Step({
   )
 }
 
-/**
- * Whether the denial is one `tccutil reset` can act on: only Documents, Desktop and Downloads have
- * a per-app TCC row, so offering the button for any other folder promises a remedy that cannot run.
- */
+/** Only Documents/Desktop/Downloads have per-app TCC rows that tccutil can reset. */
 function canResetPermission(mismatch: PtyManagementFolderAccessMismatch): boolean {
   return mismatch.freshDaemonAccess === 'denied' && isMacTccFolderClass(mismatch.cwdClass)
 }
 
-function allowStepHelper(mismatch: PtyManagementFolderAccessMismatch): string | undefined {
-  // A probe that could not answer must not accuse the user of a missing grant.
+function allowStepHelper(
+  mismatch: PtyManagementFolderAccessMismatch,
+  t: Translate = translate
+): string | undefined {
+  // An unanswered probe cannot establish a missing grant.
   if (mismatch.freshDaemonAccess === 'unknown') {
-    return translate(
+    return t(
       'auto.components.shared.MacFolderAccessFixDialog.stepAllowUnknown',
       'Couldn’t verify. Skip if already allowed.'
     )
   }
-  // The toggle is already on for everyone who sees this, so the step has to say what the reset
-  // does instead of pointing at a switch (STA-7948). Without a reset there is nothing to promise.
+  // The toggle is already on; explain the reset only when one is available.
   if (canResetPermission(mismatch)) {
-    return translate(
+    return t(
       'auto.components.shared.MacFolderAccessFixDialog.stepAllowDenied',
       'Orca is already allowed, but macOS isn’t applying it to the terminal service. Reset asks macOS for the permission again. Click Allow when it prompts.'
     )
@@ -85,6 +85,7 @@ function FixSteps({
   resetState: ResetState
   folder: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <ol className="flex flex-col gap-3">
@@ -92,28 +93,28 @@ function FixSteps({
           done={mismatch.freshDaemonAccess === 'allowed' || restartState === 'done'}
           label={
             canResetPermission(mismatch)
-              ? translate(
+              ? t(
                   'auto.components.shared.MacFolderAccessFixDialog.stepReallow',
                   'Re-allow Orca for your {{folder}}',
                   { folder }
                 )
-              : translate(
+              : t(
                   'auto.components.shared.MacFolderAccessFixDialog.stepAllow',
                   'Allow Orca under Files and Folders'
                 )
           }
-          helper={restartState === 'done' ? undefined : allowStepHelper(mismatch)}
+          helper={restartState === 'done' ? undefined : allowStepHelper(mismatch, t)}
         />
         <Step
           done={restartState === 'done'}
-          label={translate(
+          label={t(
             'auto.components.shared.MacFolderAccessFixDialog.stepRestart',
             'Restart Orca’s terminal service'
           )}
           helper={
             restartState === 'done'
               ? undefined
-              : translate(
+              : t(
                   'auto.components.shared.MacFolderAccessFixDialog.restartConsequence',
                   'Open terminals and agents will restart.'
                 )
@@ -122,7 +123,7 @@ function FixSteps({
       </ol>
       {restartState === 'failed' ? (
         <p className="text-sm text-destructive">
-          {translate(
+          {t(
             'auto.components.shared.MacFolderAccessFixDialog.restartFailed',
             'Restart failed. Try again from Settings → Terminal → Manage Sessions.'
           )}
@@ -130,7 +131,7 @@ function FixSteps({
       ) : null}
       {resetState === 'failed' && mismatch.freshDaemonAccess !== 'allowed' ? (
         <p className="text-sm text-destructive">
-          {translate(
+          {t(
             'auto.components.shared.MacFolderAccessFixDialog.resetFailed',
             'Couldn’t reset the permission. Use System Settings instead.'
           )}
@@ -138,7 +139,7 @@ function FixSteps({
       ) : null}
       {resetState === 'probed' && mismatch.freshDaemonAccess === 'denied' ? (
         <p className="text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.shared.MacFolderAccessFixDialog.resetStillBlocked',
             'Still blocked after the reset.'
           )}
@@ -148,7 +149,6 @@ function FixSteps({
   )
 }
 
-/** The footer carries the active step's one action, so the steps stay a checklist. */
 function FixFooter({
   mismatch,
   restartState,
@@ -166,20 +166,20 @@ function FixFooter({
   onReset: () => void
   onRestart: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const busy = restartState === 'busy' || resetState === 'busy'
-  const openSettingsLabel = translate(
+  const openSettingsLabel = t(
     'auto.components.shared.MacFolderAccessFixDialog.openSystemSettings',
     'Open System Settings'
   )
   if (restartState === 'done') {
     return (
       <Button size="sm" onClick={onCancel}>
-        {translate('auto.components.shared.MacFolderAccessFixDialog.done', 'Done')}
+        {t('auto.components.shared.MacFolderAccessFixDialog.done', 'Done')}
       </Button>
     )
   }
-  // Restarting cannot help while a fresh daemon is denied, so the reset takes the primary slot.
-  // Two routes for one step would read as a choice the user cannot make.
+  // Restart cannot help a denied fresh daemon; offer reset as the sole primary remedy.
   if (canResetPermission(mismatch)) {
     // System Settings is the fallback: it appears only once the reset has settled without helping.
     const resetSettled = resetState === 'probed' || resetState === 'failed'
@@ -191,28 +191,24 @@ function FixFooter({
           </Button>
         ) : (
           <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
-            {translate('auto.components.shared.MacFolderAccessFixDialog.cancel', 'Cancel')}
+            {t('auto.components.shared.MacFolderAccessFixDialog.cancel', 'Cancel')}
           </Button>
         )}
         <Button size="sm" onClick={onReset} disabled={busy}>
           {resetState === 'busy' ? <LoaderCircle className="size-4 animate-spin" /> : null}
           {resetState === 'busy'
-            ? translate('auto.components.shared.MacFolderAccessFixDialog.resetting', 'Resetting…')
-            : translate(
-                'auto.components.shared.MacFolderAccessFixDialog.reset',
-                'Reset permission'
-              )}
+            ? t('auto.components.shared.MacFolderAccessFixDialog.resetting', 'Resetting…')
+            : t('auto.components.shared.MacFolderAccessFixDialog.reset', 'Reset permission')}
         </Button>
       </>
     )
   }
-  // A denial with no TCC row to reset leaves System Settings as the only route, so it takes the
-  // primary slot: a restart cannot help while a fresh daemon is denied.
+  // Without a resettable TCC row, only System Settings can resolve the denial before restart.
   if (mismatch.freshDaemonAccess === 'denied') {
     return (
       <>
         <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
-          {translate('auto.components.shared.MacFolderAccessFixDialog.cancel', 'Cancel')}
+          {t('auto.components.shared.MacFolderAccessFixDialog.cancel', 'Cancel')}
         </Button>
         <Button size="sm" onClick={onOpenSettings} disabled={busy}>
           {openSettingsLabel}
@@ -228,29 +224,26 @@ function FixFooter({
         </Button>
       ) : (
         <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
-          {translate('auto.components.shared.MacFolderAccessFixDialog.cancel', 'Cancel')}
+          {t('auto.components.shared.MacFolderAccessFixDialog.cancel', 'Cancel')}
         </Button>
       )}
       <Button size="sm" onClick={onRestart} disabled={busy}>
         {restartState === 'busy' ? <LoaderCircle className="size-4 animate-spin" /> : null}
         {restartState === 'busy'
-          ? translate('auto.components.shared.MacFolderAccessFixDialog.restarting', 'Restarting…')
-          : translate('auto.components.shared.MacFolderAccessFixDialog.restart', 'Restart')}
+          ? t('auto.components.shared.MacFolderAccessFixDialog.restarting', 'Restarting…')
+          : t('auto.components.shared.MacFolderAccessFixDialog.restart', 'Restart')}
       </Button>
     </>
   )
 }
 
-/**
- * The remedy for a daemon macOS refuses a folder to (STA-7948), raised from the folder-access
- * toast. Two steps, because a restart alone only works once Orca itself is allowed again — which
- * step 1 does, and the focus-time poll behind `freshDaemonAccess` is what notices it landed.
- */
+/** Grant access before restarting; focus-time probes detect when the first step succeeds. */
 function FolderAccessFix({
   mismatch
 }: {
   mismatch: PtyManagementFolderAccessMismatch
 }): React.JSX.Element {
+  const t = useTranslate()
   const close = useMacFolderAccessFixStore((s) => s.close)
   const applyVerdict = useMacFolderAccessFixStore((s) => s.applyVerdict)
   const retireNotice = useMacFolderAccessFixStore((s) => s.retireNotice)
@@ -277,8 +270,7 @@ function FolderAccessFix({
         return
       }
       setResetState('probed')
-      // A null verdict means the evidence is gone (daemon replaced mid-reset), which unmounts this
-      // dialog: there is nothing left for it to fix.
+      // Null evidence means the daemon was replaced; applyVerdict unmounts this obsolete remedy.
       applyVerdict(result.mismatch)
     } catch {
       if (mountedRef.current) {
@@ -297,8 +289,7 @@ function FolderAccessFix({
       }
       setRestartState(success ? 'done' : 'failed')
       if (success) {
-        // Why here: the replaced daemon's identity is gone, so the poll that raised the toast will
-        // never mention it again, and a takedown the user did not ask for is not a dismissal.
+        // The replaced daemon will never be polled again; retire its toast without counting dismissal.
         retireNotice(daemonScope)
       }
     } catch {
@@ -308,7 +299,7 @@ function FolderAccessFix({
     }
   }, [cwdClass, daemonScope, mountedRef, retireNotice])
 
-  const folder = macFolderAccessFolderName(cwdClass)
+  const folder = macFolderAccessFolderName(cwdClass, t)
   const busy = restartState === 'busy' || resetState === 'busy'
   return (
     <Dialog
@@ -335,14 +326,14 @@ function FolderAccessFix({
       >
         <DialogHeader>
           <DialogTitle>
-            {translate(
+            {t(
               'auto.components.shared.MacFolderAccessFixDialog.title',
               'Fix access to your {{folder}}',
               { folder }
             )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.shared.MacFolderAccessFixDialog.lead',
               'macOS is blocking Orca’s terminal service from this folder.'
             )}
@@ -370,10 +361,7 @@ function FolderAccessFix({
   )
 }
 
-/**
- * Shown only while the scope the user opened is still the one the evidence is about, so no remedy
- * phase can outlive its evidence and nothing here has to be closed by hand.
- */
+/** Limit the remedy to its original evidence scope so stale phases cannot outlive it. */
 export function MacFolderAccessFixDialog(): React.JSX.Element | null {
   const mismatch = useMacFolderAccessFixStore((s) => s.mismatch)
   const openScope = useMacFolderAccessFixStore((s) => s.openScope)

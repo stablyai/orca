@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { detectCsvDelimiter } from './csv-parse'
 import { CsvDelimiterPicker, type CsvDelimiterChoice } from './csv-delimiter-picker'
 import { CsvGrid } from './CsvGrid'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { openCsvHttpLink } from './csv-link-routing'
 import { parseCsvTextDocument } from './csv-text-document'
 import { csvInspectionRows, csvSourceRow, type CsvInspectionSort } from './csv-inspection'
@@ -11,6 +11,8 @@ import { CsvTableToolbar } from './CsvTableToolbar'
 import { remapCsvColumnWidths } from './csv-column-width-preferences'
 import { useCsvColumnWidths } from './useCsvColumnWidths'
 import { buildFileViewPreferenceKey } from '../file-view-preference-storage'
+import { formatCsvPreviewError } from './csv-preview-error-message'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export default function CsvViewer({
   content,
@@ -35,6 +37,9 @@ export default function CsvViewer({
   onContentChange?: (content: string) => void
   onSave?: (content: string) => Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const languageRevision = useUiLanguageRevision()
   const [delimiterChoice, setDelimiterChoice] = useState<CsvDelimiterChoice>('auto')
   const detectedDelimiter = useMemo(
     () => detectCsvDelimiter(filePath, content),
@@ -48,7 +53,7 @@ export default function CsvViewer({
         error: null
       }
     } catch (error) {
-      return { parsed: null, error: error instanceof Error ? error.message : String(error) }
+      return { parsed: null, error }
     }
   }, [content, delimiter])
   const [filter, setFilter] = useState('')
@@ -66,8 +71,9 @@ export default function CsvViewer({
   const document = result.parsed
   const effectiveSort = sort && sort.column < (document?.columnCount ?? 0) ? sort : null
   const inspectionRows = useMemo(
-    () => (document ? csvInspectionRows(document.rows, filter, effectiveSort) : null),
-    [document, filter, effectiveSort]
+    () => (document ? csvInspectionRows(document.rows, filter, effectiveSort, intlLocale) : null),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- sorting collates in the UI language.
+    [document, filter, effectiveSort, languageRevision, intlLocale]
   )
   const editor = useCsvTableEditor({
     document,
@@ -113,7 +119,7 @@ export default function CsvViewer({
           filter={filter}
           sort={effectiveSort}
           saving={editor.saving}
-          canEdit={!result.error}
+          canEdit={result.parsed !== null}
           canSave={Boolean(onSave)}
           onFilter={(next) => {
             if (editor.interaction?.commit() !== false) {
@@ -139,12 +145,12 @@ export default function CsvViewer({
           {editor.error}
         </div>
       )}
-      {result.error ? (
+      {result.parsed === null ? (
         <div
           role="alert"
           className="flex flex-1 items-center justify-center px-4 text-sm text-muted-foreground"
         >
-          {result.error}
+          {formatCsvPreviewError(result.error, t)}
         </div>
       ) : result.parsed?.rows.length ? (
         <CsvGrid
@@ -163,7 +169,7 @@ export default function CsvViewer({
         />
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          {translate('auto.components.editor.CsvViewer.a233d55b77', 'Empty file')}
+          {t('auto.components.editor.CsvViewer.a233d55b77', 'Empty file')}
         </div>
       )}
       <CsvFooter
@@ -204,15 +210,23 @@ export function CsvFooter({
   detectedDelimiter: string
   onDelimiterChange: (choice: CsvDelimiterChoice) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div className="flex flex-wrap items-center gap-4 border-t border-border/60 px-3 py-1 text-xs text-muted-foreground">
       <span>
-        {rowCount.toLocaleString()}{' '}
-        {translate('auto.components.editor.CsvViewer.ac31d2cd60', 'rows')}
+        {t('auto.components.editor.CsvViewer.rowCount', '{{formatted}} rows', {
+          count: rowCount,
+          formatted: rowCount.toLocaleString(intlLocale),
+          defaultValue_one: '{{formatted}} row'
+        })}
       </span>
       <span>
-        {columnCount.toLocaleString()}{' '}
-        {translate('auto.components.editor.CsvViewer.eedd0d37a7', 'columns')}
+        {t('auto.components.editor.CsvViewer.columnCount', '{{formatted}} columns', {
+          count: columnCount,
+          formatted: columnCount.toLocaleString(intlLocale),
+          defaultValue_one: '{{formatted}} column'
+        })}
       </span>
       <CsvDelimiterPicker
         value={delimiterChoice}

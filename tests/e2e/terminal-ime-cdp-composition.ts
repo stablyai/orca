@@ -1,23 +1,13 @@
 import type { CDPSession, Page } from '@stablyai/playwright-test'
 
-/**
- * Dispatches the key shapes an input source or a system text substitution produces, through CDP.
- *
- * Driving these from the browser protocol rather than a native input source is what removes the
- * accessibility grant and the system input source that would otherwise force a `@headful`,
- * macOS-only gate, so the specs they feed run in the normal headless project on CI.
- */
+// Dispatch input-source/text-substitution key shapes through CDP so headless CI needs no native IME or accessibility grant.
 export type ImeKeyIdentity = {
   key: string
   code: string
   keyCode: number
 }
 
-/**
- * A printable keydown whose `key` the input source has already rewritten to the glyph it will
- * commit — the shape a CJK source produces for punctuation and full-width digits, which arrive
- * with no composition session at all.
- */
+// Some CJK sources rewrite keydown.key to the committed punctuation/full-width digit without any composition session.
 export async function dispatchImeRewrittenPrintableKey(
   session: CDPSession,
   identity: ImeKeyIdentity
@@ -40,23 +30,14 @@ export async function dispatchImeRewrittenPrintableKey(
   })
 }
 
-/**
- * A printable keydown that still carries the **physical layout key**, followed by the substituted
- * glyph arriving through the text system.
- *
- * This is the macOS shape for full-width punctuation and digits, and for a
- * `DefaultKeyBinding.dict` remap: the substitution happens inside `insertText:`, not on the
- * keydown, so the keydown Chromium delivers is the plain layout character and the substituted one
- * only ever appears in the `input` event. Anything that produces terminal bytes from the keydown
- * emits the layout form and destroys the real one.
- */
+// macOS full-width input and DefaultKeyBinding.dict remaps keep the physical layout key on keydown and substitute via insertText:.
+// Emitting terminal bytes from keydown sends the layout form and destroys the later committed glyph.
 export async function dispatchImeSubstitutedTextKey(
   session: CDPSession,
   identity: ImeKeyIdentity,
   committedText: string
 ): Promise<void> {
-  // rawKeyDown carries no `text`, so Chromium generates no character of its own and the only
-  // committed text is the one the text system supplies below.
+  // rawKeyDown supplies no text, leaving the following text-system commit as the only insertion.
   await session.send('Input.dispatchKeyEvent', {
     type: 'rawKeyDown',
     key: identity.key,
@@ -127,16 +108,17 @@ export async function dispatchPlainEnter(session: CDPSession): Promise<void> {
   }
 }
 
-/**
- * `Input.imeSetComposition` opens a genuine Chromium composition session — the same one a native
- * input source would — so preedit geometry can be asserted with no system input source at all.
- */
-export async function setImeComposition(session: CDPSession, text: string): Promise<void> {
+// imeSetComposition opens a real Chromium composition session for native-IME-free preedit geometry checks.
+export async function setImeComposition(
+  session: CDPSession,
+  text: string,
+  selection?: { start: number; end: number }
+): Promise<void> {
   const length = Array.from(text).length
   await session.send('Input.imeSetComposition', {
     text,
-    selectionStart: length,
-    selectionEnd: length
+    selectionStart: selection?.start ?? length,
+    selectionEnd: selection?.end ?? length
   })
 }
 
@@ -178,17 +160,8 @@ export async function composeHangulSyllable(
   }
 }
 
-/**
- * Emits a bare `compositionupdate` with no `compositionstart` ahead of it.
- *
- * SYNTHESISED, not replayed, and the reason is worth stating: the recorded Windows/WSL Hangul
- * capture in `fixtures/windows-wsl-2set-hangul-dom-trace.json` does **not** contain this ordering
- * — every one of its 37 composition updates sits inside an open start/end pair. The shape is
- * nevertheless reachable by construction, because xterm adds `.active` to the overlay only in its
- * `compositionstart` handler and its `compositionupdate` handler writes `textContent` without
- * ever re-adding it. CDP cannot produce the ordering either: `Input.imeSetComposition` always
- * opens a session first. So this is dispatched directly.
- */
+// Synthesize a compositionupdate without compositionstart: xterm’s update writes text but only start adds .active.
+// The Windows/WSL fixture has all 37 updates inside start/end pairs; CDP also always opens a session, so neither can supply this ordering.
 export async function dispatchResumedCompositionUpdate(page: Page, data: string): Promise<void> {
   await page.evaluate((preedit: string) => {
     const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea:focus')

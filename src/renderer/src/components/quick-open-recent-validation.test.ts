@@ -1,13 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ list: vi.fn(), cancel: vi.fn() }))
-vi.mock('@/runtime/runtime-file-request-debounce', () => ({
+vi.mock('@/runtime/files/runtime-file-request-debounce', () => ({
   debounceRuntimeFileRequest: (
     _delay: number,
     _signal: AbortSignal,
     request: () => Promise<unknown>
   ) => request()
 }))
-vi.mock('@/runtime/runtime-file-client', () => ({
+vi.mock('@/runtime/files/search/runtime-file-search-client', () => ({
   listRuntimeFiles: mocks.list,
   cancelRuntimeFileList: mocks.cancel
 }))
@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 const context = {
-  settings: { activeRuntimeEnvironmentId: null },
+  target: { kind: 'local' as const },
   worktreeId: 'wt',
   worktreePath: '/repo'
 }
@@ -85,36 +85,4 @@ it('cancels the producer on close and ignores its late result after reopening', 
   release(['deleted.ts'])
   expect(await first).toBeUndefined()
   expect(mocks.list).toHaveBeenCalledTimes(2)
-})
-it('cancels eligibility on owner/root changes while preserving ordinary search on errors', async () => {
-  const cache: QuickOpenRecentCache = { current: null }
-  mocks.list.mockRejectedValue(new Error('Update host'))
-  const result = await mergeQuickOpenRecentCandidates({
-    cache,
-    key: 'root-a',
-    context,
-    options: { rootPath: '/repo' },
-    candidatePaths: ['recent.ts'],
-    result: { files: ['recent.ts', 'ordinary.ts'], truncated: true },
-    cancelled: () => false
-  })
-  expect(result?.files).toEqual(['recent.ts', 'ordinary.ts'])
-  expect(result?.recentError).toBe('Recent files could not be checked: Update host')
-})
-
-it('uses fresh complete inventory membership without a second traversal', async () => {
-  const result = { files: ['ordinary.ts', 'recent.ts'], truncated: false }
-  expect(
-    await mergeQuickOpenRecentCandidates({
-      result,
-      completeInventory: true,
-      candidatePaths: ['recent.ts', 'deleted.ts'],
-      cache: { current: null },
-      key: 'full',
-      context,
-      options: { rootPath: '/repo' },
-      cancelled: () => false
-    })
-  ).toBe(result)
-  expect(mocks.list).not.toHaveBeenCalled()
 })

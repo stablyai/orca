@@ -1,12 +1,6 @@
 import type { RateLimitBucket, RateLimitWindow } from '../../shared/rate-limit-types'
 
-/**
- * Collapses named buckets into the one window a user is actually limited by.
- *
- * The most-consumed bucket is the binding constraint: a provider that reports one pool per model
- * family runs out of the whole tier when any single pool does, so the summary has to follow the
- * worst pool rather than an average.
- */
+/** Any exhausted model pool limits the tier; summarize the most-consumed bucket rather than averaging. */
 export function deriveMostConstrainedWindow(buckets: RateLimitBucket[]): RateLimitWindow | null {
   if (buckets.length === 0) {
     return null
@@ -14,6 +8,6 @@ export function deriveMostConstrainedWindow(buckets: RateLimitBucket[]): RateLim
   const mostConstrained = buckets.reduce((worst, bucket) =>
     bucket.usedPercent > worst.usedPercent ? bucket : worst
   )
-  const { name: _name, ...window } = mostConstrained
-  return window
+  const { usedPercent, windowMinutes, resetsAt, resetDescription } = mostConstrained
+  return { usedPercent, windowMinutes, resetsAt, resetDescription }
 }

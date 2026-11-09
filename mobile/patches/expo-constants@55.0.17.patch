@@ -1,0 +1,31 @@
+diff --git a/ios/EXConstants.podspec b/ios/EXConstants.podspec
+index fc4608aec9d7ac1e884cb6c57aaf0886f9ff6bbe..26b96c970acfbe66af00270683b21d150e27314e 100644
+--- a/ios/EXConstants.podspec
++++ b/ios/EXConstants.podspec
+@@ -34,10 +34,11 @@ Pod::Spec.new do |s|
+     s.source_files = "**/*.{h,m,swift}"
+   end
+ 
+-  env_vars = ENV['PROJECT_ROOT'] ? "PROJECT_ROOT=#{ENV['PROJECT_ROOT']} " : ""
++  # Orca: `bash -l -c` re-parses its argument, so keep paths quoted for checkouts with spaces (upstream fix in expo-constants 58).
++  env_vars = ENV['PROJECT_ROOT'] ? "PROJECT_ROOT=\\\"#{ENV['PROJECT_ROOT']}\\\" " : ""
+   script_phase = {
+     :name => 'Generate app.config for prebuilt Constants.manifest',
+-    :script => "bash -l -c \"#{env_vars}$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh\"",
++    :script => "bash -l -c \"#{env_vars}\\\"$PODS_TARGET_SRCROOT/../scripts/get-app-config-ios.sh\\\"\"",
+     :execution_position => :before_compile
+   }
+   # :always_out_of_date is only available in CocoaPods 1.13.0 and later
+diff --git a/scripts/get-app-config-ios.sh b/scripts/get-app-config-ios.sh
+index b612e095ea509f92dac967540f50353507a8ff51..d416e082d219a99ac732e1ae9802bc6cd0de0bfb 100755
+--- a/scripts/get-app-config-ios.sh
++++ b/scripts/get-app-config-ios.sh
+@@ -11,7 +11,7 @@ EXPO_CONSTANTS_PACKAGE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+ # `$PROJECT_DIR` is passed by Xcode as the directory to the xcodeproj file.
+ # in classic main project setup it is something like /path/to/app/ios
+ # in new style pod project setup it is something like /path/to/app/ios/Pods
+-PROJECT_DIR_BASENAME=$(basename $PROJECT_DIR)
++PROJECT_DIR_BASENAME=$(basename "$PROJECT_DIR")
+ if [ "x$PROJECT_DIR_BASENAME" != "xPods" ]; then
+   exit 0
+ fi

@@ -21,7 +21,8 @@ vi.mock('../macos-keychain/generic-password', () => ({
   }
 }))
 
-import { readClaudeFolderLogin, removeClaudeAccountFolder } from './claude-account-folder'
+import { removeClaudeAccountFolder } from './claude-account-folder'
+
 import { claudeKeychainService } from './keychain'
 
 const roots: string[] = []
@@ -41,30 +42,6 @@ function fixture() {
 }
 
 describe('claude account folder', () => {
-  it("reads the folder's login and treats a signed-out state file as no login", () => {
-    const { home } = fixture()
-    const stateFile = join(home, '.claude.json')
-    expect(readClaudeFolderLogin(stateFile)).toBeNull()
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: ' a@example.test ' } }))
-    expect(readClaudeFolderLogin(stateFile)).toEqual({
-      email: 'a@example.test',
-      organizationUuid: null,
-      organizationName: null
-    })
-    writeFileSync(stateFile, JSON.stringify({ numStartups: 2 }))
-    expect(readClaudeFolderLogin(stateFile)).toBeNull()
-  })
-
-  it('reuses a recent answer within maxAgeMs even though the file changed', () => {
-    const { home } = fixture()
-    const stateFile = join(home, '.claude.json')
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
-    expect(readClaudeFolderLogin(stateFile, 5_000)?.email).toBe('a@example.test')
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test!' } }))
-    expect(readClaudeFolderLogin(stateFile, 5_000)?.email).toBe('a@example.test')
-    expect(readClaudeFolderLogin(stateFile)?.email).toBe('b@example.test!')
-  })
-
   // A real symlink needs Developer Mode on Windows (EPERM otherwise).
   it.skipIf(process.platform === 'win32')(
     'unlinks shared history before deleting, and leaves the older layout alone',

@@ -1,20 +1,9 @@
 import type { z } from 'zod'
 import type { RPC_PARAMS_BY_METHOD, RpcMethodName } from './rpc-params-catalog.generated'
 
-// Why this exists: neither of zod's two inferred types describes an outgoing request.
-// z.output is what the handler receives *after* parsing, so a `.default(x)` field reads as
-// required and a sender that legitimately omits it fails to typecheck. z.input is worse here
-// — the params builders parse with z.unknown() so a hostile client cannot crash the
-// dispatcher, which collapses every requiredString/OptionalString field to `unknown`.
-//
-// So take each channel where it is honest: key optionality from zod's own `optin` marker
-// (the z.input rule, which is the one that understands .default and .optional), and value
-// types from z.output (the post-coercion contract the builders declare in their pipe target).
-// Derived from the generated catalog, so it cannot drift from the dispatcher.
-//
-// Type-level only. Never import the schema *values* into a client: requiredString is
-// z.unknown().transform(...), so a client-side parse coerces a non-string to '' instead of
-// rejecting it, silently changing the bytes on the wire.
+// Derive sender optionality from Zod’s optin marker and values from z.output: defaults are optional on the wire,
+// while z.input becomes unknown for our coercing builders. Keep schema imports type-only; client-side parsing
+// would coerce values and silently rewrite wire bytes.
 
 type Prettify<T> = { [K in keyof T]: T[K] } & {}
 
@@ -33,10 +22,7 @@ type SendFields<Fields> = Prettify<
   }
 >
 
-/**
- * The value a sender may put on the wire for one schema. Wrappers not listed here (record,
- * tuple, lazy, intersection) fall through to z.output, which is what shipped before.
- */
+/** Unlisted wrappers (record/tuple/lazy/intersection) retain the shipped z.output fallback. */
 export type RpcSendInput<Schema> =
   Schema extends z.ZodOptional<infer Inner>
     ? RpcSendInput<Inner> | undefined
@@ -48,8 +34,7 @@ export type RpcSendInput<Schema> =
           ? RpcSendInput<Inner> | null
           : Schema extends z.ZodArray<infer Element>
             ? RpcSendInput<Element>[]
-            : // ZodObject is the only schema carrying a `shape`, and matching on it keeps
-              // .strict()/.extend()/.superRefine() results in this branch.
+            : // Match shape to include strict/extend/superRefine object variants.
               Schema extends { shape: infer Fields }
               ? keyof Fields extends never
                 ? // Mirrors $InferObjectOutput: a no-field object admits no properties.

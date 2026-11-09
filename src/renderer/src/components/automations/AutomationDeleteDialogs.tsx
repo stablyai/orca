@@ -9,14 +9,16 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type {
-  Automation,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { getExternalProviderLabel } from './external-automation-display'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function AutomationDeleteDialog({
   deleteTarget,
@@ -35,6 +37,7 @@ export function AutomationDeleteDialog({
   onCancel: () => void
   onConfirm: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Dialog open={deleteTarget !== null} onOpenChange={onOpenChange}>
       <DialogContent
@@ -46,18 +49,23 @@ export function AutomationDeleteDialog({
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate(
-              'auto.components.automations.AutomationsPage.080dcb5fbb',
-              'Delete Automation'
-            )}
+            {t('auto.components.automations.AutomationsPage.080dcb5fbb', 'Delete Automation')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}{' '}
-            <span className="break-all font-medium text-foreground">{deleteTarget?.name}</span>{' '}
-            {translate(
-              'auto.components.automations.AutomationsPage.b264564427',
-              'and its run history. Workspaces created by previous runs are not deleted.'
-            )}
+            <Trans
+              i18n={i18n}
+              defaults={t(
+                'auto.components.automations.AutomationsPage.deleteAutomationDescription',
+                'Delete <name/> and its run history. Workspaces created by previous runs are not deleted.'
+              )}
+              components={{
+                name: (
+                  <span className="break-all font-medium text-foreground">
+                    {deleteTarget?.name}
+                  </span>
+                )
+              }}
+            />
           </DialogDescription>
         </DialogHeader>
         {deleteTarget ? (
@@ -65,14 +73,11 @@ export function AutomationDeleteDialog({
             <div className="break-all font-medium text-foreground">{deleteTarget.name}</div>
             <div className="mt-1 text-muted-foreground">
               {deleteTarget.workspaceMode === 'new_per_run'
-                ? translate(
+                ? t(
                     'auto.components.automations.AutomationsPage.cd8397cc32',
                     'New workspace each run'
                   )
-                : translate(
-                    'auto.components.automations.AutomationsPage.36f71740a7',
-                    'Selected workspace'
-                  )}
+                : t('auto.components.automations.AutomationsPage.36f71740a7', 'Selected workspace')}
             </div>
           </div>
         ) : null}
@@ -92,15 +97,15 @@ export function AutomationDeleteDialog({
           >
             {dontAskDeleteAgain ? <Check className="size-3" strokeWidth={3} /> : null}
           </span>
-          {translate('auto.components.automations.AutomationsPage.1e2e41392f', "Don't ask again")}
+          {t('auto.components.automations.AutomationsPage.1e2e41392f', "Don't ask again")}
         </button>
         <DialogFooter>
           <Button variant="outline" onClick={onCancel}>
-            {translate('auto.components.automations.AutomationsPage.73f630b49d', 'Cancel')}
+            {t('auto.components.automations.AutomationsPage.73f630b49d', 'Cancel')}
           </Button>
           <Button ref={confirmButtonRef} variant="destructive" onClick={onConfirm}>
             <Trash2 className="size-4" />
-            {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
+            {t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -124,6 +129,8 @@ export function ExternalAutomationDeleteDialog({
   onCancel: () => void
   onConfirm: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <Dialog open={externalDeleteTarget !== null} onOpenChange={onOpenChange}>
       <DialogContent
@@ -135,25 +142,37 @@ export function ExternalAutomationDeleteDialog({
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate(
+            {t(
               'auto.components.automations.AutomationsPage.9adfab2596',
               'Delete External Automation'
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}{' '}
-            <span className="break-all font-medium text-foreground">
-              {externalDeleteTarget?.job.name}
-            </span>{' '}
-            {translate('auto.components.automations.AutomationsPage.02a33e3204', 'from')}{' '}
-            {externalDeleteTarget
-              ? getExternalProviderLabel(externalDeleteTarget.manager)
-              : translate(
-                  'auto.components.automations.AutomationsPage.8500baacb4',
-                  'external source'
-                )}{' '}
-            {translate('auto.components.automations.AutomationsPage.1b586f0e2b', 'on')}{' '}
-            {externalDeleteTarget?.manager.targetLabel}.
+            <Trans
+              i18n={i18n}
+              defaults={t(
+                'auto.components.automations.AutomationsPage.deleteExternalAutomationDescription',
+                'Delete <name/> from <provider/> on <host/>.'
+              )}
+              components={{
+                name: (
+                  <span className="break-all font-medium text-foreground">
+                    {externalDeleteTarget?.job.name}
+                  </span>
+                ),
+                provider: (
+                  <>
+                    {externalDeleteTarget
+                      ? getExternalProviderLabel(externalDeleteTarget.manager)
+                      : t(
+                          'auto.components.automations.AutomationsPage.8500baacb4',
+                          'external source'
+                        )}
+                  </>
+                ),
+                host: <>{externalDeleteTarget?.manager.targetLabel}</>
+              }}
+            />
           </DialogDescription>
         </DialogHeader>
         {externalDeleteTarget ? (
@@ -165,7 +184,9 @@ export function ExternalAutomationDeleteDialog({
               {
                 getExternalAutomationScheduleDisplay(
                   externalDeleteTarget.manager,
-                  externalDeleteTarget.job
+                  externalDeleteTarget.job,
+                  t,
+                  intlLocale
                 ).label
               }
             </div>
@@ -173,11 +194,11 @@ export function ExternalAutomationDeleteDialog({
         ) : null}
         <DialogFooter>
           <Button variant="outline" onClick={onCancel}>
-            {translate('auto.components.automations.AutomationsPage.73f630b49d', 'Cancel')}
+            {t('auto.components.automations.AutomationsPage.73f630b49d', 'Cancel')}
           </Button>
           <Button ref={confirmButtonRef} variant="destructive" onClick={onConfirm}>
             <Trash2 className="size-4" />
-            {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
+            {t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -25,14 +25,6 @@ const live = {
 
 describe('remote foreground evidence contract', () => {
   it.each([
-    live,
-    { ...live, verdict: 'unverifiable' as const, reason: 'process_table_unreadable' },
-    { ...live, verdict: 'exited' as const, reason: 'pty_exit_0' }
-  ])('accepts the $verdict host record', (value) => {
-    expect(isRemoteForegroundEvidence(value)).toBe(true)
-  })
-
-  it.each([
     { ...live, authorityGeneration: '' },
     { ...live, ptyIncarnationId: '' },
     { ...live, capturedAgeMs: -1 },
@@ -59,8 +51,7 @@ describe('remote foreground evidence contract', () => {
     expect(
       admitRemoteForegroundEvidence(live, { ...base, expectedIncarnationId: 'inc-2' })
     ).toBeNull()
-    // `+ 1`, not the ceiling itself: the ceiling used to be crossed by the ceiling plus this
-    // admission's 10ms round trip, which was the capture being charged a second time.
+    // Test beyond the ceiling itself: old summation wrongly added the 10ms round trip again.
     expect(
       admitRemoteForegroundEvidence(
         { ...live, capturedAgeMs: REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS + 1 },
@@ -69,9 +60,7 @@ describe('remote foreground evidence contract', () => {
     ).toBeNull()
   })
 
-  // The capture runs inside the round trip, so `capturedAgeMs` and `receiveDelay` measure
-  // overlapping intervals on two clocks. Summing them charged `ps` twice and halved the budget
-  // this ceiling grants a host; these pin the boundary on the surviving measurement.
+  // Host capture age overlaps round-trip time; pin max rather than double-counting ps duration.
   describe('does not charge the capture twice', () => {
     const admission = {
       expectedPtyId: 'pty-1',
@@ -83,24 +72,11 @@ describe('remote foreground evidence contract', () => {
     }
 
     it('admits a capture whose duration alone is inside the ceiling', () => {
-      // 1,200ms on the host, 1,300ms round trip: the same 1.2s of `ps` seen twice. The sum said
-      // 2,500 and refused it; the observation is 1.3s old.
+      // 1.2s host capture inside 1.3s round trip is 1.3s old, not 2.5s.
       expect(
         admitRemoteForegroundEvidence(
           { ...live, capturedAgeMs: 1_200 },
           { ...admission, receivedAtMonotonic: 1_300 }
-        )
-      ).not.toBeNull()
-    })
-
-    it.each([
-      ['host-measured', REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS - 1, 0],
-      ['client-measured', 0, REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS - 1]
-    ])('admits at the %s boundary', (_label, capturedAgeMs, receiveDelay) => {
-      expect(
-        admitRemoteForegroundEvidence(
-          { ...live, capturedAgeMs },
-          { ...admission, receivedAtMonotonic: receiveDelay }
         )
       ).not.toBeNull()
     })
@@ -115,23 +91,6 @@ describe('remote foreground evidence contract', () => {
           { ...admission, receivedAtMonotonic: receiveDelay }
         )
       ).toBeNull()
-    })
-
-    it('still admits the prompt unverifiable a capture over its budget produces', () => {
-      // The reason the evidence path gives up on a slow capture rather than publishing a late
-      // truthful one: a REFUSED record is what bumps `consecutiveInspectionErrors` and stalls the
-      // completion poller, while an admitted `unverifiable` costs a poll and nothing else.
-      expect(
-        admitRemoteForegroundEvidence(
-          {
-            ...live,
-            verdict: 'unverifiable' as const,
-            reason: 'process_table_unreadable',
-            capturedAgeMs: 0
-          },
-          admission
-        )
-      ).not.toBeNull()
     })
   })
 

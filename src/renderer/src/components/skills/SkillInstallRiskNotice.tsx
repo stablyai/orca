@@ -1,26 +1,35 @@
 import { Info, ShieldAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { SkillInstallRiskSummary } from './skill-package-install-risk'
 import { fileCountLabel } from './skill-display-labels'
 
-function cautionDescription(summary: SkillInstallRiskSummary): string {
+function cautionDescription(summary: SkillInstallRiskSummary, t: Translate = translate): string {
   if (summary.selectedSkillCount === 1) {
-    return translate(
+    return t(
       'auto.components.skills.install.singleRunnableWarning',
       'This skill includes scripts or binary files.'
     )
   }
   const shownNames = summary.cautionSkillNames.slice(0, 3)
   const remainingCount = summary.cautionSkillNames.length - shownNames.length
-  const affected = `${shownNames.join(', ')}${remainingCount ? ` +${remainingCount} more` : ''}`
-  return translate(
-    'auto.components.skills.install.runnableWarning',
-    '{{affectedCount}} of {{selectedCount}} selected skills include scripts or binary files: {{affected}}.',
+  const names = shownNames.join(', ')
+  const affected = remainingCount
+    ? t('auto.components.skills.install.namesAndMore', '{{names}} +{{count}} more', {
+        names,
+        count: remainingCount
+      })
+    : names
+  return t(
+    'auto.components.skills.install.runnableWarningOfSelected',
+    '{{affectedCount}} of {{count}} selected skills include scripts or binary files: {{affected}}.',
     {
       affectedCount: summary.cautionSkillNames.length,
-      selectedCount: summary.selectedSkillCount,
-      affected
+      count: summary.selectedSkillCount,
+      affected,
+      defaultValue_one:
+        '{{affectedCount}} of {{count}} selected skill include scripts or binary files: {{affected}}.'
     }
   )
 }
@@ -30,18 +39,13 @@ export function SkillInstallRiskNotice({
 }: {
   summary: SkillInstallRiskSummary
 }): React.JSX.Element {
+  const t = useTranslate()
   const hasAdditionalFiles = summary.additionalFileCount > 0
   const title = summary.requiresAcknowledgement
-    ? translate(
-        'auto.components.skills.install.reviewRunnableFiles',
-        'Includes scripts or binary files'
-      )
+    ? t('auto.components.skills.install.reviewRunnableFiles', 'Includes scripts or binary files')
     : hasAdditionalFiles
-      ? translate(
-          'auto.components.skills.install.reviewSupportingFiles',
-          'Review the supporting files'
-        )
-      : translate('auto.components.skills.install.reviewInstructions', 'About this skill')
+      ? t('auto.components.skills.install.reviewSupportingFiles', 'Review the supporting files')
+      : t('auto.components.skills.install.reviewInstructions', 'About this skill')
 
   return (
     <section
@@ -67,18 +71,18 @@ export function SkillInstallRiskNotice({
         {title}
       </div>
       {summary.requiresAcknowledgement ? (
-        <p className="text-xs leading-5 text-muted-foreground">{cautionDescription(summary)}</p>
+        <p className="text-xs leading-5 text-muted-foreground">{cautionDescription(summary, t)}</p>
       ) : hasAdditionalFiles ? (
         <p className="text-xs leading-5 text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.skills.install.supportingFileWarning',
             'The selected skills include {{fileCount}} beyond SKILL.md.',
-            { fileCount: fileCountLabel(summary.additionalFileCount) }
+            { fileCount: fileCountLabel(summary.additionalFileCount, t) }
           )}
         </p>
       ) : null}
       <p className="text-xs leading-5 text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.skills.install.agentAccessWarning',
           'Skills contain instructions your agent may follow. Continue only if you trust the source of this share link.'
         )}

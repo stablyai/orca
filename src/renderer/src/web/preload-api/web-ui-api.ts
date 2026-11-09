@@ -1,6 +1,7 @@
-import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
-import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
+import { subscribeWebWorkspaceSleep } from './web-workspace-sleep-notices'
+import { savePastedTextAsWebAgentSessionAttachment } from './web-pasted-text-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'
+import { createWebJiraFilterStateApi } from './web-jira-filter-state-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
@@ -10,9 +11,9 @@ import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fi
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
 import {
   clipboardHasImage,
-  readClipboardImagePngBase64,
   readClipboardImageThumbnail,
-  saveClipboardImageAsTempFileInRuntime,
+  saveWebClipboardImageAsTempFile,
+  writeWebClipboardImage,
   writeWebClipboardText
 } from './web-clipboard-api'
 import {
@@ -39,6 +40,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
+    ...createWebJiraFilterStateApi(),
     /** Hydrates from the active host after replaying pending roots, falling back to local state on failure or host changes. */
     get: async () => {
       try {
@@ -76,8 +78,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      // Why strip here too when the host also strips: an old host predating that strip would
-      // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
+      // Older hosts lack stripping; sending browser runtime:web-* keys would overwrite desktop order.
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
@@ -146,42 +147,24 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         await (navigator.clipboard?.readText?.() ?? ''),
         options
       ),
+    // Browser paste events carry their own HTML; a programmatic read would prompt.
+    readClipboardLinkHtml: async () => '',
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    saveClipboardImageAsTempFile: async (args?: {
-      connectionId?: string | null
-      runtimeEnvironmentId?: string | null
-      agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
-    }) => {
-      if (!requireActiveEnvironmentOrNull()) {
-        return null
-      }
-      const contentBase64 = await readClipboardImagePngBase64()
-      if (!contentBase64) {
-        return null
-      }
-      if (args?.agentSessionAttachment) {
-        if (!args.runtimeEnvironmentId) {
-          throw new Error('A chat attachment needs the server the chat runs on.')
-        }
-        return saveClipboardImageAsWebAgentSessionAttachment(contentBase64, {
-          ...args.agentSessionAttachment,
-          environmentId: args.runtimeEnvironmentId
-        })
-      }
-      return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
-    },
+    saveClipboardImageAsTempFile: saveWebClipboardImageAsTempFile,
+    savePastedTextAsFile: savePastedTextAsWebAgentSessionAttachment,
     clipboardHasImage,
     // Browsers expose copied files only inside a paste event.
     readClipboardFilePaths: async () => [],
     // Why empty: a browser has no local paste folder, so restored pastes stay to attach again.
     restoreNativeChatPastes: async () => [],
+    onAgentSessionUploadRemoved: () => noopUnsubscribe,
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    writeClipboardImage: () => Promise.resolve(),
+    writeClipboardImage: writeWebClipboardImage,
     writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
     performNativePaste: () => {
       document.execCommand?.('paste')
@@ -198,11 +181,16 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       zoomLevel = level
     },
     isMaximized: () => Promise.resolve(false),
+    isWindowActive: () => Promise.resolve(document.hasFocus()),
     onOpenSettings: () => noopUnsubscribe,
-    // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
+    // Why: the web client has no native tray/menu bar, so it never queues an open-settings or quit request.
     consumePendingOpenSettings: () => Promise.resolve(false),
+    onQuitAndStopAllSessions: () => noopUnsubscribe,
+    consumePendingQuitAndStopAllSessions: () => Promise.resolve(false),
     onOpenSkillShare: () => noopUnsubscribe,
     consumePendingSkillShare: () => Promise.resolve(null),
+    onOpenPluginInstallLink: () => noopUnsubscribe,
+    consumePendingPluginInstallLink: () => Promise.resolve(null),
     // Why: the web client has no OS shell handing it files, so there is never a queued open.
     onOpenMarkdownFiles: () => noopUnsubscribe,
     consumePendingMarkdownFileOpens: () => Promise.resolve([]),
@@ -226,29 +214,29 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
-    onNewBrowserTab: () => noopUnsubscribe,
-    onNewMarkdownTab: () => noopUnsubscribe,
-    onNewSimulatorTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
+    browserTabRequestsReady: () => {},
+    onRequestRemoteCliBrowserScope: () => noopUnsubscribe,
+    replyRemoteCliBrowserScope: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,
     replyTabSetProfile: () => {},
     onRequestTabClose: () => noopUnsubscribe,
     replyTabClose: () => {},
-    onNewTerminalTab: () => noopUnsubscribe,
+    onBrowserPageTabShortcut: () => noopUnsubscribe,
+    onToggleProjectsCollapse: () => noopUnsubscribe,
     onFocusBrowserAddressBar: () => noopUnsubscribe,
+    onShowBrowserHistory: () => noopUnsubscribe,
     onFindInBrowserPage: () => noopUnsubscribe,
     onReloadBrowserPage: () => noopUnsubscribe,
     onBrowserHistoryNavigate: () => noopUnsubscribe,
+    onBrowserPagePointerDown: () => noopUnsubscribe,
     onZoomBrowserPage: () => noopUnsubscribe,
     onHardReloadBrowserPage: () => noopUnsubscribe,
     onCloseActiveTab: () => noopUnsubscribe,
     onCloseFloatingItem: () => noopUnsubscribe,
     onSelectFloatingIndex: () => noopUnsubscribe,
-    onSwitchTab: () => noopUnsubscribe,
-    onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchRecentTab: () => noopUnsubscribe,
-    onSwitchTerminalTab: () => noopUnsubscribe,
     onCtrlTabKeyDown: () => noopUnsubscribe,
     onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
@@ -260,9 +248,15 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     replyTerminalCreate: () => {},
     onPublishAgentLaunchTab: () => noopUnsubscribe,
     onAgentLaunchPaneVerdict: () => noopUnsubscribe,
+    onLaunchRecipe: () => noopUnsubscribe,
     replyAgentLaunchTabPublish: () => {},
+    onRevealTerminalPane: () => noopUnsubscribe,
+    replyTerminalPaneReveal: () => {},
+    onApplyAgentPaneActivity: () => noopUnsubscribe,
+    replyAgentPaneActivity: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
+    onSetPaneTitle: () => noopUnsubscribe,
     onFocusTerminal: () => noopUnsubscribe,
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
@@ -270,13 +264,12 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     respondSessionTabClose: () => {},
     onMoveSessionTab: () => noopUnsubscribe,
     onOpenFileFromMobile: () => noopUnsubscribe,
+    onRevealEditorTabFromRuntime: () => noopUnsubscribe,
     onOpenDiffFromMobile: () => noopUnsubscribe,
-    onMobileMarkdownRequest: () => noopUnsubscribe,
-    respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
     onTerminalTabCloseRequest: () => noopUnsubscribe,
     respondTerminalTabClose: () => {},
-    onSleepWorktree: () => noopUnsubscribe,
+    onWorkspaceSleep: subscribeWebWorkspaceSleep,
     // Why: paired web is a full renderer that wakes on activation; mobile wake is desktop-host-scoped and never reaches web.
     onResumeSleepingAgents: () => noopUnsubscribe,
     onTerminalZoom: () => noopUnsubscribe,
@@ -285,6 +278,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     syncTrafficLights: () => {},
     setMarkdownEditorFocused: () => {},
     setRichMarkdownContextMenuTarget: () => {},
+    markPlainTextContextMenuTarget: () => {},
     setTerminalInputFocused: () => {},
     setFloatingFocus: () => {},
     setShortcutRecorderFocused: () => {},
@@ -293,10 +287,12 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     minimize: () => {},
     maximize: () => {},
     onMaximizeChanged: () => noopUnsubscribe,
+    onWindowActiveChanged: () => noopUnsubscribe,
     requestClose: () => {},
     popupMenu: () => {},
     onWindowCloseRequested: () => noopUnsubscribe,
     confirmWindowClose: () => {},
+    cancelWindowClose: () => {},
     notifyWindowRevealed: () => {}
   }
 }

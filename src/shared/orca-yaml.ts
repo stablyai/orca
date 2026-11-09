@@ -12,6 +12,7 @@ import {
   MAX_ORCA_YAML_ALIAS_COUNT,
   MAX_ORCA_YAML_COLLECTION_ENTRIES
 } from './orca-yaml-file-limit'
+import { parseEphemeralVmRecipeTimeoutSeconds } from './ephemeral-vm-recipe-timeouts'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -32,17 +33,11 @@ export const ORCA_VM_RECIPE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/
 export const ORCA_VM_RECIPE_ID_RULE =
   'Use 1-64 lowercase letters, numbers, dots, underscores, or hyphens, starting with a letter or number.'
 
-// Why: bound the work one repo file can request; entries beyond this are ignored.
+// Bound work requested by one repository file.
 const MAX_SHARED_DIRECTORIES = 100
 
-/** Normalize `worktree.sharedDirectories` into deduped repo-root-relative paths.
- *  `\` becomes `/`, a `./` prefix and trailing `/` are stripped. Absolute paths,
- *  `..` traversal and `.git` are dropped here so callers get only safe entries.
- *
- *  Entries that would still need collapsing (`apps/./web`) are dropped rather
- *  than rewritten: `resolve()` collapses them when the symlink is created, but
- *  Git reports the collapsed path, so every later comparison against the stored
- *  entry would miss and the link would look like permanent untracked work. */
+/** Normalize safe repo-relative paths. Reject internal ./ rather than collapsing it: Git reports the collapsed path,
+ * so stored comparisons would miss and symlinks would appear permanently untracked. */
 function normalizeSharedDirectories(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
@@ -178,6 +173,15 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
       const resume = asTrimmedString(record.resume)
       const destroyValue = asTrimmedString(record.destroy) ?? asTrimmedString(record.cleanup)
       const destroyDisabled = destroyValue === 'none'
+      const timeouts = parseEphemeralVmRecipeTimeoutSeconds(record.timeoutSeconds)
+      if (!timeouts.ok) {
+        // A bad limit should not hide the recipe; its steps stay unlimited.
+        diagnostics.push({
+          index,
+          field: 'timeoutSeconds',
+          message: `Recipe "${id}" ${timeouts.message} Steps keep no time limit.`
+        })
+      }
       return {
         id,
         name,
@@ -187,16 +191,16 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
         ...(suspend ? { suspend } : {}),
         ...(resume ? { resume } : {}),
         ...(destroyValue && !destroyDisabled ? { destroy: destroyValue } : {}),
-        ...(destroyDisabled ? { destroyDisabled: true } : {})
+        ...(destroyDisabled ? { destroyDisabled: true } : {}),
+        ...(timeouts.ok && timeouts.timeoutSeconds
+          ? { timeoutSeconds: timeouts.timeoutSeconds }
+          : {})
       }
     })
     .filter((entry): entry is OrcaVmRecipe => entry !== null)
   return { recipes, diagnostics }
 }
 
-/**
- * Parse the supported project defaults from `orca.yaml`.
- */
 export function parseOrcaYaml(content: string): OrcaHooks | null {
   if (!isOrcaYamlTextWithinLimit(content)) {
     return null

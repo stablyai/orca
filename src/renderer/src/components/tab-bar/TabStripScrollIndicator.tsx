@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { computeTabStripThumbLayout } from './tab-strip-scroll-metrics'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 export type TabStripScrollIndicatorProps = {
   hasOverflow: boolean
@@ -171,7 +172,7 @@ export function TabStripScrollIndicator({
 
     scrollContainer.scrollTo({
       left: targetScrollLeft,
-      behavior: 'smooth'
+      behavior: motionSafeScrollBehavior()
     })
   }
 

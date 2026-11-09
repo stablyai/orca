@@ -1,4 +1,4 @@
-import type { AgentSessionPromptResponse } from '../../shared/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
 import type { ProviderTimelineRequestBody } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { piRpcDialogSchema } from './rpc-protocol'
 
@@ -70,7 +70,8 @@ export function piRpcDialogPresentation(value: unknown): PiRpcDialogPresentation
               ...(dialog.method === 'editor'
                 ? { multiline: true, initialValue: dialog.prefill ?? '' }
                 : {}),
-              ...(dialog.placeholder === undefined ? {} : { placeholder: dialog.placeholder })
+              // Pi sends "" for no hint; drop it so the card shows its default.
+              ...(dialog.placeholder ? { placeholder: dialog.placeholder } : {})
             }
           })
     },

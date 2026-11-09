@@ -6,12 +6,12 @@ const YEAR_DIR = /^\d{4}$/
 const MONTH_OR_DAY_DIR = /^\d{2}$/
 const SESSION_LOG = 'session.jsonl'
 const SUBAGENT_DIR = 'subagent'
-// Guards against a pathological or cyclic tree; real logs nest one level.
+// Bound malformed or cyclic subagent trees; normal logs nest one level.
 const MAX_SUBAGENT_DEPTH = 4
 
 export type MuseSessionLogRef = {
   path: string
-  /** Top-level session the log belongs to; subagent logs roll up into their parent. */
+  /** Roll subagent usage into its top-level session. */
   sessionId: string
   isSubagent: boolean
 }
@@ -31,7 +31,7 @@ async function listSubdirectories(
       .filter((entry) => entry.isDirectory() && (!pattern || pattern.test(entry.name)))
       .map((entry) => entry.name)
   } catch (error) {
-    // Why: a missing root means "no Muse data"; any other root failure must reach lastScanError.
+    // Missing roots mean no data; other unreadable roots must surface scan errors.
     if (options.reportUnreadable && !isMissingPathError(error)) {
       throw error
     }
@@ -56,11 +56,7 @@ async function collectSubagentLogs(
   }
 }
 
-/**
- * Lists `<root>/YYYY/MM/DD/<session>/session.jsonl` plus the subagent logs under
- * `<session>/subagent/<child>/`, which hold usage the parent log does not.
- * Sorted by path so ownership claims are deterministic; Muse's dot dirs are skipped.
- */
+/** Include subagent-only usage; sorted paths make duplicate ownership deterministic. */
 export async function listMuseSessionLogFiles(
   sessionsDir = resolveMuseSessionsDir()
 ): Promise<MuseSessionLogRef[]> {

@@ -46,20 +46,19 @@ from a different checkout. No synthetic GitHub issue number or hosted issue URL 
 
 ## Boundaries and compatibility
 
-Filesystem reads and CLI writes run on the selected execution host. Direct SSH requests
-negotiate `backlog.capabilities` before dispatch; disconnected/older relays never fall
-back to local files. Paired runtimes advertise `tasks.backlog.v1`; older runtimes do not
-receive Backlog calls. Native mobile has its own provider allowlist and does not expose
-this source or its mutation RPC. Desktop/web renderers are the supported UI surface.
+Filesystem reads and CLI writes run on the selected execution host. SSH hosts are served by
+the Orca server running on that host, so their projects appear as that server's runtime and
+carry its `tasks.backlog.v1` capability. Paired runtimes without that capability, older
+servers, and an SSH project that is not served by a runtime never receive Backlog calls and
+never fall back to local files; reconnect the SSH host so its server serves the project.
+Native mobile has its own provider allowlist and does not expose this source or its mutation
+RPC. Desktop/web renderers are the supported UI surface.
 
-Runtime `backlog.execute` accepts a registered `repoId`, resolves its path on that runtime,
-and routes to its execution host; a caller-supplied `repoPath` is not used. Runtime
-transport authentication runs before dispatch, and mobile-scoped devices cannot call
-this method. The SSH relay's separate `backlog.execute` accepts the resolved `repoPath`
-from the trusted host client. Like relay filesystem and process RPCs, it operates with
-the host user's authority, not a per-project sandbox. `session.registerRoot` is a
-compatibility no-op, not authorization. A relay-only root allowlist would not restrict
-the same client's existing filesystem or shell access.
+Runtime `backlog.execute` accepts a registered `repoId`, resolves its path from that runtime's
+own project store and runs there; a caller-supplied `repoPath` is not used. Runtime transport
+authentication and the `workspace` permission are checked before dispatch, and mobile-scoped
+devices cannot call this method. Like other workspace RPCs, it operates with the host user's
+authority, not a per-project sandbox.
 
 Task/config paths cannot escape the project or use symlinks. Package-manager links are
 accepted only when the resolved CLI package stays inside the project. Reads are bounded
@@ -86,10 +85,10 @@ Parser regressions cover whitespace-delimited config keys inside YAML literals a
 quoted/merged task hooks. Hook detection reads complete YAML metadata and fails closed
 on unsupported metadata syntax rather than discarding unknown fields.
 
-Host-routing and renderer tests cover ownership, capability refusal, source identity,
+Host-routing and renderer tests cover ownership, unserved-SSH and capability refusal, source identity,
 browsing, saves and opening the workspace composer. Execution has a 45-second overall
 response deadline (including scanning), with a 30-second CLI limit and abort signaling;
-SSH execution and renderer RPC ceilings are 55 and 65 seconds respectively. A timeout
+the renderer RPC ceiling is 65 seconds. A timeout
 is not proof that writes stopped. Any unconfirmed save locks that editor, and closing
 it keeps create/edit disabled until an explicit refresh succeeds. Inspect the refreshed
 tasks before a new attempt; this is not persistent deduplication across page reloads.

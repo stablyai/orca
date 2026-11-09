@@ -3,7 +3,7 @@ import type { Repo } from '../../../shared/repo-types'
 import {
   getTaskSourceCacheScope,
   normalizeTaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import {
   assertBacklogLaunchTarget,
   backlogRepoKey,
@@ -11,11 +11,12 @@ import {
   callBacklog,
   supportsBacklog
 } from './backlog-task-source'
-import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { BACKLOG_TASKS_CAPABILITY } from '../../../shared/backlog-capability'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn(),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   assertRuntimeEnvironmentCapability: vi.fn()
 }))
 const repo: Repo = {

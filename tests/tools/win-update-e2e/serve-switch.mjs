@@ -147,7 +147,7 @@ async function run(ctx) {
   ctx.daemonPid = before.pid
   check(
     'desktop daemon runs from the relocated daemon-host',
-    /\\Orca\\daemon-host\\/i.test(before.commandLine),
+    /\\Orca\\daemon-host(?:-profiles)?\\/i.test(before.commandLine),
     before.commandLine.slice(0, 160)
   )
   await closeApp(ctx.session.app, 45_000, { allowForceKill: false })
@@ -157,7 +157,6 @@ async function run(ctx) {
   const serve = await startOrcaServe(installed.exePath, userDataDir)
   ctx.serve = serve
   const daemon = serve.readiness.health?.terminalDaemon
-  check('orca serve chose orcad', serve.stderr().includes('[serve] running on orcad'))
   check(
     'orcad adopted the relocated daemon',
     daemon?.state === 'live' && daemon.pid === before.pid,

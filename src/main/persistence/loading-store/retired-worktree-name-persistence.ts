@@ -1,5 +1,5 @@
-import { normalizeRetirableGeneratedName } from '../../worktree-name-retirement'
-import { recordRetirementNamespaceRegistry } from '../../worktree-retirement-namespace'
+import { normalizeRetirableGeneratedName } from '../../workspaces/removal/retirement/worktree-name-retirement'
+import { recordRetirementNamespaceRegistry } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   addRetiredNames,
   EMPTY_RETIRED_NAME_REGISTRY,
@@ -107,13 +107,4 @@ export function applyRetiredWorktreeNames(
     next
   scheduleSave(owner[retiredWorktreeNamePersistenceContext].scheduling)
   return true
-}
-
-export function installRetiredWorktreeNamePersistenceContext(
-  target: RetiredWorktreeNamePersistence,
-  source: RetiredWorktreeNamePersistence
-): void {
-  Object.defineProperty(target, retiredWorktreeNamePersistenceContext, {
-    value: source[retiredWorktreeNamePersistenceContext]
-  })
 }

@@ -7,7 +7,7 @@ import {
 import {
   isEphemeralVmRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
-} from './runtime-environments'
+} from './remote-runtime/host-catalog/runtime-environments'
 
 /** A client-configured notification source, not authority for executing work. */
 export type NotificationSourceId = ExecutionHostId
@@ -15,11 +15,33 @@ export type NotificationSourceId = ExecutionHostId
 export type NotificationWorkspaceOwner = {
   executionHostId: ExecutionHostId | null
   runtimeEnvironmentId: string | null
+  workspaceExecutionHostId?: ExecutionHostId | null
+}
+
+export function notificationWorkspaceExecutionHostForOwner(
+  owner: NotificationWorkspaceOwner | null
+): ExecutionHostId | null {
+  return owner?.workspaceExecutionHostId !== undefined
+    ? owner.workspaceExecutionHostId
+    : (owner?.executionHostId ?? null)
 }
 
 type NotificationSourceCatalog = {
   sshTargetLabels?: ReadonlyMap<string, string>
   runtimeEnvironments?: readonly Pick<PublicKnownRuntimeEnvironment, 'id' | 'source'>[]
+}
+
+function ownerRuntimeEnvironmentId(owner: NotificationWorkspaceOwner): string | null {
+  const host = parseExecutionHostId(owner.executionHostId)
+  return owner.runtimeEnvironmentId ?? (host?.kind === 'runtime' ? host.environmentId : null)
+}
+
+/** The server a paired phone must open this work on; absent for work this desktop reaches itself. */
+export function notificationExecutionHostForOwner(
+  owner: NotificationWorkspaceOwner | null
+): `runtime:${string}` | undefined {
+  const environmentId = owner ? ownerRuntimeEnvironmentId(owner) : null
+  return environmentId ? toRuntimeExecutionHostId(environmentId) : undefined
 }
 
 export function notificationSourceForOwner(
@@ -30,8 +52,7 @@ export function notificationSourceForOwner(
     return undefined
   }
   const host = parseExecutionHostId(owner.executionHostId)
-  const environmentId =
-    owner.runtimeEnvironmentId ?? (host?.kind === 'runtime' ? host.environmentId : null)
+  const environmentId = ownerRuntimeEnvironmentId(owner)
   if (environmentId) {
     const environment = catalog.runtimeEnvironments?.find((entry) => entry.id === environmentId)
     if (!environment) {

@@ -33,15 +33,14 @@ function scheduleRetryTick(run: () => void): RetrySchedule {
     }
     const rafId = requestAnimationFrame(() => {
       if (!cancelled && !settled) {
-        // Why: FitAddon must observe committed CSS, and synchronous rAF test
-        // shims must not recursively consume the whole retry budget inline.
+        // Wait for committed CSS and avoid recursive budget exhaustion with synchronous rAF test shims.
         if (timer !== null) {
           clearTimeout(timer)
         }
         timer = setTimeout(finish, LAYOUT_SETTLE_MS)
       }
     })
-    // Why: Chromium can indefinitely throttle rAF for a hidden Electron window; the fit budget must still release deferred PTY output.
+    // Hidden Electron windows can throttle rAF indefinitely; the budget must still release deferred PTY output.
     timer = setTimeout(finish, LAYOUT_SETTLE_MS * 2)
     return {
       cancel: () => {
@@ -92,11 +91,7 @@ export function armPaneFitContinuationRetry(
     }
     state.attempts += 1
     if (state.attempts >= MAX_RETRY_FRAMES) {
-      // Why leafId + census: `pane.id` restarts at 1 per PaneManager and there
-      // is one manager per tab, so a burst of identical `paneId: 1` crumbs
-      // cannot distinguish one pane looping from N panes exhausting in
-      // lockstep. Both facts now travel on every crumb, so main can coalesce
-      // the burst without destroying its meaning.
+      // Pane IDs restart per manager; include leaf ID and census so coalesced crumbs distinguish one looping pane from many exhausted panes.
       const census = getLivePaneCensus()
       recordRendererCrashBreadcrumb('terminal_safe_fit_retry_exhausted', {
         paneId: pane.id,

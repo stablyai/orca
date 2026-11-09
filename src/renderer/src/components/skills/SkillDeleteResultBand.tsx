@@ -1,16 +1,12 @@
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SkillDeleteResult } from '../../../../shared/skill-delete-contract'
 import { skillDeleteResultLines } from './skill-delete-copy'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
 
-/**
- * Persistent rather than a toast: a toast disappears before a user can act on
- * "3 failed", and the lines are grouped per reason, which the flat four-string
- * install status component cannot render.
- */
+/** Keep grouped delete failures visible until acted on; a transient toast would lose actionable details. */
 export function SkillDeleteResultBand({
   result,
   onDismiss
@@ -18,7 +14,8 @@ export function SkillDeleteResultBand({
   result: SkillDeleteResult
   onDismiss: () => void
 }): React.JSX.Element | null {
-  const lines = skillDeleteResultLines(result.skills)
+  const t = useTranslate()
+  const lines = skillDeleteResultLines(result.skills, t)
   if (lines.length === 0) {
     return null
   }
@@ -37,7 +34,7 @@ export function SkillDeleteResultBand({
           variant="ghost"
           size="icon-sm"
           onClick={onDismiss}
-          aria-label={translate('auto.components.skills.SkillDelete.dismissResults', 'Dismiss')}
+          aria-label={t('auto.components.skills.SkillDelete.dismissResults', 'Dismiss')}
         >
           <X />
         </Button>

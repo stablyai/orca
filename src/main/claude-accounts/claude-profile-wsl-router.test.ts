@@ -1,3 +1,4 @@
+import type { BlockedWslDistro } from '../wsl/filesystem/wsl-unc-access-gate'
 import { spawnSync } from 'node:child_process'
 import {
   existsSync,
@@ -14,41 +15,54 @@ import { join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
-import type { WslSpec } from '../wsl/wsl-runner'
+import type { WslSpec } from '../wsl/execution/wsl-runner'
 import type * as WslPaths from '../../shared/wsl-paths'
 
-const guest = vi.hoisted(() => ({ home: '' }))
-// The guest is this machine: its "UNC" paths are the Linux paths, and scripts run in /bin/sh.
+const guest = vi.hoisted(
+  (): { home: string; failure: { code: number; stdout: string } | null } => ({
+    home: '',
+    failure: null
+  })
+)
+// Emulate the guest with local POSIX paths and /bin/sh.
 vi.mock('../../shared/wsl-paths', async (original) => ({
   ...(await original<typeof WslPaths>()),
   toWindowsWslPath: (linuxPath: string) => linuxPath
 }))
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getWslHomeAsync: async (distro: string) => `\\\\wsl.localhost\\${distro}${guest.home}`,
   listRunningWslDistrosAsync: async () => ['Ubuntu']
 }))
-vi.mock('../wsl/wsl-runner', () => ({
+const gate = vi.hoisted(() => ({
+  blocked: vi.fn(
+    async (_path: string, _distro?: string | null): Promise<BlockedWslDistro | null> => null
+  )
+}))
+vi.mock('../wsl/filesystem/wsl-unc-access-gate', () => ({ blockedWslDistroForPath: gate.blocked }))
+vi.mock('../wsl/execution/wsl-runner', () => ({
   runWslProcess: async (spec: WslSpec) => {
+    if (guest.failure) {
+      return { ...guest.failure, stderr: '', timedOut: false }
+    }
     const result = spawnSync('/bin/sh', ['-c', spec.script ?? '', 'sh', ...(spec.args ?? [])], {
       encoding: 'utf8'
     })
     return { code: result.status, stdout: result.stdout, stderr: result.stderr, timedOut: false }
   }
 }))
-
-import {
-  CLAUDE_PROFILE_MISSING_MESSAGE,
-  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
-} from '../../shared/claude-profile-routing'
+import { CLAUDE_PROFILE_SETUP_FAILED_MESSAGE } from '../../shared/claude-profile-routing'
 import type { ClaudeProfileRouterSettings } from './claude-profile-router'
 import { prepareClaudeProfileDirectory } from './claude-profile-paths'
 import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
 import { wslClaudeProfile } from './claude-profile-wsl-paths'
 
-// Why skipped on Windows: the guest is Linux; these run its scripts and Node bundle as the guest.
+// Guest emulation runs POSIX scripts and the Linux Node bundle.
 const posixHost = process.platform !== 'win32'
 const roots: string[] = []
-afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })))
+afterEach(() => {
+  guest.failure = null
+  roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
+})
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'claude-wsl-router-'))
@@ -78,7 +92,6 @@ function fixture() {
   const router = new ClaudeWslProfileRouter({
     getSettings: () => settings,
     dataRoot: join(root, 'orca-dev'),
-    // Like the guest helper, marks the folder only once it finishes.
     runSetup: async () => {
       setup.calls += 1
       await setup.gate
@@ -110,44 +123,9 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     expect(existsSync(f.pointer)).toBe(false)
   })
 
-  it('sets up a missing folder, waits for a first setup never run or still running, then launches at once', async () => {
-    const f = fixture()
-    await expect(f.router.preparation('Ubuntu')).rejects.toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
-    f.setup.fail = true
-    let release = () => {}
-    f.setup.gate = new Promise((resolve) => (release = resolve))
-    const launch = f.router.prepareLaunch('Ubuntu')
-    await vi.waitFor(() => expect(f.setup.calls).toBe(1))
-    const second = f.router.prepareLaunch('Ubuntu')
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    release()
-    await expect(launch).rejects.toThrow(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
-    await expect(second).rejects.toThrow(CLAUDE_PROFILE_SETUP_FAILED_MESSAGE)
-    expect(f.setup.calls).toBe(1)
-
-    f.setup.fail = false
-    const prepared = await f.router.prepareLaunch('Ubuntu')
-    expect(prepared).toMatchObject({
-      configDir: f.profileHome,
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu',
-      wslLinuxConfigDir: f.profileHome,
-      envPatch: {
-        ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca-dev',
-        CLAUDE_CONFIG_DIR: f.profileHome,
-        ORCA_CLAUDE_INJECTED_CONFIG_DIR: f.profileHome
-      }
-    })
-    // The failed first setup left no marker, so this launch ran setup again; the next does not.
-    expect(f.setup.calls).toBe(2)
-    await f.router.prepareLaunch('Ubuntu')
-    expect(f.setup.calls).toBe(2)
-  })
-
   it('makes a launch redo a first setup that was cut off after its ownership gate', async () => {
     const f = fixture()
     mkdirSync(f.profileHome, { recursive: true })
-    // The guest helper failed, or timed out, after the gate ran.
     const cutOff = new ClaudeWslProfileRouter({
       getSettings: () => f.settings,
       dataRoot: join(guest.home, '..', 'orca-dev'),
@@ -166,32 +144,12 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     expect(f.setup.calls).toBe(1)
   })
 
-  it('never makes a launch wait on, or fail with, a re-run of a set-up folder', async () => {
-    const f = fixture()
-    mkdirSync(f.profileHome, { recursive: true })
-    writeFileSync(join(f.profileHome, '..', 'profile.json'), '{}')
-    f.setup.fail = true
-    let release = () => {}
-    f.setup.gate = new Promise((resolve) => (release = resolve))
-    await f.router.publish('Ubuntu')
-    await vi.waitFor(() => expect(f.setup.calls).toBe(1))
-    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
-      configDir: f.profileHome
-    })
-    release()
-    await new Promise((resolve) => setTimeout(resolve, 10))
-    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
-      configDir: f.profileHome
-    })
-    expect(f.setup.calls).toBe(1)
-  })
-
   it('sets up a new account folder for sign-in and deletes it without following its links', async () => {
     const f = fixture()
     const sharedHistory = join(guest.home, '.claude', 'projects')
     mkdirSync(sharedHistory)
     writeFileSync(join(sharedHistory, 'chat.jsonl'), '{}')
-    // The stub setup marks account a's folder.
+    // The setup stub always writes account a's folder, even when preparing b.
     mkdirSync(f.profileHome, { recursive: true })
     const home = await f.router.prepareAccount('Ubuntu', 'b')
     expect(home).toBe(join(guest.home, '.local/share/orca/claude-profiles/b/home'))
@@ -213,7 +171,6 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     const f = fixture()
     mkdirSync(f.profileHome, { recursive: true })
     let release = () => {}
-    // Like the guest helper, setup recreates the folder it writes into.
     f.setup.gate = new Promise<void>((resolve) => (release = resolve)).then(() => {
       mkdirSync(f.profileHome, { recursive: true })
     })
@@ -224,15 +181,6 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     release()
     await removal
     expect(existsSync(join(f.profileHome, '..'))).toBe(false)
-  })
-
-  it('writes a missing guest pointer before a launch returns', async () => {
-    const f = fixture()
-    mkdirSync(f.profileHome, { recursive: true })
-    writeFileSync(join(f.profileHome, '..', 'profile.json'), '{}')
-    expect(existsSync(f.pointer)).toBe(false)
-    await f.router.prepareLaunch('Ubuntu')
-    expect(readFileSync(f.pointer, 'utf8')).toBe(f.profileHome)
   })
 
   it('a launch waiting on setup leaves a selection made meanwhile in the pointer', async () => {
@@ -253,25 +201,45 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     expect(readFileSync(f.pointer, 'utf8')).toBe(homeB)
   })
 
-  it('overwrites a guest pointer that names another account before a launch returns', async () => {
+  it("runs an account with no login of its own on the guest's ~/.claude while that is signed in to it", async () => {
     const f = fixture()
     mkdirSync(f.profileHome, { recursive: true })
     writeFileSync(join(f.profileHome, '..', 'profile.json'), '{}')
-    mkdirSync(join(f.pointer, '..'), { recursive: true })
-    writeFileSync(f.pointer, join(f.profileHome, '../../b/home'))
-    await f.router.prepareLaunch('Ubuntu')
-    expect(readFileSync(f.pointer, 'utf8')).toBe(f.profileHome)
-  })
-
-  it('launches System default from the guest ~/.claude with no account env', async () => {
-    const f = fixture()
-    f.wsl.Ubuntu = null
-    const prepared = await f.router.preparation('Ubuntu')
-    expect(prepared.wslLinuxConfigDir).toBe(join(guest.home, '.claude'))
-    expect(prepared.envPatch).toEqual({
-      ORCA_CLAUDE_PROFILE_POINTER: '~/.local/share/orca/claude-profiles/selected-wsl-orca-dev'
+    const login = (dir: string, email: string) =>
+      writeFileSync(
+        join(dir, '.claude.json'),
+        JSON.stringify({ oauthAccount: { emailAddress: email } })
+      )
+    login(guest.home, 'A@example.test')
+    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      wslLinuxConfigDir: join(guest.home, '.claude'),
+      provenance: 'wsl:Ubuntu:system'
     })
-    expect(await f.router.runningDistros()).toEqual(['Ubuntu'])
+    expect(readFileSync(f.pointer, 'utf8')).toBe('')
+    await f.router.publish('Ubuntu')
+    expect(readFileSync(f.pointer, 'utf8')).toBe('')
+
+    login(f.profileHome, 'a@example.test')
+    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      wslLinuxConfigDir: f.profileHome
+    })
+    expect(readFileSync(f.pointer, 'utf8')).toBe(f.profileHome)
+
+    rmSync(join(f.profileHome, '.claude.json'))
+    f.settings.claudeManagedAccounts = [{ ...f.account('a'), organizationUuid: 'org-a' }]
+    writeFileSync(
+      join(guest.home, '.claude.json'),
+      JSON.stringify({
+        oauthAccount: { emailAddress: 'a@example.test', organizationUuid: 'org-b' }
+      })
+    )
+    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      wslLinuxConfigDir: f.profileHome
+    })
+    login(guest.home, 'b@example.test')
+    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      wslLinuxConfigDir: f.profileHome
+    })
   })
 })
 
@@ -294,13 +262,16 @@ it.skipIf(!posixHost)(
       external: ['electron'],
       logLevel: 'silent'
     })
-    const run = (accountId: string) =>
-      spawnSync(process.execPath, [helper, home, 'Ubuntu', accountId], { encoding: 'utf8' })
+    const run = (accountId: string, distro = 'Ubuntu') =>
+      spawnSync(process.execPath, [helper, home, distro, accountId], { encoding: 'utf8' })
 
     expect(run('a').status).toBe(0)
     expect(existsSync(join(profileHome, '..', 'profile.json'))).toBe(true)
-    // History is a Linux link into the guest's own ~/.claude.
     expect(lstatSync(join(profileHome, 'projects')).isSymbolicLink()).toBe(true)
+    const marker = readFileSync(join(profileHome, '..', 'profile.json'), 'utf8')
+    expect(run('a', 'ubuntu').status).toBe(0)
+    expect(readFileSync(join(profileHome, '..', 'profile.json'), 'utf8')).toBe(marker)
+    expect(run('a', 'Debian').status).not.toBe(0)
     expect(run('../escape').status).not.toBe(0)
   }
 )

@@ -1,69 +1,77 @@
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
-// Why: 'repo' roots also come from folder workspaces, so "Repository" misnames
-// half of them; "Workspace" matches the share-eligibility copy users read next.
-export function sourceKindLabel(kind: SkillSourceKind): string {
+// Repo-scoped roots also include folder workspaces; call them Workspace consistently with eligibility copy.
+export function sourceKindLabel(kind: SkillSourceKind, t: Translate = translate): string {
   switch (kind) {
     case 'home':
-      return translate('auto.components.skills.sourceKind.home', 'Home')
+      return t('auto.components.skills.sourceKind.home', 'Home')
     case 'repo':
-      return translate('auto.components.skills.sourceKind.workspace', 'Workspace')
+      return t('auto.components.skills.sourceKind.workspace', 'Workspace')
     case 'bundled':
-      return translate('auto.components.skills.sourceKind.bundled', 'Bundled')
+      return t('auto.components.skills.sourceKind.bundled', 'Bundled')
     case 'plugin':
-      return translate('auto.components.skills.sourceKind.plugin', 'Plugin')
+      return t('auto.components.skills.sourceKind.plugin', 'Plugin')
   }
 }
 
-export function skillCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.skillOne', '{{count}} skill', { count })
-    : translate('auto.components.skills.count.skillOther', '{{count}} skills', { count })
+export function skillCountLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.skill', '{{count}} skills', {
+    count,
+    defaultValue_one: '{{count}} skill'
+  })
 }
 
-export function sourceCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.sourceOne', '{{count}} source', { count })
-    : translate('auto.components.skills.count.sourceOther', '{{count}} sources', { count })
+export function sourceCountLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.source', '{{count}} sources', {
+    count,
+    defaultValue_one: '{{count}} source'
+  })
 }
 
-export function fileCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.fileOne', '{{count}} file', { count })
-    : translate('auto.components.skills.count.fileOther', '{{count}} files', { count })
+export function fileCountLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.file', '{{count}} files', {
+    count,
+    defaultValue_one: '{{count}} file'
+  })
 }
 
-export function shareLinkCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.linkOne', '{{count}} link', { count })
-    : translate('auto.components.skills.count.linkOther', '{{count}} links', { count })
+export function shareLinkCountLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.link', '{{count}} links', {
+    count,
+    defaultValue_one: '{{count}} link'
+  })
 }
 
-export function resultCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.resultOne', '{{count}} result', { count })
-    : translate('auto.components.skills.count.resultOther', '{{count}} results', { count })
+export function resultCountLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.result', '{{count}} results', {
+    count,
+    defaultValue_one: '{{count}} result'
+  })
 }
 
-export function selectedCountLabel(count: number): string {
-  return translate('auto.components.skills.count.selected', '{{count}} selected', { count })
+export function selectedCountLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.selected', '{{count}} selected', { count })
 }
 
-export function shareSelectionActionLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.shareOne', 'Share {{count}} skill', { count })
-    : translate('auto.components.skills.count.shareOther', 'Share {{count}} skills', { count })
+export function shareSelectionActionLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.share', 'Share {{count}} skills', {
+    count,
+    defaultValue_one: 'Share {{count}} skill'
+  })
 }
 
-export function installSkillsActionLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.installOne', 'Install {{count}} skill', { count })
-    : translate('auto.components.skills.count.installOther', 'Install {{count}} skills', { count })
+export function installSkillsActionLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.install', 'Install {{count}} skills', {
+    count,
+    defaultValue_one: 'Install {{count}} skill'
+  })
 }
 
-export function retrySkillsActionLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.retryOne', 'Retry {{count}} skill', { count })
-    : translate('auto.components.skills.count.retryOther', 'Retry {{count}} skills', { count })
+export function retrySkillsActionLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.retry', 'Retry {{count}} skills', {
+    count,
+    defaultValue_one: 'Retry {{count}} skill'
+  })
 }

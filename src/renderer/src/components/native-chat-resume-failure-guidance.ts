@@ -1,14 +1,8 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { ResumeFailure } from './native-chat-resume-on-restart-grouping'
 
-/**
- * What the user can do about a chat Orca could not resume, decided from the host's reason.
- *
- * One sentence saying what to do and why, and the button that does it. Retry is the primary action
- * only where a second attempt can actually succeed — an ownership clash or a reconnect that never
- * happened. A refusal that stands (newer work in the chat, the provider saying no) sends the user to
- * the chat itself, because that is the only place it can be continued.
- */
+/** Offer retry only for recoverable refusals; newer chat work or a standing provider refusal requires continuing in the chat. */
 
 export type ResumeFailureAction = 'open' | 'retry' | 'dismiss'
 
@@ -28,34 +22,37 @@ const NOT_RESUMABLE = new Set([
   'agent_session_identity_required'
 ])
 
-/** Whether Resume may name this chat at all. The host already knows a retry would not run; an
- *  older host omits the flag and the row stays selectable. */
+/** Respect host retryability; older hosts omit it and retain selectable rows. */
 export function resumeFailureSelectable(failure: Pick<ResumeFailure, 'retryable'>): boolean {
   return failure.retryable !== false
 }
 
 export function resumeFailureGuidance(
-  failure: Pick<ResumeFailure, 'outcome' | 'reason' | 'retryable'>
+  failure: Pick<ResumeFailure, 'outcome' | 'reason' | 'retryable'>,
+  t?: Translate
 ): ResumeFailureGuidance {
-  const guidance = reasonGuidance(failure)
+  const guidance = reasonGuidance(failure, t)
   // The host already knows a retry would not run, whatever the reason suggests.
   return !resumeFailureSelectable(failure) &&
     (guidance.primary === 'retry' || guidance.secondary === 'retry')
-    ? { text: manualContinuationText(), primary: 'open', secondary: 'dismiss' }
+    ? { text: manualContinuationText(t), primary: 'open', secondary: 'dismiss' }
     : guidance
 }
 
-function manualContinuationText(): string {
-  return translate(
+function manualContinuationText(t: Translate = translate): string {
+  return t(
     'auto.components.NativeChatResumeFailureGuidance.fallback',
     'Orca couldn’t resume this chat. Open it to continue manually.'
   )
 }
 
-function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): ResumeFailureGuidance {
+function reasonGuidance(
+  failure: Pick<ResumeFailure, 'outcome' | 'reason'>,
+  t: Translate = translate
+): ResumeFailureGuidance {
   if (failure.outcome === 'unconfirmed') {
     return {
-      text: translate(
+      text: t(
         'auto.components.NativeChatResumeFailureGuidance.unconfirmed',
         'Orca couldn’t confirm the “continue” message was delivered. Open the chat and check before sending another.'
       ),
@@ -66,7 +63,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
   const reason = failure.reason
   if (reason === 'agent_session_restart_work_superseded') {
     return {
-      text: translate(
+      text: t(
         'auto.components.NativeChatResumeFailureGuidance.superseded',
         'Open the chat and reply. New work arrived in it right after the restart, so Orca didn’t send its “continue” message.'
       ),
@@ -76,7 +73,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
   }
   if (reason === 'agent_session_conflict') {
     return {
-      text: translate(
+      text: t(
         'auto.components.NativeChatResumeFailureGuidance.conflict',
         'This chat is open in another Orca window or terminal. Close it there, then retry.'
       ),
@@ -86,7 +83,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
   }
   if (RETRYABLE_OWNERSHIP.has(reason)) {
     return {
-      text: translate(
+      text: t(
         'auto.components.NativeChatResumeFailureGuidance.ownershipUnknown',
         'This chat isn’t ready to resume yet. Wait a moment, then retry.'
       ),
@@ -96,7 +93,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
   }
   if (RETRYABLE_DELIVERY.has(reason)) {
     return {
-      text: translate(
+      text: t(
         'auto.components.NativeChatResumeFailureGuidance.notAttached',
         'The chat didn’t reconnect. Retry, or open it to start a fresh turn.'
       ),
@@ -106,7 +103,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
   }
   if (reason === 'agent_session_dispatch_rejected') {
     return {
-      text: translate(
+      text: t(
         'auto.components.NativeChatResumeFailureGuidance.dispatchRejected',
         'The agent refused the “continue” message. Open the chat and send one yourself.'
       ),
@@ -116,7 +113,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
   }
   if (NOT_RESUMABLE.has(reason)) {
     return {
-      text: translate(
+      text: t(
         'auto.components.NativeChatResumeFailureGuidance.unsupported',
         'This chat can’t be resumed by Orca. Open it to see where it stopped.'
       ),
@@ -124,5 +121,5 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
       secondary: 'dismiss'
     }
   }
-  return { text: manualContinuationText(), primary: 'open', secondary: 'retry' }
+  return { text: manualContinuationText(t), primary: 'open', secondary: 'retry' }
 }

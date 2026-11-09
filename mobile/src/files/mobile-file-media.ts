@@ -1,4 +1,6 @@
-import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/media-file-extensions'
+import { MEDIA_FILE_MIME_TYPES } from '../../../src/shared/file-preview/media-mime-types'
+
+export const PDF_MIME_TYPE = 'application/pdf'
 
 export type MobileFileMedia = {
   worktreeId: string
@@ -11,8 +13,14 @@ export function mobileFileMedia(worktreeId: string, relativePath?: string): Mobi
   return relativePath && mimeType ? { worktreeId, relativePath, mimeType } : null
 }
 
+// PDFs count as media because they share the download-then-device-viewer path, opened by the shell instead of a <video>.
+const MOBILE_FILE_MEDIA_MIME_TYPES: Record<string, string> = {
+  ...MEDIA_FILE_MIME_TYPES,
+  '.pdf': PDF_MIME_TYPE
+}
+
 export function mobileFileMediaMime(path: string): string | null {
   const name = path.split(/[/\\]/).pop() ?? ''
   const dot = name.lastIndexOf('.')
-  return dot > 0 ? (MEDIA_FILE_MIME_TYPES[name.slice(dot).toLowerCase()] ?? null) : null
+  return dot > 0 ? (MOBILE_FILE_MEDIA_MIME_TYPES[name.slice(dot).toLowerCase()] ?? null) : null
 }

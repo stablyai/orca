@@ -1,8 +1,9 @@
 import { useContext } from 'react'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
 import {
   resumeFailureSelectable,
@@ -13,30 +14,8 @@ import { resumeActivityLabel } from './native-chat-resume-activity-label'
 import { ResumeTreeRow } from './NativeChatResumeTreeRow'
 import { ResumeTreeDepthContext } from './native-chat-resume-tree-state'
 
-/**
- * One offered chat as a leaf of the resume tree: its checkbox in the list's shared left column, then,
- * indented for its depth, the provider glyph, "name - what it was doing", the model and an age —
- * the pieces of the sidebar's compact agent row.
- *
- * The sidebar's own `CompactAgentRow` cannot be reused — it takes a `DashboardAgentRow`, which
- * requires a live pane, tab and status entry, and every chat here is by definition stopped. The
- * pieces that do NOT need a live session are reused directly: `AgentIcon`, `agentTypeToIconAgent`,
- * `formatAgentTypeLabel`, `formatShortTimeAgo`, and the same model treatment (monospace, truncated,
- * hidden when empty).
- *
- * No state dot, deliberately. Every `AgentDotState` would mislead: `idle` and `unverifiable` both
- * presuppose a live pane, `interrupted` claims a stop or a newer message ended the turn, `failed`
- * a fault, `done` a finish, `working` a spinner. A missing dot beats a dot that says these agents
- * are running.
- *
- * After the name, what the chat was doing when Orca went away — mid-reply, waiting on the user,
- * subagents or monitoring — so rows the sidebar showed as working for different reasons differ.
- *
- * A chat an earlier resume could not carry on is the same row — selectable where a retry can run,
- * so Resume retries it — plus a status icon, a dismiss control, and a line saying what to do.
- *
- * A leaf of the resume tree; the enclosing workspace node supplies its depth.
- */
+/** Render stopped chats with the sidebar’s reusable icon/model/name pieces; CompactAgentRow requires a live pane/tab/status.
+ * Omit live-state dots because no state is proven. Failed resumes retain the row with actionable status; the enclosing workspace supplies depth. */
 export function ResumeCandidateRow({
   candidate,
   workspaceName,
@@ -45,7 +24,8 @@ export function ResumeCandidateRow({
   disabled,
   onCheckedChange,
   failure,
-  onFailureAction
+  onFailureAction,
+  renderStatus
 }: {
   candidate: ResumeCandidate
   /** Named in the checkbox's accessible name: several rows otherwise read identically. */
@@ -57,14 +37,17 @@ export function ResumeCandidateRow({
   /** Present when an earlier resume of this chat did not carry on. */
   failure?: ResumeFailure
   onFailureAction?: (action: ResumeFailureAction, sessionId: string) => void
+  renderStatus?: (sessionId: string, title: string) => React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const agentLabel = formatAgentTypeLabel(candidate.agent)
   const title =
     candidate.latestPrompt.trim() ||
-    translate('auto.components.NativeChatResumeOnRestartModal.untitled', 'Untitled chat')
+    t('auto.components.NativeChatResumeOnRestartModal.untitled', 'Untitled chat')
   const model = candidate.model?.trim() ?? ''
-  const activity = resumeActivityLabel(candidate.activity)
+  const activity = resumeActivityLabel(candidate.activity, t)
   const depth = useContext(ResumeTreeDepthContext)
+  const status = renderStatus?.(candidate.sessionId, title)
   const act = (action: ResumeFailureAction) => onFailureAction?.(action, candidate.sessionId)
   return (
     <ResumeTreeRow
@@ -74,15 +57,17 @@ export function ResumeCandidateRow({
       disabled={disabled || (failure !== undefined && !resumeFailureSelectable(failure))}
       onCheckedChange={onCheckedChange}
       // Identifies the agent AND its workspace: rows would otherwise all read the same.
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectAgent',
         'Resume {{value0}} chat "{{value1}}" in {{value2}}',
         { value0: agentLabel, value1: title, value2: workspaceName }
       )}
       compact
+      checkboxSlot={status}
       // Outside the label, so pressing them never toggles the checkbox.
       trailing={
-        failure && (
+        failure &&
+        !status && (
           <ResumeFailureStatus
             failure={failure}
             title={title}
@@ -93,12 +78,13 @@ export function ResumeCandidateRow({
         )
       }
       below={
-        failure && (
+        failure &&
+        !status && (
           <ResumeFailureGuidanceLine failure={failure} disabled={disabled} onAction={act} />
         )
       }
     >
-      {/* AgentIcon carries no label of its own, so the provider was invisible to assistive tech. */}
+      {/* AgentIcon has no label, so name its provider for assistive technology. */}
       <span role="img" aria-label={agentLabel} className="inline-flex shrink-0">
         <AgentIcon agent={agentTypeToIconAgent(candidate.agent)} size={13} />
       </span>
@@ -117,7 +103,7 @@ export function ResumeCandidateRow({
           {model}
         </span>
       )}
-      {/* `formatShortTimeAgo` takes (timestamp, now) and subtracts internally — NOT a delta. */}
+      {/* formatShortTimeAgo takes a timestamp and current time, not a delta. */}
       <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
         {formatShortTimeAgo(candidate.recordedAt, listedAt)}
       </span>

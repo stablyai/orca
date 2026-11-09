@@ -11,15 +11,13 @@ import {
   type AutomationHostStatusDescriptor,
   type AutomationHostStatusTone
 } from './automation-host-status-descriptors'
+import { useTranslate } from '@/i18n/use-translate'
 
-/**
- * Host identity and status chips. The two health axes render as two chips and
- * never merge: a host can be freshly loaded and disconnected at the same time.
- */
+/** Keep host load and connectivity as independent health chips: freshly loaded data can belong to a disconnected host. */
 
 type BadgeStyle = { variant: React.ComponentProps<typeof Badge>['variant']; className?: string }
 
-// `Badge` has no muted variant and this design does not add one — quiet reads as outline + muted text.
+// Use outline plus muted text for quiet chips; Badge has no muted variant.
 const TONE_STYLE: Record<AutomationHostStatusTone, BadgeStyle> = {
   neutral: { variant: 'outline' },
   quiet: { variant: 'outline', className: 'text-muted-foreground' },
@@ -106,9 +104,10 @@ export function AutomationHostStatusBadges({
   showHealthy = false,
   className
 }: AutomationHostStatusBadgesProps): React.JSX.Element | null {
-  const authority = authorityHealthDescriptor(entry.authorityHealth)
-  const execution = executionHealthDescriptor(entry.executionHealth)
-  const query = hostScopeDescriptor(entry)
+  const t = useTranslate()
+  const authority = authorityHealthDescriptor(entry.authorityHealth, t)
+  const execution = executionHealthDescriptor(entry.executionHealth, t)
+  const query = hostScopeDescriptor(entry, t)
   const showAuthority = showHealthy || !authority.isDefault
   const showExecution = showHealthy || !execution.isDefault
 

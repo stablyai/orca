@@ -18,7 +18,9 @@ export type ProfileStateWriterCommand =
       replacements: readonly ProfileStateDomainReplacement[]
       runPayloads: readonly string[]
     }
-  | { command: 'assert-revision' | 'close' }
+  | { command: 'assert-revision' }
+  /** Only a graceful shutdown refreshes the downgrade copy; maintenance and quarantine must not write. */
+  | { command: 'close'; refreshLegacyDocuments?: boolean }
   | { command: 'export-json' | 'export-latest'; targetPath: string }
 
 export type ProfileStateWriterRequest = ProfileStateWriterCommand & { id: number }
@@ -30,6 +32,8 @@ export type ProfileStateWriterErrorData = {
   expectedRevision?: number
   actualRevision?: number
   domain?: string | null
+  /** Preserve SQLite causes that the outer open-error class cannot identify. */
+  cause?: { code?: string; errcode?: number; message: string }
 }
 export type ProfileStateWriterResponse =
   | { id: number; ok: true; revision: number; exportedRevision?: number | null }
@@ -69,8 +73,12 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
     case 'write-state':
       return value.payload instanceof Uint8Array
     case 'assert-revision':
-    case 'close':
       return true
+    case 'close':
+      return (
+        value.refreshLegacyDocuments === undefined ||
+        typeof value.refreshLegacyDocuments === 'boolean'
+      )
     case 'export-json':
     case 'export-latest':
       return typeof value.targetPath === 'string' && value.targetPath.length > 0
@@ -97,7 +105,17 @@ function isErrorData(value: unknown): value is ProfileStateWriterErrorData {
     (value.outcome === 'known-failure' || value.outcome === 'indeterminate') &&
     (value.expectedRevision === undefined || isProfileStateRevision(value.expectedRevision)) &&
     (value.actualRevision === undefined || isProfileStateRevision(value.actualRevision)) &&
-    (value.domain === undefined || value.domain === null || typeof value.domain === 'string')
+    (value.domain === undefined || value.domain === null || typeof value.domain === 'string') &&
+    (value.cause === undefined || isErrorCauseData(value.cause))
+  )
+}
+
+function isErrorCauseData(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.message === 'string' &&
+    (value.code === undefined || typeof value.code === 'string') &&
+    (value.errcode === undefined || typeof value.errcode === 'number')
   )
 }
 

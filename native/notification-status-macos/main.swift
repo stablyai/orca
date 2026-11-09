@@ -1,13 +1,6 @@
-// Prints the app's macOS notification settings as JSON and exits.
-//
-// Why this exists: Electron exposes no API for UNUserNotificationCenter
-// authorization, and scheduling silently succeeds even while macOS suppresses
-// display, so the renderer cannot know whether the user actually receives
-// notifications. This binary must run from inside the app bundle (NSBundle
-// resolves the bundle by walking up from the executable path) and must be
-// code-signed with the app's identifier — macOS keys notification records to
-// the signing identifier, which is why the build embeds an Info.plist section
-// with the target CFBundleIdentifier.
+// Electron lacks UNUserNotificationCenter authorization status; successful scheduling can still be suppressed.
+// Run inside the app bundle (NSBundle walks up from the executable) and sign/embed Info.plist with
+// its CFBundleIdentifier: macOS keys notification settings to the signing identifier.
 import Foundation
 import UserNotifications
 

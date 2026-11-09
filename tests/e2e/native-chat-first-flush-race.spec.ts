@@ -4,9 +4,15 @@ import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
 import {
-  enableNativeChatSetting,
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
+import {
+  observeTranscriptPaneLifetime,
   seedClaudeProviderSession,
   toggleTerminalTabToChatView,
   claudeTranscriptLines
@@ -24,13 +30,15 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
     const [tabId] = descriptor.paneKey.split(':')
     const sessionId = `e2e-first-flush-${randomUUID()}`
 
-    // Why: a real Claude Code session flushes its first JSONL line up to
-    // minutes after launch (#8401) — this directory intentionally has no file
-    // yet when the pane resolves its providerSession.
+    // #8401: Claude may flush its first JSONL minutes after launch; resolve providerSession before creating the file.
     const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-'))
     const transcriptPath = path.join(scratchDir, `${sessionId}.jsonl`)
 
@@ -41,8 +49,12 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
       contentType: 'text/plain'
     })
 
+    const finishLifetime = await observeTranscriptPaneLifetime(orcaPage, {
+      tabId,
+      worktreeId: descriptor.worktreeId,
+      paneKey: descriptor.paneKey
+    })
     try {
-      await enableNativeChatSetting(orcaPage)
       await seedClaudeProviderSession(orcaPage, {
         paneKey: descriptor.paneKey,
         worktreeId: descriptor.worktreeId,
@@ -60,11 +72,7 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
         path: path.join(screenshotDir, '01-loading-no-error.png')
       })
 
-      // Why observe, not sleep: 1_500ms is exactly UNFLUSHED_SETTLE_MS, so a fixed
-      // wait straddles the boundary where the host reports the transcript pending
-      // and the renderer cancels its own retry. Read through the same IPC instead,
-      // proving the miss directly. A notFound is never cached, so this cannot
-      // perturb the hydration the assertions below measure.
+      // Observe the uncached miss through IPC: a fixed 1500ms wait races UNFLUSHED_SETTLE_MS and retry cancellation.
       await expect
         .poll(
           () =>
@@ -85,8 +93,7 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
         'The main process now retries a not-yet-flushed transcript instead of caching a permanent miss.'
       writeFileSync(transcriptPath, claudeTranscriptLines({ sessionId, userText, assistantText }))
 
-      // Why: the user text also surfaces as chrome (worktree row, tab
-      // title), so scope hydration assertions to the transcript subtree.
+      // Scope to transcript content because user text also appears in workspace/tab chrome.
       const transcript = orcaPage.locator('[data-native-chat-root="true"]')
       await expect(transcript.getByText(userText)).toBeVisible({ timeout: 30_000 })
       await expect(transcript.getByText(assistantText)).toBeVisible({ timeout: 30_000 })
@@ -94,7 +101,16 @@ test.describe('Native chat first-flush transcript race (#8401)', () => {
       await orcaPage.screenshot({
         path: path.join(screenshotDir, '02-hydrated.png')
       })
+      const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+      expect(finalPane.tabId).toBe(boundPane.tabId)
+      expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+      expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+      await expect(transcript).toBeVisible()
     } finally {
+      await testInfo.attach('transcript-pane-lifetime', {
+        body: JSON.stringify(await finishLifetime()),
+        contentType: 'application/json'
+      })
       rmSync(scratchDir, { recursive: true, force: true })
     }
   })

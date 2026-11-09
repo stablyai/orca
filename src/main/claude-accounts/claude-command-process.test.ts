@@ -5,10 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 type SpawnSpec = { program: string; args?: readonly string[]; env?: NodeJS.ProcessEnv }
 const spawned = vi.hoisted(() => {
   const specs: SpawnSpec[] = []
-  return { specs }
+  const stdins: PassThrough[] = []
+  return { specs, stdins }
 })
 
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   spawnProcess: (spec: SpawnSpec) => {
     spawned.specs.push(spec)
     const child = Object.assign(new EventEmitter(), {
@@ -18,12 +19,13 @@ vi.mock('../../shared/child-process/run-process', () => ({
       pid: undefined,
       kill: vi.fn()
     })
+    spawned.stdins.push(child.stdin)
     queueMicrotask(() => child.emit('close', 0))
     return child
   }
 }))
 vi.mock('../codex-cli/command', () => ({ resolveClaudeCommand: () => 'claude' }))
-vi.mock('../wsl/wsl-executable-path', () => ({
+vi.mock('../wsl/execution/wsl-executable-path', () => ({
   resolveWslExecutablePath: () => 'C:\\Windows\\System32\\wsl.exe'
 }))
 
@@ -33,22 +35,33 @@ import { runClaudeCommandProcess } from './claude-command-process'
 const originalPlatform = process.platform
 afterEach(() => {
   spawned.specs.length = 0
+  spawned.stdins.length = 0
   Object.defineProperty(process, 'platform', { value: originalPlatform })
 })
 
 describe('runClaudeCommandProcess', () => {
-  it("logs in on the host with CLAUDE_CONFIG_DIR set to the account's folder", async () => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
+  it('survives a pasted code that reaches Claude just as it exits (EPIPE)', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let write: ((text: string) => void) | null = null
     await runClaudeCommandProcess(
       ['auth', 'login', '--claudeai'],
       { windowsPath: '/data/claude-profiles/a/home', linuxPath: null, wslDistro: null },
-      1000
+      1000,
+      {
+        keepStdinOpen: true,
+        onStdin: (next) => {
+          write = next
+          spawned.stdins[0].emit(
+            'error',
+            Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
+          )
+        }
+      }
     )
-    expect(spawned.specs[0]).toMatchObject({
-      program: 'claude',
-      args: ['auth', 'login', '--claudeai']
-    })
-    expect(spawned.specs[0].env?.CLAUDE_CONFIG_DIR).toBe('/data/claude-profiles/a/home')
+    expect(write).not.toBeNull()
+    expect(warn).toHaveBeenCalledWith('[claude-accounts] Claude login stdin:', 'write EPIPE')
+    warn.mockRestore()
   })
 
   it("logs in through the distro's login shell with --exec for a WSL account", async () => {

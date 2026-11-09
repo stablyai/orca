@@ -12,9 +12,9 @@ function write(path: string, content = ''): void {
 }
 
 function mayOverride(
-  agent: 'claude' | 'codex',
+  agent: string,
   workspacePath: string,
-  accountHomePath = '/homes/a'
+  accountHomePath: string | null = '/homes/a'
 ) {
   return workspaceMayOverrideDefaultModel({ agent, workspacePath, accountHomePath })
 }
@@ -28,40 +28,44 @@ describe('workspaceMayOverrideDefaultModel', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('finds a Codex project config at a linked worktree root', async () => {
-    const worktree = join(root, 'wt')
-    write(join(worktree, '.git'), 'gitdir: /elsewhere')
-    expect(await mayOverride('codex', worktree)).toBe(false)
-    write(join(worktree, '.codex', 'config.toml'), 'model = "gpt-project"\n')
-    expect(await mayOverride('codex', worktree)).toBe(true)
-  })
-
   it('walks from a folder up to its repository root, and no further', async () => {
     const repo = join(root, 'repo')
     const folder = join(repo, 'packages', 'app')
     write(join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n')
     mkdirSync(folder, { recursive: true })
-    write(join(root, '.codex', 'config.toml'), 'model = "above-the-repo"\n')
-    expect(await mayOverride('codex', folder)).toBe(false)
-    write(join(repo, '.codex', 'config.toml'), 'model = "gpt-project"\n')
-    expect(await mayOverride('codex', folder)).toBe(true)
+    write(join(root, '.pi', 'settings.json'), '{"defaultModel":"above-the-repo"}')
+    expect(await mayOverride('pi', folder)).toBe(false)
+    write(join(repo, '.pi', 'settings.json'), '{"defaultModel":"project"}')
+    expect(await mayOverride('pi', folder)).toBe(true)
   })
 
   it('reads only the folder itself when no repository contains it', async () => {
     const folder = join(root, 'loose')
     mkdirSync(folder, { recursive: true })
-    write(join(root, '.codex', 'config.toml'), 'model = "parent"\n')
-    expect(await mayOverride('codex', folder)).toBe(false)
+    write(join(root, '.pi', 'settings.json'), '{"defaultModel":"parent"}')
+    expect(await mayOverride('pi', folder)).toBe(false)
   })
 
-  it('skips the .codex directory that is the account home itself', async () => {
+  it('skips the .pi directory that is the account home itself', async () => {
     const worktree = join(root, 'home-repo')
     write(join(worktree, '.git'), 'gitdir: /elsewhere')
-    write(join(worktree, '.codex', 'config.toml'), 'model = "user"\n')
-    expect(await mayOverride('codex', worktree, join(worktree, '.codex'))).toBe(false)
+    write(join(worktree, '.pi', 'settings.json'), '{"defaultModel":"user"}')
+    expect(await mayOverride('pi', worktree, join(worktree, '.pi'))).toBe(false)
   })
 
-  it('never vouches for a Claude default, whose user settings can pick the model', async () => {
-    expect(await mayOverride('claude', join(root, 'anywhere'))).toBe(true)
+  it('counts unreadable project config as an override', async () => {
+    const worktree = join(root, 'broken')
+    write(join(worktree, '.git'), 'gitdir: /elsewhere')
+    write(join(worktree, '.pi', 'settings.json'), '{ "defaultModel": ')
+    expect(await mayOverride('pi', worktree)).toBe(true)
   })
+
+  it('reads OpenCode config above the repository root too, as OpenCode 2.x does', async () => {
+    const repo = join(root, 'oc-above', 'repo')
+    write(join(repo, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+    write(join(root, 'oc-above', 'opencode.json'), '{"model":"x/y"}')
+    expect(await mayOverride('opencode', repo, null)).toBe(true)
+  })
+
+  // Windows permission bits cannot make this fixture unreadable.
 })

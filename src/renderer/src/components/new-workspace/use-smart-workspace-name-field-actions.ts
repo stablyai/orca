@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
+import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import {
   applyWorkspaceEmojiSuggestion,
   type WorkspaceEmojiReplacement,
@@ -10,7 +10,7 @@ import {
   type WorkspaceEmojiSuggestion
 } from '@/lib/workspace-emoji-shortcodes'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import type {
   RepoOption,
   RowEntry,
@@ -21,6 +21,7 @@ import type { useWorkItemSourceSearch } from './use-work-item-source-search'
 import type { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field-focus-controls'
 import { useAppStore } from '@/store'
 import type { useWorkItemSourcePresentation } from './use-work-item-source-presentation'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Foundation = ReturnType<typeof useWorkItemSourceSearch> &
   SmartWorkspaceNameFieldProps &
@@ -119,7 +120,7 @@ export function useSmartWorkspaceNameFieldActions(
   )
   const openSelectedSource = useCallback((): void => {
     if (selectedSource?.url) {
-      void window.api.shell.openUrl(selectedSource.url)
+      openAppHttpLink(selectedSource.url)
     }
   }, [selectedSource?.url])
   const applyEmojiReplacement = useCallback(

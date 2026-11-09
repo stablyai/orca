@@ -6,10 +6,12 @@ import { bootstrapProfileStateAuthority } from './profile-state-authority-bootst
 import type { ProfileStateStorageClassification } from './profile-state-storage-classification'
 
 export type ProfileStateStoreFactoryOptions = {
+  userDataPath?: string
   dataFile: string
   databaseFile: string
   profileId: string
   storageAuthority?: AutomationStorageAuthority
+  initializeHomeWorkspace?: boolean
 }
 
 export class ProfileStateStoreFactoryError extends Error {
@@ -28,7 +30,6 @@ export type ProfileStateStoreFactoryResult = {
   migrated: boolean
 }
 
-/** Centralize authority selection for desktop, orcad and offline callers. */
 export function createProfileStateStore(
   options: ProfileStateStoreFactoryOptions
 ): ProfileStateStoreFactoryResult {
@@ -39,12 +40,13 @@ export function createProfileStateStore(
       store: new Store({
         dataFile: options.dataFile,
         storageAuthority: options.storageAuthority,
+        initializeHomeWorkspace: options.initializeHomeWorkspace,
         profileStateAuthority: initialState.authority,
         initialAuthorityState: initialState
       })
     }
   } catch (error) {
-    // Store construction owns the authority only after its load boundary succeeds.
+    // Failed Store construction has not taken authority ownership yet.
     initialState.authority.close?.()
     throw error
   }
@@ -54,7 +56,7 @@ type PreparedProfileStateStore = Omit<ProfileStateStoreFactoryResult, 'store'> &
   initialState: ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority>
 }
 
-/** Admission is shared by live worker startup and synchronous offline operations. */
+/** Share admission between live workers and synchronous offline operations. */
 export function prepareProfileStateStore(
   options: ProfileStateStoreFactoryOptions
 ): PreparedProfileStateStore {

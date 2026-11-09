@@ -1,6 +1,8 @@
 export const RIGHT_SIDEBAR_MIN_WIDTH = 220
 export const RIGHT_SIDEBAR_MIN_NON_SIDEBAR_AREA = 320
 export const RIGHT_SIDEBAR_ABSOLUTE_FALLBACK_MAX_WIDTH = 2000
+/** The activity bar beside the panel when it sits on the side. */
+export const RIGHT_SIDEBAR_SIDE_ACTIVITY_BAR_WIDTH = 40
 
 export function computeMaxRightSidebarPanelWidth(
   windowWidth: number | null | undefined,
@@ -25,12 +27,4 @@ export function clampRightSidebarPanelWidth(
     computeMaxRightSidebarPanelWidth(windowWidth, renderedExtraWidth),
     Math.max(RIGHT_SIDEBAR_MIN_WIDTH, width)
   )
-}
-
-/** Width the sidebar opens to while it shows a chat visual: wide enough for a chart to read. */
-export const RIGHT_SIDEBAR_VISUAL_PREFERRED_WIDTH = 720
-
-/** The sidebar's width while it shows a visual: its own resize, else the wider of stored and preferred. */
-export function rightSidebarVisualWidth(storedWidth: number, visualWidth: number | null): number {
-  return visualWidth ?? Math.max(storedWidth, RIGHT_SIDEBAR_VISUAL_PREFERRED_WIDTH)
 }

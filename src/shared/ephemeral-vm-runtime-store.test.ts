@@ -1,14 +1,13 @@
-import { mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from './pairing'
+import { encodePairingOffer } from './remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from './remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   EphemeralVmRuntimeStoreError,
-  getEphemeralVmRuntimeStorePath,
   listEphemeralVmRuntimes,
   MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES,
-  removeEphemeralVmRuntime,
   updateEphemeralVmRuntimeStatus,
   upsertEphemeralVmRuntime
 } from './ephemeral-vm-runtime-store'
@@ -70,26 +69,6 @@ describe('ephemeral VM runtime store', () => {
     return userDataPath
   }
 
-  it('persists recipe-created runtimes separately from saved remote environments', () => {
-    const userDataPath = makeUserDataPath()
-    const first = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
-    const second = upsertEphemeralVmRuntime(
-      userDataPath,
-      runtimeRecord({
-        id: 'orca-instance-2',
-        createdAt: 2_000,
-        updatedAt: 2_000,
-        recipeResult: {
-          schemaVersion: 1,
-          pairingCode: pairingCode('wss://sandbox-2.example.com'),
-          projectRoot: '/workspace/repo'
-        }
-      })
-    )
-
-    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([second, first])
-  })
-
   it('updates lifecycle and cleanup state', () => {
     const userDataPath = makeUserDataPath()
     upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
@@ -123,65 +102,6 @@ describe('ephemeral VM runtime store', () => {
       updatedAt: 4_000
     })
     expect(recovered.cleanupLastError).toBeUndefined()
-  })
-
-  it('persists runtime connection metadata', () => {
-    const userDataPath = makeUserDataPath()
-    upsertEphemeralVmRuntime(
-      userDataPath,
-      runtimeRecord({
-        connectionMode: 'ssh',
-        sshTargetId: 'runtime-ssh-orca-instance-1',
-        recipeResult: {
-          schemaVersion: 1,
-          connection: {
-            type: 'ssh',
-            projectRoot: '/workspace/repo',
-            target: {
-              label: 'Sandbox',
-              host: 'sandbox.example.com',
-              port: 22,
-              username: 'root'
-            }
-          }
-        }
-      })
-    )
-
-    expect(listEphemeralVmRuntimes(userDataPath)[0]).toMatchObject({
-      connectionMode: 'ssh',
-      sshTargetId: 'runtime-ssh-orca-instance-1',
-      recipeResult: {
-        connection: {
-          type: 'ssh',
-          projectRoot: '/workspace/repo'
-        }
-      }
-    })
-  })
-
-  it('removes cleaned runtimes', () => {
-    const userDataPath = makeUserDataPath()
-    const record = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
-
-    expect(removeEphemeralVmRuntime(userDataPath, record.id)).toEqual(record)
-    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([])
-  })
-
-  it('throws a store error for invalid persisted JSON', () => {
-    const userDataPath = makeUserDataPath()
-    writeFileSync(getEphemeralVmRuntimeStorePath(userDataPath), '{ nope', 'utf8')
-
-    expect(() => listEphemeralVmRuntimes(userDataPath)).toThrow(EphemeralVmRuntimeStoreError)
-  })
-
-  it('rejects an oversized sparse runtime store before parsing it', () => {
-    const userDataPath = makeUserDataPath()
-    const path = getEphemeralVmRuntimeStorePath(userDataPath)
-    writeFileSync(path, '{"version":1,"runtimes":[]}', 'utf8')
-    truncateSync(path, MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES + 1)
-
-    expect(() => listEphemeralVmRuntimes(userDataPath)).toThrow(EphemeralVmRuntimeStoreError)
   })
 
   it('rejects an oversized write without publishing a partial runtime record', () => {

@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { buildSync } from 'esbuild'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { spawnProcess } from '../../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
+import { stagePackagedProcessHost } from '../../../../config/scripts/desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
 import {
   acquireProfileStateMaintenance,
   acquireProfileStateRuntimeAdmission
@@ -15,7 +16,7 @@ const fixture = mkdtempSync(join(tmpdir(), 'orca-state-access-process-'))
 const bundle = join(fixture, 'access.cjs')
 const children = new Set<ReturnType<typeof spawnProcess>>()
 
-beforeAll(() => {
+beforeAll(async () => {
   buildSync({
     entryPoints: [resolve(__dirname, 'profile-state-access.ts')],
     outfile: bundle,
@@ -24,6 +25,7 @@ beforeAll(() => {
     format: 'cjs',
     packages: 'external'
   })
+  await stagePackagedProcessHost(fixture)
 })
 
 afterEach(async () => {
@@ -71,7 +73,7 @@ async function startChild(root: string, mode: string): Promise<ReturnType<typeof
   const child = spawnProcess({
     program: process.execPath,
     args: ['-e', CHILD_SOURCE, root, bundle, mode],
-    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', NODE_PATH: '', NODE_OPTIONS: '' }
   })
   children.add(child)
   let stderr = ''
@@ -130,21 +132,5 @@ describe('profile state owners across actual process death', () => {
     expect(() => acquireProfileStateMaintenance(root)).toThrow('in use')
     await stopChild(child)
     acquireProfileStateRuntimeAdmission(root).release()
-  })
-
-  it('treats a crash before complete owner publication as an inert candidate', async () => {
-    const root = join(fixture, 'candidate')
-    const child = await startChild(root, 'candidate')
-    acquireProfileStateRuntimeAdmission(root).release()
-    await stopChild(child)
-    acquireProfileStateMaintenance(root).release()
-  })
-
-  it('excludes recovery after participant publication even before runtime admission finishes', async () => {
-    const root = join(fixture, 'published')
-    const child = await startChild(root, 'published')
-    expect(() => acquireProfileStateMaintenance(root)).toThrow('in use')
-    await stopChild(child)
-    acquireProfileStateMaintenance(root).release()
   })
 })

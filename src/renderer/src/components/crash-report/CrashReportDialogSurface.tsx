@@ -22,6 +22,7 @@ import {
 } from '../../../../shared/crash-reporting'
 import type { GitHubViewer } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID,
   getCrashReportCopySubmissionFailure,
@@ -30,41 +31,71 @@ import {
 } from './crash-report-submit-notice'
 import { useCrashReportCopy } from './use-crash-report-copy'
 
-function formatSummary(report: CrashReportRecord): string {
+function formatSummary(report: CrashReportRecord, t: Translate = translate): string {
   if (isReactErrorBoundaryReport(report)) {
     const surface = typeof report.details.surface === 'string' ? report.details.surface : null
-    return surface ? `React render error in ${surface}` : 'React render error'
+    return surface
+      ? t(
+          'auto.components.crash.report.CrashReportDialogSurface.renderErrorIn',
+          'React render error in {{surface}}',
+          { surface }
+        )
+      : t('auto.components.crash.report.CrashReportDialogSurface.renderError', 'React render error')
   }
   return `${report.processType} ${report.reason}${
     report.exitCode === null ? '' : ` (exit ${report.exitCode})`
   }`
 }
 
-function getDialogTitle(report: CrashReportRecord | null): string {
+function getDialogTitle(report: CrashReportRecord | null, t: Translate = translate): string {
   if (!report) {
-    return 'Report a crash'
+    return t('auto.components.crash.report.CrashReportDialogSurface.reportTitle', 'Report a crash')
   }
   return report && isReactErrorBoundaryReport(report)
-    ? 'Orca hit a recoverable UI error'
-    : 'Orca closed unexpectedly'
+    ? t(
+        'auto.components.crash.report.CrashReportDialogSurface.uiErrorTitle',
+        'Orca hit a recoverable UI error'
+      )
+    : t(
+        'auto.components.crash.report.CrashReportDialogSurface.closedTitle',
+        'Orca closed unexpectedly'
+      )
 }
 
-function getDialogDescription(report: CrashReportRecord | null): string {
+function getDialogDescription(report: CrashReportRecord | null, t: Translate = translate): string {
   if (!report) {
-    return 'Send a privacy-safe crash report. Recent redacted diagnostic logs are included when available.'
+    return t(
+      'auto.components.crash.report.CrashReportDialogSurface.reportDescription',
+      'Send a privacy-safe crash report. Recent redacted diagnostic logs are included when available.'
+    )
   }
   return report && isReactErrorBoundaryReport(report)
-    ? 'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
-    : 'Send a privacy-safe diagnostic report to help us understand what happened.'
+    ? t(
+        'auto.components.crash.report.CrashReportDialogSurface.uiErrorDescription',
+        'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
+      )
+    : t(
+        'auto.components.crash.report.CrashReportDialogSurface.closedDescription',
+        'Send a privacy-safe diagnostic report to help us understand what happened.'
+      )
 }
 
-function getNotesPlaceholder(report: CrashReportRecord | null): string {
+function getNotesPlaceholder(report: CrashReportRecord | null, t: Translate = translate): string {
   if (!report) {
-    return 'Optional: what happened?'
+    return t(
+      'auto.components.crash.report.CrashReportDialogSurface.reportNotesPlaceholder',
+      'Optional: what happened?'
+    )
   }
   return report && isReactErrorBoundaryReport(report)
-    ? 'Optional: what were you doing before this UI error?'
-    : 'Optional: what were you doing before Orca closed?'
+    ? t(
+        'auto.components.crash.report.CrashReportDialogSurface.uiErrorNotesPlaceholder',
+        'Optional: what were you doing before this UI error?'
+      )
+    : t(
+        'auto.components.crash.report.CrashReportDialogSurface.closedNotesPlaceholder',
+        'Optional: what were you doing before Orca closed?'
+      )
 }
 
 type CrashReportDialogSurfaceProps = {
@@ -82,18 +113,18 @@ export function CrashReportDialogSurface({
   onOpenChange,
   onReportChange
 }: CrashReportDialogSurfaceProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const mountedRef = useMountedRef()
   const [notes, setNotes] = useState('')
   const [includeDiagnosticLogs, setIncludeDiagnosticLogs] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
-  // Why: account lookup can resolve after the dialog closes or reopens.
-  // Sequence the request so a stale viewer is never used for submission.
+  // Sequence viewer lookups so late close/reopen results cannot supply a stale submission identity.
   const viewerRequestIdRef = useRef(0)
   const deferredNotes = useDeferredValue(notes)
   const diagnosticText = useMemo(
-    // Why: formatting applies redaction and truncation over the full crash
-    // payload. Keep that preview update out of the textarea keystroke path.
+    // Defer full-payload redaction/truncation so notes typing stays responsive.
     () => (report ? formatCrashReportText(report, deferredNotes) : ''),
     [deferredNotes, report]
   )
@@ -175,8 +206,7 @@ export function CrashReportDialogSurface({
         ...(report ? { reportId: report.id } : {}),
         notes,
         includeDiagnosticLogs,
-        // Why: crash reporting must degrade to anonymous if gh is unavailable;
-        // identity lookup is best-effort and never blocks report creation.
+        // Identity lookup is best-effort; allow anonymous reports when gh is unavailable.
         submitAnonymously: !viewer,
         githubLogin: viewer?.login ?? null,
         githubEmail: null
@@ -197,10 +227,7 @@ export function CrashReportDialogSurface({
         toast.warning(warningNotice.title, { description: warningNotice.description })
       } else {
         toast.success(
-          translate(
-            'auto.components.crash.report.CrashReportDialog.8e24fe4f75',
-            'Crash report sent.'
-          )
+          t('auto.components.crash.report.CrashReportDialog.8e24fe4f75', 'Crash report sent.')
         )
       }
       onOpenChange(false)
@@ -237,25 +264,28 @@ export function CrashReportDialogSurface({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <AlertTriangle className="size-4 text-destructive" />
-            {getDialogTitle(report)}
+            {getDialogTitle(report, t)}
           </DialogTitle>
-          <DialogDescription className="text-xs">{getDialogDescription(report)}</DialogDescription>
+          <DialogDescription className="text-xs">
+            {getDialogDescription(report, t)}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="min-w-0 space-y-3">
           {report ? (
             <>
               <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs">
-                <div className="font-medium text-foreground">{formatSummary(report)}</div>
+                <div className="font-medium text-foreground">{formatSummary(report, t)}</div>
                 <div className="mt-1 text-muted-foreground">
-                  {new Date(report.createdAt).toLocaleString()} · {report.platform} {report.arch} ·
-                  {translate('auto.components.crash.report.CrashReportDialog.835037edc9', 'Orca')}{' '}
+                  {new Date(report.createdAt).toLocaleString(intlLocale)} · {report.platform}{' '}
+                  {report.arch} ·{' '}
+                  {t('auto.components.crash.report.CrashReportDialog.835037edc9', 'Orca')}{' '}
                   {report.appVersion}
                 </div>
               </div>
               <div className="min-w-0 space-y-1.5">
                 <div className="text-[11px] font-medium text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.crash.report.CrashReportDialog.6d3ebe216a',
                     'Diagnostic text'
                   )}
@@ -268,11 +298,11 @@ export function CrashReportDialogSurface({
           ) : (
             <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
               {loading
-                ? translate(
+                ? t(
                     'auto.components.crash.report.CrashReportDialog.765591798d',
                     'Checking for crash reports...'
                   )
-                : translate(
+                : t(
                     'auto.components.crash.report.CrashReportDialog.ead6fc0510',
                     'No automatic crash report was captured. You can still send details and include recent diagnostic logs when available.'
                   )}
@@ -285,14 +315,15 @@ export function CrashReportDialogSurface({
               rows={4}
               // Keep the UI and formatter on the same input budget.
               maxLength={MAX_USER_NOTES_LENGTH}
-              placeholder={getNotesPlaceholder(report)}
+              placeholder={getNotesPlaceholder(report, t)}
               className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
             <div
               aria-hidden="true"
               className="text-right text-[11px] tabular-nums text-muted-foreground"
             >
-              {notes.length.toLocaleString()} / {MAX_USER_NOTES_LENGTH.toLocaleString()}
+              {notes.length.toLocaleString(intlLocale)} /{' '}
+              {MAX_USER_NOTES_LENGTH.toLocaleString(intlLocale)}
             </div>
           </div>
           <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/20 p-3">
@@ -305,13 +336,13 @@ export function CrashReportDialogSurface({
             />
             <div className="space-y-1">
               <Label htmlFor="crash-report-attach-diagnostics" className="text-xs">
-                {translate(
+                {t(
                   'auto.components.crash.report.CrashReportDialog.b082f27490',
                   'Attach recent diagnostic logs'
                 )}
               </Label>
               <div className="text-xs leading-5 text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.crash.report.CrashReportDialog.e59f0b9427',
                   'Sends a capped redacted log bundle with the report.'
                 )}
@@ -329,7 +360,7 @@ export function CrashReportDialogSurface({
             disabled={loading}
           >
             <Clipboard className="size-3.5" />
-            {translate('auto.components.crash.report.CrashReportDialog.50b00dc327', 'Copy Details')}
+            {t('auto.components.crash.report.CrashReportDialog.50b00dc327', 'Copy Details')}
           </Button>
           <Button
             type="button"
@@ -338,11 +369,11 @@ export function CrashReportDialogSurface({
             onClick={handleDismiss}
             disabled={submitting}
           >
-            {translate('auto.components.crash.report.CrashReportDialog.88fea8e84e', "Don't Send")}
+            {t('auto.components.crash.report.CrashReportDialog.88fea8e84e', "Don't Send")}
           </Button>
           <Button type="button" size="sm" onClick={handleSubmit} disabled={loading || submitting}>
             <Send className="size-3.5" />
-            {translate('auto.components.crash.report.CrashReportDialog.b4951cd27c', 'Send Report')}
+            {t('auto.components.crash.report.CrashReportDialog.b4951cd27c', 'Send Report')}
           </Button>
         </DialogFooter>
       </DialogContent>

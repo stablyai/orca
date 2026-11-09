@@ -1,10 +1,6 @@
 // @vitest-environment happy-dom
 
-// A Codex parent settles, its subagent asks for approval, and the user answers. Every hop is the
-// real one: provider translator, deferred sink, durable journal and host status feed, then the
-// renderer's status bridge, agent-status store and Activity pipeline. The answer returns the
-// session to its own turn's end, so the row must read done, list the ask before the done, and
-// leave nothing unread that the user had already read.
+// Round-trip subagent approval through the real translator/journal/status/activity pipeline; answering must preserve done time and read state.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -15,18 +11,21 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../src/shared/agent-session-wire'
-import type { AgentJournalItemBody } from '../../src/shared/agent-session-journal-types'
-import { parseAgentJournalItemKey } from '../../src/shared/agent-session-journal-item-key'
+} from '../../src/shared/agent-session/agent-session-wire'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody
+} from '../../src/shared/agent-session/journal/agent-session-journal-types'
+import { parseAgentJournalItemKey } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { Tab } from '../../src/shared/tab-types'
 import type { AppState } from '../../src/renderer/src/store/types'
-import type * as WorktreeRuntimeOwnerModule from '../../src/renderer/src/lib/worktree-runtime-owner'
-import { createCodexJournalTranslator } from '../../src/main/codex/codex-structured-journal-translation'
-import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/codex-structured-prompt-replies'
-import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { createDeferredStructuredAgentSessionEventSink } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed'
-import { indexedStatusFeedSession } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
+import { createCodexJournalTranslator } from '../../src/main/codex/structured/journal/codex-structured-journal-translation'
+import '../../src/main/codex/structured/prompts/codex-structured-prompt-replies'
+import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/structured/prompts/codex-prompt-registry'
+import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../../src/main/native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
+import { indexedStatusFeedSession } from '../../src/main/native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session'
 import {
   makeRepo,
   makeWorktree
@@ -53,30 +52,32 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   const useAppStore = createTestStore()
   mocks.store = useAppStore
   return { useAppStore }
 })
 
-// Partial: the status projection also resolves each chat's owner from the worktree.
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
-  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
-  getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: vi.fn()
+  })
+)
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(),
-  subscribeStructuredAgentSession: vi.fn(),
-  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSession: vi.fn(),
+    subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
+  })
+)
 
-import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/components/native-chat/StructuredAgentSessionStatusBridge'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
-import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
+import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/components/native-chat/session/status/StructuredAgentSessionStatusBridge'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/native-chat/status/structured-agent-session-status-feed'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'codex-child-approval'
 const CODEX_THREAD = 'thread-parent'
@@ -118,6 +119,7 @@ beforeEach(async () => {
     acknowledgedAgentsByPaneKey: {},
     activityClearedAtByPaneKey: {},
     retainedAgentsByPaneKey: {},
+    refreshGitHubForWorktreeIfStale: vi.fn(),
     testRuntimeOwner: null,
     repos: [makeRepo()],
     worktreesByRepo: { [worktree.repoId]: [worktree] },
@@ -151,9 +153,15 @@ async function openHost() {
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
     sessions: new Map([
-      [SESSION, indexedStatusFeedSession({ journal, child: { phase: 'ready' } })]
+      [
+        SESSION,
+        indexedStatusFeedSession({
+          journal,
+          child: { phase: 'ready', generation: null, fence: 1 }
+        })
+      ]
     ]),
-    getRecord: () => null,
+    getConversation: () => null,
     now: () => 1
   })
   const events: AgentSessionStatusEvent[] = []
@@ -201,7 +209,10 @@ async function openHost() {
         resolvedAt: tick()
       }
     }
-    await journal.appendItem(identity, resolved, { fence: 1 })
+    await journal.appendItem(identity, resolved, {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     publish()
     translator.resolvePrompt(itemId)
   }
@@ -234,7 +245,7 @@ describe("a Codex subagent's answered approval on the settled parent's Activity 
     await host.journal.appendItem(
       { provider: 'orca', clientMessageId: 'prompt-1' },
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     host.on(CODEX_THREAD, 'turn/started', { turn: { id: 'parent-turn' } })
     const spawn = {

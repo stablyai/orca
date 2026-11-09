@@ -1,16 +1,11 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { IntegrationStepState } from './use-integration-connection-status'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type { IntegrationStepState }
 
-// One progressive step. The active step shows its instructional copy and
-// provider rows; a done step collapses to a one-line summary with a "Change"
-// affordance that reopens it inline; upcoming steps start collapsed but open
-// on click so the step order never blocks anyone. `expanded` (body visibility)
-// is tracked separately from `state` so a done step can reopen while still
-// reading as connected.
+// Track expansion separately from connection state so completed steps can reopen without losing their status.
 export function IntegrationStep(props: {
   index: number
   state: IntegrationStepState
@@ -22,11 +17,11 @@ export function IntegrationStep(props: {
   canToggle?: boolean
   children?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const { state, expanded, onToggle } = props
   const done = state === 'done'
   const active = state === 'active'
-  // Upcoming steps are openable too — the order is a recommendation, not a
-  // prerequisite, so a Linear/Jira-first user can connect tasks right away.
+  // Allow tracker-first setup; step order is a recommendation, not a prerequisite.
   const canToggle = !active && (props.canToggle ?? true)
 
   return (
@@ -71,23 +66,11 @@ export function IntegrationStep(props: {
           <span className="shrink-0 text-[12px] font-medium text-muted-foreground">
             {done
               ? expanded
-                ? translate(
-                    'auto.components.feature.wall.connect.integration.step.5538eb6743',
-                    'Done'
-                  )
-                : translate(
-                    'auto.components.feature.wall.connect.integration.step.0f47ff17c6',
-                    'Change'
-                  )
+                ? t('auto.components.feature.wall.connect.integration.step.5538eb6743', 'Done')
+                : t('auto.components.feature.wall.connect.integration.step.0f47ff17c6', 'Change')
               : expanded
-                ? translate(
-                    'auto.components.feature.wall.connect.integration.step.close_step',
-                    'Close'
-                  )
-                : translate(
-                    'auto.components.feature.wall.connect.integration.step.open_step',
-                    'Open'
-                  )}
+                ? t('auto.components.feature.wall.connect.integration.step.close_step', 'Close')
+                : t('auto.components.feature.wall.connect.integration.step.open_step', 'Open')}
           </span>
         ) : null}
       </button>

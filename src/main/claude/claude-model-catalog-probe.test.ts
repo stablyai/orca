@@ -1,27 +1,23 @@
-import { createMockDiscoveryChild } from '../text-generation/commit-message-text-generation-test-harness'
-import { CLAUDE_MODEL_LIST_STDIN } from '../../shared/claude-model-list-probe'
-import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { PROVIDER_STDIN_END_GRACE_MS } from '../provider-process/provider-process-supervisor'
 import { createClaudeModelCatalogProbe } from './claude-model-catalog-probe'
-import { resolveClaudeStructuredInvocation } from './claude-structured-launch-resolution'
-import type { discoverModelsLocal } from '../text-generation/commit-message-model-discovery'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
-import type {
-  SpawnedSourceControlAgentProcess,
-  SpawnSourceControlAgent
-} from '../text-generation/source-control-text-generation-types'
+import type { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 
-type DiscoverInput = Parameters<typeof discoverModelsLocal>[0]
-type DiscoverResult = Awaited<ReturnType<typeof discoverModelsLocal>>
+type ListingCall = Parameters<typeof runAgentModelCatalogListing>
 
-const AUTH_POLICY = { stripAuthEnv: false } as const
+const AUTH_POLICY = { account: 'system' } as const
+
+const HOME = (path: string): { variable: string; path: string } => ({
+  variable: 'CLAUDE_CONFIG_DIR',
+  path
+})
 
 function probeDeps(command = `"${process.execPath}"`): {
-  resolveCommand: () => string
+  resolveCommand: () => { command: string; prefixArgs: string[] }
   resolveEnv: () => Record<string, string>
   resolveInheritedEnv: () => Promise<Record<string, string>>
   resolveAuthPolicy: () => typeof AUTH_POLICY
@@ -37,113 +33,64 @@ function probeDeps(command = `"${process.execPath}"`): {
   }
 }
 
-function listedResult(): DiscoverResult {
-  return {
-    success: true,
-    capability: {
-      id: 'claude',
-      label: 'Claude',
-      modelSource: 'dynamic',
-      defaultModelId: 'sonnet',
-      models: []
-    },
-    models: [
-      {
-        id: 'sonnet',
-        label: 'Sonnet',
-        isDefault: true,
-        thinkingLevels: [{ id: 'low', label: 'Low' }],
-        defaultThinkingLevel: 'low'
-      }
-    ],
-    defaultModelId: 'sonnet',
-    catalogOrigin: 'probe'
+const LISTED = `${JSON.stringify({
+  type: 'control_response',
+  response: {
+    subtype: 'success',
+    request_id: 'orca-model-discovery',
+    response: {
+      models: [
+        {
+          value: 'sonnet',
+          displayName: 'Sonnet',
+          supportsEffort: true,
+          supportedEffortLevels: ['low']
+        }
+      ]
+    }
   }
-}
+})}\n`
 
 describe('claude model catalog probe', () => {
-  it.each([`"${process.execPath}"`, ''])(
-    'lists with the session executable for Command %j',
-    async (command) => {
-      const deps = probeDeps(command)
-      const captured: DiscoverInput[] = []
-      const spawnAgent = vi.fn<SpawnSourceControlAgent>(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake discover below never reads the returned child.
-        () => ({}) as SpawnedSourceControlAgentProcess
-      )
+  it.each([
+    [[], [], ['/orca-probe', '/orca-probe'], 'user,project,local'],
+    [['node_modules/claude/cli.js'], [], ['/chat-a', '/chat-b'], 'user'],
+    [[], ['--settings', 'settings.json'], ['/chat-a', '/chat-b'], 'user']
+  ])(
+    'lists prefix %j with arguments %j from %j, reading %s settings',
+    async (prefixArgs, launchArgs, listedIn, sources) => {
+      // A user command line may name files in the chat's folder, so it runs there, but reads only
+      // user settings there so the project's own settings never narrow the account's list.
+      const calls: ListingCall[] = []
       const probe = createClaudeModelCatalogProbe({
-        ...deps,
-        spawnAgent,
-        discover: async (input) => {
-          captured.push(input)
-          // Drive the probe's spawn wrapper once, the way the real listing would.
-          input.spawnAgent({
-            binary: 'claude',
-            args: ['--list'],
-            env: input.env,
-            stdinMode: 'ignore',
-            useCwdForNative: false
-          })
-          return listedResult()
+        ...probeDeps(),
+        resolveCommand: () => ({ command: process.execPath, prefixArgs }),
+        resolveLaunchArgs: async () => launchArgs,
+        runListing: async (...call) => {
+          calls.push(call)
+          return LISTED
         }
       })
-      const success = await probe('/homes/account-a')
-      expect(success.origin).toBe('probe')
-      expect(success.models).toEqual([
-        {
-          id: 'sonnet',
-          label: 'Sonnet',
-          isDefault: true,
-          // The spec's `defaultThinkingLevel` is not what Claude runs; naming it would label the effort.
-          efforts: [{ value: 'low', label: 'Low' }]
-        }
-      ])
-      // The probe's env is exactly the session launch's resolved env for the
-      // same deps, plus the account pin — and the spawn runs the resolved
-      // binary, never the bare spec name.
-      const invocation = await resolveClaudeStructuredInvocation(deps, (env) => ({
-        ...env,
-        CLAUDE_CONFIG_DIR: '/homes/account-a'
-      }))
-      expect(captured).toHaveLength(1)
-      expect(captured[0]!.env).toEqual(invocation.env)
-      expect(captured[0]!.agentCommandOverride).toBeUndefined()
-      expect(spawnAgent).toHaveBeenCalledTimes(1)
-      expect(spawnAgent.mock.calls[0]![0].binary).toBe(invocation.command)
-    }
-  )
-
-  it('pins no CLAUDE_CONFIG_DIR for the CLI default home, exactly as a session spawn does', async () => {
-    const envs: DiscoverInput['env'][] = []
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      discover: async (input) => {
-        envs.push(input.env)
-        return listedResult()
+      const identities: unknown[] = []
+      for (const folder of ['/chat-a', '/chat-b']) {
+        const resolved = await probe.resolve?.(
+          HOME('/homes/a'),
+          '/orca-probe',
+          'snapshot',
+          undefined,
+          folder
+        )
+        identities.push(resolved?.identity)
+        await resolved?.run()
       }
-    })
-    await probe(join(homedir(), '.claude'))
-    await probe('/homes/account-a')
-    // An explicit default would move the CLI off its default Keychain item (claude.ai OAuth).
-    expect(envs[0]).not.toHaveProperty('CLAUDE_CONFIG_DIR')
-    expect(envs[1]).toMatchObject({ CLAUDE_CONFIG_DIR: '/homes/account-a' })
-  })
-
-  it('refuses a static-fallback answer rather than reporting it as a catalog', async () => {
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      discover: async () => ({ ...listedResult(), catalogOrigin: 'spec' })
-    })
-    await expect(probe('/homes/a')).rejects.toThrow(/listed no models/)
-  })
-
-  it.each(['npx claude', 'claude --verbose', '/missing/claude', './claude'])(
-    'lists nothing, and never probes the stock CLI, for Command %s',
-    async (command) => {
-      const discover = vi.fn()
-      const probe = createClaudeModelCatalogProbe({ ...probeDeps(command), discover })
-      await expect(probe('/homes/a')).rejects.toMatchObject({ reason: 'agentCommandNotRunnable' })
-      expect(discover).not.toHaveBeenCalled()
+      expect(calls.map(([launch]) => launch.cwd)).toEqual(listedIn)
+      const args = calls[0]?.[0].args ?? []
+      expect(args.slice(0, prefixArgs.length)).toEqual(prefixArgs)
+      expect(args.slice(args.length - launchArgs.length)).toEqual(launchArgs)
+      expect(args[args.indexOf('--setting-sources') + 1]).toBe(sources)
+      expect(JSON.stringify(identities[0]) === JSON.stringify(identities[1])).toBe(
+        listedIn[0] === listedIn[1]
+      )
     }
   )
 
@@ -154,7 +101,7 @@ describe('claude model catalog probe', () => {
       try {
         const parentFile = join(folder, 'parent-pid')
         const standIn = join(folder, 'claude')
-        // Answers only after the session stdin-end grace, the way a slow `claude -p` does.
+        // Delay beyond the stdin-end grace to verify supervised one-shot lifetime.
         writeFileSync(
           standIn,
           `#!${process.execPath}
@@ -162,7 +109,7 @@ let input = ''
 process.stdin.on('data', (chunk) => (input += chunk))
 process.stdin.on('end', () => setTimeout(() => {
   require('node:fs').writeFileSync(${JSON.stringify(parentFile)}, String(process.ppid))
-  const request = JSON.parse(input.trim().split('\\n').at(-1))
+  const request = JSON.parse(input.trim().split('\\n').find(line => line.includes('list_models')))
   if (request.request.subtype !== 'list_models') process.exit(2)
   console.log(JSON.stringify({ type: 'control_response', response: { subtype: 'success',
     request_id: request.request_id, response: { models: [{ value: 'sonnet', displayName: 'Sonnet' }] } } }))
@@ -172,15 +119,14 @@ process.stdin.on('end', () => setTimeout(() => {
         chmodSync(standIn, 0o755)
         const probe = createClaudeModelCatalogProbe({
           ...probeDeps(),
-          resolveCommand: () => standIn,
+          resolveCommand: () => ({ command: standIn, prefixArgs: [] }),
           resolveInheritedEnv: async () => ({ PATH: process.env.PATH ?? '', HOME: folder })
         })
 
-        await expect(probe(join(folder, 'account'))).resolves.toMatchObject({
+        await expect(probe(HOME(join(folder, 'account')))).resolves.toMatchObject({
           origin: 'probe',
           models: [{ id: 'sonnet', label: 'Sonnet' }]
         })
-        // The stand-in's parent is the supervisor, never Orca itself.
         expect(Number(readFileSync(parentFile, 'utf8'))).not.toBe(process.pid)
       } finally {
         rmSync(folder, { recursive: true, force: true })
@@ -190,73 +136,19 @@ process.stdin.on('end', () => setTimeout(() => {
 })
 
 describe('Claude catalog availability', () => {
-  it('does not turn a generic discovery failure into unavailable', async () => {
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      discover: async () => ({ success: false, error: 'timeout' })
-    })
-    await expect(probe('/homes/a')).rejects.not.toBeInstanceOf(AgentModelCatalogUnavailableError)
-  })
-})
-
-describe('Claude catalog fake-child contract', () => {
-  // Claude has no pre-send sign-in verdict: its real start refusal is the only one.
-  it.each([false, true])(
-    'lists in one process with no sign-in verdict, managed=%s',
-    async (managed) => {
-      const child = createMockDiscoveryChild()
-      const spawnAgent = vi.fn<SpawnSourceControlAgent>(() => {
-        queueMicrotask(() => {
-          child.stdout.emit(
-            'data',
-            Buffer.from(
-              `${JSON.stringify({
-                type: 'control_response',
-                response: {
-                  request_id: 'orca-model-discovery',
-                  subtype: 'success',
-                  response: { models: [{ value: 'sonnet', displayName: 'Sonnet' }] }
-                }
-              })}\n`
-            )
-          )
-          child.emit('close', 0)
-        })
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: discovery reads only the fake child's EventEmitter streams, pid, kill and stdin.end.
-        return child as unknown as SpawnedSourceControlAgentProcess
-      })
+  it('says the CLI is missing when the resolved executable is not there', async () => {
+    const folder = mkdtempSync(join(tmpdir(), 'orca-claude-missing-'))
+    try {
+      const missing = join(folder, 'claude with spaces', 'claude')
       const probe = createClaudeModelCatalogProbe({
         ...probeDeps(),
-        resolveEnv: () => ({}),
-        resolveAuthPolicy: () => ({ stripAuthEnv: managed }),
-        spawnAgent
+        resolveCommand: () => ({ command: missing, prefixArgs: [] })
       })
-      const result = await probe('/homes/a')
-      expect(result).toMatchObject({ models: [{ id: 'sonnet' }] })
-      expect(result).not.toHaveProperty('unavailable')
-      expect(spawnAgent).toHaveBeenCalledTimes(1)
-      expect(child.stdin.end).toHaveBeenCalledWith(CLAUDE_MODEL_LIST_STDIN)
+      await expect(probe(HOME('/homes/a'))).rejects.toMatchObject({
+        unavailable: { reason: 'cliMissing' }
+      })
+    } finally {
+      rmSync(folder, { recursive: true, force: true })
     }
-  )
-  it('preserves the resolved executable missing error from a child', async () => {
-    const child = createMockDiscoveryChild()
-    const probe = createClaudeModelCatalogProbe({
-      ...probeDeps(),
-      resolveCommand: () => '/resolved/claude with spaces/claude',
-      spawnAgent: () => {
-        queueMicrotask(() =>
-          child.emit(
-            'error',
-            Object.assign(new Error('missing'), {
-              code: 'ENOENT',
-              path: '/resolved/claude with spaces/claude'
-            })
-          )
-        )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: discovery reads only the fake child's EventEmitter streams, pid, kill and stdin.end.
-        return child as unknown as SpawnedSourceControlAgentProcess
-      }
-    })
-    await expect(probe('/homes/a')).rejects.toMatchObject({ unavailable: { reason: 'cliMissing' } })
   })
 })

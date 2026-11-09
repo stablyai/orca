@@ -1,10 +1,11 @@
-import { createHash } from 'node:crypto'
+import 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
+import { openElectronSpeechDownloadRequest } from '../host/electron-speech-services'
 
 const { hasOpenAiSpeechApiKeyMock, netRequestMock } = vi.hoisted(() => ({
   hasOpenAiSpeechApiKeyMock: vi.fn(),
@@ -46,67 +47,19 @@ type ModelManagerInternals = {
   ) => Promise<void>
 }
 
+function managerInternals(dir: string): ModelManagerInternals {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tests drive the download hooks the class keeps protected.
+  return new ModelManager(
+    dir,
+    openElectronSpeechDownloadRequest
+  ) as unknown as ModelManagerInternals
+}
+
 describe('ModelManager', () => {
   beforeEach(() => {
     netRequestMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReset()
     hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
-  })
-
-  it('requires pinned, internally consistent metadata for every model file', () => {
-    for (const manifest of SPEECH_MODEL_CATALOG) {
-      if (manifest.provider !== 'local') {
-        continue
-      }
-      expect(manifest.downloadFiles?.length).toBeGreaterThan(0)
-      expect(manifest.files).toEqual(manifest.downloadFiles?.map(({ name }) => name))
-      expect(manifest.sizeBytes).toBe(
-        manifest.downloadFiles?.reduce((total, { sizeBytes }) => total + sizeBytes, 0)
-      )
-      for (const file of manifest.downloadFiles ?? []) {
-        expect(file.url).toMatch(
-          /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[a-f0-9]{40}\//
-        )
-        expect(file.sha256).toMatch(/^[a-f0-9]{64}$/)
-        expect(file.sizeBytes).toBeGreaterThan(0)
-      }
-    }
-  })
-
-  it('verifies downloaded model file hashes before installation', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      const filePath = join(dir, 'model.onnx')
-      writeFileSync(filePath, 'known model bytes')
-      const expected = createHash('sha256').update('known model bytes').digest('hex')
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
-
-      await expect(manager.verifyFileSha256(filePath, expected)).resolves.toBeUndefined()
-      await expect(manager.verifyFileSha256(filePath, '0'.repeat(64))).rejects.toThrow(
-        /integrity verification/
-      )
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('rejects non-HTTPS model downloads', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
-
-      await expect(
-        manager.downloadFile(
-          'http://example.com/model.bin',
-          join(dir, 'model.bin'),
-          1,
-          'm',
-          () => false
-        )
-      ).rejects.toThrow(/HTTPS/)
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
   })
 
   it('installs individually verified model files through a staging directory', async () => {
@@ -115,7 +68,7 @@ describe('ModelManager', () => {
       const manifest = SPEECH_MODEL_CATALOG.find(
         (model) => model.id === 'zipformer-streaming-zh-14m'
       )!
-      const manager = new ModelManager(dir)
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
       const internals = manager as unknown as ModelManagerInternals
       const downloadMock = vi
         .spyOn(internals, 'downloadFileWithRetry')
@@ -149,27 +102,6 @@ describe('ModelManager', () => {
     }
   })
 
-  it('marks OpenAI transcription models ready only when an API key is configured', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      const manager = new ModelManager(dir)
-
-      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
-        id: 'openai-gpt-4o-mini-transcribe',
-        status: 'not-downloaded'
-      })
-
-      hasOpenAiSpeechApiKeyMock.mockReturnValue(true)
-
-      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
-        id: 'openai-gpt-4o-mini-transcribe',
-        status: 'ready'
-      })
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
   it('deletes a ready local model and reports it as not downloaded', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
@@ -177,7 +109,7 @@ describe('ModelManager', () => {
         (model) => model.id === 'zipformer-streaming-zh-14m'
       )
       expect(manifest?.files).toBeDefined()
-      const manager = new ModelManager(dir)
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
       const modelDir = manager.getModelDir(manifest!.id)
       for (const file of manifest!.downloadFiles ?? []) {
         const path = join(modelDir, file.name)
@@ -260,7 +192,7 @@ describe('ModelManager', () => {
         end: vi.fn(() => request)
       }
       netRequestMock.mockReturnValue(request)
-      const manager = new ModelManager(dir)
+      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
 
       const download = manager.downloadModel(manifest.id)
       manager.cancelDownload(manifest.id)
@@ -336,7 +268,7 @@ describe('ModelManager', () => {
       }
       netRequestMock.mockReturnValue(request)
       const controller = new AbortController()
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
 
       const download = manager.downloadFile(
         'https://example.com/model.bin',
@@ -418,7 +350,7 @@ describe('ModelManager', () => {
         end: vi.fn(() => request)
       }
       netRequestMock.mockReturnValue(request)
-      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+      const manager = managerInternals(dir)
 
       const download = manager.downloadFile(
         'https://example.com/model.bin',

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveRepairedActiveTerminalTabId } from './active-terminal-repair'
 
 type ActiveTerminalRepairInput = {
@@ -48,9 +48,15 @@ export function useActiveTerminalRepair(input: ActiveTerminalRepairInput): void 
     tabs
   } = input
   useEffect(() => {
-    repairActiveTerminalTab(input)
+    repairActiveTerminalTab({
+      activeTabId,
+      activeTabIdByWorktree,
+      activeTabType,
+      renderedActiveWorktreeId,
+      setActiveTab,
+      tabs
+    })
     // Why: `tabs` is the dependency so repair reacts to order/content changes, not just scalar ids.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeTabId,
     activeTabType,

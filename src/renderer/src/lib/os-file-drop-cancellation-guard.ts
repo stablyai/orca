@@ -1,4 +1,4 @@
-import { hasNativeFileDragTypes } from '../../../shared/native-file-drop'
+import { hasNativeFileDragTypes } from '../../../shared/file-import/native-file-drop'
 import { WORKSPACE_FILE_DRAG_SOURCE_MIME, WORKSPACE_FILE_PATHS_MIME } from './workspace-file-drag'
 
 let disposeInstalledGuard: (() => void) | null = null
@@ -15,7 +15,6 @@ export function hasOsFileDragTypes(
   )
 }
 
-/** Cancels unclaimed OS file drops before the browser can navigate to them. */
 export function installOsFileDropCancellationGuard(): () => void {
   if (disposeInstalledGuard) {
     return disposeInstalledGuard

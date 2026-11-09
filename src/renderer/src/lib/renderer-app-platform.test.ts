@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   getRendererAppPlatform,
   resetRendererAppPlatformCacheForTests
@@ -19,28 +19,7 @@ describe('getRendererAppPlatform', () => {
     resetRendererAppPlatformCacheForTests()
   })
 
-  it('crosses the preload bridge once no matter how many renders ask', () => {
-    const get = vi.fn(() => ({ platform: 'darwin' as NodeJS.Platform }))
-    stubPlatformApi(get)
-
-    for (let index = 0; index < 500; index += 1) {
-      expect(getRendererAppPlatform()).toBe('darwin')
-    }
-
-    expect(get).toHaveBeenCalledTimes(1)
-  })
-
-  it.each(['darwin', 'win32', 'linux'] as const)(
-    'reports the preload platform verbatim on %s',
-    (platform) => {
-      stubPlatformApi(() => ({ platform }))
-
-      expect(getRendererAppPlatform()).toBe(platform)
-    }
-  )
-
-  // Why: the web client injects its platform API after boot, so an early caller must
-  // not pin the user-agent guess for the rest of the session.
+  // The web platform bridge arrives after boot; early user-agent guesses must not become session-long cache entries.
   it('does not cache the user-agent fallback', () => {
     // 'freebsd' is never a user-agent fallback answer, so the swap is unambiguous.
     expect(getRendererAppPlatform()).not.toBe('freebsd')

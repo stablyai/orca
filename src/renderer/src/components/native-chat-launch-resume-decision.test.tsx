@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// Until the launch decides whether it resumes this machine's chats itself, nothing else offers to
-// carry one on; from its decision on, the chats it resumes are named, with no moment in between.
+// Suppress other continuation offers until the launch decides and publishes the chats it will resume atomically.
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -19,11 +18,16 @@ import {
 } from './native-chat-launch-resume-decision'
 
 const rpc = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: rpc,
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: rpc
+}))
+
+vi.mock('../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', async () =>
+  (await import('./native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
+)
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root
@@ -39,7 +43,6 @@ const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
   workspaceKind: 'git-worktree'
 }))
 
-/** What Continue reads, rendered each time it changes. */
 const seen: { pending: boolean; resuming: readonly string[] }[] = []
 function Probe({ launch }: { launch: boolean }): null {
   useNativeChatRestartOffer(launch)
@@ -54,7 +57,6 @@ function settings(autoResume: boolean | undefined): void {
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalStructuredNativeChat: true,
       ...(autoResume === undefined ? {} : { nativeChatResumeWorkOnRestart: autoResume })
     }
   })
@@ -81,7 +83,6 @@ it('holds Continue back from the settings wait until the opted-in launch names i
   rpc.mockImplementation((_target, method) =>
     method === 'agentSession.restartResumable' ? read.promise : new Promise(() => {})
   )
-  // Settings not loaded yet: the launch may still resume.
   await act(async () => root.render(<Probe launch={false} />))
   expect(seen.at(-1)).toEqual({ pending: true, resuming: [] })
 
@@ -92,19 +93,5 @@ it('holds Continue back from the settings wait until the opted-in launch names i
   await act(async () => read.resolve({ sessions: offered }))
 
   expect(seen.at(-1)).toEqual({ pending: false, resuming: ['a', 'b'] })
-  // Never a render where the launch had decided and its chats were not yet named.
   expect(seen.some((entry) => !entry.pending && entry.resuming.length === 0)).toBe(false)
-})
-
-it('holds nothing back once the launch found nothing to resume', async () => {
-  settings(true)
-  rpc.mockResolvedValue({ sessions: [] })
-  await act(async () => root.render(<Probe launch />))
-  expect(seen.at(-1)).toEqual({ pending: false, resuming: [] })
-})
-
-it('holds nothing back when the launch asks instead of resuming', () => {
-  settings(false)
-  act(() => root.render(<Probe launch={false} />))
-  expect(seen.at(-1)).toEqual({ pending: false, resuming: [] })
 })

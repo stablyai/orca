@@ -6,7 +6,7 @@ import { BacklogTasks } from './BacklogTasks'
 import { callBacklog } from '@/lib/backlog-task-source'
 import type * as BacklogSource from '@/lib/backlog-task-source'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { RuntimeEnvironmentStatus } from '../../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { BACKLOG_TASKS_CAPABILITY } from '../../../../../shared/backlog-capability'
 
 const mocks = vi.hoisted(
@@ -38,7 +38,7 @@ vi.mock('@/lib/backlog-task-source', async (original) => ({
   ...(await original<typeof BacklogSource>()),
   callBacklog: vi.fn()
 }))
-vi.mock('../../task-page-source-context', () => ({
+vi.mock('@/lib/task-repo-source-context', () => ({
   getTaskPageRepoSourceContext: () => ({
     kind: 'task-source',
     provider: 'backlog',

@@ -1,4 +1,5 @@
-import { AI_VAULT_SCAN_CANCELLED_MESSAGE } from '../../shared/ai-vault-types'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { AI_VAULT_SCAN_CANCELLED_MESSAGE } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 export function throwIfAiVaultScanCancelled(signal?: AbortSignal): void {
   if (!signal?.aborted) {
@@ -7,9 +8,17 @@ export function throwIfAiVaultScanCancelled(signal?: AbortSignal): void {
   throw createAiVaultScanCancelledError()
 }
 
-// Why: the runtime RPC transport has no abort hook, so cancellation can only
-// stop the caller waiting on it — the in-flight request settles on its own
-// timeout instead of holding an 'all'-scope merge open after every waiter left.
+export function waitForAiVaultScan<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) {
+    return promise
+  }
+  return waitForPromiseWithSignal(promise, signal).catch((error: unknown) => {
+    throwIfAiVaultScanCancelled(signal)
+    throw error
+  })
+}
+
+// RPC cannot abort in-flight work; cancellation releases its waiter while the request settles separately.
 export function abandonRemoteSessionScanOnCancel<T>(
   promise: Promise<T>,
   signal?: AbortSignal
@@ -19,8 +28,7 @@ export function abandonRemoteSessionScanOnCancel<T>(
   }
   return new Promise<T>((resolve, reject) => {
     if (signal.aborted) {
-      // The scanner promise already exists; observe it so its later failure is
-      // not an unhandled rejection after this caller walked away.
+      // Observe later failure even though the caller has already cancelled.
       void promise.catch(() => undefined)
       reject(createAiVaultScanCancelledError())
       return

@@ -1,7 +1,8 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
-import { isTuiAgent } from '../tui-agent-config'
-import type { TuiAgent } from '../tui-agent'
+import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automations/ownership/automation-workspace-provenance'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -10,11 +11,12 @@ import {
   TriStateLinkedIssue
 } from './rpc-param-primitives'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
-import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
-import { WorkspaceAttachmentsSchema } from '../workspace-attachment-schema'
+import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../diff-comment-schema'
-import { TaskSourceContextSchema } from '../task-source-context-schema'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-linked-item-source-context'
+import { TaskSourceContextSchema } from '../work-items/task-source-context-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
+import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 
 export const OptionalExecutionHostId = z
   .string()
@@ -45,9 +47,22 @@ export const AutomationWorkspaceProvenanceRequest = z.object({
   createRequestId: z.string()
 })
 
-// Why no dispatch token (unlike automation provenance): this is a descriptive
-// origin marker for sidebar filtering, not an authority grant. The host stamps
-// createdAt itself so a client clock can't skew sort order.
+// A label for another owner's run: the host records it only for automations it does not hold, and stamps createdAt.
+const ProvenanceId = z.string().min(1).max(256)
+const ProvenanceSnapshot = z.string().max(CLIENT_PROVENANCE_SNAPSHOT_MAX)
+export const ClientAutomationWorkspaceProvenance = z.object({
+  automationId: ProvenanceId,
+  automationNameSnapshot: ProvenanceSnapshot,
+  automationRunId: ProvenanceId,
+  automationRunTitleSnapshot: ProvenanceSnapshot,
+  executionTargetType: z.enum(['local', 'ssh']),
+  executionTargetId: z.string().max(256),
+  projectId: z.string().max(256),
+  repoId: z.string().max(256).optional(),
+  hostId: OptionalExecutionHostId
+})
+
+// Descriptive provenance grants no authority; the host stamps createdAt to avoid client-clock sort skew.
 export const CliWorkspaceProvenanceRequest = z.object({
   callerTerminalHandle: OptionalString
 })
@@ -72,11 +87,17 @@ export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams
 export const WorktreePsParams = z.object({
   limit: OptionalFiniteNumber,
   afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
-  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional()
+  // Opt-in: the caller holds afterSnapshotId's rows and can rebuild a catalog from rowsFromBase; older hosts ignore it.
+  acceptRowDelta: z.literal(true).optional(),
+  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional(),
+  // Opt-in: wait lookups read screens and probe PTYs, too costly for pollers; older hosts omit agentWait.
+  includeAgentWait: z.literal(true).optional()
 })
 
 export const WorktreeSortOrder = z.object({
-  orderedIds: z.array(z.string())
+  orderedIds: z.array(z.string()),
+  // Parallel to orderedIds: the copy each id names, so a same-id twin keeps its own order.
+  hostIds: z.array(z.string()).optional()
 })
 
 export const WorktreeSelector = z.object({
@@ -84,6 +105,22 @@ export const WorktreeSelector = z.object({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing worktree selector'))
+})
+
+/** Opt-in: path: and name: also match folder workspaces. Absent keeps older clients' repo-only meaning. */
+export const MatchFolderWorkspaces = z.literal(true).optional()
+
+export const WorktreeShow = WorktreeSelector.extend({
+  matchFolderWorkspaces: MatchFolderWorkspaces
+})
+
+export const WorktreeRunApprovedSetup = WorktreeSelector.extend({
+  approvedSetupHash: z.string().min(1).max(128)
+})
+
+// Why optional: an older host strips the unknown field and marks its chats asleep as before.
+export const WorktreeSleepParams = WorktreeSelector.extend({
+  markChatsAsleep: z.boolean().optional()
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({
@@ -111,13 +148,21 @@ export function assertLinkedWorkItemSourceContextMatch(
   }
 }
 
+/** A create's caller context, resolved by the caller's own Orca as its same-machine create would. */
+export const WorktreeResolveCallerParent = z.object({
+  envParentWorkspace: OptionalString,
+  callerTerminalHandle: OptionalString,
+  cwdParentWorktree: OptionalString,
+  cwdParentAmbiguous: z.literal(true).optional(),
+  /** The workspace note; a task id in it names its parent as on a same-machine create. */
+  comment: OptionalString
+})
+
 export const WorktreeSet = WorktreeSelector.extend({
-  // Why: '' is the blanking contract — "fall back to the branch/folder name".
-  // OptionalString coerced it to undefined, so on remote/SSH hosts clearing the
-  // name was dropped here and the old name came back on the next refresh.
+  // Empty clears to branch/folder fallback; OptionalString would drop remote clears and restore the old name.
   displayName: OptionalPlainString,
-  // Why: empty comments are meaningful metadata updates, so use the plain
-  // string parser instead of OptionalString's empty-as-undefined behavior.
+  firstAgentMessageRenameError: z.null().optional(),
+  // Preserve empty comment updates instead of coercing them to absent.
   comment: OptionalPlainString,
   linkedIssue: TriStateLinkedIssue,
   linkedPR: TriStateLinkedIssue,
@@ -137,6 +182,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
+  // Explicit whole-workspace read intent; older hosts strip this field.
+  acknowledgeAttention: z.boolean().optional(),
   isPinned: OptionalBoolean,
   sortOrder: OptionalFiniteNumber,
   manualOrder: OptionalFiniteNumber,
@@ -157,30 +204,52 @@ export const WorktreeSet = WorktreeSelector.extend({
     .optional(),
   // Older clients may send unsupported review shapes alongside unrelated metadata edits.
   diffComments: z.array(DiffCommentSchema).optional().catch(undefined),
+  // The list the writer started from; the host applies only its changes so other devices' notes survive.
+  diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined),
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
+  matchFolderWorkspaces: MatchFolderWorkspaces,
+  /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
+  crossStoreParent: CrossStoreParentRefSchema.optional(),
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {
   assertLinkedWorkItemSourceContextMatch(params, ctx)
-  if (params.parentWorktree && params.noParent === true) {
+  if ((params.parentWorktree || params.crossStoreParent) && params.noParent === true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'Choose either --parent-worktree or --no-parent, not both.'
     })
   }
+  if (params.parentWorktree && params.crossStoreParent) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose one parent.' })
+  }
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  // Omission retains legacy/UI metadata policy; explicit CLI intent overrides it.
+  deleteBranch: OptionalBoolean,
   hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
-  // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
-  // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop
-  // waiver travels on its own field.
+  // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).
   allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean,
-  // Why (#19334): a failed archive hook blocks removal. This waives that refusal and is recorded
-  // in the result; it is NOT `force`, and it does not decide whether the hook runs.
-  allowFailedArchiveHook: OptionalBoolean
+  // Waive failed-hook refusal explicitly and record it; independent of force and whether hooks run (#19334).
+  allowFailedArchiveHook: OptionalBoolean,
+  // Reply with Git's outcome instead of on acceptance; older hosts strip it and answer `removing: true` (#35135).
+  waitForBackgroundRemoval: OptionalBoolean,
+  // The reviewed nested-delete plan; the host re-lists and refuses if it no longer matches.
+  approvedNestedWorktrees: z
+    .array(z.object({ path: z.string().min(1), head: z.string(), branch: z.string() }))
+    .min(1)
+    .max(1_000)
+    .optional(),
+  // The caller showed that this also destroys the recipe environment Orca created for the workspace.
+  // Absent: today's removal, which leaves that environment running. Older hosts strip it.
+  destroyHost: z.literal(true).optional()
+})
+
+export const WorktreePreviewNestedRemoval = WorktreeSelector.extend({
+  hostId: OptionalExecutionHostId
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
@@ -206,7 +275,9 @@ export const WorktreeResolvePrBase = z.object({
     .pipe(z.number().int().positive('Missing PR number')),
   headRefName: OptionalString,
   baseRefName: OptionalString,
-  isCrossRepository: OptionalBoolean
+  isCrossRepository: OptionalBoolean,
+  /** The user creating or launching from the PR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })
 
 export const WorktreeResolveMrBase = z.object({
@@ -220,5 +291,7 @@ export const WorktreeResolveMrBase = z.object({
     .pipe(z.number().int().positive('Missing MR number')),
   sourceBranch: OptionalString,
   targetBranch: OptionalString,
-  isCrossRepository: OptionalBoolean
+  isCrossRepository: OptionalBoolean,
+  /** The user creating from the MR; older hosts drop it. */
+  wakeWslDistro: OptionalBoolean
 })

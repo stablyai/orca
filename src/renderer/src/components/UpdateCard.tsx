@@ -5,7 +5,8 @@ import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { updaterMessageText } from '@/lib/updater-message-copy'
 import { UpdateCardStateContent } from './maintenance/update-card/UpdateCardStateContent'
 import { buildUpdateCardErrorModel } from './maintenance/update-card/update-card-error-model'
 import {
@@ -17,6 +18,7 @@ import {
 export { isHttp2ProtocolError }
 
 export function UpdateCard(): React.JSX.Element | null {
+  const t = useTranslate()
   const status = useAppStore((state) => state.updateStatus)
   const changelog: ChangelogData | null = useAppStore((state) => state.updateChangelog)
   const updateUserInitiatedCycle = useAppStore((state) => state.updateUserInitiatedCycle)
@@ -143,26 +145,35 @@ export function UpdateCard(): React.JSX.Element | null {
       .catch((error) => {
         const message = String((error as Error)?.message ?? error)
         console.error('[updates] failed to enable HTTP/1.1 compatibility:', error)
-        setCompatibilitySetupError(`Could not enable compatibility mode. ${message}`)
+        setCompatibilitySetupError(
+          t(
+            'auto.components.UpdateCard.compatibilityModeFailed',
+            'Could not enable compatibility mode. {{message}}',
+            { message }
+          )
+        )
         setCompatibilityRelaunching(false)
       })
   }
-  const errorCard = buildUpdateCardErrorModel({
-    status,
-    isLocalBuild,
-    cachedVersion,
-    installError,
-    compatibilityRelaunching,
-    compatibilitySetupError,
-    onChooseLocalBuild: () => void window.api.updater.check({ localBuild: true }),
-    onEnableHttp1Compatibility: handleEnableHttp1Compatibility,
-    onRetryDownload: handleUpdate,
-    onRecheck: () => void window.api.updater.check({ includePrerelease: false }),
-    onInstallRetry: handleInstallRetry
-  })
+  const errorCard = buildUpdateCardErrorModel(
+    {
+      status,
+      isLocalBuild,
+      cachedVersion,
+      installError,
+      compatibilityRelaunching,
+      compatibilitySetupError,
+      onChooseLocalBuild: () => void window.api.updater.check({ localBuild: true }),
+      onEnableHttp1Compatibility: handleEnableHttp1Compatibility,
+      onRetryDownload: handleUpdate,
+      onRecheck: () => void window.api.updater.check({ includePrerelease: false }),
+      onInstallRetry: handleInstallRetry
+    },
+    t
+  )
   const linuxPackageRecovery =
     status.state === 'error' && status.recovery?.kind === 'linux-package-install'
-      ? { recovery: status.recovery, diagnostic: status.message }
+      ? { recovery: status.recovery, diagnostic: updaterMessageText(status) }
       : null
   const handleDismissWithAnimation = (): void => {
     if (prefersReducedMotion) {
@@ -244,7 +255,7 @@ export function UpdateCard(): React.JSX.Element | null {
           <div className="flex items-center gap-3 p-3">
             <div className="flex-1 min-w-0">
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.UpdateCard.b1d867f4fb',
                   "Your terminal sessions won't be interrupted during the update."
                 )}
@@ -255,7 +266,7 @@ export function UpdateCard(): React.JSX.Element | null {
               size="icon"
               className="size-7 shrink-0"
               onClick={markReassuranceSeen}
-              aria-label={translate('auto.components.UpdateCard.7274ef6e59', 'Dismiss tip')}
+              aria-label={t('auto.components.UpdateCard.7274ef6e59', 'Dismiss tip')}
             >
               <X className="size-3.5" />
             </Button>
@@ -264,7 +275,7 @@ export function UpdateCard(): React.JSX.Element | null {
       )}
       <Card
         role="complementary"
-        aria-label={getUpdateCardAriaLabel(status)}
+        aria-label={getUpdateCardAriaLabel(status, t)}
         aria-live="polite"
         tabIndex={-1}
         onKeyDown={handleKeyDown}

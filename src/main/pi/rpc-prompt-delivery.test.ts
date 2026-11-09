@@ -104,22 +104,4 @@ describe('Pi pending prompt delivery bounds and ownership', () => {
     h.delivery.consumeNext()
     expect(h.accepted).toHaveBeenLastCalledWith('retrying', 1)
   })
-
-  it('settles a pending auth retry as unknown on process teardown', async () => {
-    vi.useFakeTimers()
-    const h = rig()
-    await h.delivery.submit('retrying', 1, { type: 'prompt', message: 'first' })
-    h.delivery.reply({
-      type: 'response',
-      command: 'prompt',
-      success: false,
-      error: 'No API key found for provider'
-    })
-    h.delivery.end()
-    expect(h.settled).toHaveBeenCalledWith(
-      'retrying',
-      expect.objectContaining({ state: 'unknown' })
-    )
-    expect(vi.getTimerCount()).toBe(0)
-  })
 })

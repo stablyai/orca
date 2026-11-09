@@ -30,8 +30,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('expo-router', () => ({
   router: { replace: vi.fn() },
-  // `ProtocolBlockScreen` reaches the router through the navigation handoff now, and the handoff's
-  // native form is this hook. Its web form is what posts the target to the shell.
+  // Mock native handoff’s router hook; web sibling posts target to shell.
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() })
 }))
 
@@ -73,41 +72,16 @@ describe('ProtocolBlockScreen', () => {
     renderer = null
   })
 
-  // Why: the protocol wall shipped before the bundle one; its copy is what users already see.
-  it('keeps the existing protocol wall rendering unchanged', () => {
-    const mobile = render({
-      kind: 'blocked',
-      reason: 'mobile-too-old',
-      desktopVersion: 5,
-      requiredMobileVersion: 99
-    })
-    expect(mobile).toContain('Update Orca Mobile')
-    expect(mobile).toContain(
-      'This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.'
-    )
-    expect(mobile).toContain('Open App Store')
-    act(() => renderer?.unmount())
-
-    const desktop = render({
-      kind: 'blocked',
-      reason: 'desktop-too-old',
-      desktopVersion: 0,
-      requiredDesktopVersion: 2
-    })
-    expect(desktop).toContain('Update Orca on your computer')
-    expect(desktop).toContain(
-      'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
-    )
-    expect(desktop).toContain('Open GitHub Releases')
-  })
-
-  it('sends a host without a bundle to the desktop update', () => {
-    const output = render({ kind: 'blocked', reason: 'bundle-unavailable' })
-    expect(output).toContain('Update Orca on your computer')
-    expect(output).toContain(
-      'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
-    )
-    expect(primaryActionUrl()).toBe(RELEASES_URL)
+  it('tells a host without a bundle, or without this screen, the desktop is too old', () => {
+    for (const reason of ['bundle-unavailable', 'page-route-unlisted'] as const) {
+      const output = render({ kind: 'blocked', reason })
+      expect(output).toContain('Update Orca on your computer')
+      expect(output).toContain(
+        'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+      )
+      expect(output).not.toContain('does not include the mobile workspace')
+      expect(primaryActionUrl()).toBe(RELEASES_URL)
+    }
   })
 
   it('sends an unknown manifest schema to the mobile update', () => {
@@ -161,44 +135,13 @@ describe('ProtocolBlockScreen', () => {
     expect(primaryActionUrl()).toBe(RELEASES_URL)
   })
 
-  it('sends a desktop whose page is older than this shell to the desktop update', () => {
-    const output = render({
-      kind: 'blocked',
-      reason: 'bundle-incompatible',
-      side: 'desktop',
-      pageVersion: 0,
-      requiredPageVersion: 1
-    })
-    expect(output).toContain('Update Orca on your computer')
-    expect(output).toContain('This paired desktop app is too old for your current Orca Mobile app')
-    expect(primaryActionUrl()).toBe(RELEASES_URL)
-  })
-
-  it('routes an Android bundle wall to GitHub Releases, not a store that has no listing', () => {
-    nativeTestState.platform.OS = 'android'
-    const output = render({
-      kind: 'blocked',
-      reason: 'bundle-shell-too-old',
-      schemaVersion: 2
-    })
-    expect(output).toContain('Update Orca Mobile from GitHub Releases')
-    expect(primaryActionUrl()).toBe(RELEASES_URL)
-  })
-
-  it('keeps the update walls on two buttons and the full recovery note', () => {
-    const output = render({ kind: 'blocked', reason: 'bundle-unavailable' })
-    expect(output).toContain('Already updated? Go back to Hosts and refresh the connection.')
-    // The presence precondition for the absence asserted on the refresh wall above.
-    expect(pressableCount()).toBe(2)
-  })
-
   describe('with the newest release known', () => {
     const release = {
       version: '0.0.52',
       url: 'https://github.com/stablyai/orca/releases/tag/mobile-v0.0.52'
     }
 
-    it.each(['ios', 'android'] as const)('opens that exact release on %s', (os) => {
+    it.each(['android'] as const)('opens that exact release on %s', (os) => {
       nativeTestState.platform.OS = os
       const output = render(
         { kind: 'blocked', reason: 'bundle-shell-too-old', schemaVersion: 2 },

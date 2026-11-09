@@ -1,31 +1,59 @@
-/**
- * The notification ids main actually announced — a desktop banner shown or a mobile alert sent —
- * per subject pane, until an acknowledgement of that subject retires them.
- *
- * Why by subject rather than by an id the renderer rebuilds: an id is minted from the status row's
- * `stateStartedAt`, and that field moves after the fact (settling pushes the working start into
- * history, and a settled structured row is re-stamped by later journal rows such as a cancel's
- * status note). Main is where the announcement happens, so main is where the record belongs.
- *
- * In memory only, like the banner registry it sits beside; after a restart the renderer's id
- * rebuilt from the current row is the fallback.
- */
+// Track pending and delivered announcements: journal updates can change renderer-reconstructed IDs.
+// Memory-only; after restart, the current status row supplies the fallback ID.
+import type { StructuredAttentionOrigin } from '../../shared/agent-session/agent-session-attention'
+import type {
+  NotificationAttentionAcknowledgement,
+  NotificationDispatchRequest,
+  StructuredNotificationRead
+} from '../../shared/notification-settings-types'
 import {
-  attentionOriginWasRead,
-  type StructuredAttentionOrigin,
-  type StructuredAttentionRead
-} from '../../shared/agent-session-attention'
+  NotificationAttentionReadFrontiers,
+  notificationWasAcknowledged
+} from '../../shared/notification-attention-acknowledgement'
 const DEFAULT_MAX_SUBJECTS = 256
 const DEFAULT_MAX_IDS_PER_SUBJECT = 20
 
-type AnnouncedNotification = { id: string; origin?: StructuredAttentionOrigin }
+export type AnnouncedNotification = {
+  id: string
+  origin?: StructuredAttentionOrigin
+  paneKey?: string
+  pendingOnly?: true
+} & Pick<NotificationDispatchRequest, 'worktreeId' | 'executionHost' | 'workspaceExecutionHostId'>
 
 export type AnnouncedNotificationRegistry = {
-  record: (paneKey: string, notificationId: string, origin?: StructuredAttentionOrigin) => void
-  /** Whether this id was announced with a journal position, so only a covering read retires it. */
+  record: (
+    paneKey: string,
+    notificationId: string,
+    origin?: StructuredAttentionOrigin,
+    workspace?: Pick<
+      NotificationDispatchRequest,
+      'worktreeId' | 'executionHost' | 'workspaceExecutionHostId'
+    >
+  ) => readonly AnnouncedNotification[]
+  reserveNative: (
+    paneKey: string,
+    notificationId: string,
+    origin?: StructuredAttentionOrigin,
+    workspace?: Pick<
+      NotificationDispatchRequest,
+      'worktreeId' | 'executionHost' | 'workspaceExecutionHostId'
+    >
+  ) => {
+    evicted: readonly AnnouncedNotification[]
+    isCurrent: () => boolean
+    release: () => void
+  }
+  takeAcknowledged: (
+    acknowledgement: NotificationAttentionAcknowledgement,
+    executionHost?: NotificationDispatchRequest['executionHost']
+  ) => readonly AnnouncedNotification[]
+  hasAnnouncement: (request: Pick<NotificationDispatchRequest, 'notificationId'>) => boolean
+  wasRead: (request: NotificationDispatchRequest) => boolean
+  hasUnpositionedSubject: (paneKey: string) => boolean
+  /** Journal-positioned announcements require a covering read to retire. */
   isBounded: (notificationId: string) => boolean
-  /** Removes every announcement without a journal position, and those with one this read covers. */
-  take: (paneKey: string, read?: StructuredAttentionRead) => readonly AnnouncedNotification[]
+  /** Take unpositioned announcements and those covered by this read. */
+  take: (paneKey: string, read?: StructuredNotificationRead) => readonly AnnouncedNotification[]
 }
 
 export function createAnnouncedNotificationRegistry(limits?: {
@@ -36,17 +64,82 @@ export function createAnnouncedNotificationRegistry(limits?: {
   const maxIdsPerSubject = limits?.maxIdsPerSubject ?? DEFAULT_MAX_IDS_PER_SUBJECT
   const idsBySubject = new Map<string, AnnouncedNotification[]>()
 
-  return {
-    record: (paneKey, notificationId, origin) => {
-      const ids = (idsBySubject.get(paneKey) ?? []).filter((entry) => entry.id !== notificationId)
-      ids.push({ id: notificationId, origin })
-      // Re-insert so eviction drops the subject least recently announced, not the first ever seen.
+  const frontiers = new NotificationAttentionReadFrontiers()
+  const takeSelected = (paneKey: string, selects: (entry: AnnouncedNotification) => boolean) => {
+    const ids = idsBySubject.get(paneKey) ?? []
+    const selected = ids.filter(selects)
+    const kept = ids.filter((entry) => !selects(entry))
+    if (kept.length > 0) {
+      idsBySubject.set(paneKey, kept)
+    } else {
       idsBySubject.delete(paneKey)
-      idsBySubject.set(paneKey, ids.slice(-maxIdsPerSubject))
-      if (idsBySubject.size > maxSubjects) {
-        const oldest = idsBySubject.keys().next().value
-        if (oldest !== undefined) {
-          idsBySubject.delete(oldest)
+    }
+    return selected
+  }
+  const record = (
+    paneKey: string,
+    notificationId: string,
+    origin?: StructuredAttentionOrigin,
+    workspace?: Pick<
+      NotificationDispatchRequest,
+      'worktreeId' | 'executionHost' | 'workspaceExecutionHostId'
+    >,
+    pendingOnly?: true
+  ) => {
+    const ids = (idsBySubject.get(paneKey) ?? []).filter((entry) => entry.id !== notificationId)
+    const { worktreeId, executionHost, workspaceExecutionHostId } = workspace ?? {}
+    const entry: AnnouncedNotification = {
+      id: notificationId,
+      paneKey,
+      origin,
+      worktreeId,
+      executionHost,
+      workspaceExecutionHostId,
+      ...(pendingOnly ? { pendingOnly } : {})
+    }
+    ids.push(entry)
+    const evicted = ids.slice(0, Math.max(0, ids.length - maxIdsPerSubject))
+    // Reinsertion evicts the least recently announced subject.
+    idsBySubject.delete(paneKey)
+    idsBySubject.set(paneKey, ids.slice(-maxIdsPerSubject))
+    if (idsBySubject.size > maxSubjects) {
+      const oldest = idsBySubject.keys().next().value
+      if (oldest !== undefined) {
+        evicted.push(...(idsBySubject.get(oldest) ?? []))
+        idsBySubject.delete(oldest)
+      }
+    }
+    return { entry, evicted }
+  }
+
+  return {
+    hasUnpositionedSubject: (paneKey) =>
+      idsBySubject.get(paneKey)?.some((entry) => !entry.origin && !entry.pendingOnly) ?? false,
+    hasAnnouncement: (request) =>
+      !request.notificationId ||
+      [...idsBySubject.values()].some((entries) =>
+        entries.some((entry) => entry.id === request.notificationId)
+      ),
+    wasRead: (request) => frontiers.covers({ ...request, origin: request.structuredOrigin }),
+    takeAcknowledged: (acknowledgement, executionHost) => {
+      frontiers.accept(acknowledgement, executionHost)
+      return [...idsBySubject.keys()].flatMap((paneKey) =>
+        takeSelected(paneKey, (entry) =>
+          notificationWasAcknowledged(entry, acknowledgement, executionHost)
+        )
+      )
+    },
+    record: (paneKey, notificationId, origin, workspace) =>
+      record(paneKey, notificationId, origin, workspace).evicted,
+    reserveNative: (paneKey, notificationId, origin, workspace) => {
+      const existing = idsBySubject.get(paneKey)?.find((entry) => entry.id === notificationId)
+      const pendingOnly = existing && !existing.pendingOnly ? undefined : true
+      const { entry, evicted } = record(paneKey, notificationId, origin, workspace, pendingOnly)
+      return {
+        evicted,
+        isCurrent: () => idsBySubject.get(paneKey)?.includes(entry) ?? false,
+        release: () => {
+          takeSelected(paneKey, (candidate) => candidate === entry && !!candidate.pendingOnly)
         }
       }
     },
@@ -55,18 +148,15 @@ export function createAnnouncedNotificationRegistry(limits?: {
         entries.some((entry) => entry.id === notificationId && entry.origin !== undefined)
       ),
     take: (paneKey, read) => {
-      const ids = idsBySubject.get(paneKey) ?? []
-      // No position means a host older than journal cursors, which raises no prompts to race.
-      const selected = ids.filter(
-        (entry) => !entry.origin || (read && attentionOriginWasRead(entry.origin, read))
-      )
-      const kept = ids.filter((entry) => !selected.includes(entry))
-      if (kept.length > 0) {
-        idsBySubject.set(paneKey, kept)
-      } else {
-        idsBySubject.delete(paneKey)
+      if (read) {
+        frontiers.accept({ reads: [read] }, read.executionHost)
       }
-      return selected
+      return takeSelected(
+        paneKey,
+        (entry) =>
+          !entry.origin ||
+          Boolean(read && notificationWasAcknowledged(entry, { reads: [read] }, read.executionHost))
+      )
     }
   }
 }

@@ -1,5 +1,3 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-
 export type FileSearchResultOwner = {
   worktreeId: string
   runtimeEnvironmentId: string | null
@@ -9,13 +7,13 @@ export type FileSearchResultOwner = {
 
 export function createFileSearchResultOwner(
   worktreeId: string,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>,
+  runtimeEnvironmentId: string | null,
   identity?: { rootPath: string; executionHostId: string }
 ): FileSearchResultOwner {
   return {
     ...identity,
     worktreeId,
-    runtimeEnvironmentId: settings.activeRuntimeEnvironmentId?.trim() || null
+    runtimeEnvironmentId: runtimeEnvironmentId?.trim() || null
   }
 }
 

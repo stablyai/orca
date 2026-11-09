@@ -59,6 +59,7 @@ vi.mock('../editor/EditorPanel', () => ({
   }
 }))
 
+import { TooltipProvider } from '@/components/ui/tooltip'
 import TabGroupPanel from './TabGroupPanel'
 
 function drag(target: Element, type: 'dragover' | 'drop'): Event {
@@ -91,17 +92,19 @@ afterEach(() => {
 describe('TabGroupPanel editor area OS file drops', () => {
   it("opens a file dropped on the editor in this group's worktree, and Monaco never sees it", async () => {
     const view = render(
-      <TabGroupPanel
-        groupId="group-b"
-        worktreeId="wt-b"
-        isVisible
-        isFocused={false}
-        hasSplitGroups
-        touchesLeftEdge={false}
-        touchesRightEdge={false}
-        reserveClosedExplorerToggleSpace={false}
-        reserveCollapsedSidebarHeaderSpace={false}
-      />
+      <TooltipProvider>
+        <TabGroupPanel
+          groupId="group-b"
+          worktreeId="wt-b"
+          isVisible
+          isFocused={false}
+          hasSplitGroups
+          touchesLeftEdge={false}
+          touchesRightEdge={false}
+          reserveClosedExplorerToggleSpace={false}
+          reserveCollapsedSidebarHeaderSpace={false}
+        />
+      </TooltipProvider>
     )
     const input = await view.findByTestId('monaco-input')
     drag(input, 'dragover')

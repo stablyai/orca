@@ -14,6 +14,16 @@ import {
 import { toModifierDoubleTapEvent } from '../../../../shared/modifier-double-tap-detector'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+
+const FLOATING_TAB_SWITCH_ACTIONS: readonly KeybindingActionId[] = [
+  'tab.nextSameType',
+  'tab.previousSameType',
+  'tab.nextAllTypes',
+  'tab.previousAllTypes',
+  'tab.nextTerminal',
+  'tab.previousTerminal'
+]
 
 type FloatingTerminalGlobalShortcutListenersInput = Pick<
   FloatingTerminalPanelLocalState,
@@ -58,9 +68,6 @@ export function useFloatingTerminalGlobalShortcutListeners({
         }),
         Date.now()
       )
-      if (event.repeat) {
-        return
-      }
       const state = useAppStore.getState()
       const context: KeybindingContext = isFloatingWorkspaceTerminalInputTarget(event.target)
         ? 'terminal'
@@ -74,6 +81,13 @@ export function useFloatingTerminalGlobalShortcutListeners({
         event.preventDefault()
         event.stopPropagation()
         event.stopImmediatePropagation()
+      }
+      if (event.repeat) {
+        // Why: a held tab chord switches once; its repeats must not reach the next terminal.
+        if (FLOATING_TAB_SWITCH_ACTIONS.some(matches)) {
+          consume()
+        }
+        return
       }
       const dispatchShortcut =
         floatingShortcutListenersRef.current.handleFloatingPanelShortcutAction
@@ -137,12 +151,12 @@ export function useFloatingTerminalGlobalShortcutListeners({
       )
     }
     const handleFloatingPanelBlur = (): void => doubleTapDetector?.reset()
-    window.addEventListener('keydown', handleFloatingPanelKeyDown, { capture: true })
-    window.addEventListener('keyup', handleFloatingPanelKeyUp, { capture: true })
+    addAppKeyListener('keydown', handleFloatingPanelKeyDown)
+    addAppKeyListener('keyup', handleFloatingPanelKeyUp)
     window.addEventListener('blur', handleFloatingPanelBlur)
     return () => {
-      window.removeEventListener('keydown', handleFloatingPanelKeyDown, { capture: true })
-      window.removeEventListener('keyup', handleFloatingPanelKeyUp, { capture: true })
+      removeAppKeyListener('keydown', handleFloatingPanelKeyDown)
+      removeAppKeyListener('keyup', handleFloatingPanelKeyUp)
       window.removeEventListener('blur', handleFloatingPanelBlur)
       doubleTapDetector?.reset()
     }

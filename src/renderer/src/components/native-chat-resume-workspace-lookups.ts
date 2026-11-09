@@ -2,12 +2,12 @@ import { useMemo } from 'react'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getSidebarLineageAncestors
-} from '@/components/sidebar/worktree-lineage-projection'
+} from '../../../shared/sidebar-list/worktree-lineage-projection'
 import {
-  getAllWorktreesFromState,
-  getWorktreeMapFromState,
-  getWorktreeOnHostFromState
-} from '@/store/selectors'
+  getIndexedAllWorktrees,
+  getIndexedWorktreeMap
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -15,21 +15,14 @@ import {
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import type { ResumeWorkspaceGroup } from './native-chat-resume-on-restart-grouping'
-
-// Store lookups the resume tree makes for its workspaces, each on the workspace's own host.
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** The store's row for a workspace on its own host; folder workspaces included. Stable per row. */
 export function useWorkspaceWorktree(workspaceId: string, hostId: ExecutionHostId | undefined) {
   return useAppStore((store) => store.getKnownWorktreeById(workspaceId, hostId))
 }
 
-/**
- * The repo owning each workspace, as one narrow subscription.
- *
- * Selected as a joined string rather than a map so the selector returns a PRIMITIVE: a fresh object
- * or array would fail the equality check on every store change and re-render the whole list.
- * Keyed by the group itself: the same workspace id can be listed on two machines.
- */
+/** Use a primitive snapshot to avoid list rerenders on unrelated writes; group identity distinguishes twin workspace ids across hosts. */
 export function useRepoIdByWorkspace(
   workspaces: readonly ResumeWorkspaceGroup[]
 ): (group: ResumeWorkspaceGroup) => string | null {
@@ -50,19 +43,19 @@ export function useRepoIdByWorkspace(
 export function useLineageAncestors(
   workspaces: readonly ResumeWorkspaceGroup[]
 ): (group: ResumeWorkspaceGroup) => readonly string[] {
-  const worktreesByRepo = useAppStore((store) => store.worktreesByRepo)
+  const worktreesByRepo = useAppStore((store) => selectWorktreesByRepo(store))
   const worktreeLineageById = useAppStore((store) => store.worktreeLineageById)
   const ancestors = useMemo(() => {
     const state = { worktreesByRepo }
     // Why: archived rows never render in the sidebar, so nothing nests under them.
     const rows = new Map(
-      getAllWorktreesFromState(state)
+      getIndexedAllWorktrees(selectWorktreesByRepo(state))
         .filter((worktree) => !worktree.isArchived)
         .map((worktree) => [getWorktreeHostIdentity(worktree), worktree])
     )
     const cyclic = getCyclicProjectedWorktreeLineageIds(
       worktreeLineageById,
-      getWorktreeMapFromState(state)
+      getIndexedWorktreeMap(selectWorktreesByRepo(state))
     )
     return new Map(
       workspaces.map((group) => {

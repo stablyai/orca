@@ -1,10 +1,12 @@
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { subscribeToUnpairedDeviceAuthNotification } from '../unpaired-device-auth-notification'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
+import { openPluginInstallLink } from '../../store/plugins/navigation/plugin-preview-request'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -51,14 +53,25 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       .catch(() => {})
   }
 
+  unsubs.push(window.api.ui.onOpenPluginInstallLink?.(openPluginInstallLink) ?? (() => {}))
+  const pendingPluginLink = window.api.ui.consumePendingPluginInstallLink?.()
+  if (pendingPluginLink && typeof pendingPluginLink.then === 'function') {
+    void pendingPluginLink
+      .then((link) => {
+        if (link) {
+          openPluginInstallLink(link)
+        }
+      })
+      .catch(() => {})
+  }
+
   unsubs.push(
     window.api.ui.onOpenSetupGuide?.(() => {
       useAppStore.getState().openModal('setup-guide', { telemetrySource: 'help_menu' })
     }) ?? (() => {})
   )
 
-  // Why: a phone stuck in a silent 4001 auth loop (lost device registry) reads as
-  // "phone won't connect" with no clue on either end; main throttles to once per session.
+  // Lost-registry auth loops need a visible remedy on either end; main throttles this notice once per session.
   unsubs.push(
     subscribeToUnpairedDeviceAuthNotification(window.api.mobile, () => {
       toast.warning(
@@ -145,7 +158,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
 
   unsubs.push(
     window.api.ui.onToggleLeftSidebar(() => {
-      useAppStore.getState().toggleSidebar()
+      runBuiltInOrReplacement('sidebar.left.toggle', () => useAppStore.getState().toggleSidebar())
     })
   )
 
@@ -155,7 +168,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       if (!canShowRightSidebarForView(store.activeView)) {
         return
       }
-      store.toggleRightSidebar()
+      runBuiltInOrReplacement('sidebar.right.toggle', () => store.toggleRightSidebar())
     })
   )
 

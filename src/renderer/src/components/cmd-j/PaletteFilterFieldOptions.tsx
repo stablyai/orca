@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Check, ChevronLeft, SearchIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PaletteFilterOption } from './palette-filter-options'
 import type { PaletteFilterField } from './palette-filter'
 import {
@@ -79,6 +79,7 @@ export function PaletteFilterFieldOptions({
   onClearField: () => void
   onSelectAllMatching: (ids: readonly string[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const selected = useMemo(() => new Set(group.selected), [group.selected])
   const normalizedQuery = optionQuery.trim().toLowerCase()
   const rankMode: FilterOptionRankMode = group.field === 'host' ? 'registry' : 'popularity'
@@ -93,14 +94,10 @@ export function PaletteFilterFieldOptions({
     [group.options, selected, normalizedQuery, rankMode]
   )
 
-  // State, not a ref: the scroller unmounts on an empty list, and the wheel
-  // listener has to re-attach to the node that replaces it.
+  // The scroller remounts after empty results; state reattaches the native wheel listener to its replacement.
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  // Why the field/query are stored alongside the cursor instead of reset in an
-  // effect: a stale row would stay active for one paint. Why not key off the
-  // ranked list identity: a toggle re-ranks, so that would yank the cursor back
-  // to the top mid multi-select.
+  // Store field/query with highlight to avoid stale paints; list identity changes on toggles and must not reset multi-select navigation.
   const [highlight, setHighlight] = useState<{
     field: PaletteFilterField
     query: string
@@ -112,10 +109,7 @@ export function PaletteFilterFieldOptions({
   }))
   const storedId =
     highlight.field === group.field && highlight.query === normalizedQuery ? highlight.id : null
-  // Why track the option id rather than its position: toggling re-ranks the list and pins
-  // the toggled option to the front, so a stored index would land on a different option and
-  // the next Enter would check one the user never aimed at. findIndex also covers the option
-  // disappearing from a narrowed list.
+  // Track option IDs: toggling re-ranks rows, so indices could aim the next Enter at another option.
   const activeIndex =
     storedId === null
       ? 0
@@ -170,8 +164,7 @@ export function PaletteFilterFieldOptions({
   )
 
   const handleListKeyDown = useCallback(
-    // Space toggles only from the listbox; in the search input it stays a
-    // typeable character, and labels like "Delta Host" need it.
+    // Space toggles only from the listbox; search text must still accept spaces.
     (event: React.KeyboardEvent, allowSpaceToToggle = true) => {
       if (event.key === 'ArrowDown') {
         event.preventDefault()
@@ -197,18 +190,17 @@ export function PaletteFilterFieldOptions({
 
   const searchPlaceholder =
     group.field === 'host'
-      ? translate('worktreeJumpPalette.filter.searchHosts', 'Filter hosts...')
-      : translate('worktreeJumpPalette.filter.searchProjects', 'Filter projects...')
+      ? t('worktreeJumpPalette.filter.searchHosts', 'Filter hosts...')
+      : t('worktreeJumpPalette.filter.searchProjects', 'Filter projects...')
   const emptyLabel =
     group.field === 'host'
-      ? translate('worktreeJumpPalette.filter.noHosts', 'No matching hosts')
-      : translate('worktreeJumpPalette.filter.noProjects', 'No matching projects')
-  // Why a dedicated string per field: lowercasing a translated heading breaks in
-  // languages that capitalize nouns mid-sentence (German "Projekte").
+      ? t('worktreeJumpPalette.filter.noHosts', 'No matching hosts')
+      : t('worktreeJumpPalette.filter.noProjects', 'No matching projects')
+  // Translate complete field-specific labels; lowercasing nouns breaks languages such as German.
   const clearLabel =
     group.field === 'host'
-      ? translate('worktreeJumpPalette.filter.clearHosts', 'Clear hosts')
-      : translate('worktreeJumpPalette.filter.clearProjects', 'Clear projects')
+      ? t('worktreeJumpPalette.filter.clearHosts', 'Clear hosts')
+      : t('worktreeJumpPalette.filter.clearProjects', 'Clear projects')
 
   const canSelectAll = ranked.unselectedCount > 0
   const canClear = ranked.selectedCount > 0
@@ -223,7 +215,7 @@ export function PaletteFilterFieldOptions({
             className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <ChevronLeft className="size-3.5" aria-hidden="true" />
-            {translate('worktreeJumpPalette.filter.back', 'Back')}
+            {t('worktreeJumpPalette.filter.back', 'Back')}
           </button>
           <span className="min-w-0 flex-1 truncate pr-2 text-[12px] font-medium text-foreground">
             {group.heading}
@@ -251,7 +243,7 @@ export function PaletteFilterFieldOptions({
       {ranked.selectedCollapsed ? (
         <div className="flex items-center justify-between gap-2 border-b border-border/55 px-2.5 py-1.5">
           <span className="text-[11px] text-muted-foreground">
-            {translate(
+            {t(
               'worktreeJumpPalette.filter.selectedCollapsed',
               '{{value0}} selected — remove via chips or Clear',
               { value0: ranked.selectedCount }
@@ -314,7 +306,7 @@ export function PaletteFilterFieldOptions({
               onClick={() => onSelectAllMatching(ranked.unselectedIds)}
               className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
             >
-              {translate(
+              {t(
                 'worktreeJumpPalette.filter.selectAllMatching',
                 'Select all matching ({{value0}})',
                 { value0: ranked.unselectedCount }

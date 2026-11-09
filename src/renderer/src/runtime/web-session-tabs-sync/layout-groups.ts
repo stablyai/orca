@@ -1,16 +1,12 @@
 import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
 import type { TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type {
-  MirroredAgentTab,
-  MirroredBrowserTab,
-  MirroredEditorTab,
-  TerminalSurface
-} from './state'
-import { toWebTerminalSurfaceTabId } from '../web-runtime-session'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { MirroredAgentTab, MirroredBrowserTab, MirroredEditorTab } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { clearHostSessionTabIdMappings, setHostSessionTabIdMapping } from './tracking-mappings'
-import { isWebSessionBrowserPlacementGroupReserved } from '../web-session-browser-placement'
-import { resolveWebSessionReorderedOrder } from '../web-session-reorder-intent'
+import { isWebSessionBrowserPlacementGroupReserved } from '../browser/placement/web-session-browser-placement'
+import { resolveWebSessionReorderedOrder } from './navigation/web-session-reorder-intent'
 import { mapHostRecentTabIds } from './tab-group-layout-tree'
 import { pushRecentTabId, sanitizeRecentTabIds } from './state-equality-core'
 
@@ -21,7 +17,7 @@ export function buildHostToLocalTabIdMap({
   editorTabs,
   agentTabs
 }: {
-  terminalSurfaces: readonly TerminalSurface[]
+  terminalSurfaces: readonly RuntimeMobileSessionTerminalClientTab[]
   terminalTabs: readonly TerminalTab[]
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
@@ -52,29 +48,30 @@ export function buildHostToLocalTabIdMap({
 export function updateHostSessionTabIdMappings(args: {
   environmentId: string
   worktreeId: string
-  terminalSurfaces: readonly TerminalSurface[]
+  terminalSurfaces: readonly RuntimeMobileSessionTerminalClientTab[]
   terminalTabs: readonly TerminalTab[]
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
   agentTabs: readonly MirroredAgentTab[]
+  hostGroupIdByTabId: ReadonlyMap<string, string>
 }): void {
   clearHostSessionTabIdMappings(args.environmentId, args.worktreeId)
+  const map = (tabId: string, hostTabId: string): void =>
+    setHostSessionTabIdMapping(
+      { ...args, tabId },
+      hostTabId,
+      args.hostGroupIdByTabId.get(hostTabId)
+    )
 
   const mirroredTerminalIds = new Set(args.terminalTabs.map((tab) => tab.id))
   for (const surface of args.terminalSurfaces) {
     const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
     if (mirroredTerminalIds.has(localId)) {
-      setHostSessionTabIdMapping({ ...args, tabId: localId }, surface.parentTabId)
+      map(localId, surface.parentTabId)
     }
   }
-  for (const entry of args.browserTabs) {
-    setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
-  }
-  for (const entry of args.editorTabs) {
-    setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
-  }
-  for (const entry of args.agentTabs) {
-    setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
+  for (const entry of [...args.browserTabs, ...args.editorTabs, ...args.agentTabs]) {
+    map(entry.unifiedTab.id, entry.hostTabId)
   }
 }
 

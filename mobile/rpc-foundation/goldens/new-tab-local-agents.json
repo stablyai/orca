@@ -73,6 +73,38 @@
       }
     },
     "44136fa355b3": {},
+    "4b7de31b7ca7": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktreeId": "repo-1::/folder"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": ["codex", "claude"]
+        }
+      }
+    },
     "51d4cb56be85": {
       "name": "settings.get#1",
       "ordinal": 2,
@@ -98,6 +130,11 @@
         "status": "pending",
         "startedAt": 0
       }
+    },
+    "584e8a48c9d1": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\",\"params\":{\"worktreeId\":\"repo-1::/folder\"}}"
     },
     "70e0675ab2a9": {
       "name": "repo.list#1",
@@ -140,38 +177,6 @@
         }
       }
     },
-    "89b73b1e13d1": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": ["codex", "claude"]
-        }
-      }
-    },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
@@ -195,11 +200,6 @@
       "name": "repo.list#1",
       "ordinal": 3,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "f49d184679d1": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
     }
   },
   "recording": {
@@ -220,8 +220,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["70e0675ab2a9", "02188f091419", "89b73b1e13d1"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["70e0675ab2a9", "02188f091419", "4b7de31b7ca7"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "584e8a48c9d1"],
           "settlements": {
             "load": "b27c85677730"
           },

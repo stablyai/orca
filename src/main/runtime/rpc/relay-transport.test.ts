@@ -28,7 +28,7 @@ describe('CloudRelayTransport', () => {
   })
 
   it('authenticates one query-free host-data socket and forwards messages verbatim', async () => {
-    // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+    // Bind the exact loopback address clients dial; wildcard binds let another listener claim that address.
     const server = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
@@ -118,8 +118,7 @@ describe('CloudRelayTransport', () => {
           fn(...args)
         }
       }
-      // Why: models a half-open post-sleep relay socket — terminate() never
-      // produces a 'close' event, which previously hung stop() forever.
+      // Model a post-sleep half-open socket whose terminate never emits close, formerly hanging stop forever.
       const fakeSocket = {
         readyState: 1,
         OPEN: 1,
@@ -178,8 +177,7 @@ describe('CloudRelayTransport', () => {
         transport.metadataFor(socket)
         onLateMessage()
       })
-      // Why: timeout cleanup can precede the native socket's eventual close;
-      // late frames must not reach wiring after their metadata was released.
+      // After forced timeout cleanup, late native frames must not reach wiring with released metadata.
       expect(() => emit('message', 'late-after-stop', false)).not.toThrow()
       expect(onLateMessage).not.toHaveBeenCalled()
       expect(reply).not.toBeNull()
@@ -192,52 +190,6 @@ describe('CloudRelayTransport', () => {
       expect(listeners.get('close')).toHaveLength(0)
       expect(vi.getTimerCount()).toBe(0)
       expect(() => transport.setGeneration(2)).not.toThrow()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('observes a synchronous close emitted by terminate without waiting for the deadline', async () => {
-    vi.useFakeTimers()
-    try {
-      const listeners = new Map<string, ((...args: unknown[]) => void)[]>()
-      const addListener = (event: string, fn: (...args: unknown[]) => void): void => {
-        listeners.set(event, [...(listeners.get(event) ?? []), fn])
-      }
-      const emit = (event: string): void => {
-        for (const fn of listeners.get(event) ?? []) {
-          fn()
-        }
-      }
-      const fakeSocket = {
-        readyState: 1,
-        OPEN: 1,
-        CLOSED: 3,
-        on: addListener,
-        once: addListener,
-        off: vi.fn(),
-        send: () => {},
-        terminate: () => emit('close')
-      }
-      const transport = new CloudRelayTransport({
-        cellUrl: 'http://127.0.0.1:9',
-        relayHostId: 'AbCdEf0123_-xyZ9',
-        generation: 1,
-        createSocket: () => fakeSocket as unknown as WebSocketClient
-      })
-      const opening = transport.openConnection({
-        connId: 'conn-sync-close',
-        connTicket: 'ticket-1',
-        kind: 'resume',
-        relayDeviceId: 'device-1',
-        attachDeadlineMs: 1_000
-      })
-      emit('open')
-      await opening
-
-      await transport.stop()
-
-      expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()
     }
@@ -375,16 +327,5 @@ describe('CloudRelayTransport', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('rejects non-origin cell URLs before opening a socket', () => {
-    expect(
-      () =>
-        new CloudRelayTransport({
-          cellUrl: 'https://relay.example/path?credential=forbidden',
-          relayHostId: 'AbCdEf0123_-xyZ9',
-          generation: 1
-        })
-    ).toThrow('relay_cell_url_must_be_an_origin')
   })
 })

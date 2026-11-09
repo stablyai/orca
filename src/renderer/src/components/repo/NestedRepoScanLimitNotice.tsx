@@ -3,41 +3,79 @@ import { useState } from 'react'
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
-function formatTimeout(timeoutMs: number): string {
+function formatTimeout(timeoutMs: number, t: Translate = translate): string {
   if (timeoutMs >= 1000 && timeoutMs % 1000 === 0) {
-    return `${timeoutMs / 1000} seconds`
+    const count = timeoutMs / 1000
+    return t('auto.components.repo.NestedRepoScanLimitNotice.seconds', '{{count}} seconds', {
+      count,
+      defaultValue_one: '{{count}} second'
+    })
   }
-  return `${timeoutMs} ms`
+  return t('auto.components.repo.NestedRepoScanLimitNotice.milliseconds', '{{count}} ms', {
+    count: timeoutMs
+  })
 }
 
-export function nestedRepoScanLimitText(scan: NestedRepoScanResult): string {
-  const automaticStops = [`${scan.maxDepth} folder levels`, `${scan.maxRepos} repositories`]
-  if (scan.timeoutMs !== null) {
-    automaticStops.push(formatTimeout(scan.timeoutMs))
-  }
-  return `Scan stops after ${automaticStops.join(' or ')}. You can stop scanning early and import repositories found so far.`
+function folderLevelsLabel(count: number, t: Translate = translate): string {
+  return t(
+    'auto.components.repo.NestedRepoScanLimitNotice.folderLevels',
+    '{{count}} folder levels',
+    { count, defaultValue_one: '{{count}} folder level' }
+  )
+}
+
+function repositoriesLabel(count: number, t: Translate = translate): string {
+  return t(
+    'auto.components.repo.NestedRepoScanLimitNotice.repositories',
+    '{{count}} repositories',
+    { count, defaultValue_one: '{{count}} repository' }
+  )
+}
+
+export function nestedRepoScanLimitText(
+  scan: NestedRepoScanResult,
+  t: Translate = translate
+): string {
+  const depth = folderLevelsLabel(scan.maxDepth, t)
+  const repos = repositoriesLabel(scan.maxRepos, t)
+  return scan.timeoutMs === null
+    ? t(
+        'auto.components.repo.NestedRepoScanLimitNotice.limitText',
+        'Scan stops after {{depth}} or {{repos}}. You can stop scanning early and import repositories found so far.',
+        { depth, repos }
+      )
+    : t(
+        'auto.components.repo.NestedRepoScanLimitNotice.limitTextWithTimeout',
+        'Scan stops after {{depth}}, {{repos}}, or {{timeout}}. You can stop scanning early and import repositories found so far.',
+        { depth, repos, timeout: formatTimeout(scan.timeoutMs, t) }
+      )
 }
 
 export function NestedRepoScanLimitNotice({ scan }: { scan: NestedRepoScanResult }) {
+  const t = useTranslate()
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const detailsText = nestedRepoScanLimitText(scan)
+  const detailsText = nestedRepoScanLimitText(scan, t)
 
   return (
     <div
       className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"
       onPointerEnter={() => setDetailsOpen(true)}
       onPointerLeave={() => setDetailsOpen(false)}
+      onPointerDown={(event) => {
+        if (event.button === 2) {
+          event.preventDefault()
+        }
+      }}
+      onContextMenu={() => setDetailsOpen(false)}
       onFocusCapture={() => setDetailsOpen(true)}
       onBlurCapture={() => setDetailsOpen(false)}
     >
       <span>
         {scan.stopped
-          ? translate(
-              'auto.components.repo.NestedRepoScanLimitNotice.03e9beab7b',
-              'Scan stopped early.'
-            )
-          : translate(
+          ? t('auto.components.repo.NestedRepoScanLimitNotice.03e9beab7b', 'Scan stopped early.')
+          : t(
               'auto.components.repo.NestedRepoScanLimitNotice.574eb5408b',
               'Showing partial scan results.'
             )}
@@ -46,7 +84,7 @@ export function NestedRepoScanLimitNotice({ scan }: { scan: NestedRepoScanResult
         <PopoverTrigger asChild>
           <button
             type="button"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.repo.NestedRepoScanLimitNotice.642a43c139',
               'Nested repository scan limits'
             )}
@@ -65,9 +103,10 @@ export function NestedRepoScanLimitNotice({ scan }: { scan: NestedRepoScanResult
           side="top"
           sideOffset={4}
           className="max-w-[260px] px-3 py-2 text-xs leading-5 text-pretty"
-          // Why: this popover opens on hover, so default focus-on-open would
-          // yank focus off the dialog every time the pointer grazes the icon.
+          onContextMenu={(event) => event.stopPropagation()}
+          // Hover-open must not move focus from the dialog when the pointer grazes this icon.
           onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
         >
           {detailsText}
         </PopoverContent>

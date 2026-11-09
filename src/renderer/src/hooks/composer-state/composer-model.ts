@@ -19,3 +19,36 @@ export type ComposerTargetModel = ComposerTargetStoreModel &
   ComposerDerivedModel
 
 export type ComposerModel = ComposerTargetModel & ComposerSourceModel & ComposerSubmitModel
+
+export type QuickCreationExecutionInput = Pick<
+  ComposerModel,
+  | 'agentPrompt'
+  | 'clearNewWorkspaceDraft'
+  | 'createMultiple'
+  | 'effectivePresetId'
+  | 'ephemeralVmRecipes'
+  | 'ephemeralVmsEnabled'
+  | 'isSubmissionCancelled'
+  | 'linkedGitLabIssue'
+  | 'linkedGitLabMR'
+  | 'normalizedSparseDirectories'
+  | 'onCreated'
+  | 'parentWorktreeId'
+  | 'persistDraft'
+  | 'persistSetupAgentStartupPolicy'
+  | 'prepareQuickSubmit'
+  | 'resetForNextCreate'
+  | 'resolvedInitialWorkspaceStatus'
+  | 'selectedEphemeralVmRecipeId'
+  | 'selectedRepoAgentLaunchFact'
+  | 'selectedRepoExecutionHostId'
+  | 'selectedRepoIsGit'
+  | 'selectedRepoIsRemote'
+  | 'selectedRepoTarget'
+  | 'selectedRepoStartupShell'
+  | 'selectedWorkspaceTarget'
+  | 'settings'
+  | 'sparseEnabled'
+  | 'taskSourceContext'
+  | 'telemetrySource'
+>

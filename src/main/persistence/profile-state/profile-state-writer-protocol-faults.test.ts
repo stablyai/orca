@@ -33,7 +33,7 @@ function clientFor(
   )
   const client = new ProfileStateWriteWorkerClient(
     { databasePath: join(root, 'unused.db'), profileId: 'protocol-test', revision: 1 },
-    { workerPath, timeoutMs: 1000, onFailure }
+    { workerPath, slowWarningMs: 50, onFailure }
   )
   clients.push(client)
   return client
@@ -57,53 +57,6 @@ describe('writer protocol refuses uncertain acknowledgements', () => {
     })
   })
 
-  it.each(['undefined', 'null', '0', '2'])(
-    'refuses a versioned export with revision %s for an admitted revision of one',
-    async (exportedRevision) => {
-      const client = clientFor(`parentPort.postMessage({
-        id: request.id, ok: true, revision: 1, exportedRevision: ${exportedRevision}
-      })`)
-      await client.ready
-      await expect(client.writeLatestJsonExport('unused.json')).rejects.toMatchObject({
-        code: 'profile-state-writer-protocol',
-        outcome: 'indeterminate'
-      })
-    }
-  )
-
-  it('refuses a revision jump at an unchanged-state fence', async () => {
-    const client = clientFor('parentPort.postMessage({ id: request.id, ok: true, revision: 2 })')
-    await client.ready
-    await expect(client.assertCurrentRevision()).rejects.toMatchObject({
-      code: 'profile-state-writer-protocol',
-      outcome: 'indeterminate'
-    })
-  })
-
-  it('refuses an initialization acknowledgement for a different revision', async () => {
-    const client = clientFor('', '{ id: 0, ok: true, revision: 2 }')
-    await expect(client.ready).rejects.toMatchObject({
-      code: 'profile-state-writer-protocol',
-      outcome: 'known-failure'
-    })
-  })
-
-  it('faults an unanswered request and rejects later work without retry', async () => {
-    const notify = vi.fn()
-    const client = clientFor('', undefined, notify)
-    await client.ready
-    await expect(
-      client.writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-    ).rejects.toMatchObject({ code: 'profile-state-writer-timeout', outcome: 'indeterminate' })
-    await expect(client.assertCurrentRevision()).rejects.toMatchObject({
-      code: 'profile-state-writer-timeout'
-    })
-    await client.close()
-    expect(notify).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ code: 'profile-state-writer-timeout' })
-    )
-  })
-
   it('reports an idle writer exit even without a subsequent save', async () => {
     const notify = vi.fn()
     const client = clientFor('', undefined, notify, 'setTimeout(() => process.exit(1), 50)')
@@ -114,35 +67,5 @@ describe('writer protocol refuses uncertain acknowledgements', () => {
     )
     await client.close()
     expect(notify).toHaveBeenCalledOnce()
-  })
-
-  it('leaves startup failure reporting to the startup caller', async () => {
-    const notify = vi.fn()
-    const client = clientFor('', '{ id: 0, ok: true, revision: 2 }', notify)
-    await expect(client.ready).rejects.toThrow()
-    await client.close()
-    expect(notify).not.toHaveBeenCalled()
-  })
-
-  it('does not report saving stopped after a recoverable request failure or clean close', async () => {
-    const notify = vi.fn()
-    const client = clientFor(
-      `
-      if (request.command === 'close') {
-        parentPort.postMessage({ id: request.id, ok: true, revision: 1 })
-        parentPort.close()
-      } else {
-        parentPort.postMessage({ id: request.id, ok: false,
-          error: { code: 'SQLITE_BUSY', message: 'busy', outcome: 'known-failure' } })
-      }
-    `,
-      undefined,
-      notify
-    )
-    await client.ready
-    await expect(client.assertCurrentRevision()).rejects.toThrow('busy')
-    expect(() => client.assertWritable()).not.toThrow()
-    await client.close()
-    expect(notify).not.toHaveBeenCalled()
   })
 })

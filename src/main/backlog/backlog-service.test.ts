@@ -6,7 +6,7 @@ import { executeBacklogOperation } from './backlog-service'
 import { backlogMutationArgs } from './backlog-cli'
 import * as backlogCli from './backlog-cli'
 import { BacklogOperation } from '../../shared/backlog-types'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const roots: string[] = []
 afterEach(async () => {

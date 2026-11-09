@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { resolveSidebarLineageParentIdentities } from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 
 function makeFolder(id = 'folder-1'): FolderWorkspace {
@@ -60,56 +63,7 @@ function makeWorkspaceLineage(child: Worktree, folderId = 'folder-1'): Workspace
   }
 }
 
-function makeWorktreeLineage(child: Worktree, parent: Worktree): WorktreeLineage {
-  return {
-    worktreeId: child.id,
-    worktreeInstanceId: child.instanceId ?? '',
-    parentWorktreeId: parent.id,
-    parentWorktreeInstanceId: parent.instanceId ?? '',
-    origin: 'cli',
-    capture: { source: 'env-workspace', confidence: 'inferred' },
-    createdAt: 1
-  }
-}
-
 describe('getAttachedWorktreesForFolderWorkspace', () => {
-  it('resolves direct attached children and sorts by activity then name', () => {
-    const alpha = makeWorktree({
-      id: 'repo-1::/alpha',
-      displayName: 'Alpha',
-      lastActivityAt: 10
-    })
-    const beta = makeWorktree({
-      id: 'repo-1::/beta',
-      displayName: 'Beta',
-      lastActivityAt: 50
-    })
-    const gamma = makeWorktree({
-      id: 'repo-1::/gamma',
-      displayName: 'Gamma',
-      lastActivityAt: 50
-    })
-
-    const result = getAttachedWorktreesForFolderWorkspace({
-      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
-      activeWorktreeId: null,
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: {
-        [alpha.id]: makeWorkspaceLineage(alpha),
-        [beta.id]: makeWorkspaceLineage(beta),
-        [gamma.id]: makeWorkspaceLineage(gamma)
-      },
-      worktreeLineageById: {},
-      worktreesByRepo: { 'repo-1': [alpha, beta, gamma] }
-    })
-
-    expect(result.childWorktrees.map((worktree) => worktree.displayName)).toEqual([
-      'Beta',
-      'Gamma',
-      'Alpha'
-    ])
-  })
-
   it('omits archived and stale-instance children', () => {
     const visible = makeWorktree({
       id: 'repo-1::/visible',
@@ -134,140 +88,173 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
         }
       },
       worktreeLineageById: {},
-      worktreesByRepo: { 'repo-1': [visible, archived, stale] }
+      worktreesByRepo: { 'repo-1': [visible, archived, stale] },
+      crossStoreChildrenByFolderId: new Map()
     })
 
     expect(result.childWorktrees.map((worktree) => worktree.id)).toEqual([visible.id])
   })
+})
 
-  it('includes nested lineage descendants under attached roots', () => {
-    const parent = makeWorktree({
-      id: 'repo-1::/parent',
-      instanceId: 'parent'
-    })
-    const nested = makeWorktree({
-      id: 'repo-1::/nested',
-      instanceId: 'nested'
-    })
+function edge(child: Worktree, parent: Worktree, createdAt: number): WorktreeLineage {
+  return {
+    worktreeId: child.id,
+    worktreeInstanceId: child.instanceId!,
+    parentWorktreeId: parent.id,
+    parentWorktreeInstanceId: parent.instanceId!,
+    origin: 'cli',
+    capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+    createdAt
+  }
+}
 
-    const result = getAttachedWorktreesForFolderWorkspace({
-      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
-      activeWorktreeId: null,
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: { [nested.id]: makeWorktreeLineage(nested, parent) },
-      worktreesByRepo: { 'repo-1': [parent, nested] }
-    })
-
-    expect(result.rootChildWorktrees.map((worktree) => worktree.id)).toEqual([parent.id])
-    expect(result.lineageChildrenByParentId.get(parent.id)?.map((worktree) => worktree.id)).toEqual(
-      [nested.id]
-    )
+it('keeps attachment order, descendants and Attached-tab parents on their resolved host and instance', () => {
+  const root = makeWorktree({
+    id: 'same-root',
+    hostId: 'local',
+    instanceId: 'local-root',
+    lastActivityAt: 99
   })
-
-  it('includes an exact inline-only legacy descendant under an attached root', () => {
-    const parent = makeWorktree({
-      id: 'repo-1::/parent',
-      instanceId: 'parent'
-    })
-    const nested = makeWorktree({
-      id: 'repo-1::/nested',
-      instanceId: 'nested'
-    })
-    const inlineNested = {
-      ...nested,
-      lineage: makeWorktreeLineage(nested, parent)
-    } as Worktree
-
-    const result = getAttachedWorktreesForFolderWorkspace({
-      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
-      activeWorktreeId: null,
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: {},
-      worktreesByRepo: { 'repo-1': [parent, inlineNested] }
-    })
-
-    expect(result.lineageChildrenByParentId.get(parent.id)?.map((worktree) => worktree.id)).toEqual(
-      [nested.id]
-    )
+  const twin = makeWorktree({ id: 'same-root', hostId: 'ssh:box', instanceId: 'remote-root' })
+  const child = makeWorktree({ id: 'same-child', hostId: 'local', instanceId: 'local-child' })
+  const remoteChild = makeWorktree({
+    id: 'same-child',
+    hostId: 'ssh:box',
+    instanceId: 'remote-child'
   })
+  const remoteGrandchild = makeWorktree({
+    id: 'grandchild',
+    hostId: 'ssh:box',
+    instanceId: 'remote-grandchild'
+  })
+  const remoteOnly = makeWorktree({
+    id: 'remote-only',
+    hostId: 'ssh:box',
+    instanceId: 'remote-only-instance'
+  })
+  const stale = makeWorktree({ id: 'stale', hostId: 'local', instanceId: 'new-instance' })
+  const remoteEdge = edge(remoteChild, twin, 40)
+  Object.assign(remoteChild, { lineage: remoteEdge })
+  const result = getAttachedWorktreesForFolderWorkspace({
+    activeWorkspaceKey: 'folder:folder-1',
+    activeWorktreeId: null,
+    executionHostId: 'local',
+    folderWorkspaces: [makeFolder()],
+    workspaceLineageByChildKey: {
+      remoteOnly: { ...makeWorkspaceLineage(remoteOnly), createdAt: 60 },
+      first: { ...makeWorkspaceLineage(twin), createdAt: 10 },
+      second: { ...makeWorkspaceLineage(root), createdAt: 20 },
+      stale: { ...makeWorkspaceLineage(stale), childInstanceId: 'old-instance' }
+    },
+    worktreeLineageById: {
+      [child.id]: edge(child, root, 30),
+      [remoteGrandchild.id]: edge(remoteGrandchild, remoteChild, 50)
+    },
+    worktreesByRepo: {
+      remote: [twin, remoteChild, remoteGrandchild, remoteOnly],
+      local: [root, child, stale]
+    },
+    crossStoreChildrenByFolderId: new Map()
+  })
+  expect(
+    result.owners.map((owner) => [
+      owner.executionHostId,
+      owner.worktree.instanceId,
+      owner.attachedAt
+    ])
+  ).toEqual([
+    ['local', 'local-root', 20],
+    ['local', 'local-child', 30],
+    ['ssh:box', 'remote-only-instance', 60]
+  ])
+  expect(result.lineageChildrenByParentId.get('local|same-root')).toEqual([child])
+  expect(result.lineageChildrenByParentId.has('ssh:box|same-root')).toBe(false)
+  expect(result.rootChildWorktrees.map((row) => row.instanceId)).toEqual([
+    'local-root',
+    'remote-only-instance'
+  ])
+})
 
-  it('keeps a stale side-map entry authoritative over valid inline lineage', () => {
-    const parent = makeWorktree({ id: 'repo-1::/parent', instanceId: 'parent' })
-    const nested = makeWorktree({ id: 'repo-1::/nested', instanceId: 'nested' })
-    const inlineNested = {
-      ...nested,
-      lineage: makeWorktreeLineage(nested, parent)
-    } as Worktree
+it('includes resolved cross-store roots and their descendants without attaching another host copy', () => {
+  const root = makeWorktree({ id: 'remote-root', hostId: 'ssh:box', instanceId: 'root' })
+  const twin = makeWorktree({ id: 'remote-root', hostId: 'ssh:other', instanceId: 'twin' })
+  const child = makeWorktree({ id: 'remote-child', hostId: 'ssh:box', instanceId: 'child' })
+  const lineage = edge(child, root, 5)
+  Object.assign(child, { lineage })
+  const result = getAttachedWorktreesForFolderWorkspace({
+    activeWorkspaceKey: 'folder:folder-1',
+    activeWorktreeId: null,
+    executionHostId: 'local',
+    folderWorkspaces: [makeFolder()],
+    workspaceLineageByChildKey: {},
+    worktreeLineageById: {},
+    worktreesByRepo: { remote: [root, child], other: [twin] },
+    lineageParentIdentities: new Map([
+      ['ssh:box|remote-root', 'local|folder:folder-1'],
+      ['ssh:box|remote-child', 'ssh:box|remote-root']
+    ]),
+    crossStoreChildrenByFolderId: new Map([['folder-1', [root]]])
+  })
+  expect(result.owners.map((owner) => owner.worktree.instanceId)).toEqual(['root', 'child'])
+  expect(result.rootChildWorktrees).toEqual([root])
+  expect(result.lineageChildrenByParentId.get('ssh:box|remote-root')).toEqual([child])
+})
 
-    const result = getAttachedWorktreesForFolderWorkspace({
-      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
-      activeWorktreeId: null,
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: {
-        [nested.id]: {
-          ...makeWorktreeLineage(nested, parent),
-          parentWorktreeInstanceId: 'stale-parent'
+it('attaches cross-store roots only to the resolved host when folder IDs collide', () => {
+  const localFolder = makeFolder()
+  const pairedFolder: FolderWorkspace = { ...makeFolder(), executionHostId: 'runtime:paired' }
+  const root = makeWorktree({ id: 'root', hostId: 'local', instanceId: 'root-instance' })
+  const child = makeWorktree({ id: 'child', hostId: 'local', instanceId: 'child-instance' })
+  const worktreeLineageById = { child: edge(child, root, 5) }
+  const rows = [
+    root,
+    child,
+    ...[localFolder, pairedFolder].map((folder) => getFolderWorkspaceWorktree(folder))
+  ]
+  const lineageParentIdentities = resolveSidebarLineageParentIdentities(
+    worktreeLineageById,
+    new Map(rows.map((row) => [getWorktreeHostIdentity(row), row])),
+    new Map([
+      [
+        '',
+        {
+          installationId: 'local-installation',
+          crossStoreLineageByChildKey: {
+            [worktreeWorkspaceKey(root.id)]: {
+              childWorkspaceKey: worktreeWorkspaceKey(root.id),
+              childInstanceId: 'root-instance',
+              parent: {
+                installationId: 'paired-installation',
+                workspaceKey: 'folder:folder-1',
+                instanceId: 'folder-1'
+              },
+              origin: 'cli',
+              capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+              createdAt: 1
+            }
+          }
         }
-      },
-      worktreesByRepo: { 'repo-1': [parent, inlineNested] }
-    })
+      ],
+      ['paired', { installationId: 'paired-installation', crossStoreLineageByChildKey: {} }]
+    ])
+  )
+  const inputs = {
+    activeWorkspaceKey: 'folder:folder-1',
+    activeWorktreeId: null,
+    folderWorkspaces: [localFolder, pairedFolder],
+    workspaceLineageByChildKey: {},
+    worktreeLineageById,
+    worktreesByRepo: { local: [root, child] },
+    lineageParentIdentities,
+    crossStoreChildrenByFolderId: new Map([['folder-1', [root]]])
+  }
 
-    expect(result.lineageChildrenByParentId.size).toBe(0)
+  const local = getAttachedWorktreesForFolderWorkspace({ ...inputs, executionHostId: 'local' })
+  const paired = getAttachedWorktreesForFolderWorkspace({
+    ...inputs,
+    executionHostId: 'runtime:paired'
   })
 
-  it('rejects nested descendants across host or project boundaries', () => {
-    const parent = makeWorktree({
-      id: 'repo-1::/parent',
-      instanceId: 'parent',
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      projectId: 'project-1'
-    })
-    const hostChild = makeWorktree({
-      id: 'repo-1::/host-child',
-      instanceId: 'host-child',
-      hostId: toSshExecutionHostId('other')
-    })
-    const projectChild = makeWorktree({
-      id: 'repo-1::/project-child',
-      instanceId: 'project-child',
-      projectId: 'project-2'
-    })
-
-    const result = getAttachedWorktreesForFolderWorkspace({
-      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
-      activeWorktreeId: null,
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: {
-        [hostChild.id]: makeWorktreeLineage(hostChild, parent),
-        [projectChild.id]: makeWorktreeLineage(projectChild, parent)
-      },
-      worktreesByRepo: { 'repo-1': [parent, hostChild, projectChild] }
-    })
-
-    expect(result.lineageChildrenByParentId.size).toBe(0)
-  })
-
-  it('does not attach cyclic legacy descendants', () => {
-    const parent = makeWorktree({ id: 'repo-1::/parent', instanceId: 'parent' })
-    const nested = makeWorktree({ id: 'repo-1::/nested', instanceId: 'nested' })
-
-    const result = getAttachedWorktreesForFolderWorkspace({
-      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
-      activeWorktreeId: null,
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
-      worktreeLineageById: {
-        [parent.id]: makeWorktreeLineage(parent, nested),
-        [nested.id]: makeWorktreeLineage(nested, parent)
-      },
-      worktreesByRepo: { 'repo-1': [parent, nested] }
-    })
-
-    expect(result.lineageChildrenByParentId.size).toBe(0)
-    expect(result.rootChildWorktrees.map((worktree) => worktree.id)).toEqual([parent.id])
-  })
+  expect(local.childWorktrees).toEqual([])
+  expect(paired.owners.map((owner) => owner.worktree.id)).toEqual(['root', 'child'])
 })

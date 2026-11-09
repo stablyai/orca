@@ -80,17 +80,7 @@ function restoreCapturedScrollState(
   refreshAfterReparent(pane)
 }
 
-// Why: reparenting a terminal container during split resets the viewport
-// scroll position (browser clears scrollTop on DOM move). This schedules a
-// two-phase restore: an early double-rAF (~32ms) to minimise the visible
-// flash, plus a 200ms authoritative restore that also clears the scroll lock.
-//
-// The optional reattachWebgl callback re-creates the WebGL addon after the
-// DOM has settled. splitPane() disposes WebGL before wrapInSplit() to free
-// the GPU context slot (Chromium silently kills the oldest context when
-// approaching its limit without firing contextlost). Reattaching at 200ms
-// — after all layout and reflow have completed — creates a fresh context on
-// a stable DOM tree.
+// Reparenting clears scrollTop. Restore after double-rAF (~32ms), then authoritatively at 200ms and unlock. Reattach WebGL only after stable layout; disposal before moving frees context slots Chromium could otherwise kill silently.
 export function scheduleSplitScrollRestore(
   getPaneById: (id: number) => ManagedPaneInternal | undefined,
   paneId: number,
@@ -116,8 +106,7 @@ export function scheduleSplitScrollRestore(
       if (!live?.pendingSplitScrollState) {
         return
       }
-      // Why: see the 200ms timer below — the alt-screen buffer belongs to a
-      // TUI and restore-during-draw knocks its cursor one row off (#1298).
+      // Alt-screen TUIs own cursor position; restoring during drawing shifts it one row (#1298), as guarded by the 200ms timer below.
       if (
         scrollState.bufferType === 'alternate' ||
         live.terminal.buffer.active.type === 'alternate'
@@ -150,14 +139,7 @@ export function scheduleSplitScrollRestore(
     if (!live) {
       return
     }
-    // Why: the alt-screen buffer belongs to a full-screen TUI (Claude Code,
-    // vim, less) that owns its cursor position. Re-running scroll restore
-    // and a full refresh here clobbers an in-progress draw — refresh(0,
-    // rows-1) repaints rows from xterm's buffer, racing the TUI's next
-    // write and leaving its cursor one row off (#1298 regression).
-    // WebGL reattach also refreshes, so defer it until the TUI exits the
-    // alternate buffer. Alt-screen has no scrollback, so scroll restore has
-    // nothing legitimate to do.
+    // Alt-screen TUIs own cursor position and have no scrollback; restore/refresh races their drawing (#1298). Defer WebGL reattach too, since it refreshes, until the alternate buffer exits.
     if (scrollState.bufferType === 'alternate') {
       clearPendingSplitScrollBufferDisposable(live)
       live.pendingSplitScrollState = null

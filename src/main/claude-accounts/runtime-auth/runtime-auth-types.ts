@@ -6,8 +6,7 @@ export type ClaudeRuntimeAuthPreparation = {
   wslDistro?: string | null
   wslLinuxConfigDir?: string | null
   envPatch: ClaudeEnvPatch
-  stripAuthEnv: boolean
   provenance: string
-  /** Usage only: why the selected account cannot be read; usage polling must not throw for it. */
+  /** Report unavailable usage without throwing out the entire polling cycle. */
   usageError?: string
 }

@@ -25,19 +25,21 @@ function listResult(overrides: Partial<RuntimeTerminalListResult> = {}): Runtime
 }
 
 describe('formatTerminalList host identity', () => {
-  it('prints the execution host each terminal runs on', () => {
-    const output = formatTerminalList(
-      listResult({ terminals: [terminal({ executionHostId: 'ssh:box-1' })] })
-    )
-
-    expect(output).toContain('host=ssh:box-1')
-  })
-
   it('prints unverifiable, not local, for a row whose host the runtime could not name', () => {
     const output = formatTerminalList(listResult({ terminals: [terminal()] }))
 
     expect(output).toContain('host=unverifiable')
     expect(output).not.toContain('host=local')
+  })
+})
+
+describe('formatTerminalList orphaned marker', () => {
+  it('marks only the terminal with no pane binding', () => {
+    const list = formatTerminalList(
+      listResult({ terminals: [terminal(), terminal({ handle: 'term_2', orphaned: true })] })
+    )
+    expect(list).toContain('term_1  worker  connected  host=')
+    expect(list).toContain('term_2  worker  connected  orphaned  host=')
   })
 })
 

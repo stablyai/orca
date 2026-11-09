@@ -1,11 +1,14 @@
-import type { MessageType, MessagePriority, MessageDeliveryContract, MessageRow } from '../../types'
+import type {
+  MessageType,
+  MessagePriority,
+  MessageDeliveryContract,
+  MessageRow
+} from '../orchestration-records'
 import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
-import { UNBOUND_RUN_ID } from '../contract-constants'
-
-// ── Messages ──
+import { ORCHESTRATION_UNBOUND_RUN_ID as UNBOUND_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
 const WORKER_DONE_MESSAGE_SAVEPOINT = 'worker_done_message_commit'
@@ -22,13 +25,12 @@ export type MessageInsert = {
   payload?: string
   senderPaneKey?: string
   runId?: string
+  answerSenderSnapshot?: string
   deliveryContract?: MessageDeliveryContract
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
-  // A sender in no Run (two plain terminals, `send --to <handle>`) still gets durable mail. It is
-  // filed under the unbound Run, never the legacy one, which the schema-skew probe reads as pre-Runs.
-  // Created on first use so `run list` shows it only to a user who has such mail.
+  // Unbound senders get a lazily created unbound Run; the legacy Run denotes pre-Runs data to skew probes.
   const runId = msg.runId ?? UNBOUND_RUN_ID
   if (msg.runId == null) {
     this.db
@@ -41,12 +43,15 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
   const deliveryContract = msg.deliveryContract ?? 'current_delivery'
   this.requireRun(runId)
   const id = msg.id ?? generateId('msg')
+  const type = msg.type ?? 'status'
+  // Heartbeats only record liveness: store them handled so they never reach a mailbox or wake it.
+  const handled = type === 'heartbeat' ? 1 : 0
   const stmt = this.db.prepare(`
     INSERT INTO messages (
       id, run_id, delivery_contract, from_handle, to_handle, subject, body,
-      type, priority, thread_id, payload, sender_pane_key
+      type, priority, thread_id, payload, sender_pane_key, answer_sender_snapshot, read, delivered_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END)
   `)
   stmt.run(
     id,
@@ -56,11 +61,14 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     msg.to,
     msg.subject,
     msg.body ?? '',
-    msg.type ?? 'status',
+    type,
     msg.priority ?? 'normal',
     msg.threadId ?? null,
     msg.payload ?? null,
-    msg.senderPaneKey ?? null
+    msg.senderPaneKey ?? null,
+    msg.answerSenderSnapshot ?? null,
+    handled,
+    handled
   )
   return exposeMessageTimestamps(
     this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow

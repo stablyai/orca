@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import {
-  automationRunMatchesPaneKey,
   buildAutomationRunOpenLayout,
-  canOpenAutomationRunOpenTarget,
   resolveAutomationRunOpenTarget
 } from './automation-run-open-target'
 
 const leafId = '11111111-1111-4111-8111-111111111111'
 const otherLeafId = '22222222-2222-4222-8222-222222222222'
 const paneKey = `tab-1:${leafId}`
-const splitPaneKey = `tab-1:${otherLeafId}`
+
 const runLeafLayout = {
   root: { type: 'leaf' as const, leafId },
   activeLeafId: leafId,
   expandedLeafId: null
 }
 const livePtyIds = ['pty-run']
+const canOpen = (args: Parameters<typeof resolveAutomationRunOpenTarget>[0]): boolean =>
+  resolveAutomationRunOpenTarget(args) !== null
 
 function run(overrides: Partial<AutomationRun> = {}): AutomationRun {
   return {
@@ -45,60 +45,6 @@ function run(overrides: Partial<AutomationRun> = {}): AutomationRun {
 }
 
 describe('automation run open target', () => {
-  it('matches exact pane identity only', () => {
-    expect(automationRunMatchesPaneKey(run(), paneKey)).toBe(true)
-    expect(automationRunMatchesPaneKey(run(), splitPaneKey)).toBe(false)
-    expect(
-      automationRunMatchesPaneKey(run({ terminalPaneKey: null, terminalPtyId: null }), splitPaneKey)
-    ).toBe(false)
-  })
-
-  it('requires exact pane identity before treating a run terminal as openable', () => {
-    expect(
-      canOpenAutomationRunOpenTarget({
-        run: run({ terminalPaneKey: null, terminalPtyId: null }),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
-      })
-    ).toBe(false)
-    expect(
-      canOpenAutomationRunOpenTarget({
-        run: run({ terminalPaneKey: `other-tab:${leafId}` }),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
-      })
-    ).toBe(true)
-    expect(
-      canOpenAutomationRunOpenTarget({
-        run: run(),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
-      })
-    ).toBe(true)
-  })
-
-  it('requires the run PTY to be live for View run', () => {
-    expect(
-      canOpenAutomationRunOpenTarget({
-        run: run(),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
-      })
-    ).toBe(true)
-    expect(
-      canOpenAutomationRunOpenTarget({
-        run: run(),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds: []
-      })
-    ).toBe(false)
-  })
-
   it('rejects a layout whose run leaf is bound to another PTY', () => {
     expect(
       resolveAutomationRunOpenTarget({
@@ -113,13 +59,38 @@ describe('automation run open target', () => {
     ).toBeNull()
   })
 
-  it('rejects a run without an exact PTY identity', () => {
+  it('targets the pane a successful run slept in place, before and after it wakes', () => {
+    // Why: hibernation drops only the run's PTY id; the pane key still names the run's own pane.
+    const sleptRun = run({ terminalPtyId: null })
+    const asleepLayout = { ...runLeafLayout, ptyIdsByLeafId: { [leafId]: 'pty-run' } }
+    const asleep = resolveAutomationRunOpenTarget({
+      run: sleptRun,
+      terminalTabExists: true,
+      currentLayout: asleepLayout,
+      livePtyIds: []
+    })
+
+    expect(asleep).toEqual({ tabId: 'tab-1', paneKey, leafId, ptyId: null })
+    if (!asleep) {
+      throw new Error('Expected target.')
+    }
     expect(
-      canOpenAutomationRunOpenTarget({
-        run: run({ terminalPtyId: null }),
+      buildAutomationRunOpenLayout({ target: asleep, currentLayout: asleepLayout }).ptyIdsByLeafId
+    ).toBe(asleepLayout.ptyIdsByLeafId)
+    expect(
+      resolveAutomationRunOpenTarget({
+        run: sleptRun,
         terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
+        currentLayout: { ...runLeafLayout, ptyIdsByLeafId: { [leafId]: 'pty-resumed' } },
+        livePtyIds: ['pty-resumed']
+      })
+    ).toEqual({ tabId: 'tab-1', paneKey, leafId, ptyId: 'pty-resumed' })
+    expect(
+      canOpen({
+        run: sleptRun,
+        terminalTabExists: false,
+        currentLayout: asleepLayout,
+        livePtyIds: []
       })
     ).toBe(false)
   })

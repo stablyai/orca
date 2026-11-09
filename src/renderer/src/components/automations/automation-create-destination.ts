@@ -1,25 +1,16 @@
-/**
- * Where a new automation is created, stated explicitly.
- *
- * Creation never infers a host. A concrete host filter constrains the
- * destination; under All hosts the active workspace's host may pre-fill it, but
- * only when that host resolves to a catalog entry with a real executable owner.
- * Anything less — an orphan bucket, an unhydrated or ghost host, no selection
- * at all — asks the user instead of picking for them, because a silent default
- * here creates a scheduled job on a machine nobody chose.
- *
- * The destination is re-resolved immediately before submit so a host that
- * changed incarnation while the form was open fails closed with the form
- * intact, rather than landing the record on a re-registered target.
- */
+/** State the storage destination explicitly. A concrete filter constrains it; All hosts may prefill only a catalog-backed executable owner, otherwise ask. Revalidate before submit so changed incarnations refuse without losing the form. */
 
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
-} from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
-import { hostStableKey, isSameAutomationOwner } from '../../../../shared/automation-owner-key'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
+import {
+  hostStableKey,
+  isSameAutomationOwner
+} from '../../../../shared/automations/ownership/automation-owner-key'
+import { getRepoSshConnectionId, parseExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
   AutomationCatalogHydrationEvidence,
   AutomationHostCatalogEntry
@@ -50,36 +41,36 @@ export type AutomationCreateDestinationResolution =
   | ({ status: 'ready' } & AutomationCreateDestination)
   | { status: 'choice-required'; reason: AutomationCreateDestinationChoiceReason }
 
-/**
- * The one create-eligibility predicate: an executable owner AND the scoped
- * query contract. A view-only entry (degraded `querySupport`) must not accept
- * a create it could not list or edit back afterwards, so every surface that
- * offers, resolves, or defaults a create destination shares this check.
- */
+/** Share create eligibility across surfaces: require an executable owner and scoped queries so a new record can be listed and edited afterward. */
 export function automationCreateHostEligible(
   entry: AutomationHostCatalogEntry
 ): entry is AutomationHostCatalogEntry & { owner: AutomationOwnerRef } {
-  return entry.kind !== 'orphan' && entry.owner !== null && entry.querySupport === 'scoped'
+  return (
+    entry.kind !== 'orphan' &&
+    entry.owner !== null &&
+    entry.querySupport === 'scoped' &&
+    entry.servedBy === undefined
+  )
 }
 
-/**
- * What the picker lists: a superset of eligibility on purpose. An ineligible
- * host renders disabled with its status stated, because a host the rest of the
- * app still shows must not silently vanish here — omission reads as the host
- * being gone. Only rows that can never become destinations stay hidden: the
- * orphan bucket and removed targets.
- */
+/** The entry that holds new automations for a host key: a managed SSH host's is its Orca server's. */
+export function automationCreateHostFor(
+  entries: readonly AutomationHostCatalogEntry[],
+  stableKey: string | null | undefined
+): AutomationHostCatalogEntry | null {
+  const entry = stableKey ? entries.find((candidate) => candidate.stableKey === stableKey) : null
+  const server = entry?.servedBy
+    ? entries.find((candidate) => candidate.stableKey === entry.servedBy)
+    : null
+  return server ?? entry ?? null
+}
+
+/** Offer ineligible hosts disabled with reasons so they do not appear gone; hide removed targets, the orphan bucket, and SSH hosts their Orca server stands for. */
 export function automationCreateHostOffered(entry: AutomationHostCatalogEntry): boolean {
-  return entry.kind !== 'orphan' && entry.catalogState !== 'removed'
+  return entry.kind !== 'orphan' && entry.catalogState !== 'removed' && entry.servedBy === undefined
 }
 
-/**
- * The authorities whose ineligibility a server update would repair, named so
- * the field can say which machines need updating. A disabled row cannot explain
- * itself — its tooltip sits behind pointer-events: none — and not every
- * disabled host is repaired this way (an unverified target needs a reconnect),
- * so the hint names exactly the update-repairable ones.
- */
+/** Name only authorities repaired by a server update; disabled tooltips are unreachable, and unverified targets need reconnect instead. */
 export function automationCreateUpdateRequiredAuthorityLabels(
   entries: readonly AutomationHostCatalogEntry[]
 ): string[] {
@@ -111,27 +102,16 @@ export function resolveAutomationCreateDestination(
   }
 }
 
-/**
- * Under All hosts, a pre-fill is a convenience, never a fallback: an
- * unresolvable active workspace leaves the choice to the user.
- */
+/** Under All hosts, prefill only a resolvable workspace host; otherwise leave the choice to the user. */
 export function preselectAutomationCreateHost(
   entries: readonly AutomationHostCatalogEntry[],
   selectedStableKey: string | null,
   activeWorkspaceStableKey: string | null
 ): AutomationHostCatalogEntry | null {
-  const key = selectedStableKey ?? activeWorkspaceStableKey
-  if (!key) {
-    return null
-  }
-  return entries.find((entry) => entry.stableKey === key) ?? null
+  return automationCreateHostFor(entries, selectedStableKey ?? activeWorkspaceStableKey)
 }
 
-/**
- * Re-resolves the captured destination against the live catalog. A changed
- * incarnation is reported rather than followed, so the caller can keep the form
- * and say which host moved.
- */
+/** Revalidate against the live catalog; report a changed incarnation without silently following it or discarding the form. */
 export function revalidateAutomationCreateDestination(
   captured: AutomationCreateDestination,
   entries: readonly AutomationHostCatalogEntry[]
@@ -146,11 +126,7 @@ export function revalidateAutomationCreateDestination(
     : { status: 'stale', entry: resolved.entry }
 }
 
-/**
- * One eligible host is not a guess: with nothing else the user could choose, the
- * destination is still stated. Gated on positive hydration evidence, because a
- * catalog that has not settled can look single-host while a second one loads.
- */
+/** Default a sole eligible host only after positive hydration evidence; another host may still be loading. */
 export function soleAutomationCreateHost(
   entries: readonly AutomationHostCatalogEntry[],
   hydration: AutomationCatalogHydrationEvidence
@@ -181,28 +157,20 @@ export function automationCreateHostStableKey(hostId: string | null | undefined)
   })
 }
 
-/**
- * Whether the project can live on the destination at all, answered by the
- * destination authority's own repo table.
- *
- * Fail closed on a miss: repo ids are host-local, and every candidate this
- * dialog offers is a live row of this client's catalog, so a row the
- * destination's table does not hold is provably another authority's — sending
- * its id would only defer the refusal to the destination (`repo_not_found`).
- * Contrast `automationAuthorityPartitionContext`, which stays fail-open for
- * *stored* automation rows whose project may simply not be mirrored yet.
- */
+/** Validate new projects against the destination authority’s repo table and fail closed on misses (repo_not_found). Stored rows use the more permissive automationAuthorityPartitionContext because their mirrors may lag. */
 export function automationCreateProjectMismatch(
   tables: AutomationAuthorityRepoTables,
   destination: AutomationCreateDestination,
   projectId: string
 ): boolean {
   const table = tables.get(automationAuthorityCatalogKey(destination.authority))
-  const connectionId = table ? repoConnectionIdIn(table)(projectId) : undefined
+  const selector = destination.destination.selector
+  const connectionId = table
+    ? repoConnectionIdIn(table, selector.kind === 'ssh' ? selector.targetId : null)(projectId)
+    : undefined
   if (connectionId === undefined) {
     return true
   }
-  const selector = destination.destination.selector
   return selector.kind === 'ssh' ? connectionId !== selector.targetId : connectionId !== null
 }
 
@@ -210,13 +178,19 @@ export function automationCreateProjectMismatch(
  * The projects a destination can hold, filtered by the rule submit already
  * enforces, so the form cannot offer a pairing its own check will refuse.
  */
-export function automationCreateEligibleProjects<TProject extends { id: string }>(
+export function automationCreateEligibleProjects<
+  TProject extends Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+>(
   tables: AutomationAuthorityRepoTables,
   destination: AutomationCreateDestination,
   projects: readonly TProject[]
 ): TProject[] {
+  const selector = destination.destination.selector
+  const connectionId = selector.kind === 'ssh' ? selector.targetId : null
   return projects.filter(
-    (project) => !automationCreateProjectMismatch(tables, destination, project.id)
+    (project) =>
+      getRepoSshConnectionId(project) === connectionId &&
+      !automationCreateProjectMismatch(tables, destination, project.id)
   )
 }
 

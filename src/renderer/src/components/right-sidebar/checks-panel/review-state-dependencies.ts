@@ -36,6 +36,7 @@ export type ChecksPanelReviewStateInput = Pick<
     | 'remoteStatusInvalidation'
     | 'repo'
     | 'repoConnectionId'
+    | 'ownerTarget'
     | 'runtimeEnvironmentId'
     | 'settings'
     | 'updatePullRequestGenerationRecord'

@@ -35,21 +35,15 @@ import { buildCompleteDocumentReplacements } from './profile-state-complete-repl
 import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
 import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
+import { ProfileStateLegacyDocumentRefresh } from './profile-state-legacy-document-refresh'
 
-/**
- * Complete-document authority for the Store cutover.
- *
- * A Store authority keeps one writable handle for its lifetime so repeated
- * domain commits do not pay connection and pragma setup costs. Store teardown
- * calls {@link close} before profile switches or process removal. Complete
- * payloads use one fenced domain transaction, so unchanged normalized rows are
- * not rebuilt; Store callers can still opt into narrower dirty-domain writes.
- */
+/** Reuse one writable handle; fenced domain commits preserve unchanged normalized rows. */
 export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
   private retired = false
   private observedRevision: number | undefined
   private writableDatabase: ReturnType<typeof openWritableProfileStateDatabase> | undefined
   private backupRotation: ProfileStateBackupRotation | undefined
+  private readonly legacyDocuments = new ProfileStateLegacyDocumentRefresh()
 
   constructor(
     private readonly databasePath: string,
@@ -79,6 +73,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     assertProfileStateRevisionOnDisk(this.databasePath, this.profileId, revision)
     this.observedRevision = revision
     this.assertCurrentRevision()
+    this.legacyDocuments.startWriterThread(this.writableDatabase?.db)
   }
 
   get revision(): number {
@@ -89,7 +84,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     return this.observedRevision
   }
 
-  /** Keep the startup payload and write fence on the same accepted revision. */
+  /** Bind startup payload and write fence to the same accepted revision. */
   readAcceptedState(
     rawJson: string
   ): ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority> | undefined {
@@ -129,8 +124,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
   readSerializedState(): string | undefined {
     this.assertActive()
     if (!this.writableDatabase && !existsSync(this.databasePath)) {
-      // Treat an absent database as the empty revision so a concurrent creator
-      // cannot race this authority's first commit.
+      // Fence absence at revision zero against a concurrent creator.
       this.observedRevision = 0
       return undefined
     }
@@ -153,16 +147,17 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
   ): void {
     this.assertActive()
     if (this.observedRevision === undefined) {
-      // Store normally reads before its first write. Establishing the revision
-      // here keeps direct authority callers fenced too.
+      // Direct callers must establish a revision fence even without Store's initial read.
       this.readSerializedState()
     }
     const opened = this.openWritableDatabase()
+    this.legacyDocuments.catchUp(this.writableDatabase?.db)
     this.observedRevision = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? 0,
       replacements,
       automationRunsAfter
     }).revision
+    this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
 
   assertCurrentRevision(): void {
@@ -209,10 +204,11 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       })
     }
     const opened = this.openWritableDatabase()
+    this.legacyDocuments.catchUp(this.writableDatabase?.db)
     const currentRevision = readProfileStateRevision(opened.db)
     const complete = buildCompleteDocumentReplacements(opened.db, replacements)
     if (currentRevision === 0 || complete.length === 0) {
-      // Each fragment must be valid independently before it can become part of a root object.
+      // Validate fragments independently so splicing cannot conceal malformed JSON.
       for (const replacement of replacements) {
         prepareProfileStateDomainMutation(replacement)
       }
@@ -229,6 +225,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       expectedRevision: this.observedRevision ?? currentRevision,
       replacements: complete
     }).revision
+    this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
 
   scheduleBackup(): void {
@@ -257,9 +254,11 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     return quarantineProfileStateDatabase(this.databasePath, this.profileId, quarantineRoot, reason)
   }
 
-  close(): void {
+  /** Only a graceful shutdown refreshes legacy rows; quarantine and maintenance closes must not write. */
+  close(options: { refreshLegacyDocuments?: boolean } = {}): void {
     this.assertActive()
     this.backupRotation?.stop()
+    this.legacyDocuments.beforeClose(this.writableDatabase?.db, options.refreshLegacyDocuments)
     this.writableDatabase?.db.close()
     this.writableDatabase = undefined
   }

@@ -7,20 +7,34 @@ import {
   printResult,
   type HostNameResult
 } from '../format'
-import { listSshTargets } from '../host-selector-alternatives'
-import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
-import type { RuntimeClient, RuntimeRpcSuccess } from '../runtime-client'
+import { parseHostFlag } from '../execution-host-flag'
+import {
+  fetchSshTargetSummaries,
+  listSshTargets,
+  LOCAL_HOST_LIST_NAME,
+  normalizeTypedName,
+  type SshTargetSummary
+} from '../host-selector-alternatives'
+import {
+  getDefaultUserDataPath,
+  RuntimeClientError,
+  type RuntimeClient,
+  type RuntimeRpcSuccess
+} from '../runtime-client'
+
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
-import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import { redactRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import {
   addEnvironmentFromPairingCode,
-  listEnvironments,
   removeEnvironment,
   resolveEnvironment,
   type EnvironmentAddResult,
   type EnvironmentRemoveResult
 } from '../runtime/environments'
+import { exchangeCliPairingCode } from '../runtime/environment-pairing-exchange'
+import { refuseReservedEnvironmentName } from '../local-environment-selector'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   'host name': async ({ client, flags, json }) => {
@@ -29,8 +43,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', 'Missing value for --name')
     }
     if (typeof requestedName === 'string') {
-      // Why: an older runtime rejects the unknown settings field with a bare `invalid_params`;
-      // a runtime that does not publish a name cannot store one either, so say so plainly.
+      // Check name support before an older settings schema can reject the write as invalid_params.
       const current = await client.call<RuntimeStatus>('status.get')
       if (current.result.machineName === undefined) {
         throw new RuntimeClientError(
@@ -40,14 +53,14 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       }
       await client.call('settings.update', { machineName: requestedName })
     }
-    // Why: print what the runtime publishes after the write (a blank `--name` means the detected
-    // name), inside the runtime's own envelope so a routed answer is stamped with that runtime.
+    // A blank override restores the detected name; read it from the runtime after writing.
     const status = await client.call<RuntimeStatus>('status.get')
     printResult({ ...status, result: describeRuntimeHost(status.result) }, json, formatHostName)
   },
   'environment add': async ({ flags, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
-    const pairingCode = getRequiredStringFlag(flags, 'pairing-code')
+    refuseReservedEnvironmentName(name)
+    const pairingCode = await exchangeCliPairingCode(getRequiredStringFlag(flags, 'pairing-code'))
     const environment = redactRuntimeEnvironment(
       addEnvironmentFromPairingCode(getDefaultUserDataPath(), {
         name,
@@ -61,9 +74,6 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
         `Saved environment ${result.environment.name} (${result.environment.id}).`
     )
   },
-  // Why: an agent told "run it on <name>" had nowhere to look. `orca environment list` showed
-  // paired servers only, and nothing in the CLI listed SSH targets at all, so the wrong-axis
-  // guess was the only move available. This is the one place that answers both.
   'host list': async ({ client, flags, json }) => {
     rejectLocalPairingStoreRetargeting(
       flags,
@@ -79,8 +89,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       ...(target.connectionStatus ? { connectionStatus: target.connectionStatus } : {}),
       ...(target.remotePlatform ? { platform: target.remotePlatform } : {})
     }))
-    // Why: this listing answers from the local pairing store; dialing each paired server would make
-    // it slow and offline-fragile. `orca host name --environment <name>` asks one server directly.
+    // Read the local pairing store without dialing every server, so listing works offline.
     const localStatus = await readLocalHostDescriptor(client)
     const environments = listEnvironments(getDefaultUserDataPath()).map((environment) => ({
       kind: 'environment' as const,
@@ -91,7 +100,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     const hosts = [
       {
         kind: 'local' as const,
-        name: 'this machine',
+        name: LOCAL_HOST_LIST_NAME,
         id: 'local',
         selector: '--host local',
         ...localStatus,
@@ -101,6 +110,36 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       ...environments
     ]
     printResult(localSuccess({ hosts }), json, formatHostList)
+  },
+  'host rm': async ({ client, flags, json }) => {
+    rejectLocalPairingStoreRetargeting(
+      flags,
+      '`orca host rm`. It removes an SSH target from this machine\u2019s own Orca runtime, the same one `orca host list` reads.',
+      'Run `orca host rm` on that machine to remove an SSH target registered there.'
+    )
+    const targetId = requireSshHostFlag(flags)
+    // Unlike listSshTargets, this keeps runtime_unavailable instead of reporting an unknown target.
+    const { targets } = await fetchSshTargetSummaries<SshTargetSummary>(client)
+    const target = targets.find((candidate) => candidate.id === targetId)
+    if (!target) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Unknown SSH target in --host ssh:${targetId}: this Orca host has no SSH target with that id.`,
+        {
+          knownSshTargets: targets,
+          nextSteps: ['Run `orca host list` to see each SSH target and its --host ssh:<id> flag.']
+        }
+      )
+    }
+    // Same RPC as the UI: the runtime tombstones the alias so the ~/.ssh/config import skips it.
+    const response = await client.call('ssh.removeTarget', { targetId })
+    const removed = { kind: 'ssh' as const, name: target.label, id: target.id }
+    printResult(
+      { ...response, result: { removed } },
+      json,
+      (result: { removed: typeof removed }) =>
+        `Removed SSH target ${result.removed.name} (${result.removed.id}).`
+    )
   },
   'environment list': async ({ flags, json }) => {
     rejectLocalPairingStoreRetargeting(
@@ -148,13 +187,7 @@ async function readLocalHostDescriptor(client: RuntimeClient): Promise<HostNameR
   }
 }
 
-/**
- * These two listings are pinned local by `shouldIgnoreRemoteSelection`, so a runtime selector is
- * dropped for routing. It used to still reach the SSH half of `host list` through the routed
- * client, producing a listing whose SSH rows came from the named server and whose paired-server
- * rows came from this machine — one answer describing two hosts, stamped `runtimeId: local`.
- * Failing is the only answer that is true of a single machine.
- */
+// Both listings read the local pairing store; reject flags that imply a different runtime.
 function rejectLocalPairingStoreRetargeting(
   flags: Map<string, string | boolean>,
   suffix: string,
@@ -163,6 +196,28 @@ function rejectLocalPairingStoreRetargeting(
   rejectRemoteSelectionFlags(flags, suffix, {
     nextSteps: [crossHostNextStep, 'Drop the flag to answer for this machine.']
   })
+}
+
+function requireSshHostFlag(flags: Map<string, string | boolean>): string {
+  const host = parseHostFlag(flags)
+  if (host?.kind === 'ssh') {
+    return host.targetId
+  }
+  if (!host) {
+    throw new RuntimeClientError('invalid_argument', 'Missing required --host ssh:<target-id>')
+  }
+  const named = host.kind === 'alias' ? host.alias : host.id
+  const nextStep =
+    host.kind === 'runtime'
+      ? 'A paired Orca server is removed with `orca environment rm --environment <name>`.'
+      : host.kind === 'local' || normalizeTypedName(named) === LOCAL_HOST_LIST_NAME
+        ? 'This machine is always listed and cannot be removed.'
+        : 'Pass the SSH target id as --host ssh:<target-id>; `orca host list` prints it.'
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `\`orca host rm\` removes saved SSH targets only, and --host ${named} is not one.`,
+    { nextSteps: [nextStep, 'Run `orca host list` to see each SSH target and its --host flag.'] }
+  )
 }
 
 function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {

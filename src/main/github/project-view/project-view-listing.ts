@@ -7,8 +7,6 @@ import type {
 import { assertPositiveInt, assertSlug } from './internals'
 import { fetchProjectViewsPage } from './project-view-config'
 
-// ─── listProjectViews ──────────────────────────────────────────────────
-
 export async function listProjectViews(
   args: ListProjectViewsArgs
 ): Promise<ListProjectViewsResult> {
@@ -21,7 +19,14 @@ export async function listProjectViews(
     return { ok: false, error: numCheck.error }
   }
   if (args.ownerType !== 'organization' && args.ownerType !== 'user') {
-    return { ok: false, error: { type: 'validation_error', message: 'Invalid ownerType.' } }
+    return {
+      ok: false,
+      error: {
+        type: 'validation_error',
+        message: 'Invalid ownerType.',
+        reason: 'invalid_owner_type'
+      }
+    }
   }
   const summaries: GitHubProjectViewSummary[] = []
   let cursor: string | null = null

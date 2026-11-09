@@ -1,5 +1,11 @@
-import { randomUUID } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import {
+  parseChatUiLaunchTipAudience,
+  type ChatUiLaunchTipAudience
+} from '../../../shared/native-chat/chat-ui-launch-tip-audience'
+import { carriedChatUiLaunchSettings } from '../../../shared/native-chat/native-chat-providers'
+import { savedChatUiWithTerminalDefaultView } from '../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 
@@ -8,26 +14,148 @@ type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeeds
 export class LoadedCohortMigrationOperations {
   constructor(private readonly runtime: LoadedCohortMigrationOperationsRuntime) {}
 
-  migrateTabSwitchKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
-    const existing = state.settings?.tabSwitchKeybindingSeed
-    if (existing === 'pending' || existing === 'done') {
+  /** Freezes each rollout's new-or-existing cohort on first load, before a save makes a fresh install look existing. */
+  migrateCohortSeeds(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    // Secondary profiles start with only the install's telemetry consent, before their first load.
+    const telemetryOnly =
+      Object.keys(state).length === 1 &&
+      isRecord(state.settings) &&
+      Object.keys(state.settings).length === 1 &&
+      isRecord(state.settings.telemetry)
+    const existingProfile = fileExistedOnLoad && !telemetryOnly
+    for (const key of [
+      'tabSwitchKeybindingSeed',
+      'searchKeybindingSeed',
+      'nonMacSearchKeybindingSeed'
+    ] as const) {
+      const existing = state.settings?.[key]
+      if (existing === 'legacy' || existing === 'done') {
+        continue
+      }
+      // Freeze each rollout's cohort before saving makes a fresh install appear existing.
+      this.runtime.loadNeedsSave = true
+      state = {
+        ...state,
+        settings: {
+          ...state.settings,
+          [key]: existing === 'pending' || existingProfile ? 'legacy' : 'done'
+        }
+      }
+    }
+    if (state.settings?.claudeCodeThemeSyncOffer === undefined) {
+      this.runtime.loadNeedsSave = true
+      // Why every profile: settings.json is global, so even a fresh profile must not restyle Claude Code unasked.
+      state = {
+        ...state,
+        settings: {
+          ...state.settings,
+          claudeCodeThemeSync: false,
+          claudeCodeThemeSyncOffer: 'pending'
+        }
+      }
+    }
+    return state
+  }
+
+  /** Reads the retired Chat UI switch from the raw profile, before load strips it. */
+  captureChatUiLaunchTipAudience(savedProfile: unknown): ChatUiLaunchTipAudience {
+    const saved = isRecord(savedProfile) ? savedProfile.chatUiLaunchTipAudience : undefined
+    const kept = saved === undefined ? null : parseChatUiLaunchTipAudience(saved)
+    if (kept) {
+      return kept
+    }
+    // Persist this decision before later settings changes can alter the apparent audience.
+    this.runtime.loadNeedsSave = true
+    if (!isRecord(savedProfile)) {
+      return { version: 1, membership: 'excluded', basis: 'new-profile' }
+    }
+    if (saved !== undefined) {
+      // Never rederive a damaged audience record from current settings.
+      return { version: 1, membership: 'excluded', basis: 'unreadable-record' }
+    }
+    const settings = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    // Opt-ins saved with new tabs opening in the terminal were kept on the terminal, so they count as off.
+    const chatUiOn =
+      settings?.experimentalNativeChat === true && !savedChatUiWithTerminalDefaultView(settings)
+    return { version: 1, membership: 'eligible', basis: chatUiOn ? 'chat-ui-on' : 'chat-ui-off' }
+  }
+
+  /** Runs with the audience capture that first records the profile, so it applies once and in the same save. */
+  carryChatUiChoices(
+    state: PersistedState,
+    savedProfile: unknown,
+    audience: ChatUiLaunchTipAudience
+  ): PersistedState {
+    if (
+      !isRecord(savedProfile) ||
+      savedProfile.chatUiLaunchTipAudience !== undefined ||
+      (audience.basis !== 'chat-ui-on' && audience.basis !== 'chat-ui-off')
+    ) {
       return state
     }
-    // Why: mark dirty so the frozen cohort persists; else a fresh install re-reads as "existing" after its file lands.
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    const launchSettings = carriedChatUiLaunchSettings(
+      saved?.nativeChatProviders,
+      audience.basis === 'chat-ui-on'
+    )
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, ...launchSettings } }
+  }
+
+  /** Resume on restart defaults on for new profiles; profiles saved before without a choice keep it off. */
+  keepResumeOnRestartOffForExistingProfiles(
+    state: PersistedState,
+    savedProfile: unknown
+  ): PersistedState {
+    if (!isRecord(savedProfile)) {
+      return state
+    }
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.nativeChatResumeWorkOnRestart === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, nativeChatResumeWorkOnRestart: false } }
+  }
+
+  migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    return this.seedMilestoneInstallCohort(
+      this.migrateTelemetryIdentity(state, fileExistedOnLoad),
+      fileExistedOnLoad
+    )
+  }
+
+  /** Freeze once so upgraded profiles' first post-release interaction is never counted as activation. */
+  private seedMilestoneInstallCohort(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const telemetry = state.settings?.telemetry
+    if (!telemetry || telemetry.protectedMilestones?.installCohort !== undefined) {
+      return state
+    }
     this.runtime.loadNeedsSave = true
     return {
       ...state,
       settings: {
         ...state.settings,
-        // Existing installs pin old chords via a keybindings.json seed; fresh installs use the new registry defaults.
-        tabSwitchKeybindingSeed: fileExistedOnLoad ? 'pending' : 'done'
+        telemetry: {
+          ...telemetry,
+          protectedMilestones: {
+            ...telemetry.protectedMilestones,
+            installCohort: fileExistedOnLoad ? 'existing' : 'fresh'
+          }
+        }
       }
     }
   }
 
-  migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+  private migrateTelemetryIdentity(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
     const existing = state.settings?.telemetry
-    // Why: require all three invariants; keying on existedBeforeTelemetryRelease alone lets a partial block skip migration.
+    // Partial telemetry blocks still require migration unless all invariants hold.
     if (
       typeof existing?.existedBeforeTelemetryRelease === 'boolean' &&
       typeof existing.installId === 'string' &&
@@ -36,19 +164,26 @@ export class LoadedCohortMigrationOperations {
     ) {
       return state
     }
-    // Why: resolve cohort once; re-inferring it in the optedIn fallback could misclassify a partially-written new user.
+    // Resolve cohort once so partial new-user state cannot change its default mid-migration.
     const resolvedExistedBefore =
       typeof existing?.existedBeforeTelemetryRelease === 'boolean'
         ? existing.existedBeforeTelemetryRelease
         : fileExistedOnLoad
+    const onboardingLanguageCohort = !fileExistedOnLoad
+      ? randomInt(2) === 0
+        ? 'control'
+        : 'treatment'
+      : undefined
+    this.runtime.loadNeedsSave = true
     return {
       ...state,
       settings: {
         ...state.settings,
         telemetry: {
           ...existing,
+          ...(onboardingLanguageCohort ? { onboardingLanguageCohort } : {}),
           existedBeforeTelemetryRelease: resolvedExistedBefore,
-          // Why: preserve any explicit opt-in/out; fall back to cohort default only when optedIn is undefined, never when false.
+          // Preserve explicit true, false and null; only absence uses the cohort default.
           optedIn:
             existing?.optedIn === true || existing?.optedIn === false || existing?.optedIn === null
               ? existing.optedIn
@@ -63,4 +198,8 @@ export class LoadedCohortMigrationOperations {
       }
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

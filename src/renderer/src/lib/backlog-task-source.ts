@@ -7,13 +7,14 @@ import {
   type BacklogOperation,
   type BacklogTask
 } from '../../../shared/backlog-types'
-import { callRuntimeRpc, assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { buildContainedLinkedContextBlock } from './linked-work-item-context'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 
-/** Requires advertised support for runtime hosts; local and SSH support is checked when executing. */
+/** Requires advertised support for runtime hosts; local support and unserved SSH refusal are checked when executing. */
 export function supportsBacklog(
   repo: Repo,
   hosts: ReadonlyMap<ExecutionHostId, Pick<ExecutionHostRegistryEntry, 'capabilities'>>
@@ -30,7 +31,7 @@ export function backlogRepoKey(repo: Repo): string {
   return JSON.stringify([getRepoExecutionHostId(repo), repo.id, repo.path])
 }
 
-/** Uses the owning runtime (local runtime routes SSH), checks runtime capability, and validates the reply. */
+/** Uses the owning runtime, checks runtime capability, and validates the reply; unserved SSH is refused, not read locally. */
 export async function callBacklog(repo: Repo, operation: BacklogOperation): Promise<BacklogReply> {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   const target =

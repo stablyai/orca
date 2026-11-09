@@ -1,11 +1,4 @@
-/**
- * `orcad --complete-managed-stop <request-json>`: one stop, one JSON verdict line on stdout.
- * `orcad --cancel-managed-stop <request-json>`: one cancellation, one JSON outcome line.
- * Either takes `--request-file <path>` in place of the JSON.
- *
- * Exit 0 means a result was printed — read it, the exit code does not carry it. 64 is a
- * malformed invocation; 1 is a failure before any result, which is never evidence of exit.
- */
+// Exit 0 means JSON was printed; read its outcome. Exit 64 is invalid input, 1 is failure without exit proof.
 import {
   ORCAD_CANCEL_MANAGED_STOP_FLAG,
   ORCAD_COMPLETE_MANAGED_STOP_FLAG,
@@ -95,6 +88,6 @@ export async function runOrcadManagedStopCommandAndExit(argv: readonly string[])
         ? ORCAD_MANAGED_STOP_EXIT_USAGE
         : ORCAD_MANAGED_STOP_EXIT_FAILED
   }
-  // Why exit after the write drains: the caller reads stdout to EOF.
+  // Drain stdout before exit: callers read the result to EOF.
   process.stdout.write('', () => process.exit(code))
 }

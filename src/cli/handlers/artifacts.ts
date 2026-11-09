@@ -5,18 +5,18 @@ import type {
   ArtifactListPage,
   ArtifactListItem,
   ArtifactWriteRequest
-} from '../../shared/artifacts'
-import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../shared/artifacts'
+} from '../../shared/artifacts/artifacts'
+import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../shared/artifacts/artifacts'
 import {
   parseRemoteArtifactInput,
   REMOTE_ARTIFACT_INPUT_ENV
-} from '../../shared/artifact-cli-bridge'
-import { readArtifactFileWithinLimit } from '../../shared/artifact-file-read'
+} from '../../shared/artifacts/artifact-cli-bridge'
+import { readArtifactFileWithinLimit } from '../../shared/artifacts/artifact-file-read'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
   ARTIFACT_SHARING_DISABLED_MESSAGE,
   ARTIFACT_SHARING_DISABLED_NEXT_STEPS
-} from '../../shared/artifact-sharing-gate'
+} from '../../shared/artifacts/artifact-sharing-gate'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { RuntimeClientError } from '../runtime-client'
@@ -78,12 +78,7 @@ async function readStdinWithinLimit(maxBytes: number): Promise<string> {
   return Buffer.concat(chunks).toString('utf8')
 }
 
-/**
- * Publishing is off by default, so denial is the common outcome. A tiny `settings.get` read
- * answers it before we load (or pipe in) up to the full RPC byte budget the host would reject.
- * Only an explicit `false` denies: a host predating the capability omits the field entirely,
- * and an unreachable host stays the publish RPC's problem, not the preflight's.
- */
+// Check before reading a large body; only explicit false denies, preserving older-host compatibility.
 async function preflightPublishCapability(ctx: HandlerContext): Promise<void> {
   let enabled: unknown
   try {

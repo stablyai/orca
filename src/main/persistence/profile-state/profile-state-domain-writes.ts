@@ -18,6 +18,12 @@ import {
 import { isRecord, validateProfileStateDocumentRow } from './profile-state-document-validation'
 import { assertProfileStateDocumentRevision } from './profile-state-revision'
 import {
+  deleteProfileStateDomainParts,
+  readSplitDomainWriteState,
+  writeProfileStateDomainParts
+} from './profile-state-document-parts-storage'
+import { isProfileStateSplitDomain } from './profile-state-document-parts'
+import {
   prepareProfileStateDomainMutation,
   validateProfileStateDomainTransaction,
   type PreparedProfileStateMutation
@@ -25,31 +31,23 @@ import {
 
 export { ProfileStateRevisionConflictError } from './profile-state-documents'
 
-/** A storage-form replacement for one top-level profile-state domain. */
 export type ProfileStateDomainReplacement = {
-  /** Non-empty top-level domain name, for example `automationRuns`. */
   domain: string
-  /** Canonical JSON payload, or null to remove the domain row. */
+  /** Null deletes the row; JSON "null" remains an explicit value. */
   payload: string | null
-  /** Revision observed by the caller before it built this replacement. */
+  /** Fence the revision read before constructing this replacement. */
   expectedRevision: number
   domainVersion?: number
   now?: () => number
 }
 
-/** One row mutation inside a transaction that may update several domains. */
 export type ProfileStateDomainMutation = Omit<ProfileStateDomainReplacement, 'expectedRevision'>
 
-/**
- * A set of domain mutations guarded by one profile revision.
- *
- * A profile revision is shared by every row, so checking it once at the start
- * of the transaction gives callers an atomic cross-domain compare-and-swap.
- */
+/** One shared revision check makes cross-domain mutations an atomic compare-and-swap. */
 export type ProfileStateDomainTransaction = {
   expectedRevision: number
   replacements: readonly ProfileStateDomainMutation[]
-  /** Changed run projection supplied by Store for selective row updates. */
+  /** Enable selective run-row updates from Store's changed projection. */
   automationRunsAfter?: readonly unknown[]
 }
 
@@ -62,14 +60,7 @@ export type ProfileStateDomainTransactionResult = ProfileStateDomainWriteResult 
   changedDomains: readonly string[]
 }
 
-/**
- * Replace one domain without serializing or rewriting the other domains.
- *
- * The caller supplies the revision it read with the domain. SQLite's
- * `BEGIN IMMEDIATE` plus the exact revision check fences stale Store instances
- * before the row and profile revision are changed. A null payload deletes the
- * row; the JSON literal `null` remains an explicit domain value.
- */
+/** BEGIN IMMEDIATE fences stale writers; only this domain changes, and null deletes its row. */
 export function writeProfileStateDomain(
   db: Database.Database,
   replacement: ProfileStateDomainReplacement
@@ -88,13 +79,7 @@ export function writeProfileStateDomain(
   return { changed: result.changed, revision: result.revision }
 }
 
-/**
- * Replace one or more domains in one SQLite transaction.
- *
- * Every changed row receives the same next profile revision. If any row
- * validation, payload write, or commit step fails, SQLite rolls back all row
- * changes and the profile revision remains unchanged.
- */
+/** All changed rows share one revision; any validation/write/commit failure rolls back the whole set. */
 export function writeProfileStateDomains(
   db: Database.Database,
   transaction: ProfileStateDomainTransaction
@@ -111,7 +96,18 @@ export function writeProfileStateDomains(
     const currentAutomationRuns = readCurrentAutomationRunsState(db, actualRevision)
 
     const updates: PreparedProfileStateMutation[] = []
+    const splitStates = new Map<string, ReturnType<typeof readSplitDomainWriteState>>()
     for (const mutation of prepared) {
+      const splitState = readSplitDomainWriteState(db, mutation.domain)
+      splitStates.set(mutation.domain, splitState)
+      if (splitState.kind === 'parts') {
+        // Compare by hash; the legacy row is a stale downgrade copy and is not re-read.
+        assertProfileStateDocumentRevision(splitState.revision, actualRevision, mutation.domain)
+        if (mutation.payload === null || mutation.payloadHash !== splitState.contentHash) {
+          updates.push(mutation)
+        }
+        continue
+      }
       const existing = db
         .prepare(
           `SELECT domain, payload, domain_version, revision, updated_at, content_hash
@@ -122,14 +118,14 @@ export function writeProfileStateDomains(
         existing === undefined
           ? undefined
           : validateProfileStateDocumentRow(existing, {
-              // An identical incoming payload has already passed JSON validation.
+              // Identical incoming payloads already passed JSON validation.
               validateJson: !(isRecord(existing) && existing.payload === mutation.payload)
             })
       if (existingRow) {
         assertProfileStateDocumentRevision(existingRow.revision, actualRevision, mutation.domain)
       }
       if (mutation.domain === 'automationRuns') {
-        // Canonical history already has this hash; unchanged rows need no new projection.
+        // Matching canonical history hashes avoid rebuilding the projection.
         if (
           currentAutomationRuns.presence === 'array' &&
           mutation.payload?.startsWith('[') &&
@@ -193,10 +189,28 @@ export function writeProfileStateDomains(
       }
       if (mutation.payload === null) {
         db.prepare('DELETE FROM profile_state_documents WHERE domain = ?').run(mutation.domain)
+        deleteProfileStateDomainParts(db, mutation.domain)
       } else {
         const updatedAt = (mutation.now ?? Date.now)()
         if (!Number.isSafeInteger(updatedAt) || updatedAt < 0) {
           throw new Error(`Profile state domain update timestamp is invalid: ${mutation.domain}`)
+        }
+        const splitState = splitStates.get(mutation.domain)
+        if (
+          splitState?.kind === 'parts' &&
+          writeProfileStateDomainParts(db, {
+            domain: mutation.domain,
+            payload: mutation.payload,
+            value: mutation.splitDomainValue,
+            payloadHash: mutation.payloadHash!,
+            domainVersion: mutation.domainVersion,
+            revision: nextRevision,
+            updatedAt,
+            legacyRevision: splitState.legacyRevision,
+            diffExisting: true
+          })
+        ) {
+          continue
         }
         db.prepare(
           `INSERT INTO profile_state_documents
@@ -216,6 +230,20 @@ export function writeProfileStateDomains(
           updatedAt,
           mutation.payloadHash
         )
+        if (isProfileStateSplitDomain(mutation.domain)) {
+          // The legacy row now matches; later writes touch only the parts that change.
+          writeProfileStateDomainParts(db, {
+            domain: mutation.domain,
+            payload: mutation.payload,
+            value: mutation.splitDomainValue,
+            payloadHash: mutation.payloadHash!,
+            domainVersion: mutation.domainVersion,
+            revision: nextRevision,
+            updatedAt,
+            legacyRevision: nextRevision,
+            diffExisting: false
+          })
+        }
       }
     }
     db.prepare(

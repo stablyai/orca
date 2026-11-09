@@ -7,8 +7,6 @@ describe('runKeyedSerializedOperation', () => {
     const failing = runKeyedSerializedOperation(queues, 'key', async () => {
       throw new Error('write failed')
     })
-    // Why: awaiting the tail is how reads barrier on writes; an unrelated
-    // failed write must not abort the reader (startup candidate discovery).
     const tail = getKeyedSerializedQueueTail(queues, 'key')
 
     await expect(failing).rejects.toThrow('write failed')

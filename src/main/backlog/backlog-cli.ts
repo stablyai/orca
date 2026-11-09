@@ -6,7 +6,7 @@ import {
   type BacklogOperation,
   type BacklogTask
 } from '../../shared/backlog-types'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { readBacklogFile, type BacklogProject } from './backlog-project'
 
 const Package = z.object({

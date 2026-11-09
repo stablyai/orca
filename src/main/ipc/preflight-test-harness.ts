@@ -1,6 +1,6 @@
 import path from 'node:path'
 import type { Mock } from 'vitest'
-import { _resetPreflightCache } from './preflight'
+import { _resetPreflightCache } from '../preflight/agent-detection'
 
 export type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Promise<unknown>>
 
@@ -10,11 +10,11 @@ export type PreflightMocks = {
   runWslProcessMock?: Mock
   hydrateShellPathMock: Mock
   mergePathSegmentsMock: Mock
-  getActiveMultiplexerMock: Mock
   getBitbucketAuthStatusMock: Mock
   getAzureDevOpsAuthStatusMock: Mock
   getGiteaAuthStatusMock: Mock
   resolveCliCommandsMock: Mock
+  findCommandsOnLocalPathMock: Mock
   isCommandOnLocalPathMock: Mock
   listLocalCommandPathsMock: Mock
   mergePersistedWindowsPathAsyncMock: Mock
@@ -39,7 +39,6 @@ export const defaultGiteaStatus = {
   tokenConfigured: false
 }
 
-/** Shared per-test reset: mock defaults, cleared cache, darwin platform, fresh handler map. */
 export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap): void {
   const {
     handleMock,
@@ -47,11 +46,11 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
     runWslProcessMock,
     hydrateShellPathMock,
     mergePathSegmentsMock,
-    getActiveMultiplexerMock,
     getBitbucketAuthStatusMock,
     getAzureDevOpsAuthStatusMock,
     getGiteaAuthStatusMock,
     resolveCliCommandsMock,
+    findCommandsOnLocalPathMock,
     isCommandOnLocalPathMock,
     listLocalCommandPathsMock,
     mergePersistedWindowsPathAsyncMock,
@@ -64,10 +63,7 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
   hydrateShellPathMock.mockReset()
   hydrateShellPathMock.mockResolvedValue({ segments: [], ok: false, failureReason: 'no_shell' })
   mergePathSegmentsMock.mockReset()
-  getActiveMultiplexerMock.mockReset()
-  // Why empty by default: with no fs candidates the local probe keeps its
-  // historical bare-name spawn, so cases that stub only where/which and execFile
-  // still assert on the command names they were written against.
+  // No filesystem candidates keeps bare command names for tests using the existing lookup/exec mocks.
   listLocalCommandPathsMock.mockReset()
   listLocalCommandPathsMock.mockResolvedValue([])
   getBitbucketAuthStatusMock.mockReset()
@@ -76,15 +72,12 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
   mergePersistedWindowsPathAsyncMock.mockReset()
   mergePersistedWindowsPathAsyncMock.mockResolvedValue(undefined)
   mergePersistedWindowsPathMock.mockReset()
-  // Why: existing tests should keep treating `which` as the only source
-  // unless a case explicitly exercises the install-dir fallback.
+  // Keep install-directory fallback opt-in for cases that otherwise use only the command lookup mock.
   resolveCliCommandsMock.mockReset()
   resolveCliCommandsMock.mockImplementation(
     (commands: string[]) => new Map(commands.map((command) => [command, command]))
   )
-  // Why: reproduce the pre-#9297 local PATH check (spawn where/which, keep
-  // only absolute resolutions) so cases that stub the where/which mock still
-  // drive detection identically without a real subprocess.
+  // Preserve existing lookup fixtures while production uses filesystem PATH resolution (#9297).
   isCommandOnLocalPathMock.mockReset()
   isCommandOnLocalPathMock.mockImplementation(async (command: string) => {
     const finder = process.platform === 'win32' ? 'where' : 'which'
@@ -97,6 +90,13 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
     } catch {
       return false
     }
+  })
+  findCommandsOnLocalPathMock.mockReset()
+  findCommandsOnLocalPathMock.mockImplementation(async (commands: readonly string[]) => {
+    const matches = await Promise.all(
+      commands.map(async (command) => ((await isCommandOnLocalPathMock(command)) ? command : null))
+    )
+    return new Set(matches.filter((command) => command !== null))
   })
   getBitbucketAuthStatusMock.mockResolvedValue(defaultBitbucketStatus)
   getAzureDevOpsAuthStatusMock.mockResolvedValue(defaultAzureDevOpsStatus)

@@ -86,17 +86,14 @@ export function installDiffCommentAddButtonOverlay({
     editor,
     editorDomNode,
     commentableLineSet,
-    // A press on the "+" itself has no Monaco gutter target, so it resolves through the line the
-    // button is parked on.
+    // Presses on the overlay have no Monaco gutter position; use its parked line.
     resolvePressLine: (event) =>
       event.target instanceof Node && plus.contains(event.target)
         ? hoverLineRef.current
         : getGutterPressLine(editor, event),
     onDragChange: ({ dragging: isDragging, focusLine }) => {
       dragging = isDragging
-      // Why: inert while dragging so it can't punch a hit-test hole in the band the pointer is
-      // sweeping — but it still rides the growing end of the selection, which is the only thing
-      // telling the user the drag is live.
+      // Disable hit testing during selection drag to avoid a hole in the swept band; keep following the growing endpoint as feedback.
       plus.style.pointerEvents = isDragging ? 'none' : ''
       editorDomNode.classList.toggle('orca-diff-comment-range-dragging', isDragging)
       if (isDragging && focusLine !== null) {

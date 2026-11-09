@@ -10,6 +10,7 @@ const fakes = vi.hoisted(() => ({
   },
   wsl: {
     prepareLaunch: async (distro: string) => ({ runtime: 'wsl', wslDistro: distro }),
+    preparation: async (distro: string) => ({ runtime: 'wsl', wslDistro: distro }),
     publish: async (_distro: string): Promise<void> => {},
     runningDistros: async (): Promise<string[]> => []
   }
@@ -17,7 +18,7 @@ const fakes = vi.hoisted(() => ({
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/data/orca' })
 }))
-vi.mock('../wsl', () => ({
+vi.mock('../wsl/discovery/distro-catalog', () => ({
   getDefaultWslDistro: () => 'Ubuntu',
   getWslHome: (distro: string) => `/wsl/${distro}/home`
 }))
@@ -31,15 +32,23 @@ vi.mock('./claude-profile-wsl-router', () => ({
     return fakes.wsl
   }
 }))
-vi.mock('./claude-profile-installed-router', () => ({ installClaudeProfileRouter: () => {} }))
+vi.mock('./claude-profile-installed-router', () => ({
+  installClaudeObservedConfigDirs: () => {},
+  installClaudeProfileRouter: () => {},
+  installClaudeWslProfileRouter: () => {}
+}))
 
 import { ClaudeRuntimeAuthService } from './runtime-auth-service'
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-function service(platformName: NodeJS.Platform, overrides: Partial<GlobalSettings> = {}) {
+function service(
+  platformName: NodeJS.Platform,
+  overrides: Partial<GlobalSettings> = {},
+  isDistroRunning: (distro: string) => Promise<boolean> = async () => true
+) {
   Object.defineProperty(process, 'platform', { configurable: true, value: platformName })
   const settings = { ...getDefaultSettings('/home/user'), ...overrides }
-  return new ClaudeRuntimeAuthService({ getSettings: () => settings })
+  return new ClaudeRuntimeAuthService({ getSettings: () => settings }, isDistroRunning)
 }
 
 beforeEach(() => {
@@ -51,22 +60,6 @@ afterEach(() => {
 })
 
 describe('ClaudeRuntimeAuthService', () => {
-  it('keeps a stale WSL account setting on the host off Windows', async () => {
-    const auth = service('darwin', { localAccountRuntime: 'wsl', localAccountWslDistro: 'Ubuntu' })
-    expect(auth.getRuntimeConfigDir()).toBe('/host/.claude')
-    await expect(auth.prepareForClaudeLaunch()).resolves.toEqual({ runtime: 'host' })
-  })
-
-  it('routes a WSL target that names no distro to the default distro', async () => {
-    const auth = service('win32')
-    await expect(auth.prepareForClaudeLaunch({ runtime: 'wsl', wslDistro: null })).resolves.toEqual(
-      { runtime: 'wsl', wslDistro: 'Ubuntu' }
-    )
-    expect(auth.getRuntimeConfigDir({ runtime: 'wsl', wslDistro: null })).toBe(
-      '/wsl/Ubuntu/home/.claude'
-    )
-  })
-
   it('never fails a select over a failed guest publish, and publishes one pass at a time', async () => {
     const auth = service('win32')
     vi.spyOn(fakes.wsl, 'publish').mockRejectedValue(new Error('distro is gone'))

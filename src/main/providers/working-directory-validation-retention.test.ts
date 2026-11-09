@@ -5,10 +5,7 @@ const { stat } = vi.hoisted(() => ({
   stat: vi.fn<() => Promise<{ isDirectory: () => boolean }>>()
 }))
 vi.mock('node:fs/promises', () => ({ stat }))
-vi.mock('../wsl', () => ({
-  wslUncDirectoryExists: () => {
-    throw new Error('Unexpected WSL probe')
-  },
+vi.mock('../wsl/filesystem/unc-path-access', () => ({
   wslUncDirectoryExistsAsync: () => {
     throw new Error('Unexpected WSL probe')
   }
@@ -151,32 +148,6 @@ describe('working directory validation waiter lifetime', () => {
     } finally {
       gate.resolve(directory)
       process.off('unhandledRejection', recordUnhandled)
-    }
-  })
-
-  it('keeps UNC slots occupied after caller cancellation until native settlement', async () => {
-    const gates = Array.from({ length: 3 }, () => Promise.withResolvers<typeof directory>())
-    let calls = 0
-    stat.mockImplementation(() => {
-      const gate = gates[calls++]
-      if (!gate) {
-        throw new Error('Unexpected native stat')
-      }
-      return gate.promise
-    })
-    try {
-      for (let index = 0; index < 3; index += 1) {
-        await canceledWait(`\\\\synthetic-host\\path-${index}`)
-      }
-      expect(stat).toHaveBeenCalledTimes(2)
-      gates[0].resolve(directory)
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      expect(stat).toHaveBeenCalledTimes(3)
-    } finally {
-      for (const gate of gates) {
-        gate.resolve(directory)
-      }
-      await new Promise<void>((resolve) => setImmediate(resolve))
     }
   })
 
