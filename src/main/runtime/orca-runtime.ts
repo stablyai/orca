@@ -61,6 +61,7 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contrac
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import { continueRestoredWorkerMailSoon } from './rpc/methods/orchestration/messaging/settled-worker-follow-through'
+import { PeerMailRelay } from './orchestration/federation/peer-mail/peer-mail-relay'
 
 const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? OrcaRuntimeWithSidebarTemporal
@@ -68,6 +69,20 @@ const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDE
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
 class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
+  // Lazy: the database can open, and arm relays, while the runtime is still constructing.
+  declare private peerMailRelay: PeerMailRelay | undefined
+
+  override ensureOrchestrationFederationRelay(runId?: string): void {
+    super.ensureOrchestrationFederationRelay(runId)
+    this.peerMailRelay ??= new PeerMailRelay(this, () => this.orchestrationEnvironmentTransport)
+    this.peerMailRelay.ensure()
+  }
+
+  override stopOrchestrationFederationRelay(): void {
+    super.stopOrchestrationFederationRelay()
+    this.peerMailRelay?.stop()
+  }
+
   /** Sidebar facts are absent unless ORCA_SIDEBAR_INPUTS=main. */
   get sidebarFacts() {
     return sidebarFactsRuntime(this)
