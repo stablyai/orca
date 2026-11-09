@@ -1,5 +1,4 @@
 import type Database from '../../sqlite/sync-database'
-import type { JournalSqlBatch, JournalSqlBatchResult } from './journal-sql-batch'
 import {
   applyJournalDomainItem,
   type JournalDomainItemWrite,
@@ -19,39 +18,10 @@ type MessageCommand = {
   savedAt: number
 }
 
-export type JournalSqlMessageJob = {
-  command: MessageCommand
-  bytes: number
-}
-
 export type JournalSqlMessagesCommit = Omit<JournalDomainItemCommit, 'outcome'> & {
   publicCursor: AgentJournalCursor
   outcomes: JournalStepOutcome[]
   failure?: JournalSqlFailure
-}
-
-/** Sender work; the writer drains the already classified and sized command. */
-export function prepareJournalSqlMessages(command: MessageCommand): JournalSqlMessageJob {
-  return {
-    command,
-    bytes: Buffer.byteLength(JSON.stringify(command), 'utf8')
-  }
-}
-
-/** Called by the existing writer admission lane; publication completes before the next drain. */
-export async function commitJournalSqlMessages(
-  db: Database.Database,
-  batch: JournalSqlBatch,
-  jobs: readonly JournalSqlMessageJob[],
-  publish: (commit: JournalSqlMessagesCommit, index: number) => void
-): Promise<JournalSqlBatchResult<JournalSqlMessagesCommit>> {
-  const result = await batch.run(jobs, (job) => applyJournalSqlMessageSteps(db, job.command))
-  for (const [index, outcome] of result.outcomes.entries()) {
-    if (outcome.committed) {
-      publish(outcome.value, index)
-    }
-  }
-  return result
 }
 
 export function applyJournalSqlMessageSteps(

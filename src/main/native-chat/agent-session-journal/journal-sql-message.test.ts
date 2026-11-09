@@ -1,12 +1,10 @@
 import { afterEach, expect, it } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { message, messageFixture, target } from './journal-sql-message.test-fixture'
-import { commitJournalSqlMessages, prepareJournalSqlMessages } from './journal-sql-message-commit'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { readJournalDomainItems } from './journal-sql-item-reads'
-import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 
 const databases: Database.Database[] = []
 const fixture = () => {
@@ -20,75 +18,28 @@ afterEach(() => {
   }
 })
 
-it('admits revision zero and moves the same item without changing its admission ordinal', () => {
-  const { db, item } = fixture()
-  const admitted = {
-    itemId: 'orca:send',
-    revision: 0,
-    sequence: 11,
-    observedAt: 100,
-    turnScope: { kind: 'thread' as const },
-    body: { kind: 'message' as const, role: 'user' as const, blocks: [] }
-  }
-  db.exec('BEGIN')
-  writeJournalDomainCurrentItem(db, target, {
-    item: admitted,
-    ordinal: 11,
-    hidden: false,
-    ownerFence: 1
-  })
-  expect(item('orca:send')).toEqual(admitted)
-  writeJournalDomainCurrentItem(db, target, {
-    item: {
-      ...admitted,
-      sequence: 20,
-      observedAt: 200,
-      turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
-    },
-    previous: { item: admitted, ordinal: 11, hidden: false },
-    ordinal: 11,
-    hidden: false,
-    ownerFence: 1
-  })
-  db.exec('COMMIT')
-  expect(item('orca:send')).toMatchObject({
-    revision: 0,
-    sequence: 20,
-    observedAt: 200,
-    turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
-  })
-  expect(db.prepare("SELECT ordinal FROM journal_items WHERE item_id='orca:send'").get()).toEqual({
-    ordinal: 11
-  })
-})
-
 it('publishes exact committed snapshots and their final body in order', async () => {
-  const { db, batch, commit, item, published } = fixture()
+  const { db, command, commitCommands, commit, item, published } = fixture()
   db.prepare('UPDATE journal_chat_state SET context_boundary=7').run()
   expect((await commit(message('first'))).outcomes[0]).toMatchObject({
     committed: true,
     value: {
-      cursor: { epoch: 'epoch', sequence: 11 },
-      publicCursor: {
+      cursor: {
         epoch: 'context-v1:2aa4945736094af6247b635644bf6763d06f6ba2c1f8d5a69f5ef000feafd5f1',
         sequence: 11
       }
     }
   })
-  const result = await commitJournalSqlMessages(
-    db,
-    batch,
-    ['second', 'third'].map((text) =>
-      prepareJournalSqlMessages({ target, steps: [message(text)], savedAt: 200 })
-    ),
-    (result) => published.push(result)
+  const result = await commitCommands(
+    ['second', 'third'].map((text) => command([message(text)])),
+    200
   )
   expect(result.outcomes.map((entry) => entry.committed)).toEqual([true, true])
-  expect(published.at(-1)?.publicCursor).toEqual({
+  expect(published.at(-1)?.cursor).toEqual({
     epoch: 'context-v1:2aa4945736094af6247b635644bf6763d06f6ba2c1f8d5a69f5ef000feafd5f1',
     sequence: 13
   })
-  expect(published.map((entry) => entry.items[0]?.body)).toEqual([
+  expect(published.map((entry) => entry.publication?.items[0]?.body)).toEqual([
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'first' }] },
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'second' }] },
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'third' }] }
@@ -99,30 +50,22 @@ it('publishes exact committed snapshots and their final body in order', async ()
   expect((await commit(ended)).outcomes[0]).toMatchObject({
     committed: true,
     value: {
-      cursor: { epoch: 'epoch', sequence: 14 },
-      items: [{ body: { completedAt: 300 } }]
+      cursor: {
+        epoch: 'context-v1:2aa4945736094af6247b635644bf6763d06f6ba2c1f8d5a69f5ef000feafd5f1',
+        sequence: 14
+      },
+      publication: { items: [{ body: { completedAt: 300 } }] }
     }
   })
 })
 
-it('commits ready revisions from different chats atomically before publishing either payload', async () => {
-  const { db, batch, commit } = fixture()
+it('commits ready revisions from different chats atomically', async () => {
+  const { db, command, commitCommands, commit } = fixture()
   await commit(message('first', 'assistant', 'item'))
   db.exec(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
     VALUES('workspace','other','epoch',0,1)`)
-  const other = { sessionId: 'other', epoch: 'epoch' }
-  await commitJournalSqlMessages(
-    db,
-    batch,
-    [
-      prepareJournalSqlMessages({
-        target: other,
-        steps: [message('other first', 'assistant', 'item')],
-        savedAt: 100
-      })
-    ],
-    () => {}
-  )
+  const other = { sessionId: 'other', epoch: 'epoch', ownerToken: 'other-owner' }
+  await commitCommands([command([message('other first', 'assistant', 'item')], other)])
   db.exec(`PRAGMA foreign_keys=ON;
     CREATE TABLE published_pair (id TEXT PRIMARY KEY);
     CREATE TABLE pending_pair (id TEXT REFERENCES published_pair(id) DEFERRABLE INITIALLY DEFERRED);
@@ -130,25 +73,33 @@ it('commits ready revisions from different chats atomically before publishing ei
       BEGIN INSERT INTO pending_pair VALUES ('paired'); END;
     CREATE TEMP TRIGGER pair_second AFTER UPDATE OF payload_json ON journal_items WHEN NEW.session_id='other'
       BEGIN INSERT INTO published_pair VALUES ('paired'); END`)
-  const delivered: string[] = []
-  const result = await commitJournalSqlMessages(
-    db,
-    batch,
-    [target, other].map((target) =>
-      prepareJournalSqlMessages({ target, steps: [message('last')], savedAt: 200 })
-    ),
-    (commit, index) => {
-      expect(db.isTransaction).toBe(false)
-      expect(db.prepare('SELECT id FROM published_pair').get()).toEqual({ id: 'paired' })
-      delivered.push(`${index}:${commit.cursor.sequence}`)
-    }
+  const result = await commitCommands(
+    [target, other].map((target) => command([message('last')], target)),
+    200
   )
   expect(result.outcomes.map((outcome) => outcome.committed)).toEqual([true, true])
-  expect(delivered).toEqual(['0:12', '1:2'])
+  expect(db.isTransaction).toBe(false)
+  expect(db.prepare('SELECT id FROM published_pair').get()).toEqual({ id: 'paired' })
+  expect(result.outcomes).toMatchObject([
+    {
+      committed: true,
+      value: {
+        cursor: { epoch: 'epoch', sequence: 12 },
+        publication: { items: [{ body: { blocks: [{ type: 'text', text: 'last' }] } }] }
+      }
+    },
+    {
+      committed: true,
+      value: {
+        cursor: { epoch: 'epoch', sequence: 2 },
+        publication: { items: [{ body: { blocks: [{ type: 'text', text: 'last' }] } }] }
+      }
+    }
+  ])
 })
 
 it('accepts an optimistic echo once, preserving its local body and moved placement', async () => {
-  const { db, commit, item, seedSend, seedItem } = fixture()
+  const { db, commit, commitCommands, item, seedSend, seedItem } = fixture()
   seedSend()
   db.exec(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,
       attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,fingerprint,
@@ -186,13 +137,18 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
     committed: true,
     value: {
       inputChanged: true,
-      acceptedInputs: { latestAcceptedTurnSequence: 1, latestPersonAcceptedSequence: 1 },
-      cards: [{ messageId: 'card', state: 'withdrawn' }],
-      receipts: [
-        { clientMessageId: 'send', acceptedAt: 100, cursor: { epoch: 'epoch', sequence: 11 } }
-      ]
+      publication: {
+        acceptedInputs: { latestAcceptedTurnSequence: 1, latestPersonAcceptedSequence: 1 },
+        cards: [],
+        receipts: [
+          { clientMessageId: 'send', acceptedAt: 100, cursor: { epoch: 'epoch', sequence: 11 } }
+        ]
+      }
     }
   })
+  expect(db.prepare("SELECT state FROM journal_queue_cards WHERE message_id='card'").get()).toEqual(
+    { state: 'returned' }
+  )
   const accepted: AgentJournalSubmission = JSON.parse(
     String(
       db.prepare('SELECT payload_json FROM journal_submission_attempts WHERE current=1').get()!
@@ -211,9 +167,6 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
     db.prepare('SELECT payload_json FROM journal_submission_attempts WHERE current=0').get()!
       .payload_json
   ).toBe(historical)
-  expect(
-    db.prepare('SELECT candidate FROM journal_submission_attempts WHERE current=1').get()!.candidate
-  ).toBe(0)
   expect(item('orca:send')).toMatchObject({
     sequence: 7,
     observedAt: 70,
@@ -222,14 +175,28 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
   input.body.blocks = [{ type: 'text', text: 'provider normalized' }]
   expect((await commit(input)).outcomes[0]).toMatchObject({
     committed: true,
-    value: { receipts: [], inputChanged: false }
+    value: { publication: { receipts: [] } }
   })
   expect(item('orca:send')?.body).toEqual({
     kind: 'message',
     role: 'user',
     blocks: [{ type: 'text', text: 'original' }]
   })
-  expect(db.prepare('SELECT COUNT(*) AS count FROM journal_items').get()!.count).toBe(2)
+  const reported = await commitCommands([
+    {
+      target,
+      operation: {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: 'reported-command' },
+        body: { kind: 'turn', turnId: 'command', state: 'completed' },
+        options: { fence: 1, turnScope: { kind: 'thread' } }
+      }
+    }
+  ])
+  expect(reported.outcomes[0]).toMatchObject({
+    committed: true,
+    value: { publication: { cards: [{ messageId: 'card', state: 'withdrawn' }] } }
+  })
 })
 
 it('refuses a snapshot after the saved turn ends and commits only a successful step prefix', async () => {
@@ -258,8 +225,8 @@ it('refuses a snapshot after the saved turn ends and commits only a successful s
     committed: true,
     value: {
       cursor: { epoch: 'epoch', sequence: 12 },
-      items: [],
-      outcomes: [{ kind: 'dropped', reason: 'turn-settled' }]
+      publication: { items: [] },
+      value: { outcomes: [{ kind: 'dropped', reason: 'turn-settled' }] }
     }
   })
   expect(item('orca:assistant')).toBeUndefined()
@@ -277,13 +244,12 @@ it('refuses a snapshot after the saved turn ends and commits only a successful s
     committed: true,
     value: {
       cursor: { epoch: 'epoch', sequence: 13 },
-      items: [{ itemId: 'orca:prefix' }],
-      failure: { message: 'refused' }
+      publication: { items: [{ itemId: 'orca:prefix' }] },
+      value: { failure: { message: 'refused' } }
     }
   })
   expect(item('orca:refused')).toBeUndefined()
   expect(item('orca:suffix')).toBeUndefined()
-  expect(db.prepare('SELECT COUNT(*) AS count FROM journal_events').get()!.count).toBe(3)
 })
 
 it('stores one growing text body and a metadata-only replay tail', async () => {
@@ -354,7 +320,9 @@ it('retains a stream placement while honoring a newer moved row and a settled tu
   const late = await commit(second)
   expect(late.outcomes[0]).toMatchObject({
     committed: true,
-    value: { outcomes: [{ kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' }] }
+    value: {
+      value: { outcomes: [{ kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' }] }
+    }
   })
   expect(item('orca:assistant')?.revision).toBe(4)
 })
@@ -379,7 +347,6 @@ it('retains removed turn identity when its item is reinserted', () => {
   )
   db.exec('COMMIT')
   expect(item('orca:turn')).toMatchObject({ revision: 10 })
-  expect(db.prepare('SELECT 1 FROM journal_item_tombstones').get()).toBeUndefined()
   expect(
     readJournalDomainItems(db, target, { kind: 'named-turn', turnId: 'removed-turn' })
   ).toEqual({

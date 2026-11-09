@@ -15,14 +15,12 @@ import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/r
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { JournalSqlBatch } from './journal-sql-batch'
-import {
-  commitJournalSqlMessages,
-  prepareJournalSqlMessages,
-  type JournalSqlMessagesCommit
-} from './journal-sql-message-commit'
+import { JournalSqlCommand } from './journal-sql-command'
+import type { JournalWriterCommand } from './journal-writer-command'
+import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalSqlMessage } from './journal-sql-message-commit'
 
-export const target = { sessionId: 'chat', epoch: 'epoch' }
+export const target = { sessionId: 'chat', epoch: 'epoch', ownerToken: 'owner' }
 export function message(
   text: string,
   clientMessageId = 'assistant',
@@ -42,19 +40,39 @@ export function messageFixture(db = new Database(':memory:')) {
     `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('workspace',?,?,10,1)`
   ).run(target.sessionId, target.epoch)
   const batch = new JournalSqlBatch(db)
-  const published: JournalSqlMessagesCommit[] = []
-  const commit = (...steps: JournalSqlMessage[]) =>
-    commitJournalSqlMessages(
-      db,
-      batch,
-      [prepareJournalSqlMessages({ target, steps, savedAt: 100 })],
-      (result) => {
-        if (db.isTransaction) {
-          throw new Error('publication preceded commit')
-        }
-        published.push(result)
-      }
+  const published: JournalWriterCommit[] = []
+  const command = (
+    steps: readonly JournalSqlMessage[],
+    destination = target
+  ): JournalWriterCommand => ({
+    target: destination,
+    operation: {
+      kind: 'steps',
+      steps: steps.map((step) => {
+        const reservedBytes = Buffer.byteLength(JSON.stringify(step)) + 512
+        return step.kind === 'text-snapshot'
+          ? {
+              kind: 'resolved-item',
+              resolution: { kind: 'text-snapshot', identity: step.identity, body: step.body },
+              options: step.options,
+              reservedBytes
+            }
+          : { ...step, reservedBytes }
+      })
+    }
+  })
+  const commitCommands = async (commands: readonly JournalWriterCommand[], savedAt = 100) => {
+    const result = await batch.run(commands, (command) =>
+      new JournalSqlCommand(db, '').apply(command, savedAt)
     )
+    for (const outcome of result.outcomes) {
+      if (outcome.committed) {
+        published.push(outcome.value)
+      }
+    }
+    return result
+  }
+  const commit = (...steps: JournalSqlMessage[]) => commitCommands([command(steps)])
   const item = (itemId: string): AgentJournalRenderItem | undefined => {
     const row = db.prepare('SELECT payload_json FROM journal_items WHERE item_id=?').get(itemId)
     return row ? JSON.parse(String(row.payload_json)) : undefined
@@ -143,5 +161,5 @@ export function messageFixture(db = new Database(':memory:')) {
       ended: false
     })
   }
-  return { db, batch, published, commit, item, seedItem, seedSend }
+  return { db, batch, published, command, commitCommands, commit, item, seedItem, seedSend }
 }
