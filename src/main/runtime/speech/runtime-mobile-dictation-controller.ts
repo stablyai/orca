@@ -14,7 +14,7 @@ import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot
-} from './mobile-dictation-transcript'
+} from '../../../shared/dictation-transcript'
 
 type MobileDictationSession = {
   id: string

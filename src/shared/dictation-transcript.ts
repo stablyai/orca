@@ -1,4 +1,4 @@
-/** The text a phone or web client sees mid-dictation: committed text never changes, tentative text may still be revised. */
+/** The text so far mid-dictation, for the desktop pill and phone replies: committed text never changes, tentative text may still be revised. */
 export type DictationTranscriptSnapshot = {
   /** Grows with every change, so a client keeps the newest snapshot when replies arrive out of order. */
   revision: number
