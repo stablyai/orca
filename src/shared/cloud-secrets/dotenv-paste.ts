@@ -17,6 +17,8 @@ export type DotenvPasteEntry = {
   value: string
   kind: CloudSecretKind
   issue: DotenvPasteIssue | null
+  /** The source text of the entry (several lines for a multi-line value), to keep it for a retry. */
+  raw: string
 }
 
 const ASSIGNMENT = /^\s*(?:export\s+)?([^=\s]*)\s*=\s?(.*)$/
@@ -53,7 +55,7 @@ export function parseDotenvPaste(text: string): DotenvPasteEntry[] {
     const lineNumber = index + 1
     const match = ASSIGNMENT.exec(raw)
     if (!match) {
-      entries.push({ line: lineNumber, name: '', value: '', kind: 'env', issue: 'syntax' })
+      entries.push({ line: lineNumber, name: '', value: '', kind: 'env', issue: 'syntax', raw })
       continue
     }
     const name = match[1]
@@ -81,7 +83,14 @@ export function parseDotenvPaste(text: string): DotenvPasteEntry[] {
       value = rest.replace(/\s+#.*$/, '').trim()
     }
     issue ??= cloudSecretNameError(name) ?? cloudSecretValueError(name, value)
-    entries.push({ line: lineNumber, name, value, kind: cloudSecretKind(name), issue })
+    entries.push({
+      line: lineNumber,
+      name,
+      value,
+      kind: cloudSecretKind(name),
+      issue,
+      raw: lines.slice(lineNumber - 1, index + 1).join('\n')
+    })
   }
   // Like a shell sourcing the file, the last assignment of a name wins.
   const lastIndexByName = new Map<string, number>()

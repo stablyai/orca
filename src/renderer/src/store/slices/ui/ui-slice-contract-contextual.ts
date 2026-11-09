@@ -120,6 +120,8 @@ export type UISliceContextual = {
   dismissMobileEmulatorTabIntro: () => void
   mobileEmulatorAgentSetupDismissed: boolean
   dismissMobileEmulatorAgentSetup: () => void
+  cloudAgentSetupDone: boolean
+  markCloudAgentSetupDone: () => void
   projectOrderManualDefaultNoticeDismissed: boolean
   dismissProjectOrderManualDefaultNotice: () => void
   usagePercentageDisplayChangeNoticeDismissed: boolean
