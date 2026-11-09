@@ -1,3 +1,4 @@
+import { ClaudeProfileRouter } from '../../../claude-accounts/claude-profile-router'
 import {
   acquired,
   fakeClaude,
@@ -416,3 +417,54 @@ it('discards a retired CLI result and publishes only independent fallback text',
     cli.dispose()
   }
 })
+
+it.each(['capture', 'pending result'] as const)(
+  'keeps the seed and existing naming failure when account lookup fails at %s',
+  async (stage) => {
+    const cli = fakeClaude()
+    const adapter = await acquired(cli)
+    const state = rig()
+    const naming = automaticNaming(state)
+    const router = new ClaudeProfileRouter({
+      getSettings: () => ({
+        claudeManagedAccounts: [],
+        activeClaudeManagedAccountId: null,
+        agentStatusHooksEnabled: false,
+        disabledTuiAgents: []
+      }),
+      dataRoot: '/isolated',
+      userHome: '/users/test',
+      env: {}
+    })
+    const preparation = vi.spyOn(router, 'preparation')
+    installClaudeProfileRouter(router)
+    const unavailable = () => {
+      throw new Error('Selected account folder missing')
+    }
+    const pending = Promise.withResolvers<string>()
+    const started = Promise.withResolvers<void>()
+    cli.connections[0]!.generateSessionTitle = async () => {
+      started.resolve()
+      return pending.promise
+    }
+    mocks.titleOwner.mockImplementation((record) => adapter.captureConversationTitleOwner(record))
+    state.runtime.resolveNamingEnvironment.mockImplementation(async () => unavailable())
+    try {
+      if (stage === 'capture') {
+        preparation.mockImplementation(unavailable)
+      }
+      naming.start()
+      if (stage === 'pending result') {
+        await started.promise
+        preparation.mockImplementation(unavailable)
+        pending.resolve('Unusable account title')
+      }
+      await vi.waitFor(() => expect(naming.handler.activeSessionIds()).toEqual([]))
+      expect(naming.record().conversationName).toBe('Repair login')
+      expect(naming.handler.failure('session-1')?.messageCode).toBe('agentNotRun')
+    } finally {
+      await adapter.closeAll()
+      cli.dispose()
+    }
+  }
+)

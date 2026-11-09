@@ -18,25 +18,30 @@ export const captureClaudeConversationTitleOwner =
     const { connection, acquisitionGeneration, fence, providerSessionId, initialization } = session
     const boundary = record.providerContextBoundary?.operationId
     const account = () => {
-      const policy = getClaudeProfileRouter()?.preparation()
-      const recipe = initialization.accountRecipe
-      if (policy) {
-        if ((recipe?.route ?? initialization.account) === 'managed') {
-          if (
-            !policy.provenance.startsWith('profile:') ||
-            (recipe?.route === 'managed' && policy.provenance !== `profile:${recipe.accountId}`) ||
-            resolve(initialization.cwd, policy.configDir) !== initialization.claudeConfigDir
-          ) {
+      try {
+        const policy = getClaudeProfileRouter()?.preparation()
+        const recipe = initialization.accountRecipe
+        if (policy) {
+          if ((recipe?.route ?? initialization.account) === 'managed') {
+            if (
+              !policy.provenance.startsWith('profile:') ||
+              (recipe?.route === 'managed' &&
+                policy.provenance !== `profile:${recipe.accountId}`) ||
+              resolve(initialization.cwd, policy.configDir) !== initialization.claudeConfigDir
+            ) {
+              return null
+            }
+          } else if (policy.provenance !== 'system') {
             return null
           }
-        } else if (policy.provenance !== 'system') {
-          return null
         }
+        return JSON.stringify([
+          policy?.provenance,
+          policy?.provenance.startsWith('profile:') ? policy.configDir : null
+        ])
+      } catch {
+        return null
       }
-      return JSON.stringify([
-        policy?.provenance,
-        policy?.provenance.startsWith('profile:') ? policy.configDir : null
-      ])
     }
     const selectedAccount = account()
     const isCurrent: NonNullable<
