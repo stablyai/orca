@@ -31,7 +31,6 @@ export type MobileDictationOwner = {
   readonly instance: object
   readonly sessionKey: string
   readonly client: RpcClient | null
-  readonly deviceToken: string | null
   readonly target: MobileDictationAwayTarget
   // The target tab's title, for the pill and its toasts.
   readonly title: string

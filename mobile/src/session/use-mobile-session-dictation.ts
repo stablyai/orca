@@ -63,7 +63,6 @@ export function useMobileSessionDictation(
     activeHandleRef,
     activeSessionTab,
     setShowDictationSetup,
-    deviceTokenRef,
     dictationRouteContextRef,
     flushPendingLiveInputBeforeExternalSend,
     canSend,
@@ -215,7 +214,6 @@ export function useMobileSessionDictation(
         instance,
         sessionKey,
         client,
-        deviceToken: deviceTokenRef.current,
         target:
           target?.field === 'chat'
             ? target.scope === null
@@ -242,7 +240,6 @@ export function useMobileSessionDictation(
     busyElsewhere,
     client,
     destination.captureDestination,
-    deviceTokenRef,
     dictationCanStart,
     dictationRouteContextRef,
     executionHost,

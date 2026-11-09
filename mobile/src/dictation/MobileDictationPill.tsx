@@ -27,6 +27,8 @@ import { composerInputStyles } from '../components/composer-input/composer-input
 import { useMobileDictationHost, type MobileDictationHostToast } from './mobile-dictation-host'
 
 const TOAST_MS = 4000
+// Long enough to read the target's name and reach Open.
+const TOAST_WITH_OPEN_MS = 6000
 
 // The meter needs a live recording; finishing and failures show words instead.
 function PillStatus({ dictation }: { dictation: UseMobileDictationResult }) {
@@ -148,7 +150,7 @@ function MobileDictationToast({
     if (!toast) {
       return
     }
-    const timer = setTimeout(onDone, TOAST_MS)
+    const timer = setTimeout(onDone, toast.open ? TOAST_WITH_OPEN_MS : TOAST_MS)
     return () => clearTimeout(timer)
   }, [onDone, toast])
   // The live region stays mounted so a screen reader hears the message appear.
@@ -212,10 +214,13 @@ export function MobileDictationPillLayer(): React.JSX.Element {
 const PILL_HEIGHT = 56
 
 const styles = themedStyleSheet(() => ({
+  // Above every screen's own floating controls, below drawers and the host's pending cover (1000).
   layer: {
     position: 'absolute',
     left: spacing.lg,
-    right: spacing.lg
+    right: spacing.lg,
+    zIndex: 900,
+    elevation: 9
   },
   pill: {
     height: PILL_HEIGHT,
@@ -272,7 +277,9 @@ const styles = themedStyleSheet(() => ({
     position: 'absolute',
     left: spacing.lg,
     right: spacing.lg,
-    alignItems: 'center'
+    alignItems: 'center',
+    zIndex: 900,
+    elevation: 9
   },
   toast: {
     flexDirection: 'row',

@@ -17,7 +17,6 @@ export type MobileDictationAwayTarget =
 export async function insertMobileDictationAway(
   owner: {
     readonly client: RpcClient | null
-    readonly deviceToken: string | null
     readonly target: MobileDictationAwayTarget
   },
   text: string
@@ -40,7 +39,8 @@ export async function insertMobileDictationAway(
         terminal: target.handle,
         text,
         enter: false,
-        deviceToken: owner.deviceToken
+        // No phone identity: a phone may only claim a terminal it is watching, and this one is off screen; the words go in as plain typed input.
+        deviceToken: null
       }),
       TERMINAL_INPUT_SEND_OPTIONS
     )
