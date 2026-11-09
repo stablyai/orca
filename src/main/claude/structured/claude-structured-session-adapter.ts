@@ -91,8 +91,15 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       ...(naming ? { naming } : {}),
       callbacks: {
         publish: start.publish,
-        deliver: (attempt, sessionId, event) =>
-          deliverClaudeConnectionEvent(this.sessions, this.exits, attempt, sessionId, event),
+        deliver: (attempt, sessionId, event, payload) =>
+          deliverClaudeConnectionEvent(
+            this.sessions,
+            this.exits,
+            attempt,
+            sessionId,
+            event,
+            payload
+          ),
         emit: (session, _events, event) => this.emit(session, event),
         handleExit: (sessionId, attempt, error) =>
           observeClaudeSessionExit(this.exitLifecycle, sessionId, attempt, error),
