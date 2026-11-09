@@ -1,6 +1,7 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 import type * as RuntimeEnvironmentStore from '../../shared/remote-runtime/host-store/runtime-environment-store'
@@ -64,10 +65,8 @@ beforeEach(() => {
   )
 })
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await removeTempDirs(tempDirs.splice(0))
 })
 
 it('removes the hidden SSH target when provider cleanup cannot start', async () => {

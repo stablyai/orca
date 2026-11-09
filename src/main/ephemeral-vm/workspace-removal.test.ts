@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   listEphemeralVmRuntimes,
@@ -89,7 +90,7 @@ function makePorts(
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-recipe-remove-'))
 })
-afterEach(() => rmSync(root, { recursive: true, force: true }))
+afterEach(() => removeTempDirs([root]))
 
 describe('recipe workspace removal on the provisioning host', () => {
   it('handles only removals that asked to destroy the environment', () => {

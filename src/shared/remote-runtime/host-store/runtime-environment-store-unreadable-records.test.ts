@@ -1,6 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
 import {
@@ -46,9 +47,9 @@ describe('runtime environment store with records this build cannot read', () => 
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-environment-unreadable-'))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks()
-    rmSync(userDataPath, { recursive: true, force: true })
+    await removeTempDirs([userDataPath])
   })
 
   // Why a key per name: two names with one key are one server, which the store refreshes in place.

@@ -1,16 +1,15 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from './testing/remove-temp-dirs.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runRecipeCommand } from './ephemeral-vm-recipe-process'
 
 const tmpRoots: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
-  for (const root of tmpRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
-  }
+  await removeTempDirs(tmpRoots.splice(0))
 })
 
 function makeRepo(): string {

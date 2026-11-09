@@ -1,7 +1,8 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
@@ -23,10 +24,8 @@ import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 
 const tempDirs: string[] = []
 
-afterEach(() => {
-  for (const root of tempDirs.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
-  }
+afterEach(async () => {
+  await removeTempDirs(tempDirs.splice(0))
 })
 
 function makeDir(prefix: string): string {
@@ -49,19 +48,6 @@ function nodeCommand(scriptPath: string): string {
 }
 
 describe('ephemeral VM runtime service', () => {
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-
-  beforeEach(() => {
-    // Isolate lifecycle tests from platform ACL behavior, which secure-file tests cover.
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-  })
-
-  afterEach(() => {
-    if (originalPlatform) {
-      Object.defineProperty(process, 'platform', originalPlatform)
-    }
-  })
-
   it('persists a successful recipe-created runtime and cleans it up', async () => {
     const userDataPath = makeDir('orca-ephemeral-vm-service-user-data-')
     const repoPath = makeDir('orca-ephemeral-vm-service-repo-')

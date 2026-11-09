@@ -1,9 +1,10 @@
 // #34089 for VMs reached as paired Orca servers: a VM its provider stopped or reclaimed stays
 // recorded as running. Once Orca's own probes have failed for minutes, opening the workspace runs
 // the recipe's resume and keeps the device pairing unless the server came back with a new host key.
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type MockState = {
@@ -140,11 +141,8 @@ describe('opening a workspace whose paired VM server Orca could not reach for mi
   let environmentId: string
   let keyPair: KeyPair
   let now: number
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
   beforeEach(async () => {
-    // Why: store contents are under test; secure-file tests cover Windows ACLs.
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     vi.useFakeTimers({ toFake: ['Date'] })
     now = Date.parse('2026-11-08T12:00:00Z')
     vi.setSystemTime(now)
@@ -178,11 +176,7 @@ describe('opening a workspace whose paired VM server Orca could not reach for mi
     mocks.reconnectControl.mockClear()
     mocks.refreshStatus.mockClear()
     mocks.updateStatus.mockClear()
-    if (originalPlatform) {
-      Object.defineProperty(process, 'platform', originalPlatform)
-    }
-    rmSync(state.desktopDataPath, { recursive: true, force: true })
-    rmSync(serverDataPath, { recursive: true, force: true })
+    await removeTempDirs([state.desktopDataPath, serverDataPath])
   })
 
   /** The VM goes away; Orca's probes keep failing for `forMs`. */
@@ -256,7 +250,7 @@ describe('opening a workspace whose paired VM server Orca could not reach for mi
       expect(listEnvironments(state.desktopDataPath)).toHaveLength(1)
       expect((await probe(environmentId)).ok).toBe(true)
     } finally {
-      rmSync(rebuiltServerDataPath, { recursive: true, force: true })
+      await removeTempDirs([rebuiltServerDataPath])
     }
   })
 
