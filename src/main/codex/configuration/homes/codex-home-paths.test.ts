@@ -106,6 +106,8 @@ function mockElectronAppPaths(): void {
 }
 
 beforeEach(() => {
+  vi.stubEnv('CODEX_HOME', undefined)
+  vi.stubEnv('ORCA_CODEX_HOME', undefined)
   mockElectronAppPaths()
   fsMockState.copyCount = 0
   fsMockState.failSymlink = false
@@ -126,6 +128,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
@@ -137,6 +140,48 @@ afterEach(() => {
 })
 
 describe('syncSystemCodexResourcesIntoManagedHome', () => {
+  it('mirrors custom-home instructions into accounts without importing another account home', () => {
+    const customHome = join(fakeHomeDir, 'custom-codex')
+    const firstAccount = join(userDataDir, 'first-account')
+    const secondAccount = join(userDataDir, 'second-account')
+    const localAccount = join(userDataDir, 'local-account')
+    mkdirSync(customHome)
+    mkdirSync(localAccount)
+    writeFileSync(join(getSystemCodexHomePath(), 'AGENTS.md'), 'default instructions\n')
+    writeFileSync(join(customHome, 'AGENTS.md'), 'shared project workflow\n')
+    writeFileSync(join(localAccount, 'AGENTS.md'), 'account instructions\n')
+    // Exercise Windows installations where file symlinks are unavailable.
+    fsMockState.failSymlink = true
+    syncSystemCodexResourcesIntoManagedHome(firstAccount)
+
+    vi.stubEnv('CODEX_HOME', customHome)
+    syncSystemCodexResourcesIntoManagedHome(firstAccount)
+    syncSystemCodexResourcesIntoManagedHome(secondAccount)
+    syncSystemCodexResourcesIntoManagedHome(localAccount)
+
+    expect(readFileSync(join(firstAccount, 'AGENTS.md'), 'utf-8')).toBe('shared project workflow\n')
+    expect(readFileSync(join(secondAccount, 'AGENTS.md'), 'utf-8')).toBe(
+      'shared project workflow\n'
+    )
+    expect(readFileSync(join(localAccount, 'AGENTS.md'), 'utf-8')).toBe('account instructions\n')
+
+    writeFileSync(join(customHome, 'AGENTS.md'), 'updated project workflow\n')
+    syncSystemCodexResourcesIntoManagedHome(firstAccount)
+    expect(readFileSync(join(firstAccount, 'AGENTS.md'), 'utf-8')).toBe(
+      'updated project workflow\n'
+    )
+
+    vi.stubEnv('CODEX_HOME', undefined)
+    syncSystemCodexResourcesIntoManagedHome(secondAccount)
+    expect(readFileSync(join(secondAccount, 'AGENTS.md'), 'utf-8')).toBe('default instructions\n')
+
+    vi.stubEnv('CODEX_HOME', firstAccount)
+    vi.stubEnv('ORCA_CODEX_HOME', firstAccount)
+    const newAccount = join(userDataDir, 'new-account')
+    syncSystemCodexResourcesIntoManagedHome(newAccount)
+    expect(readFileSync(join(newAccount, 'AGENTS.md'), 'utf-8')).toBe('default instructions\n')
+  })
+
   it('does not replace an existing runtime-owned resource entry', () => {
     mkdirSync(join(getSystemCodexHomePath(), 'skills'), { recursive: true })
     mkdirSync(join(getRuntimeCodexHomePath(), 'skills'), { recursive: true })
