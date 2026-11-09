@@ -5268,7 +5268,6 @@
       "src/renderer/src/components/native-chat/queue/editing/native-chat-queued-edit-draft.test.ts": 649,
       "src/renderer/src/components/native-chat/viewport/rail/native-chat-rail-outline-parity.test.ts": 497,
       "src/renderer/src/components/native-chat/viewport/scroll/native-chat-reader-scroll-input.test.tsx": 311,
-      "src/renderer/src/components/native-chat/paste/native-chat-remote-image-paste.test.tsx": 1834,
       "src/renderer/src/components/native-chat/attachments/uploads/native-chat-resolved-path-ownership.test.ts": 1749,
       "src/renderer/src/components/native-chat/viewport/virtualization/native-chat-row-height-estimate.test.ts": 293,
       "src/renderer/src/components/native-chat/drafts/native-chat-sent-prompt-history.test.ts": 217,
