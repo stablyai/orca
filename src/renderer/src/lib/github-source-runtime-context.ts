@@ -15,7 +15,7 @@ import {
   resolveRepoRuntimeOwner,
   getHostlessSourceRepoOwnerEnvironmentId,
   type RepoRuntimeOwnerState
-} from './repo-runtime-owner'
+} from './workspace/ownership/repo-runtime-owner'
 
 export type GitHubRuntimeHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 

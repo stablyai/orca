@@ -6,7 +6,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
-import type * as ConnectionOwnerResolutionModule from '../../../connection-owner-resolution'
+import type * as ConnectionOwnerResolutionModule from '../../../workspace/ownership/connection-owner-resolution'
 
 const mocks = vi.hoisted(() => ({
   getExecutionHostIdForWorktree: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: mocks.getExecutionHostIdForWorktree
 }))
 // Stage only workspace ownership; repo fallback must use the real resolver.
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionOwnerResolutionModule>()),
   getConnectionIdFromState: mocks.getConnectionIdFromState
 }))

@@ -12,7 +12,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import { useAppStore } from '@/store'
 import {
   clearActivityThread,

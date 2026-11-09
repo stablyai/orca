@@ -52,7 +52,9 @@ vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', () => 
 vi.mock('./workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.reveal
 }))
-vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: () => false }))
+vi.mock('./workspace/activation/wsl-moved-chat-activation', () => ({
+  activateWslMovedWorkspace: () => false
+}))
 import { openAgentMessageSender } from './open-agent-message-sender'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 const host = { kind: 'environment', environmentId: 'remote-2' } as const

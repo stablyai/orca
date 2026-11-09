@@ -11,7 +11,7 @@ import {
   isCustomAgentId,
   listCommitMessageAgentCapabilities
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

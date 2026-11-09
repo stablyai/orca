@@ -65,8 +65,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       'handles focused Ctrl+C for %s without guessing Codex cancellation',
       async (agentType) => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -146,8 +147,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('clears stale working pane title after inferred interrupt applies', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { resolveWorktreeStatus } = await import('@/lib/worktree-status')
       vi.mocked(window.api.agentStatus.inferInterrupt).mockResolvedValue(true)
       const transport = createMockTransport()
@@ -224,8 +226,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('clears unchanged title-only working indicators after acknowledged interrupt input', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -278,8 +281,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('does not clear title-only working indicators when interrupt writes are unacknowledged', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       delete transport.sendInputAccepted
       transportFactoryQueue.push(transport)
@@ -322,8 +326,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('infers exact Ctrl+C terminal input when keydown capture misses the press', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -371,8 +376,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('marks bracketed paste as stale after acknowledged Ctrl+C input', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { pasteTerminalText } = await import('../../input/paste/terminal-bracketed-paste')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -406,8 +412,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('infers captured Ctrl+C even when xterm emits an enhanced keyboard sequence', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -459,8 +466,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('infers interrupt for an explicit working status even if the title is already non-agent', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -522,8 +530,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('keeps inferred interrupted status after the pane settles on a non-agent title', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -601,8 +610,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('does not infer exact interrupt input when the transport cannot acknowledge writes', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks10 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       delete transport.sendInputAccepted
       transportFactoryQueue.push(transport)
@@ -644,8 +654,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('removes agent status and pane title on PTY exit after inferred interrupt', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.mocked(window.api.agentStatus.inferInterrupt).mockResolvedValue(true)
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
@@ -717,8 +728,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
       const restoreUserAgent = temporarilySetNavigatorUserAgent('Mozilla/5.0 (X11; Linux x86_64)')
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks12 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -785,8 +797,9 @@ export function registerPtyConnectionInterruptInferenceTests(): void {
 
     it('removes the terminal key listener on dispose before a remount adds another', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks13 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks13 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const firstTransport = createMockTransport()
       const secondTransport = createMockTransport()
       transportFactoryQueue.push(firstTransport, secondTransport)

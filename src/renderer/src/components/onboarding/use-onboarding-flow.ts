@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
 import { selectOnboardingWorkspaceId } from './onboarding-workspace-selection'
 import { applyDocumentTheme } from '@/lib/document-theme'

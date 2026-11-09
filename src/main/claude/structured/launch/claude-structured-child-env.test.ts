@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
-  claudeChildEnv,
   resolveClaudeChildEnvSources,
   withOrcaClaudeEntrypoint
 } from './claude-structured-child-env'
@@ -30,21 +29,6 @@ it('resolves a custom Claude command against the login shell PATH', async () => 
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
-})
-
-it('names Orca as the Claude client unless the launch environment sets one', () => {
-  const sources = {
-    command: 'claude',
-    prefixArgs: [],
-    overlay: undefined,
-    inheritedEnv: { CLAUDE_CODE_ENTRYPOINT: 'cli' }
-  }
-  const options = { runtimeOnPath: false }
-  expect(claudeChildEnv(sources, undefined, options).CLAUDE_CODE_ENTRYPOINT).toBe('orca')
-  const overlay = { CLAUDE_CODE_ENTRYPOINT: 'custom' }
-  expect(claudeChildEnv({ ...sources, overlay }, undefined, options).CLAUDE_CODE_ENTRYPOINT).toBe(
-    'custom'
-  )
 })
 
 it('keeps a differently cased Windows launch value over the Orca default', () => {

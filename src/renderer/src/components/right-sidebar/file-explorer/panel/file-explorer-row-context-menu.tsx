@@ -25,8 +25,8 @@ import {
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { detectLanguage } from '@/lib/language-detect'
-import { openFileInBrowserTab } from '@/lib/file-preview'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
+import { openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
 import { useTranslate } from '@/i18n/use-translate'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
