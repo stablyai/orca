@@ -15,6 +15,9 @@ export type AutomationSchedulerOwner = 'local_host_service' | 'ssh_bridge' | 're
 
 export type AutomationMissedRunPolicy = 'run_once_within_grace'
 
+/** What a reuse-session run does when its workspace still holds a session it cannot reuse. */
+export type AutomationOnNoReusableSession = 'skip'
+
 export type AutomationSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
 
 export type AutomationPrecheck = {
@@ -59,6 +62,8 @@ export type Automation = {
   /** Hash of the setup content approved with `run`; a run whose branch content differs skips setup. Older automations omit it. */
   setupTrustHash?: string
   reuseSession: boolean
+  /** Skip instead of starting a second session while the previous one is live but cannot take the run. */
+  onNoReusableSession?: AutomationOnNoReusableSession
   timezone: string
   rrule: string
   dtstart: number
@@ -92,6 +97,7 @@ export type AutomationCreateInput = {
   setupDecision?: SetupDecision
   setupTrustHash?: string
   reuseSession?: boolean
+  onNoReusableSession?: AutomationOnNoReusableSession
   timezone: string
   rrule: string
   dtstart: number
@@ -116,6 +122,7 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'setupDecision'
     | 'setupTrustHash'
     | 'reuseSession'
+    | 'onNoReusableSession'
     | 'timezone'
     | 'rrule'
     | 'dtstart'

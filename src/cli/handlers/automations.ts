@@ -45,11 +45,14 @@ import {
   getOptionalProviderFlag,
   getPrecheckFlag,
   getProviderFlag,
-  getReuseSessionFlag,
   getScheduleFlag,
   getSourceContextFlag,
   getWorkspaceModeFlag
 } from './automation-handler-flags'
+import {
+  assertOnNoReusableSessionReuse,
+  automationSessionReuseFlags
+} from './automation-session-reuse-flags'
 import { getExtraAgentArgsFlag } from './automation-extra-agent-args-flag'
 import { assertAutomationFieldsSupported } from './automation-host-support'
 import { assertAutomationSetupMode, getAutomationSetupFlag } from './automation-setup-flag'
@@ -178,6 +181,8 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const workspaceMode =
       getWorkspaceModeFlag(flags) ?? (target.workspace ? 'existing' : 'new_per_run')
     assertAutomationSetupMode(setupDecision, workspaceMode, flags)
+    const sessionReuse = automationSessionReuseFlags(flags)
+    assertOnNoReusableSessionReuse(sessionReuse)
     // Built before the destination read so a contradictory flag still fails without a runtime call.
     const create = {
       name: getRequiredStringFlag(flags, 'name'),
@@ -192,7 +197,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       workspace: target.workspace,
       workspaceMode,
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-      reuseSession: getReuseSessionFlag(flags),
+      ...sessionReuse,
       timezone: getOptionalStringFlag(flags, 'timezone'),
       enabled: getEnabledFlag(flags),
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
@@ -212,6 +217,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const schedule = getScheduleFlag(flags, false)
     const sourceContext = getSourceContextFlag(flags)
     const id = getRequiredStringFlag(flags, 'id')
+    const sessionReuse = automationSessionReuseFlags(flags)
     // Built before the owner read so a contradictory flag still fails without a runtime call.
     const updates = {
       name: getOptionalStringFlag(flags, 'name'),
@@ -226,7 +232,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       workspace: target.workspace,
       workspaceMode: getWorkspaceModeFlag(flags),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-      reuseSession: getReuseSessionFlag(flags),
+      ...sessionReuse,
       timezone: getOptionalStringFlag(flags, 'timezone'),
       enabled: getEnabledFlag(flags),
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
@@ -241,6 +247,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       setupDecision,
       updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode)
     )
+    assertOnNoReusableSessionReuse(sessionReuse, current)
     // Owner fencing covers the source host; moves must fence the destination too.
     const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.update', {

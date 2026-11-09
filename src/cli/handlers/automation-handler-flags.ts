@@ -194,32 +194,6 @@ export function getEnabledFlag(flags: Map<string, string | boolean>): boolean | 
   return undefined
 }
 
-export function getReuseSessionFlag(flags: Map<string, string | boolean>): boolean | undefined {
-  const reuseFlag = flags.get('reuse-session')
-  const freshFlag = flags.get('fresh-session')
-  if (typeof reuseFlag === 'string') {
-    throw new RuntimeClientError('invalid_argument', '--reuse-session does not take a value')
-  }
-  if (typeof freshFlag === 'string') {
-    throw new RuntimeClientError('invalid_argument', '--fresh-session does not take a value')
-  }
-  const reuse = reuseFlag === true
-  const fresh = freshFlag === true
-  if (reuse && fresh) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Use either --reuse-session or --fresh-session, not both.'
-    )
-  }
-  if (reuse) {
-    return true
-  }
-  if (fresh) {
-    return false
-  }
-  return undefined
-}
-
 export function getPrecheckFlag(
   flags: Map<string, string | boolean>
 ): AutomationPrecheck | null | undefined {

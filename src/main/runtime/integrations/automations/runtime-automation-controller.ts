@@ -104,6 +104,9 @@ export class RuntimeAutomationController {
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
+    if (input.onNoReusableSession && !input.reuseSession) {
+      throw new Error('Skipping an unusable previous session requires session reuse.')
+    }
     const automation = this.store.createAutomation(
       {
         creationKey: input.creationKey,
@@ -122,6 +125,7 @@ export class RuntimeAutomationController {
         setupDecision: input.setupDecision,
         setupTrustHash: input.setupTrustHash,
         reuseSession: input.reuseSession,
+        onNoReusableSession: input.onNoReusableSession,
         timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
         rrule: input.rrule,
         dtstart: input.dtstart,

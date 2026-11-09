@@ -19,6 +19,7 @@ const AUTOMATION_STATE_FLAGS = [
   'disabled',
   'missed-run-grace-minutes',
   'reuse-session',
+  'on-no-reusable-session',
   'fresh-session'
 ]
 
@@ -66,13 +67,15 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --precheck-timeout <seconds> to set the time limit (default 60 seconds). Skips appear in Orca run history and orca automations runs --id <automation-id> as skipped_precheck.',
       'Run now in Orca and orca automations run intentionally bypass the precheck so you can test or override the scheduled condition.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
+      'Use --on-no-reusable-session skip with --reuse-session to keep exactly one session per workspace: while a previous session is still live but cannot take the run, Orca records the run as skipped (errorCode sessionBusy or sessionNotReusable) instead of starting a second session. It still launches when no previous session is live.',
       'Use --extra-agent-args="--model opus --effort high" to add arguments after the host\'s default agent Arguments on each fresh run. Only model, effort, and a few safe options are accepted (Antigravity, Claude, Codex, CodeBuddy, Cursor, Grok, OMP, Pi); extras cannot be combined with --reuse-session. On edit, --extra-agent-args= clears them.'
     ],
     examples: [
       'orca automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',
       'orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo my-repo',
       'orca automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex',
-      'orca automations create --name "Docs pass" --trigger daily --prompt "Tidy the docs" --provider claude --extra-agent-args="--model opus --effort high --add-dir docs"'
+      'orca automations create --name "Docs pass" --trigger daily --prompt "Tidy the docs" --provider claude --extra-agent-args="--model opus --effort high --add-dir docs"',
+      'orca automations create --name "Coordinator" --trigger "*/5 * * * *" --prompt "Continue the queue" --provider claude --workspace my-workspace --reuse-session --on-no-reusable-session skip'
     ]
   },
   {
@@ -94,7 +97,8 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     positionalArgs: ['id'],
     notes: [
-      'Use --setup run|skip only for new-per-run automations. Omit it to preserve the saved setup choice.'
+      'Use --setup run|skip only for new-per-run automations. Omit it to preserve the saved setup choice.',
+      'Use --on-no-reusable-session skip to start skipping runs while a live previous session cannot take them; omit it to preserve the saved choice.'
     ],
     examples: [
       'orca automations edit 2f9e... --disabled',

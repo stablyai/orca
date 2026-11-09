@@ -12,6 +12,7 @@ export const RUNTIME_AUTOMATION_PATCH_KEYS = [
   'setupDecision',
   'setupTrustHash',
   'reuseSession',
+  'onNoReusableSession',
   'timezone',
   'rrule',
   'dtstart',
