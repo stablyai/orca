@@ -5,7 +5,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { isExplicitAgentStatusFresh } from '../../../lib/pane-agent-evidence'
+import { isAgentStatusFresh } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AppState } from '../../../store/types'
 import { createTestStore, seedStore } from '../../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
@@ -111,7 +111,7 @@ function applyChangedHostSnapshot(
 function mirroredRowIsFreshAt(store: TestStore, clientNow: number): boolean {
   const row = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
   expect(row, 'the mirrored row must exist for freshness to mean anything').toBeDefined()
-  return isExplicitAgentStatusFresh(row, clientNow, AGENT_STATUS_STALE_AFTER_MS)
+  return isAgentStatusFresh(row, clientNow, AGENT_STATUS_STALE_AFTER_MS)
 }
 
 describe('a mirrored remote row decays on the replica clock, not the host clock', () => {

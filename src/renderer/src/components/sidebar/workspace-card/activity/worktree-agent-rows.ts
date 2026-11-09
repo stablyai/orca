@@ -1,7 +1,7 @@
 import type { Tab } from '../../../../../../shared/tab-types'
 import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isAgentStatusFresh } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type {
@@ -176,7 +176,7 @@ export function buildWorktreeAgentRows(args: {
     const hasLivePty = tabHasLivePty(ptyIdsByTabId, tab.id)
     for (const entry of explicitEntries) {
       const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
-      const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
+      const isFresh = isAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
       const shouldDecay =
         !isFresh &&
         (rowEntry.state === 'working' ||
@@ -223,7 +223,7 @@ export function buildWorktreeAgentRows(args: {
     if (!tab) {
       continue
     }
-    const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
+    const isFresh = isAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
     const shouldDecay =
       !isFresh &&
       (rowEntry.state === 'working' || rowEntry.state === 'blocked' || rowEntry.state === 'waiting')

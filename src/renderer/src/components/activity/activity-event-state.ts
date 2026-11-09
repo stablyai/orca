@@ -1,4 +1,4 @@
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type {
   AgentStatusEntry,
@@ -20,7 +20,7 @@ export function freshActivityLiveAgentState(
 ): ActivityLiveAgentState | null {
   if (
     !isActivityHookLiveAgentState(entry.state) ||
-    !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+    !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
   ) {
     return null
   }

@@ -1,4 +1,5 @@
-import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
+import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -80,12 +81,12 @@ function countTitleActiveAgentsForTab(
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     return Object.values(paneTitles).filter((title) => {
-      const status = classifyTitleActivity(title)
+      const status = detectAgentStatusFromTitle(title)
       return status === 'working' || status === 'permission'
     }).length
   }
 
-  const status = classifyTitleActivity(tab.title)
+  const status = detectAgentStatusFromTitle(tab.title)
   return status === 'working' || status === 'permission' ? 1 : 0
 }
 
@@ -106,7 +107,7 @@ export function countWorkspaceSpaceActiveAgents({
     if (!isActiveAgentState(entry)) {
       continue
     }
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       continue
     }
     const tabId = getPaneKeyTabId(entry.paneKey || paneKey)

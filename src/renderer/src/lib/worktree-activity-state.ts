@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { createAgentStatusEpochSelector } from './agent-status-epoch-selector'
+import { createAgentStatusEpochSelector } from './agent-status/evidence/agent-status-epoch-selector'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { isFreshNonDoneAgentStatus } from '../../../shared/agent-status/contracts/agent-status-freshness'

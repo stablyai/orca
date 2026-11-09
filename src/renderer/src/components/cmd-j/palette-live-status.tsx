@@ -11,7 +11,7 @@ import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
 } from '../../../../shared/sidebar-list/smart-attention'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   getLiveAgentStatusByWorktreeId,
   type LiveAgentWorktreeStatus
@@ -162,7 +162,7 @@ function buildLiveAgentStatusPaneIdsByTabId(
       }
       if (
         entry.restoredUnconfirmed !== true &&
-        !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+        !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
       ) {
         stalePaneIds.add(paneId)
         continue

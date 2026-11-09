@@ -29,7 +29,7 @@ import {
 } from './folder-workspace-agent-startup'
 
 import { translate } from '@/i18n/i18n'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
 
 export async function submitFolderWorkspaceCreate({

@@ -160,4 +160,4 @@ export function isInheritedFromActivePane(
   )
 }
 
-export { resolvePaneKey } from '../../lib/agent-status-pane-ownership'
+export { resolvePaneKey } from '../../lib/agent-status/ownership/agent-status-pane-ownership'

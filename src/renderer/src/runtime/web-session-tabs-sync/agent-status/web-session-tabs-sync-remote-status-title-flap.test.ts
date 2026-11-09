@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isAgentStatusFresh } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { deriveGeneratedTabTitle } from '../../../../../shared/agent-status/presentation/agent-tab-title'
@@ -324,7 +324,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       const entry = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
       expect(entry).toBeDefined()
       expect(
-        isExplicitAgentStatusFresh(entry!, afterStale, AGENT_STATUS_STALE_AFTER_MS),
+        isAgentStatusFresh(entry!, afterStale, AGENT_STATUS_STALE_AFTER_MS),
         'the retained entry must read as stale so consumers render it idle'
       ).toBe(false)
     })

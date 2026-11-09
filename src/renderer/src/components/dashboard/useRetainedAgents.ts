@@ -2,7 +2,7 @@ import { agentEntrySessionStartedAt } from '../../../../shared/agent-session/lif
 import { useEffect, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { DashboardAgentRow } from './useDashboardData'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -116,7 +116,7 @@ export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshot
     if (!owner) {
       continue
     }
-    const isFresh = isExplicitAgentStatusFresh(entry, args.now, AGENT_STATUS_STALE_AFTER_MS)
+    const isFresh = isAgentStatusFresh(entry, args.now, AGENT_STATUS_STALE_AFTER_MS)
     const shouldDecay =
       !isFresh &&
       (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')

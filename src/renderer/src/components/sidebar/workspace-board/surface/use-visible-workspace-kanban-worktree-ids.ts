@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
+import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import '../../worktree-list/listing/visible-worktrees'
