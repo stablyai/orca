@@ -8,9 +8,11 @@ export type BillingSummary = {
   /** null until the first read answers (or when billing is off for this build/account). */
   subscribed: boolean | null
   canManageBilling: boolean
+  /** "Team" when subscribed; null otherwise. */
+  planLabel: string | null
 }
 
-let summary: BillingSummary = { subscribed: null, canManageBilling: false }
+let summary: BillingSummary = { subscribed: null, canManageBilling: false, planLabel: null }
 const listeners = new Set<() => void>()
 let lastReadAt = 0
 let inFlight: Promise<void> | null = null
@@ -21,14 +23,16 @@ export function recordBillingStatus(result: OrcaBillingStatusResult): void {
     result.status === 'ok'
       ? {
           subscribed: isActivePlan(result.entitlement),
-          canManageBilling: result.entitlement.canManageBilling
+          canManageBilling: result.entitlement.canManageBilling,
+          planLabel: isActivePlan(result.entitlement) ? result.entitlement.planLabel : null
         }
       : result.status === 'failed'
         ? summary
-        : { subscribed: null, canManageBilling: false }
+        : { subscribed: null, canManageBilling: false, planLabel: null }
   if (
     next.subscribed !== summary.subscribed ||
-    next.canManageBilling !== summary.canManageBilling
+    next.canManageBilling !== summary.canManageBilling ||
+    next.planLabel !== summary.planLabel
   ) {
     summary = next
     for (const listener of listeners) {

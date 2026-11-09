@@ -2,6 +2,7 @@ import { withCloudBuildDefaults } from '../cloud-build-defaults'
 // Plan & billing for the active Orca profile's signed-in account. Results are values, never
 // throws, so the renderer can show a precise state. A billing-service refusal never signs the
 // user out; only Orca Cloud auth rejecting the session does (via runWithFreshOrcaCloudSession).
+import { appendFile } from 'node:fs/promises'
 import { app, shell } from 'electron'
 import type {
   OrcaBillingCheckoutArgs,
@@ -147,7 +148,13 @@ async function openHosted(
       return { status: 'signed-out' }
     }
     // createUrl already restricted this to Stripe's hosted Checkout/Portal hosts.
-    await shell.openExternal(url)
+    const devUrlFile = app.isPackaged
+      ? ''
+      : (process.env.ORCA_BILLING_DEV_OPEN_URL_FILE?.trim() ?? '')
+    // Dev automation only: hand the Stripe URL to a test driver instead of the user's browser.
+    await (devUrlFile
+      ? appendFile(devUrlFile, `${url}\n`, { mode: 0o600 })
+      : shell.openExternal(url))
     return { status: 'opened' }
   } catch (error) {
     return openResultForError(error)

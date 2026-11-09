@@ -209,27 +209,6 @@
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}"
         }
       },
-      "billing": {
-        "team": {
-          "askAdmin": "Only owners and admins can invite or remove members.",
-          "cannotChangeOwnRole": "You cannot change your own role.",
-          "cannotRemoveSelf": "You cannot remove yourself.",
-          "invite": "Invite",
-          "inviteEmail": "Email to invite",
-          "invitePlaceholder": "teammate@company.com",
-          "invited": "Invite sent to {{value0}}. They join (and become a billed seat) when they accept.",
-          "memberCount": "{{value0}} members",
-          "memberSeats": "{{value0}} members · {{value1}} seats billed. Seats follow membership; pending invites are free until accepted.",
-          "pending": "Pending invites",
-          "remove": "Remove {{value0}}",
-          "removeDescription2": "They lose access to the org right away. Their seat stays paid until your plan renews, then drops off.",
-          "removed": "Member removed.",
-          "revoke": "Revoke",
-          "revoked": "Invite revoked.",
-          "roleChanged": "Role updated.",
-          "seatsDrop": "Seats paid this period stay until {{value0}}, then drop to {{value1}}."
-        }
-      },
       "browser-pane": {
         "markup": {
           "errorAttach": "Could not attach the markup screenshot.",
