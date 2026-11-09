@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { markRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 
 import { createWorktreeWithNameRetry } from './worktree-create-retry'
@@ -105,7 +106,7 @@ describe('createWorktreeWithNameRetry after a lost reply', () => {
   })
   it('tries no other name when a fallback create after a refused agent launch is resent and refused', async () => {
     const client = new FakeSession('connected')
-    const taken = {
+    const taken: RpcResponse = {
       id: '1',
       ok: false,
       error: { code: 'x', message: 'already exists locally' },
