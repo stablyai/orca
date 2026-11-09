@@ -6,7 +6,7 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
 import { publishPageDeviceStore } from '../../mobile-web-shell/bridge/page-device-store'
 import { mobileNativeChatTranscriptCache } from './mobile-native-chat-transcript-cache'
-import { encodeStoredChatTranscript } from './mobile-native-chat-transcript-writer'
+import { encodeStoredChatTranscript } from './mobile-native-chat-transcript-encode'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
@@ -572,7 +572,7 @@ describe('useMobileNativeChatSession after a relaunch', () => {
 
   it('paints the stored rows and subscribes after the newest one', async () => {
     // What an earlier launch's page saved when this chat's turn settled.
-    stored = encodeStoredChatTranscript({
+    stored = await encodeStoredChatTranscript({
       kind: 'terminal',
       savedAt: 1_700_000_000_000,
       messages: [

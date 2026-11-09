@@ -7,77 +7,19 @@ import {
 } from '../../../../src/shared/agent-session/structured-agent-session-reducer'
 import {
   MAX_RETAINED_ITEMS,
-  MAX_RETAINED_OWN_ITEMS,
-  mergeSubmissions,
-  trimRetainedItems
+  MAX_RETAINED_OWN_ITEMS
 } from '../../../../src/shared/agent-session/view/structured-agent-session-item-retention'
-import { agentSessionHasOlderTranscript } from '../../../../src/shared/agent-session/agent-session-context-clear'
-import {
-  DEVICE_STORE_MAX_VALUE_LENGTH,
-  encodeDeviceStoreValue
-} from '../../device-store/device-store-value-codec'
 import { readPageDeviceStore } from '../../mobile-web-shell/bridge/page-device-store'
 import {
   chatTranscriptStoreKey,
   peekStoredChatTranscript,
   rememberStoredChatTranscript,
-  STORED_TRANSCRIPT_VERSION,
   type StoredChatTranscript,
-  type StoredStructuredChatTranscript,
-  type StoredTerminalChatTranscript
+  type StoredStructuredChatTranscript
 } from './mobile-native-chat-transcript-store'
+import { encodeStoredChatTranscript } from './mobile-native-chat-transcript-encode'
 
 // Writes and restores chat copies; kept apart from the store's reads so the boot read stays small.
-const MAX_STORED_ROWS = 500
-
-function encodeStored(stored: StoredChatTranscript): string {
-  return encodeDeviceStoreValue({ v: STORED_TRANSCRIPT_VERSION, stored })
-}
-
-function terminalWindow(
-  stored: StoredTerminalChatTranscript,
-  rows: number
-): StoredTerminalChatTranscript {
-  if (rows >= stored.messages.length) {
-    return stored
-  }
-  // Older rows past the window come back through Load earlier's tail read, so its offset no longer applies.
-  return { ...stored, messages: stored.messages.slice(-rows), hasMore: true, beforeOffset: null }
-}
-
-function structuredWindow(
-  stored: StoredStructuredChatTranscript,
-  rows: number
-): StoredStructuredChatTranscript {
-  const { journal } = stored
-  const items = trimRetainedItems(journal.items, rows, rows)
-  if (items === journal.items) {
-    return stored
-  }
-  return {
-    ...stored,
-    journal: {
-      ...journal,
-      items,
-      submissions: mergeSubmissions(journal.submissions, [], items),
-      hasOlder: agentSessionHasOlderTranscript(items, true)
-    }
-  }
-}
-
-/** The newest rows that fit one store value (at most 500); null when not even a few rows fit. */
-export function encodeStoredChatTranscript(stored: StoredChatTranscript): string | null {
-  const count = stored.kind === 'terminal' ? stored.messages.length : stored.journal.items.length
-  for (let rows = Math.min(count, MAX_STORED_ROWS); rows >= 1; rows = Math.floor(rows / 2)) {
-    const value = encodeStored(
-      stored.kind === 'terminal' ? terminalWindow(stored, rows) : structuredWindow(stored, rows)
-    )
-    if (value.length <= DEVICE_STORE_MAX_VALUE_LENGTH) {
-      return value
-    }
-  }
-  return count === 0 ? encodeStored(stored) : null
-}
 
 // What a chat's copy is built from: its message list, or its session state.
 type TranscriptSource = readonly NativeChatMessage[] | StructuredAgentSessionState
@@ -138,9 +80,19 @@ function sameRows(a: StoredChatTranscript, b: StoredChatTranscript): boolean {
   )
 }
 
-/** Writes a chat's noted copy now, unless the store already holds it. */
-export function flushChatTranscript(identity: string): void {
-  const next = pending.get(identity)
+// Chats whose copy is being encoded in slices; a hide takes the copy over and encodes it at once.
+const encoding = new Map<string, NotedTranscript>()
+
+function yieldToPage(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+/**
+ * Writes a chat's noted copy unless the store already holds it. A turn settle or a close encodes in slices,
+ * so even a big chat costs no long task; a hide (`now`) encodes in one go, since the app may stop right after.
+ */
+export function flushChatTranscript(identity: string, now = false): void {
+  const next = pending.get(identity) ?? (now ? encoding.get(identity) : undefined)
   pending.delete(identity)
   const store = readPageDeviceStore()
   if (!next || !store?.available()) {
@@ -152,33 +104,47 @@ export function flushChatTranscript(identity: string): void {
     written.add(next.source)
     return
   }
-  const value = encodeStoredChatTranscript(stored)
   const write = ++writes
   latestWrite.set(identity, write)
   const superseded = (): boolean => latestWrite.get(identity) !== write
+  if (now) {
+    encoding.delete(identity)
+  } else {
+    encoding.set(identity, next)
+  }
   // A refused or failed write stays noted, so the next settle, hidden or close tries again.
   const retry = (): void => {
     if (!superseded() && !pending.has(identity)) {
       pending.set(identity, next)
     }
   }
-  // The shell finishes a write it was handed, so a page closing right after still keeps it.
-  void store.write('cache', [{ key: chatTranscriptStoreKey(identity), value }]).then((result) => {
-    if (!result.written) {
-      retry()
-      return
-    }
-    written.add(next.source)
-    if (!superseded()) {
-      latestWrite.delete(identity)
-      rememberStoredChatTranscript(identity, value === null ? null : stored)
-    }
-  }, retry)
+  void encodeStoredChatTranscript(stored, now ? null : yieldToPage)
+    .then(async (value) => {
+      if (encoding.get(identity) === next) {
+        encoding.delete(identity)
+      }
+      // A newer flush of this chat started while this one encoded; it carries newer rows.
+      if (superseded()) {
+        return
+      }
+      // The shell finishes a write it was handed, so a page closing right after still keeps it.
+      const result = await store.write('cache', [{ key: chatTranscriptStoreKey(identity), value }])
+      if (!result.written) {
+        retry()
+        return
+      }
+      written.add(next.source)
+      if (!superseded()) {
+        latestWrite.delete(identity)
+        rememberStoredChatTranscript(identity, value === null ? null : stored)
+      }
+    })
+    .catch(retry)
 }
 
 function flushAll(): void {
-  for (const identity of pending.keys()) {
-    flushChatTranscript(identity)
+  for (const identity of new Set([...pending.keys(), ...encoding.keys()])) {
+    flushChatTranscript(identity, true)
   }
 }
 
