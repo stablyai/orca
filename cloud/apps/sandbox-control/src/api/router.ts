@@ -130,16 +130,27 @@ function messageBucket(caller: ApiCaller): string {
 }
 
 export function isApiPath(pathname: string): boolean {
-  return /^\/v1\/(me|api-keys|settings|audit|projects|workspaces|routines)(\/|$)/.test(pathname)
+  return /^\/v1\/(me|api-keys|settings|audit|projects|workspaces|routines|oauth-approvals|oauth-grants)(\/|$)/.test(pathname)
 }
 
 export async function handleApi(request: Request, url: URL, env: Parameters<typeof authenticateApi>[0], ctx: ApiContext): Promise<Response> {
+  let caller: ApiCaller | null
+  try {
+    caller = await authenticateApi(env, request, ctx.now())
+  } catch (error) {
+    return apiError(error)
+  }
+  // MCP OAuth access tokens are audience-bound to the MCP server (RFC 8707): not REST credentials.
+  if (!caller || caller.via === 'oauth') {
+    return json({ error: 'unauthorized' }, 401, { 'www-authenticate': caller ? 'Bearer error="invalid_token"' : 'Bearer' })
+  }
+  return handleApiAs(caller, request, url, ctx)
+}
+
+/** The API for an already-authenticated caller (the MCP server dispatches tool calls here). */
+export async function handleApiAs(caller: ApiCaller, request: Request, url: URL, ctx: ApiContext): Promise<Response> {
   let rate: RateLimit | null = null
   try {
-    const caller = await authenticateApi(env, request, ctx.now())
-    if (!caller) {
-      return json({ error: 'unauthorized' }, 401, { 'www-authenticate': 'Bearer' })
-    }
     if (caller.via === 'workspace' && !(await getAccountSettings(ctx.db, caller.accountId)).vmCliEnabled) {
       // The org turned in-VM access off: every outstanding workspace token stops working at once.
       throw new ApiError(403, 'forbidden', 'vm_cli_disabled')

@@ -10,6 +10,8 @@ export type ApiCaller = SandboxCaller & {
   keyId?: string
   /** Workspace tokens: the VM the token was minted for (its workspaces are siblings). */
   sandboxId?: string
+  /** MCP OAuth access tokens: the resource they were issued for (RFC 8707). */
+  audience?: string
 }
 
 export class ApiError extends Error {
@@ -54,7 +56,8 @@ export async function authenticateApi(env: Env, request: Request, now: number): 
       scopes: new Set(parseScopes(key.scopes).filter((scope) => allowed.has(scope))),
       via: key.kind,
       keyId: key.id,
-      ...(key.sandbox_id ? { sandboxId: key.sandbox_id } : {})
+      ...(key.sandbox_id ? { sandboxId: key.sandbox_id } : {}),
+      ...(key.audience ? { audience: key.audience } : {})
     }
   }
   const session = await authenticateDesktop(env, request, now)
