@@ -110,6 +110,20 @@ function readUncompiledFiles(root) {
     : new Set()
 }
 
+// Why: the build matches the exact id, so `../`, a directory or another case would silently compile.
+function isCanonicalFile(root, rel) {
+  try {
+    const file = path.join(root, rel)
+    return (
+      path.posix.normalize(rel) === rel &&
+      fs.statSync(file).isFile() &&
+      fs.realpathSync.native(file) === path.join(fs.realpathSync.native(root), rel)
+    )
+  } catch {
+    return false
+  }
+}
+
 /** Listed paths that name no renderer file; a renamed file would silently compile. */
 export function findStaleUncompiledFiles(uncompiled, exists) {
   return [...uncompiled].filter((rel) => !rel.startsWith(`${SCAN_ROOT}/`) || !exists(rel))
@@ -217,9 +231,7 @@ export async function scanRenderer(root = process.cwd()) {
     diagnostics: new Map(),
     hazards: new Map(),
     uncompiled,
-    staleUncompiled: findStaleUncompiledFiles(uncompiled, (rel) =>
-      fs.existsSync(path.join(root, rel))
-    ),
+    staleUncompiled: findStaleUncompiledFiles(uncompiled, (rel) => isCanonicalFile(root, rel)),
     virtualizerHooks: collectVirtualizerHooks(sources),
     liveReaders: collectLiveReaders(sources)
   }
