@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { spawnSttWorkerWithCpuFallback } from './stt-worker-cpu-fallback'
 
 class FakeChild extends EventEmitter {
@@ -113,6 +113,31 @@ describe('GPU speech process falling back to the CPU', () => {
     expect(children).toHaveLength(1)
     expect(exits).toEqual([137])
     expect(marks()).toBe(0)
+  })
+
+  it('keeps a slow GPU load that still finishes its steps, and moves a silent one to the CPU', () => {
+    vi.useFakeTimers()
+    try {
+      const { children, events } = setup()
+      const [gpu] = children
+      vi.advanceTimersByTime(20_000)
+      gpu.emit('message', { type: 'loading' })
+      vi.advanceTimersByTime(20_000)
+      gpu.emit('message', { type: 'loading' })
+      vi.advanceTimersByTime(20_000)
+      gpu.emit('message', { type: 'ready' })
+      expect(children).toHaveLength(1)
+      expect(events).toEqual([{ type: 'ready' }])
+
+      const silent = setup()
+      vi.advanceTimersByTime(20_000)
+      silent.children[0].emit('message', { type: 'loading' })
+      vi.advanceTimersByTime(25_000)
+      expect(silent.children).toHaveLength(2)
+      expect(silent.children[1].cpuOnly).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('fails the worker when the CPU replacement cannot load the model mid-dictation', () => {
