@@ -1,10 +1,10 @@
 import { common } from '@kit.AbilityKit';
-import { router } from '@kit.ArkUI';
 import { i18n } from '@kit.LocalizationKit';
 import { modelInFlight, SpeechModel, VoiceConfig, VoiceSettingsRpc, VoiceSetup, voiceShortcutMode,
   voiceShortcutModeConfig } from '../dictation/VoiceSetup';
 import { lucideColorFilter } from '../settings/LucideColor';
 import { uiText } from '../settings/NativeUi';
+import { SettingsNavBar } from '../settings/SettingsNavBar';
 import {
   readDictationEngine, setString, KEY_DICTATION_ENGINE, DICTATION_ENGINE_OPTIONS,
   DICTATION_ENGINE_AUTOMATIC, DICTATION_ENGINE_ONDEVICE, OptionEntry
@@ -413,16 +413,7 @@ struct VoiceSettings {
 
   build() {
     Column() {
-      Row() {
-        Button({ type: ButtonType.Circle }) {
-          Image($r('app.media.lucide_chevron_left')).supportSvg2(true).width(22).height(22)
-            .colorFilter(lucideColorFilter(this.themeText))
-        }.width(44).height(44).backgroundColor(this.themeSurface)
-          .accessibilityText(this.t('返回')).onClick(() => router.back())
-        Text(this.t('语音')).fontFamily('Geist').fontSize(17).fontWeight(FontWeight.Medium)
-          .fontColor(this.themeText).layoutWeight(1).textAlign(TextAlign.Center)
-        Row().width(44)
-      }.width('100%').height(54).padding({ left: 16, right: 16 })
+      SettingsNavBar({ title: this.t('语音') })
 
       Scroll() {
         Column({ space: 20 }) {
