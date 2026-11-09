@@ -179,15 +179,24 @@ export async function openChatTab(
     { timeout: 60_000 }
   )
   const id = (await tabId.jsonValue()) as string
-  await page.evaluate(
+  // Unified chat tabs activate through their group; a worktree switch can restore another tab first, so re-apply until it holds.
+  await page.waitForFunction(
     ({ worktreeId, id }) => {
       const state = window.__store!.getState()
+      const group = (state.groupsByWorktree[worktreeId] ?? []).find((candidate) =>
+        candidate.tabOrder.includes(id)
+      )
+      if (state.activeWorktreeId === worktreeId && group?.activeTabId === id) {
+        return true
+      }
       if (state.activeWorktreeId !== worktreeId) {
         state.setActiveWorktree(worktreeId)
       }
-      state.setActiveTab(id)
+      window.__store!.getState().activateTab(id, { worktreeId })
+      return false
     },
-    { worktreeId, id }
+    { worktreeId, id },
+    { timeout: 30_000, polling: 100 }
   )
 }
 

@@ -15,7 +15,7 @@ import { createChat, history, mutate, userItemIds, waitForIdle } from './native-
 
 const bytesOf = (value: unknown): number => Buffer.byteLength(JSON.stringify(value))
 
-type Item = { id: string; body?: { kind?: string } }
+type Item = { itemId: string; body?: { kind?: string } }
 
 async function read(
   ctx: RunContext,
