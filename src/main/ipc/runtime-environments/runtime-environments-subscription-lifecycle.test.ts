@@ -71,6 +71,7 @@ vi.mock('./runtime-environment-request-connections', async () => {
   })
 })
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
+import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
 
 const handler = channelHandlerLookup(handleMock)
@@ -185,5 +186,53 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       unsubscribed: true
     })
     expect(close).toHaveBeenCalled()
+  })
+
+  it('closes a live stream when its environment moves to a new transport generation', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const close = vi.fn()
+    let deliver: (response: unknown) => void = () => {}
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      async (
+        _connection: unknown,
+        _method: string,
+        _params: unknown,
+        _timeoutMs: number,
+        callbacks: { onResponse: (response: unknown) => void }
+      ) => {
+        deliver = callbacks.onResponse
+        return { requestId: 'stream-1', close, sendBinary: vi.fn() }
+      }
+    )
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const { environment } = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const send = vi.fn()
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const { subscriptionId } = await subscribe(
+      {
+        sender: { id: 1, isDestroyed: () => false, send, on: vi.fn(), removeListener: vi.fn() }
+      },
+      { selector: 'desk', method: 'agentSession.subscribe', params: { sessionId: 's1' } }
+    )
+
+    // Re-creating the shared control socket advances the generation without an invalidate.
+    advanceRuntimeEnvironmentTransportGeneration(environment.id)
+
+    expect(close).toHaveBeenCalled()
+    expect(send).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
+      subscriptionId,
+      type: 'close'
+    })
+    deliver({ id: 'stream-1', ok: true, result: { type: 'batch' } })
+    expect(send).not.toHaveBeenCalledWith(
+      'runtimeEnvironments:subscriptionEvent',
+      expect.objectContaining({ type: 'response' })
+    )
   })
 })

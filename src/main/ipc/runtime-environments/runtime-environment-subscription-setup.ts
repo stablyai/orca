@@ -180,11 +180,13 @@ export type RetainedRemoteRuntimeSubscription = RemoteRuntimeTransportSubscripti
   ownerWebContentsId: number
   disposeRendererLifetime: () => void
   notifyClosed: () => void
+  transportIsCurrent: () => boolean
 }
 export type PendingRuntimeSubscription = {
   ownerWebContentsId: number
   environmentId: string
   close: () => void
+  transportIsCurrent: () => boolean
 }
 
 export function assertSubscriptionPairingCurrent(

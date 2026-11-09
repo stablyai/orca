@@ -29,7 +29,10 @@ import { setManagedOrcadPairingRepairedListener } from '../../managed-server/lif
 import { forgetManagedOrcadAutomaticFailures } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment-recovery-handler'
 import { registerRuntimeEnvironmentRepairHandler } from './runtime-environment-repair-handler'
-import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
+import {
+  advanceRuntimeEnvironmentTransportGeneration,
+  onRuntimeEnvironmentTransportGenerationAdvanced
+} from './runtime-environment-transport-generation'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
 import { registerOrcadRuntimeLifecycleHandlers } from './orcad-runtime-lifecycle-handlers'
@@ -53,15 +56,16 @@ import { resetDesktopBrowserBridgeEnvironment } from '../browser/desktop-browser
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const getUserDataPath = getRuntimeEnvironmentRegistryRoot
 
-function closeSubscriptionsForEnvironment(environmentId: string): void {
+/** Ends every stream whose transport generation has moved on; readers reopen on the new one. */
+function closeStaleSubscriptions(): void {
   for (const pending of pendingSubscriptions.values()) {
-    if (pending.environmentId === environmentId) {
+    if (!pending.transportIsCurrent()) {
       pending.close()
     }
   }
   // Removed runtimes must release terminal/browser sockets before renderer teardown.
   for (const [subscriptionId, subscription] of remoteRuntimeSubscriptions) {
-    if (subscription.environmentId !== environmentId) {
+    if (subscription.transportIsCurrent()) {
       continue
     }
     remoteRuntimeSubscriptions.delete(subscriptionId)
@@ -83,9 +87,9 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
 export function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
   // Same-ID re-pairing must retire every transport authenticated as the former peer.
   advanceRuntimeEnvironmentCapabilityIncarnation(environmentId)
+  // Advancing ends this environment's streams through closeStaleSubscriptions.
   advanceRuntimeEnvironmentTransportGeneration(environmentId)
   closeRemoteRuntimeRequestConnection(environmentId)
-  closeSubscriptionsForEnvironment(environmentId)
   retireMobileDesktopRelayEnvironment(environmentId)
   resetDesktopBrowserBridgeEnvironment(environmentId)
   reactivateRuntimeEnvironmentStatus(environmentId)
@@ -115,6 +119,7 @@ function reactivateRuntimeEnvironmentStatus(environmentId: string): void {
 }
 
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
+onRuntimeEnvironmentTransportGenerationAdvanced(closeStaleSubscriptions)
 let stopPreferenceWatch: (() => void) | undefined
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {

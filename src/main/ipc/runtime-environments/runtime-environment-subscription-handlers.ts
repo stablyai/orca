@@ -13,7 +13,7 @@ import type * as SubscriptionSetup from '../../../shared/remote-runtime/host-cat
 import { ipcMain } from 'electron'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
+import { captureRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 export type {
@@ -56,9 +56,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
           getUserDataPath(),
           args
         )
-        const transportGeneration = getRuntimeEnvironmentTransportGeneration(environment.id)
-        const transportIsCurrent = (): boolean =>
-          getRuntimeEnvironmentTransportGeneration(environment.id) === transportGeneration
+        const transportIsCurrent = captureRuntimeEnvironmentTransportGeneration(environment.id)
         const sender = event.sender
         const ownerWebContentsId = sender.id
         const setupController = new AbortController()
@@ -130,7 +128,8 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
         const pending = {
           ownerWebContentsId,
           environmentId: environment.id,
-          close: closeSubscription
+          close: closeSubscription,
+          transportIsCurrent
         }
         pendingSubscriptions.set(subscriptionId, pending)
         // A reload replaces the owning document without destroying its WebContents.
@@ -242,6 +241,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(
           ownerWebContentsId,
           disposeRendererLifetime,
           notifyClosed,
+          transportIsCurrent,
           sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,
           close: () => {
             disposeRendererLifetime()
