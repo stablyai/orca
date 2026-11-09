@@ -16,6 +16,8 @@ import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceModelUnloadSetting } from './VoiceModelUnloadSetting'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { VoiceSpeechGpuSetting } from './VoiceSpeechGpuSetting'
+import { speechEngineForModelFiles } from '../../../../../shared/speech-model-engine'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
 import { useTranslate } from '@/i18n/use-translate'
@@ -298,6 +300,17 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         selectedModel={selectedModel}
         onUpdateVoiceSettings={updateVoiceSettings}
       />
+
+      {selectedModel &&
+        speechEngineForModelFiles(selectedModel.files ?? []) === 'transcribe-cpp' && (
+          <>
+            <Separator />
+            <VoiceSpeechGpuSetting
+              voiceSettings={voiceSettings}
+              onUpdateVoiceSettings={updateVoiceSettings}
+            />
+          </>
+        )}
 
       {showOpenAiSettingsRow && (
         <>
