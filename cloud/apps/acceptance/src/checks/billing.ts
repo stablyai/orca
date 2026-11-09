@@ -1,13 +1,36 @@
 // Billing checks against the dev billing Worker and Stripe TEST mode (real hosted Checkout in headless
 // Chrome, real webhooks to the dev Worker). Stripe objects created here are canceled/deleted after.
+import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { billing } from '../clients'
+import { secrets } from '../env'
 import type { Check, Ctx } from '../context'
 import { log } from '../context'
 import { CARDS, completeCheckout, stripe, type CheckoutCard } from '../stripe'
 import type { Identity } from '../tokens'
 
 const HOUR = 3600
+const TEAM_MONTHLY_PRICE = 'price_1UZmKpKb73TzRkjk33aiB2th' // wrangler.dev.jsonc STRIPE_PRICE_TEAM_MONTHLY
+const BILLING_DIR = new URL('../../../billing/', import.meta.url).pathname
+
+/** Test-clock customers are created by us, so link them to the account in the dev billing D1. */
+function linkBillingAccount(accountId: string, customer: string): void {
+  if (!/^[A-Za-z0-9_:.-]+$/.test(accountId + customer)) {
+    throw new Error('unsafe id')
+  }
+  const now = Date.now()
+  execFileSync(
+    `${BILLING_DIR}node_modules/.bin/wrangler`,
+    ['d1', 'execute', 'BILLING_DB', '-c', 'wrangler.dev.jsonc', '--remote', '--command',
+      `INSERT INTO billing_accounts (account_id, stripe_customer_id, created_at, updated_at) VALUES ('${accountId}', '${customer}', ${now}, ${now})`],
+    { cwd: BILLING_DIR, stdio: 'ignore', env: { ...process.env, CI: '1', WRANGLER_SEND_METRICS: 'false' } }
+  )
+}
+
+async function advanceClock(clock: string, to: number): Promise<void> {
+  await stripe('POST', `/v1/test_helpers/test_clocks/${clock}/advance`, { frozen_time: Math.floor(to) })
+  await until(() => stripe('GET', `/v1/test_helpers/test_clocks/${clock}`), (c: any) => c.status === 'ready', 180_000)
+}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 async function until<T>(read: () => Promise<T>, done: (v: T) => boolean, timeoutMs = 90_000): Promise<T> {
@@ -125,15 +148,80 @@ export const billingChecks: Record<string, Check> = {
     }
   },
 
-  'billing.seat-proration': async () => ({
-    status: 'not_landed',
-    detail: 'Seats follow Orca Cloud auth membership (POST /v1/internal/seats, MEMBERSHIP_SYNC_TOKEN); auth not deployed and the eval has no membership token yet — waiting on team-billing-ux'
-  }),
+  'billing.seat-proration': async (ctx) => {
+    const token = secrets.membershipToken()
+    if (!token) {
+      return { status: 'skipped', detail: 'no membership sync token' }
+    }
+    const r = await team(ctx)
+    if ('error' in r && r.error) {
+      return { status: 'fail', detail: r.error }
+    }
+    const accountId = `org:${r.who.org}`
+    const push = (members: number) => billing.raw('POST', '/v1/internal/seats', token, { accountId, members })
+    const sub = async () => (await stripe('GET', '/v1/subscriptions', { customer: r.customer!, limit: 1 })).data[0]
+    const seatQty = async () => (await sub())?.items.data.find((i: any) => i.price.recurring?.usage_type !== 'metered')?.quantity
+    const added = await push(3)
+    const qtyAfterAdd = await seatQty()
+    const invoice = (await stripe('GET', '/v1/invoices', { subscription: (await sub()).id, limit: 1 })).data[0]
+    const removed = await push(2)
+    const qtyAfterRemove = await seatQty()
+    const ent = await entitlement(r.who)
+    const same = await push(2)
+    const ok =
+      added.body?.status === 'updated' && qtyAfterAdd === 3 && invoice?.billing_reason === 'subscription_update' && invoice?.status === 'paid' &&
+      removed.body?.status === 'updated' && qtyAfterRemove === 2 && ent?.seats === 2 && same.body?.status === 'unchanged'
+    return {
+      status: ok ? 'pass' : 'fail',
+      detail: `member added -> ${qtyAfterAdd} seats, proration invoice ${invoice?.billing_reason}/${invoice?.status} $${((invoice?.amount_paid ?? 0) / 100).toFixed(2)} charged now; member removed -> ${qtyAfterRemove} seats (credit next invoice), entitlements ${ent?.seats} seats; repeat push -> ${same.body?.status}`,
+      evidence: [log('seat pushes', JSON.stringify({ added: added.body, removed: removed.body, same: same.body }))]
+    }
+  },
 
-  'billing.dunning': async () => ({
-    status: 'not_landed',
-    detail: 'Needs CONTROL_PLANE_TOKEN + D1 account link for the test-clock flow (billing e2e-test-mode.ts covers it); eval wiring pending — waiting on team-billing-ux'
-  }),
+  'billing.dunning': async (ctx) => {
+    const cp = secrets.controlPlaneToken()
+    if (!cp) {
+      return { status: 'skipped', detail: 'no control-plane token' }
+    }
+    const who = orgFor(ctx, 'dunning')
+    const accountId = `org:${who.org}`
+    const startCheck = async () =>
+      (await billing.raw('POST', '/v1/internal/entitlements/check', cp, { accountId, machineSize: 'standard', runningSandboxes: 0 })).body
+    const clock = await stripe('POST', '/v1/test_helpers/test_clocks', { frozen_time: Math.floor(Date.now() / 1000), name: `orca-acceptance-${ctx.run.file.runId}` })
+    ctx.run.created({ kind: 'stripe_test_clock', id: clock.id, label: 'dunning clock' })
+    const customer = await stripe('POST', '/v1/customers', { email: who.email, test_clock: clock.id, metadata: { account_id: accountId } })
+    ctx.run.created({ kind: 'stripe_customer', id: customer.id, label: 'dunning customer (test clock)' })
+    try {
+      linkBillingAccount(accountId, customer.id)
+      const visa = await stripe('POST', '/v1/payment_methods/pm_card_visa/attach', { customer: customer.id })
+      await stripe('POST', `/v1/customers/${customer.id}`, { invoice_settings: { default_payment_method: visa.id } })
+      const sub = await stripe('POST', '/v1/subscriptions', { customer: customer.id, items: [{ price: TEAM_MONTHLY_PRICE, quantity: 1 }], metadata: { account_id: accountId } })
+      const active = await until(() => entitlement(who), (e) => e?.status === 'active')
+      const failing = await stripe('POST', '/v1/payment_methods/pm_card_chargeCustomerFail/attach', { customer: customer.id })
+      await stripe('POST', `/v1/customers/${customer.id}`, { invoice_settings: { default_payment_method: failing.id } })
+      await advanceClock(clock.id, active.period.end / 1000 + HOUR)
+      const pastDue = await until(() => entitlement(who), (e) => e?.status === 'past_due', 150_000)
+      const blocked = await startCheck()
+      const graceH = pastDue?.payment ? (pastDue.payment.graceEndsAt - pastDue.payment.pastDueSince) / 3_600_000 : null
+      // Pay the open invoice with a good card -> active -> starts allowed again.
+      const good = await stripe('POST', '/v1/payment_methods/pm_card_visa/attach', { customer: customer.id })
+      await stripe('POST', `/v1/customers/${customer.id}`, { invoice_settings: { default_payment_method: good.id } })
+      const live = await stripe('GET', `/v1/subscriptions/${sub.id}`)
+      await stripe('POST', `/v1/invoices/${live.latest_invoice}/pay`, { payment_method: good.id })
+      const resumed = await until(startCheck, (c) => c?.allow === true, 120_000)
+      const ok = pastDue?.status === 'past_due' && blocked?.allow === false && resumed?.allow === true && resumed?.suspendRunning === false
+      return {
+        status: ok ? 'partial' : 'fail',
+        detail: `test clock renewal with a failing card -> ${pastDue?.status} (reason ${pastDue?.reason}); new starts ${blocked?.allow === false ? 'blocked' : 'ALLOWED'}; grace ${graceH} h before running sandboxes are suspended (expiry not waited on the dev Worker); paid -> starts ${resumed?.allow ? 'allowed' : 'still blocked'}, suspendRunning=${resumed?.suspendRunning}`,
+        evidence: [log('past_due entitlements', JSON.stringify(pastDue).slice(0, 1500))]
+      }
+    } finally {
+      await stripe('DELETE', `/v1/customers/${customer.id}`).catch(() => {})
+      ctx.run.destroyed('stripe_customer', customer.id)
+      await stripe('DELETE', `/v1/test_helpers/test_clocks/${clock.id}`).catch(() => {})
+      ctx.run.destroyed('stripe_test_clock', clock.id)
+    }
+  },
 
   'team.create': async () => ({ status: 'not_landed', detail: 'Orgs live in Orca Cloud auth (login.onorca.dev); team endpoints merged but not deployed — waiting on team-billing-ux' }),
   'team.invite': async () => ({ status: 'not_landed', detail: 'Invites live in Orca Cloud auth; not deployed — waiting on team-billing-ux' }),

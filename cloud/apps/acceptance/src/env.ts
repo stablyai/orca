@@ -35,6 +35,10 @@ function readSecretJson<T>(file: string): T | null {
   return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as T) : null
 }
 
+function readText(path: string): string | null {
+  return existsSync(path) ? readFileSync(path, 'utf8').trim() || null : null
+}
+
 export const secrets = {
   devJwk: () => readSecretJson<{ private: JsonWebKey & { kid?: string }; public: JsonWebKey }>('dev-jwk.json'),
   operatorToken: () => readSecretJson<{ OPERATOR_TOKEN: string }>('operator-dev.json')?.OPERATOR_TOKEN ?? null,
@@ -44,6 +48,11 @@ export const secrets = {
     const path = join(SECRETS_DIR, 'ai-gateway.key')
     return existsSync(path) ? readFileSync(path, 'utf8').trim() : null
   },
+  /** Billing internal routes (usage, entitlements/check, suspensions). */
+  controlPlaneToken: () => readText(join(SECRETS_DIR, 'control-plane.token')),
+  /** Auth -> billing membership pushes (POST /v1/internal/seats). */
+  membershipToken: () =>
+    process.env.ORCA_EVAL_MEMBERSHIP_TOKEN ?? readText(join(process.env.HOME ?? '', '.orca-secrets/billing-membership-token')),
   /** Optional: sk_test_/rk_test_ only. Falls back to the Stripe CLI `orca` project profile. */
   stripeKey: () => process.env.ORCA_EVAL_STRIPE_KEY ?? null
 }
