@@ -150,6 +150,14 @@ Compiled per sandbox by `compileNetworkPolicy()`:
 - Per-account authorization on every route (row `account_id` must equal the caller's); ids are random.
 - Strict zod bodies, 16 KiB limit, no redirects on provider calls, provider error bodies dropped.
 
+GitHub App + billing dev (2026-11-09): app "Orca Cloud (dev)" (stablyai, id 5677658,
+https://github.com/apps/orca-cloud-dev; contents/pull_requests write, metadata read, no webhook) created by the
+manifest flow; key only as a Worker secret. From a real sandbox via the dev Worker: private repo cloned at create
+(6.6s total), real `git push` of a new branch in 1.0s with the transform-injected repo token, `gh` and Node fetch to
+api.github.com through the forwardURL proxy with a minted token (200, ~1s), no token on the VM disk. Billing dev is
+reached over a service binding (same-account workers.dev fetches fail with 1042): an account without a subscription
+gets 403 `no_subscription`; the cron's suspensions poll runs clean. `dev:*` operator accounts bypass billing outside prod.
+
 ## Built (mock-tested) and next wiring
 
 - (b) `src/main/environment-providers/*`, `src/main/hosted-sandbox/*` — driver, client, contract kit, recipe adapter.

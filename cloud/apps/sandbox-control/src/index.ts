@@ -9,7 +9,12 @@
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
 import { authenticateDesktop } from './auth'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker } from './egress-proxy'
-import { BillingUnavailableError, createEntitlementClient, type EntitlementClient } from './entitlements'
+import {
+  BillingUnavailableError,
+  createEntitlementClient,
+  withDevAccountBypass,
+  type EntitlementClient
+} from './entitlements'
 import type { Env } from './env'
 import {
   LifecycleError,
@@ -99,10 +104,14 @@ function githubManifestStart(url: URL): Response {
   }
   const state = crypto.randomUUID()
   const escaped = JSON.stringify(manifest).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')
+  console.log(JSON.stringify({ event: 'github_manifest_start' }))
+  // No auto-submit: some browsers drop scripted cross-site POSTs, and GitHub still needs its own click.
   return html(
-    `<form id=f method=post action="https://github.com/organizations/stablyai/settings/apps/new?state=${state}">` +
-      `<input type=hidden name=manifest value="${escaped}"><button>Create “Orca Cloud (dev)” on stablyai</button></form>` +
-      '<script>document.getElementById("f").submit()</script>'
+    '<h2>Create the Orca Cloud (dev) GitHub App</h2>' +
+      '<p>1. Click the button. 2. On GitHub, scroll down and click <b>Create GitHub App for stablyai</b>.</p>' +
+      `<form method=post action="https://github.com/organizations/stablyai/settings/apps/new?state=${state}">` +
+      `<input type=hidden name=manifest value="${escaped}">` +
+      '<button type=submit style="font-size:18px;padding:10px 18px">Continue to GitHub</button></form>'
   )
 }
 
@@ -160,7 +169,7 @@ function lifecycleDeps(env: Env, deps: Deps): LifecycleDeps | null {
         projectId: env.VERCEL_PROJECT_ID!,
         baseUrl: env.VERCEL_API_BASE
       }),
-    entitlements: deps.entitlements ?? createEntitlementClient(env),
+    entitlements: deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env)),
     github: deps.github ?? githubMinter(env),
     now: deps.now ?? Date.now,
     config: {

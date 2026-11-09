@@ -61,6 +61,24 @@ export const STOP_RUNNING_REASONS: ReadonlySet<string> = new Set([
   'payment_grace_expired'
 ])
 
+/** Dev operator test accounts (`dev:*`, see auth.ts) never reach billing outside prod. */
+export function withDevAccountBypass(env: Env, client: EntitlementClient): EntitlementClient {
+  if (env.SANDBOX_ENV === 'prod') {
+    return client
+  }
+  return {
+    checkStart: (request) =>
+      request.accountId.startsWith('dev:')
+        ? Promise.resolve({ allow: true, reason: null, suspendRunning: false })
+        : client.checkStart(request),
+    reportUsage: (segment) =>
+      segment.accountId.startsWith('dev:')
+        ? Promise.resolve({ canStartSandbox: true, reason: null, suspendRunning: false })
+        : client.reportUsage(segment),
+    listSuspensions: () => client.listSuspensions()
+  }
+}
+
 export function createEntitlementClient(
   env: Env,
   doFetch: typeof fetch = env.BILLING ? (input, init) => env.BILLING!.fetch(input, init) : fetch
