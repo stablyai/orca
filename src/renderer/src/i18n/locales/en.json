@@ -1128,6 +1128,20 @@
           "devinDesktop": "devin desktop",
           "antigravity": "antigravity"
         }
+      },
+      "newTabMenu": {
+        "newMarkdownDescription": "Also covers file types added by plugins.",
+        "mobileEmulator": "Mobile Emulator",
+        "title": "New Tab Menu",
+        "groupDescription": "Choose which items the + button next to your tabs offers. New Terminal and agents always appear.",
+        "description": "Choose which items the + button next to your tabs offers.",
+        "keywordNewTab": "new tab",
+        "keywordPlus": "plus",
+        "keywordMenu": "menu",
+        "keywordHide": "hide",
+        "keywordBrowser": "browser",
+        "keywordMarkdown": "markdown",
+        "keywordEmulator": "mobile emulator"
       }
     },
     "openInApp": {

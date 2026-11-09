@@ -14,6 +14,7 @@ import {
 } from './use-tab-bar-runtime-model'
 import type { TabBarProps } from './tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
+import { useNewTabMenuShownItems } from './use-new-tab-menu-shown-items'
 
 export function TabBarStaticCreateMenu({
   groupId,
@@ -64,6 +65,13 @@ export function TabBarStaticCreateMenu({
     onNewFileTab,
     onOpenFileTab
   } = props
+  const shownItems = useNewTabMenuShownItems()
+  const showSimulator =
+    !terminalOnly &&
+    mobileEmulatorEnabled &&
+    mobileEmulatorCreationEnabled &&
+    Boolean(onNewSimulatorTab) &&
+    shownItems['mobile-emulator']
   const defaultTerminalMenuItems =
     windowsShellEntries && onNewTerminalWithShell ? (
       windowsShellEntries.map((entry, index) => {
@@ -106,7 +114,7 @@ export function TabBarStaticCreateMenu({
       </DropdownMenuItem>
     )
   const newBrowserMenuItem =
-    !terminalOnly && managedBrowserCreationEnabled ? (
+    !terminalOnly && managedBrowserCreationEnabled && shownItems.browser ? (
       <DropdownMenuItem
         onSelect={onNewBrowserTab}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -116,30 +124,29 @@ export function TabBarStaticCreateMenu({
         <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
-  const newSimulatorMenuItem =
-    !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled && onNewSimulatorTab ? (
-      workspaceHasSimulatorTab ? (
-        <DropdownMenuItem
-          onSelect={onNewSimulatorTab}
-          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-        >
-          <Smartphone className="size-4 text-muted-foreground" />
-          {t('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
-          <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
-        </DropdownMenuItem>
-      ) : (
-        <DropdownMenuItem
-          onSelect={onNewSimulatorTab}
-          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-        >
-          <Smartphone className="size-4 text-muted-foreground" />
-          {t('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')}
-          <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
-        </DropdownMenuItem>
-      )
-    ) : null
+  const newSimulatorMenuItem = showSimulator ? (
+    workspaceHasSimulatorTab ? (
+      <DropdownMenuItem
+        onSelect={onNewSimulatorTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <Smartphone className="size-4 text-muted-foreground" />
+        {t('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
+        <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+    ) : (
+      <DropdownMenuItem
+        onSelect={onNewSimulatorTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <Smartphone className="size-4 text-muted-foreground" />
+        {t('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')}
+        <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+    )
+  ) : null
   const newMarkdownMenuItem =
-    !terminalOnly && onNewFileTab ? (
+    !terminalOnly && onNewFileTab && shownItems['new-markdown'] ? (
       <DropdownMenuItem
         onSelect={onNewFileTab}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -151,7 +158,7 @@ export function TabBarStaticCreateMenu({
     ) : null
   const pluginNewFiles = usePluginNewFiles()
   const pluginNewFileMenuItems =
-    !terminalOnly && onNewFileTab
+    !terminalOnly && onNewFileTab && shownItems['new-markdown']
       ? pluginNewFiles.map((newFile) => (
           <DropdownMenuItem
             key={newFile.key}
@@ -170,7 +177,7 @@ export function TabBarStaticCreateMenu({
         ))
       : null
   const openMarkdownMenuItem =
-    !terminalOnly && onOpenFileTab ? (
+    !terminalOnly && onOpenFileTab && shownItems['open-markdown'] ? (
       <DropdownMenuItem
         onSelect={onOpenFileTab}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -183,12 +190,7 @@ export function TabBarStaticCreateMenu({
       </DropdownMenuItem>
     ) : null
   const mobileEmulatorIntroMenuBlock =
-    showMobileEmulatorIntroCallout &&
-    !terminalOnly &&
-    isMacOs &&
-    mobileEmulatorEnabled &&
-    mobileEmulatorCreationEnabled &&
-    onNewSimulatorTab ? (
+    showMobileEmulatorIntroCallout && isMacOs && showSimulator ? (
       <MobileEmulatorTabIntroCallout />
     ) : null
 

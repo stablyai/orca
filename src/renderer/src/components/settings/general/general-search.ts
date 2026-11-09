@@ -201,6 +201,25 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getGeneralNewTabMenuSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.general.newTabMenu.title', 'New Tab Menu'),
+    description: translate(
+      'settings.general.newTabMenu.description',
+      'Choose which items the + button next to your tabs offers.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.general.newTabMenu.keywordNewTab', 'new tab'),
+      ...translateSearchKeyword('settings.general.newTabMenu.keywordPlus', 'plus'),
+      ...translateSearchKeyword('settings.general.newTabMenu.keywordMenu', 'menu'),
+      ...translateSearchKeyword('settings.general.newTabMenu.keywordHide', 'hide'),
+      ...translateSearchKeyword('settings.general.newTabMenu.keywordBrowser', 'browser'),
+      ...translateSearchKeyword('settings.general.newTabMenu.keywordMarkdown', 'markdown'),
+      ...translateSearchKeyword('settings.general.newTabMenu.keywordEmulator', 'mobile emulator')
+    ]
+  }
+])
+
 export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.327e3fa70d', 'Orca CLI'),
@@ -277,6 +296,7 @@ export function getGeneralPaneSearchEntries(
   return [
     ...getGeneralWorkspaceSearchEntries(),
     ...getGeneralNavigationSearchEntries(),
+    ...getGeneralNewTabMenuSearchEntries(),
     ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
     ...getGeneralEditorSearchEntries(),
     ...getGeneralCliSearchEntries(),
