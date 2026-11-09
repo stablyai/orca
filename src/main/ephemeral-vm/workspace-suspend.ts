@@ -4,6 +4,10 @@ import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-works
 import { suspendEphemeralVmRuntime } from './runtime-service'
 import { disconnectRuntimeOwnedSshTarget } from './runtime-ssh'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
+import {
+  EphemeralVmFailureError,
+  pickEphemeralVmFailureCode
+} from '../../shared/ephemeral-vm-failure-copy'
 
 export async function suspendEphemeralVmWorkspace(
   store: Store,
@@ -11,7 +15,9 @@ export async function suspendEphemeralVmWorkspace(
 ): Promise<void> {
   const userDataPath = app.getPath('userData')
   const runtime = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
-  if (!runtime) {
+  // A second Suspend VM queued behind the first finds the VM asleep; rerunning the recipe's
+  // suspend on it would fail and mark a sleeping VM suspend_failed.
+  if (!runtime || runtime.status === 'suspended') {
     return
   }
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
@@ -22,7 +28,10 @@ export async function suspendEphemeralVmWorkspace(
     runtimeId: runtime.id
   })
   if (!result.ok) {
-    throw new Error(result.error)
+    throw new EphemeralVmFailureError({
+      error: result.error,
+      ...pickEphemeralVmFailureCode(result)
+    })
   }
   // A skipped suspend leaves the VM running, so its SSH connection must remain live.
   if (runtime.connectionMode === 'ssh' && !result.skipped) {
