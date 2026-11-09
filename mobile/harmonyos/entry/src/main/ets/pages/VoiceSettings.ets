@@ -15,6 +15,7 @@ import { SpikeRpcClient } from '../transport/SpikeRpcClient';
 import { NativeSpeech } from '../webshell/NativeSpeech';
 
 interface VoiceDesktop { id: string; lease: DesktopConnectionLease; unobserve: () => void; }
+interface VoiceAction { kind: string; modelId: string; }
 const MODEL_POLL_MS = 1500;
 const PHONE_RECHECK_MS = 3000;
 
@@ -26,11 +27,13 @@ struct VoiceSettings {
   @StorageProp('themeBg') themeBg: string = '#0a0a0a';
   @StorageProp('themeSurface') themeSurface: string = '#171717';
   @StorageProp('themeSheet') themeSheet: string = '#171717';
+  @StorageProp('themeRaised') themeRaised: string = '#262626';
   @StorageProp('themeBorder') themeBorder: string = 'rgba(255, 255, 255, 0.07)';
   @StorageProp('themeText') themeText: string = '#fafafa';
   @StorageProp('themeMuted') themeMuted: string = '#898989';
   @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
   @StorageProp('themeAccent') themeAccent: string = '#3276f2';
+  @StorageProp('themeStatusRed') themeStatusRed: string = '#ff6568';
   @State engine: string = DICTATION_ENGINE_AUTOMATIC;
   @State engineBusy: boolean = true;
   @State engineError: string = '';
@@ -41,8 +44,9 @@ struct VoiceSettings {
   @State setup: VoiceSetup | null = null;
   @State loadError: string = '';
   @State changeError: string = '';
-  @State busyAction: string = '';
+  @State busyAction: VoiceAction | null = null;
   @State modelsOpen: boolean = false;
+  @State viewportHeight: number = 0;
   private shown: boolean = false;
   private pageEpoch: number = 0;
   private requestEpoch: number = 0;
@@ -89,7 +93,7 @@ struct VoiceSettings {
     this.stopPolling();
     this.desktops.forEach((desktop: VoiceDesktop): void => { desktop.unobserve(); desktop.lease.release(); });
     this.desktops = []; this.client = null; this.hostId = ''; this.setup = null; this.connected = false;
-    this.modelsOpen = false; this.loading = false; this.busyAction = ''; this.loadError = ''; this.changeError = '';
+    this.modelsOpen = false; this.loading = false; this.busyAction = null; this.loadError = ''; this.changeError = '';
     this.downloadGraceUntil = 0;
   }
 
@@ -132,7 +136,7 @@ struct VoiceSettings {
     let client = ready?.lease.connection.getClient() ?? null;
     if (client === this.client) { return; }
     this.requestEpoch++; this.stopPolling();
-    this.client = client; this.connected = client !== null; this.loading = false; this.busyAction = '';
+    this.client = client; this.connected = client !== null; this.loading = false; this.busyAction = null;
     if (ready && ready.id !== this.hostId) {
       this.hostId = ready.id; this.setup = null; this.modelsOpen = false;
       this.loadError = ''; this.changeError = ''; this.downloadGraceUntil = 0;
@@ -165,7 +169,7 @@ struct VoiceSettings {
     if (!client || this.busyAction || !this.setup) { return; }
     let epoch = ++this.requestEpoch;
     let rpc = new VoiceSettingsRpc(client);
-    this.stopPolling(); this.loading = false; this.busyAction = id || action; this.changeError = '';
+    this.stopPolling(); this.loading = false; this.busyAction = { kind: action, modelId: id }; this.changeError = '';
     try {
       let next: VoiceSetup | null = null;
       if (action === 'download') {
@@ -186,7 +190,7 @@ struct VoiceSettings {
     } finally {
       if (epoch === this.requestEpoch) {
         // Read the desktop's state after an ambiguous reply. Writes are never replayed.
-        this.busyAction = '';
+        this.busyAction = null;
         this.refresh().catch(() => {});
       }
     }
@@ -194,28 +198,29 @@ struct VoiceSettings {
 
   private t(label: string): string { return uiText(label, this.uiLocale); }
   private engineAvailable(value: string): boolean { return value !== DICTATION_ENGINE_ONDEVICE || this.phoneStatus !== 'unsupported'; }
-  private canConfigure(): boolean { return this.connected && this.busyAction === ''; }
+  private canConfigure(): boolean { return this.connected && this.busyAction === null; }
   private canChooseModel(): boolean { return this.canConfigure() && this.setup?.enabled === true; }
   private offersAuto(): boolean { return this.setup?.dictationHoldToRecord !== undefined; }
   private model(id: string): SpeechModel | undefined {
     return this.setup?.models.find((model: SpeechModel): boolean => model.id === id);
   }
-  private modelAction(id: string): string {
-    let model = this.model(id);
-    if (!model) { return ''; }
-    if (model.status === 'ready') { return model.id === this.setup?.selectedModelId ? 'selected' : 'use'; }
+  private modelAction(model: SpeechModel, selectedModelId: string | undefined): string {
+    if (model.status === 'ready') { return model.id === selectedModelId ? 'selected' : 'use'; }
     if (model.provider === 'openai') { return 'key'; }
-    if (modelInFlight(model)) { return 'progress'; }
-    return model.provider === 'local' && ['error', 'not-downloaded'].includes(model.status) ? 'download' : '';
+    return modelInFlight(model) ? 'progress' : 'download';
   }
-  private modelDetails(id: string): string {
-    let model = this.model(id);
-    if (!model) { return ''; }
+  private modelDetails(model: SpeechModel, locale: string): string {
     if (model.provider === 'openai') { return 'OpenAI API'; }
-    let size = model.sizeBytes > 0 ? `${Math.round(model.sizeBytes / 1_000_000)} MB` : '';
-    if (modelInFlight(model) && model.progress !== null) { return [size, `${Math.round(model.progress * 100)}%`].filter(Boolean).join(' · '); }
-    if (model.status === 'extracting') { return [size, this.t('正在解压…')].filter(Boolean).join(' · '); }
-    if (model.status === 'error') { return [size, this.t('下载失败')].filter(Boolean).join(' · '); }
+    let intlLocale = locale === 'pt' ? 'pt-BR' : locale === 'zh' ? 'zh-Hans' : locale;
+    let size = model.sizeBytes > 0 ? uiText('components.voiceModelList.modelSize', locale)
+      .replace('{{size}}', Math.round(model.sizeBytes / 1_000_000).toLocaleString(intlLocale)) : '';
+    if (modelInFlight(model) && model.progress !== null) {
+      return uiText('components.voiceModelList.modelProgress', locale).replace('{{size}}', size)
+        .replace('{{progress}}', Math.round(model.progress * 100).toLocaleString(intlLocale));
+    }
+    if (model.status === 'extracting') {
+      return uiText('components.voiceModelList.modelExtracting', locale).replace('{{size}}', size);
+    }
     return size;
   }
 
@@ -297,6 +302,7 @@ struct VoiceSettings {
             Text(this.t('在电脑上向任何获得焦点的窗格听写文本。')).fontFamily('Geist').fontSize(13).fontColor(this.themeSecondary)
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           Toggle({ type: ToggleType.Switch, isOn: this.setup?.enabled === true }).selectedColor(this.themeAccent)
+            .width(51).height(31).switchPointColor(Color.White)
             .enabled(this.canConfigure()).accessibilityText(this.t('启用语音听写')).id('voice-enabled')
             .onChange((on: boolean): void => {
               if (on !== this.setup?.enabled) { this.change('configure', '', { enabled: on }).catch(() => {}); }
@@ -341,74 +347,82 @@ struct VoiceSettings {
   }
 
   @Builder
-  private modelButton(id: string, action: string, label: string) {
+  private modelButton(model: SpeechModel, action: string, labelKey: string) {
     Button({ type: ButtonType.Normal }) {
-      if (this.busyAction === id) {
-        LoadingProgress().width(18).height(18).color(this.themeSecondary)
+      if (this.busyAction?.modelId === model.id && this.busyAction?.kind === action) {
+        LoadingProgress().width(18).height(18).color(action === 'delete' ? this.themeStatusRed : this.themeSecondary)
       } else if (action === 'delete') {
         Image($r('app.media.lucide_trash_2')).supportSvg2(true).width(18).height(18)
-          .colorFilter(lucideColorFilter(this.themeScheme === 'light' ? '#b91c1c' : '#ff6568'))
+          .colorFilter(lucideColorFilter(this.themeStatusRed))
       } else if (action === 'download') {
         Image($r('app.media.lucide_download')).supportSvg2(true).width(18).height(18)
           .colorFilter(lucideColorFilter(this.themeSecondary))
       } else {
-        Text(this.t(label)).fontFamily('Geist').fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.themeSecondary)
+        Text(this.t('components.voiceModelList.use')).fontFamily('Geist').fontSize(12)
+          .fontWeight(FontWeight.Medium).fontColor(this.themeSecondary)
       }
     }.constraintSize({ minWidth: 42, minHeight: 40 }).padding({ left: 8, right: 8 })
-      .borderRadius(10).backgroundColor(this.themeSheet).enabled(this.canChooseModel())
-      .id(`voice-${action}-${id}`).accessibilityText(`${this.t(label)} ${this.model(id)?.label ?? id}`)
+      .borderRadius(10).backgroundColor(this.themeRaised).enabled(this.canChooseModel())
+      .id(`voice-${action}-${model.id}`).accessibilityText(this.t(labelKey).replace('{{label}}', model.label))
       .onClick((): void => {
-        this.change(action, id, action === 'use' ? { enabled: true, modelId: id } : {}).catch(() => {});
+        this.change(action, model.id, action === 'use' ? { enabled: true, modelId: model.id } : {}).catch(() => {});
       })
   }
 
   @Builder
-  private modelRow(id: string) {
+  private modelRow(model: SpeechModel) {
     Row({ space: 8 }) {
       Column({ space: 3 }) {
-        Text(this.model(id)?.label ?? id).fontFamily('Geist').fontSize(15).fontColor(this.themeText)
-        if (this.modelDetails(id)) {
-          Text(this.modelDetails(id)).fontFamily('Geist').fontSize(12).fontColor(this.themeSecondary)
+        Text(model.label).fontFamily('Geist').fontSize(15).fontColor(this.themeText)
+        if (this.modelDetails(model, this.uiLocale)) {
+          Text(this.modelDetails(model, this.uiLocale)).fontFamily('Geist').fontSize(13).fontColor(this.themeSecondary)
         }
-        if (this.model(id)?.recommended === true) {
-          Text(this.t('推荐')).fontFamily('Geist').fontSize(11).fontWeight(FontWeight.Medium)
+        if (model.recommended) {
+          Text(this.t('components.voiceModelList.recommended')).fontFamily('Geist').fontSize(11).fontWeight(FontWeight.Bold)
             .fontColor(this.themeScheme === 'light' ? '#147638' : '#86efac')
         }
       }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      if (this.modelAction(id) === 'selected') {
-        Text(this.t('使用中')).fontFamily('Geist').fontSize(12)
-          .fontColor(this.themeScheme === 'light' ? '#147638' : '#86efac')
-      } else if (this.modelAction(id) === 'use') {
-        this.modelButton(id, 'use', '使用')
-      } else if (this.modelAction(id) === 'download') {
-        this.modelButton(id, 'download', '下载')
-      } else if (this.modelAction(id) === 'progress') {
+      if (this.modelAction(model, this.setup?.selectedModelId) === 'selected') {
+        Row({ space: 4 }) {
+          Image($r('app.media.lucide_check')).supportSvg2(true).width(14).height(14)
+            .colorFilter(lucideColorFilter(this.themeScheme === 'light' ? '#147638' : '#86efac'))
+          Text(this.t('components.voiceModelList.inUse')).fontFamily('Geist').fontSize(12)
+            .fontColor(this.themeScheme === 'light' ? '#147638' : '#86efac')
+        }
+      } else if (this.modelAction(model, this.setup?.selectedModelId) === 'use') {
+        this.modelButton(model, 'use', 'components.voiceModelList.useModel')
+      } else if (this.modelAction(model, this.setup?.selectedModelId) === 'download') {
+        this.modelButton(model, 'download', 'components.voiceModelList.downloadModel')
+      } else if (this.modelAction(model, this.setup?.selectedModelId) === 'progress') {
         LoadingProgress().width(18).height(18).color(this.themeSecondary)
-      } else if (this.modelAction(id) === 'key') {
-        Text(this.t('需要 OpenAI 密钥')).fontFamily('Geist').fontSize(12).fontColor(this.themeMuted)
+      } else {
+        Text(this.t('dictation.setup.cloudModelNeedsKey')).fontFamily('Geist').fontSize(12).fontColor(this.themeMuted)
+          .constraintSize({ maxWidth: '40%' })
       }
-      if (this.model(id)?.provider === 'local' && this.model(id)?.status === 'ready') {
-        this.modelButton(id, 'delete', '删除')
+      if (model.provider !== 'openai' && model.status === 'ready') {
+        this.modelButton(model, 'delete', 'components.voiceModelList.deleteModel')
       }
     }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 14, right: 10, top: 8, bottom: 8 })
   }
 
   @Builder
   private modelDrawer() {
-    Column({ space: 10 }) {
-      Text(this.t('语音模型')).fontFamily('Geist').fontSize(16).fontWeight(FontWeight.Medium)
-        .fontColor(this.themeText).width('100%').padding({ left: 4 })
-      if (this.changeError || this.loadError) { this.note(this.changeError || this.loadError, true) }
-      if (!this.connected) { this.note('连接桌面后可管理语音设置。') }
-      Scroll() {
+    Scroll() {
+      Column({ space: 10 }) {
+        Text(this.t('语音模型')).fontFamily('Geist').fontSize(13).fontWeight(FontWeight.Medium)
+          .fontColor(this.themeSecondary).width('100%').padding({ left: 4 })
+        if (this.changeError || this.loadError) { this.note(this.changeError || this.loadError, true) }
+        if (!this.connected) { this.note('连接桌面后可管理语音设置。') }
         Column() {
           ForEach(this.setup?.models ?? [], (model: SpeechModel, index: number): void => {
             if (index > 0) { this.separator() }
-            this.modelRow(model.id)
-          }, (model: SpeechModel): string => model.id)
-        }.width('100%').backgroundColor(this.themeSurface).borderRadius(16).clip(true)
-      }.width('100%').layoutWeight(1).scrollBar(BarState.Off).align(Alignment.Top)
-    }.width('100%').height('100%').padding({ left: 16, right: 16, bottom: 20, top: 8 })
+            this.modelRow(model)
+          }, (model: SpeechModel, index: number): string => `${index > 0}:${JSON.stringify(model)}`)
+        }.width('100%').backgroundColor(this.themeScheme === 'light' ? this.themeBg : this.themeRaised)
+          .borderRadius(16).clip(true)
+      }.width('100%').padding({ left: 16, right: 16, bottom: 20, top: 8 })
+    }.width('100%').height('auto').constraintSize({ maxHeight: Math.max(160, this.viewportHeight * 0.85) })
+      .scrollBar(BarState.Off).align(Alignment.Top)
   }
 
   build() {
@@ -435,7 +449,8 @@ struct VoiceSettings {
         }.width('100%').padding({ top: 8, left: 16, right: 16, bottom: 24 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Off).align(Alignment.Top)
     }.width('100%').height('100%').backgroundColor(this.themeBg)
-      .bindSheet(this.modelsOpen, this.modelDrawer, { height: '75%', backgroundColor: this.themeSheet,
+      .onSizeChange((_previous: SizeOptions, current: SizeOptions): void => { this.viewportHeight = Number(current.height); })
+      .bindSheet(this.modelsOpen, this.modelDrawer, { height: SheetSize.FIT_CONTENT, backgroundColor: this.themeSheet,
         maskColor: 'rgba(0,0,0,0.55)', showClose: false, onDisappear: (): void => { this.modelsOpen = false; } })
   }
 }
