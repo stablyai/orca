@@ -38,6 +38,8 @@ const buttonVariants = cva(
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
         inline: 'h-6 gap-1 px-0 has-[>svg]:px-0',
+        // A text action inside a dense status line: shorter than xs, body-weight text.
+        statusAction: 'h-5 gap-1 rounded-md px-1 text-xs font-normal',
         // A ghost name inside a row label: `inline`'s height, padded so its hover fill clears the text.
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',

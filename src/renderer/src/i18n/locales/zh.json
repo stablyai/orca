@@ -2082,10 +2082,8 @@
         "destroyDisabled": "已禁用销毁",
         "destroyConfigured": "已配置销毁",
         "noDestroyConfigured": "未配置销毁",
-        "ephemeralVm": "工作区专属环境",
         "chooseRunTarget": "选择目标",
         "noRunTargets": "此项目还没有可用的运行目标。",
-        "perWorkspaceEnvHint": "通过环境模板按需创建环境",
         "branchName": "分支名称",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "连接超时，可能仍在后台连接中。",
@@ -2094,7 +2092,6 @@
         "addHost": "Add host",
         "addSshHost": "添加 SSH 主机",
         "addSshHostHint": "通过 SSH 使用现有机器",
-        "addRemoteOrcaServer": "添加远程 Orca 服务器",
         "addRemoteOrcaServerHint": "配对另一个 Orca 运行时",
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "无法更新项目默认分支。再试一次。",
@@ -6252,7 +6249,6 @@
           "modalInstallDescription": "为你的智能体安装 Linear 技能。"
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "创建文件夹工作区",
           "create": "创建工作区"
         },
         "AddRepoHostSelector": {

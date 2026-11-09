@@ -2116,10 +2116,8 @@
         "destroyDisabled": "destroy deshabilitado",
         "destroyConfigured": "destroy configurado",
         "noDestroyConfigured": "sin destroy",
-        "ephemeralVm": "Entorno por espacio de trabajo",
         "chooseRunTarget": "Elegir destino",
         "noRunTargets": "No hay destinos de ejecución listos para este proyecto.",
-        "perWorkspaceEnvHint": "Provisiona un entorno bajo demanda a partir de una receta",
         "branchName": "Nombre de rama",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "Se agotó el tiempo de conexión. Es posible que todavía se esté conectando en segundo plano.",
@@ -2128,7 +2126,6 @@
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
         "addSshHostHint": "Utilice una máquina existente sobre SSH",
-        "addRemoteOrcaServer": "Agregar servidor remoto Orca",
         "addRemoteOrcaServerHint": "Emparejar otro tiempo de ejecución Orca",
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "No se pudo actualizar la rama predeterminada del proyecto. Inténtalo de nuevo.",
@@ -6486,7 +6483,6 @@
           "modalInstallDescription": "Instala la habilidad de Linear para tus agentes."
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "Crear espacio de trabajo de carpeta",
           "create": "Crear espacio de trabajo"
         },
         "AddRepoHostSelector": {

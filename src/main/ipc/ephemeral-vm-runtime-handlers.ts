@@ -19,6 +19,7 @@ import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
 import { ephemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-attachment'
 import { forgetInterruptedEphemeralVmProvision } from '../ephemeral-vm/runtime-provisioning-persistence'
+import { installCloudSsh } from '../cloud-ssh/cloud-ssh-main'
 
 let stopRuntimesChangedBroadcast: (() => void) | null = null
 let runtimesChangedBroadcastQueued = false
@@ -53,6 +54,8 @@ export type EphemeralVmCleanupCommandResult = {
 }
 
 export function registerEphemeralVmRuntimeHandlers(store: Store): void {
+  // Orca Cloud SSH (orca ssh, Remote-SSH) rides on the same runtime records.
+  installCloudSsh(store)
   ipcMain.removeHandler('ephemeralVm:attachWorkspace')
   ipcMain.removeHandler('ephemeralVm:listRuntimes')
   ipcMain.removeHandler('ephemeralVm:cleanup')

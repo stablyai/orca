@@ -2811,10 +2811,8 @@
         "destroyDisabled": "destroy disabled",
         "destroyConfigured": "destroy configured",
         "noDestroyConfigured": "no destroy",
-        "ephemeralVm": "Per-Workspace Environment",
         "chooseRunTarget": "Choose target",
         "noRunTargets": "No run targets are ready for this project.",
-        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe",
         "branchName": "Branch name",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "Connection timed out. It may still be connecting in the background.",
@@ -2826,7 +2824,6 @@
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
         "addSshHostHint": "Use an existing machine over SSH",
-        "addRemoteOrcaServer": "Add Remote Orca Server",
         "addRemoteOrcaServerHint": "Pair another Orca runtime",
         "hostConnectionFailed": "Connection failed",
         "connect": "Connect",
@@ -7338,7 +7335,6 @@
           "modalInstallDescription": "Install the Linear skill for your agents."
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "Create Folder Workspace",
           "create": "Create workspace"
         },
         "WorkspaceKanbanDrawer": {
@@ -16020,7 +16016,6 @@
             "browse": "Browse run targets",
             "orcaCloudHoursLeft": "{{hours}} h left",
             "orcaCloudNoHours": "No hours left",
-            "orcaCloudPaymentIssue": "Payment issue",
             "orcaCloudTeamBadge": "Team",
             "orcaCloudUpgrade": "Upgrade",
             "orcaCloudDetail": "Hosted sandbox · 4 vCPU / 8 GB",

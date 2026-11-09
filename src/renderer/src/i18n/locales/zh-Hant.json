@@ -2493,10 +2493,8 @@
         "destroyDisabled": "已停用銷燬",
         "destroyConfigured": "已設定銷燬",
         "noDestroyConfigured": "未設定銷燬",
-        "ephemeralVm": "工作區專屬環境",
         "chooseRunTarget": "選擇目標",
         "noRunTargets": "此專案還沒有可用的執行目標。",
-        "perWorkspaceEnvHint": "透過環境範本依需求建立環境",
         "branchName": "分支名稱",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "連線逾時，可能仍在背景連線中。",
@@ -2508,7 +2506,6 @@
         "addHost": "新增主機",
         "addSshHost": "新增 SSH 主機",
         "addSshHostHint": "透過 SSH 使用現有機器",
-        "addRemoteOrcaServer": "新增遠端 Orca 伺服器",
         "addRemoteOrcaServerHint": "配對另一個 Orca 執行環境",
         "hostConnectionFailed": "連線失敗",
         "connect": "連線",
@@ -6740,7 +6737,6 @@
           "modalInstallDescription": "為代理程式安裝 Linear 技能。"
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "建立資料夾工作區",
           "create": "建立工作區"
         },
         "WorkspaceKanbanDrawer": {

@@ -1,4 +1,3 @@
-import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -20,7 +19,11 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
+import type {
+  OrcaCloudAvailability,
+  OrcaHooks,
+  SetupAgentStartupPolicy
+} from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'

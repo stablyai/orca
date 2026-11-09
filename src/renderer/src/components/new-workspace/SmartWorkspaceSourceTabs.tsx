@@ -28,7 +28,7 @@ export function SmartWorkspaceSourceTabs({
         <TabsList
           ref={tabsListRef}
           variant="line"
-          className="h-7 w-full justify-start gap-3 overflow-x-auto overflow-y-hidden px-0 scrollbar-none"
+          className="h-7 w-full justify-start gap-4 overflow-x-auto overflow-y-hidden px-0 scrollbar-sleek"
           onFocusCapture={(event) => {
             const previous = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null
             const list = event.currentTarget
