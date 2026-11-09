@@ -313,7 +313,7 @@ export async function authorize(request: Request, url: URL, env: OAuthEnv): Prom
     return consentPage(viewFor(req, client, fresh, 'That approval code or API key is not valid (it may have expired or been used). Get a new one from Orca.'), fresh, redirectTarget(req.redirectUri).formAction, 401)
   }
   // Only what was requested, what the user left ticked, and what the credential itself may do.
-  const ticked = new Set(form.getAll('scope'))
+  const ticked = new Set(form.getAll('grant'))
   const scopes = req.scopes.filter((scope) => ticked.has(scope) && grantor.scopes.has(scope))
   if (scopes.length === 0) {
     return redirectWith(req.redirectUri, { error: 'invalid_scope', error_description: 'None of the requested scopes could be granted', state: req.state, iss: env.origin })

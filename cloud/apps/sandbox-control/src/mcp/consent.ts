@@ -81,7 +81,7 @@ export function consentPage(view: ConsentView, csrf: string, formAction: string,
   const scopes = view.scopes
     .map(
       ({ scope, label }) =>
-        `<li><label><input type="checkbox" name="scope" value="${esc(scope)}" checked><span>${esc(label)}<br><code>${esc(scope)}</code></span></label></li>`
+        `<li><label><input type="checkbox" name="grant" value="${esc(scope)}" checked><span>${esc(label)}<br><code>${esc(scope)}</code></span></label></li>`
     )
     .join('')
   const body =

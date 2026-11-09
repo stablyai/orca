@@ -74,8 +74,8 @@ async function harness() {
     for (const [, name = '', value = ''] of html.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)) {
       form.set(name, value.replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&#39;', "'").replaceAll('&lt;', '<').replaceAll('&gt;', '>'))
     }
-    for (const [, scope = ''] of html.matchAll(/name="scope" value="([^"]+)" checked/g)) {
-      if (!opts.untick?.includes(scope)) form.append('scope', scope)
+    for (const [, scope = ''] of html.matchAll(/name="grant" value="([^"]+)" checked/g)) {
+      if (!opts.untick?.includes(scope)) form.append('grant', scope)
     }
     if (opts.csrf !== undefined) {
       opts.csrf === null ? form.delete('csrf') : form.set('csrf', opts.csrf)
