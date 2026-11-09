@@ -1,7 +1,7 @@
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
 import { useCallback, useEffect, useRef } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   createFileSearchResultOwner,
   type FileSearchResultOwner
@@ -16,7 +16,7 @@ import {
   getExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { isTwinWorkspace } from '@/lib/resolve-owner'
+import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
 import type { SearchResult } from '../../../../../../shared/file-search/code-search-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 

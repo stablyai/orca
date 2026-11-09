@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ResolveOwnerModule from '@/lib/resolve-owner'
+import type * as ResolveOwnerModule from '@/lib/workspace/ownership/resolve-owner'
 
 const closeWebRuntimeSessionTabMock = vi.fn()
 const ownerLookup = vi.hoisted(() => ({ calls: 0 }))
@@ -8,7 +8,7 @@ vi.mock('../actions/web-runtime-session-tab-lifecycle', () => ({
   closeWebRuntimeSessionTab: (args: unknown) => closeWebRuntimeSessionTabMock(args)
 }))
 
-vi.mock('@/lib/resolve-owner', async (importOriginal) => {
+vi.mock('@/lib/workspace/ownership/resolve-owner', async (importOriginal) => {
   const actual = await importOriginal<typeof ResolveOwnerModule>()
   return {
     ...actual,

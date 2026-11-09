@@ -5,12 +5,12 @@ import {
   activateAndRevealWorktree,
   activateAndRevealWorkspaceWithOutcome
 } from './worktree-activation'
-import { reportAgentWorkspaceActivation } from '@/lib/worktree-activation-outcome'
+import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import '../../workspace-switch-user-act'
+import './workspace-switch-user-act'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>

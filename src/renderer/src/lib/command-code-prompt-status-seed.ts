@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { getConnectionIdFromState } from './connection-owner-resolution'
+import { getConnectionIdFromState } from './workspace/ownership/connection-owner-resolution'
 import { resolveLiveAgentStatusConnectionRouting } from './agent-status-connection-ownership'
 import { rendererAgentStatusObservations } from './renderer-agent-status-observations'
 

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DictationMode } from '../../shared/speech-types'
+import type { VoiceSettings } from '../../shared/speech-types'
+import { dictationShortcutModeSettings } from '../../shared/dictation-shortcut-mode'
 
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
@@ -15,6 +16,7 @@ vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
 )
 
 import { createMainWindow } from './createMainWindow'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
@@ -59,16 +61,23 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    const voice: { enabled: boolean; sttModel: string; dictationMode: DictationMode } = {
+    const voice: Pick<
+      VoiceSettings,
+      'enabled' | 'sttModel' | 'dictationMode' | 'dictationHoldToRecord'
+    > = {
       enabled: false,
       sttModel: '',
-      dictationMode: 'toggle'
+      ...dictationShortcutModeSettings('toggle')
     }
     createMainWindow({
       getUI: () => ({}) as never,
       getSettings: () => ({ windowBackgroundBlur: false, voice }) as never,
       updateUI: vi.fn()
     } as never)
+    // A focused browser page forwards only keydown, so it hands the chord over unless Hold needs the release.
+    const pageForwardsDictation = vi.mocked(browserManager.setDictationShortcutForwardingPredicate)
+      .mock.lastCall?.[0]
+    expect(pageForwardsDictation?.()).toBe(false)
 
     const isDarwin = process.platform === 'darwin'
     const dictationInput = {
@@ -91,6 +100,7 @@ describe('createMainWindow', () => {
 
     // #18691: with no model the renderer still needs the chord to show its setup toast.
     voice.enabled = true
+    expect(pageForwardsDictation?.()).toBe(true)
     const noModelPreventDefault = vi.fn()
     windowHandlers['before-input-event']({ preventDefault: noModelPreventDefault }, dictationInput)
     expect(noModelPreventDefault).toHaveBeenCalledTimes(1)
@@ -98,7 +108,8 @@ describe('createMainWindow', () => {
 
     webContents.send.mockClear()
     voice.sttModel = 'test-model'
-    voice.dictationMode = 'hold'
+    Object.assign(voice, dictationShortcutModeSettings('hold'))
+    expect(pageForwardsDictation?.()).toBe(false)
     const holdPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: holdPreventDefault } as never,
@@ -107,13 +118,14 @@ describe('createMainWindow', () => {
     expect(holdPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
-    voice.dictationMode = 'auto'
+    Object.assign(voice, dictationShortcutModeSettings('auto'))
+    expect(pageForwardsDictation?.()).toBe(true)
     const autoPreventDefault = vi.fn()
     windowHandlers['before-input-event']({ preventDefault: autoPreventDefault }, dictationInput)
     expect(autoPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
-    voice.dictationMode = 'toggle'
+    Object.assign(voice, dictationShortcutModeSettings('toggle'))
     const composingPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: composingPreventDefault },
@@ -173,10 +185,13 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    const voice: { enabled: boolean; sttModel: string; dictationMode: DictationMode } = {
+    const voice: Pick<
+      VoiceSettings,
+      'enabled' | 'sttModel' | 'dictationMode' | 'dictationHoldToRecord'
+    > = {
       enabled: false,
       sttModel: '',
-      dictationMode: 'toggle'
+      ...dictationShortcutModeSettings('toggle')
     }
     createMainWindow(
       {
@@ -224,12 +239,12 @@ describe('createMainWindow', () => {
 
     voice.enabled = true
     voice.sttModel = 'test-model'
-    voice.dictationMode = 'hold'
+    Object.assign(voice, dictationShortcutModeSettings('hold'))
     const holdPreventDefault = triggerDoubleTapShift()
     expect(holdPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
-    voice.dictationMode = 'auto'
+    Object.assign(voice, dictationShortcutModeSettings('auto'))
     const autoPreventDefault = triggerDoubleTapShift()
     expect(autoPreventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')

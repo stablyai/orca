@@ -12,7 +12,7 @@ import type {
 } from './session/worktree-selection-contract'
 
 import type { WorkspaceAttachmentMutation } from '../../../../../shared/workspace-attachments/workspace-attachment-mutation'
-import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
+import type { WorkspaceReferenceObservationContext } from '@/lib/workspace/attachments/workspace-attachment-observed-origin'
 import type {
   CreateWorktreeCallOptions,
   CreatedWorktreeResult
@@ -179,6 +179,7 @@ export type WorktreeSlice = {
       request?: PendingWorktreeCreation['request']
       chatSessionOptions?: Readonly<Record<string, string>>
       provisioningLog?: string
+      environmentCheck?: PendingWorktreeCreation['environmentCheck']
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
       worktreeId?: string
       heldChatMessage?: string

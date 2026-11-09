@@ -11,10 +11,10 @@ import { webClientDocPreviewRefusal } from '@/lib/doc-preview-web-client'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { basename } from '@/lib/path'
-import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { activateBrowserWorkspaceTab } from '@/lib/browser/workspace/browser-workspace-tab-activation'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { isTwinWorkspace } from '@/lib/resolve-owner'
+import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
 import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
   TWIN_FILE_BROWSER_UNSUPPORTED_MESSAGE

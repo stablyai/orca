@@ -6,6 +6,7 @@ import { getProjectIdentityKey } from '../../../shared/project-host-setup-projec
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
+import { gateVmCreateOnEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check'
 import {
   appendProvisioningLog,
   appendProvisioningWarnings
@@ -109,7 +110,15 @@ async function prepareEphemeralVmRecipeRequest(
       path: preparedTarget.setup.repo.path
     }
   }
-  if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
+  const proceed =
+    Boolean(useAppStore.getState().pendingWorktreeCreations[creationId]) &&
+    (!preparedTarget.environmentId ||
+      (await gateVmCreateOnEnvironmentCheck(
+        creationId,
+        preparedTarget.environmentId,
+        preparedTarget.setup.repo.path
+      )))
+  if (!proceed) {
     await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
     return null
   }

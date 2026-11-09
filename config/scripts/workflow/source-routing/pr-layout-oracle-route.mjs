@@ -29,7 +29,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/renderer/src/attention/orca-window-foreground-focus.ts',
   'src/renderer/src/attention/notification-workspace-labels.ts',
   'src/renderer/src/lib/agent-session/identity/pane-agent-session-id.ts',
-  'src/renderer/src/lib/wsl-host-availability.ts',
+  'src/renderer/src/runtime/hosts/wsl/wsl-host-availability.ts',
   'src/renderer/src/lib/workspace/ownership/workspace-runtime-environment.ts',
   'src/renderer/src/components/tab-group/tab-drag-drop-commit.ts',
   'src/renderer/src/app-shell/use-runtime-graph-sync.ts',

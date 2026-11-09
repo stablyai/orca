@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PtyTransport } from '../../pty-transport-types'
-import { useWslHostUnavailableReason } from '../../../../../lib/wsl-host-availability'
+import { useWslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
 import {
   useManagedPairingRefusedEnvironmentId,
   useManagedServerReplaced
@@ -20,7 +20,7 @@ import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import { useAppStore } from '@/store/index'
 import { useRuntimeHostRetired } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { runtimeStatusSubscriptions } from '@/store/slices/runtime-status/views/runtime-status-subscription-store'
-import { paneShowsWslHostStoppedCard } from '@/lib/wsl-host-stopped-status'
+import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'

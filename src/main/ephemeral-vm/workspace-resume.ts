@@ -21,9 +21,15 @@ import type { VmWakeRequest } from '../runtime/workspaces/sleep/workspace-sleep-
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import {
+  getRemoteRuntimeSharedControlDiagnostics,
   getRuntimeEnvironmentStatusOwner,
   reconnectRemoteRuntimeSharedControlConnection
 } from '../ipc/runtime-environments/runtime-environment-request-connections'
+import {
+  clearRuntimeEnvironmentContactLoss,
+  isRuntimeEnvironmentContactLost
+} from '../ipc/runtime-environments/runtime-environment-contact-loss'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/runtime-environment-manual-disconnect'
 import { getRegisteredSshState } from '../ssh/targets/ssh-target-registry'
 import { isRecipeVmLostContact } from './recipe-vm-lost-contact'
 
@@ -38,12 +44,15 @@ export async function resumeEphemeralVmWorkspace(
   if (!runtime) {
     return null
   }
-  // A VM recorded as up whose SSH host Orca gave up reaching may have been stopped or reclaimed by
-  // its provider (#34089): its recipe's resume brings it back. A failure there keeps the record as
-  // it was, so a VM that was only out of reach is still reconnected as before.
+  // A VM recorded as up whose host Orca gave up reaching may have been stopped or reclaimed by its
+  // provider (#34089): its recipe's resume brings it back. A failure there keeps the record as it
+  // was, so a VM that was only out of reach is still reconnected as before.
   const lostContact =
     !request.sshHeld &&
-    isRecipeVmLostContact(runtime, (targetId) => getRegisteredSshState(targetId)?.status)
+    isRecipeVmLostContact(runtime, {
+      readSshStatus: (targetId) => getRegisteredSshState(targetId)?.status,
+      isServerContactLost: isPairedServerContactLost
+    })
   if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed' && !lostContact) {
     return runtime
   }
@@ -53,6 +62,14 @@ export async function resumeEphemeralVmWorkspace(
     }
   }
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+  if (lostContact && runtime.connectionMode === 'orca-server' && !recipeContext.recipe.resume) {
+    // Nothing can restart this VM, and only the user can tell whether it is gone. Retry the
+    // server now, and say what is left; the record and the workspace stay as they are.
+    if (runtime.runtimeEnvironmentId) {
+      reestablishWokenServer(userDataPath, runtime.runtimeEnvironmentId)
+    }
+    throw new Error(RECIPE_VM_UNREACHABLE_WITHOUT_RESUME_MESSAGE)
+  }
   const result = await resumeEphemeralVmRuntime({
     userDataPath,
     repoPath: recipeContext.repoPath,
@@ -62,6 +79,10 @@ export async function resumeEphemeralVmWorkspace(
   if (!result.ok) {
     restoreAfterFailedRecovery()
     throw new Error(result.error)
+  }
+  if (lostContact && runtime.runtimeEnvironmentId) {
+    // The resume restarted the VM; its server's old failures say nothing about the new boot.
+    clearRuntimeEnvironmentContactLoss(runtime.runtimeEnvironmentId)
   }
   if (!result.runtime.recipeResult) {
     return result.runtime
@@ -129,6 +150,20 @@ export async function resumeEphemeralVmWorkspace(
     }
   }
   return result.runtime
+}
+
+export const RECIPE_VM_UNREACHABLE_WITHOUT_RESUME_MESSAGE =
+  "Orca hasn't reached this workspace's VM for several minutes, and its recipe has no resume " +
+  'step to restart it. If the VM is gone, delete this workspace and create it again.'
+
+/** A paired VM server Orca could not reach for minutes, that is not ready now and that the user
+ *  did not disconnect. */
+function isPairedServerContactLost(environmentId: string): boolean {
+  return (
+    isRuntimeEnvironmentContactLost(environmentId) &&
+    !isRuntimeEnvironmentManuallyDisconnected(environmentId) &&
+    getRemoteRuntimeSharedControlDiagnostics(environmentId)?.state !== 'ready'
+  )
 }
 
 /** Nothing retried this server's control socket or health probe while its VM slept; reopen them.

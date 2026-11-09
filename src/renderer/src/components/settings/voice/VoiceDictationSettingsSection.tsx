@@ -1,4 +1,8 @@
 import type { VoiceSettings } from '../../../../../shared/speech-types'
+import {
+  dictationShortcutMode,
+  dictationShortcutModeSettings
+} from '../../../../../shared/dictation-shortcut-mode'
 import { Label } from '../../ui/label'
 import { Separator } from '../../ui/separator'
 import { Switch } from '../../ui/switch'
@@ -21,6 +25,7 @@ export function VoiceDictationSettingsSection({
 }: VoiceDictationSettingsSectionProps): React.JSX.Element {
   const t = useTranslate()
   const shortcutLabel = useShortcutLabel('voice.dictation')
+  const selectedMode = dictationShortcutMode(voiceSettings)
   const modeLabels = {
     auto: t('auto.components.settings.VoicePane.dictationModeAuto', 'Auto'),
     hold: t('auto.components.settings.VoicePane.174da92062', 'Hold'),
@@ -69,10 +74,10 @@ export function VoiceDictationSettingsSection({
           {(['auto', 'hold', 'toggle'] as const).map((mode) => (
             <button
               key={mode}
-              onClick={() => onUpdateVoiceSettings({ dictationMode: mode })}
+              onClick={() => onUpdateVoiceSettings(dictationShortcutModeSettings(mode))}
               disabled={!voiceSettings.enabled}
               className={`rounded-sm px-3 py-1 text-sm transition-colors ${
-                voiceSettings.dictationMode === mode
+                selectedMode === mode
                   ? 'bg-accent font-medium text-accent-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               } ${!voiceSettings.enabled ? 'opacity-50 cursor-not-allowed' : ''}`}

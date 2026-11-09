@@ -1,7 +1,7 @@
 import type {
   BrowserSelectResult,
   BrowserScrollResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import { iterateBrowserTextInsertionChunks } from '../../../../shared/browser-text-insertion-chunks'
 import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from '../protocol/agent-browser-text-argument-budget'

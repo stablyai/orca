@@ -43,7 +43,9 @@ vi.mock('./editor-external-watch-targets', async (importOriginal) => ({
 vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: harness.readRuntimeFileContent
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { useEditorExternalWatch } from './useEditorExternalWatch'

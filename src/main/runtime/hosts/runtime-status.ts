@@ -5,7 +5,7 @@ import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
-} from '../../../shared/browser-runtime-capabilities'
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,

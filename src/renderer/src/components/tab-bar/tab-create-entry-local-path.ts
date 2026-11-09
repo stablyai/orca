@@ -1,5 +1,5 @@
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
-import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
+import { getFolderWorkspaceConnectionId } from '@/lib/workspace/ownership/folder-workspace-connection'
 import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'

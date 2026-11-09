@@ -76,7 +76,7 @@ import type {
   PtyTransportRecoveryState
 } from '../pty-transport-types'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
-import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
+import { localizeWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import {
   RuntimeRpcCallError,

@@ -7,8 +7,8 @@ import {
 } from './stt-session-state'
 import { waitForSttWorkerStop, type SttWorkerStopOutcome } from './stt-worker-stop'
 import { STT_WORKER_HUNG_ERROR } from './stt-worker-process'
+import { LOCAL_DICTATION_STOP_TIMEOUT_MS } from '../../shared/dictation-finish-deadlines'
 
-const STOP_DICTATION_TIMEOUT_MS = 60_000
 // A cancel waits only this long behind a busy decode before giving up on it.
 const DISCARD_DICTATION_TIMEOUT_MS = 2_000
 
@@ -74,7 +74,7 @@ function stopLocalSession(
     worker: engine.worker,
     streamId: session.streamId,
     sink: session.sink,
-    timeoutMs: discard ? DISCARD_DICTATION_TIMEOUT_MS : STOP_DICTATION_TIMEOUT_MS,
+    timeoutMs: discard ? DISCARD_DICTATION_TIMEOUT_MS : LOCAL_DICTATION_STOP_TIMEOUT_MS,
     discard,
     finish: (outcome) => finishLocalStop(state, session, engine, outcome, discard)
   })

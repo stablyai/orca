@@ -15,7 +15,7 @@ import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib
 import {
   findIndexedReviewRepository,
   hasUniqueIndexedRepositoryHost
-} from '@/lib/repository-owner-index'
+} from '@/lib/workspace/ownership/repository-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { prCacheKey } from '../cache/cache-identity'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'

@@ -3473,7 +3473,6 @@
             "a3346fc6ed": "Annuler la création du worktree",
             "532aea14ce": "Annuler",
             "767951265d": "Un problème est survenu lors de la création du worktree.",
-            "vmProvisioningTitle": "Provisionnement de la VM",
             "cancelProvisioning": "Annuler",
             "vmProvisioningLogEmpty": "En attente de la sortie de la recette…"
           }
@@ -16920,7 +16919,8 @@
           "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
           "micDisconnected": "Micro déconnecté. Dictée arrêtée.",
           "cloudLimitReached": "Dictée arrêtée à la limite cloud de 10 minutes.",
-          "stoppedAfterSilence": "Arrêt après une minute de silence"
+          "stoppedAfterSilence": "Arrêt après une minute de silence",
+          "retryUnmatched": "La nouvelle tentative n'a pas pu repérer les mots déjà saisis, ils ont donc tous été insérés."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "La dictée n'a pas pu être insérée, elle a donc été copiée dans le presse-papiers.",
@@ -16928,7 +16928,21 @@
           "lost": "La dictée n'a pu être ni insérée ni copiée."
         },
         "DictationIndicator": {
-          "4977162383": "Trop fort"
+          "4977162383": "Trop fort",
+          "finishing": "Finalisation…",
+          "listening": "Écoute…",
+          "cancel": "Annuler",
+          "finish": "Terminer",
+          "oneMinuteLeft": "Plus qu’une minute.",
+          "sendsWhenLanded": "Envoi dès que le texte arrive",
+          "entersWhenLanded": "Entrée dès que le texte arrive"
+        },
+        "DictationPillFailure": {
+          "discard": "Supprimer l'enregistrement",
+          "modelFailed": "Modèle non chargé.",
+          "transcribeFailed": "Échec. Enregistrement conservé.",
+          "openSettings": "Paramètres",
+          "retry": "Réessayer"
         }
       },
       "dashboard": {
@@ -23974,5 +23988,8 @@
     "branchName": "Nom de la branche",
     "invalidBranchName": "Ce nom de branche n’est pas valide. Choisissez un autre nom.",
     "createBranchFailed": "Orca n’a pas pu créer la branche. Vérifiez ce dépôt dans un terminal, puis réessayez."
+  },
+  "checks": {
+    "gitlabAllowedFailure": "Échec autorisé"
   }
 }

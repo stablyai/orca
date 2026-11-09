@@ -1341,6 +1341,30 @@
       "sessionLimit": "Trop d'appareils dictent sur cet ordinateur. Réessayez quand l'un d'eux aura terminé.",
       "sessionLost": "La dictée a perdu sa connexion à l'ordinateur. Réessayez.",
       "updateFailed": "Impossible de mettre à jour les paramètres de dictée"
+    },
+    "controls": {
+      "start": "Dicter",
+      "starting": "Démarrage de la dictée",
+      "stop": "Arrêter et insérer",
+      "finishing": "Finalisation de la dictée",
+      "cancel": "Annuler la dictée",
+      "meterOnPhone": "Enregistrement, {{duration}}, sur ce téléphone",
+      "meterOn": "Enregistrement, {{duration}}, sur {{computer}}",
+      "meterOnComputer": "Enregistrement, {{duration}}, sur l’ordinateur",
+      "meter": "Enregistrement, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} seconde",
+      "durationSeconds_other": "{{count}} secondes",
+      "durationSeconds_many": "{{count}} secondes",
+      "durationMinutes_one": "{{count}} minute",
+      "durationMinutes_other": "{{count}} minutes",
+      "durationMinutes_many": "{{count}} minutes"
+    },
+    "status": {
+      "finishingOn": "Finalisation sur {{computer}}",
+      "finishingOnComputer": "Finalisation sur l’ordinateur",
+      "movedTo": "Passé sur {{computer}}",
+      "movedToComputer": "Passé sur l’ordinateur"
     }
   },
   "files": {
@@ -1573,6 +1597,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Supprimer « {{name}} » ({{branch}}) ?",
+      "deleteDestroysEnvironment": "Cela détruit aussi l’environnement « {{environment}} » qu’Orca a créé pour lui, avec les modifications non validées et les terminaux en cours qui s’y trouvent.",
+      "deleteKeepsEnvironment": "L’environnement « {{environment}} » qu’Orca a créé pour lui continue de tourner : sa recette n’a pas d’étape de destruction.",
       "deleteWorktree": "Supprimer le worktree",
       "pin": "Épingler",
       "primaryWorktreeDeleteHint": "Worktree principal — impossible à supprimer. Retirez plutôt le projet.",
@@ -2470,11 +2496,7 @@
     "terminalInputActions": {
       "attachFileHint": "Appuyez longuement pour joindre un fichier à la place.",
       "attachPhoto": "Joindre une photo",
-      "sendingImage": "Envoi de l'image",
-      "startDictation": "Démarrer la dictée vocale",
-      "startingDictation": "Démarrage de la dictée vocale",
-      "stopDictation": "Arrêter la dictée vocale",
-      "transcribingDictation": "Transcription de la dictée vocale"
+      "sendingImage": "Envoi de l'image"
     },
     "terminalLiveInputStatus": {
       "listening": "Écoute en cours",
@@ -2483,8 +2505,6 @@
       "processing": "Traitement en cours",
       "releaseMicHint": "Relâchez le micro pour arrêter",
       "startingMic": "Démarrage du micro",
-      "stopHint": "Touchez le micro pour arrêter",
-      "transcribing": "Transcription sur l'ordinateur",
       "uploadingImage": "Envoi de l'image à l'hôte",
       "uploadingImageTitle": "Envoi de l'image"
     },
@@ -2578,7 +2598,8 @@
       "insertFailed": "Impossible d'insérer la dictée",
       "insertFailedCopied": "Impossible d'insérer la dictée ; elle a été copiée dans le presse-papiers",
       "inserted": "Dictée insérée",
-      "stoppedAfterSilence": "Arrêt après une minute de silence"
+      "stoppedAfterSilence": "Arrêt après une minute de silence",
+      "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes."
     },
     "useNativeChatStop": {
       "stopNotSent": "Commande d'arrêt non envoyée",
@@ -2903,6 +2924,8 @@
       "dictationHeading": "DICTÉE",
       "dictationMode": "Mode de dictée",
       "dictationModeDescription": "Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que vous maintenez l'appui.",
+      "dictationModeWithAutoDescription": "Auto : appuyez pour démarrer et arrêter ; sur votre ordinateur, maintenir le raccourci enregistre jusqu’à ce que vous relâchiez. Maintien : dictez tant que vous maintenez l’appui. Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter.",
+      "autoMode": "Auto",
       "downloadFailed": "Échec du téléchargement",
       "enableDictation": "Activer la dictée vocale",
       "holdMode": "Maintien",

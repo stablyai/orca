@@ -14,7 +14,7 @@ import type { RuntimeCapability } from '../../../src/shared/protocol-version'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
-} from '../../../src/shared/browser-screencast-protocol'
+} from '../../../src/shared/browser/screencast/browser-screencast-protocol'
 import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,

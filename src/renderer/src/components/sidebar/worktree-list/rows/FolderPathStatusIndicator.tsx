@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import {
   getFolderWorkspacePathStatusDescription,
   getFolderWorkspacePathStatusTitle
-} from '@/lib/folder-workspace-path-status'
+} from '@/lib/workspace/paths/folder-workspace-path-status'
 import {
   isConfirmedStaleFolderPathStatus,
   type FolderWorkspacePathStatus

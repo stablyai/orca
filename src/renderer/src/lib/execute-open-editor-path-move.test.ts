@@ -27,7 +27,7 @@ vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) =
 import { useAppStore } from '@/store'
 import { executeOpenEditorPathMove } from './execute-open-editor-path-move'
 
-import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation-generation'
+import { captureWorktreeOperationGenerationSnapshot } from './workspace/ownership/worktree-operation-generation'
 
 import {
   drawTabsFromMain,

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { linearIssueComments } from '@/runtime/linear/runtime-linear-issue-client'
-import type { RowLessSource as RuntimeLinearSettings } from '@/lib/default-creation-host'
+import type { RowLessSource as RuntimeLinearSettings } from '@/runtime/hosts/selection/default-creation-host'
 import {
   initLinearIssueEditState,
   type LinearEditState,

@@ -169,7 +169,8 @@ export function useMobileSessionNativeChatDictation(
     onError: (err) => {
       dictationRouteContextRef.current = null
       reportDictationFailure(err)
-    }
+    },
+    onAudioLimitReached: () => showToast(nativeChatDictationCopy.stoppedAtCloudLimit())
   })
 
   const dictationLeaveHold = useMobileDictationLeaveHold(dictation)

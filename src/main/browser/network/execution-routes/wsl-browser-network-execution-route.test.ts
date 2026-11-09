@@ -13,7 +13,7 @@ import type { BrowserNetworkExecutionRoute } from './browser-network-execution-r
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
   BrowserNetworkTunnelStreamFrameWriter
-} from '../../../../shared/browser-network-tunnel-stream-framing'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-stream-framing'
 import { resolveWslBrowserNetworkExecutionRoute } from './wsl-browser-network-execution-route'
 
 class FakeDestination extends EventEmitter implements BrowserNetworkTunnelSocket {

@@ -6,7 +6,7 @@ import {
   toWorktreeRelativePath
 } from '../../../../shared/terminal/links/terminal-links'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { basename, joinPath } from '@/lib/path'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'

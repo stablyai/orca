@@ -3720,7 +3720,6 @@
             "a3346fc6ed": "Worktree-Erstellung abbrechen",
             "532aea14ce": "Abbrechen",
             "767951265d": "Beim Erstellen des Worktrees ist ein Fehler aufgetreten.",
-            "vmProvisioningTitle": "VM wird bereitgestellt",
             "cancelProvisioning": "Abbrechen",
             "vmProvisioningLogEmpty": "Warten auf Rezeptausgabe…"
           }
@@ -16969,7 +16968,8 @@
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
           "micDisconnected": "Mikrofon getrennt. Diktat gestoppt.",
           "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
-          "stoppedAfterSilence": "Nach einer Minute Stille beendet"
+          "stoppedAfterSilence": "Nach einer Minute Stille beendet",
+          "retryUnmatched": "Beim erneuten Versuch war nicht erkennbar, welche Wörter schon eingegeben waren, daher wurden alle eingefügt."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Das Diktat konnte nicht eingefügt werden und wurde in die Zwischenablage kopiert.",
@@ -16977,7 +16977,21 @@
           "lost": "Das Diktat konnte weder eingefügt noch kopiert werden."
         },
         "DictationIndicator": {
-          "4977162383": "Zu laut"
+          "4977162383": "Zu laut",
+          "finishing": "Wird abgeschlossen…",
+          "listening": "Hört zu…",
+          "cancel": "Abbrechen",
+          "finish": "Fertig",
+          "oneMinuteLeft": "Noch eine Minute.",
+          "sendsWhenLanded": "Sendet, sobald der Text da ist",
+          "entersWhenLanded": "Drückt Enter, sobald der Text da ist"
+        },
+        "DictationPillFailure": {
+          "discard": "Aufnahme verwerfen",
+          "modelFailed": "Modell nicht geladen.",
+          "transcribeFailed": "Nicht erkannt. Aufnahme behalten.",
+          "openSettings": "Einstellungen",
+          "retry": "Wiederholen"
         }
       },
       "dashboard": {
@@ -23567,5 +23581,8 @@
     "branchName": "Branch-Name",
     "invalidBranchName": "Dieser Branchname ist ungültig. Wähle einen anderen Namen.",
     "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut."
+  },
+  "checks": {
+    "gitlabAllowedFailure": "Fehlschlag erlaubt"
   }
 }
