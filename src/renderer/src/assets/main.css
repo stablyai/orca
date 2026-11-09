@@ -588,6 +588,42 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   margin-left: 0;
 }
 
+/* Why: Sonner's 24px buttons with untokened fills don't match Orca; mirror Button size="sm" default/secondary. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transition:
+    opacity 0.4s,
+    box-shadow 0.2s,
+    background-color 150ms;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:hover {
+  background: color-mix(in oklab, var(--primary) 90%, transparent);
+}
+
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-button][data-cancel] {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-button][data-cancel]:hover {
+  background: color-mix(in oklab, var(--secondary) 80%, transparent);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
   line-height: 1.35;
 }

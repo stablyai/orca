@@ -5,7 +5,7 @@ import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
-import { checkedMailboxes } from './mailbox-message-receipt'
+import { checkedMailboxes, withReportFollowUps } from './mailbox-message-receipt'
 import { withRunCheckNext } from '../receipt-next'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { hasRunBindingKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
@@ -51,7 +51,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
         if (consumingCheck) {
           runtime.withdrawStaleChatMail(checkedMailboxes(result))
         }
-        return result
+        return withReportFollowUps(db, result)
       }
       if (params.run || boundRun) {
         const result = await checkRunMailbox({

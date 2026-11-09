@@ -16,7 +16,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 
-export type AgentPaneThreadsStoreData = Pick<
+export type AllAgentPaneThreadsStoreData = Pick<
   AppState,
   | 'agentStatusByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'
@@ -39,11 +39,20 @@ export type AgentPaneThreadsStoreData = Pick<
   worktreeMap: ReturnType<typeof getIndexedWorktreeMap>
   repoMap: ReturnType<typeof getIndexedRepoMap>
   generatedTitlesEnabled: boolean
+}
+
+export type AgentPaneThreadsStoreData = AllAgentPaneThreadsStoreData & {
   /** Focused-host fallback for hostless worktrees, shared by the scope filter and the row actions. */
   defaultHostId: ExecutionHostId
 }
 
-export function useAgentPaneThreadStoreData(): AgentPaneThreadsStoreData {
+/** Focused-host fallback for the scope filter and row actions; the unscoped list never reads it. */
+export function useAgentPaneThreadsDefaultHostId(): ExecutionHostId {
+  return useAppStore((s) => getSettingsFocusedExecutionHostId(s.settings))
+}
+
+/** Store inputs for every Activity thread, before any view scope. */
+export function useAllAgentPaneThreadStoreData(): AllAgentPaneThreadsStoreData {
   // Keep original native tabs for owner-qualified names; preserve terminal projections across focus writes.
   const tabProjectionRef = useRef<{
     raw: AppState['unifiedTabsByWorktree'] | null
@@ -77,8 +86,7 @@ export function useAgentPaneThreadStoreData(): AgentPaneThreadsStoreData {
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,
       unacknowledgeAgents: s.unacknowledgeAgents,
-      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true,
-      defaultHostId: getSettingsFocusedExecutionHostId(s.settings)
+      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
     }))
   )
 }

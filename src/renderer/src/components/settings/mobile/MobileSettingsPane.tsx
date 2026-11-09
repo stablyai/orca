@@ -8,7 +8,7 @@ import {
 } from './mobile-settings-search'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { MobileRelayBetaNotice } from './pairing/MobileRelayBetaNotice'
+import { MobileRelayBetaNotice } from '../../mobile/pairing/MobileRelayBetaNotice'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 const ORCA_IOS_APP_STORE_URL = 'https://apps.apple.com/app/orca-ide/id6766130217'

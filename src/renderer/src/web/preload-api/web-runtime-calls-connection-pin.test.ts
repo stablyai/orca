@@ -19,8 +19,11 @@ vi.mock('./web-runtime-session', () => ({
   updateEnvironmentFromResponse: () => undefined
 }))
 
-import { callEnvironmentEnvelope } from './web-runtime-calls'
-import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../web-runtime-request-registry'
+import { callEnvironmentEnvelope, callRuntimeResult } from './web-runtime-calls'
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  RuntimeRpcCallError
+} from '../../runtime/rpc/calls/runtime-rpc-result'
 
 describe('web runtime call pinned to the probed runtime', () => {
   beforeEach(() => {
@@ -43,7 +46,7 @@ describe('web runtime call pinned to the probed runtime', () => {
 
     await expect(
       callEnvironmentEnvelope('env-1', 'files.write', {}, 15_000, undefined, 'runtime-a')
-    ).rejects.toThrow(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+    ).rejects.toBeInstanceOf(RuntimeConnectionChangedBeforeSendError)
     expect(session.client.call).not.toHaveBeenCalledWith(
       'files.write',
       expect.anything(),
@@ -63,5 +66,25 @@ describe('web runtime call pinned to the probed runtime', () => {
       {},
       { timeoutMs: 15_000, expectedConnectionEpoch: 2 }
     )
+  })
+})
+
+it('preserves runtime failure details for web callers', async () => {
+  session.client.call.mockResolvedValueOnce({
+    id: 'rpc',
+    ok: false,
+    error: {
+      code: 'runtime_error',
+      message: 'Cannot add project',
+      data: { reason: 'windows_drive' }
+    }
+  })
+
+  const error = await callRuntimeResult('repo.add').catch((failure: unknown) => failure)
+  expect(error).toBeInstanceOf(RuntimeRpcCallError)
+  expect(error).toMatchObject({
+    code: 'runtime_error',
+    message: 'Cannot add project',
+    response: { error: { data: { reason: 'windows_drive' } } }
   })
 })

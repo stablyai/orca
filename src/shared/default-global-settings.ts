@@ -97,7 +97,7 @@ export function buildDefaultSettings(args: {
     terminalUseSeparateLightTheme: true,
     terminalColorOverridesSplit: true,
     terminalThemeLight: 'Builtin Tango Light',
-    claudeCodeThemeSync: true,
+    claudeCodeThemeSync: false,
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
     terminalInactivePaneOpacity: args.terminalInactivePaneOpacity,
@@ -313,6 +313,7 @@ export function buildDefaultSettings(args: {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
-    voice: args.voice
+    voice: args.voice,
+    voiceDictationModeDefaultedToAuto: true
   }
 }

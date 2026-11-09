@@ -1,4 +1,4 @@
-import type { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
+import type { acquireEditorFileOperation } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import type { LocalFileAccess } from '../../../../../../shared/file-access/local-file-access'
 import type { EditorSaveResult, EditorSaveTrigger } from './editor-save-disk-precondition'
 

@@ -5,10 +5,10 @@ import {
 } from '../../../src/shared/rpc-contract/speech-params'
 import type { DictationCaptureChunk } from '../platform/dictation-capture-contract'
 
-// Five minutes of 16 kHz PCM (9.6 MB): what an on-device dictation keeps to replay to the computer if the phone fails.
-const MAX_HELD_AUDIO_BYTES = DICTATION_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * 300
+// Five minutes of 16 kHz PCM (9.6 MB): the longest recording kept for a replay to the computer.
+export const MAX_HELD_AUDIO_BYTES = DICTATION_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * 300
 
-// Speech not sent yet, in order: held between the tap and the host's start reply, while every send slot is busy, and for a whole on-device dictation.
+// Speech not sent yet, in order: held between the tap and the host's start reply, while every send slot is busy, and for a replay of the recording.
 export class MobileDictationHeldAudio {
   private held: DictationCaptureChunk[] = []
   private heldBytes = 0

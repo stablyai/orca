@@ -409,6 +409,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
               <NativeChatComposerWorkspace
                 terminalTabId={terminalTabId}
                 structuredTransport={structuredTransport}
+                isWorking={isWorking}
               />
             ) : undefined
           }

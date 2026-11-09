@@ -101,6 +101,7 @@ export const ptySessionControlApi = {
   write: (id: string, data: string, inputKind: TerminalInputKind): void => {
     ipcRenderer.send('pty:write', { id, data, inputKind })
   },
+  noteUserInput: (): void => ipcRenderer.send('pty:noteUserInput'),
   writeAccepted: (
     id: string,
     data: string,

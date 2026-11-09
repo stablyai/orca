@@ -32,8 +32,8 @@ import {
   sessionSearchReadErrorMessage,
   sessionSearchStatusDetails,
   sessionSearchStatusMessage
-} from './session-history-status-copy'
-import { useSessionSearchStatus } from './use-session-search-status'
+} from '../../session-search/session-search-status'
+import { useSessionSearchStatus } from '../../session-search/use-session-search-status'
 import { useRuntimeEnvironmentCatalog } from '../runtime-environments/catalog/use-runtime-environment-catalog'
 
 export function SessionHistorySettingsPane({
@@ -190,7 +190,7 @@ export function SessionHistorySettingsPane({
               )
             : t(
                 'sessionHistory.settings.computersConsent',
-                'Each computer keeps a searchable copy of its own agent conversations and tool output. Nothing leaves that computer.'
+                'Each computer keeps a searchable copy of its own agent conversations. Nothing leaves that computer.'
               )}
         </p>
       </div>

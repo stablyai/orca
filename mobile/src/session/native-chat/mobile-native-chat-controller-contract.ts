@@ -56,6 +56,8 @@ export type MobileNativeChatController = {
   nativeChatStructured: boolean
   nativeChatVisualSource: MobileNativeChatVisualSource | null
   nativeChatItemSource: MobileNativeChatVisualSource | null
+  /** The paired desktop's CI result lines setting; false until it reports one. */
+  nativeChatShowsCiResultLines: boolean
   /** Working or waiting on the reader: keeps the turn clock running. */
   nativeChatTurnActive: boolean
   nativeChatAwaitingInput: NativeChatAwaitingInput | null

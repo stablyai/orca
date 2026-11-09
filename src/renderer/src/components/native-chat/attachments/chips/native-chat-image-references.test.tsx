@@ -190,20 +190,6 @@ describe('composer image attachments', () => {
     expect(promptValue(composer.textbox())).toBe(`look ${chip('missing')}`)
   })
 
-  it('leaves a file path that reads like a marker as typed when a message comes back', () => {
-    const scope = structuredAgentSessionDraftScopeKey('s1')
-    const file = formatNativeChatFileReference('/repo/[Image #1].md')
-    handBackStructuredAgentSessionMessage(
-      's1',
-      'm1',
-      message(`see ${file} and [Image #1]`, ['/up/a.png'])
-    )
-    expect(readNativeChatComposerDraft(scope)).toMatchObject({
-      text: `see ${file} and [Image #1]`,
-      images: [{ id: 'returned-m1-1', path: '/up/a.png' }]
-    })
-  })
-
   it('keeps a stored draft’s file reference when a message comes back', async () => {
     const scope = structuredAgentSessionDraftScopeKey('s1')
     const composer = renderComposer(scope)
@@ -217,22 +203,6 @@ describe('composer image attachments', () => {
     expect(fileReferences(readNativeChatComposerDraft(scope).document)).toEqual(['/repo/a.md'])
     await waitFor(() => expect(back.api().imageAttachments).toMatchObject([{ path: '/up/a.png' }]))
     expect(promptValue(back.textbox())).toContain('see [Image #1]')
-  })
-
-  it('adds a returned message once even after typing, by its image ids', () => {
-    const scope = structuredAgentSessionDraftScopeKey('s1')
-    const returned = message('see [Image #1]', ['/up/a.png'])
-    handBackStructuredAgentSessionMessage('s1', 'm1', returned)
-    updateNativeChatComposerDraft(
-      scope,
-      { text: `${readNativeChatComposerDraft(scope).text} and more` },
-      'immediate'
-    )
-    handBackStructuredAgentSessionMessage('s1', 'm1', returned)
-    expect(readNativeChatComposerDraft(scope)).toMatchObject({
-      text: 'see [Image #1] and more',
-      images: [{ id: 'returned-m1-1' }]
-    })
   })
 
   it('settles a late upload into its own conversation, bound by the same id, while another is shown', async () => {

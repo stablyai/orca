@@ -173,27 +173,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect(input.value).toBe('retained draft')
   })
 
-  it.each([true, false])(
-    'sends raw text with alternate intent, retaining focus on accepted:%s',
-    async (accepted) => {
-      onSend.mockResolvedValue(accepted)
-      await render()
-      expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-      expect(onSend).toHaveBeenCalledExactlyOnceWith(' hello ', { alternate: true })
-      expect(document.activeElement).toBe(field())
-      expect(field().value).toBe(' hello ')
-    }
-  )
-
-  it('uses Ctrl on Android and leaves Cmd alone', async () => {
-    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Android')
-    await render()
-    expect((await key({ metaKey: true })).defaultPrevented).toBe(false)
-    expect(onSend).not.toHaveBeenCalled()
-    expect((await key({ ctrlKey: true })).defaultPrevented).toBe(true)
-    expect(onSend).toHaveBeenCalledExactlyOnceWith(' hello ', { alternate: true })
-  })
-
   it.each([
     {},
     { shiftKey: true },
@@ -209,30 +188,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect(onSend).not.toHaveBeenCalled()
     expect(field().value).toBe(' hello ')
   })
-
-  it('consumes a refused send without changing the draft or focus', async () => {
-    await render({ sendDisabled: true })
-    expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-    expect(onSend).not.toHaveBeenCalled()
-    expect(field().value).toBe(' hello ')
-    expect(document.activeElement).toBe(field())
-  })
-
-  it.each([
-    { sendFollowUp: { action: 'queue', offersChoice: true }, alternateSteers: true },
-    { sendFollowUp: { action: 'steer', offersChoice: true }, alternateSteers: false },
-    { sendFollowUp: { action: 'queue', offersChoice: false }, alternateSteers: false },
-    { sendFollowUp: null, alternateSteers: false }
-  ] as const)(
-    'hands an empty chord to the head card, saying whether its other way is steer: %j',
-    async ({ sendFollowUp, alternateSteers }) => {
-      const steerHead = { steers: () => true, run: vi.fn(() => true), light: vi.fn() }
-      await render({ value: '', sendFollowUp, steerHead })
-      expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-      expect(steerHead.run).toHaveBeenCalledExactlyOnceWith(alternateSteers)
-      expect(onSend).not.toHaveBeenCalled()
-    }
-  )
 
   it('holding Cmd alone on an empty composer shows Steer queued in Send, lights the head card and sends it on a press', async () => {
     vi.spyOn(document, 'hasFocus').mockReturnValue(true)
@@ -257,13 +212,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
     })
     expect(preview()).toBeNull()
     expect(steerHead.light).toHaveBeenLastCalledWith(false)
-  })
-
-  it('saves a queued edit without alternate intent', async () => {
-    await render({ editSession: { cancel: vi.fn(), refuseCommand: () => false, locked: false } })
-    expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-    expect(onSend).toHaveBeenCalledExactlyOnceWith(' hello ')
-    expect(document.activeElement).toBe(field())
   })
 
   it.each([

@@ -21,6 +21,7 @@ export function ConversationTabDescription({
   bodySaving,
   bodyChanged,
   body,
+  bodyImageUrls,
   resolvedBodyDraft,
   markdownGitHubRepo,
   setBodyDraft,
@@ -37,6 +38,7 @@ export function ConversationTabDescription({
   bodySaving: boolean
   bodyChanged: boolean
   body: string
+  bodyImageUrls?: Record<string, string>
   resolvedBodyDraft: string
   markdownGitHubRepo: GitHubOwnerRepo | null
   setBodyDraft: (value: string) => void
@@ -136,6 +138,7 @@ export function ConversationTabDescription({
         ) : body.trim() ? (
           <CommentMarkdown
             content={body}
+            bodyImageUrls={bodyImageUrls}
             variant="document"
             githubRepo={markdownGitHubRepo}
             className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
