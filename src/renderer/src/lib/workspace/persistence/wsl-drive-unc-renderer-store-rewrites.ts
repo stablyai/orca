@@ -16,12 +16,12 @@ import type {
   WslDriveUncPendingRendererRewrite,
   WslDriveUncRendererKeys
 } from '../../../../../shared/wsl-drive-unc-renderer-store-keys'
-import { WSL_MOVE_RENDERER_REWRITE_STORE_IDS as WSL_DRIVE_UNC_RENDERER_STORE_IDS } from '../../../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
+import { WSL_MOVE_RENDERER_REWRITE_STORE_IDS } from '../../../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 
 const APPLIED_STORAGE_KEY = 'orca.wsl-drive-unc.renderer-rewrites.v1'
 const MAX_APPLIED_MARKERS = 256
 
-type StoreId = (typeof WSL_DRIVE_UNC_RENDERER_STORE_IDS)[number]
+type StoreId = (typeof WSL_MOVE_RENDERER_REWRITE_STORE_IDS)[number]
 
 // Loaded only when a conversion is pending, so a profile without one never pays for these modules.
 const STORE_REWRITES: Record<StoreId, (keys: WslDriveUncRendererKeys) => Promise<void>> = {
@@ -74,7 +74,7 @@ function writeAppliedMarker(marker: string): void {
 
 async function rewriteConversion(conversion: WslDriveUncPendingRendererRewrite): Promise<void> {
   const keys = wslDriveUncRendererKeys(conversion)
-  for (const storeId of WSL_DRIVE_UNC_RENDERER_STORE_IDS) {
+  for (const storeId of WSL_MOVE_RENDERER_REWRITE_STORE_IDS) {
     const marker = `${conversion.migrationId}:${storeId}`
     try {
       if (!readAppliedMarkers().includes(marker)) {
