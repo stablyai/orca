@@ -208,7 +208,7 @@ describe('Codex structured child-work producer', () => {
       })
     send(turn('turn/started', REVIEWER, 'r1'))
     send(message('r1', 'before announcement'))
-    expect(send(turn('turn/completed', REVIEWER, 'r1', 'unknown'))).toEqual([])
+    expect(send({ method: 'thread/closed', params: { threadId: REVIEWER } })).toEqual([])
     expect(send(spawned(REVIEWER, 'review', 'p1'))).toEqual([
       expect.objectContaining({ type: 'ended', lastMessage: 'before announcement' })
     ])
@@ -223,7 +223,7 @@ describe('Codex structured child-work producer', () => {
         child: expect.objectContaining({ lastMessage: 'future reply' })
       })
     ])
-    expect(send(turn('turn/completed', REVIEWER, 'r2', 'unknown'))).toEqual([
+    expect(send({ method: 'thread/closed', params: { threadId: REVIEWER } })).toEqual([
       expect.objectContaining({ type: 'ended', lastMessage: 'future reply' })
     ])
     expect(send(turn('turn/completed', REVIEWER, 'r2'))).toEqual([

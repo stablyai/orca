@@ -164,8 +164,14 @@ export class CodexSubagentExecutions {
     }
     const lineage: CodexExecutionChild[] = []
     const seen = new Set<string>()
-    for (const root of roots) {
-      const pending = [root]
+    const orderedRoots = [...roots]
+      .flatMap((root) => {
+        const child = selected.get(root)
+        return child ? [child] : []
+      })
+      .sort((a, b) => a.observationOrder - b.observationOrder)
+    for (const root of orderedRoots) {
+      const pending = [root.agentThreadId]
       for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
         const child = selected.get(id)
         if (!child || seen.has(id)) {

@@ -138,7 +138,7 @@ describe('Codex sub-agent Stop', () => {
       turn: { id: 'helper-turn-2', status: 'inProgress' }
     })
     await new Promise((resolve) => setImmediate(resolve))
-    await expect(codex.stop([HELPER])).rejects.toBe(timeout)
+    await expect(codex.stop(['grandchild', HELPER])).rejects.toBe(timeout)
     expect(codex.interrupts()).toEqual([
       { threadId: HELPER, turnId: 'helper-turn-2' },
       { threadId: 'grandchild', turnId: 'grandchild-turn' }
