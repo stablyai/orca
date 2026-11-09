@@ -100,11 +100,14 @@ export function cloudApiError(
     return new RuntimeClientError(
       'cloud_unauthorized',
       inVm
-        ? 'Orca Cloud rejected this workspace token (it is replaced at each boot and revoked on sleep or destroy).'
+        ? 'Orca Cloud rejected this workspace token. In-workspace CLI access may be turned off for the organization (that revokes every workspace token at once), or the token was replaced at boot or revoked on sleep.'
         : 'Orca Cloud rejected the token: it is expired, revoked or for another control plane.',
       data(
         inVm
-          ? ['Restart the workspace to get a fresh token, or set ORCA_CLOUD_TOKEN to an API key.']
+          ? [
+              'Ask an organization owner or admin to check in-workspace CLI access in Orca Cloud settings (vmCliEnabled); once it is on, restart the workspace for a fresh token.',
+              'Or set ORCA_CLOUD_TOKEN to an API key.'
+            ]
           : context.credentials.source === 'env'
             ? ['Set ORCA_CLOUD_TOKEN to a valid API key or session token.']
             : ['Run `orca cloud login --token <token>` with a fresh API key or session token.']

@@ -240,7 +240,7 @@ describe('cloud API error messages', () => {
 
   it('explains token expiry differently for workspace tokens and keys', () => {
     expect(cloudApiError(401, { error: 'unauthorized' }, { credentials: vm }).message).toContain(
-      'each boot'
+      'turned off for the organization'
     )
     expect(cloudApiError(401, { error: 'unauthorized' }, { credentials: user }).data).toMatchObject(
       {
