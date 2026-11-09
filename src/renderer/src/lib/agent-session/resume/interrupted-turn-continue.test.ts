@@ -254,3 +254,23 @@ describe('safety', () => {
     expect(submit).not.toHaveBeenCalled()
   })
 })
+
+describe('person in charge', () => {
+  it('leaves the relaunched agent alone once a person typed into it after the restart', async () => {
+    const buffer = await import('@/components/terminal-pane/input/wake-input-buffer')
+    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'codex') }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    buffer.noteUserInputForPane('1', NOW + 3)
+    state.agentStatusByPaneKey = {
+      'tab-a:1': working('tab-a:1', 'codex', {
+        state: 'done',
+        updatedAt: NOW + 1,
+        stateStartedAt: NOW + 1
+      })
+    }
+    const { submit, send, deps: d } = deps()
+    expect(await continueInterruptedTurns('ws', d)).toBe(0)
+    expect(submit).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+  })
+})

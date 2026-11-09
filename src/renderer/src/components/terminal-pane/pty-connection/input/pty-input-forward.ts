@@ -21,6 +21,7 @@ import { recordAdmittedTerminalUserInput } from '@/lib/telemetry'
 import {
   captureWakeInput,
   hasWakeInput,
+  noteUserInputForPane,
   rebindWakeInputTarget
 } from '../../input/wake-input-buffer'
 import { findColdRestoreResumeSource } from '../startup/cold-restore-resume-startup'
@@ -184,6 +185,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   session.onDataDisposable = subscribeToTerminalInputData(
     session.pane.terminal,
     (data, wasUserInput) => {
+      if (wasUserInput) {
+        noteUserInputForPane(wakeInputKey)
+      }
       // Typing into a workspace whose server is waking is accepted now and delivered, in order,
       // once this pane is attached to the woken terminal.
       if (

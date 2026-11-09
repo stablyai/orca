@@ -24,11 +24,8 @@ import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
 import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
-import { useWakeInput } from './use-wake-input'
-import {
-  clearWakeInput,
-  subscribeWakeInputDelivered
-} from '@/components/terminal-pane/input/wake-input-buffer'
+import { useWakeInput, useWakeInputNotices } from './use-wake-input'
+import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buffer'
 import {
   runRestartCloudWorkspace,
   runUnarchiveCloudWorkspace,
@@ -229,21 +226,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   const now = useNow(1_000, view.wake !== undefined)
   // Typing is accepted while a wake is in flight, so the terminal stays visible and typeable.
   const wakeInput = useWakeInput(workspaceId)
-  useEffect(
-    () =>
-      subscribeWakeInputDelivered((delivery) => {
-        if (delivery.workspaceId === workspaceId && delivery.submitted) {
-          // Enter is never replayed into the woken terminal: the person runs it after a look.
-          toast(
-            t(
-              'orcaCloudWorkspace.typedWhileWaking',
-              'What you typed is on the prompt. Press Enter to run it.'
-            )
-          )
-        }
-      }),
-    [workspaceId, t]
-  )
+  useWakeInputNotices(workspaceId)
   const overlay = useWakeOverlay(
     view.wake,
     Math.max(now, view.wake?.at ?? 0),

@@ -19,7 +19,7 @@ import {
   isInterruptedTurnContinued,
   markInterruptedTurnContinued
 } from '@/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup'
-import { paneReceivedWakeTyping } from '@/components/terminal-pane/input/wake-input-buffer'
+import { paneHadUserInputSince } from '@/components/terminal-pane/input/wake-input-buffer'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import {
   isAgentForegroundWrapperProcess,
@@ -159,9 +159,9 @@ async function continueOne(turn: ArmedTurn, deps: ContinueDeps): Promise<boolean
   while (deps.now() < deadline) {
     if (
       continuedOnItsOwn(turn.paneKey, turn.armedAt) ||
-      // A cold-restore resume already carried `continue`, or the person is driving the pane.
+      // A cold-restore resume already carried `continue`, or a person typed into the pane since.
       isInterruptedTurnContinued(turn.turnKey) ||
-      paneReceivedWakeTyping(leafOf(turn.paneKey), turn.armedAt)
+      paneHadUserInputSince(leafOf(turn.paneKey), turn.armedAt)
     ) {
       return false
     }

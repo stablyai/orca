@@ -7,7 +7,9 @@
 // and other control keys are dropped. Held typing is dropped when the wake fails, a while after it
 // settles without a terminal to take it, and when the workspace wakes again.
 
-export const WAKE_INPUT_CAP = 4096
+import { applyWakeInput } from './wake-input-text'
+
+export { WAKE_INPUT_CAP, applyWakeInput } from './wake-input-text'
 const FLUSH_POLL_MS = 100
 /** A wake nobody settles stops holding typing after this, and the typing is dropped. */
 export const WAKE_INPUT_MAX_HOLD_MS = 90_000
@@ -18,6 +20,8 @@ type PaneBuffer = {
   text: string
   /** Enter was pressed: the person meant to submit; shown as "press Enter to run" after insertion. */
   submitted: boolean
+  /** Text followed an Enter (a multi-line paste): joining the lines would change the command. */
+  multiline: boolean
   deliver: (data: string) => void
   isReady: () => boolean
   /** The pane's transport was seen not ready during the wake, so "ready" means re-attached. */
@@ -32,6 +36,8 @@ type WorkspaceWake = {
 }
 
 export type WakeInputDelivery = { workspaceId: string; paneId: string; submitted: boolean }
+/** Held typing that was not sent (wake failed, never re-attached, multi-line). */
+export type WakeInputDropped = { workspaceId: string }
 
 const wakes = new Map<string, WorkspaceWake>()
 if (import.meta.env?.DEV && typeof window !== 'undefined') {
@@ -40,8 +46,10 @@ if (import.meta.env?.DEV && typeof window !== 'undefined') {
 }
 const listeners = new Set<() => void>()
 const deliveryListeners = new Set<(delivery: WakeInputDelivery) => void>()
-/** Panes whose typing was delivered after a wake (the continue logic leaves those alone). */
-const typedPanes = new Map<string, number>()
+const droppedListeners = new Set<(dropped: WakeInputDropped) => void>()
+/** Last time a person's input reached each pane (layout leaf); the continue logic leaves those alone. */
+const lastUserInputByPane = new Map<string, number>()
+const USER_INPUT_MEMORY_MS = 30 * 60_000
 let timer: ReturnType<typeof setInterval> | null = null
 let version = 0
 
@@ -50,73 +58,6 @@ function changed(): void {
   for (const listener of listeners) {
     listener()
   }
-}
-
-/**
- * Applies typed `data` to held `text`: printable characters append, Backspace removes one, Ctrl-C
- * clears, Enter/Tab are noted (Enter) or kept (Tab), everything else (escape sequences, other
- * controls) is dropped.
- */
-export function applyWakeInput(
-  held: { text: string; submitted: boolean },
-  data: string
-): { text: string; submitted: boolean } {
-  let text = held.text
-  let submitted = held.submitted
-  for (let i = 0; i < data.length; i++) {
-    const ch = data[i]!
-    const code = ch.charCodeAt(0)
-    if (code === 0x1b) {
-      const next = data[i + 1]
-      if (next === '[') {
-        i += 2
-        while (i < data.length && !/[\x40-\x7e]/.test(data[i]!)) {
-          i++
-        }
-      } else if (next === ']') {
-        // OSC: up to BEL or ST (ESC \).
-        i += 2
-        while (
-          i < data.length &&
-          data[i] !== '\x07' &&
-          !(data[i] === '\x1b' && data[i + 1] === '\\')
-        ) {
-          i++
-        }
-        if (data[i] === '\x1b') {
-          i++
-        }
-      } else if (next === 'O') {
-        i += 2
-      } else if (next !== undefined) {
-        i += 1
-      }
-      continue
-    }
-    if (code === 0x03) {
-      text = ''
-      submitted = false
-      continue
-    }
-    if (code === 0x7f || code === 0x08) {
-      text = Array.from(text).slice(0, -1).join('')
-      continue
-    }
-    if (code === 0x0d || code === 0x0a) {
-      // Never replayed: the person submits after reviewing what landed.
-      submitted = text.length > 0
-      continue
-    }
-    if (code === 0x09) {
-      text += ch
-      continue
-    }
-    if (code < 0x20 || (code >= 0x80 && code < 0xa0)) {
-      continue
-    }
-    text += ch
-  }
-  return { text: text.slice(0, WAKE_INPUT_CAP), submitted }
 }
 
 function ensureTimer(): void {
@@ -134,9 +75,32 @@ function stopTimerIfIdle(): void {
   }
 }
 
-function drop(workspaceId: string): void {
-  if (wakes.delete(workspaceId)) {
-    changed()
+function hasHeldText(wake: WorkspaceWake): boolean {
+  for (const pane of wake.panes.values()) {
+    if (pane.text) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Drops a workspace's held typing; tells the window when keys were actually lost. */
+function discard(workspaceId: string, wake: WorkspaceWake, notify: boolean): void {
+  const lost = notify && hasHeldText(wake)
+  wakes.delete(workspaceId)
+  pruneUserInput()
+  if (lost) {
+    for (const listener of droppedListeners) {
+      listener({ workspaceId })
+    }
+  }
+}
+
+function pruneUserInput(now = Date.now()): void {
+  for (const [paneId, at] of lastUserInputByPane) {
+    if (now - at > USER_INPUT_MEMORY_MS) {
+      lastUserInputByPane.delete(paneId)
+    }
   }
 }
 
@@ -146,17 +110,17 @@ function pump(now = Date.now()): void {
   for (const [workspaceId, wake] of wakes) {
     if (wake.outcome === 'pending' && now - wake.startedAt > WAKE_INPUT_MAX_HOLD_MS) {
       // Nobody settled this wake: whatever it attaches to now is unknown, so nothing is sent.
-      wakes.delete(workspaceId)
+      discard(workspaceId, wake, true)
       didChange = true
       continue
     }
     if (wake.outcome === 'failed') {
-      wakes.delete(workspaceId)
+      discard(workspaceId, wake, true)
       didChange = true
       continue
     }
     if (wake.settledAt !== null && now - wake.settledAt > WAKE_INPUT_SETTLED_GRACE_MS) {
-      wakes.delete(workspaceId)
+      discard(workspaceId, wake, true)
       didChange = true
       continue
     }
@@ -183,12 +147,19 @@ function pump(now = Date.now()): void {
       if (!pane.sawUnready && wake.outcome !== 'ready') {
         continue
       }
-      const { text, submitted } = pane
+      const { text, submitted, multiline } = pane
       wake.panes.delete(paneId)
       didChange = true
+      if (multiline) {
+        // Several lines held: inserting them joined would change the command; send nothing.
+        for (const listener of droppedListeners) {
+          listener({ workspaceId })
+        }
+        continue
+      }
       try {
         pane.deliver(text)
-        typedPanes.set(paneId, now)
+        lastUserInputByPane.set(paneId, now)
         for (const listener of deliveryListeners) {
           listener({ workspaceId, paneId, submitted })
         }
@@ -197,7 +168,7 @@ function pump(now = Date.now()): void {
       }
     }
     if (wake.outcome !== 'pending' && wake.panes.size === 0) {
-      wakes.delete(workspaceId)
+      discard(workspaceId, wake, false)
       didChange = true
     }
   }
@@ -265,6 +236,7 @@ export function captureWakeInput(
   const pane: PaneBuffer = existing ?? {
     text: '',
     submitted: false,
+    multiline: false,
     deliver,
     isReady,
     sawUnready: false
@@ -274,6 +246,7 @@ export function captureWakeInput(
   const next = applyWakeInput(pane, data)
   pane.text = next.text
   pane.submitted = next.submitted
+  pane.multiline = next.multiline
   wake.panes.set(paneId, pane)
   ensureTimer()
   changed()
@@ -305,7 +278,8 @@ export function clearWakeInput(workspaceId: string): void {
   }
   wake.panes.clear()
   if (wake.outcome !== 'pending') {
-    drop(workspaceId)
+    discard(workspaceId, wake, false)
+    changed()
     return
   }
   changed()
@@ -324,9 +298,14 @@ export function getWakeInputCount(workspaceId: string | null | undefined): numbe
   return count
 }
 
-/** True when typing went to this pane after its last wake (since `since`). */
-export function paneReceivedWakeTyping(paneId: string, since: number): boolean {
-  const at = typedPanes.get(paneId)
+/** Any person's input reached this pane (layout leaf). Called for every admitted keystroke. */
+export function noteUserInputForPane(paneId: string, at = Date.now()): void {
+  lastUserInputByPane.set(paneId, at)
+}
+
+/** True when a person's input reached this pane since `since` (wake typing included). */
+export function paneHadUserInputSince(paneId: string, since: number): boolean {
+  const at = lastUserInputByPane.get(paneId)
   return at !== undefined && at >= since
 }
 
@@ -342,6 +321,13 @@ export function subscribeWakeInputDelivered(
   return () => deliveryListeners.delete(listener)
 }
 
+export function subscribeWakeInputDropped(
+  listener: (dropped: WakeInputDropped) => void
+): () => void {
+  droppedListeners.add(listener)
+  return () => droppedListeners.delete(listener)
+}
+
 export function getWakeInputVersion(): number {
   return version
 }
@@ -349,7 +335,7 @@ export function getWakeInputVersion(): number {
 /** Tests: drops every wake and stops the pump. */
 export function resetWakeInputForTests(): void {
   wakes.clear()
-  typedPanes.clear()
+  lastUserInputByPane.clear()
   if (timer) {
     clearInterval(timer)
     timer = null
