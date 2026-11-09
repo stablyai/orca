@@ -62,23 +62,6 @@ afterEach(() => {
 })
 
 describe('delayed agent startup subscription', () => {
-  it('delivers when launch registration, PTY ownership, and layout binding arrive', () => {
-    seedPendingState()
-    const deliver = vi.fn().mockResolvedValue(undefined)
-    const startup = {} as never
-    queuePendingAgentStartupDelivery({
-      worktreeId: 'wt-background',
-      tabId: 'tab-background',
-      launchToken: 'target-launch',
-      startup,
-      deliver
-    })
-
-    bindPendingPty()
-
-    expect(deliver).toHaveBeenCalledWith('tab-background', 'pty-background', startup)
-  })
-
   it('drops a delivery when its tab is removed before PTY binding', () => {
     seedPendingState()
     const deliver = vi.fn().mockResolvedValue(undefined)

@@ -1390,6 +1390,7 @@
       "movedTo": "Ce téléphone a arrêté de transcrire. Suite sur {{computer}}.",
       "movedToComputer": "Ce téléphone a arrêté de transcrire. Suite sur l’ordinateur.",
       "stoppedKept": "Dictée arrêtée. {{reason}}. Votre enregistrement est conservé.",
+      "stoppedKeptGeneric": "Dictée arrêtée. Votre enregistrement est conservé.",
       "stillListening": "Toujours à l’écoute."
     },
     "pill": {
