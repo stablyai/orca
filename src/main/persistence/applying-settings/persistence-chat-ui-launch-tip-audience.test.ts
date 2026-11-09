@@ -77,7 +77,7 @@ describe('project grouping upgrade tip cohort', () => {
     writeDataFile({ repos: checkouts, settings: {} })
     const store = createStore()
     const audience = store.getProjectGroupingUpgradeTipAudience()
-    expect(audience).toMatchObject({ membership: 'eligible', hostId: 'local', checkoutCount: 2 })
+    expect(audience).toMatchObject({ membership: 'eligible', projectCount: 1 })
     store.updateUI({ contextualToursSeenIds: ['project-grouping-upgrade'] })
     store.updateUI({ contextualToursSeenIds: [] })
     store.updateSettings({ projectGroupingMode: 'folder' })
@@ -85,6 +85,19 @@ describe('project grouping upgrade tip cohort', () => {
     const loaded = await reopen()
     expect(loaded.getProjectGroupingUpgradeTipAudience()).toEqual(audience)
     expect(loaded.getUI().contextualToursSeenIds).toContain('project-grouping-upgrade')
+  })
+  it('counts every project with split checkouts', () => {
+    const other = checkouts.map((repo, index) => ({
+      ...repo,
+      id: `other-${index}`,
+      path: `/work/api-${index}`,
+      upstream: { owner: 'org', repo: 'api' }
+    }))
+    writeDataFile({ repos: [...checkouts, ...other], settings: {} })
+    expect(createStore().getProjectGroupingUpgradeTipAudience()).toMatchObject({
+      membership: 'eligible',
+      projectCount: 2
+    })
   })
   it.each([
     ['one checkout', checkouts.slice(0, 1), {}],

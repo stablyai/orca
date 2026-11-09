@@ -1,40 +1,30 @@
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
-import { getExecutionHostLabel, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { LocalizedContextualTourStepCopy } from './contextual-tour-step-copy'
 
-/** Names the captured project and its host, read when the tip renders. */
+/** Counts the combined projects, naming the project when there is only one. */
 export function getProjectGroupingUpgradeTipCopy(): LocalizedContextualTourStepCopy {
   const state = useAppStore.getState()
   const audience = state.projectGroupingUpgradeTipAudience
-  const group =
-    audience?.membership === 'eligible'
-      ? getProjectGroupingIndexFromState(state).groupByKey.get(`project:${audience.projectId}`)
-      : undefined
-  const parsed = audience?.membership === 'eligible' ? parseExecutionHostId(audience.hostId) : null
-  const host = parsed
-    ? (state.settings?.hostSettingOverrides?.[parsed.id]?.displayLabel ??
-      (parsed.kind === 'ssh'
-        ? state.sshTargetLabels.get(parsed.targetId)
-        : parsed.kind === 'runtime'
-          ? state.runtimeEnvironments.find((entry) => entry.id === parsed.environmentId)?.name
-          : null) ??
-      getExecutionHostLabel(parsed.id))
-    : ''
+  const eligible = audience?.membership === 'eligible' ? audience : null
+  const group = eligible
+    ? getProjectGroupingIndexFromState(state).groupByKey.get(`project:${eligible.projectId}`)
+    : undefined
   return {
-    title: translate('settings.projectGrouping.upgrade.title', '{{project}} is now one project', {
-      project: group?.label ?? ''
-    }),
-    body: translate(
-      'settings.projectGrouping.upgrade.body',
-      'Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History.',
-      {
-        count: audience?.membership === 'eligible' ? audience.checkoutCount : 0,
-        project: group?.label ?? '',
-        host
-      }
-    ),
+    title: translate('settings.projectGrouping.upgrade.title', 'Your checkouts were combined'),
+    body:
+      eligible?.projectCount === 1
+        ? translate(
+            'settings.projectGrouping.upgrade.bodyProject',
+            'For {{project}}, Orca now groups multiple checkouts of the same repo into one project.',
+            { project: group?.label ?? '' }
+          )
+        : translate(
+            'settings.projectGrouping.upgrade.bodyProjects',
+            'For {{count}} projects, Orca now groups multiple checkouts of the same repo into one project.',
+            { count: eligible?.projectCount ?? 0 }
+          ),
     primaryActionLabel: translate('settings.projectGrouping.upgrade.gotIt', 'Got it')
   }
 }

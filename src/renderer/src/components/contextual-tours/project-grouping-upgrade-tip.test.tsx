@@ -17,14 +17,12 @@ import type { SettingsNavigationModel } from '../settings/navigation/use-setting
 import type { SettingsTerminalModel } from '../settings/page/use-settings-terminal-model'
 import { useProjectGroupingUpgradeTip } from './use-project-grouping-upgrade-tip'
 import { useSettingsHostNavigation } from '../settings/host-scope/use-settings-host-navigation'
-import { getLocalizedContextualTourStepCopy } from './contextual-tour-step-copy'
 
 const audience = {
   version: 1 as const,
   membership: 'eligible' as const,
   projectId: 'github:org/app',
-  hostId: 'local',
-  checkoutCount: 2
+  projectCount: 1
 }
 function Tip() {
   useProjectGroupingUpgradeTip()
@@ -75,7 +73,7 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
-it.each(['Got it', 'Dismiss tour', 'Group checkouts in Settings'])(
+it.each(['Got it', 'Dismiss tour', 'Settings'])(
   'dismisses the actual upgrade overlay permanently through %s',
   async (action) => {
     const scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo')
@@ -88,12 +86,11 @@ it.each(['Got it', 'Dismiss tour', 'Group checkouts in Settings'])(
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(100)
     const user = userEvent.setup()
     const view = render(<Tip />)
-    expect(await screen.findByText('App is now one project')).toBeTruthy()
-    expect(screen.getByText(/Your 2 checkouts of App/)).toBeTruthy()
+    expect(await screen.findByText('Your checkouts were combined')).toBeTruthy()
     await user.click(await screen.findByRole('button', { name: action }))
     expect(useAppStore.getState().contextualToursSeenIds).toContain('project-grouping-upgrade')
-    expect(screen.queryByText('App is now one project')).toBeNull()
-    if (action === 'Group checkouts in Settings') {
+    expect(screen.queryByText('Your checkouts were combined')).toBeNull()
+    if (action === 'Settings') {
       expect(useAppStore.getState().settingsNavigationTarget).toBeNull()
       expect(useAppStore.getState().activeView).toBe('settings')
       await waitFor(() =>
@@ -118,7 +115,7 @@ it.each(['Got it', 'Dismiss tour', 'Group checkouts in Settings'])(
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
     })
-    expect(screen.queryByText('App is now one project')).toBeNull()
+    expect(screen.queryByText('Your checkouts were combined')).toBeNull()
   }
 )
 
@@ -129,7 +126,7 @@ it('consumes the audience when a separate mode is chosen before first display', 
   expect(useAppStore.getState().contextualToursSeenIds).toContain('project-grouping-upgrade')
   act(() => useAppStore.setState({ settings: getDefaultSettings('') }))
   await act(async () => {})
-  expect(screen.queryByText('App is now one project')).toBeNull()
+  expect(screen.queryByText('Your checkouts were combined')).toBeNull()
 })
 
 vi.mock('../settings/general/WorkspaceDirectorySetting', () => ({
@@ -226,40 +223,3 @@ function SettingsDestination() {
     </div>
   )
 }
-
-it('uses the runtime environment name and retains explicit host-copy precedence', () => {
-  useAppStore.setState({
-    projectGroupingUpgradeTipAudience: { ...audience, hostId: 'runtime:server' },
-    runtimeEnvironments: [
-      {
-        id: 'server',
-        name: 'Build server',
-        createdAt: 1,
-        updatedAt: 1,
-        lastUsedAt: null,
-        runtimeId: null,
-        endpoints: [
-          {
-            id: 'socket',
-            kind: 'websocket',
-            label: 'Server',
-            endpoint: 'ws://server'
-          }
-        ],
-        preferredEndpointId: 'socket'
-      }
-    ]
-  })
-  expect(getLocalizedContextualTourStepCopy('project-grouping-upgrade')?.body).toContain(
-    'on Build server'
-  )
-  useAppStore.setState({
-    settings: {
-      ...getDefaultSettings(''),
-      hostSettingOverrides: { 'runtime:server': { displayLabel: 'My server' } }
-    }
-  })
-  expect(getLocalizedContextualTourStepCopy('project-grouping-upgrade')?.body).toContain(
-    'on My server'
-  )
-})

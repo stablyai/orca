@@ -2200,8 +2200,8 @@
     },
     "projectGrouping": {
       "upgrade": {
-        "body_one": "Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History.",
-        "body_other": "Your {{count}} checkouts of {{project}} on {{host}} used to show as separate projects. Orca now groups every checkout of a repository into one project, here and in Session History."
+        "bodyProject": "For {{project}}, Orca now groups multiple checkouts of the same repo into one project.",
+        "bodyProjects": "For {{count}} projects, Orca now groups multiple checkouts of the same repo into one project."
       }
     },
     "repository": {

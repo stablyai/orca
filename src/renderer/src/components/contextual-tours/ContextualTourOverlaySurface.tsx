@@ -231,7 +231,7 @@ export function ContextualTourOverlaySurface({
               i18n={i18n}
               defaults={translate(
                 'settings.projectGrouping.upgrade.link',
-                'To keep them separate, change <settings>Group checkouts in Settings</settings>.'
+                'You can change this grouping in <settings>Settings</settings>.'
               )}
               components={{
                 settings: (

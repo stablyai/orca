@@ -14,8 +14,7 @@ const Audience = z.discriminatedUnion('membership', [
     version: z.literal(1),
     membership: z.literal('eligible'),
     projectId: z.string(),
-    hostId: z.string(),
-    checkoutCount: z.number().int().min(2)
+    projectCount: z.number().int().min(1)
   })
 ])
 export type ProjectGroupingUpgradeTipAudience = z.infer<typeof Audience>
@@ -47,18 +46,15 @@ export function captureProjectGroupingUpgradeTipAudience(
     paths.add(getProjectCheckoutPathKey(setup))
     surfaces.set(key, paths)
   }
+  const projectIds = new Set<string>()
   for (const setup of setups) {
-    const checkoutCount =
-      surfaces.get(`${setup.projectId}::${getProjectHostNamespace(setup)}`)?.size ?? 0
-    if (checkoutCount > 1) {
-      return {
-        version: 1,
-        membership: 'eligible',
-        projectId: setup.projectId,
-        hostId: setup.hostId,
-        checkoutCount
-      }
+    if ((surfaces.get(`${setup.projectId}::${getProjectHostNamespace(setup)}`)?.size ?? 0) > 1) {
+      projectIds.add(setup.projectId)
     }
+  }
+  const [projectId] = projectIds
+  if (projectId) {
+    return { version: 1, membership: 'eligible', projectId, projectCount: projectIds.size }
   }
   return { version: 1, membership: 'excluded' }
 }
