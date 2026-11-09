@@ -15,6 +15,7 @@ vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
 )
 
 import { createMainWindow } from './createMainWindow'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
@@ -69,6 +70,10 @@ describe('createMainWindow', () => {
       getSettings: () => ({ windowBackgroundBlur: false, voice }) as never,
       updateUI: vi.fn()
     } as never)
+    // A focused browser page forwards only keydown, so it hands the chord over unless Hold needs the release.
+    const pageForwardsDictation = vi.mocked(browserManager.setDictationShortcutForwardingPredicate)
+      .mock.lastCall?.[0]
+    expect(pageForwardsDictation?.()).toBe(false)
 
     const isDarwin = process.platform === 'darwin'
     const dictationInput = {
@@ -91,6 +96,7 @@ describe('createMainWindow', () => {
 
     // #18691: with no model the renderer still needs the chord to show its setup toast.
     voice.enabled = true
+    expect(pageForwardsDictation?.()).toBe(true)
     const noModelPreventDefault = vi.fn()
     windowHandlers['before-input-event']({ preventDefault: noModelPreventDefault }, dictationInput)
     expect(noModelPreventDefault).toHaveBeenCalledTimes(1)
@@ -99,6 +105,7 @@ describe('createMainWindow', () => {
     webContents.send.mockClear()
     voice.sttModel = 'test-model'
     voice.dictationMode = 'hold'
+    expect(pageForwardsDictation?.()).toBe(false)
     const holdPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: holdPreventDefault } as never,
@@ -108,6 +115,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
     voice.dictationMode = 'auto'
+    expect(pageForwardsDictation?.()).toBe(true)
     const autoPreventDefault = vi.fn()
     windowHandlers['before-input-event']({ preventDefault: autoPreventDefault }, dictationInput)
     expect(autoPreventDefault).not.toHaveBeenCalled()
