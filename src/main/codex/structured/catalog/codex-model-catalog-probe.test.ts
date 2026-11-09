@@ -47,7 +47,7 @@ it.each(['saved', 'recover'] as const)(
     })
     const resolved = await probe.resolve?.(
       { variable: 'CODEX_HOME', path: '/pinned' },
-      undefined,
+      '/probe',
       lookup
     )
     expect((await resolved?.run())?.models[0]?.id).toBe('gpt-live')

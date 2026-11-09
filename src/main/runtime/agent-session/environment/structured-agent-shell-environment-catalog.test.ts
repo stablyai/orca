@@ -88,13 +88,18 @@ function rig(overlay?: Record<string, string>) {
 
 it('keeps a Windows catalog source while only a shadowed inherited path changes', async () => {
   vi.stubGlobal('process', { ...process, platform: 'win32' })
-  const h = rig({ path: '/configured/bin' })
+  const overlay = { path: '/configured/bin' }
+  const h = rig(overlay)
   const source = h.service.captureSource(h.record)
   cleanups.push(() => source.release?.())
   await captureHostShellEnvironment(async () => {
     shell.next = { PATH: '/changed', IGNORED: 'a' }
   })
   expect(source()).toBe(true)
+  await captureHostShellEnvironment(async () => {
+    overlay.path = '/new-configured/bin'
+  })
+  expect(source()).toBe(false)
 })
 
 it('retires a producer on effective Refresh before new publication and fences late defaults and new old reports', async () => {
