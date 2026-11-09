@@ -30,7 +30,7 @@ export function environmentReadyToRecipeResult(
       driverState: ready.handle.driverState
     }
   }
-  const connection = { ...ready.connection }
+  const connection = getEphemeralVmRecipeResultConnection(ready.result)
   return checkoutMode === 'provisioned-root'
     ? { schemaVersion: 2, checkoutMode: 'provisioned-root', connection, userData }
     : { schemaVersion: 1, connection, userData }

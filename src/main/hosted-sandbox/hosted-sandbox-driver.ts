@@ -154,7 +154,7 @@ function toReady(ready: HostedSandboxReadyResponse): EnvironmentReady {
       environmentId: ready.sandbox.id,
       driverState: { sandboxId: ready.sandbox.id }
     },
-    connection: ready.connection,
+    result: { schemaVersion: 1, connection: ready.connection },
     session
   }
 }

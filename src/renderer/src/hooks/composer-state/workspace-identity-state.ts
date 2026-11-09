@@ -29,7 +29,7 @@ import {
   filterEnabledTuiAgents,
   isTuiAgentEnabled
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
 
 /** Older drafts lack naming intent; restore baseBranch as the branch pick it represented when saved. */

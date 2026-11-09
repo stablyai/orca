@@ -6,7 +6,8 @@ import {
   isAgentApiKeyAgent,
   type AgentApiKeySummary
 } from '../../../../../shared/agent-api-keys/agent-api-key-catalog'
-import { AgentIcon, getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { getAgentCatalog, getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {

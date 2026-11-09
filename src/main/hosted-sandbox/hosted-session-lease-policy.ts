@@ -67,10 +67,11 @@ export function decideHostedLeaseAction(input: {
       return { kind: 'rollover', reason: 'opportunistic' }
     }
   }
+  const leaseExpiresAt = session.leaseExpiresAt ?? null
   if (
-    session.leaseExpiresAt !== null &&
-    session.leaseExpiresAt - now <= HOSTED_LEASE_POLICY.renewWhenRemainingMs &&
-    (deadlineAt === null || session.leaseExpiresAt < deadlineAt)
+    leaseExpiresAt !== null &&
+    leaseExpiresAt - now <= HOSTED_LEASE_POLICY.renewWhenRemainingMs &&
+    (deadlineAt === null || leaseExpiresAt < deadlineAt)
   ) {
     return { kind: 'renew', extendMs: HOSTED_LEASE_POLICY.renewByMs }
   }

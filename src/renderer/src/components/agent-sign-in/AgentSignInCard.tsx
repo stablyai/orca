@@ -1,6 +1,6 @@
 import { CircleAlert, Copy, ExternalLink } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { PasteCodeForm } from './AgentSignInPasteCodeForm'

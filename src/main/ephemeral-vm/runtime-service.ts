@@ -4,15 +4,12 @@ import {
   updateEphemeralVmRuntimeStatus
 } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import {
-  runEphemeralVmRecipeCleanup,
-  runEphemeralVmRecipeResume,
-  runEphemeralVmRecipeSuspend,
-  runEphemeralVmRecipeStart,
-  type EphemeralVmRecipeContext,
-  type EphemeralVmRecipeStartFailure,
-  type EphemeralVmRecipeStartSuccess
+import type {
+  EphemeralVmRecipeContext,
+  EphemeralVmRecipeStartFailure,
+  EphemeralVmRecipeStartSuccess
 } from '../../shared/ephemeral-vm-recipe-runner'
+import { ShellRecipeDriver } from '../environment-providers/shell-recipe-driver'
 import {
   beginEphemeralVmProvisioning,
   endEphemeralVmProvisioning,
@@ -109,9 +106,7 @@ export async function provisionEphemeralVmRuntime(
 ): Promise<ProvisionEphemeralVmRuntimeResult> {
   const writeAhead = beginEphemeralVmProvisioning(args)
   try {
-    const start = await runEphemeralVmRecipeStart({
-      repoPath: args.repoPath,
-      recipe: args.recipe,
+    const start = await new ShellRecipeDriver(args.recipe, args.repoPath).runCreate({
       context: {
         projectId: args.projectId,
         workspaceId: args.workspaceId,
@@ -183,9 +178,7 @@ async function cleanupEphemeralVmRuntimeOnce(
     cleanupLastError: null,
     updatedAt: now
   })
-  const cleanup = await runEphemeralVmRecipeCleanup({
-    repoPath: args.repoPath,
-    recipe: args.recipe,
+  const cleanup = await new ShellRecipeDriver(args.recipe, args.repoPath).runDestroy({
     context: contextFromRuntime(args.repoPath, running),
     recipeResult: running.recipeResult,
     signal: args.signal,
@@ -227,9 +220,7 @@ export async function suspendEphemeralVmRuntime(
   if (!existing.recipeResult) {
     throw new Error(`Ephemeral VM runtime never finished provisioning: ${args.runtimeId}`)
   }
-  const suspend = await runEphemeralVmRecipeSuspend({
-    repoPath: args.repoPath,
-    recipe: args.recipe,
+  const suspend = await new ShellRecipeDriver(args.recipe, args.repoPath).runSuspend({
     context: contextFromRuntime(args.repoPath, existing),
     recipeResult: existing.recipeResult,
     signal: args.signal,
@@ -264,9 +255,7 @@ export async function resumeEphemeralVmRuntime(
   if (!existing.recipeResult) {
     throw new Error(`Ephemeral VM runtime never finished provisioning: ${args.runtimeId}`)
   }
-  const resume = await runEphemeralVmRecipeResume({
-    repoPath: args.repoPath,
-    recipe: args.recipe,
+  const resume = await new ShellRecipeDriver(args.recipe, args.repoPath).runResume({
     context: contextFromRuntime(args.repoPath, existing),
     recipeResult: existing.recipeResult,
     signal: args.signal,

@@ -17,7 +17,7 @@ function setup(options: { token?: string; fetch?: typeof fetch } = {}) {
     getAccessToken: async () => options.token ?? plane.token,
     fetch: options.fetch ?? plane.fetch
   })
-  return { plane, driver: createHostedSandboxDriver(client) }
+  return { plane, client, driver: createHostedSandboxDriver(client) }
 }
 
 async function rejection(promise: Promise<unknown>): Promise<unknown> {
@@ -28,9 +28,10 @@ async function rejection(promise: Promise<unknown>): Promise<unknown> {
 }
 
 runEnvironmentProviderDriverContract('HostedSandboxDriver', async () => {
-  const { plane, driver } = setup()
+  const { plane, client, driver } = setup()
   return {
     driver,
+    reopenDriver: () => createHostedSandboxDriver(client),
     liveEnvironmentIds: async () =>
       [...plane.sandboxes.values()].filter((s) => s.status !== 'destroyed').map((s) => s.id)
   }

@@ -12,7 +12,7 @@ import {
   resolveRuntimeHostTerminalWindowsShell,
   resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget
-} from '@/lib/agent-resume-launch-target'
+} from '@/lib/agent-session/resume/agent-resume-launch-target'
 import {
   agentResumeOriginNamesAnotherExecutionHost,
   sleepingRecordNamesAnotherExecutionHost

@@ -15,7 +15,11 @@ import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-envi
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import { applyResumedRuntimePairing } from '../ephemeral-vm/runtime-resume-pairing'
 import { noteRecipeVmWakePairing } from '../ephemeral-vm/recipe-vm-wake-pairings'
-import type { EnvironmentProviderDriver } from '../environment-providers/environment-provider-driver'
+import type {
+  EnvironmentProviderDriver,
+  EnvironmentReady
+} from '../environment-providers/environment-provider-driver'
+import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
 import {
   environmentHandleFromRecipeResult,
   environmentReadyToRecipeResult
@@ -105,7 +109,7 @@ export function createHostedSessionRegistry(deps: {
         const { environment } = await applyResumedRuntimePairing({
           userDataPath: deps.userDataPath,
           environmentId: runtimeEnvironmentId,
-          pairingCode: ready.connection.pairingCode,
+          pairingCode: hostedPairingCode(ready),
           invalidateTransport: invalidateRuntimeEnvironmentTransport
         })
         noteRecipeVmWakePairing(
@@ -168,4 +172,12 @@ export function createHostedSessionRegistry(deps: {
       }
     }
   }
+}
+
+function hostedPairingCode(ready: EnvironmentReady): string {
+  const connection = getEphemeralVmRecipeResultConnection(ready.result)
+  if (connection.type !== 'orca-server') {
+    throw new Error('Orca Cloud returned a connection that is not an Orca server.')
+  }
+  return connection.pairingCode
 }

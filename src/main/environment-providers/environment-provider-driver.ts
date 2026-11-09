@@ -1,6 +1,6 @@
-// One lifecycle seam for VM-backed workspaces: shell recipes, hosted Orca Cloud sandboxes and later
-// plugin providers all answer the same calls, and capability flags (not provider ids) drive the UX.
-import type { JsonValue } from '../../shared/ephemeral-vm-recipes'
+// One lifecycle seam for VM-backed workspaces: every environment provider answers the same calls,
+// and capability flags (not provider ids) decide what the UI offers.
+import type { EphemeralVmRecipeResult, JsonValue } from '../../shared/ephemeral-vm-recipes'
 
 export type EnvironmentProviderCapabilities = Readonly<{
   /** Suspend keeps memory and processes; false means suspend/resume is a reboot from disk. */
@@ -9,10 +9,10 @@ export type EnvironmentProviderCapabilities = Readonly<{
   maxSessionMs: number | null
   /** The filesystem (worktree, auth homes, orcad identity) survives suspend. */
   fsPersistOnStop: boolean
-  /** Secrets can be injected at the egress proxy instead of living in the VM. */
-  egressInjection: boolean
   /** Orca-owned idle stop; null when the provider has none. */
   idleStopMs: number | null
+  /** Secrets can be injected at the egress proxy instead of living in the VM. */
+  egressInjection?: boolean
 }>
 
 export type EnvironmentProviderPhase =
@@ -34,30 +34,26 @@ export type EnvironmentProviderCallContext = {
 export type EnvironmentCreateSpec = {
   /** Orca's workspace id; one environment per workspace. */
   workspaceId: string
+  workspaceName?: string
+  projectId?: string
   machineSize?: string
   region?: string
   repo?: { url: string; ref?: string }
 }
 
-/** Persisted in the runtime record; `driverState` is opaque to everything but the driver. */
+/** Persisted with the runtime record; `driverState` is opaque to everything but the driver. */
 export type EnvironmentHandle = {
   driverId: string
   environmentId: string
   driverState: Record<string, JsonValue>
 }
 
-export type EnvironmentConnection = {
-  type: 'orca-server'
-  pairingCode: string
-  projectRoot: string
-}
-
 export type EnvironmentSessionInfo = {
   startedAt: number
   /** When the provider will end this session regardless of activity. */
   deadlineAt: number | null
-  /** When the current Orca lease lapses unless renewed. */
-  leaseExpiresAt: number | null
+  /** Session-capped providers: when the current Orca lease lapses unless renewed. */
+  leaseExpiresAt?: number | null
 }
 
 export type EnvironmentStatus =
@@ -77,7 +73,8 @@ export type EnvironmentStatusSnapshot = {
 
 export type EnvironmentReady = {
   handle: EnvironmentHandle
-  connection: EnvironmentConnection
+  /** Same document a shell recipe prints, so runtime records, pairing and resume keep one path. */
+  result: EphemeralVmRecipeResult
   session: EnvironmentSessionInfo
 }
 
@@ -114,21 +111,21 @@ export type EnvironmentProviderDriver = {
 
 export const ENVIRONMENT_PROVIDER_ERROR_CODES = [
   'unauthorized',
-  'entitlement_denied',
   'not_found',
   'conflict',
   'invalid_request',
   'unavailable',
   'timeout',
   'aborted',
-  'invalid_response'
+  'invalid_response',
+  'entitlement_denied'
 ] as const
 
 export type EnvironmentProviderErrorCode = (typeof ENVIRONMENT_PROVIDER_ERROR_CODES)[number]
 
 export class EnvironmentProviderError extends Error {
   readonly code: EnvironmentProviderErrorCode
-  /** Machine-readable detail, e.g. the billing deny reason for `entitlement_denied`. */
+  /** Machine-readable provider detail, e.g. the Orca failure-copy code behind the message. */
   readonly reason: string | null
 
   constructor(code: EnvironmentProviderErrorCode, message: string, reason: string | null = null) {

@@ -77,8 +77,9 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       } as unknown as Document
 
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -174,8 +175,9 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('restores hidden Codex output after a suppressed exit revives the same ptyId with a restarted seq counter', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -276,8 +278,9 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('restores hidden Codex output when the pty seq counter restarts without an observed exit', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current:
@@ -355,8 +358,9 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('writes ordinary hidden output live instead of proactively restoring a snapshot', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -409,8 +413,9 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('pauses capable paired output while hidden and restores exactly on reveal', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const remotePtyId = 'remote:env-1@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       let callbacks: ConnectCallbacks = {}
@@ -554,8 +559,9 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
 
     it('locally gates hidden paired output when a legacy host cannot pause it', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const remotePtyId = 'remote:legacy-env@@terminal-1'
       const transport = createMockTransport(remotePtyId)
       let callbacks: ConnectCallbacks = {}
