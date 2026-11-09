@@ -11,6 +11,7 @@ import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import { useMobileTasksHostedCommentReviewActions } from './use-mobile-tasks-hosted-comment-review-actions'
 import { useMobileTasksMutation } from './use-mobile-tasks-workspace-and-project-state'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
+import { useTaskCommentDraft } from './task-draft-rows'
 import { useMobileTasksItemDetailLoading } from './use-mobile-tasks-item-detail-loading'
 
 vi.mock('./mobile-tasks-dependencies', async () => ({
@@ -60,6 +61,7 @@ async function mount(loadDetails = false) {
       itemState.readDetailPayload,
       itemState.reconcilePrFileConnection
     )
+    const [itemCommentDraft, setItemCommentDraft] = useTaskCommentDraft(selection.actionItem)
     const mutation = useMobileTasksMutation()
     const [items, setItems] = useState<TaskItem[]>([selected])
     const [error, setError] = useState('')
@@ -70,6 +72,8 @@ async function mount(loadDetails = false) {
       ...selection,
       ...mutation,
       ...itemState,
+      itemCommentDraft,
+      setItemCommentDraft,
       client,
       tasksSupported: true,
       setError,

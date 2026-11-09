@@ -120,9 +120,9 @@ export function updateFederatedDispatchRuntimeEpoch(
     .prepare(
       `UPDATE federated_dispatches
        SET remote_runtime_epoch = ?, updated_at = datetime('now')
-       WHERE dispatch_id = ?`
+       WHERE dispatch_id = ? AND remote_runtime_epoch IS NOT ?`
     )
-    .run(remoteRuntimeEpoch, dispatchId)
+    .run(remoteRuntimeEpoch, dispatchId, remoteRuntimeEpoch)
 }
 
 export type FederatedDispatchStoreMethods = {

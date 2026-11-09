@@ -9,12 +9,12 @@ import {
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   getStructuredAgentSessionStatusFeed,
   structuredAgentSessionStatusFeedKey,
   type StructuredAgentSessionStatusFeedOwner
-} from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
 import {
   createTabOwnerCache,

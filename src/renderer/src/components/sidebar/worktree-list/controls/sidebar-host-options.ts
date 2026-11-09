@@ -8,14 +8,16 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import {
-  buildExecutionHostRegistry,
-  type ExecutionHostHealth,
-  type ExecutionHostRegistryEntry
-} from '../../../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
+import type {
+  EphemeralVmHostLifecycle,
+  ExecutionHostHealth,
+  ExecutionHostVmState
+} from '../../../../../../shared/execution-host/execution-host-health'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 
 import { getExecutionHostHealthLabel } from '@/lib/runtime-host-copy'
-import { pickerExecutionHosts } from '../../../../../../shared/managed-orcad-execution-host'
+import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import { getCheckedHostRows } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import type { RuntimeCompatVerdict } from '../../../../../../shared/protocol-compat'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../../../shared/ssh-types'
@@ -50,6 +52,8 @@ export type SidebarHostOption = {
   // Host menus need the compatibility verdict to explain version skew.
   compatibility?: RuntimeCompatVerdict
   blockedReason?: RuntimeHostBlockedReason
+  /** The VM lifecycle behind a VM-backed host, when it rather than transport explains health. */
+  vmState?: ExecutionHostVmState
   // Host headers use this status to describe authentication requirements.
   connectionStatus?: SshConnectionStatus
   aliasHostIds?: readonly ExecutionHostId[]
@@ -65,6 +69,7 @@ export type SidebarHostScopeOption = {
   label: string
   detail: string
   health: ExecutionHostHealth | 'mixed'
+  vmState?: ExecutionHostVmState
 }
 
 export function buildSidebarHostOptions(
@@ -86,6 +91,7 @@ export function buildSidebarHostOptions(
     wslHostsEnabled?: boolean
     /** True keeps WSL hosts' rows but marks them unable to run in this build. */
     wslHostServerFilesMissing?: boolean
+    ephemeralVmHosts?: readonly EphemeralVmHostLifecycle[]
   },
   t?: Translate
 ): SidebarHostOption[] {
@@ -118,7 +124,8 @@ export function buildSidebarHostOptions(
     sshConnectionStates: args.sshConnectionStates,
     runtimeEnvironments: args.runtimeEnvironments,
     runtimeStatusByEnvironmentId: args.runtimeStatusByEnvironmentId,
-    hostLabelOverrides: args.hostLabelOverrides
+    hostLabelOverrides: args.hostLabelOverrides,
+    ephemeralVmHosts: args.ephemeralVmHosts
   }).map((host) => {
     if (host.kind === 'local') {
       return { ...host, presence: 'local' }
@@ -174,13 +181,14 @@ export function shouldShowHostScopeControls(hosts: readonly SidebarHostOption[])
 }
 
 export function buildSidebarHostScopeOptions(
-  allHosts: readonly SidebarHostOption[]
+  allHosts: readonly SidebarHostOption[],
+  t: Translate = translate
 ): SidebarHostScopeOption[] {
   const hosts = pickerExecutionHosts(allHosts)
   return [
     {
       id: ALL_EXECUTION_HOSTS_SCOPE,
-      label: translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts'),
+      label: t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts'),
       detail: hosts.map((host) => host.label).join(', '),
       health: 'mixed'
     },
@@ -188,27 +196,29 @@ export function buildSidebarHostScopeOptions(
       id: host.id,
       label: host.label,
       detail: host.detail,
-      health: host.health
+      health: host.health,
+      ...(host.vmState ? { vmState: host.vmState } : {})
     }))
   ]
 }
 
 export function getSidebarHostVisibilityLabel(
   visibleHostIds: readonly ExecutionHostId[] | null | undefined,
-  hosts: readonly SidebarHostOption[]
+  hosts: readonly SidebarHostOption[],
+  t: Translate = translate
 ): string {
   const rows = pickerExecutionHosts(hosts)
   const checkedRows = visibleHostIds ? getCheckedHostRows(rows, visibleHostIds) : rows
   if (checkedRows.length === rows.length) {
-    return translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
+    return t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
   }
   if (checkedRows.length === 1) {
     return checkedRows[0].label
   }
   if (checkedRows.length === 0) {
-    return translate('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
+    return t('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
   }
-  return translate('auto.components.sidebar.sidebarHostOptions.visibleHosts', '{{count}} hosts', {
+  return t('auto.components.sidebar.sidebarHostOptions.visibleHosts', '{{count}} hosts', {
     count: checkedRows.length,
     defaultValue_one: '{{count}} host'
   })
@@ -216,11 +226,13 @@ export function getSidebarHostVisibilityLabel(
 
 export function getSidebarHostHealthLabel(
   health: SidebarHostScopeOption['health'],
-  blockedReason?: RuntimeHostBlockedReason
+  blockedReason?: RuntimeHostBlockedReason,
+  t: Translate = translate,
+  vmState?: ExecutionHostVmState
 ): string {
   return health === 'mixed'
-    ? translate('runtime.health.mixed', 'Mixed')
-    : getExecutionHostHealthLabel(health, blockedReason)
+    ? t('runtime.health.mixed', 'Mixed')
+    : getExecutionHostHealthLabel(health, blockedReason, t, vmState)
 }
 
 // Diagnostics do not change host choices; retain every other exposed registry field.

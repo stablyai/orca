@@ -1,5 +1,7 @@
-import type { ConnectionState, RpcResponse } from '../transport/types'
-import { BridgeCapExceededError, BridgeReplyUndeliverableError } from './bridge-host-errors'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { BRIDGE_APP_INACTIVE_FRAME } from './bridge/bridge-app-inactive'
+
+import { BridgeCapExceededError } from './bridge-host-errors'
 import { createNativeVerbServer } from './bridge-host-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
@@ -13,7 +15,7 @@ import {
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
-import { splitBridgeReply } from './bridge/bridge-reply-chunking'
+import { createBridgeHostReplySender } from './bridge-host-reply-sender'
 import { createBridgeHostFrames } from './bridge-host-frames'
 import { createBridgeHostBack } from './bridge-host-back'
 import { createBridgeNotifyForwarder } from './bridge-host-notify'
@@ -66,6 +68,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // re-handshake. Null is a page older than `storageKeys`, which gets the legacy keys only.
   let pageStorageKeys: readonly string[] | null = options.sessionBack?.storageKeys ?? null
   let pageReadsConnectionPath = options.sessionBack?.connectionPathFrames === true
+  let pageReadsAppInactive = options.sessionBack?.appInactiveFrames === true
 
   const frames = createBridgeHostFrames({
     post: options.post,
@@ -144,16 +147,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     )
   }
 
-  function sendReply(id: string, payload: RpcResponse): void {
-    const split = splitBridgeReply(id, payload)
-    if (!split.ok) {
-      sendError(id, new BridgeReplyUndeliverableError(split.refusal))
-      return
-    }
-    for (const frame of split.frames) {
-      sendJson(frame)
-    }
-  }
+  const sendReply = createBridgeHostReplySender(sendJson, sendError)
 
   const requests = new BridgeHostRequests({
     client,
@@ -226,6 +220,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       serving = true
       pageStorageKeys = message.storageKeys ?? null
       pageReadsConnectionPath = message.connectionPathFrames === true
+      pageReadsAppInactive = message.appInactiveFrames === true
       back.readReady()
       // Dropped like the Back claim: a page still showing a terminal claims again on this `init`.
       reportRailClaim(false)
@@ -339,11 +334,17 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     publishUiLocale: (next) => {
       routes.publishUiLocale(next, deliverable())
     },
+    sendAppInactive: () => {
+      if (pageReadsAppInactive && deliverable()) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, type: BRIDGE_APP_INACTIVE_FRAME })
+      }
+    },
     sendBack: back.send,
     readSessionBack: () => ({
       ...back.read(),
       ...(pageStorageKeys === null ? {} : { storageKeys: pageStorageKeys }),
       ...(pageReadsConnectionPath ? { connectionPathFrames: true as const } : {}),
+      ...(pageReadsAppInactive ? { appInactiveFrames: true as const } : {}),
       ...(railClaimed ? { terminalKeyRailClaim: { inputOwner: railOwner } } : {})
     }),
     dispose

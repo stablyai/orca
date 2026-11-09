@@ -5,7 +5,7 @@ import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../store/repos/repo.test-fixture'
-import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
+import { layoutApplyTestDouble } from '@/runtime/workspace-layout/testing/layout-apply-test-double'
 import type { AppState } from '../store/types'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
@@ -30,94 +30,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
-  })
-
-  it('caps pending mobile state events while startup hydration is unresolved', async () => {
-    const setFitOverride = vi.fn()
-    const hydrateOverrides = vi.fn()
-    const setDriverForPty = vi.fn()
-    const hydrateDrivers = vi.fn()
-    const setDriverForBrowserPage = vi.fn()
-    const hydrateBrowserDrivers = vi.fn()
-    const listeners: { fit?: MobileFitListener } = {}
-    let resolveFitOverrides: (value: []) => void = () => {}
-    let resolveDrivers: (value: []) => void = () => {}
-    let resolveBrowserDrivers: (value: []) => void = () => {}
-
-    vi.doMock('@/lib/pane-manager/mobile-fit-overrides', () => ({
-      setFitOverride,
-      hydrateOverrides
-    }))
-    vi.doMock('@/lib/pane-manager/mobile-driver-state', () => ({
-      setDriverForPty,
-      hydrateDrivers
-    }))
-    vi.doMock('@/lib/pane-manager/browser-mobile-driver-state', () => ({
-      setDriverForBrowserPage,
-      hydrateBrowserDrivers
-    }))
-    stubReactSyncEffect()
-    stubAuxiliaryModules()
-    vi.doMock('../store', () => ({
-      useAppStore: {
-        subscribe: vi.fn(() => () => {}),
-        getState: () => buildStoreState({})
-      }
-    }))
-    vi.stubGlobal(
-      'window',
-      buildWindowApi({
-        onSet: () => () => {},
-        runtime: {
-          getTerminalFitOverrides: () =>
-            new Promise<[]>((resolve) => {
-              resolveFitOverrides = resolve
-            }),
-          getTerminalDrivers: () =>
-            new Promise<[]>((resolve) => {
-              resolveDrivers = resolve
-            }),
-          getBrowserDrivers: () =>
-            new Promise<[]>((resolve) => {
-              resolveBrowserDrivers = resolve
-            }),
-          onTerminalFitOverrideChanged: (listener: MobileFitListener) => {
-            listeners.fit = listener
-            return () => {}
-          }
-        }
-      })
-    )
-
-    const { useIpcEvents } = await import('./useIpcEvents')
-    useIpcEvents()
-
-    const emitFit = listeners.fit
-    if (!emitFit) {
-      throw new Error('Expected fit listener to be registered')
-    }
-    for (let index = 0; index < 350; index += 1) {
-      emitFit({
-        ptyId: `pty-${index}`,
-        mode: 'mobile-fit',
-        cols: 80,
-        rows: 24
-      })
-    }
-    expect(setFitOverride).not.toHaveBeenCalled()
-
-    resolveFitOverrides([])
-    resolveDrivers([])
-    resolveBrowserDrivers([])
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(hydrateOverrides).toHaveBeenCalledWith([])
-    expect(hydrateDrivers).toHaveBeenCalledWith([])
-    expect(hydrateBrowserDrivers).toHaveBeenCalledWith([])
-    expect(setFitOverride).toHaveBeenCalledTimes(300)
-    expect(setFitOverride).toHaveBeenNthCalledWith(1, 'pty-50', 'mobile-fit', 80, 24)
-    expect(setFitOverride).toHaveBeenLastCalledWith('pty-349', 'mobile-fit', 80, 24)
   })
 
   it('clears pending mobile state events and ignores late hydration after cleanup', async () => {

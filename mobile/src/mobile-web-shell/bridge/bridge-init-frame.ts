@@ -23,7 +23,7 @@ import {
 } from './bridge-safe-area-insets'
 import type { BridgeFoldDivision } from './bridge-fold-division'
 import type { BridgeTerminalKeyRail } from './bridge-terminal-key'
-import type { HostStatusReply } from '../../transport/host-status-reply-schema'
+import type { HostStatusReply } from '../../transport/hosts/host-status-reply-schema'
 
 // Grant the intersection of implemented capabilities and route declarations, plus protocol fault. Use the same resolved list for init and enforcement; new names need no version bump.
 export const BRIDGE_NATIVE_GRANTS: readonly string[] = [

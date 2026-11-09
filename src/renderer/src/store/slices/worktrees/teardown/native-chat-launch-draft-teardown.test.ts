@@ -1,6 +1,6 @@
 /** Evict nativeChatLaunchDraftByTabId wherever launch prompt retires (close, orphan sweep, bulk/single purge); stranded drafts otherwise keep publishing to mobile. */
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 
 import {
   drawTabsFromMain,
@@ -18,7 +18,7 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   unregisterPtyDataHandlers: vi.fn()
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
@@ -26,12 +26,12 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 // Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

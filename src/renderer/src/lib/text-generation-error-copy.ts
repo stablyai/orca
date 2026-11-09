@@ -3,7 +3,7 @@ import {
   TEXT_GENERATION_FAILURE_COPY as EN,
   type TextGenerationFailureCode
 } from '../../../shared/text-generation-failure-copy'
-import { AGENT_OUTPUT_ERROR_COPY } from './agent-output-error-copy'
+import { AGENT_OUTPUT_ERROR_COPY } from './text-generation/agent-output-error-copy'
 
 type CopyValues = Record<string, string | number>
 

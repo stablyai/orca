@@ -9,6 +9,8 @@ import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useContext, useSyncExternalStore } from 'react'
 import { NativeChatForkedFromContext } from '../actions/native-chat-fork-context'
+import { NativeChatPullRequestEventLine } from '../../NativeChatPullRequestEventLine'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,7 +24,8 @@ import {
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
-  nativeChatNoticeLook
+  nativeChatNoticeLook,
+  type NativeChatNoticeTone
 } from '../../../../../../shared/native-chat/native-chat-notice'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
@@ -63,6 +66,14 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
     )
 }
 
+function toneClass(tone: NativeChatNoticeTone): string {
+  return tone === 'warning'
+    ? 'text-chat-warning'
+    : tone === 'error'
+      ? 'text-destructive'
+      : 'text-chat-foreground-faint'
+}
+
 export function NativeChatNoticeRow({
   block,
   messageId,
@@ -78,6 +89,9 @@ export function NativeChatNoticeRow({
   const orcaStopView = useNativeChatOrcaStopView()
   const openForkSource = useContext(NativeChatForkedFromContext)
 
+  if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
+    return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
+  }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
     const label = t('components.native-chat.notices.forkedFrom', NATIVE_CHAT_NOTICE_COPY.forkedFrom)
@@ -171,23 +185,26 @@ export function NativeChatNoticeRow({
   if (look.kind === 'settled-permission') {
     const agent = agentName ?? look.agent
     const summary =
-      look.decision === 'denied'
+      look.decision === 'approved'
         ? t(
-            'components.native-chat.notices.permissionDenied',
-            '{{agent}} denied permission. View details.',
+            'components.native-chat.notices.safetyReviewApproved',
+            '{{agent}} approved this action. View details.',
             { agent }
           )
-        : t(
-            'components.native-chat.notices.safetyReview',
-            '{{agent}} reported a safety review warning. View details.',
-            { agent }
-          )
+        : look.decision === 'denied'
+          ? t(
+              'components.native-chat.notices.permissionDenied',
+              '{{agent}} denied permission. View details.',
+              { agent }
+            )
+          : t(
+              'components.native-chat.notices.safetyReview',
+              '{{agent}} reported a safety review warning. View details.',
+              { agent }
+            )
     const payload = block.providerFrame?.payload
     return (
-      <NativeChatDetailsDisclosure
-        summary={summary}
-        bodyClassName={look.tone === 'error' ? 'text-destructive' : 'text-chat-warning'}
-      >
+      <NativeChatDetailsDisclosure summary={summary} bodyClassName={toneClass(look.tone)}>
         {block.text}
         {payload ? '\n\n' : ''}
         {payload?.truncated
@@ -284,9 +301,7 @@ export function NativeChatNoticeRow({
       className={cn(
         'space-y-2 text-sm text-chat-foreground',
         Icon && 'rounded-md border border-border bg-muted/20 p-3',
-        tone === 'warning' && 'text-chat-warning',
-        tone === 'error' && 'text-destructive',
-        tone === 'notice' && 'text-chat-foreground-faint'
+        tone && toneClass(tone)
       )}
     >
       <div className="flex items-start gap-2">

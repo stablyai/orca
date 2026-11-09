@@ -1,5 +1,6 @@
 import type { SkillCloudVersion } from '../../../../shared/skill-cloud-contract'
 import { fileCountLabel } from './skill-display-labels'
+import type { Translate } from '../../i18n/use-translate'
 
 export type SkillChecklistFile = {
   path: string
@@ -36,8 +37,11 @@ export function checklistItemsFromVersion(version: SkillCloudVersion): SkillChec
   ]
 }
 
-export function checklistItemSummary(files: readonly SkillChecklistFile[]): {
+export function checklistItemSummary(
+  files: readonly SkillChecklistFile[],
+  t?: Translate
+): {
   label: string
 } {
-  return { label: fileCountLabel(files.length) }
+  return { label: fileCountLabel(files.length, t) }
 }

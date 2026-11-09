@@ -1,7 +1,8 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { isMacUserAgent } from '../../../lib/user-agent-platform'
 import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from '../search/settings-search-keywords'
+import type { Translate } from '@/i18n/use-translate'
+import { searchKeywordTranslator } from '../search/settings-search-keywords'
 import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'
 import { getBrowserProfileScopeSearchEntry } from './profiles/browser-profile-scope-search'
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
@@ -19,59 +20,20 @@ import {
   getBrowserSshWorkspaceRoutingDescription,
   getBrowserSshWorkspaceRoutingTitle
 } from './routing/browser-ssh-workspace-routing-copy'
-
-export type BrowserShortcutPlatform = {
-  isMac: boolean
-}
-
-export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPlatform): string[] {
-  return [
-    ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
-    ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
-    ...translateSearchKeyword(
-      'auto.components.settings.browser.search.terminalLinkActions.terminal',
-      'terminal'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.browser.search.terminalLinkActions.chat',
-      'chat'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.browser.search.terminalLinkActions.click',
-      'click'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.browser.search.terminalLinkActions.actions',
-      'actions'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.browser.search.terminalLinkActions.popover',
-      'popover'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.browser.search.terminalLinkActions.menu',
-      'menu'
-    ),
-    ...translateSearchKeyword(
-      'auto.components.settings.browser.search.terminalLinkActions.disable',
-      'disable'
-    ),
-    'link click behavior',
-    'open directly',
-    'modifier-click only',
-    'middle click',
-    'mouse 3',
-    platform.isMac ? 'cmd' : 'ctrl'
-  ]
-}
+import {
+  getTerminalLinkActionSearchKeywords,
+  type BrowserShortcutPlatform
+} from './routing/browser-terminal-link-action-search'
 
 export function getBrowserPaneSearchEntries(
-  platform: BrowserShortcutPlatform = { isMac: isMacUserAgent() }
+  platform: BrowserShortcutPlatform = { isMac: isMacUserAgent() },
+  t: Translate = translate
 ): SettingsSearchEntry[] {
+  const translateSearchKeyword = searchKeywordTranslator(t)
   return [
     {
-      title: translate('auto.components.settings.browser.search.c3903322d2', 'Default Home Page'),
-      description: translate(
+      title: t('auto.components.settings.browser.search.c3903322d2', 'Default Home Page'),
+      description: t(
         'auto.components.settings.browser.search.a942905148',
         'URL opened when creating a new browser tab. Leave empty to open a blank tab.'
       ),
@@ -87,11 +49,8 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: translate(
-        'auto.components.settings.browser.search.5e755920c9',
-        'Default Search Engine'
-      ),
-      description: translate(
+      title: t('auto.components.settings.browser.search.5e755920c9', 'Default Search Engine'),
+      description: t(
         'auto.components.settings.browser.search.0628d5943b',
         'Search engine used when typing non-URL text in the address bar.'
       ),
@@ -114,8 +73,8 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: translate('auto.components.settings.browser.search.072b7f5c1f', 'Default Zoom'),
-      description: translate(
+      title: t('auto.components.settings.browser.search.072b7f5c1f', 'Default Zoom'),
+      description: t(
         'auto.components.settings.browser.search.c3d89ed4d0',
         'Zoom level applied to newly opened browser tabs.'
       ),
@@ -136,8 +95,8 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: translate('auto.components.settings.browser.search.5cb082b3e3', 'Link Routing'),
-      description: getBrowserLinkRoutingDescription(platform),
+      title: t('auto.components.settings.browser.search.5cb082b3e3', 'Link Routing'),
+      description: getBrowserLinkRoutingDescription(platform, undefined, t),
       keywords: [
         ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
         ...translateSearchKeyword('auto.components.settings.browser.search.44d14df30d', 'preview'),
@@ -155,11 +114,14 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: getLinkRoutingModifierTitle(false),
-      description: getLinkRoutingModifierDescription({
-        openLinksInApp: false,
-        isMac: platform.isMac
-      }),
+      title: getLinkRoutingModifierTitle(false, t),
+      description: getLinkRoutingModifierDescription(
+        {
+          openLinksInApp: false,
+          isMac: platform.isMac
+        },
+        t
+      ),
       keywords: [
         ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
         ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links'),
@@ -181,27 +143,24 @@ export function getBrowserPaneSearchEntries(
           'opposite'
         ),
         // Index the alternate live title because this entry is built with openLinksInApp false.
-        getLinkRoutingModifierTitle(true),
+        getLinkRoutingModifierTitle(true, t),
         platform.isMac ? 'cmd' : 'ctrl'
       ]
     },
     {
-      title: translate(
+      title: t(
         'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
         'Terminal URL clicks'
       ),
-      description: translate(
+      description: t(
         'auto.components.settings.BrowserTerminalLinkActionsSetting.descriptionV2',
         'Control clicks on detected URLs printed in terminal panes and chat transcripts.'
       ),
-      keywords: getTerminalLinkActionSearchKeywords(platform)
+      keywords: getTerminalLinkActionSearchKeywords(platform, t)
     },
     {
-      title: translate(
-        'auto.components.settings.browser.search.19ea5607cf',
-        'Localhost Worktree Labels'
-      ),
-      description: translate(
+      title: t('auto.components.settings.browser.search.19ea5607cf', 'Localhost Worktree Labels'),
+      description: t(
         'auto.components.settings.browser.search.4e0fdf0a3f',
         'Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.'
       ),
@@ -219,8 +178,8 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: translate('auto.components.settings.browser.search.96afedcb5c', 'Session & Cookies'),
-      description: translate(
+      title: t('auto.components.settings.browser.search.96afedcb5c', 'Session & Cookies'),
+      description: t(
         'auto.components.settings.browser.search.060ac1fcba',
         'Import cookies from Chrome, Edge, or other browsers to use existing logins inside Orca.'
       ),
@@ -241,8 +200,8 @@ export function getBrowserPaneSearchEntries(
     },
     // Append entries because BrowserPane indexes this catalog by position.
     {
-      title: getBrowserClientHostedRemoteTitle(),
-      description: getBrowserClientHostedRemoteDescription(),
+      title: getBrowserClientHostedRemoteTitle(t),
+      description: getBrowserClientHostedRemoteDescription(t),
       keywords: [
         ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
         ...translateSearchKeyword(
@@ -269,8 +228,8 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: getBrowserSshWorkspaceRoutingTitle(),
-      description: getBrowserSshWorkspaceRoutingDescription(),
+      title: getBrowserSshWorkspaceRoutingTitle(t),
+      description: getBrowserSshWorkspaceRoutingDescription(t),
       keywords: [
         ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
         ...translateSearchKeyword(
@@ -298,6 +257,6 @@ export function getBrowserPaneSearchEntries(
     getBrowserUserAgentSearchEntry(),
     getBrowserSitePermissionsSearchEntry(),
     getBrowserProfileScopeSearchEntry(),
-    getLinkRoutingBackgroundSearchEntry()
+    getLinkRoutingBackgroundSearchEntry(t)
   ]
 }

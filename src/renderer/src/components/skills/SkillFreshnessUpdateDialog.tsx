@@ -7,7 +7,7 @@ import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRunti
 import { bundledSkillTargetKey } from '@/lib/bundled-skill-target'
 import type { BundledSkillUnsupportedReason } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -35,14 +35,12 @@ import {
 import { useReviewedSkillPlan } from './use-reviewed-skill-plan'
 
 function RunHeadline({ run }: { run: SkillUpdateRun }): React.JSX.Element | null {
+  const t = useTranslate()
   if (run.state === 'running') {
     return (
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
-        {translate(
-          'auto.components.skills.SkillFreshnessUpdateDialog.progressAria',
-          'Updating skills'
-        )}
+        {t('auto.components.skills.SkillFreshnessUpdateDialog.progressAria', 'Updating skills')}
       </div>
     )
   }
@@ -50,7 +48,7 @@ function RunHeadline({ run }: { run: SkillUpdateRun }): React.JSX.Element | null
     return (
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <CheckCircle2 className="size-4 text-status-success" />
-        {updatedSkillsLabel(run.summary)}
+        {updatedSkillsLabel(run.summary, t)}
       </div>
     )
   }
@@ -59,8 +57,8 @@ function RunHeadline({ run }: { run: SkillUpdateRun }): React.JSX.Element | null
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
         <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
         {run.summary.ok
-          ? translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
-          : translate(
+          ? t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
+          : t(
               'auto.components.skills.SkillFreshnessUpdateDialog.finishedWithProblems',
               'Some skills need attention'
             )}
@@ -72,7 +70,7 @@ function RunHeadline({ run }: { run: SkillUpdateRun }): React.JSX.Element | null
       <div className="space-y-1">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
           <AlertTriangle className="size-4 text-destructive" />
-          {translate(
+          {t(
             'auto.components.skills.SkillFreshnessUpdateDialog.errorTitle',
             "The update didn't finish"
           )}
@@ -123,6 +121,7 @@ function DialogHeadline({
   error: string | null
   plan: BundledSkillPlan | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (run.state !== 'idle') {
     return <RunHeadline run={run} />
   }
@@ -130,11 +129,11 @@ function DialogHeadline({
     return (
       <p className="text-xs text-muted-foreground">
         {unsupported === 'connect-host'
-          ? translate(
+          ? t(
               'auto.components.skills.SkillFreshnessUpdateDialog.connectHost',
               'Connect to this SSH host to check its Orca skills.'
             )
-          : translate(
+          : t(
               'auto.components.skills.SkillFreshnessUpdateDialog.updateServer',
               'Update Orca on the server to update its Orca skills.'
             )}
@@ -167,6 +166,7 @@ function SkillUpdateFooter({
   onClose: () => void
   onUpdate: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DialogFooter className="sm:justify-between">
       {showResult ? (
@@ -180,7 +180,7 @@ function SkillUpdateFooter({
           onClick={onRecheck}
         >
           <RefreshCw className={checking ? 'animate-spin' : undefined} />
-          {translate('auto.components.skills.SkillFreshnessUpdateDialog.checkNow', 'Re-check')}
+          {t('auto.components.skills.SkillFreshnessUpdateDialog.checkNow', 'Re-check')}
         </Button>
       )}
       <div className="flex items-center gap-2">
@@ -191,14 +191,14 @@ function SkillUpdateFooter({
           onClick={onClose}
         >
           {showResult
-            ? translate('auto.components.skills.SkillFreshnessUpdateDialog.done', 'Done')
-            : translate('auto.components.skills.SkillFreshnessUpdateDialog.close', 'Close')}
+            ? t('auto.components.skills.SkillFreshnessUpdateDialog.done', 'Done')
+            : t('auto.components.skills.SkillFreshnessUpdateDialog.close', 'Close')}
         </Button>
         {!showResult && updatePlan ? (
           <Button type="button" size="sm" disabled={!canUpdate} onClick={onUpdate}>
             {isRunning
-              ? translate('auto.components.skills.SkillFreshnessUpdateDialog.updating', 'Updating…')
-              : updateActionLabel(updatePlan)}
+              ? t('auto.components.skills.SkillFreshnessUpdateDialog.updating', 'Updating…')
+              : updateActionLabel(updatePlan, t)}
           </Button>
         ) : null}
       </div>
@@ -207,6 +207,7 @@ function SkillUpdateFooter({
 }
 
 export function SkillFreshnessUpdateDialog(): React.JSX.Element {
+  const t = useTranslate()
   const activeTarget = useActiveProjectSkillRuntime().bundledSkillTarget
   const openRequest = useSyncExternalStore(
     subscribeSkillFreshnessUpdateDialog,
@@ -307,7 +308,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
       >
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.skills.SkillFreshnessUpdateDialog.title', 'Update skills')}
+            {t('auto.components.skills.SkillFreshnessUpdateDialog.title', 'Update skills')}
           </DialogTitle>
         </DialogHeader>
 

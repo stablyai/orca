@@ -5,10 +5,10 @@ import {
   getComposerEligibleRepos,
   resolveComposerActiveRepoId
 } from '@/lib/new-workspace-composer-repo'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
@@ -159,8 +159,8 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
   )
 
   const seedActiveRepoId = useMemo(
-    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId),
-    [repos, eligibleRepos, activeRepoId]
+    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, runtimeEnvironments),
+    [repos, eligibleRepos, activeRepoId, runtimeEnvironments]
   )
 
   return {

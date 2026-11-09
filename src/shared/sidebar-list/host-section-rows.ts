@@ -7,7 +7,10 @@ import {
   type ExecutionHostKind,
   type ExecutionHostScope
 } from '../execution-host'
-import type { ExecutionHostHealth } from '../execution-host-registry'
+import type {
+  ExecutionHostHealth,
+  ExecutionHostVmState
+} from '../execution-host/execution-host-health'
 import type { RuntimeCompatVerdict } from '../protocol-compat'
 import type { RuntimeHostBlockedReason } from '../remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionStatus } from '../ssh-types'
@@ -28,6 +31,8 @@ export type HostHeaderRow = {
   compatibility?: RuntimeCompatVerdict
   // Why: a revoked pairing needs "Re-pair", not the update guidance a version block gets.
   blockedReason?: RuntimeHostBlockedReason
+  // A VM-backed host's lifecycle explains suspended/waking/resume-failed without a transport fault.
+  vmState?: ExecutionHostVmState
   connectionStatus?: SshConnectionStatus
   collapsed: boolean
   count: number
@@ -43,6 +48,7 @@ export type HostSectionOption = {
   health: ExecutionHostHealth
   compatibility?: RuntimeCompatVerdict
   blockedReason?: RuntimeHostBlockedReason
+  vmState?: ExecutionHostVmState
   connectionStatus?: SshConnectionStatus
 }
 
@@ -82,7 +88,7 @@ function localizePendingRowsForHost(
   const localized: Extract<Row, { type: 'header' }>[] = []
   for (const row of rows) {
     if (!row.hostWorktreeCounts) {
-      localized.push(row)
+      localized.push({ ...row, hostId })
       continue
     }
     const count = row.hostWorktreeCounts.get(hostId)
@@ -278,6 +284,7 @@ export function addHostSectionRows(args: {
       health: host.health,
       compatibility: host.compatibility,
       ...(host.blockedReason ? { blockedReason: host.blockedReason } : {}),
+      ...(host.vmState ? { vmState: host.vmState } : {}),
       connectionStatus: host.connectionStatus,
       collapsed,
       count: countWorkspaceRows(hostRows)

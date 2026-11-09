@@ -1,14 +1,8 @@
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { collectLayoutLeafIdsInOrder } from '../../../../../shared/workspace-layout/terminal-pane-tree'
 
-export function collectLeafIdsInOrder(node: TerminalPaneLayoutNode | null | undefined): string[] {
-  if (!node) {
-    return []
-  }
-  if (node.type === 'leaf') {
-    return [node.leafId]
-  }
-  return [...collectLeafIdsInOrder(node.first), ...collectLeafIdsInOrder(node.second)]
-}
+// Accumulate instead of spreading per split, which copies quadratically on skewed layouts.
+export const collectLeafIdsInOrder = collectLayoutLeafIdsInOrder
 
 export function getLeftmostLeafId(node: TerminalPaneLayoutNode): string {
   return node.type === 'leaf' ? node.leafId : getLeftmostLeafId(node.first)

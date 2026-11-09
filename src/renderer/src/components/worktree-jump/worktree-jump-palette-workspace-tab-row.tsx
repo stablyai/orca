@@ -1,11 +1,11 @@
 import type React from 'react'
 import { FileText, MessageSquare, SquareTerminal } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { CommandItem } from '@/components/ui/command'
 import { PaletteRecentTabStatusDot } from '@/components/cmd-j/palette-live-status'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceTabPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import {
@@ -28,6 +28,7 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
   renderKey: string
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
+  const t = useTranslate()
   const result = entry.result
   const workspaceTabWorktree = controller.resolveWorktree(result.worktreeId, result.executionHostId)
   const workspaceTabRepo = workspaceTabWorktree
@@ -55,7 +56,11 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
   ) : (
     <FileText className="size-3.5" aria-hidden="true" />
   )
-  const sessionAge = formatPaletteSessionAge(result.lastActiveAt ?? null, controller.paletteNowMs)
+  const sessionAge = formatPaletteSessionAge(
+    result.lastActiveAt ?? null,
+    controller.paletteNowMs,
+    t
+  )
 
   return (
     <CommandItem
@@ -84,15 +89,12 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
                 <>
                   {result.isCurrentTab && (
                     <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                      {translate('auto.components.WorktreeJumpPalette.52404f8096', 'Current Tab')}
+                      {t('auto.components.WorktreeJumpPalette.52404f8096', 'Current Tab')}
                     </span>
                   )}
                   {!result.isCurrentTab && result.isCurrentWorktree && (
                     <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                      {translate(
-                        'auto.components.WorktreeJumpPalette.c5081f2814',
-                        'Current Worktree'
-                      )}
+                      {t('auto.components.WorktreeJumpPalette.c5081f2814', 'Current Worktree')}
                     </span>
                   )}
                 </>

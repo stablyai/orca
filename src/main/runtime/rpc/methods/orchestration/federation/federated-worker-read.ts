@@ -1,8 +1,8 @@
 import type {
   ORCHESTRATION_WORKER_READ_SOURCES,
   OrchestrationWorkerReadResult
-} from '../../../../../../shared/orchestration-worker-output'
-import { ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
+import { ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/federation/orchestration-peer-capability-cache'

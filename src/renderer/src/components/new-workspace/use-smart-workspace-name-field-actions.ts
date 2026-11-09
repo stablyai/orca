@@ -10,7 +10,7 @@ import {
   type WorkspaceEmojiSuggestion
 } from '@/lib/workspace-emoji-shortcodes'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import type {
   RepoOption,
   RowEntry,

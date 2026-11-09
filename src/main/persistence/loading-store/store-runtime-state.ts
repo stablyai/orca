@@ -28,7 +28,7 @@ import type {
   AutomationStorageAuthority
 } from '../scheduling-automations/automation-owner-projection'
 import type { ProfileStatePersistenceAuthority } from './profile-state-authority'
-import type { AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/orcad-shell-history-installer'
 import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 
@@ -83,9 +83,14 @@ export class StoreRuntimeState {
   dirtyProfileStateDomains: Set<string> | null = new Set()
   pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
   githubCacheDirty = false
-  githubCacheGeneration = 0
+  githubCachePersistedAt = Date.now()
+  githubCachePersistTimer: ReturnType<typeof setTimeout> | null = null
+  githubCacheRetryDelayMs = 0
+  /** Fingerprint of a sidecar the loaded cache imported or supersedes; retired once rows commit. */
+  githubCacheLegacyFileHash: string | null = null
+  /** The saved cache or an older build's sidecar was unreadable at load: save nothing this session. */
+  githubCachePersistenceDisabled = false
   readonly githubCacheWriteListeners = new Set<() => void>()
-  pendingGithubCacheWrite: Promise<void> | null = null
   readonly staleGithubCacheTempCleanup: Promise<void>
   readonly staleProfileStateTempCleanup: Promise<void>
   readonly gitUsernameCache = new Map<string, string>()

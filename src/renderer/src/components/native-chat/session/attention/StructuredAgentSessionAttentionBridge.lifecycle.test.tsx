@@ -54,18 +54,24 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOri
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionTurnCompletions: mocks.subscribeCompletions,
-  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus,
-  acknowledgeStructuredAgentSessionAttention: mocks.acknowledgeAttention
+  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
+
+vi.mock(
+  '../../../../runtime/native-chat/attention/structured-agent-session-attention-acknowledgment',
+  () => ({
+    acknowledgeStructuredAgentSessionAttention: mocks.acknowledgeAttention
+  })
+)
 
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
 import {
   resetStructuredAgentSessionTurnCompletionFeedsForTests,
   structuredAgentSessionTurnCompletionFeedCountForTests as retainedCount
-} from '@/runtime/structured-agent-session-turn-completion-feed'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { makeTabGroup, makeUnifiedTab } from '../../../../store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'

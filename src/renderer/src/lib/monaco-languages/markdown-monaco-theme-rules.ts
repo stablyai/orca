@@ -1,7 +1,7 @@
 import type * as Monaco from 'monaco-editor'
 import { MIN_SYNTAX_CONTRAST } from '../plugin-monaco-theme'
 import { MARKDOWN_TOKEN_PREFIX, markdownTokenRules } from '../plugin-monaco-token-rules'
-import { contrastRatio, type Rgba } from '../plugin-theme-tokens'
+import { contrastRatio, type Rgba } from '../../../../shared/color/rgba-contrast'
 
 type ThemeRule = Monaco.editor.ITokenThemeRule
 type ThemeBase = 'light' | 'dark'

@@ -14,12 +14,14 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../ssh/orcad-runtime-maintenance', () => ({
+vi.mock('./orcad-managed-lifecycle', () => ({
   withManagedOrcadLifecycle: (
     _userData: string,
     _selector: string,
     run: (managed: unknown) => Promise<unknown>
-  ) => run({ environment: { id: 'env-1' }, deployment: {} }),
+  ) => run({ environment: { id: 'env-1' }, deployment: {} })
+}))
+vi.mock('./orcad-runtime-maintenance', () => ({
   runManagedOrcadUpdate: mocks.runUpdate
 }))
 vi.mock('./orcad-managed-runtime-context', () => ({

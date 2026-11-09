@@ -4,9 +4,12 @@ import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pa
 import { RESET_MOUSE_REPORTING } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalAgent } from '../../../../../../shared/agent-status/identity/terminal-agent'
-import type * as CoordinatorModule from '../../agent-completion/agent-completion-coordinator'
-import type { AgentCompletionCoordinatorOptions } from '../../agent-completion/agent-completion-coordinator-types'
-import { createDeferred, flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
+import type * as CoordinatorModule from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
+import type { AgentCompletionCoordinatorOptions } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
+import {
+  createDeferred,
+  flushAsyncTicks
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createMockTransport,
   createPane,
@@ -14,19 +17,19 @@ import {
   leafIdForPane,
   type ConnectCallbacks,
   type MockTransport
-} from '../test-fixtures/pty-connection-test-pane-fixtures'
-import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import type { StoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from '../test-fixtures/pty-connection-test-deps'
-import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../test-fixtures/pty-connection-test-environment'
-import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 
 const {
   coordinatorOptionsByPaneKey,
@@ -48,7 +51,7 @@ let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 
@@ -69,7 +72,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -139,7 +142,9 @@ async function connectAgentPane(args: {
   terminal: ReturnType<typeof createPane>['terminal']
 }> {
   const { connectPanePty } = await import('../connect-pane-pty')
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
   const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
   const transport = createMockTransport(args.ptyId)
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -186,7 +191,11 @@ async function seedHookRow(
   // Why the real slice: the row must carry the acceptedStatusSeq a real accepted hook stamps.
   const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   const realStore = createTestStore(
-    (await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')).isClaudeAgent
+    (
+      await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+    ).isClaudeAgent
   )
   realStore.getState().setAgentStatus(paneKey, { state, prompt: 'ship it', agentType })
   const row = realStore.getState().agentStatusByPaneKey[paneKey]
@@ -200,7 +209,6 @@ function setHostCanVerifyOwner(answer: boolean | Promise<boolean>): void {
 
 describe('connectPanePty confirmed process exit retires the live agent row', () => {
   beforeEach(async () => {
-    vi.resetModules()
     vi.clearAllMocks()
     vi.useFakeTimers()
     coordinatorOptionsByPaneKey.clear()

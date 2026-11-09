@@ -1,9 +1,10 @@
 import { Check } from 'lucide-react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
-import { type AgentCatalogEntry, AgentIcon } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 function DefaultAgentPill({
@@ -55,6 +56,7 @@ export function AgentDefaultSetting({
   onSetDefault: (agent: TuiAgent | 'blank' | null) => void
   permissions: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const storedDefaultAgent =
     defaultAgent !== null && defaultAgent !== 'blank'
       ? catalog.find((agent) => agent.id === defaultAgent)
@@ -66,7 +68,7 @@ export function AgentDefaultSetting({
 
   return (
     <SettingsGroup
-      title={translate('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}
+      title={t('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}
       description={description}
     >
       <div className="flex flex-wrap gap-2 py-4">
@@ -75,7 +77,7 @@ export function AgentDefaultSetting({
           onClick={() => onSetDefault(defaultAgent === null ? 'blank' : null)}
         >
           {defaultAgent === null && <Check className="size-3.5" />}
-          {translate('auto.components.settings.AgentsPane.92033495ff', 'Auto')}
+          {t('auto.components.settings.AgentsPane.92033495ff', 'Auto')}
         </DefaultAgentPill>
         {defaultAgentPills.map((agent) => {
           const isActive = defaultAgent === agent.id
@@ -88,7 +90,7 @@ export function AgentDefaultSetting({
               onClick={() => onSetDefault(isActive ? 'blank' : agent.id)}
               title={
                 isUndetected
-                  ? translate(
+                  ? t(
                       'auto.components.settings.AgentsPane.storedDefaultUndetected',
                       'Saved as your default, but not detected right now'
                     )

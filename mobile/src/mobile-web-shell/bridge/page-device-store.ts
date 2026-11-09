@@ -198,3 +198,15 @@ export function createPageDeviceStore(
     }
   }
 }
+
+// Published at page boot, like page storage, so plain modules (draft rows) can reach the store.
+let pageDeviceStore: PageDeviceStore | null = null
+
+export function publishPageDeviceStore(store: PageDeviceStore | null): void {
+  pageDeviceStore = store
+}
+
+/** Null outside a page; an older shell's store answers unavailable. */
+export function readPageDeviceStore(): PageDeviceStore | null {
+  return pageDeviceStore
+}

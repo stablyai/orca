@@ -2,13 +2,13 @@ import { getTaskPageRepoSourceContext } from './task-repo-source-context'
 
 import type { Repo } from '../../../shared/repo-types'
 
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 
 import {
   buildTaskSourceContextFromRepo,
   getTaskSourceCacheScope,
   areTaskSourceContextsEqual
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { createLocalFilesystemProvider } from './local-filesystem-provider'
 
 let root: string

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { getOwnerNotSetUpLabel, getOwnerNotSetUpNote } from './owner-not-set-up-copy'
 import { getProviderUsageStatusLabel } from './usage-error-copy'
@@ -34,7 +35,8 @@ function isConfirmedSignedOut(provider: ProviderRateLimits): boolean {
 
 export function getUsageRosterRowState(
   provider: ProviderRateLimits,
-  hasUsage: boolean
+  hasUsage: boolean,
+  t: Translate = translate
 ): UsageRosterRowState {
   if (hasUsage) {
     return { kind: 'usage', statusLabel: null }
@@ -43,35 +45,29 @@ export function getUsageRosterRowState(
   if (placeholder) {
     return {
       kind: 'unavailable',
-      statusLabel: getOwnerNotSetUpLabel(placeholder),
-      detail: getOwnerNotSetUpNote(placeholder)
+      statusLabel: getOwnerNotSetUpLabel(placeholder, t),
+      detail: getOwnerNotSetUpNote(placeholder, t)
     }
   }
   if (provider.status === 'idle' || provider.status === 'fetching') {
     return {
       kind: 'loading',
-      statusLabel: translate(
-        'auto.components.status.bar.UsageRosterPanel.loadingUsage',
-        'Loading usage…'
-      )
+      statusLabel: t('auto.components.status.bar.UsageRosterPanel.loadingUsage', 'Loading usage…')
     }
   }
   if (isConfirmedSignedOut(provider)) {
     return {
       kind: 'sign-in',
-      statusLabel: translate(
-        'auto.components.status.bar.UsageRosterPanel.notSignedIn',
-        'not signed in'
-      )
+      statusLabel: t('auto.components.status.bar.UsageRosterPanel.notSignedIn', 'not signed in')
     }
   }
   if (provider.status === 'error') {
-    return { kind: 'error', statusLabel: getProviderUsageStatusLabel(provider) }
+    return { kind: 'error', statusLabel: getProviderUsageStatusLabel(provider, t) }
   }
   if (provider.status === 'unavailable') {
     return {
       kind: 'unavailable',
-      statusLabel: translate(
+      statusLabel: t(
         'auto.components.status.bar.UsageRosterPanel.usageUnavailable',
         'Usage unavailable'
       )
@@ -79,9 +75,6 @@ export function getUsageRosterRowState(
   }
   return {
     kind: 'empty',
-    statusLabel: translate(
-      'auto.components.status.bar.UsageRosterPanel.noUsageData',
-      'No usage data'
-    )
+    statusLabel: t('auto.components.status.bar.UsageRosterPanel.noUsageData', 'No usage data')
   }
 }

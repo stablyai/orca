@@ -1,6 +1,6 @@
 /** Removal must evict detached-name, foreground-last-seen and consumed-startup guards; fresh tab/worktree IDs cannot reclaim leaked module entries. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import {
   getForegroundTerminalTabLastSeenAtById,
   resetForegroundTerminalTabIdsForTests,
@@ -9,7 +9,7 @@ import {
 import {
   beginAgentStartupDeliveryAttempt,
   resetAgentStartupDelayedDeliveryForTests
-} from '@/lib/agent-startup-delayed-delivery'
+} from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -22,7 +22,7 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   unregisterPtyDataHandlers: vi.fn()
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

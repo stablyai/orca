@@ -25,14 +25,14 @@ import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
 } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { agentHookServer } from '../agent-hooks/server'
-import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/local-tmux-managed-pty'
-import { installLocalHookRootEvidence } from '../agent-hooks/local-hook-root-evidence'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { createLocalTmuxManagedPtyResolver } from '../agent-hooks/observations/local-tmux-managed-pty'
+import { installLocalHookRootEvidence } from '../agent-hooks/observations/local-hook-root-evidence'
 import {
   indexPersistedPaneKeyPtyIds,
   resolveAgentWorkspaceExecutionHostId,
   retireRestoredStatusesWithDeadTerminals
-} from '../agent-hooks/restored-status-dead-terminal-sweep'
+} from '../agent-hooks/observations/restored-status-dead-terminal-sweep'
 import { startFirstWindowStartupServices } from './first-window-startup-services'
 import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'

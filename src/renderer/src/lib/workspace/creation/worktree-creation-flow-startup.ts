@@ -1,7 +1,7 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { useAppStore } from '@/store/index'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import type {
   WorktreeCreationPhase,

@@ -15,8 +15,8 @@ import {
   prepareRuntimeBrowserLink,
   materializedBrowserLinkOutcome
 } from './workspace-browser-link-open'
-import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-browser-creation'
-import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/web-runtime-browser-client-target-group'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/web-runtime-browser-creation'
+import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/browser/creation/web-runtime-browser-client-target-group'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { resolveNewBrowserTabProfile } from '@/store/slices/browser/profiles/browser-new-tab-profile'
@@ -35,7 +35,7 @@ import {
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute
-} from '../../worktree-operation-route'
+} from '../../workspace/ownership/worktree-operation-route'
 import {
   intentPresentation,
   openFailure,

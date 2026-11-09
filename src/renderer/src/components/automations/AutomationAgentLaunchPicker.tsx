@@ -10,13 +10,13 @@ import {
   resolveHostCapabilities,
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import type { AgentCatalogEntry } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
-import { automationLegacyArguments } from '../../../../shared/automation-launch-setup-source'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automations/automation-runtime-capabilities'
+import { automationLegacyArguments } from '../../../../shared/automations/launch/automation-legacy-arguments'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { draftExtraAgentArgsNeedFreshSession } from './automation-draft-model'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
@@ -61,6 +61,7 @@ export function AutomationAgentLaunchPicker({
   chatSupported: boolean | null
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }) {
+  const t = useTranslate()
   const state = useAppStore(selectAgentLaunchRouteView)
   const [menuOpen, setMenuOpen] = useState(false)
   const [catalogAgent, setCatalogAgent] = useState<AgentPickerEntry['agent']>()
@@ -204,7 +205,7 @@ export function AutomationAgentLaunchPicker({
       ) : modern && draftExtraAgentArgsNeedFreshSession({ ...draft, surface }) ? (
         <div className="mt-2 flex items-center justify-between gap-2">
           <p className="text-xs text-destructive">
-            {translate(
+            {t(
               'auto.components.automations.launchSettings.needsFreshSession',
               'Agent launch settings require a fresh session for every run.'
             )}
@@ -216,10 +217,7 @@ export function AutomationAgentLaunchPicker({
             className="shrink-0"
             onClick={() => onDraftChange((current) => ({ ...current, reuseSession: false }))}
           >
-            {translate(
-              'auto.components.automations.extraAgentArgs.useFreshSessions',
-              'Use fresh sessions'
-            )}
+            {t('auto.components.automations.extraAgentArgs.useFreshSessions', 'Use fresh sessions')}
           </Button>
         </div>
       ) : null}

@@ -232,7 +232,7 @@ const leaseRpc = vi.hoisted(() =>
     })
   )
 )
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: leaseRpc
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -563,7 +563,7 @@ it.each(['mounted', 'success', 'unmounted', 'ime', 'cancel'] as const)(
       act(() =>
         bottom.view.dispatch(bottom.state.tr.insertText('가', bottom.state.doc.content.size - 1))
       )
-      expect(nextSend().blocks).toEqual([{ type: 'text', text: 'first\n\necho가echo' }])
+      expect(nextSend().blocks).toEqual([{ type: 'text', text: 'first\n\necho가 echo' }])
     } else {
       expect(nextSend().blocks).toEqual([
         {

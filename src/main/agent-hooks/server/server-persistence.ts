@@ -2,7 +2,13 @@ import { createHash } from 'node:crypto'
 
 import { isValidPaneKey } from './server-status-identity'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS as HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
-import { LAST_STATUS_FILE_VERSION, STATUS_PERSIST_MIN_INTERVAL_MS } from './server-constants'
+import {
+  LAST_STATUS_FILE_VERSION,
+  STATUS_FLUSH_BUSY_TIMEOUT_MS,
+  STATUS_PERSIST_MIN_INTERVAL_MS,
+  STATUS_PERSIST_RETRY_MAX_MS,
+  STATUS_PERSIST_RETRY_MIN_MS
+} from './server-constants'
 import type {
   EnrichedAgentHookEventPayload,
   LastStatusFile,
@@ -12,19 +18,26 @@ import type {
 import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
 import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
-import { AtomicSnapshotWriter } from '../../persistence/atomic-snapshot-writer'
+import { LastStatusStore } from './last-status-store'
+import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
-  private statusSnapshotWriter: AtomicSnapshotWriter | null = null
-  private statusSnapshotWriterPath: string | null = null
+  private statusStore: LastStatusStore | null = null
+  private statusStorePath: string | null = null
   private statusPersistFailing = false
+  private statusPersistRetryDelayMs = 0
+  private statusPersistRetryAt = 0
 
-  protected serializeStatusFile(): string {
+  protected buildStatusFile(): LastStatusFile {
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
     const conflictedCommitments = new Set<string>()
+    // Restart drops anything older than the TTL, so saving it would only carry dead rows forward.
+    const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
     for (const [paneKey, commitment] of this.persistedAuthorityCommitmentsByPaneKey) {
-      authorityCommitments[paneKey] = { ...commitment }
+      if (commitment.observedAt >= ttlCutoff) {
+        authorityCommitments[paneKey] = { ...commitment }
+      }
     }
     for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
       // Why: never persist invalid keys (matches the hydrate-path invariant).
@@ -33,7 +46,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       }
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
       // Journal projections must not compete with unconfirmed copies hydrated from this cache.
-      if (enrichedPayload.structuredHost) {
+      if (enrichedPayload.structuredHost || enrichedPayload.receivedAt < ttlCutoff) {
         continue
       }
       const {
@@ -77,17 +90,20 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       }
     }
     // Panes without successor agents would otherwise retain exit evidence forever.
-    pruneAgentExits(this.agentExitedAtByPaneKey, Date.now() - HYDRATE_MAX_AGE_MS, (paneKey) =>
+    pruneAgentExits(this.agentExitedAtByPaneKey, ttlCutoff, (paneKey) =>
       this.state.lastStatusByPaneKey.has(paneKey)
     )
-    const agentExits = serializeAgentExits(this.agentExitedAtByPaneKey)
-    const file: LastStatusFile = {
+    // Runtime keeps an old exit for a live row; the saved copy keeps it only beside a saved row.
+    const agentExits = serializeAgentExits(this.agentExitedAtByPaneKey).filter(
+      (exit) =>
+        exit.at >= ttlCutoff || exit.paneKeys.some((paneKey) => Object.hasOwn(entries, paneKey))
+    )
+    return {
       version: LAST_STATUS_FILE_VERSION,
       entries,
       authorityCommitments,
       ...(agentExits.length > 0 ? { agentExits } : {})
     }
-    return JSON.stringify(file)
   }
 
   // Leading-edge throttling prevents event streams from postponing writes indefinitely (#26720).
@@ -99,12 +115,14 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     // Persist authority changes immediately to preserve spool replay filtering after a crash.
     const urgent = this.currentAuthorityFingerprint() !== this.lastPersistedAuthorityFingerprint
     // A wall-clock rollback must not defer persistence indefinitely.
-    const dueAt = urgent
+    const throttledAt = urgent
       ? now
       : Math.min(
           this.lastStatusPersistStartedAt + STATUS_PERSIST_MIN_INTERVAL_MS,
           now + STATUS_PERSIST_MIN_INTERVAL_MS
         )
+    // After a failed save every attempt, urgent or not, waits for the short retry backoff.
+    const dueAt = this.statusPersistRetryAt > now ? this.statusPersistRetryAt : throttledAt
     if (this.statusPersistTimer) {
       if (dueAt >= this.statusPersistDueAt) {
         return
@@ -114,7 +132,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     this.statusPersistDueAt = Math.max(dueAt, now)
     this.statusPersistTimer = setTimeout(() => {
       this.statusPersistTimer = null
-      this.startStatusPersist()
+      this.runStatusPersist()
     }, this.statusPersistDueAt - now)
     // Quit flushes synchronously; this timer must not keep the runtime alive.
     if (typeof this.statusPersistTimer.unref === 'function') {
@@ -122,60 +140,71 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     }
   }
 
-  flushStatusPersistSync(): void {
+  /** Quit, stop and hook-disable: one bounded lock wait, then the failure is reported. */
+  flushStatusPersistSync(): boolean {
     this.cancelStatusPersistTimer()
     if (!this.lastStatusFilePath) {
-      return
+      return true
     }
-    this.runStatusPersist()
+    return this.runStatusPersist(STATUS_FLUSH_BUSY_TIMEOUT_MS)
   }
 
-  /** Quit, hook-disable and hydration repair need synchronous writes; routine updates are async. */
-  protected runStatusPersist(): void {
-    const writer = this.getStatusSnapshotWriter()
-    if (!writer) {
-      return
+  /** Writes only changed rows; a failure (including a held lock) retries with backoff. */
+  protected runStatusPersist(busyTimeoutMs = 0): boolean {
+    const store = this.getStatusStore()
+    if (!store) {
+      return true
+    }
+    if (store.isDisabled) {
+      // Nothing reaches disk this session; flush callers must not read that as saved.
+      return false
     }
     this.lastStatusPersistStartedAt = Date.now()
-    this.lastPersistedAuthorityFingerprint = this.currentAuthorityFingerprint()
+    const fingerprint = this.currentAuthorityFingerprint()
     try {
-      writer.writeSync(() => this.serializeStatusFile())
-      this.statusPersistFailing = false
+      store.write(this.buildStatusFile(), busyTimeoutMs)
     } catch (err) {
       this.reportStatusPersistFailure(err)
+      this.statusPersistRetryDelayMs = nextRetryDelayMs(this.statusPersistRetryDelayMs, {
+        minMs: STATUS_PERSIST_RETRY_MIN_MS,
+        maxMs: STATUS_PERSIST_RETRY_MAX_MS
+      })
+      this.statusPersistRetryAt = Date.now() + this.statusPersistRetryDelayMs
+      // Retry even if no later mutation arrives.
+      this.scheduleStatusPersist()
+      return false
     }
-  }
-
-  protected primeStatusPersistBaseline(onDiskJson: string): void {
-    this.getStatusSnapshotWriter()?.primeCommittedContent(onDiskJson)
-    this.lastPersistedAuthorityFingerprint = this.currentAuthorityFingerprint()
+    // Only a committed save can stand in for the authority it carries.
+    this.lastPersistedAuthorityFingerprint = fingerprint
+    this.statusPersistFailing = false
+    this.statusPersistRetryDelayMs = 0
+    this.statusPersistRetryAt = 0
+    return true
   }
 
   protected closeStatusSnapshotWriter(): void {
     this.cancelStatusPersistTimer()
-    this.statusSnapshotWriter?.close()
-    this.statusSnapshotWriter = null
-    this.statusSnapshotWriterPath = null
+    this.statusStore?.close()
+    this.statusStore = null
+    this.statusStorePath = null
     this.lastStatusPersistStartedAt = Number.NEGATIVE_INFINITY
     this.lastPersistedAuthorityFingerprint = null
     this.statusPersistFailing = false
+    this.statusPersistRetryDelayMs = 0
+    this.statusPersistRetryAt = 0
   }
 
-  protected getStatusSnapshotWriter(): AtomicSnapshotWriter | null {
+  protected getStatusStore(): LastStatusStore | null {
     const filePath = this.lastStatusFilePath
     if (!filePath) {
       return null
     }
-    if (!this.statusSnapshotWriter || this.statusSnapshotWriterPath !== filePath) {
-      this.statusSnapshotWriter?.close()
-      this.statusSnapshotWriter = new AtomicSnapshotWriter(() => filePath, {
-        fileMode: 0o600,
-        directoryMode: 0o700,
-        skipUnchanged: true
-      })
-      this.statusSnapshotWriterPath = filePath
+    if (!this.statusStore || this.statusStorePath !== filePath) {
+      this.statusStore?.close()
+      this.statusStore = new LastStatusStore(filePath)
+      this.statusStorePath = filePath
     }
-    return this.statusSnapshotWriter
+    return this.statusStore
   }
 
   /** Revision counters and live tokens avoid per-event hashing or serialization. */
@@ -191,30 +220,6 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     return fingerprint
   }
 
-  private startStatusPersist(): void {
-    const writer = this.getStatusSnapshotWriter()
-    if (!writer) {
-      return
-    }
-    this.lastStatusPersistStartedAt = Date.now()
-    this.lastPersistedAuthorityFingerprint = this.currentAuthorityFingerprint()
-    writer
-      .write(() => this.serializeStatusFile())
-      .then(
-        () => {
-          this.statusPersistFailing = false
-        },
-        (err: unknown) => {
-          if (this.statusSnapshotWriter !== writer) {
-            return
-          }
-          this.reportStatusPersistFailure(err)
-          // Retry even if no later mutation arrives.
-          this.scheduleStatusPersist()
-        }
-      )
-  }
-
   private cancelStatusPersistTimer(): void {
     if (this.statusPersistTimer) {
       clearTimeout(this.statusPersistTimer)
@@ -224,7 +229,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
 
   private reportStatusPersistFailure(err: unknown): void {
     if (!this.statusPersistFailing) {
-      console.warn('[agent-hooks] failed to write last-status file:', err)
+      console.warn('[agent-hooks] failed to save agent status:', err)
     }
     this.statusPersistFailing = true
   }

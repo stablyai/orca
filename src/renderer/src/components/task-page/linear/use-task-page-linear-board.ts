@@ -20,7 +20,7 @@ import {
   findLinearWorkflowStateForStatus,
   getLinearStatusSectionState
 } from './task-page-linear-issue-model'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 export function useTaskPageLinearBoard(model: TaskPageLinearListProjectionModel) {
   const {
     settings,

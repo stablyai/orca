@@ -77,7 +77,11 @@ afterAll(async () => {
 })
 
 /** Boots the host document under a shell double, recording what the page sent before its first `painted`. */
-async function openHostDocument({ route, pageRoutes = [HOST_PATTERN, SESSION_PATTERN] }) {
+async function openHostDocument({
+  route,
+  pageRoutes = [HOST_PATTERN, SESSION_PATTERN],
+  backOnFirstClaim = false
+}) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
   await page.addInitScript(installShellDouble, {
     version: bridgeVersion,
@@ -97,6 +101,23 @@ async function openHostDocument({ route, pageRoutes = [HOST_PATTERN, SESSION_PAT
     backFrame: backNames.frame,
     replies: { 'status.get': STATUS_REPLY }
   })
+  if (backOnFirstClaim) {
+    // Press Back the moment the page first claims it, before the target's paint releases the stack.
+    await page.addInitScript((claim) => {
+      const channel = globalThis.orcaBridge
+      const post = channel.postMessage
+      let pressed = false
+      channel.postMessage = (json) => {
+        const result = post(json)
+        const frame = JSON.parse(json)
+        if (!pressed && frame.name === claim && frame.claimed === true) {
+          pressed = true
+          queueMicrotask(() => globalThis.__orcaRenderCheckSendBack())
+        }
+        return result
+      }
+    }, backNames.claim)
+  }
   await page.addInitScript(() => {
     globalThis.__openTargetBeforePaint = null
     const channel = globalThis.orcaBridge
@@ -171,19 +192,33 @@ describeRender('a host document asked to open a target', () => {
     await page.close()
   }, 60_000)
 
-  it('pushes a target that arrives after the host list is up', async () => {
-    const { page, errors, beforePaint } = await openHostDocument({
-      route: { pathname: HOST_ROUTE }
+  it('takes taps again after a Back that lands before the target paints', async () => {
+    const { page, errors } = await openHostDocument({
+      route: { pathname: HOST_ROUTE, params: { open: SESSION_ROUTE } },
+      backOnFirstClaim: true
     })
-    expect(beforePaint.pathname).toBe(HOST_ROUTE)
-    await page.evaluate((route) => globalThis.__orcaRenderCheckResendInit({ route }), {
-      pathname: HOST_ROUTE,
-      params: { open: SESSION_ROUTE }
-    })
-    await page.waitForFunction((target) => location.pathname === target, SESSION_ROUTE, {
+    await page.waitForFunction((host) => location.pathname === host, HOST_ROUTE, {
       timeout: 10_000,
       polling: 100
     })
+    // The pop's slide has to settle, or the stack keeps refusing every tap.
+    await page.waitForFunction(
+      () => {
+        const fab = [...document.querySelectorAll('[role="button"]')].find(
+          (element) =>
+            element.getAttribute('aria-label') === 'New workspace' &&
+            element.getBoundingClientRect().width > 0
+        )
+        if (fab === undefined) {
+          return false
+        }
+        const box = fab.getBoundingClientRect()
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+        return hit !== null && fab.contains(hit)
+      },
+      undefined,
+      { timeout: 10_000, polling: 100 }
+    )
     expect(errors).toEqual([])
     await page.close()
   }, 60_000)

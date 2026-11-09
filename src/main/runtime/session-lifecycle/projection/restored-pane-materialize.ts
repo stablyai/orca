@@ -14,7 +14,7 @@ import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { buildHeadlessMobileSessionTerminalTabs } from '../../terminal/surface/mobile-session-terminal-projection'
 import {

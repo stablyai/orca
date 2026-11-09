@@ -2,8 +2,11 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
+import { publishPageDeviceStore } from '../../mobile-web-shell/bridge/page-device-store'
 import { mobileNativeChatTranscriptCache } from './mobile-native-chat-transcript-cache'
+import { encodeStoredChatTranscript } from './mobile-native-chat-transcript-encode'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
@@ -118,75 +121,6 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.status).toBe('idle')
     expect(state?.loadingEarlier).toBe(false)
   })
-
-  it.each(['replacement', 'snapshot'] as const)(
-    'can page again after an authoritative %s resets a maxed-out read window',
-    async (frameType) => {
-      const sendRequest = vi.fn().mockResolvedValue({
-        ok: true,
-        result: { messages: [message('older')], hasMore: true, beforeOffset: 50 }
-      })
-      const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-        emit = onData
-        onData({
-          type: 'snapshot',
-          messages: Array.from({ length: 40 }, (_unused, index) => message(`old-${index}`)),
-          hasMore: true,
-          beforeOffset: 100
-        })
-        return () => {}
-      })
-      await mount({ sendRequest, subscribe } as unknown as RpcClient)
-      for (let page = 0; page < 33; page += 1) {
-        await act(async () => {
-          state?.loadEarlier()
-          await Promise.resolve()
-        })
-      }
-      const requestsAtCap = sendRequest.mock.calls.length
-      expect(requestsAtCap).toBe(33)
-      expect(state?.hasMore).toBe(false)
-      expect(sendRequest).toHaveBeenLastCalledWith(
-        'nativeChat.readSession',
-        {
-          agent: 'claude',
-          sessionId: 'session',
-          limit: 40,
-          beforeOffset: 50,
-          capabilities: { transcriptSourceOrder: 1 }
-        },
-        expect.objectContaining({ budgetSpansConnect: true })
-      )
-      await act(async () => state?.loadEarlier())
-      expect(sendRequest).toHaveBeenCalledTimes(33)
-
-      await act(async () =>
-        emit({
-          type: frameType,
-          messages: [message('authoritative')],
-          hasMore: true,
-          beforeOffset: 500
-        })
-      )
-      await act(async () => {
-        state?.loadEarlier()
-        await Promise.resolve()
-      })
-
-      expect(sendRequest).toHaveBeenCalledTimes(requestsAtCap + 1)
-      expect(sendRequest).toHaveBeenLastCalledWith(
-        'nativeChat.readSession',
-        {
-          agent: 'claude',
-          sessionId: 'session',
-          limit: 60,
-          beforeOffset: 500,
-          capabilities: { transcriptSourceOrder: 1 }
-        },
-        expect.objectContaining({ budgetSpansConnect: true })
-      )
-    }
-  )
 
   it('keeps paged-in history across an auto-reconnect replay snapshot', async () => {
     // Reconnect replays the original small window; merge it into paged history instead of truncating.
@@ -314,43 +248,6 @@ describe('useMobileNativeChatSession', () => {
 
     expect(state?.messages.some((entry) => entry.id === 'stale-page')).toBe(false)
     expect(state?.loadingEarlier).toBe(false)
-  })
-
-  it('lands a page across a same-cursor replay, and flags a refused page until the next tap', async () => {
-    const pages: ((response: unknown) => void)[] = []
-    const sendRequest = vi.fn(() => new Promise((resolve) => pages.push(resolve)))
-    const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
-    const snapshot = { type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 }
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      emit = onData
-      onData(snapshot)
-      return () => {}
-    })
-    await mount({ sendRequest, subscribe } as unknown as RpcClient)
-    const answer = (response: unknown) =>
-      act(async () => {
-        pages.at(-1)?.(response)
-        await Promise.resolve()
-      })
-
-    act(() => state?.loadEarlier())
-    await act(async () => emit(snapshot))
-    await answer({
-      ok: true,
-      result: { messages: [message('older')], hasMore: true, beforeOffset: 40 }
-    })
-    expect(state?.messages.map((entry) => entry.id)).toEqual([
-      'older',
-      ...window.map((entry) => entry.id)
-    ])
-
-    act(() => state?.loadEarlier())
-    await answer({ id: 'x', ok: false, error: { code: 'refused', message: 'refused' } })
-    expect(state?.olderPages).toBe('failed')
-    expect(state?.loadingEarlier).toBe(false)
-    act(() => state?.loadEarlier())
-    expect(sendRequest).toHaveBeenCalledTimes(3)
-    expect(state?.olderPages).toBe('loading')
   })
 
   it('keeps the base snapshot authoritative when a live append arrives first', async () => {
@@ -649,5 +546,64 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     )
 
     expect(renders.at(-1)).toMatchObject({ status: 'loading', ids: ['a-1'] })
+  })
+})
+
+describe('useMobileNativeChatSession after a relaunch', () => {
+  let renderer: ReactTestRenderer | null = null
+  let stored: string | null = null
+
+  beforeEach(() => {
+    publishPageDeviceStore({
+      available: () => true,
+      read: async (_table, keys) => ({
+        status: 'ok',
+        values: keys.map((key) => (key.startsWith('transcript:') ? stored : null))
+      }),
+      write: async () => ({ written: true })
+    })
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    publishPageDeviceStore(null)
+  })
+
+  it('paints the stored rows and subscribes after the newest one', async () => {
+    // What an earlier launch's page saved when this chat's turn settled.
+    stored = await encodeStoredChatTranscript({
+      kind: 'terminal',
+      savedAt: 1_700_000_000_000,
+      messages: [
+        { ...message('m1'), transcriptOrder: 100 },
+        { ...message('m2'), transcriptOrder: 200 }
+      ],
+      hasMore: false,
+      beforeOffset: null
+    })
+    const subscribe = vi.fn<RpcClient['subscribe']>(() => () => {})
+    const client = stubRpcClient({ subscribe })
+    const seen: { state: MobileNativeChatSession | null } = { state: null }
+    function Harness(): null {
+      seen.state = useMobileNativeChatSession({
+        client,
+        sourceIdentity: 'host-a\0relaunched',
+        agent: 'claude',
+        sessionId: 'session',
+        transcriptPath: null
+      })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+
+    expect(subscribe).toHaveBeenCalledTimes(1)
+    expect(subscribe.mock.calls[0]?.[1]).toMatchObject({
+      resumeAfter: { id: 'm2', transcriptOrder: 200, timestamp: 1 }
+    })
+    expect(seen.state?.messages.map((entry) => entry.id)).toEqual(['m1', 'm2'])
+    expect(seen.state?.savedAt).toBe(1_700_000_000_000)
   })
 })

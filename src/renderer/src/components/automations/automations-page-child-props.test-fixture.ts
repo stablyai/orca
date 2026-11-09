@@ -1,5 +1,5 @@
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
-import type { Automation } from '../../../../shared/automations-types'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'

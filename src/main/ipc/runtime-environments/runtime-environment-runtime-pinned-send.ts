@@ -1,5 +1,5 @@
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { sendRemoteRuntimeRequestAbortable } from './runtime-environment-abortable-requests'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -16,22 +16,28 @@ async function sendOneShotRequestOnRuntime(
 ): Promise<RuntimeRpcResponse<unknown> | null> {
   let otherRuntime = false
   try {
-    return await sendRemoteRuntimeRequestWithStatusPreflight<unknown>(
+    const requestMethod = call.method
+    const requestParams = call.params
+    const requestTimeoutMs = call.timeoutMs
+    const orchestrationEnvelope = call.envelope
+    const requestSignal = call.signal
+    const requestPreparation = call.prepareRequest
+    return await sendRemoteRuntimeRequestOnSocket<unknown>(
       connection,
-      call.method,
-      call.params,
-      call.timeoutMs,
+      requestMethod,
+      requestParams,
+      requestTimeoutMs,
+      orchestrationEnvelope,
       (status) => {
         otherRuntime = !status.ok || status.result.runtimeId !== expectedRuntimeId
         if (otherRuntime) {
           throw new Error('Runtime changed before sending')
         }
       },
-      call.envelope,
+      requestSignal,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-      call.signal,
       undefined,
-      call.prepareRequest
+      requestPreparation
     )
   } catch (error) {
     if (otherRuntime) {

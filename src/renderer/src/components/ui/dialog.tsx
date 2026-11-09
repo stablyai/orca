@@ -12,7 +12,7 @@ import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-sco
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -63,10 +63,11 @@ const dialogContentSurfaceVariants = cva('', {
 })
 
 function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }) {
+  const t = useTranslate()
   const label =
     variant === 'minimize'
-      ? translate('auto.components.ui.dialog.minimize', 'Minimize')
-      : translate('auto.components.ui.dialog.f26c4baeda', 'Close')
+      ? t('auto.components.ui.dialog.minimize', 'Minimize')
+      : t('auto.components.ui.dialog.f26c4baeda', 'Close')
   const button = (
     <DialogPrimitive.Close
       data-slot="dialog-close"
@@ -154,6 +155,7 @@ function DialogFooter({
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean
 }) {
+  const t = useTranslate()
   return (
     <div
       data-slot="dialog-footer"
@@ -163,9 +165,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">
-            {translate('auto.components.ui.dialog.f26c4baeda', 'Close')}
-          </Button>
+          <Button variant="outline">{t('auto.components.ui.dialog.f26c4baeda', 'Close')}</Button>
         </DialogPrimitive.Close>
       )}
     </div>

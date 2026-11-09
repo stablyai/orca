@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
 vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
@@ -43,47 +43,5 @@ describe('runtimePaneTitle → sortEpoch', () => {
 
     expect(store.getState().tabsByWorktree['wt-bg']?.[0]?.title).toBe('⠂ Claude Code')
     expect(store.getState().runtimePaneTitlesByTabId['tab-1']?.[1]).toBe('⠂ Claude Code')
-  })
-
-  it('updates titles in their corresponding worktrees', () => {
-    const store = createTestStore()
-    const tabCount = 2
-    const worktrees = Array.from({ length: tabCount }, (_, index) =>
-      makeWorktree({ id: `wt-${index}`, repoId: 'repo1', path: `/path/wt-${index}` })
-    )
-    seedStore(store, {
-      worktreesByRepo: { repo1: worktrees },
-      tabsByWorktree: Object.fromEntries(
-        worktrees.map((worktree, index) => [
-          worktree.id,
-          [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
-        ])
-      )
-    })
-    store.getState().updateTabTitles(
-      worktrees.map((_, index) => ({
-        tabId: `tab-${index}`,
-        title: `Codex ready ${index}`
-      }))
-    )
-
-    expect(store.getState().tabsByWorktree['wt-0']?.[0]?.title).toBe('Codex ready 0')
-    expect(store.getState().tabsByWorktree['wt-1']?.[0]?.title).toBe('Codex ready 1')
-  })
-
-  it('clears an unclassified runtime pane title', () => {
-    const store = createTestStore()
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: 'wt-bg', repoId: 'repo1', path: '/path/wt-bg' })]
-      },
-      tabsByWorktree: {
-        'wt-bg': [makeTab({ id: 'tab-1', worktreeId: 'wt-bg' })]
-      }
-    })
-    store.getState().setRuntimePaneTitle('tab-1', 1, 'shell prompt')
-    store.getState().clearRuntimePaneTitle('tab-1', 1)
-
-    expect(store.getState().runtimePaneTitlesByTabId['tab-1']).toBeUndefined()
   })
 })

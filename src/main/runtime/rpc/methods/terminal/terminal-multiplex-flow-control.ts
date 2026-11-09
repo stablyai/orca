@@ -1,9 +1,4 @@
-import {
-  TERMINAL_MULTIPLEX_ACK_BATCH_BYTES,
-  TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES,
-  TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
-  TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS
-} from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
+import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { drainTerminalMultiplexRoundRobin } from '../../terminal-multiplex-round-robin'
 import {
   sendSnapshotFrames,
@@ -14,6 +9,11 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import {
+  ackLinkHasRoomForHistory,
+  creditAckWindow,
+  releaseAckPendingHoldbackIfDrained
+} from './terminal-multiplex-ack-window'
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
 import {
   markYieldedQueriesDiscardedInFrames,
@@ -22,15 +22,15 @@ import {
 
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
   const { runtime, streams } = state
-  // Snapshots bypass ACK windows; restore history only after link drain so sustained floods cannot outrun intake.
   const linkHasRoomForHistory = (stream: TerminalMultiplexStream): boolean =>
-    stream.ackInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
-    state.ackTotalInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES
+    ackLinkHasRoomForHistory(state, stream)
   state.sendAckRecoverySnapshot = async (stream: TerminalMultiplexStream): Promise<void> => {
     if (
       !isMultiplexStreamAttached(state, stream) ||
       stream.outputPaused ||
-      stream.ackRecoverySnapshotInFlight
+      stream.ackRecoverySnapshotInFlight ||
+      // Images bypass ACK windows, so one per drained window keeps a slow link from queueing them without bound.
+      stream.ackRecoveryAwaitedBytes > 0
     ) {
       return
     }
@@ -76,6 +76,10 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       if (!publication.published) {
         throw new Error('Remote terminal recovery snapshot was not published.')
       }
+      stream.ackRecoveryAwaitedBytes = stream.ackInFlightBytes
+      if (state.linkEstimate.enabled) {
+        state.linkEstimate.noteImageSent(publication.bytes)
+      }
       if (!isMultiplexStreamAttached(state, stream)) {
         throw new Error('Remote terminal recovery snapshot stream detached.')
       }
@@ -90,6 +94,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
           (total, chunk) => total + chunk.bytes.byteLength,
           0
         )
+        releaseAckPendingHoldbackIfDrained(state, stream)
       }
       stream.ackPendingOutputOverflowed = false
       stream.ackRecoveryHistoryOwed = !carriesHistory
@@ -127,7 +132,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       flushed < maxChunks &&
       state.canSendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!.bytes.byteLength)
     ) {
-      if (!state.sendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!)) {
+      if (!state.sendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!, true)) {
         return flushed
       }
       flushed += 1
@@ -139,9 +144,12 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         0
       )
     }
+    releaseAckPendingHoldbackIfDrained(state, stream)
     if (
       stream.ackRecoveryHistoryOwed &&
       stream.ackPendingOutput.length === 0 &&
+      // Flagging overflow while the gate holds the image would queue live output (echo) behind it.
+      stream.ackRecoveryAwaitedBytes === 0 &&
       linkHasRoomForHistory(stream)
     ) {
       // The flood settled: one recovery now replaces the screen-only image and its history.
@@ -171,17 +179,13 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     if (!stream.ackOutput || bytes <= 0) {
       return
     }
-    const acknowledged = Math.min(stream.ackInFlightBytes, bytes)
-    stream.ackWindowBytes = Math.min(
-      TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES,
-      stream.ackWindowBytes + acknowledged
-    )
-    state.ackTotalWindowBytes = Math.min(
-      TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
-      state.ackTotalWindowBytes + acknowledged
-    )
-    stream.ackInFlightBytes -= acknowledged
-    state.ackTotalInFlightBytes = Math.max(0, state.ackTotalInFlightBytes - acknowledged)
+    const acknowledged = creditAckWindow(state, stream, bytes)
+    if (state.linkEstimate.enabled) {
+      state.linkEstimate.noteAcknowledged(stream, acknowledged)
+    }
     state.flushAllAckPendingOutput()
+    if (stream.ackPendingOutput.length === 0 && !stream.ackPendingOutputOverflowed) {
+      stream.ackOutputWaited = false
+    }
   }
 }

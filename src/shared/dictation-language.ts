@@ -10,6 +10,10 @@ export const DICTATION_LANGUAGES: readonly string[] = DICTATION_LANGUAGE_CODES.s
 // SenseVoice refuses to load with any other code.
 export const SENSE_VOICE_DICTATION_LANGUAGES: readonly string[] = ['en', 'ja', 'ko', 'yue', 'zh']
 
+// Nemotron 3.5's locales (ko-KR, zh-CN, ...) by ISO-639-1 language; the recognizer sends the first matching locale.
+export const NEMOTRON_DICTATION_LANGUAGES: readonly string[] =
+  'ar bg cs da de en es et fi fr hi hr hu it ja ko nl pl pt ro ru sk sv tr uk vi zh'.split(' ')
+
 /** The code to send the engine, or undefined to let it detect the language itself. */
 export function engineDictationLanguage(
   model: Pick<SpeechModelManifest, 'dictationLanguages'>,

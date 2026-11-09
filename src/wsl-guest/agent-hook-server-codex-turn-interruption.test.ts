@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { RelayAgentHookServer } from './agent-hook-server'
-import { AgentHookServer } from '../main/agent-hooks/server'
+import { AgentHookServer } from '../main/agent-hooks/server/agent-hook-server'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
 const line = (payload: unknown): string => `${JSON.stringify({ type: 'event_msg', payload })}\n`

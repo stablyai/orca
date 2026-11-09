@@ -1,6 +1,6 @@
 import type { editor } from 'monaco-editor'
 import { monacoFindOptions } from '@/components/editor/monaco-find-options'
-import type { MonacoTypographyOptions } from '@/lib/editor-typography'
+import type { MonacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 
 export function buildAutomationPromptEditorOptions(args: {
   ariaLabel: string

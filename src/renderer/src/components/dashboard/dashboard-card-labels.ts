@@ -9,7 +9,7 @@ import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
 import {
   projectedStructuredChatTabName,
   type StructuredChatTabNames
-} from '@/runtime/structured-chat-tab-name'
+} from '@/runtime/native-chat/naming/structured-chat-tab-name'
 
 export function rowTask(row: DashboardAgentRow): string {
   return (row.entry.orchestration?.taskTitle ?? '').trim() || (row.entry.prompt ?? '').trim()

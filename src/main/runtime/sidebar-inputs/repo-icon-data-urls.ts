@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { RepoIcon } from '../../../shared/repo-icon'
 import type { Repo } from '../../../shared/repo-types'
-import { readRasterImageDimensions } from '../../../shared/raster-image-dimensions'
+import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 import {
   MAX_REPO_ICON_DATA_URL_BYTES,
   repoIconFeedKey,
@@ -12,7 +12,7 @@ import {
   type FetchedRepoIcon,
   type RepoIconFetch
 } from './repo-icon-remote-fetch'
-import type { RuntimeDesktopSurface } from '../runtime-desktop-surface'
+import type { RuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 
 export type RepoIconPngEncoder = NonNullable<RuntimeDesktopSurface['encodeRepoIconPng']>
 

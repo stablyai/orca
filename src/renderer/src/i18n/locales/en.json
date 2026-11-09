@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Connect to this workspace’s SSH host, then try again.",
+    "sshUnavailable": "Terminal launch is unavailable on this SSH host. Open a terminal in the workspace and start the agent there.",
+    "reconnectServer": "Reconnect to this workspace’s Orca server, then try again.",
+    "updateServer": "Update Orca on this workspace’s server, then try again.",
+    "checkSettings": "Check the agent’s launch settings, then try again.",
+    "invalidArgs": "The CLI arguments for {{value0}} have an unclosed quote. Fix them, then try again.",
     "terminalPreparationFailed": "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
     "terminalPromptFailed": "Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.",
     "opencode": {
@@ -732,6 +738,23 @@
           "remote": "remote",
           "gpu": "gpu"
         }
+      },
+      "appIcon": {
+        "importCustom": "Custom…",
+        "replaceCustom": "Replace custom icon…",
+        "removeCustom": "Remove custom icon",
+        "customKeyword": "custom",
+        "importKeyword": "import",
+        "importErrors": {
+          "unsupportedFormat": "Unsupported image. Pick a PNG or JPEG file.",
+          "unreadable": "Could not read the selected file.",
+          "tooLarge": "Image is larger than {{max}} MB.",
+          "notSquare": "App icons must be square.",
+          "tooSmall": "Image must be at least {{min}}×{{min}} pixels.",
+          "tooBig": "Image must be at most {{max}}×{{max}} pixels.",
+          "undecodable": "Could not decode the selected image.",
+          "saveFailed": "Could not save the custom icon."
+        }
       }
     },
     "browser": {
@@ -1035,7 +1058,6 @@
       "actionModel": {
         "on": "On",
         "off": "Off",
-        "invalidArgs": "The CLI arguments for {{value0}} are invalid. Fix them in Settings → Source Control AI.",
         "model": "Model",
         "effort": "Effort",
         "agentDefault": "Agent default",
@@ -1126,16 +1148,14 @@
       "modelDescriptions": {
         "parakeetV3": "Highest accuracy for 25 European languages. Punctuation, capitalization, and word-level timestamps.",
         "parakeetV2": "English only. Faster than v3 with similar accuracy. Punctuation and capitalization.",
-        "zipformerBilingual": "Chinese + English with code-switching. Low-latency real-time streaming.",
-        "paraformerBilingual": "Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.",
         "zipformerStreamingEnRetired": "No longer offered: it drops the start of sentences. Delete it to free up space.",
-        "zipformerStreamingZh": "Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.",
-        "zipformerStreamingKo": "Korean only. Low-latency real-time streaming.",
-        "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
         "whisperTiny": "90+ languages. Lower accuracy than Parakeet but broadest language coverage.",
         "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
-        "gpt4oMiniTranscribe": "Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.",
-        "gpt4oTranscribe": "Cloud transcription with higher accuracy. Requires an OpenAI API key."
+        "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key.",
+        "openAiCompatible": "Any service with an OpenAI-style transcription API, such as Groq, Mistral or a local server.",
+        "whisperLargeV3Turbo": "Best accuracy for Japanese, Korean, and Chinese, and 90+ languages. Slower than Parakeet.",
+        "retiredForEngine": "No longer offered: the speech engine can no longer run it. Delete it to free up space.",
+        "nemotron": "English, Spanish, German and many more languages, with automatic language detection."
       }
     },
     "diagnostics": {
@@ -1696,9 +1716,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Unable to find a workspace for these checks.",
-              "fb6c294e85": "Could not build the agent launch command.",
               "03c1d61f83": "Unable to open the workspace attached to these checks.",
-              "822bf52295": "Unable to resolve the workspace launch platform.",
               "dfb4dd7c00": "Unable to find the workspace attached to these checks.",
               "9f00d7df0c": "Fix checks prompt is empty. Update Source Control AI settings.",
               "2ebf794906": "No enabled AI agent was detected on this workspace host.",
@@ -1737,8 +1755,8 @@
             "direct": {
               "3de6371df3": "Could not build the agent launch command.",
               "67e103dd60": "Workspace created but could not be activated.",
-              "19c7683acf": "Selected agent is not available in the created workspace.",
-              "8bc45efdbc": "Failed to resolve PR head.",
+              "19c7683acf": "The selected agent is unavailable. Check the workspace’s agent settings, then try again.",
+              "8bc45efdbc": "Could not read the pull request. Check that you can open it, then try again.",
               "agent": {
                 "ceeeb509b5": "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle."
               }
@@ -2086,7 +2104,9 @@
         "settingUpWorkspace": "Setting up your workspace…",
         "preparingWorkspace": "Preparing workspace…",
         "creatingWorktree": "Creating worktree…",
-        "fetchingBaseBranch": "Fetching base branch…"
+        "fetchingBaseBranch": "Fetching base branch…",
+        "checkingVmEnvironment": "Checking VM environment…",
+        "vmChecksFailed": "Environment checks failed"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -2119,6 +2139,15 @@
         "title": "Add Windows drive folders on this computer",
         "descriptionWithPath": "{{value0}} is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly.",
         "description": "This folder is on a Windows drive. Git in WSL reports false line-ending changes there, misses edits made from Windows, and searches it slowly."
+      },
+      "environmentSetupAgentLaunch": {
+        "noAgent": "No enabled AI agent was detected for this workspace.",
+        "noWorkspace": "Open a workspace for this project first, then try again."
+      },
+      "ephemeralVmEnvironmentCheck": {
+        "backgroundFailed": "Environment checks failed for a new VM workspace. Open it in the sidebar to continue.",
+        "openedDegraded": "Creating the workspace on a VM whose environment checks failed.",
+        "unreachable": "The environment checks could not finish: {{error}}"
       }
     },
     "hooks": {
@@ -3386,7 +3415,6 @@
         "a2a279b32a": "Save timed out or failed. Fix errors before closing.",
         "46e08bc5c8": "This file has unsaved changes.",
         "61ed600d29": "\"{{value0}}\" has unsaved changes. Do you want to save before closing?",
-        "e57db40c11": "Could not build launch command for {{value0}}.",
         "5b2c1a9e44": "No agent CLI detected — install one or pick a default agent in Settings.",
         "quitSnapshotSaveFailed": "Quit canceled: the session snapshot could not be saved ({{value0}}).",
         "reloadSnapshotSaveFailed": "Reload canceled: the session snapshot could not be saved ({{value0}})."
@@ -3939,7 +3967,6 @@
             "a3346fc6ed": "Cancel worktree creation",
             "532aea14ce": "Cancel",
             "767951265d": "Something went wrong while creating the worktree.",
-            "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
             "vmProvisioningLogEmpty": "Waiting for recipe output…"
           },
@@ -3954,6 +3981,18 @@
             "create": "Create worktree",
             "setup": "Set up workspace",
             "startAgent": "Start {{agent}}"
+          },
+          "VmBuildSheet": {
+            "checks": "Check environment",
+            "checksFailed": "The VM is up, but its environment checks failed",
+            "create": "Create workspace",
+            "editRecipe": "Edit recipe",
+            "fixWithAgent": "Fix with agent",
+            "openAnyway": "Open anyway",
+            "openAnywayHint": "Open anyway keeps this VM and creates the workspace on it as is. Dismiss destroys the VM.",
+            "provision": "Provision VM",
+            "retryChecks": "Retry checks",
+            "title": "Building your VM"
           }
         }
       },
@@ -4436,6 +4475,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Turn on"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Sized for another window",
+            "fitHere": "Fit here"
           }
         }
       },
@@ -4487,7 +4530,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
             "ec2adf093e": "Launch {{value0}} in a new terminal",
-            "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
             "8dea9b5cdf": "No enabled agents",
             "terminalListNeedsServerUpdate": "Update Orca on this server to list terminal agents",
@@ -4539,7 +4581,6 @@
             "4f327c8b3d": "Open Markdown...",
             "3d5d6c960d": "New Markdown",
             "fd2b42aaa3": "New Mobile Emulator",
-            "aea43b5748": "Open the existing emulator tab.",
             "b426bb2615": "Go to Mobile Emulator",
             "4833fb2cbe": "New Browser Tab",
             "d364f3c8d4": "New Terminal",
@@ -5288,6 +5329,9 @@
             "accounts": "Saved Antigravity Accounts",
             "readAgo": "Read {{time}}",
             "notRead": "Usage unknown: not read yet"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Resets {{when}}"
           }
         }
       },
@@ -6223,7 +6267,10 @@
           "69f5b5380d": "Cloning...",
           "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
           "cloneParentFolder": "Parent folder",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Folder name",
+          "cloneFolderTakenByRepo": "\"{{value0}}\" in this folder is already a different repository, so this clone needs its own folder.",
+          "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
           "dismissError": "Dismiss error",
@@ -6260,25 +6307,25 @@
           "removeBatchMixed_other": "Remove <target>{{count}} workspaces</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeBatchGit_one": "Remove <target>{{count}} workspace</target> from git and delete its workspace folder.",
           "removeBatchGit_other": "Remove <target>{{count}} workspaces</target> from git and delete their workspace folders.",
-          "removeSingleFolder": "Remove <target/> from Orca. The project folder on disk will not be deleted.",
-          "removeSingleGit": "Remove <target/> from git and delete its workspace folder.",
           "removeWithChildrenFolder_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Project folders on disk will not be deleted.",
           "removeWithChildrenFolder_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Project folders on disk will not be deleted.",
           "removeWithChildrenMixed_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeWithChildrenMixed_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeWithChildrenGit_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.",
-          "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders."
+          "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.",
+          "removeSingleFolderFromOrca": "Removes it from Orca. The folder on disk is kept.",
+          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Show loaded paths",
           "loadedPathsNotice": "Loaded paths may be incomplete or out of date.",
           "loadedChangedPaths": "Loaded changed paths",
           "unresolvedConflict": "Unresolved conflict",
-          "changeCount_one": "{{count}} uncommitted or untracked change",
-          "changeCount_other": "{{count}} uncommitted or untracked changes",
-          "changes": "Uncommitted or untracked changes",
           "moreLoadedPaths_one": "and {{count}} more loaded path",
-          "moreLoadedPaths_other": "and {{count}} more loaded paths"
+          "moreLoadedPaths_other": "and {{count}} more loaded paths",
+          "changesLost_one": "{{count}} uncommitted change will be lost",
+          "changesLost_other": "{{count}} uncommitted changes will be lost",
+          "uncountedChangesLost": "Uncommitted changes will be lost"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "Child workspaces will be deleted",
@@ -6286,9 +6333,6 @@
           "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
           "moreChildren_one": "+{{count}} more",
           "moreChildren_other": "+{{count}} more"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "Don't ask again"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "This is the <strong>main worktree</strong> (the original clone directory)."
@@ -6416,15 +6460,19 @@
           "b0a7bfc34c": "Hide from sidebar",
           "88d402b71d": "Onboarding checklist"
         },
+        "SetupScriptCodeBlock": {
+          "showLess": "Show less",
+          "showMore_one": "Show {{count}} more line",
+          "showMore_other": "Show {{count}} more lines"
+        },
         "SetupScriptPromptCard": {
           "ff1e819a11": "Add a setup script",
           "70715947fb": "Setup script cannot be empty",
           "888b83bf78": "Failed to save setup script",
           "a49196d538": "Runs when Orca creates a new worktree.",
           "savedSetupCommand": "Saved the setup command.",
-          "savedWithSkippedFields_one": "{{count}} unsupported field skipped. Saved the setup command.",
-          "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command.",
-          "savedInProjectSettings": "Saved in this <settings>project's settings</settings>"
+          "savedInProjectSettings": "Saved in this <settings>project's settings</settings>",
+          "importTitle": "Import setup script"
         },
         "SetupScriptPromptCardViews": {
           "3933401d28": "Configure",
@@ -6436,20 +6484,23 @@
           "eefa756190": "Configure manually",
           "ca4efcbc25": "Save",
           "fdbc6cb064": "Detected setup script",
-          "7275f674cc": "Detected setup",
           "822ff300ad": "Dismiss",
           "5bfd5c8779": "Dismiss setup scripts",
-          "detectedFromSource": "Detected from <source>{{source}}</source>",
           "ignoresSharedSetup": "This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.",
-          "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees.",
-          "reviewSetupScript": "Review setup script"
+          "reviewSetupScript": "Review setup script",
+          "foundSetupScriptIn": "Found a setup script in <file>{{source}}</file>.",
+          "7275f674cc": "Detected setup",
+          "detectedFromSource": "Detected from <file>{{source}}</file>"
         },
         "SetupScriptReviewDialog": {
           "title": "Review setup script",
           "description": "Saving runs this whenever Orca creates a worktree for {{repo}}.",
           "setupScript": "Setup script",
           "archiveScript": "Archive script",
-          "save": "Save local setup"
+          "save": "Save local setup",
+          "descriptionWithSource": "From <file>{{source}}</file>. Saving runs this whenever Orca creates a worktree for {{repo}}.",
+          "notImported": "Not imported",
+          "notImportedHint": "These settings have no Orca equivalent and won't be saved."
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",
@@ -6755,14 +6806,11 @@
           "c39c37676a": "Create a group and move this project into it.",
           "6664418e98": "New Project Group",
           "e091caab15": "The project could not be found",
-          "439fa94d53": "Update",
           "579b1a8e61": "Remove from Parent",
           "8d9cd19d09": "Open Parent Worktree",
           "d35dfeae58": "Remove from group",
           "76865d827f": "Move to group",
           "503ec0f8e6": "New group from project",
-          "3350101edb": "Copy Path",
-          "copyWorktreeName": "Copy Worktree Name",
           "f4475537d8": "Delete",
           "f5ac91531d": "Remove Project from Orca",
           "b42391d8bf": "Deleting…",
@@ -6781,9 +6829,16 @@
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
           "deleteWorktree": "Delete Worktree",
-          "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "sleepThisWorkspace": "This Workspace",
+          "sleepDescendantsOption": "With Descendants ({{value0}})",
+          "deleteWithDescendants": "Delete with Descendants…",
+          "editDetails": "Edit Details…",
+          "copySubmenu": "Copy",
+          "copyPathOption": "Path",
+          "copyNameOption": "Worktree Name",
+          "lineageSubmenu": "Parent & Children",
+          "projectGroupSubmenu": "Project Group"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -6834,7 +6889,12 @@
           "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
           "projectGroupRefreshing": "Refreshing {{group}}…",
           "refreshProjectGroup": "Refresh projects",
-          "hostServerReplaced": "Different server: forget it, then connect"
+          "hostServerReplaced": "Different server: forget it, then connect",
+          "hostVmResumeFailed": "Resume failed",
+          "hostVmSetupFailed": "Setup failed",
+          "hostVmSuspended": "Suspended",
+          "hostVmWaking": "Waking…",
+          "hostVmProvisioning": "Provisioning…"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -7564,7 +7624,8 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
-        }
+        },
+        "projectOrderSaveFailed": "Could not save the complete project order"
       },
       "shared": {
         "useDaemonActions": {
@@ -8850,7 +8911,6 @@
           "f828e1de19": "- shared with your team",
           "673a7fd10e": "Checking...",
           "5426ecbdcb": "Local scripts will not run",
-          "b2b06c7ce8": "Available environment variables (hover for details):",
           "95a0411b3e": "template",
           "175daba180": "Example",
           "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
@@ -9242,18 +9302,10 @@
           "b661b034ec": "· Default:",
           "builtin_themes": "Built-in",
           "ceefb9d7f1": "No themes found.",
-          "imported_from": "Imported from {{value0}}",
           "imported_themes": "Imported",
-          "9119fb2268": "Current",
-          "4e11f87ca6": "Showing",
-          "fbb428db98": "Selected:",
           "search_terminal_themes": "Search terminal themes",
-          "cb330ef7f8": " of {{value0}}",
-          "c822571b2e": " matching \"{{value0}}\"",
           "plugin_themes": "Plugins",
-          "from_plugin": "From {{value0}}",
-          "delete_imported_theme": "Delete {{value0}}",
-          "delete_theme": "Delete theme"
+          "delete_imported_theme": "Delete {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -9754,7 +9806,11 @@
           "cd9fe37556": "Microphone permission granted",
           "openAiKeyName": "Your OpenAI transcription key",
           "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
-          "dictationModesDescription": "Toggle: press {{shortcut}} once to start, again to stop. Hold: dictate while {{shortcut}} is held."
+          "dictationModeAuto": "Auto",
+          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop.",
+          "speechGpuLabel": "Use GPU",
+          "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer.",
+          "updateToFasterVersion": "Update to the faster version ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -11597,7 +11653,10 @@
               "modelUnloadTitle": "Unload Speech Model",
               "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
               "modelUnloadKeyword": "unload",
-              "modelMemoryKeyword": "memory"
+              "modelMemoryKeyword": "memory",
+              "fillerWordsTitle": "Remove Filler Words",
+              "fillerWordsDescription": "Drop “um”, “uh” and similar sounds from dictated text.",
+              "fillerWordsKeyword": "filler words"
             }
           }
         },
@@ -11988,7 +12047,11 @@
           "stopCleanup": "Stop cleanup",
           "cleanupStopped": "Cleanup stopped",
           "stopCleanupFailed": "Couldn’t stop Cloud VM cleanup.",
-          "cloudVmRefreshLabel": "Refresh Cloud VMs"
+          "cloudVmRefreshLabel": "Refresh Cloud VMs",
+          "provisioning": "Provisioning",
+          "untrackedRuntimeHint": "Orca never received this VM’s details. Cleanup runs destroy with only instance ID {{instanceId}}; if it fails, delete the VM in your provider, then remove it from this list.",
+          "removeFromList": "Remove from list",
+          "removeFromListFailed": "Couldn’t remove Cloud VM runtime from the list."
         },
         "ephemeralVms": {
           "search": {
@@ -12017,7 +12080,10 @@
           "checking": "Checking recipes...",
           "none": "No recipes found yet.",
           "cloudVmSkillTitle": "Cloud VM setup skill",
-          "cloudVmRefresh": "Refresh Cloud VM recipes"
+          "cloudVmRefresh": "Refresh Cloud VM recipes",
+          "setUpWithAgent": "Set up with an agent",
+          "setUpWithAgentHint": "Starts your default agent in {{repo}}. It edits orca.yaml, runs the doctors until they pass, and opens a PR.",
+          "setUpWithAgentNoRepo": "Add a project first."
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
@@ -12747,6 +12813,12 @@
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
               "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
               "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
+              "scopesTitle": "Select these Bitbucket API token scopes:",
+              "scopeUser": "Verify your account",
+              "scopeRepository": "Read build statuses",
+              "scopeReadPullRequest": "Read pull requests",
+              "scopeWritePullRequest": "Create pull requests",
+              "scopesWriteNote": "For read-only use, omit the write scope. Write does not include read; select each scope separately.",
               "docsLink": "Bitbucket API token docs",
               "storageNote": "Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.",
               "cancel": "Cancel",
@@ -13096,6 +13168,7 @@
         "SettingsHostScopePicker": {
           "label": "Host",
           "unavailable": "{{value0}} (unavailable)",
+          "loading": "Loading hosts…",
           "description": "Accounts, detected agents and terminal options below are for this host.",
           "unavailableNotice": "This server is no longer saved, so nothing can be shown for it. Choose another host at the top of Settings."
         },
@@ -13375,6 +13448,7 @@
           },
           "lightTheme": "Light theme",
           "darkTheme": "Dark theme",
+          "languageUnavailable": "{{value0}} (unavailable)",
           "themeSlot": {
             "description": "App colors for this mode."
           }
@@ -13799,7 +13873,9 @@
           "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
         },
         "SettingsSearchableSelect": {
-          "noMatches": "No matches."
+          "noMatches": "No matches.",
+          "searchHosts": "Search hosts…",
+          "searchLanguages": "Search languages…"
         }
       },
       "right": {
@@ -14691,7 +14767,6 @@
                     },
                     "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
                     "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
-                    "5540ff50cc": "Could not build the agent launch command.",
                     "216f762bd7": "Unable to resolve the workspace connection.",
                     "success": "Started an AI agent for the {{value0}} failure."
                   }
@@ -15259,7 +15334,9 @@
             "needsIsolatedFrames": "This panel is not available: it needs isolated plugin frames, which are turned off."
           },
           "activityBar": {
-            "error": "Error"
+            "error": "Error",
+            "disablePlugin": "Disable Plugin",
+            "disableFailed": "Could not disable plugin."
           },
           "AiVaultSessionLimitMenu": {
             "historyDepth": "History depth: {{value0}}",
@@ -15921,7 +15998,6 @@
             "3f4ca29961": "Maximize floating workspace",
             "1c79cba25d": "Restore floating workspace",
             "648352c51f": "Open {{value0}} in floating workspace",
-            "82da3701e7": "Could not build launch command for {{value0}}.",
             "109870e023": "Maximize",
             "b5686fee1e": "Restore"
           }
@@ -16685,6 +16761,7 @@
           "kernelStartFailed": "The kernel failed to start.",
           "noPython": "Python was not found on this computer. Install it from [python.org](https://www.python.org/downloads/), then run the cell again.",
           "kernelDied": "The kernel died.",
+          "outputTruncated": "Output truncated: Orca kept the start of this cell's output and discarded the rest. To keep all of it, write it to a file instead.",
           "localOnly": "Notebook cells can only run for files on this computer.",
           "pythonOnly": "Only Python notebooks can run in Orca.",
           "ownerUnresolved": "Orca can't tell which computer this notebook is on yet, so its cells can't run.",
@@ -17355,12 +17432,14 @@
           "noModel": "No speech model selected. Download one in Settings > Voice.",
           "disabled": "Voice dictation is disabled. Enable it in Settings > Voice.",
           "notReady": "Speech model not ready. Download it in Settings > Voice.",
+          "modelNeedsUpdate": "Your speech model needs an update to keep working. Update it to the faster version in Settings > Voice.",
           "unknownModel": "Selected model is no longer available. Please choose another in Settings > Voice.",
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
           "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit.",
-          "stoppedAfterSilence": "Stopped after a minute of silence"
+          "stoppedAfterSilence": "Stopped after a minute of silence",
+          "retryUnmatched": "Retry couldn't tell which words were already typed, so it inserted them all."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Dictation couldn't be inserted, so it was copied to the clipboard.",
@@ -17368,13 +17447,21 @@
           "lost": "Dictation couldn't be inserted or copied."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Stop dictation",
-          "7f3660a7ba": "Starting mic…",
-          "f082d0cb9d": "Processing…",
-          "3de5a129e7": "Listening",
           "4977162383": "Too loud",
-          "25f2b7a6a5": "Speaking",
-          "loadingModel": "Loading speech model…"
+          "finishing": "Finishing…",
+          "listening": "Listening…",
+          "cancel": "Cancel",
+          "finish": "Finish",
+          "oneMinuteLeft": "One minute left.",
+          "sendsWhenLanded": "Sends when the text lands",
+          "entersWhenLanded": "Presses Enter when the text lands"
+        },
+        "DictationPillFailure": {
+          "discard": "Discard recording",
+          "modelFailed": "Speech model couldn't load.",
+          "transcribeFailed": "Couldn't transcribe. Recording kept.",
+          "openSettings": "Open settings",
+          "retry": "Retry"
         }
       },
       "dashboard": {
@@ -18706,6 +18793,11 @@
         "FolderWorkspaceSourceControl": {
           "openWorktree": "Open this worktree",
           "reconnect": "Reconnect to see this worktree’s changes."
+        },
+        "FolderWorkspaceEmptyState": {
+          "createWorktree": "Create worktree",
+          "created": "Created worktree {{name}} in {{repo}}",
+          "createFailed": "Could not create a worktree in {{repo}}."
         }
       },
       "link": {
@@ -18821,7 +18913,10 @@
         "projectCount_one": "{{count}} project",
         "selectedProjectCount_one": "{{count}} selected project",
         "sourceHostCount_one": "{{count}} source host",
-        "unavailableCount_one": "{{count}} unavailable"
+        "unavailableCount_one": "{{count}} unavailable",
+        "statusProvisioning": "provisioning",
+        "statusSuspended": "suspended",
+        "statusWaking": "waking"
       },
       "ShortcutKeyCombo": {
         "07eb4985a1": "Double-tap {{value0}}"
@@ -19721,6 +19816,12 @@
       },
       "reasoning": "Reasoning",
       "failureWords": {
+        "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
+        "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat. Open it and fork from there.",
+        "forkOriginalMissingNamed": "{{agent}} could not find this response in \"{{detail}}\". Open that chat and fork from there.",
+        "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
+        "forkOriginalLatestOnly": "{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.",
+        "forkOriginalLatestOnlyNamed": "{{agent}} can only fork the latest response in \"{{detail}}\". Open that chat and fork its latest response once it has finished.",
         "theAgent": "The agent",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
         "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",
@@ -19973,6 +20074,7 @@
         "orcaStopCanContinue": "You can continue in this conversation.",
         "orcaStopUnnamedServer": "the remote server",
         "permissionDenied": "{{agent}} denied permission. View details.",
+        "safetyReviewApproved": "{{agent}} approved this action. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
@@ -20002,6 +20104,7 @@
         "noCommands": "No matching commands",
         "commands": "Commands",
         "skills": "Skills",
+        "checkingSkills": "Checking for new skills...",
         "loadingSkills": "Loading skills...",
         "skillsLoaded": "Skills loaded",
         "clearDescription": "Clear conversation context",
@@ -20287,7 +20390,6 @@
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
         "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
         "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
-        "terminalExitUnprovenInChat": "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Make sure it has stopped, then try again.",
         "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again."
       },
       "state": {
@@ -20460,7 +20562,8 @@
       "contextUsage": {
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
         "title": "Context",
-        "estimated": "Estimated from the last response."
+        "estimated": "Estimated from the last response.",
+        "deferredNote": "Loaded on demand. Not counted in the used total."
       },
       "contextMenu": {
         "noSessionContext": "No chat context is available.",
@@ -20729,8 +20832,10 @@
       "composerWorkspace": {
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
+        "detachedCommit": "Commit {{head}} (not a branch)",
         "folder": "Folder",
         "mainCheckout": "Main checkout",
+        "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
         "worktree": "Worktree"
       },
       "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
@@ -20773,6 +20878,13 @@
         "settingsLink": "Settings > Chat UI > Turn activity",
         "failed": "Couldn't save that. You can turn it off in Settings > Chat UI > Turn activity."
       },
+      "ciResultLine": {
+        "failingLead": "CI failing on",
+        "greenLead": "CI green on",
+        "at": "at",
+        "hide": "Don't show CI result lines",
+        "hidden": "Orca won't show CI result lines anymore"
+      },
       "openedPullRequests": {
         "one": "Opened {{name}}",
         "hide": "Don't show opened pull requests",
@@ -20780,7 +20892,21 @@
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
       },
-      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
+      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead.",
+      "splitRight": "Split Right",
+      "splitDown": "Split Down",
+      "sideChat": {
+        "description": "Ask a side question in a fork beside this chat",
+        "argumentHint": "<question>",
+        "notReady": "Side chats are not ready yet. Try again in a moment.",
+        "replyRunning": "Available when this reply finishes.",
+        "noReply": "Available after the first reply.",
+        "textOnly": "Side chats take text only. Remove attachments, then send it again.",
+        "questionNotSent": "{{agent}} didn't get your question",
+        "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
+        "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
+        "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      }
     },
     "tab": {
       "bar": {
@@ -21079,11 +21205,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Any uncommitted or untracked changes in Git workspaces will be permanently deleted.",
-          "clean": "No uncommitted or untracked changes",
           "unavailable": "Changes could not be checked",
           "checking": "Checking for changes…",
           "checkingDetails": "Checking…",
-          "unavailableDetails": "Details unavailable"
+          "unavailableDetails": "Details unavailable",
+          "none": "No uncommitted changes"
         },
         "unsavedEdits": {
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
@@ -21185,6 +21311,11 @@
           "scrollback": "scrollback",
           "snap": "snap",
           "position": "position"
+        },
+        "claudeCodeThemeSync": {
+          "title": "Match Claude Code to Terminal Theme",
+          "description": "Claude Code on this computer uses your terminal colors and follows theme changes live, including outside Orca. Turning this off restores your previous Claude Code theme. Picking a theme in Claude Code stops the sync.",
+          "claude": "claude"
         }
       },
       "nativeChat": {
@@ -21224,6 +21355,10 @@
         "openedPullRequestsCopy": "Shows the pull requests each turn opened, with titles and line counts, below the reply.",
         "openedPullRequestsSearchPr": "PR",
         "openedPullRequestsSearchCard": "pull request card",
+        "ciResultLinesTitle": "CI result lines",
+        "ciResultLinesCopy": "A line in the chat when CI finishes on a pull request the agent opened or pushed to.",
+        "ciResultLinesSearchChecks": "checks",
+        "ciResultLinesSearchPr": "PR",
         "turnActivityTitle": "Turn activity",
         "turnDiffsTitle": "Turn diffs",
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
@@ -21244,7 +21379,32 @@
           "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
           "never": "Never",
           "immediately": "Immediately"
+        },
+        "fillerWords": {
+          "title": "Remove Filler Words",
+          "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
+        },
+        "openAiCompatible": {
+          "updateFailed": "Could not update the provider",
+          "title": "OpenAI-compatible provider",
+          "description": "Audio goes to this service only while the OpenAI-compatible model is selected. It works with Groq, Mistral, OpenAI and local servers.",
+          "baseUrl": "Base URL",
+          "baseUrlPlaceholder": "https://api.groq.com/openai/v1",
+          "model": "Model",
+          "modelPlaceholder": "whisper-large-v3-turbo",
+          "apiKey": "API Key",
+          "keySaved": "Saved key kept",
+          "keyOptional": "Optional for local servers",
+          "save": "Save",
+          "rowConfigured": "Base URL and model saved for the OpenAI-compatible model.",
+          "rowMissing": "Add a base URL and model before selecting the OpenAI-compatible model.",
+          "edit": "Edit",
+          "removeLabel": "Remove OpenAI-compatible provider",
+          "setUp": "Set up"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Available environment variables"
       }
     },
     "agentChildRow": {
@@ -21444,6 +21604,10 @@
         },
         "split": {
           "bodyWithoutShortcut": "Right-click the pane for split options."
+        },
+        "splitChatPane": {
+          "title": "Open a pane beside the chat",
+          "action": "Split pane"
         }
       },
       "badgeNew": "New",
@@ -21454,6 +21618,20 @@
           "bodyWithoutShortcut": "Click this button, or {{modifier}}-click any project header.",
           "action": "Got it"
         }
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "browser": "Browser",
+        "chooseAgent": "Choose agent",
+        "closePane": "Close pane",
+        "goToFile": "Go to file",
+        "heading": "Open in this pane",
+        "markdown": "Markdown",
+        "mobileEmulator": "Mobile emulator",
+        "newAgent": "New Agent",
+        "reopenClosedTab": "Reopen closed tab",
+        "terminal": "Terminal"
       }
     }
   },
@@ -21939,6 +22117,30 @@
       "loading": "Loading submodule changes…",
       "empty": "No changes in submodule",
       "loadFailed": "Failed to load submodule changes"
+    },
+    "branchPicker": {
+      "switch": "Switch branch: {{branch}}",
+      "search": "Search branches",
+      "recover": "Switch to {{branch}}",
+      "copy": "Copy branch name",
+      "create": "Create branch {{name}} from {{branch}}",
+      "open": "Open workspace",
+      "occupied": "Checked out in {{path}}",
+      "remote": "remote",
+      "statusFailed": "Orca couldn't read this checkout's changes. Refresh Source Control before switching.",
+      "statusUnknown": "Read this checkout’s changes before switching.",
+      "conflict": "Finish or abort the {{operation}} before switching branches.",
+      "dirty_one": "Commit or discard {{count}} changed file before switching branches.",
+      "dirty_other": "Commit or discard {{count}} changed files before switching branches.",
+      "agentWorking": "An agent is working in this workspace. Switch branches after it finishes, or close its tab if it has stopped.",
+      "listFailed": "Orca couldn't list local branches. Try reopening the picker.",
+      "discoveryFailed": "Orca couldn't find remote branches. You can still switch local branches or create a branch.",
+      "switchFailed": "Orca couldn't switch branches. Try again.",
+      "switchFailedTitle": "Couldn't switch branches",
+      "switchFailedIn": "Couldn't switch branches in {{workspace}}",
+      "switchedIn": "In {{workspace}}",
+      "thisComputer": "this computer",
+      "updateHost": "Update Orca on {{host}} to switch branches from here."
     }
   },
   "agentsSidebarIntro": {
@@ -22011,7 +22213,7 @@
       "sortRelevance": "Most relevant",
       "sortNewest": "Newest",
       "sortResultsAriaLabel": "Sort results: {{value0}}",
-      "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.",
+      "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations. Content is not redacted. Authenticated paired clients can search it.",
       "remoteDisabled": "Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.",
       "titleOnly": "Full-text search is off on this computer, so only session titles are matched.",
       "notReady": "The search index is not ready yet. Try again shortly.",
@@ -22071,7 +22273,7 @@
       "description": "Search everything your agents have said and done, on this computer and on any paired Orca server.",
       "searchDescription": "Turn on session search for this computer and paired servers, or clear search data.",
       "indexComputers": "Search inside sessions",
-      "computersConsent": "Each computer keeps a searchable copy of its own agent conversations and tool output. Nothing leaves that computer.",
+      "computersConsent": "Each computer keeps a searchable copy of its own agent conversations. Nothing leaves that computer.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Search sessions on {{host}}",
       "serverOffline": "Offline",
@@ -22244,7 +22446,22 @@
       "count_other": "{{count}} running terminals"
     },
     "restartedInputNotSent": "The terminal restarted while you were typing, so some input may not have reached it. Check the new shell before typing it again.",
-    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent."
+    "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent.",
+    "windowsFontWeight": {
+      "title": "Terminal text on Windows is now lighter",
+      "okay": "Okay",
+      "lighterText": "Lighter terminal text"
+    },
+    "claudeThemeSyncOffer": {
+      "title": "Match Claude Code to your Orca theme?",
+      "description": "Claude Code on this computer would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.",
+      "accept": "Match theme",
+      "accepted": "Claude Code theme sync is on",
+      "acceptedDescription": "New Claude Code sessions on this computer use your Orca theme.",
+      "decline": "No thanks",
+      "failed": "Could not turn on Claude Code theme sync",
+      "failedDescription": "Turn it on in Settings."
+    }
   },
   "fileExplorer": {
     "root": {
@@ -22488,11 +22705,14 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",
     "alwaysForceDelete": "Always force delete",
+    "alwaysForceDeleteDescription": "Applies to all future workspace deletions.",
     "moreActions": "More force delete options",
-    "alwaysForceDeleteTooltip": "Applies to all future workspace deletions.",
     "moreBranchActions": "More branch delete options",
     "alwaysForceDeleteBranches": "Always delete preserved branches",
-    "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions."
+    "alwaysForceDeleteBranchesDescription": "Applies to branches kept after future workspace deletions.",
+    "moreDeleteOptions": "More delete options",
+    "alwaysDelete": "Always delete",
+    "alwaysDeleteTooltip": "Skip this confirmation for future deletions."
   },
   "worktree": {
     "setupTrust": {
@@ -22519,7 +22739,18 @@
       "confirm": "Delete all listed worktrees",
       "preservedBranches": "Some nested worktree branches were kept"
     },
-    "setupTerminalTitle": "Setup"
+    "setupTerminalTitle": "Setup",
+    "delete": {
+      "detachingChildren": "Detaching children...",
+      "childrenPreservedTitle": "Child workspaces will be kept",
+      "childrenCannotBeKeptTitle": "Child workspaces cannot be kept",
+      "childrenPreservedDescription": "Direct children will become top-level workspaces. Their files, terminals, and nested children will be kept.",
+      "detachChildren": "Detach and keep child workspaces",
+      "nestedChildrenCannotBeKept": "Child workspace folders inside this workspace must be moved outside it before they can be kept.",
+      "childrenChanged": "Child workspaces changed. Review the workspace list and try again.",
+      "childrenChangedClearPreserve": "Child workspaces changed. Clear this option to review deletion.",
+      "detachFailed": "Could not detach all child workspaces. The parent was not deleted. {{error}}"
+    }
   },
   "projectBoard": {
     "noColumnField": "This board view has no single-select or iteration field to group by, so Orca is listing items instead.",
@@ -22722,6 +22953,30 @@
       "checksPending": "{{review}} checks: Pending",
       "checksPassing": "{{review}} checks: Passing",
       "open": "{{review}}: Open"
+    },
+    "vm": {
+      "menu": {
+        "waking": "Waking VM…",
+        "retryResume": "Retry Resume VM",
+        "resume": "Resume VM",
+        "suspend": "Suspend VM",
+        "suspendDescription": "Close this workspace's panels and suspend its VM. Opening the workspace wakes it."
+      },
+      "state": {
+        "provisioning": "VM provisioning",
+        "suspended": "VM suspended",
+        "waking": "VM waking",
+        "resumeFailed": "VM resume failed",
+        "provisionFailed": "VM setup failed"
+      },
+      "hint": {
+        "provisioning": "The VM is being created.",
+        "suspended": "Asleep to save cost. Opening the workspace wakes it.",
+        "waking": "Resuming the VM and reconnecting.",
+        "resumeFailed": "The VM could not be resumed. Right-click and choose Resume VM to retry.",
+        "provisionFailed": "The VM was not created, or creation was interrupted. Open Settings to destroy or remove it."
+      },
+      "suspendFailed": "Failed to suspend VM workspace"
     }
   },
   "tabHoverCard": {
@@ -23199,7 +23454,8 @@
     "refresh": "Refresh",
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
-    "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+    "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
+    "metricDetails": "Metric details"
   },
   "browserExtensions": {
     "permission": {
@@ -23561,7 +23817,12 @@
       "error": "Needs attention",
       "repair": "Re-pair needed",
       "update": "Update needed",
-      "serverReplaced": "Different server"
+      "serverReplaced": "Different server",
+      "resumeFailed": "Resume failed",
+      "setupFailed": "Setup failed",
+      "provisioning": "Provisioning",
+      "suspended": "Suspended",
+      "waking": "Waking"
     },
     "compat": {
       "compatible": "Runtime client and server are compatible.",
@@ -23618,7 +23879,9 @@
       "repoIconImages": "Repo icon images",
       "audio": "Audio",
       "importGhosttyConfig": "Import Ghostty Config",
-      "importKittyConfig": "Import Kitty Config"
+      "importKittyConfig": "Import Kitty Config",
+      "pickAppIcon": "Choose app icon",
+      "appIconImage": "App icon image"
     }
   },
   "taskProviders": {
@@ -23751,13 +24014,15 @@
   },
   "agentPicker": {
     "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",
+    "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogFailed": "Could not load {{agent}} models. Close and reopen the agent picker to try again.",
     "catalogSignIn": "Sign in to {{agent}} to load its models, then close and reopen the agent picker.",
     "catalogInstall": "Install {{agent}} on this host to load its models, then close and reopen the agent picker.",
     "catalogUnresolved": "{{agent}} models have not loaded. Close and reopen the agent picker to try again.",
     "catalogEmpty": "{{agent}} has no available models.",
     "workspaceStartupFailed": "Could not start {{agent}}. Check Arguments in this setup and try again.",
-    "search": "Search agents and setups…",
+    "search": "Search, e.g. Opus 5.5…",
+    "searchAgents": "Search agents…",
     "configure": "Configure {{agent}}",
     "arguments": "Arguments",
     "argumentsHint": "Applies only to CLI launches.",
@@ -24111,7 +24376,13 @@
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "sshTargetRemoveFailed": "Failed to remove the hidden SSH target.",
       "recipeExitedWithoutCode": "Recipe exited with code unknown.",
-      "destroyExitedWithoutCode": "Destroy exited with code unknown."
+      "destroyExitedWithoutCode": "Destroy exited with code unknown.",
+      "suspendExited": "Suspend exited with code {{exitCode}}.",
+      "suspendExitedWithoutCode": "Suspend exited with code unknown.",
+      "resumeExited": "Resume exited with code {{exitCode}}.",
+      "resumeExitedWithoutCode": "Resume exited with code unknown.",
+      "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.",
+      "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources."
     }
   },
   "installDirAcl": {
@@ -24182,6 +24453,7 @@
     }
   },
   "checks": {
+    "gitlabAllowedFailure": "Allowed to fail",
     "rerunUnsuccessful": "Rerun unsuccessful"
   },
   "gitGraph": {
@@ -24209,7 +24481,42 @@
     "historyChanged": "History changed again. Refresh the Git Graph to try again.",
     "loadFailed": "Failed to load Git history",
     "updateHost": "Update Orca on {{host}} to open the Git Graph",
-    "title": "Git Graph"
+    "title": "Git Graph",
+    "revertConflicts": "Revert conflicts",
+    "revertInProgress": "Revert in progress",
+    "abortOperationTitle": "Abort {{operation}}?",
+    "abortOperationDescription": "This cancels the operation in progress and can discard conflict resolutions made during it.",
+    "abortOperation": "Abort {{operation}}",
+    "recoveryFailed": "Could not finish the operation. Refresh Source Control and try again.",
+    "continueOperation": "Continue {{operation}}",
+    "reverting": "Reverting",
+    "updateActionsHost": "Update Orca on {{host}} to act on commits",
+    "thisHost": "this host",
+    "cannotApplyMerge": "Can't cherry-pick/revert a merge commit from here",
+    "confirmCommitAction": "{{action}} {{commit}}?",
+    "cancelAction": "Cancel",
+    "checkoutCommit": "Check out commit",
+    "cherryPick": "Cherry-pick",
+    "revert": "Revert",
+    "actionLanded": "Now at {{commit}} on {{branch}}",
+    "detachedHead": "detached HEAD",
+    "actionWarning": "The action completed, but Git reported a problem.",
+    "actionConflicted": "Resolve the conflicts in Source Control, then continue or abort the operation.",
+    "alreadyApplied": "Already applied, nothing to cherry-pick",
+    "nothingToRevert": "Nothing to revert; the changes are already undone.",
+    "actionRefused": "The action did not complete.",
+    "actionUnavailable": "This workspace is no longer available for the action. Reopen the Git Graph and try again.",
+    "ownerChanged": "The workspace host changed. Reopen the Git Graph and try again.",
+    "showAllBranches": "Show all branches",
+    "actionDirty": "Commit or stash your changes, then try again.",
+    "actionFailed": "Git did not create a commit. Check the checkout and try again.",
+    "operationInProgress": "Finish or abort the {{operation}} in progress before trying again.",
+    "checkoutBranch": "Check out branch",
+    "createBranch": "Create branch here",
+    "branchCreated": "Created {{branch}} at {{commit}}",
+    "branchName": "Branch name",
+    "invalidBranchName": "This branch name is invalid. Choose a different name.",
+    "createBranchFailed": "Orca couldn't create the branch. Check this repository in a terminal, then try again."
   },
   "macosUpdateRequirement": {
     "title": "Orca updates now need macOS {{macos}}",
@@ -24239,5 +24546,31 @@
     "stopped": "{{host}} stopped controlling browser tabs until Orca restarts.",
     "disallowed": "{{host}} can no longer control browser tabs. Turn it back on in Settings > SSH.",
     "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Update your speech model",
+    "updateDescription": "Dictation now runs on a faster engine. {{model}} needs a one-time download ({{size}} MB) before you can dictate again.",
+    "update": "Update",
+    "replacedTitle": "Your speech model was replaced",
+    "replacedDescription": "{{old}} can't run on the new speech engine. {{model}} replaces it ({{size}} MB).",
+    "downloadReplacement": "Download {{model}}",
+    "later": "Later",
+    "dismiss": "Dismiss",
+    "updatingTitle": "Updating {{model}}",
+    "downloadingTitle": "Downloading {{model}}",
+    "downloadingDescription": "You can keep working. Dictation is back when this finishes.",
+    "progress": "{{done}} of {{total}} MB",
+    "cancel": "Cancel",
+    "doneTitle": "Dictation is ready",
+    "doneDescription": "{{model}} is updated. The old files were removed.",
+    "doneRetiredDescription": "{{model}} is set up. The old {{old}} files are still on disk.",
+    "keep": "Keep",
+    "deleteOld": "Delete old model",
+    "deleteFailed": "Failed to delete {{model}}.",
+    "updateFailedTitle": "Couldn't update {{model}}",
+    "downloadFailedTitle": "Couldn't download {{model}}",
+    "failedAtDescription": "The download stopped at {{mb}} MB. Check your connection and try again.",
+    "failedDescription": "The download stopped. Check your connection and try again.",
+    "tryAgain": "Try again"
   }
 }

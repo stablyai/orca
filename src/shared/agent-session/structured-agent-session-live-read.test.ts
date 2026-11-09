@@ -46,7 +46,7 @@ describe('structured agent session live read with text appends', () => {
       onHistoryReadInvalidated: () => {},
       sessionId: 'session-1',
       subscribe,
-      textAppend: Promise.resolve(true),
+      textAppend: Promise.resolve({ textAppend: 1 }),
       readCurrentRequests: vi.fn(),
       subscribeRetryNow: () => () => {}
     })

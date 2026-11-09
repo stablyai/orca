@@ -35,7 +35,6 @@ export function registerPtyConnectionLocalStartupCommandDeliveryTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -60,8 +59,9 @@ export function registerPtyConnectionLocalStartupCommandDeliveryTests(): void {
     it('does not send startup command via sendInput for local connections', async () => {
       // Why: the local PTY provider already writes the command via writeStartupCommandWhenShellReady; re-sending from the renderer would double it in the terminal.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport()
@@ -110,7 +110,6 @@ export function registerPtyConnectionTerminalPasteStartupCommandDeliveryTests():
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -141,8 +140,9 @@ export function registerPtyConnectionTerminalPasteStartupCommandDeliveryTests():
 
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks9 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
 
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-id')
@@ -204,8 +204,9 @@ export function registerPtyConnectionTerminalPasteStartupCommandDeliveryTests():
 
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks10 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
 
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-id')

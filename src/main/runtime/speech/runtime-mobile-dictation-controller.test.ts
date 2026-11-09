@@ -6,11 +6,12 @@ import {
 } from '../../speech/speech-runtime-service'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 type Sink = (event: { type: string; text?: string }) => void
 
 let sink: Sink = () => {}
+let startedTerms: unknown
 // A finish transcribes what was said; tests that never settle it model a slow transcription.
 let transcription: Promise<void> = Promise.resolve()
 const stopDictation = vi.fn(async (_owner: string, options?: { discard?: boolean }) => {
@@ -28,8 +29,9 @@ beforeEach(() => {
   const factories = {
     createModelManager: () => ({ getModelState: async () => ({ status: 'ready' }) }),
     createSttService: () => ({
-      startDictation: async (_modelId: string, next: Sink) => {
+      startDictation: async (_modelId: string, next: Sink, terms: unknown) => {
         sink = next
+        startedTerms = terms
       },
       feedAudio,
       stopDictation
@@ -159,5 +161,41 @@ describe('mobile dictation on several phones', () => {
       dictationId: 'd-1',
       text: 'before the drop'
     })
+  })
+})
+
+describe('mobile dictation at the cloud length cap', () => {
+  it('tells the phone on every reply after the speech session filled up', async () => {
+    const controller = await startPhoneDictation()
+    controller.feed(chunk)
+    feedAudio.mockReturnValueOnce(true)
+
+    // The second reply is inside the one-second text throttle, so it carries no text.
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', audioLimitReached: true })
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', audioLimitReached: true })
+  })
+})
+
+describe('mobile dictation dictionary', () => {
+  it("spells with the dictating worktree's repo terms before the host's personal ones", async () => {
+    const store = {
+      getSettings: () => ({
+        voice: { ...getDefaultVoiceSettings(), enabled: true, dictationTerms: [{ term: 'Orca' }] }
+      }),
+      getRepo: (id: string) =>
+        id === 'repo-1'
+          ? { id, dictationTerms: [{ term: 'kubectl', heardAs: 'cube control' }] }
+          : undefined
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the controller reads only getSettings and getRepo.
+    const controller = new RuntimeMobileDictationController(() => store as unknown as RuntimeStore)
+    await controller.start({
+      dictationId: 'd-1',
+      modelId: 'test-model',
+      worktreeId: 'repo-1::/work/repo',
+      clientId: 'phone-a'
+    })
+
+    expect(startedTerms).toEqual([{ term: 'kubectl', heardAs: 'cube control' }, { term: 'Orca' }])
   })
 })
