@@ -82,5 +82,10 @@ export function useStructuredAgentSessionCommandMenu(
     }
   }, [enabled, open, sessionId, target])
   const refresh = useCallback(() => query.current?.invalidate(), [])
-  return { setOpen, refresh, checking: enabled && open && checking }
+  // Named as the session controller exposes them.
+  return {
+    setCommandsMenuOpen: setOpen,
+    refreshCommands: refresh,
+    commandsChecking: enabled && open && checking
+  }
 }
