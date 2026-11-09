@@ -301,6 +301,7 @@
       "switch": "Trocar de branch: {{branch}}",
       "search": "Pesquisar branches",
       "recover": "Trocar para {{branch}}",
+      "copy": "Copiar nome do branch",
       "create": "Criar branch {{name}} a partir de {{branch}}",
       "open": "Abrir espaço de trabalho",
       "occupied": "Em uso em {{path}}",
@@ -13091,6 +13092,7 @@
           "kernelStartFailed": "Não foi possível iniciar o kernel.",
           "noPython": "O Python não foi encontrado neste computador. Instale-o pelo [python.org](https://www.python.org/downloads/) e execute a célula novamente.",
           "kernelDied": "O kernel parou.",
+          "outputTruncated": "Saída truncada: o Orca manteve o início da saída desta célula e descartou o restante. Para manter tudo, grave-a em um arquivo.",
           "localOnly": "As células do notebook só podem ser executadas para arquivos neste computador.",
           "pythonOnly": "O Orca só executa notebooks Python.",
           "ownerUnresolved": "O Orca ainda não sabe em qual computador este notebook está, por isso não pode executar suas células.",
@@ -16652,6 +16654,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Ligar"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Dimensionado para outra janela",
+            "fitHere": "Ajustar aqui"
           }
         },
         "quick": {
@@ -21170,6 +21176,7 @@
         "copyIdentity": "Copiar {{value0}}",
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
+        "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal.",

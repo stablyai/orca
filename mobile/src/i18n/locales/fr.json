@@ -311,6 +311,11 @@
       "signInHint": "Ouvre un terminal sur l’ordinateur qui exécute ce chat",
       "forkedFrom": "Branche créée à partir de"
     },
+    "ciResultLine": {
+      "failingLead": "CI en échec sur",
+      "greenLead": "CI au vert sur",
+      "at": "à"
+    },
     "orcaStop": {
       "canContinue": "Vous pouvez continuer dans cette conversation.",
       "crash": "Orca sur {{machine}} s'est arrêté de manière inattendue pendant que cette réponse était en cours.",
@@ -1445,12 +1450,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} en activité",
-      "heading": "Agents",
-      "showAll": "Tout afficher ({{count}})",
-      "showFewer": "Afficher moins"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Ignorer la mise à jour Orca {{version}}",
       "title": "Orca {{version}} est disponible",

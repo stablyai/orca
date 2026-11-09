@@ -1,5 +1,5 @@
 import type { BrowserHttpAuthCredentials } from '../../../../shared/browser-http-auth'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../manager/browser-manager'
 import { browserPagePromptOrigin, openBrowserPagePrompt } from './browser-page-prompts'
 
 function parseCredentials(value: unknown): BrowserHttpAuthCredentials | undefined {

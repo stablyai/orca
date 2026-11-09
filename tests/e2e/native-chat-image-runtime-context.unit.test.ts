@@ -31,7 +31,7 @@ import { assertRuntimeFileMutationExpectation } from '../../src/main/runtime/fil
 import {
   resetSshConnectionGenerations,
   setSshConnectionGeneration
-} from '../../src/main/ssh/connection/ssh-connection-generation'
+} from '../../src/main/ssh/connection/authority/ssh-connection-generation'
 import {
   agentSessionTabFixture,
   nativeChatFanoutFixture,

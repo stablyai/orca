@@ -1,40 +1,52 @@
-import { mkdtempSync } from 'node:fs'
-import * as fsPromises from 'node:fs/promises'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { createAgentModelCatalogFilePersistence } from './agent-model-catalog-persistence'
 import { AgentModelCatalogStore } from './agent-model-catalog-store'
 
-vi.mock('node:fs/promises', async (original) => {
-  const actual = await original<typeof fsPromises>()
-  return { ...actual, writeFile: vi.fn(actual.writeFile) }
-})
-await vi.importActual<typeof fsPromises>('node:fs/promises')
+const directories: string[] = []
 afterEach(() => {
-  vi.restoreAllMocks()
+  for (const directory of directories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
 
-it('keeps optional cache write failure from poisoning subsequent serialized writes', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'pr-31927-catalog-failure-'))
+it("imports an older build's catalog file once and keeps later listings", async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-model-catalog-'))
+  directories.push(directory)
+  const legacyPath = join(directory, 'agent-model-catalog.json')
+  writeFileSync(
+    legacyPath,
+    JSON.stringify({
+      version: 3,
+      entries: [
+        {
+          agent: 'grok',
+          fingerprint: 'fp',
+          discovered: {
+            origin: 'probe',
+            at: 1,
+            models: [{ id: 'A', label: 'A', efforts: [], isDefault: true }]
+          },
+          live: null
+        }
+      ]
+    })
+  )
   const store = new AgentModelCatalogStore()
-  const persistence = createAgentModelCatalogFilePersistence(directory)
-  await store.attachPersistence(persistence)
-  const publish = (id: string) =>
-    store.recordSuccess(
-      'fp',
-      'grok',
-      {
-        origin: 'probe',
-        models: [{ id, label: id, efforts: [], isDefault: true }]
-      },
-      'discovery'
-    )
-  vi.mocked(fsPromises.writeFile).mockRejectedValueOnce(new Error('cache unavailable'))
-  publish('A')
-  await store.flushPersistence()
+  await store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
   expect(store.get('fp')?.models[0]?.id).toBe('A')
-  publish('B')
+  expect(existsSync(legacyPath)).toBe(false)
+
+  store.recordSuccess(
+    'fp',
+    'grok',
+    { origin: 'probe', models: [{ id: 'B', label: 'B', efforts: [], isDefault: true }] },
+    'discovery'
+  )
   await store.flushPersistence()
-  expect((await persistence.load())[0]?.models[0]?.id).toBe('B')
+
+  const restarted = await createAgentModelCatalogFilePersistence(directory).load()
+  expect(restarted.map((entry) => entry.models[0]?.id)).toEqual(['B'])
 })

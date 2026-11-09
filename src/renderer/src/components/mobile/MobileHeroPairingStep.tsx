@@ -3,10 +3,10 @@ import { Trans } from 'react-i18next'
 import { ChevronDown, CircleAlert, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
-import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import { NetworkInterfacePicker } from './NetworkInterfacePicker'
-import { MobilePairingConnectionOptions } from '../settings/mobile/pairing/MobilePairingConnectionOptions'
-import { MobileRelayBetaNotice } from '../settings/mobile/pairing/MobileRelayBetaNotice'
+import { MobilePairingConnectionOptions } from './pairing/MobilePairingConnectionOptions'
+import { MobileRelayBetaNotice } from './pairing/MobileRelayBetaNotice'
 import { MachineNameField } from '../machine-identity/MachineNameField'
 import { MobileRelayMintFailureNotice } from './mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
@@ -101,7 +101,7 @@ export function MobileHeroPairingStep({
   onRegeneratePairing: () => void
   canGeneratePairing: boolean
   onCopyPairingCode: () => void
-  networkInterfaces: readonly MobileNetworkInterface[]
+  networkInterfaces: readonly PairingNetworkInterface[]
   customAddresses: readonly string[]
   selectedAddress: string | undefined
   selectedAddressIsCustom: boolean

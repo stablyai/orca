@@ -2,8 +2,8 @@
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { readManagedOrcadLaunchSshSession } from '../../managed-server/lifecycle/orcad-managed-launch-session'
-import { knownSshHostPlatform } from '../../ssh/ssh-host-platform-memo'
-import { getSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+import { knownSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-memo'
+import { getSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'
 import { connectionManager } from './ssh-ipc-context'
 import {
   clearLaunchSessionNote,

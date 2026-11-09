@@ -4,8 +4,8 @@ import type {
   BrowserExtensionListResult,
   InstalledBrowserExtension
 } from '../../../shared/browser/extensions/browser-extension-types'
-import { browserSessionRegistry } from '../sessions/browser-session-registry'
-import { openBrowserExtensionOptionsPage } from './api/runtime'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
+import { openBrowserExtensionOptionsPage } from './tabs-and-windows/browser-extension-options-page'
 import { getBrowserExtensionInstallStore } from './installation/browser-extension-install-store'
 import { reloadBrowserExtensionWhereEnabled } from './profile-sessions/browser-extension-profile-reload'
 import {
@@ -32,7 +32,7 @@ import {
 } from './profile-sessions/browser-extension-load-errors'
 import { notifyBrowserExtensionListChanged } from './installation/browser-extension-list-changes'
 import { reviewHeldBrowserExtensionUpdate } from './web-store/browser-extension-webstore-updater'
-import { withBrowserExtensionLock } from './installation/browser-extension-webstore-install'
+import { withBrowserExtensionLock } from './installation/browser-extension-mutation-lock'
 import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
 import {
   withExtensionEnabled,

@@ -307,6 +307,11 @@
       "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다",
       "forkedFrom": "분기 원본"
     },
+    "ciResultLine": {
+      "failingLead": "CI 실패:",
+      "greenLead": "CI 통과:",
+      "at": "커밋"
+    },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
       "crash": "이 응답이 진행되는 동안 {{machine}}의 Orca가 예기치 않게 중지되었습니다.",
@@ -1402,12 +1407,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "활성 {{count}}개",
-      "heading": "에이전트",
-      "showAll": "{{count}}개 모두 보기",
-      "showFewer": "접기"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} 업데이트 알림 닫기",
       "title": "Orca {{version}} 업데이트 가능",

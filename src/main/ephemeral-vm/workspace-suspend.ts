@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
 import { suspendEphemeralVmRuntime } from './runtime-service'
 import { disconnectRuntimeOwnedSshTarget } from './runtime-ssh'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
@@ -17,7 +17,7 @@ export async function suspendEphemeralVmWorkspace(
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
   const result = await suspendEphemeralVmRuntime({
     userDataPath,
-    repoPath: recipeContext.repo.repo.path,
+    repoPath: recipeContext.repoPath,
     recipe: recipeContext.recipe,
     runtimeId: runtime.id
   })

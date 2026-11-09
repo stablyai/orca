@@ -311,6 +311,11 @@
       "signInHint": "Abre um terminal no computador que executa este chat",
       "forkedFrom": "Ramificado de"
     },
+    "ciResultLine": {
+      "failingLead": "CI falhando em",
+      "greenLead": "CI verde em",
+      "at": "em"
+    },
     "orcaStop": {
       "canContinue": "Você pode continuar nesta conversa.",
       "crash": "O Orca ({{machine}}) parou inesperadamente enquanto esta resposta estava em andamento.",
@@ -1445,12 +1450,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} em atividade",
-      "heading": "Agentes",
-      "showAll": "Mostrar todos ({{count}})",
-      "showFewer": "Mostrar menos"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar atualização do Orca {{version}}",
       "title": "Orca {{version}} está disponível",

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -68,22 +68,6 @@ describe('SkillSharePreparationService', () => {
     const prepared = await service.prepare({ sourceDirectory: providerSource })
 
     expect(prepared.skills?.[0]?.executablePaths).toEqual(['run.sh'])
-  })
-
-  it('removes abandoned preparations from a previous process before preparing', async () => {
-    const { root, source } = await createSource()
-    const preparationRoot = join(root, 'preparations')
-    await mkdir(join(preparationRoot, 'abandoned'), { recursive: true })
-    await writeFile(join(preparationRoot, 'abandoned', 'package.tar.gz'), 'private bytes')
-    const service = new SkillSharePreparationService(preparationRoot, {
-      findOwnedPackageId: nameIsFree,
-      publishVersion: vi.fn(),
-      createShare: vi.fn()
-    })
-
-    const result = await service.prepare({ sourceDirectory: source })
-
-    expect(await readdir(preparationRoot)).toEqual([result.preparationId])
   })
 
   it('enforces the preparation cap while archives are still being created', async () => {

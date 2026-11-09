@@ -307,6 +307,11 @@
       "signInHint": "在运行此聊天的电脑上打开终端",
       "forkedFrom": "分支来源"
     },
+    "ciResultLine": {
+      "failingLead": "CI 失败:",
+      "greenLead": "CI 通过:",
+      "at": "提交"
+    },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
       "crash": "此回复进行期间，{{machine}} 上的 Orca 意外停止。",
@@ -1402,12 +1407,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 个活跃",
-      "heading": "智能体",
-      "showAll": "显示全部 {{count}} 个",
-      "showFewer": "收起"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",

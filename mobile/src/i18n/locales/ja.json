@@ -307,6 +307,11 @@
       "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます",
       "forkedFrom": "分岐元"
     },
+    "ciResultLine": {
+      "failingLead": "CI 失敗:",
+      "greenLead": "CI 成功:",
+      "at": "コミット"
+    },
     "orcaStop": {
       "canContinue": "この会話で続行できます。",
       "crash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
@@ -1402,12 +1407,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 件がアクティブ",
-      "heading": "Agent",
-      "showAll": "{{count}} 件をすべて表示",
-      "showFewer": "折りたたむ"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",

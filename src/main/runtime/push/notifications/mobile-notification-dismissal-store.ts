@@ -1,150 +1,116 @@
-import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isUnreadableError } from '../../../../shared/secure-storage/secure-file'
-import { AtomicSnapshotWriter } from '../../../persistence/atomic-snapshot-writer'
-import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  KeyedJsonRowCache,
+  parseKeyedJsonRows
+} from '../../../sqlite/row-cache/keyed-json-row-cache'
+import { nextRetryDelayMs } from '../../../sqlite/row-cache/row-cache-failure'
 import type { DeliveredNotificationIdentity } from '../../../../shared/mobile-notification-identity'
 import {
-  isStructuredAttentionOrigin,
-  type StructuredAttentionOrigin
-} from '../../../../shared/agent-session/agent-session-attention'
+  applyDismissalEvent,
+  dismissalRows,
+  DISMISSAL_LIMIT,
+  isLiveDismissalEntry,
+  readDismissalEntries,
+  type DeliveredNotificationRecord,
+  type DismissalEvent,
+  type DismissalRecordEntry
+} from './mobile-notification-dismissal-entries'
 
-export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
-  structuredOrigin?: StructuredAttentionOrigin
-  worktreeId?: string
-  paneKey?: string
-  workspaceExecutionHostId?: ExecutionHostId | null
-  executionHost?: `runtime:${string}`
-}
-type RecordEntry = DeliveredNotificationRecord & { dismissedThrough: number; expiresAt: number }
-const LIMIT = 4096
-const RETENTION_MS = 7 * 86400_000
+export type { DeliveredNotificationRecord } from './mobile-notification-dismissal-entries'
+
+const DATABASE_FILE = 'mobile-notification-dismissals.db'
+// Earlier builds rewrote this whole file per alert; it is imported once, then removed.
+const LEGACY_FILE = 'mobile-notification-dismissals.json'
+const RETRY_BACKOFF = { minMs: 100, maxMs: 60_000 }
 
 function warnPersistFailed(error: unknown): void {
   console.warn('[notifications] Could not persist dismissal recovery state', error)
 }
 
+type PendingEvent = { event: DismissalEvent & { notificationId: string }; at: number }
+
+/**
+ * One SQLite row per delivery, so each alert or dismissal saves only the rows it changed.
+ * Until stored history is read it is never replaced: events queue and merge into it once a
+ * retry reads it, and meanwhile any delivery may still be live.
+ */
 export class MobileNotificationDismissalStore {
-  private readonly path: string
-  private entries: RecordEntry[] = []
-  private unreadable = false
+  private entries: DismissalRecordEntry[] = []
+  private historyKnown = false
+  private readonly pending: PendingEvent[] = []
+  private dirty = false
+  private retryTimer: ReturnType<typeof setTimeout> | undefined
+  private retryDelayMs = 0
   private closed = false
   // Notification ids need no secure writer; its synchronous Windows icacls froze windows per alert (STA-9692).
-  private readonly writer: AtomicSnapshotWriter
+  private readonly cache: KeyedJsonRowCache
+
   constructor(userDataPath: string) {
-    this.path = join(userDataPath, 'mobile-notification-dismissals.json')
-    this.writer = new AtomicSnapshotWriter(() => this.path, { fileMode: 0o600 })
-    try {
-      const value: unknown = JSON.parse(readFileSync(this.path, 'utf8'))
-      if (Array.isArray(value)) {
-        this.entries = value.flatMap(readEntry).slice(-LIMIT)
-      }
-    } catch (error) {
-      this.unreadable = isUnreadableError(error)
-      // Missing history cannot establish that a delivered alert was dismissed.
+    this.cache = new KeyedJsonRowCache(join(userDataPath, DATABASE_FILE), {
+      schemaVersion: 1,
+      legacyPath: join(userDataPath, LEGACY_FILE)
+    })
+    const unread = this.hydrate()
+    if (unread) {
+      // Show what an older build's file says while the stored history stays unread.
+      this.entries = unread.legacy ?? []
+      this.scheduleRetry()
     }
   }
 
-  record(
-    event: MobileNotificationEvent & { notificationEpoch: string; notificationSeq: number }
-  ): void {
-    if (!event.notificationId) {
+  record(event: DismissalEvent): void {
+    const { notificationId } = event
+    if (!notificationId) {
       return
     }
     const now = Date.now()
-    const kept = this.entries.filter((entry) => entry.expiresAt > now)
-    const same = (entry: RecordEntry) =>
-      entry.notificationId === event.notificationId &&
-      entry.notificationEpoch === event.notificationEpoch
-    let next: RecordEntry[]
-    if (event.type === 'dismiss' && event.dismissedDelivery) {
-      const target = event.dismissedDelivery
-      next = kept.map((entry) =>
-        entry.notificationId === target.notificationId &&
-        entry.notificationEpoch === target.notificationEpoch
-          ? {
-              ...entry,
-              dismissedThrough: Math.max(entry.dismissedThrough, target.notificationSeq),
-              expiresAt: now + RETENTION_MS
-            }
-          : entry
-      )
-    } else if (event.type === 'notification') {
-      next = [
-        ...kept.filter((entry) => !same(entry)),
-        {
-          notificationId: event.notificationId,
-          notificationEpoch: event.notificationEpoch,
-          notificationSeq: event.notificationSeq,
-          ...(event.workspaceExecutionHostId !== undefined
-            ? { workspaceExecutionHostId: event.workspaceExecutionHostId }
-            : {}),
-          ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
-          ...(event.paneKey ? { paneKey: event.paneKey } : {}),
-          ...(event.executionHost ? { executionHost: event.executionHost } : {}),
-          ...(event.structuredOrigin ? { structuredOrigin: event.structuredOrigin } : {}),
-          dismissedThrough: kept.find(same)?.dismissedThrough ?? -1,
-          expiresAt: now + RETENTION_MS
-        }
-      ]
-    } else {
-      next = kept
-        .filter((entry) => !same(entry))
-        .map((entry) =>
-          entry.notificationId === event.notificationId
-            ? { ...entry, dismissedThrough: entry.notificationSeq, expiresAt: now + RETENTION_MS }
-            : entry
-        )
-      next.push({
-        notificationId: event.notificationId,
-        notificationEpoch: event.notificationEpoch,
-        notificationSeq: event.notificationSeq,
-        dismissedThrough: event.notificationSeq,
-        expiresAt: now + RETENTION_MS
-      })
-    }
-    next = next.slice(-LIMIT)
-    this.entries = next
-    if (this.unreadable) {
-      return
-    }
-    const serialize = () => JSON.stringify(this.entries, null, 2)
-    if (this.closed) {
-      // Exit would drop an asynchronous write.
-      try {
-        this.writer.writeSync(serialize)
-      } catch (error) {
-        warnPersistFailed(error)
+    this.entries = applyDismissalEvent(this.entries, { ...event, notificationId }, now)
+    if (!this.historyKnown) {
+      this.pending.push({ event: { ...event, notificationId }, at: now })
+      this.pending.splice(0, Math.max(0, this.pending.length - DISMISSAL_LIMIT))
+      if (this.closed) {
+        // No retry timer runs after close: one bounded attempt, keeping the event on failure.
+        this.attempt()
       }
       return
     }
-    this.writer.write(serialize).catch(warnPersistFailed)
+    this.dirty = true
+    if (!this.persist() && !this.closed) {
+      this.scheduleRetry()
+    }
   }
 
+  /** One bounded attempt to read unread history and save what is pending. */
   flush(): Promise<void> {
-    return this.writer.waitForPendingWrite().catch(() => {})
+    this.attempt()
+    return Promise.resolve()
   }
 
-  /** Committed exits only: subsequent records write synchronously; wait for the pending write. */
+  /** Saves what it can and releases the database; later records still save per write. */
   close(): Promise<void> {
+    clearTimeout(this.retryTimer)
+    this.retryTimer = undefined
+    this.attempt()
     this.closed = true
-    return this.flush()
+    this.cache.close()
+    return Promise.resolve()
   }
 
-  /** Unreadable history cannot rule a delivery out. */
+  /** Unread history cannot rule a delivery out. */
   hasLiveDelivery(notificationId: string): boolean {
     const now = Date.now()
     return (
-      this.unreadable ||
-      this.entries.some((entry) => entry.notificationId === notificationId && isLive(entry, now))
+      !this.historyKnown ||
+      this.entries.some(
+        (entry) => entry.notificationId === notificationId && isLiveDismissalEntry(entry, now)
+      )
     )
   }
 
   liveDeliveries(): DeliveredNotificationRecord[] {
     const now = Date.now()
     return this.entries
-      .filter((entry) => isLive(entry, now))
+      .filter((entry) => isLiveDismissalEntry(entry, now))
       .map(
         ({
           notificationId,
@@ -181,37 +147,77 @@ export class MobileNotificationDismissalStore {
       )
     )
   }
-}
 
-function isLive(entry: RecordEntry, now: number): boolean {
-  return entry.expiresAt > now && entry.dismissedThrough < entry.notificationSeq
-}
-
-/** Keep records with unknown future origin kinds, degrading only their origin to none. */
-function readEntry(value: unknown): RecordEntry[] {
-  if (!isEntry(value)) {
-    return []
+  /** Returns why history stays unread, or undefined once it is read and merged. */
+  private hydrate(): { legacy?: DismissalRecordEntry[] } | undefined {
+    // A file still present came from an older build unless its receipt shows it was imported.
+    const loaded = this.cache.load(readLegacyHistory)
+    if (loaded.kind === 'unavailable') {
+      console.warn('[notifications] Could not read dismissal recovery state', loaded.error)
+      return { legacy: loaded.legacy }
+    }
+    let entries: DismissalRecordEntry[]
+    if (loaded.kind === 'import') {
+      try {
+        this.cache.write(dismissalRows(loaded.value), { importReceipt: loaded.receipt })
+      } catch (error) {
+        console.warn('[notifications] Could not read dismissal recovery state', error)
+        return { legacy: loaded.value }
+      }
+      entries = loaded.value
+    } else {
+      entries = readDismissalEntries(parseKeyedJsonRows(loaded.rows).map(({ value }) => value))
+    }
+    for (const { event, at } of this.pending) {
+      entries = applyDismissalEvent(entries, event, at)
+    }
+    this.dirty = this.pending.length > 0
+    this.pending.length = 0
+    this.entries = entries
+    this.historyKnown = true
+    return undefined
   }
-  const { structuredOrigin, ...entry } = value
-  return [isStructuredAttentionOrigin(structuredOrigin) ? { ...entry, structuredOrigin } : entry]
+
+  private persist(): boolean {
+    if (!this.dirty || !this.historyKnown) {
+      return true
+    }
+    try {
+      this.cache.write(dismissalRows(this.entries))
+      this.dirty = false
+      this.retryDelayMs = 0
+      return true
+    } catch (error) {
+      warnPersistFailed(error)
+      return false
+    }
+  }
+
+  private attempt(): boolean {
+    if (!this.historyKnown && this.hydrate()) {
+      return false
+    }
+    return this.persist()
+  }
+
+  private scheduleRetry(): void {
+    if (this.retryTimer || this.closed) {
+      return
+    }
+    this.retryDelayMs = nextRetryDelayMs(this.retryDelayMs, RETRY_BACKOFF)
+    const delay = this.retryDelayMs
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined
+      if (!this.attempt()) {
+        this.scheduleRetry()
+      }
+    }, delay)
+    this.retryTimer.unref?.()
+  }
 }
 
-function isEntry(
-  value: unknown
-): value is Omit<RecordEntry, 'structuredOrigin'> & { structuredOrigin?: unknown } {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  const item = value as RecordEntry
-  return (
-    typeof item.notificationId === 'string' &&
-    item.notificationId.length > 0 &&
-    typeof item.notificationEpoch === 'string' &&
-    item.notificationEpoch.length > 0 &&
-    Number.isSafeInteger(item.notificationSeq) &&
-    item.notificationSeq >= 0 &&
-    Number.isSafeInteger(item.dismissedThrough) &&
-    item.dismissedThrough >= -1 &&
-    Number.isFinite(item.expiresAt)
-  )
+/** History an older build wrote; corrupt bytes are rejected and never replace stored rows. */
+function readLegacyHistory(text: string): DismissalRecordEntry[] | null {
+  const value: unknown = JSON.parse(text)
+  return Array.isArray(value) ? readDismissalEntries(value) : null
 }
