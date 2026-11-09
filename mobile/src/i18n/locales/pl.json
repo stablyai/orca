@@ -156,6 +156,20 @@
     },
     "agents": {
       "permissionOwnAll": "Własne ustawienia agentów"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSKRYBUJ NA",
+      "description": "Mowa usłyszana na tym telefonie zostaje na nim. Tryb automatyczny korzysta z komputera, gdy telefon nie może transkrybować.",
+      "automatic": "Automatycznie",
+      "phone": "Ten telefon",
+      "computer": "Komputer",
+      "phoneReady": "Gotowe na tym telefonie",
+      "phoneNeedsDownload": "Wymaga pobrania języka",
+      "phoneDownloading": "Pobieranie… {{progress}}%",
+      "phoneUnsupported": "Niedostępne na tym telefonie",
+      "download": "Pobierz na ten telefon",
+      "downloadSize": "Około {{size}} MB",
+      "phoneChecking": "Sprawdzanie…"
     }
   },
   "common": {
@@ -254,7 +268,8 @@
       "pastePairingCode": "Lub wklej kod parowania",
       "connecting": "Łączenie…",
       "pairingLog": "Log parowania",
-      "tryAgain": "Spróbuj ponownie"
+      "tryAgain": "Spróbuj ponownie",
+      "codeNoLongerValid": "Ten kod parowania wygasł, został już użyty albo zastąpiony. Wyświetl nowy kod na komputerze i zeskanuj ponownie."
     },
     "pair": {
       "missingCode": "Brak kodu parowania",
@@ -508,6 +523,8 @@
     "setup": {
       "serverUpdateRequired": "Zaktualizuj Orca na tym serwerze, aby korzystać z dyktowania głosowego.",
       "alreadyActive": "Dyktowanie jest już używane na komputerze lub innym telefonie.",
+      "sessionLimit": "Zbyt wiele urządzeń dyktuje na tym komputerze. Spróbuj ponownie, gdy któreś skończy.",
+      "modelBusy": "Inne urządzenie dyktuje z użyciem innego modelu mowy. Spróbuj ponownie, gdy skończy.",
       "repairRequired": "Sparuj ponownie ten telefon z komputerem, aby korzystać z dyktowania.",
       "sessionLost": "Dyktowanie straciło połączenie z komputerem. Spróbuj ponownie.",
       "desktopUpdateRequired": "Zaktualizuj aplikację Orca na sparowanym komputerze, aby korzystać z ustawień głosu w aplikacji mobilnej.",
@@ -556,10 +573,6 @@
     "desktops": {
       "pairDesktop": "Sparuj komputer"
     },
-    "jumpBackIn": {
-      "lastOpened": "Ostatnio otwarte",
-      "connectToOpen": "Połącz się z komputerem {{desktop}}, aby otworzyć"
-    },
     "sections": {
       "tasks": "Zadania",
       "tasksSubtitle": "Twoje zgłoszenia i przeglądy"
@@ -572,12 +585,6 @@
       "days": "{{days}} d",
       "hours": "{{hours}} godz.",
       "minutes": "{{minutes}} min"
-    },
-    "agents": {
-      "heading": "Agenci",
-      "activeCount": "Aktywni: {{count}}",
-      "showFewer": "Pokaż mniej",
-      "showAll": "Pokaż wszystkich ({{count}})"
     },
     "automationsTab": {
       "newAutomation": "Nowa automatyzacja",
@@ -597,7 +604,8 @@
       "automations": "Automatyzacje",
       "feed": "Aktualności",
       "chooseDesktop": "{{desktop}}, wybierz inny komputer",
-      "usage": "Użycie"
+      "usage": "Użycie",
+      "agents": "Agenci"
     },
     "usage": {
       "refresh": "Odśwież użycie",
@@ -610,6 +618,10 @@
       "active": "Aktywne",
       "openAccountsHint": "Otwiera konta tego komputera",
       "emptyTitle": "Brak danych o użyciu"
+    },
+    "needsYou": {
+      "heading": "Czekają na Ciebie",
+      "seeAll": "Zobacz wszystkich agentów"
     }
   },
   "hooks": {
@@ -621,7 +633,10 @@
       "microphoneInitFailed": "Nie udało się zainicjować mikrofonu",
       "noSpeech": "Nie wykryto mowy.",
       "microphoneInterrupted": "Dyktowanie głosowe zatrzymało się, ponieważ przerwano pracę mikrofonu. Spróbuj ponownie.",
-      "inputClosed": "Dyktowanie głosowe zatrzymało się, ponieważ ta sesja nie przyjmuje już danych wejściowych. Spróbuj ponownie."
+      "inputClosed": "Dyktowanie głosowe zatrzymało się, ponieważ ta sesja nie przyjmuje już danych wejściowych. Spróbuj ponownie.",
+      "phoneUnavailable": "Dyktowanie na tym telefonie nie jest gotowe. Pobierz je w ustawieniach głosu albo wybierz tryb automatyczny.",
+      "phoneFailed": "Dyktowanie na tym telefonie przestało działać. Spróbuj ponownie.",
+      "phoneBusy": "Dyktowanie na tym telefonie jeszcze się uruchamia. Spróbuj ponownie za chwilę."
     }
   },
   "hostScreen": {
@@ -651,11 +666,18 @@
       "sleep": "Uśpij",
       "unpin": "Odepnij",
       "pin": "Przypnij",
+      "rename": "Zmień nazwę",
       "primaryWorktreeDeleteHint": "Główne worktree – nie można go usunąć. Zamiast tego usuń projekt.",
       "removeHost": "Usuń hosta",
       "removeHostMessage": "Usunąć „{{name}}”? Możesz później sparować go ponownie.",
       "deleteFailed": "Nie udało się usunąć „{{name}}”",
       "deleteAnyway": "Usuń mimo to"
+    },
+    "workspaceRenameSheet": {
+      "title": "Zmień nazwę przestrzeni roboczej",
+      "emptyUsesBranch": "Zostaw puste, aby użyć nazwy gałęzi.",
+      "emptyUsesFolder": "Zostaw puste, aby użyć nazwy folderu.",
+      "failed": "Nie udało się zmienić nazwy przestrzeni roboczej. {{reason}}"
     },
     "workspaceDetailsSheet": {
       "merged": "Scalony",
@@ -897,7 +919,8 @@
       "days_other": "{{count}} d",
       "days_few": "{{count}} d",
       "days_many": "{{count}} d",
-      "done": "Gotowe"
+      "done": "Gotowe",
+      "permission": "Wymaga uwagi"
     },
     "hostWorkspaceListStates": {
       "checkHost": "Sprawdź, czy komputer nie śpi i czy Orca jest uruchomiona",
@@ -1121,7 +1144,7 @@
       "worktreeAccessibilitySummary": "{{summary}}, aktywne: {{activeCount}}",
       "pairingInvalid": "Nieprawidłowe parowanie",
       "pairingTemporarilyUnavailable": "Parowanie chwilowo niedostępne",
-      "updateDesktopHint": "Zaktualizuj Orca na komputerze i zaloguj się, aby łączyć się z dowolnego miejsca",
+      "sameNetworkOnlyHint": "Łączy się tylko w tej samej sieci Wi-Fi lub przez Tailscale. Aby łączyć się z dowolnego miejsca, zaloguj się na komputerze i sparuj ponownie",
       "repairHint": "Dotknij, aby ponownie sparować z komputerem",
       "unlockHint": "Odblokuj telefon, a potem dotknij, aby ponowić",
       "openHost": "Otwórz: {{title}}",
@@ -1323,7 +1346,8 @@
       "children_one": "{{count}} podrzędna",
       "children_other": "{{count}} podrzędnej",
       "children_few": "{{count}} podrzędne",
-      "children_many": "{{count}} podrzędnych"
+      "children_many": "{{count}} podrzędnych",
+      "unsavedName": "Niezapisana nazwa: {{name}}"
     },
     "accountsSnapshot": {
       "invalidSnapshot": "Nieprawidłowe dane kont otrzymane z hosta"
@@ -1356,7 +1380,16 @@
     },
     "markdownBlocks": {
       "copyCode": "Kopiuj kod",
-      "openImage": "Otwórz obraz"
+      "openImage": "Otwórz obraz",
+      "wrapLines": "Zawijaj wiersze",
+      "disableLineWrap": "Wyłącz zawijanie wierszy"
+    },
+    "markdownCallout": {
+      "note": "Uwaga",
+      "tip": "Wskazówka",
+      "important": "Ważne",
+      "warning": "Ostrzeżenie",
+      "caution": "Ostrożnie"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Zamknij panel"
@@ -1430,7 +1463,19 @@
         "changedFiles_many": "{{count}} zmienionych plików",
         "partial": "Częściowy diff",
         "showMoreFiles": "Pokaż więcej ({{count}})"
+      },
+      "composer": {
+        "planMode": "Plan",
+        "exitPlanMode": "Wyjdź z trybu planowania"
       }
+    },
+    "hostOfflineBanner": {
+      "offline": "{{host}} jest offline",
+      "reconnecting": "Ponowne łączenie z {{host}}…",
+      "asOf": "Pokazano stan z {{time}}"
+    },
+    "offlineAsOfTime": {
+      "yesterday": "wczoraj, {{time}}"
     }
   },
   "pullRequest": {
@@ -1879,7 +1924,6 @@
       "connecting": "Łączenie z komputerem...",
       "waiting": "Oczekiwanie na komputer...",
       "loadFailed": "Nie udało się wczytać plików",
-      "loadInterrupted": "Przerwano wczytywanie folderu",
       "closeFiles": "Zamknij pliki",
       "backToSession": "Wróć do sesji",
       "title": "Pliki",
@@ -1951,7 +1995,17 @@
       "openFolder": "Otwórz folder {{name}}",
       "fileUnavailable": "{{name}} – niedostępne na telefonie",
       "previewFile": "Podgląd pliku {{name}}",
-      "unavailable": "Niedostępne na telefonie"
+      "unavailable": "Niedostępne na telefonie",
+      "showMore": "Pokaż jeszcze {{rows}}",
+      "loadedOfTotal": "{{loaded}} z {{total}}",
+      "searched": "Przeszukano {{loaded}} z {{total}} w {{folder}}.",
+      "searching": "Przeszukiwanie {{folder}}… {{loaded}} z {{total}}",
+      "searchAll": "Szukaj wszędzie",
+      "searchAllIn": "Szukaj we wszystkim w {{folder}}"
+    },
+    "fileExplorerRowActions": {
+      "copyName": "Kopiuj nazwę",
+      "copyRelativePath": "Kopiuj ścieżkę względną"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Nie udało się zweryfikować połączenia SSH. Połącz ponownie z hostem i spróbuj jeszcze raz."
@@ -1968,6 +2022,13 @@
       "bytes": "{{size}} B",
       "kilobytes": "{{size}} KB",
       "megabytes": "{{size}} MB"
+    },
+    "unsavedEditsOffer": {
+      "unsavedFrom": "Niezapisane zmiany z {{time}}",
+      "changedSince": "Plik zmieniono na komputerze od Twoich zmian z {{time}}",
+      "discard": "Odrzuć",
+      "restore": "Przywróć",
+      "copyMyEdits": "Kopiuj moje zmiany"
     }
   },
   "session": {
@@ -1991,8 +2052,7 @@
     "markdownReader": {
       "readOnly": "Tylko do odczytu",
       "changedOnDesktop": "Zmieniono na komputerze",
-      "dismissKeyboard": "Schowaj klawiaturę",
-      "dismissKeyboardHint": "Chowa klawiaturę ekranową, a edytor Markdown pozostaje otwarty.",
+      "previewTruncated": "Podgląd został skrócony.",
       "discard": "Odrzuć",
       "copyLoadedSource": "Kopiuj wczytane źródło Markdown",
       "copySource": "Kopiuj źródło Markdown",
@@ -2037,7 +2097,6 @@
     },
     "queuedMessageComposer": {
       "commandsNotAllowed": "W wiadomości w kolejce nie można zapisać poleceń.",
-      "editingAttributed": "Edytowanie wiadomości · {{attribution}}",
       "editing": "Edytowanie wiadomości"
     },
     "accessoryKeys": {
@@ -2148,6 +2207,7 @@
       "shortcut": "Skrót",
       "removeShortcutMessage": "Usunąć ten własny skrót?",
       "renameTerminal": "Zmień nazwę terminala",
+      "renameTerminalFailed": "Nie udało się zmienić nazwy terminala. {{reason}}",
       "terminalName": "Nazwa terminala",
       "allowAutoClose": "Zezwól na automatyczne zamknięcie"
     },
@@ -2254,13 +2314,8 @@
       "agent": "Agent"
     },
     "agentMessageAttribution": {
-      "messageFromUnnamed": "Wiadomość od agenta",
-      "fromUnnamed": "Od agenta",
       "unnamedSender": "agent",
-      "messageFromMore": "Wiadomość od: {{sender}} +{{count}}",
-      "fromMore": "Od: {{sender}} +{{count}}",
-      "messageFrom": "Wiadomość od: {{sender}}",
-      "from": "Od: {{sender}}"
+      "fromSender": "Od"
     },
     "backgroundTask": {
       "monitoring": "Monitorowanie zadań w tle",
@@ -2273,6 +2328,7 @@
       "monitor": "Monitor w tle",
       "task": "Zadanie w tle",
       "detailsUnavailable": "Szczegóły zadań są niedostępne w tej sesji.",
+      "outputFile": "Wynik: {{value0}}",
       "countAgents_one": "{{count}} agent",
       "countAgents_other": "{{count}} agenta",
       "countAgents_few": "{{count}} agentów",
@@ -2356,8 +2412,6 @@
       "committedChangesUnavailable": "Zatwierdzone zmiany są niedostępne",
       "committedChangesFailed": "Nie udało się wczytać zatwierdzonych zmian",
       "desktopUpdateRequired": "Zaktualizuj Orca na komputerze, aby przeglądać zmiany na telefonie.",
-      "changesLoadFailed": "Nie udało się wczytać zmian",
-      "invalidSourceControlResponse": "Nieprawidłowa odpowiedź kontroli wersji",
       "reviewNotesLoadFailed": "Nie udało się wczytać notatek z przeglądu",
       "diffLoadFailed": "Nie udało się wczytać diffu",
       "committedDiffUnavailable": "Diff zatwierdzonych zmian jest niedostępny",
@@ -2618,6 +2672,12 @@
       "fallback": "Worktree"
     },
     "failure": {
+      "forkOriginalMissing": "{{agent}} nie znalazł tej odpowiedzi w oryginalnym czacie. Otwórz go i utwórz odgałęzienie stamtąd.",
+      "forkOriginalUnavailable": "{{agent}} nie może utworzyć odgałęzienia tej odpowiedzi w oryginalnym czacie. Otwórz go i utwórz odgałęzienie stamtąd.",
+      "forkOriginalMissingNamed": "{{agent}} nie znalazł tej odpowiedzi w „{{detail}}”. Otwórz ten czat i utwórz odgałęzienie stamtąd.",
+      "forkOriginalUnavailableNamed": "{{agent}} nie może utworzyć odgałęzienia tej odpowiedzi w „{{detail}}”. Otwórz ten czat i utwórz odgałęzienie stamtąd.",
+      "forkOriginalLatestOnly": "{{agent}} może utworzyć odgałęzienie tylko najnowszej odpowiedzi w oryginalnym czacie. Otwórz ten czat i utwórz odgałęzienie jego najnowszej odpowiedzi po jej zakończeniu.",
+      "forkOriginalLatestOnlyNamed": "{{agent}} może utworzyć odgałęzienie tylko najnowszej odpowiedzi w „{{detail}}”. Otwórz ten czat i utwórz odgałęzienie jego najnowszej odpowiedzi po jej zakończeniu.",
       "backgroundTasksRunning": "Zadania w tle wciąż trwają.",
       "waitForBackgroundTasks": "Poczekaj, aż zadania w tle się zakończą.",
       "agentStarting": "Agent jeszcze się uruchamia.",
@@ -2637,6 +2697,7 @@
       "backgroundTaskNotStopped": "Zadanie w tle nie zostało zatrzymane.",
       "backgroundTasksNotStopped": "Zadania w tle nie zostały zatrzymane.",
       "answerUnconfirmed": "Twoja odpowiedź została zapisana, ale agent jej nie potwierdził.",
+      "pluginInputRequired": "{{agent}} zatrzymał się, bo plugin „{{plugin}}” czeka na dane w panelu terminala. Wyłącz plugin dla sesji czatu albo uruchom zadanie w terminalu {{agent}}.",
       "hostFault": "W Orca wystąpił problem, więc operacja nie została wykonana.",
       "hostFaultTryAgain": "W Orca wystąpił problem, więc operacja nie została wykonana. Spróbuj ponownie.",
       "hostStopped": "{{agent}} nie zdążył się uruchomić, więc Orca go zatrzymała.",
@@ -2661,6 +2722,8 @@
       "providerExitedAnswer": "{{agent}} zatrzymał się, więc Twoja odpowiedź nie została wysłana. Wyślij wiadomość, aby kontynuować.",
       "claudeEffortInvalid": "Nieprawidłowy poziom rozumowania Claude. Wybierz low, medium, high, xhigh lub max i wyślij ponownie.",
       "modelUnavailable": "{{agent}} nie mógł użyć modelu {{detail}}. Wybierz inny model i wyślij ponownie.",
+      "modelUnavailableUpdate": "{{agent}} nie mógł użyć {{detail}}. Zaktualizuj {{agent}} do wersji {{minimumVersion}} lub nowszej, aby zachować to po ponownym uruchomieniu, albo wybierz inny model i wyślij ponownie.",
+      "modelNotSelected": "{{agent}} nie ma wybranego modelu. Sprawdź wybór modelu i logowanie do {{agent}}, a potem wyślij ponownie.",
       "providerRejected": "{{agent}} nie przyjął tej wiadomości.",
       "providerRejectedQuoted": "{{agent}} nie przyjął tej wiadomości: {{detail}}.",
       "attachmentEmpty": "Obraz w tej wiadomości jest pusty, więc wiadomość nie została wysłana.",
@@ -2712,6 +2775,7 @@
       "codexSystemNotSignedIn": "Codex nie jest zalogowany. Uruchom `{{loginCommand}}`.",
       "codexManagedNotSignedIn": "To konto Codex nie jest zalogowane. Zaloguj się ponownie w ustawieniach kont Codex.",
       "antigravityNotSignedIn": "Antigravity nie jest zalogowany. Zaloguj się w Ustawienia → Konta → Antigravity. Następnie wyślij wiadomość ponownie.",
+      "antigravitySystemNotSignedIn": "Antigravity nie jest zalogowany. Zaloguj się, uruchamiając `agy` na komputerze, na którym działa ten czat, a potem wyślij wiadomość ponownie.",
       "agentCommandNotSignedIn": "Zaloguj się do agenta {{agent}} poleceniem `{{loginCommand}}` na komputerze, na którym działa ten czat.",
       "interactiveAgentNotSignedIn": "Zaloguj się do agenta {{agent}}, uruchamiając `{{loginCommand}}` i używając `{{slashCommand}}` na komputerze, na którym działa ten czat.",
       "agentNotSignedIn": "Zaloguj się do agenta {{agent}}.",
@@ -2880,7 +2944,8 @@
     "contentState": {
       "connectingTo": "Łączenie z hostem {{host}}…",
       "connecting": "Łączenie…",
-      "tabsStalled": "Wczytywanie kart trwa dłużej niż zwykle"
+      "tabsStalled": "Wczytywanie kart trwa dłużej niż zwykle",
+      "tabsAsOf": "Karty z {{time}}"
     },
     "presentation": {
       "loadingTabs": "Wczytywanie kart",
@@ -2893,6 +2958,11 @@
       "diffFailed": "Nie udało się wczytać podglądu diffu",
       "fileFailed": "Nie udało się wczytać podglądu pliku",
       "outsideWorkspace": "Ten plik jest poza przestrzenią roboczą. Otwórz go na komputerze, aby go wyświetlić."
+    },
+    "linkActionSheet": {
+      "openInOrca": "Otwórz w przeglądarce Orca",
+      "openInBrowser": "Otwórz w przeglądarce systemowej",
+      "copyLink": "Kopiuj link"
     },
     "useDiffReviewGitHub": {
       "waitingForDesktop": "Oczekiwanie na komputer..."
@@ -2911,8 +2981,14 @@
       "sendMessage": "Wyślij wiadomość",
       "sendQueue": "Dodaj do kolejki",
       "sendSteer": "Pokieruj",
+      "sendSteerQueued": "Pokierowanie w kolejce",
       "sendQueueHint": "Trafi do agenta po bieżącej turze",
       "sendSteerHint": "Trafi do agenta w trakcie bieżącej pracy"
+    },
+    "contextUsage": {
+      "label": "Kontekst: {{used}} z {{window}} tokenów, użyto {{percent}}%",
+      "title": "Kontekst",
+      "estimated": "Szacunek na podstawie ostatniej odpowiedzi."
     },
     "composerAttachments": {
       "file": "Plik",
@@ -2967,6 +3043,13 @@
       "queuedState": "W kolejce",
       "editMessage": "Edytuj wiadomość"
     },
+    "offlineQueue": {
+      "failed": "Nie udało się wysłać – dotknij Wyślij, aby ponowić",
+      "waitingFor": "Wyśle, gdy {{host}} wróci",
+      "waiting": "Wyśle, gdy komputer wróci",
+      "behind": "Oczekuje – wiadomość przed nią wymaga uwagi",
+      "closed": "Nie wysłano przed zamknięciem Orca"
+    },
     "sessionOptionPickers": {
       "workingAnnouncement": "Agent pracuje. Ustawienia modelu odblokują się po zakończeniu tej tury.",
       "modelFullAccessLabel": "Model: {{value}}, pełny dostęp",
@@ -2978,6 +3061,8 @@
       "dispatchUnconfirmed": "Wysłano do agenta — bez potwierdzenia",
       "permissions": "Uprawnienia",
       "applying": "Stosowanie…",
+      "onAttach": "Zastosuje się po dołączeniu do czatu",
+      "heldPickRefused": "{{picked}} nie jest dostępne w tym czacie. Zachowano {{kept}}.",
       "optionsSection": "Opcje"
     },
     "sessionOptionRows": {
@@ -3063,13 +3148,16 @@
       "responding": "Agent odpowiada"
     },
     "message": {
-      "copyMessage": "Kopiuj wiadomość"
+      "copyMessage": "Kopiuj wiadomość",
+      "forkFromResponse": "Utwórz odgałęzienie z tej odpowiedzi",
+      "forkFromResponseHint": "Nowy czat z całą tą odpowiedzią, aż do końca jej tury"
     },
     "messageActionsSheet": {
       "copyMessage": "Kopiuj wiadomość",
       "copyFailed": "Nie udało się skopiować",
       "clipboardRejected": "Schowek odrzucił tekst.",
-      "selectText": "Zaznacz tekst"
+      "selectText": "Zaznacz tekst",
+      "rewind": "Cofnij do tego miejsca"
     },
     "notice": {
       "stoppedManually": "Zatrzymano ręcznie",
@@ -3079,7 +3167,15 @@
       "permissionDenied": "{{agent}}: odmowa uprawnień. Zobacz szczegóły.",
       "safetyReview": "{{agent}}: ostrzeżenie z kontroli bezpieczeństwa. Zobacz szczegóły.",
       "truncatedResponse": "Odpowiedź dostawcy została obcięta (pierwotny rozmiar: {{bytes}} B).",
-      "modelFallback": "Claude zmienił model: {{from}} → {{to}}."
+      "modelFallback": "Claude zmienił model: {{from}} → {{to}}.",
+      "forkedFrom": "Odgałęzienie z",
+      "signIn": "Zaloguj się",
+      "signInHint": "Otwiera terminal na komputerze, na którym działa ten czat"
+    },
+    "ciResultLine": {
+      "failingLead": "CI nie przechodzi w",
+      "greenLead": "CI przechodzi w",
+      "at": "na"
     },
     "nativeChatProse": {
       "attachedImage": "Załączony obraz",
@@ -3143,6 +3239,13 @@
       "remote": "Orca ({{machine}}) zatrzymała się w trakcie tej odpowiedzi.",
       "canContinue": "Możesz kontynuować tę rozmowę.",
       "unnamedServer": "serwer zdalny"
+    },
+    "interruptedContinue": {
+      "failed": "Nie udało się kontynuować tego czatu. Spróbuj ponownie albo wyślij wiadomość.",
+      "explanation": "Po kontynuacji agent najpierw sprawdzi, czy jego ostatni krok się zakończył."
+    },
+    "sendError": {
+      "dismiss": "Zamknij"
     },
     "toolActivity": {
       "count_one": "{{count}} wywołanie narzędzia",
@@ -3265,15 +3368,32 @@
       "windowCredits": "dodatkowego użycia",
       "reachedNamed": "{{agent}} wyczerpał limit {{window}}.",
       "reached": "{{agent}} wyczerpał limit użycia.",
-      "resetsAt": "Limit odnowi się: {{when}}."
+      "switchAccount": "Zmień konto",
+      "autoContinueCancelFailed": "Nie udało się anulować automatycznej kontynuacji. Spróbuj ponownie.",
+      "autoContinueCancel": "Nie kontynuuj",
+      "statusResetAt": "Reset o {{time}}",
+      "statusResetsAt": "Reset o {{time}}",
+      "statusContinuesShortly": "Orca wkrótce kontynuuje",
+      "statusContinuesThen": "Orca kontynuuje wtedy",
+      "statusWontContinue": "Orca nie będzie kontynuować automatycznie"
     },
     "composerPlaceholder": {
-      "reconnecting": "Ponowne łączenie…",
       "waitingForTerminal": "Oczekiwanie na terminal…",
       "prompt": "Zapytaj o cokolwiek; @ – wzmianka o pliku, / – polecenia"
     },
     "nativeChatImageViewer": {
-      "closeImage": "Zamknij obraz"
+      "closeImage": "Zamknij obraz",
+      "imageActions": "Akcje obrazu",
+      "copyImage": "Kopiuj obraz",
+      "saveImage": "Zapisz obraz",
+      "share": "Udostępnij…",
+      "imageCopied": "Skopiowano obraz",
+      "imageSaved": "Zapisano obraz",
+      "copyFailed": "Nie udało się skopiować obrazu",
+      "saveFailed": "Nie udało się zapisać obrazu",
+      "shareFailed": "Nie udało się udostępnić obrazu",
+      "photosAccessDenied": "Zezwól Orce na dodawanie zdjęć w Ustawieniach",
+      "imageTooLarge": "Ten obraz jest za duży"
     },
     "nativeChatVisual": {
       "defaultTitle": "Wizualizacja",
@@ -3359,8 +3479,54 @@
       "taskFromCoordinator": "Zadanie od koordynatora",
       "messageFromCoordinator": "Wiadomość od koordynatora",
       "updateFromWorker": "Aktualizacja od wykonawcy",
-      "messageFrom": "Wiadomość od",
-      "showMore": "Pokaż więcej"
+      "messageFrom": "Wiadomość od"
+    },
+    "fork": {
+      "busy": "Otwiera się inny czat lub terminal. Poczekaj i ponownie utwórz odgałęzienie czatu ({{agent}}).",
+      "unconfirmed": "{{agent}} nie potwierdził utworzenia odgałęzienia. Mogło się jednak otworzyć – sprawdź historię sesji, zanim utworzysz je ponownie.",
+      "failed": "{{agent}} nie mógł utworzyć odgałęzienia tego czatu. {{detail}}",
+      "unsupported": "Ten host ma starszą wersję Orca. Zaktualizuj Orca na hoście i spróbuj ponownie."
+    },
+    "hostOutage": {
+      "reconnecting": "{{hostName}} łączy się ponownie…",
+      "stopped": "{{hostName}} jest zatrzymany. Uruchom go na komputerze.",
+      "server": "Serwer",
+      "unavailable": "{{hostName}} nie jest dostępny z telefonu. Otwórz jeden z jego projektów na komputerze."
+    },
+    "goal": {
+      "chip": "Cel",
+      "exitMode": "Wyjdź z trybu celu",
+      "placeholder": "Opisz swój cel i określ mierzalne wyniki – dzięki temu efekt będzie lepszy",
+      "pursuing": "Realizacja celu",
+      "set": "Cel ustawiony",
+      "paused": "Cel wstrzymany",
+      "blocked": "Cel zablokowany",
+      "limited": "Cel ograniczony",
+      "clear": "Wyczyść cel",
+      "expand": "Pokaż cały cel",
+      "collapse": "Ukryj cały cel",
+      "attachmentsUnsupported": "Usuń załączniki przed ustawieniem celu.",
+      "pause": "Wstrzymaj",
+      "resume": "Wznów"
+    },
+    "rewind": {
+      "title": "Cofnąć do tego miejsca?",
+      "confirmation": "Odrzucić tę wiadomość i wszystko po niej? Wiadomość wróci do pola wiadomości, aby można ją było edytować i wysłać ponownie. Zmiany plików na dysku zostaną zachowane.",
+      "confirm": "Cofnij",
+      "unsupported": "Ten czat nie może wrócić do wcześniejszej wiadomości.",
+      "historyNotPaginated": "Ten starszy czat Codex nie może wrócić do wcześniejszej wiadomości. Rozpocznij nowy czat, aby użyć opcji Cofnij do tego miejsca.",
+      "busy": "Dostępne, gdy agent jest bezczynny i nic w tym czacie na Ciebie nie czeka.",
+      "staleEpoch": "Rozmowa uległa zmianie. Przejrzyj najnowsze wiadomości i spróbuj ponownie.",
+      "invalidTarget": "Rozmowa nie może wrócić do tej wiadomości. Nic nie zostało zmienione.",
+      "historyLimit": "Ta rozmowa jest zbyt długa, aby się w niej cofać. Nic nie zostało zmienione.",
+      "providerRefused": "Agent nie mógł wrócić do tej wiadomości.",
+      "proofMismatch": "Historia agenta nie zgadza się z tym czatem. Sprawdź rozmowę, zanim będziesz kontynuować.",
+      "outcomeUnknown": "Orca nie mogła potwierdzić, czy rozmowa wróciła do wcześniejszej wiadomości. Sprawdzi to przed wysłaniem kolejnej wiadomości.",
+      "refused": "Orca nie mogła wrócić do tej wiadomości. Sprawdź rozmowę, zanim będziesz kontynuować.",
+      "unavailable": "Poczekaj, aż czat zakończy łączenie.",
+      "outcomeUnknownReturned": "Orca nie mogła potwierdzić, czy rozmowa wróciła do tej wiadomości. Wiadomość wróciła do pola wiadomości, a Orca sprawdzi rozmowę przed wysłaniem kolejnej wiadomości.",
+      "timeout": "Czat nie zaktualizował się po cofnięciu do tej wiadomości. Otwórz go ponownie, aby zobaczyć najnowszy stan.",
+      "pending": "Poczekaj, aż rozmowa wróci do wcześniejszej wiadomości."
     }
   },
   "sourceControl": {
@@ -3638,6 +3804,12 @@
     "panel": {
       "unavailableTitle": "Kontrola wersji niedostępna",
       "loading": "Wczytywanie zmian…"
+    },
+    "folder": {
+      "emptyTitle": "Brak dołączonych worktree",
+      "emptyCopy": "Worktree utworzone z tej przestrzeni roboczej pojawią się tutaj.",
+      "statusUnavailable": "Niedostępne",
+      "backToFolder": "Wróć do folderu"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Aktualizowanie gałęzi...",
@@ -4062,7 +4234,8 @@
       "moreFields_few": "+{{count}} pola",
       "moreFields_many": "+{{count}} pól",
       "loading": "Wczytywanie projektu…",
-      "noMatches": "Żaden element projektu nie pasuje."
+      "noMatches": "Żaden element projektu nie pasuje.",
+      "linkedPullRequestsOverflow": "+{{count}} więcej"
     },
     "githubProjectPickers": {
       "title": "Projekty GitHub",
@@ -4723,6 +4896,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Pierwotny panel agenta jest niedostępny. Zapisane dane wyjściowe pozostają tutaj.",
       "openAgent": "Otwórz agenta",
       "retryHistory": "Ponów wczytywanie historii",
+      "fullOutputUnavailable": "Nie udało się wczytać pełnego wyniku.",
+      "retryFullOutput": "Ponów",
       "loadingRuns": "Wczytywanie uruchomień…",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Brak pasujących uruchomień we wczytanej historii. Wczytaj więcej, aby kontynuować.",
       "noMatchingRunsYet": "Brak pasujących uruchomień.",
@@ -4775,7 +4950,11 @@
       "notReported": "Brak danych",
       "searchOptions": "Szukaj opcji",
       "task": "Zadanie",
-      "review": "Przegląd"
+      "review": "Przegląd",
+      "discardChangesTitle": "Odrzucić zmiany?",
+      "discardChangesMessage": "Niezapisane zmiany w tej automatyzacji zostaną utracone.",
+      "discard": "Odrzuć",
+      "keepEditing": "Kontynuuj edycję"
     },
     "orphanIssues": {
       "hostReselection": "Edytuj tę automatyzację i ponownie wybierz jej host, zanim ją uruchomisz.",
@@ -4793,6 +4972,7 @@
       "noRunnableHost": "Ta automatyzacja nie ma hosta, na którym mogłaby się uruchomić.",
       "wslMoveInProgress": "Projekt tej automatyzacji jest przenoszony na host WSL, więc Orca pominęła to uruchomienie. Uruchomienia zostaną wznowione po zakończeniu przenoszenia.",
       "wslMoveOwnedByHost": "Projekt tej automatyzacji działa teraz na hoście WSL, który sam uruchamia tę automatyzację. Orca nie uruchamia już tej lokalnej kopii.",
+      "managedHostServer": "Wymaga migracji do: {{host}}",
       "missedGraceWindow": "Gdy Orca ponownie sprawdziła harmonogram, to uruchomienie przekroczyło już dopuszczalne opóźnienie.",
       "targetMissing": "Host automatyzacji nie jest już zarejestrowany, więc ta automatyzacja nie ma gdzie się uruchomić.",
       "targetReplaced": "Host automatyzacji został usunięty i zarejestrowany ponownie, więc przed uruchomieniem trzeba ponownie przypisać do niego tę automatyzację.",
@@ -4837,6 +5017,96 @@
           }
         }
       }
+    }
+  },
+  "hostMutation": {
+    "renameOffline": "{{host}} jest offline. Wpisany tekst zostanie tutaj do czasu zapisu.",
+    "renameUnconfirmed": "Jeszcze niepotwierdzone. Orca sprawdzi nazwę, gdy {{host}} wróci.",
+    "saving": "Zapisywanie",
+    "serverUnreachable": "Nie można połączyć się z jego serwerem."
+  },
+  "agents": {
+    "list": {
+      "idleCount": "Bezczynni: {{count}}",
+      "offlineTitle": "{{desktop}} jest offline",
+      "offlineMessage": "Połącz go ponownie, aby otworzyć tego agenta.",
+      "actions": "Akcje dla: {{title}}",
+      "workers_one": "{{count}} wykonawca",
+      "workers_other": "{{count}} wykonawcy",
+      "workers_few": "{{count}} wykonawców",
+      "workers_many": "{{count}} wykonawców",
+      "noMatches": "Brak agentów pasujących do „{{query}}”",
+      "emptyTitle": "Brak uruchomionych agentów",
+      "pairDesktop": "Sparuj komputer, aby zobaczyć tutaj jego agentów.",
+      "emptyBody": "Uruchom agenta w dowolnej przestrzeni roboczej, a pojawi się tutaj.",
+      "unread": "Nieprzeczytane",
+      "noDesktopTitle": "Brak połączonego komputera",
+      "noDesktopBody": "Agenci pojawią się tutaj po połączeniu komputera.",
+      "hideWorkers": "Ukryj: {{workers}}",
+      "showWorkers": "Pokaż: {{workers}}"
+    },
+    "actions": {
+      "offlineHint": "Jego komputer jest offline.",
+      "open": "Otwórz",
+      "goToWorkspace": "Przejdź do przestrzeni roboczej",
+      "copyTitle": "Kopiuj tytuł",
+      "copied": "Skopiowano",
+      "copyFailed": "Nie udało się skopiować tytułu",
+      "markRead": "Oznacz jako przeczytane",
+      "markUnread": "Oznacz jako nieprzeczytane",
+      "clear": "Usuń z listy"
+    },
+    "groupBy": {
+      "status": "Status",
+      "workspace": "Przestrzeń robocza",
+      "project": "Projekt",
+      "agent": "Agent",
+      "desktop": "Komputer"
+    },
+    "options": {
+      "groupBy": "Grupuj według",
+      "showWorkers": "Pokaż agentów-wykonawców",
+      "open": "Opcje listy agentów",
+      "unreadOnly": "Tylko nieprzeczytane",
+      "markAllRead": "Oznacz wszystkie jako przeczytane",
+      "clearFinished": "Usuń zakończone"
+    },
+    "search": {
+      "toggle": "Szukaj agentów",
+      "placeholder": "Szukaj agentów"
+    },
+    "desktops": {
+      "pickerTitle": "Pokaż agentów na",
+      "agents_one": "{{count}} agent",
+      "agents_other": "{{count}} agenta",
+      "agents_few": "{{count}} agentów",
+      "agents_many": "{{count}} agentów",
+      "all": "Wszystkie komputery",
+      "offline": "Offline",
+      "needsYou_one": "{{count}} czeka na Ciebie",
+      "needsYou_other": "{{count}} czeka na Ciebie",
+      "needsYou_few": "{{count}} czekają na Ciebie",
+      "needsYou_many": "{{count}} czeka na Ciebie"
+    },
+    "sections": {
+      "needsYou": "Czeka na Ciebie",
+      "working": "Pracuje",
+      "done": "Gotowe",
+      "offline": "Offline",
+      "offlineSeenAgo": "Offline · widziany {{ago}} temu",
+      "offlineSeenJustNow": "Offline · widziany przed chwilą",
+      "seenAgo": "Widziany {{ago}} temu",
+      "seenJustNow": "Widziany przed chwilą",
+      "clear": "Usuń"
+    },
+    "swipe": {
+      "read": "Przeczytane",
+      "unread": "Nieprzeczytane",
+      "clear": "Usuń"
+    },
+    "activity": {
+      "needsWindow": "Nie udało się zaktualizować. Otwórz Orca na komputerze {{desktop}}.",
+      "failed": "Nie udało się zaktualizować listy agentów."
     }
   }
 }
