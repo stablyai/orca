@@ -132,6 +132,7 @@ type HostConnection = {
   streams: Map<number, HostStream>
   closed: boolean
   ackTotalInFlightBytes: number
+  linkEstimate: { enabled: boolean }
   sendFrame: (streamId: number, opcode: number, payload?: Uint8Array<ArrayBufferLike>) => boolean
   sendStreamError: (streamId: number, message: string) => void
   sendAckRecoverySnapshot?: (stream: HostStream) => Promise<void>
@@ -329,6 +330,7 @@ async function publishHostRecovery(
     streams: new Map([[streamId, stream]]),
     closed: false,
     ackTotalInFlightBytes: 0,
+    linkEstimate: { enabled: false },
     sendFrame,
     sendStreamError: (_id, message) => {
       throw new Error(message)

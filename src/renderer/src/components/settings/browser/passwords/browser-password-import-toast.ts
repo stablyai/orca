@@ -46,11 +46,3 @@ export function toastBrowserPasswordImportResult(result: BrowserPasswordImportRe
     skipped.length > 0 ? { description: skipped.join(' · ') } : undefined
   )
 }
-
-export function browserPasswordHostOf(origin: string): string {
-  try {
-    return new URL(origin).host
-  } catch {
-    return origin
-  }
-}

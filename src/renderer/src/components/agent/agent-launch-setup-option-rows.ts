@@ -11,7 +11,8 @@ import type {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import type {
   AgentPickerEntry,
-  AgentPickerDraft
+  AgentPickerDraft,
+  AgentPickerModel
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 
@@ -163,10 +164,24 @@ export function agentLaunchSetupOptionRows(
   })
 }
 
+/** Speed rows sit apart from the rest; launch also lifts level rows onto speed's line. */
+export function agentLaunchSetupRowGroups(rows: SessionOptionDescriptor[], launch: boolean) {
+  const isSpeed = (row: SessionOptionDescriptor) =>
+    row.id === 'fastMode' || row.id === 'serviceTier'
+  const isLevel = (row: SessionOptionDescriptor) =>
+    launch && !isSpeed(row) && row.category === 'thought_level' && row.kind.type === 'select'
+  return {
+    level: rows.filter(isLevel),
+    speed: rows.filter(isSpeed),
+    rest: rows.filter((row) => !isSpeed(row) && !isLevel(row))
+  }
+}
+
 export function agentLaunchSetupCatalogState(
   entry: AgentPickerEntry,
   models: readonly { id: string; hidden?: true }[],
   currentModel: string | undefined,
+  mode: 'launch' | 'select',
   t: Translate = translate
 ) {
   const hasModels = models.some((model) => !model.hidden)
@@ -178,11 +193,17 @@ export function agentLaunchSetupCatalogState(
       ? null
       : entry.catalogRead === 'unsupported' ||
           (!hasModels && entry.catalog.origin === 'unknown' && entry.catalogRead === undefined)
-        ? t(
-            'agentPicker.catalogUnsupported',
-            '{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.',
-            { agent: entry.label }
-          )
+        ? mode === 'launch'
+          ? t(
+              'agentPicker.catalogUnsupportedLaunch',
+              '{{agent}} models are unavailable on this host. Your current choices still apply.',
+              { agent: entry.label }
+            )
+          : t(
+              'agentPicker.catalogUnsupported',
+              '{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.',
+              { agent: entry.label }
+            )
         : entry.catalogRead === 'failed'
           ? t(
               'agentPicker.catalogFailed',
@@ -221,4 +242,27 @@ export function agentLaunchSetupCatalogState(
                       })
                     : null
   return { hasModels, catalogPending, catalogMessage }
+}
+
+/** Visible model rows, plus the model the list starts on. */
+export function agentLaunchSetupModelRows(
+  models: readonly AgentPickerModel[],
+  currentModel: string | undefined,
+  query: string,
+  legacy: boolean,
+  modelInArguments: boolean
+) {
+  const rows: { id: string; label: string; unlisted?: true }[] = models.filter(
+    (model) =>
+      !model.hidden && (model.id === currentModel || query || Boolean(model.isLegacy) === legacy)
+  )
+  // Why one keyed list: when the catalog later lists an unlisted current model, its row keeps
+  // its identity, so the highlight stays on it instead of jumping to the first model.
+  if (currentModel && !models.some((model) => model.id === currentModel)) {
+    rows.push({ id: currentModel, label: currentModel, unlisted: true })
+  }
+  // An Arguments-owned text action has no current model row, so it starts on its default as before.
+  const start =
+    !modelInArguments && rows.some((row) => row.id === currentModel) ? currentModel : undefined
+  return { rows, start }
 }

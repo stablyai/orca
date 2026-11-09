@@ -1,4 +1,4 @@
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CircleDot,
@@ -322,6 +322,7 @@ function PullRequestPageItem({
             sourceContext={sourceContext}
             projectOrigin={projectOrigin}
             body={body}
+            bodyImageUrls={details?.bodyImageUrls}
             comments={comments}
             files={files}
             filesUnavailable={filesUnavailable}

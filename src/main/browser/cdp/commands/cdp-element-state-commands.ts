@@ -3,17 +3,25 @@ import type {
   BrowserSelectResult,
   BrowserUploadResult
 } from '../../../../shared/runtime-browser-contracts'
-import { CdpBridgeCommandModule } from './cdp-bridge-command-module'
+import type { CdpBridgeState } from './cdp-bridge-state'
+import type { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'
+import type { CdpRefResolution } from './cdp-ref-resolution'
 
-export class CdpElementStateCommands extends CdpBridgeCommandModule {
+export class CdpElementStateCommands {
+  constructor(
+    private readonly bridgeState: CdpBridgeState,
+    private readonly debuggerLifecycle: CdpDebuggerLifecycle,
+    private readonly refResolution: CdpRefResolution
+  ) {}
+
   uploadFile(element: string, filePaths: string[]): Promise<BrowserUploadResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const node = await this.resolveRef(guest, sender, element)
-      const refSender = this.senderForRef(guest, node)
+      const node = await this.refResolution.resolveRef(guest, sender, element)
+      const refSender = this.refResolution.senderForRef(guest, node)
       await refSender('DOM.setFileInputFiles', {
         files: filePaths,
         backendNodeId: node.backendDOMNodeId
@@ -24,13 +32,13 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
   }
 
   select(element: string, value: string): Promise<BrowserSelectResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const node = await this.resolveRef(guest, sender, element)
-      const refSender = this.senderForRef(guest, node)
+      const node = await this.refResolution.resolveRef(guest, sender, element)
+      const refSender = this.refResolution.senderForRef(guest, node)
       const { nodeId } = (await refSender('DOM.requestNode', {
         backendNodeId: node.backendDOMNodeId
       })) as { nodeId: number }
@@ -75,13 +83,13 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
   }
 
   check(element: string, checked: boolean): Promise<BrowserCheckResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const node = await this.resolveRef(guest, sender, element)
-      const refSender = this.senderForRef(guest, node)
+      const node = await this.refResolution.resolveRef(guest, sender, element)
+      const refSender = this.refResolution.senderForRef(guest, node)
 
       const { nodeId } = (await refSender('DOM.requestNode', {
         backendNodeId: node.backendDOMNodeId
@@ -97,9 +105,12 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
       })) as { result: { value: boolean } }
 
       if (currentState.value !== checked) {
-        await this.scrollIntoView(refSender, node.backendDOMNodeId)
-        const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
-        const { cx, cy } = await this.getPageCoordinates(
+        await this.refResolution.scrollIntoView(refSender, node.backendDOMNodeId)
+        const localCenter = await this.refResolution.getElementCenter(
+          refSender,
+          node.backendDOMNodeId
+        )
+        const { cx, cy } = await this.refResolution.getPageCoordinates(
           guest,
           node,
           localCenter.cx,

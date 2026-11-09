@@ -1,7 +1,7 @@
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../../../shared/runtime-file-contracts'
+} from '../../../../../shared/file-content/runtime-file-read'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { RuntimeFileDownloadResult } from '../runtime-file-client-types'
@@ -142,7 +142,7 @@ export async function downloadRemoteFileViaPreview(
     if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
       throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
     }
-    return window.api.fs.saveDownloadedFile({
+    return await window.api.fs.saveDownloadedFile({
       suggestedName,
       content: result.content,
       encoding: result.isBinary ? 'base64' : 'utf8'

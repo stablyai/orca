@@ -20,7 +20,7 @@ const {
   writeCookieIdentityMock: vi.fn()
 }))
 
-vi.mock('../sessions/browser-session-registry', () => ({
+vi.mock('../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock

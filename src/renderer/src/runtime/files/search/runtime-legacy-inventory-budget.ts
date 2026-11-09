@@ -1,12 +1,12 @@
 import type {
   RuntimeFileListEntry,
   RuntimeFileListResult
-} from '../../../../../shared/runtime-file-contracts'
+} from '../../../../../shared/file-listing/runtime-file-list'
 import {
   FILE_INVENTORY_MAX_BYTES,
   FILE_INVENTORY_MAX_PATH_BYTES,
   FileInventoryCapacityError
-} from '../../../../../shared/file-inventory-budget'
+} from '../../../../../shared/file-listing/file-inventory-budget'
 import { isUtf8ByteLengthWithinLimit } from '../../../../../shared/utf8-byte-limits'
 
 export function decodeLegacyQuickOpenInventory(

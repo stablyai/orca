@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { automationActionAvailability } from './automation-captured-owner'
 import { readFullAutomationRun } from './automation-scoped-list-client'
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'

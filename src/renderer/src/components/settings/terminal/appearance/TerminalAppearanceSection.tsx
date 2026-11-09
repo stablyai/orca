@@ -21,9 +21,9 @@ import {
   getTerminalWarpImportSearchEntries,
   getTerminalYamlImportSearchEntries
 } from '../themes/terminal-theme-search'
-import { getTerminalConfigImportSearchEntries } from '../platform/terminal-advanced-platform-search'
+import { getTerminalConfigImportSearchEntries } from '../configuration/terminal-config-import-search'
 import { getTerminalPaneAppearanceSearchEntries } from './terminal-pane-appearance-search'
-import { getTerminalWindowSearchEntries } from '../terminal-window-setup-search'
+import { getTerminalWindowSearchEntries } from './terminal-window-search'
 import { Button } from '../../../ui/button'
 import { SettingsRow, SettingsSubsectionHeader } from '../../form-controls/SettingsFormControls'
 import { FontAutocomplete } from '../../appearance/fonts/FontAutocomplete'
@@ -32,7 +32,7 @@ import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from '../themes/TerminalThemeSections'
 import { ClaudeCodeThemeSyncSetting } from '../themes/ClaudeCodeThemeSyncSetting'
-import { TerminalWindowSection } from '../TerminalWindowSection'
+import { TerminalWindowSection } from './TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
 import { TerminalPaneAppearanceSection } from './TerminalPaneAppearanceSection'
 import { AppearanceAdvancedDisclosure } from '../../appearance/AppearanceAdvancedDisclosure'
@@ -86,7 +86,6 @@ export function TerminalAppearanceSection({
   const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
-  const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
   const showDesktopThemeImports = !isWebClientLocation()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
@@ -282,8 +281,6 @@ export function TerminalAppearanceSection({
           key={`theme-catalog-${preferredThemeTarget ?? 'manual'}`}
           settings={settings}
           systemPrefersDark={systemPrefersDark}
-          themeSearch={themeSearch}
-          setThemeSearch={setThemeSearch}
           updateSettings={updateSettings}
           previewFontFamily={previewFontFamily}
           importedHighlightSignal={warpThemes.importSignal}

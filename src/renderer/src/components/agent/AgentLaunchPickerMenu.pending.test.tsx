@@ -107,11 +107,9 @@ it('keeps the terminal launch shown but waiting while the host connects, with ch
     { name: 'Launch chat', disabled: false },
     { name: 'Launch terminal', disabled: true }
   ])
-  const args = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')
-  fireEvent.change(args()!, { target: { value: '--search' } })
   view.rerender(menu(false))
   expect(reason()).toBe('ClaudeNo chat over SSH')
-  expect(args()?.value).toBe('--search')
+  expect(document.querySelector('[contenteditable]')?.textContent).toBe('first line')
   expect(buttons()).toEqual([
     { name: 'Launch chat', disabled: false },
     { name: 'Launch terminal', disabled: false }

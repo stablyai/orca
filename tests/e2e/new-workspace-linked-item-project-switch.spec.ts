@@ -9,7 +9,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import type { LinkedWorkItemSummary } from '../../src/renderer/src/lib/new-workspace'
-import type { TaskSourceContext } from '../../src/shared/task-source-context'
+import type { TaskSourceContext } from '../../src/shared/work-items/task-source-context'
 
 const SECOND_PROJECT_NAME = 'linked-item-second-project'
 

@@ -1,6 +1,6 @@
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
-import { mayHoldAgentReferences } from '../../../../../../shared/orchestration-agent-reference'
+import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { useCallback, useMemo, useState, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'

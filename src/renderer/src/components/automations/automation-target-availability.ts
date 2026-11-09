@@ -2,7 +2,7 @@ import {
   automationHostReselectionMessage,
   type AutomationCapturedOwner
 } from './automation-captured-owner'
-import type { Automation } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   setupHostMatchesRunContext,

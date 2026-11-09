@@ -3,12 +3,12 @@ import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
-import type { AutomationRunOutputSnapshot } from '../../shared/automations-types'
+import type { AutomationRunOutputSnapshot } from '../../shared/automations/history/automation-run'
 import {
   AUTOMATION_RUN_FAILURE_COPY,
   automationRunFailure,
   type AutomationRunFailure
-} from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run-failure-copy'
 import {
   judgeHeldRunTurn,
   judgeIdleRun,

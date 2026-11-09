@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Globe, X } from 'lucide-react'
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'

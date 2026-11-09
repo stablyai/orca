@@ -1,7 +1,8 @@
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
-import { editorRowHost } from '../../../../shared/session-tab-file-host'
+import { editorRowHost } from '../../../../shared/workspace-session/session-tab-file-host'
+import { remoteTabFaviconUrl } from '../../../../shared/browser/browser-favicon-url'
 import type { MobileSessionWorktreeInputs } from './types'
 import { isUnifiedTabActiveInActiveGroup } from './mobile-session-surfaces'
 
@@ -29,6 +30,7 @@ export function buildMobileBrowserTab(
     loading: activePage?.loading ?? workspace.loading,
     canGoBack: activePage?.canGoBack ?? workspace.canGoBack,
     canGoForward: activePage?.canGoForward ?? workspace.canGoForward,
+    faviconUrl: remoteTabFaviconUrl(activePage?.faviconUrl),
     // Null means the active page cleared its failure; do not resurrect a stale workspace error.
     loadError: activePage ? activePage.loadError : workspace.loadError,
     certificateFailure: activePage

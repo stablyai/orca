@@ -9,7 +9,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../../../../shared/shell/launch/terminal-startup-cwd'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import type { AgentLaunchRoutingInput } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 // Import the resolver directly: the connection-context facade reaches the store root and creates a launch-graph cycle.
 import {

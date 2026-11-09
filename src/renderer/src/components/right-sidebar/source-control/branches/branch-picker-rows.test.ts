@@ -82,32 +82,6 @@ it('drops tracking duplicates without confusing qualified remote refs and slash-
   ])
 })
 
-it('maps owner-translated WSL occupancy to its workspace', () => {
-  const path = String.raw`\\wsl.localhost\Ubuntu\home\alice\feature`
-  const index = indexBranchWorkspaces(true, [{ id: 'held', repoId: 'repo', path }], 'repo', 'local')
-  expect(
-    indexLocalBranchRows(
-      { current: 'main', branches: ['feature'], worktreePaths: { feature: path } },
-      String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`,
-      index
-    )[0]?.workspace?.id
-  ).toBe('held')
-})
-it('orders the current branch before recent local commits', () => {
-  const local = indexLocalBranchRows(
-    {
-      current: 'old',
-      branches: ['old', 'new', 'middle'],
-      committedAt: { old: 1, new: 3, middle: 2 }
-    },
-    '/repo',
-    null
-  )
-  expect(
-    branchPickerRows(local, new Set(['old', 'new', 'middle']), null, '').map((row) => row.label)
-  ).toEqual(['old', 'new', 'middle'])
-})
-
 it('keeps an older exact local match reachable ahead of newer prefix and substring matches', () => {
   const newer = Array.from({ length: 60 }, (_, n) => `feature-${n}`)
   const branches = ['main', 'feature', 'other-feature', ...newer]

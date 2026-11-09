@@ -311,6 +311,11 @@
       "signInHint": "Abre um terminal no computador que executa este chat",
       "forkedFrom": "Ramificado de"
     },
+    "ciResultLine": {
+      "failingLead": "CI falhando em",
+      "greenLead": "CI verde em",
+      "at": "em"
+    },
     "orcaStop": {
       "canContinue": "Você pode continuar nesta conversa.",
       "crash": "O Orca ({{machine}}) parou inesperadamente enquanto esta resposta estava em andamento.",
@@ -1435,15 +1440,16 @@
       "openFailed": "Não foi possível abrir este PDF",
       "opening": "Abrindo PDF…",
       "updateRequired": "Atualize o Orca Mobile para abrir PDFs"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Alterado no desktop desde suas edições de {{time}}",
+      "copyMyEdits": "Copiar minhas edições",
+      "discard": "Descartar",
+      "restore": "Restaurar",
+      "unsavedFrom": "Edições não salvas de {{time}}"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} em atividade",
-      "heading": "Agentes",
-      "showAll": "Mostrar todos ({{count}})",
-      "showFewer": "Mostrar menos"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar atualização do Orca {{version}}",
       "title": "Orca {{version}} está disponível",

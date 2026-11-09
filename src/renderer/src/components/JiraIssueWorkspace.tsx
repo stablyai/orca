@@ -12,7 +12,7 @@ import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-ty
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { JiraIssueMetadataBar, JiraIssueWorkspaceHeader } from './jira-issue-workspace-chrome'

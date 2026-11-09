@@ -3,7 +3,7 @@ import type { Mock } from 'vitest'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../rpc/compatibility/runtime-compatibility-cache'
 import { replaceRuntimeEnvironmentRevisions } from '../rpc/environment-revisions/runtime-environment-revision'
 import { clearLegacyQuickOpenInventoryCacheForTests } from './search/runtime-legacy-quick-open-inventory'
-import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../shared/files-runtime-capabilities'
+import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../shared/file-access/files-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION

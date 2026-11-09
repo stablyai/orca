@@ -11,7 +11,8 @@ export type Env = {
   // The cell id directors write into relay_assignments for hosts placed on the edge.
   EDGE_CELL_ID?: string
   // Relay JWTs: verified against the auth service's JWKS (fetched, cached per isolate, served
-  // stale for up to 30 min if auth is unreachable). RELAY_JWKS (inline set) is for local tests and
+  // stale for up to 30 min if auth is unreachable; a cold isolate falls back to the colo's last
+  // good set in the Cache API for up to 24 h, jwks-persist.ts). RELAY_JWKS (inline set) is for local tests and
   // the spike only.
   RELAY_JWKS_URL?: string
   RELAY_JWKS?: string
@@ -20,6 +21,9 @@ export type Env = {
   PING_INTERVAL_MS: string
   SILENCE_TIMEOUT_MS: string
   ORPHAN_GRACE_MS: string
+  // '0' stops offering the host-sent keepalive (host-relay-control.ts) and pings every control from
+  // the alarm again, including controls that took the offer earlier. Default: offered.
+  CLIENT_KEEPALIVE?: string
   // Object backend: store cleanup cadence (default 24 h) and how long an object keeps the data of
   // a host that moved away before wiping it (default 30 days). Tests shorten both.
   SWEEP_INTERVAL_MS?: string
@@ -68,6 +72,7 @@ export type EdgeConfig = {
   orphanGraceMs: number
   sweepIntervalMs: number
   leftRetentionMs: number
+  clientKeepalive: boolean
 }
 
 const configs = new WeakMap<object, EdgeConfig>()
@@ -108,8 +113,11 @@ export function edgeConfig(env: Env): EdgeConfig {
     silenceTimeoutMs: positiveInt('silence_timeout', env.SILENCE_TIMEOUT_MS),
     orphanGraceMs: positiveInt('orphan_grace', env.ORPHAN_GRACE_MS),
     sweepIntervalMs: positiveInt('sweep_interval', env.SWEEP_INTERVAL_MS ?? String(24 * 60 * 60 * 1000)),
-    leftRetentionMs: positiveInt('left_retention', env.LEFT_RETENTION_MS ?? String(30 * 24 * 60 * 60 * 1000))
+    leftRetentionMs: positiveInt('left_retention', env.LEFT_RETENTION_MS ?? String(30 * 24 * 60 * 60 * 1000)),
+    clientKeepalive: env.CLIENT_KEEPALIVE !== '0'
   }
+  // The offer carries the ping interval, which the contract bounds to 1..60 s.
+  config.clientKeepalive &&= config.pingIntervalMs >= 1_000 && config.pingIntervalMs <= 60_000
   // Shipped desktops close a control that is silent for 75 s; a ping must arrive well inside it.
   if (config.pingIntervalMs >= config.silenceTimeoutMs) { throw new Error('relay_edge_config_ping_interval') }
   configs.set(env, config)

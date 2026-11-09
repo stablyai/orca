@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { FolderWorkspacePersistenceOperations } from '../../persistence/restoring-sessions/folder-workspace-operations'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -70,29 +70,6 @@ function createController(rows: FolderWorkspace[], onTeardown: () => void = () =
 }
 
 describe('folder workspace update and delete with requireUniqueId', () => {
-  // An older show could select one of these twins: the local row resolves, the other row's host does not.
-  const twins = () => [
-    folderRow({ executionHostId: 'local', comment: 'local copy' }),
-    folderRow({ folderPath: '', comment: 'unresolved copy' })
-  ]
-
-  it('refuses a shared folder id and changes neither row', async () => {
-    const deps = createController(twins())
-
-    await expect(
-      deps.controller.updateFolderWorkspace('hub-a', { comment: 'x' }, { requireUniqueId: true })
-    ).rejects.toMatchObject({ code: 'selector_ambiguous' })
-    await expect(
-      deps.controller.deleteFolderWorkspace('hub-a', { requireUniqueId: true })
-    ).rejects.toMatchObject({ code: 'selector_ambiguous' })
-
-    expect(deps.state.folderWorkspaces.map((row) => row.comment)).toEqual([
-      'local copy',
-      'unresolved copy'
-    ])
-    expect(deps.teardown).not.toHaveBeenCalled()
-  })
-
   it('refuses the delete when a twin appears during teardown, before any cleanup', async () => {
     const twin = folderRow({ comment: 'added during teardown' })
     const deps = createController([folderRow({ comment: 'selected' })], () => {

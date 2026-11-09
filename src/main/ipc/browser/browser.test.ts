@@ -48,7 +48,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../browser/browser-manager', () => ({
+vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserCertificateTrustController: {
     proceed: proceedCertificateMock
   },

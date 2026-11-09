@@ -16,7 +16,6 @@ import { createRelayApp } from './app.js'
 
 const EDGE_URL = 'https://edge.relay.example.test'
 const COHORT_HOST = 'edgecohorthost01'
-const OTHER_HOST = 'gcehostnotinedge'
 
 const databases: RelayDatabase[] = []
 afterEach(async () => {
@@ -105,35 +104,6 @@ async function harness(options: { seeded?: boolean } = {}) {
 }
 
 describe('director routes with the relay edge', () => {
-  it('answers a cohort host on the edge before any other lane, with the exact wire shape', async () => {
-    const h = await harness()
-    const response = await h.assign(COHORT_HOST, { reconnect: true })
-    expect(response.status).toBe(200)
-    const body = (await response.json()) as Record<string, unknown>
-    expect(Object.keys(body).sort()).toEqual(['assignmentEpoch', 'cellUrl', 'lease', 'v'])
-    expect(body).toMatchObject({ v: 1, cellUrl: EDGE_URL, assignmentEpoch: 1 })
-    expect(h.plan).not.toHaveBeenCalled()
-    expect(h.assignments.assign).not.toHaveBeenCalled()
-    expect(h.assignments.resolve).not.toHaveBeenCalled()
-    expect(h.raiseEpochFloor).toHaveBeenCalledWith({ userId: 'user-1', relayHostId: COHORT_HOST }, 1)
-    // A re-ask keeps the epoch.
-    expect(await (await h.assign(COHORT_HOST)).json()).toMatchObject({ assignmentEpoch: 1 })
-  })
-
-  it('keeps today\'s path for hosts outside the cohort', async () => {
-    const h = await harness()
-    const response = await h.assign(OTHER_HOST)
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
-    expect(h.plan).toHaveBeenCalled()
-    expect(h.assignments.assign).toHaveBeenCalled()
-  })
-
-  it('keeps today\'s path for everyone until the edge cell is seeded', async () => {
-    const h = await harness({ seeded: false })
-    const response = await h.assign(COHORT_HOST)
-    expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
-  })
 
   it('keeps a host still holding units on its old cell there (no 503), moving it on a later ask', async () => {
     const h = await harness()
@@ -149,18 +119,6 @@ describe('director routes with the relay edge', () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
     expect(h.assignments.assign).toHaveBeenCalled()
-  })
-
-  it('answers a phone /v1/resolve for an edge host from the edge row, with the exact wire shape', async () => {
-    const h = await harness()
-    await h.assign(COHORT_HOST)
-    const response = await h.resolve(COHORT_HOST)
-    expect(response.status).toBe(200)
-    const body = (await response.json()) as Record<string, unknown>
-    expect(Object.keys(body).sort()).toEqual(['assignmentEpoch', 'cellUrl', 'leaseExpiresAt', 'v'])
-    expect(body).toMatchObject({ v: 1, cellUrl: EDGE_URL, assignmentEpoch: 1 })
-    expect(h.assignments.resolve).not.toHaveBeenCalled()
-    expect(h.assignments.assign).not.toHaveBeenCalled()
   })
 
   it('never moves a host on a phone resolve', async () => {

@@ -10,7 +10,7 @@ const { registerPaneKeyAliasMock } = vi.hoisted(() => ({
   registerPaneKeyAliasMock: vi.fn()
 }))
 
-vi.mock('../../agent-hooks/server', () => ({
+vi.mock('../../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: {
     registerPaneKeyAlias: registerPaneKeyAliasMock
   }

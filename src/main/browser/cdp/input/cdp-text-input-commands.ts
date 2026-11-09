@@ -7,17 +7,25 @@ import type {
   BrowserTypeResult
 } from '../../../../shared/runtime-browser-contracts'
 import { insertTextThroughCdp } from './browser-text-insertion'
-import { CdpBridgeCommandModule } from '../commands/cdp-bridge-command-module'
+import type { CdpBridgeState } from '../commands/cdp-bridge-state'
+import type { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'
+import type { CdpRefResolution } from '../commands/cdp-ref-resolution'
 
-export class CdpTextInputCommands extends CdpBridgeCommandModule {
+export class CdpTextInputCommands {
+  constructor(
+    private readonly bridgeState: CdpBridgeState,
+    private readonly debuggerLifecycle: CdpDebuggerLifecycle,
+    private readonly refResolution: CdpRefResolution
+  ) {}
+
   fill(element: string, value: string): Promise<BrowserFillResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const node = await this.resolveRef(guest, sender, element)
-      const refSender = this.senderForRef(guest, node)
+      const node = await this.refResolution.resolveRef(guest, sender, element)
+      const refSender = this.refResolution.senderForRef(guest, node)
 
       await refSender('DOM.focus', { backendNodeId: node.backendDOMNodeId })
 
@@ -54,10 +62,10 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
   }
 
   type(input: string): Promise<BrowserTypeResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       await insertTextThroughCdp(sender, input)
       return { typed: true }
@@ -65,13 +73,13 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
   }
 
   focus(element: string): Promise<BrowserFocusResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const node = await this.resolveRef(guest, sender, element)
-      const refSender = this.senderForRef(guest, node)
+      const node = await this.refResolution.resolveRef(guest, sender, element)
+      const refSender = this.refResolution.senderForRef(guest, node)
       await refSender('DOM.focus', { backendNodeId: node.backendDOMNodeId })
 
       return { focused: element }
@@ -79,13 +87,13 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
   }
 
   clear(element: string): Promise<BrowserClearResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const node = await this.resolveRef(guest, sender, element)
-      const refSender = this.senderForRef(guest, node)
+      const node = await this.refResolution.resolveRef(guest, sender, element)
+      const refSender = this.refResolution.senderForRef(guest, node)
 
       const { nodeId } = (await refSender('DOM.requestNode', {
         backendNodeId: node.backendDOMNodeId
@@ -108,13 +116,13 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
   }
 
   selectAll(element: string): Promise<BrowserSelectAllResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
-      const node = await this.resolveRef(guest, sender, element)
-      const refSender = this.senderForRef(guest, node)
+      const node = await this.refResolution.resolveRef(guest, sender, element)
+      const refSender = this.refResolution.senderForRef(guest, node)
       await refSender('DOM.focus', { backendNodeId: node.backendDOMNodeId })
 
       await sender('Input.dispatchKeyEvent', {
@@ -133,10 +141,10 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
   }
 
   keypress(key: string): Promise<BrowserKeypressResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
+    return this.bridgeState.enqueueCommand(async () => {
+      const guest = this.bridgeState.getActiveGuest()
+      const sender = this.debuggerLifecycle.makeCdpSender(guest)
+      await this.debuggerLifecycle.ensureDebuggerAttached(guest)
 
       const keyDef = resolveKeyDefinition(key)
       await sender('Input.dispatchKeyEvent', {

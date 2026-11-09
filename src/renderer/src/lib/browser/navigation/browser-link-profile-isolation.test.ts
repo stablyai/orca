@@ -120,8 +120,19 @@ describe.each(['repo', 'worktree'] as const)('%s browser profile isolation', (sc
             (workspace) => workspace.id === opened.result.browserWorkspaceId
           )
       ).toMatchObject({ sessionProfileId: profile.id, sessionPartition: profile.partition })
-      expect(await open(surface)).toEqual(opened)
-      expect(store.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
+      const reopened = await open(surface)
+      if (surface === 'html') {
+        expect(reopened).toEqual(opened)
+      } else {
+        expect(reopened.status).toBe('opened')
+        if (reopened.status !== 'opened') {
+          throw new Error('Expected opened link')
+        }
+        expect(reopened.result.browserWorkspaceId).not.toBe(opened.result.browserWorkspaceId)
+      }
+      expect(store.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(
+        surface === 'http' ? 3 : 2
+      )
     }
   )
 })

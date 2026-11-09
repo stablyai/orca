@@ -1,9 +1,18 @@
-import { chmodSync, existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
 import type { OrcadLockRecord } from './orcad-instance-lock'
+import { shortDaemonSocketDir } from '../daemon/endpoint/publication/daemon-socket-endpoint-path'
 import {
   probeOrcadEndpoint,
   reclaimStaleOrcadInstanceLock,
@@ -160,6 +169,31 @@ describe.skipIf(process.platform === 'win32')('reclaimStaleOrcadInstanceLock (#3
     expect(result).toMatchObject({
       status: 'refused',
       exitCode: 1,
+      message: expect.stringContaining('Something on this machine answers')
+    })
+    expect(readOrcadInstanceLockRecord(join(root, ORCAD_LOCK_FILE_NAME))?.nonce).toBe(
+      'stale-holder'
+    )
+  })
+
+  it('refuses while the holder answers at a socket relocated for a long data root', async () => {
+    const root = makeRoot()
+    writeLock(root, holderRecord())
+    const relocatedDir = shortDaemonSocketDir(root, process.getuid!())
+    mkdirSync(relocatedDir, { recursive: true, mode: 0o700 })
+    roots.push(relocatedDir)
+    const server = createServer()
+    servers.push(server)
+    await new Promise<void>((resolve) =>
+      server.listen(join(relocatedDir, `o-${HOLDER_PID}-rt.sock`), resolve)
+    )
+    const result = await reclaimStaleOrcadInstanceLock(
+      root,
+      { yes: true, hintRuntime: null },
+      rebootedBox()
+    )
+    expect(result).toMatchObject({
+      status: 'refused',
       message: expect.stringContaining('Something on this machine answers')
     })
     expect(readOrcadInstanceLockRecord(join(root, ORCAD_LOCK_FILE_NAME))?.nonce).toBe(

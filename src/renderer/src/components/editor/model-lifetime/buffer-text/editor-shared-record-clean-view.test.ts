@@ -13,7 +13,7 @@ import { editorTabModelUri } from '../../save/queue/editor-save-disk-preconditio
 import { useEditorContentChangeHandler } from './use-editor-content-change-handler'
 import { useMonacoContentSyncBridge } from '../../use-monaco-content-sync-bridge'
 import type { FileContent } from '../../editor-panel-content-types'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 
 const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
 vi.mock('@/store/index', () => {

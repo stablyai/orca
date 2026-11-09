@@ -1,7 +1,7 @@
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { ProjectGroup, ProjectGroupUpdate } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type {
   FolderWorkspacePathStatus,
@@ -14,7 +14,7 @@ import {
   getFolderWorkspacePathStatusForPath
 } from '../../project-groups/folder-workspace-path-status'
 import { FolderWorkspaceCreateRefusedError } from '../../project-groups/folder-workspace-create-refusal'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorktreeLifecycleEvent } from '../workspaces/lifecycle/worktree-lifecycle-event'
 import {
   runtimeVisibleFolderWorkspaces,
@@ -113,10 +113,7 @@ export class RuntimeProjectGroupController {
     return group
   }
 
-  async updateGroup(
-    groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  ): Promise<ProjectGroup | null> {
+  async updateGroup(groupId: string, updates: ProjectGroupUpdate): Promise<ProjectGroup | null> {
     const store = this.deps.getStore()
     if (!store?.updateProjectGroup) {
       throw new Error('runtime_unavailable')

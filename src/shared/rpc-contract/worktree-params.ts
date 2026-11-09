@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
-import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
+import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automations/ownership/automation-workspace-provenance'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import {
@@ -14,7 +14,7 @@ import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../diff-comment-schema'
-import { TaskSourceContextSchema } from '../task-source-context-schema'
+import { TaskSourceContextSchema } from '../work-items/task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 

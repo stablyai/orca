@@ -23,7 +23,11 @@ export class LoadedCohortMigrationOperations {
       Object.keys(state.settings).length === 1 &&
       isRecord(state.settings.telemetry)
     const existingProfile = fileExistedOnLoad && !telemetryOnly
-    for (const key of ['tabSwitchKeybindingSeed', 'searchKeybindingSeed'] as const) {
+    for (const key of [
+      'tabSwitchKeybindingSeed',
+      'searchKeybindingSeed',
+      'nonMacSearchKeybindingSeed'
+    ] as const) {
       const existing = state.settings?.[key]
       if (existing === 'legacy' || existing === 'done') {
         continue
@@ -40,16 +44,13 @@ export class LoadedCohortMigrationOperations {
     }
     if (state.settings?.claudeCodeThemeSyncOffer === undefined) {
       this.runtime.loadNeedsSave = true
-      // Why: existing users keep Claude Code's look until they accept the offer at their next Claude launch.
-      // Not keyed on a saved claudeCodeThemeSync: offline writers copy the default (on) into old profiles.
-      const offer = existingProfile
+      // Why every profile: settings.json is global, so even a fresh profile must not restyle Claude Code unasked.
       state = {
         ...state,
         settings: {
           ...state.settings,
-          ...(offer
-            ? { claudeCodeThemeSync: false, claudeCodeThemeSyncOffer: 'pending' as const }
-            : { claudeCodeThemeSyncOffer: 'settled' as const })
+          claudeCodeThemeSync: false,
+          claudeCodeThemeSyncOffer: 'pending'
         }
       }
     }
@@ -118,6 +119,41 @@ export class LoadedCohortMigrationOperations {
   }
 
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    return this.seedMilestoneInstallCohort(
+      this.migrateTelemetryIdentity(state, fileExistedOnLoad),
+      fileExistedOnLoad
+    )
+  }
+
+  /** Freeze once so upgraded profiles' first post-release interaction is never counted as activation. */
+  private seedMilestoneInstallCohort(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const telemetry = state.settings?.telemetry
+    if (!telemetry || telemetry.protectedMilestones?.installCohort !== undefined) {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        telemetry: {
+          ...telemetry,
+          protectedMilestones: {
+            ...telemetry.protectedMilestones,
+            installCohort: fileExistedOnLoad ? 'existing' : 'fresh'
+          }
+        }
+      }
+    }
+  }
+
+  private migrateTelemetryIdentity(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
     const existing = state.settings?.telemetry
     // Partial telemetry blocks still require migration unless all invariants hold.
     if (

@@ -1,8 +1,8 @@
 import {
   ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { z } from 'zod'
 import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/federation/orchestration-peer-capability-cache'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'

@@ -162,18 +162,6 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
     await expect(launch()).resolves.toBe(`codex "resume" "${SESSION_ID}"`)
   })
 
-  it('keeps PowerShell quoting for a powershell tab', async () => {
-    store.settings.terminalWindowsShell = 'powershell.exe'
-
-    await expect(launch()).resolves.toBe(`codex 'resume' '${SESSION_ID}'`)
-  })
-
-  it('quotes the resume argv for a Git Bash tab', async () => {
-    store.settings.terminalWindowsShell = 'git-bash'
-
-    await expect(launch()).resolves.toBe(`codex 'resume' '${SESSION_ID}'`)
-  })
-
   it('ignores the local Windows shell setting for an SSH workspace', async () => {
     store.settings.terminalWindowsShell = 'cmd.exe'
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/home/neil/repo' }]

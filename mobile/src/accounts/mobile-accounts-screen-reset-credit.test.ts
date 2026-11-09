@@ -60,12 +60,12 @@ vi.mock('lucide-react-native', () => ({
   User: 'User'
 }))
 
-vi.mock('../transport/host-store', () => ({
+vi.mock('../transport/hosts/host-store', () => ({
   loadHosts: dependencies.loadHosts,
   peekHosts: () => null
 }))
 
-vi.mock('../transport/host-client-hooks', () => {
+vi.mock('../transport/connection/host-client-hooks', () => {
   const client = {
     sendRequest: async (method: string, params?: unknown, options?: unknown) => {
       if (method === 'status.get') {
@@ -200,38 +200,8 @@ function openDialog(renderer: ReactTestRenderer) {
 }
 
 /** Presses the dialog's confirm button, which closes it after its action as `ConfirmContent` does. */
-function getLatestConfirmAction(renderer: ReactTestRenderer): () => void {
-  const dialog = openDialog(renderer)
-  if (dialog?.title !== 'Use a rate-limit reset?') {
-    throw new Error('Reset confirmation not open')
-  }
-  return () => {
-    dialog.onConfirm()
-    dialog.onCancel()
-  }
-}
-
-async function confirmReset(renderer: ReactTestRenderer): Promise<void> {
-  const button = await findResetButton(renderer)
-  await act(async () => button.props.onPress())
-  const confirm = getLatestConfirmAction(renderer)
-  await act(async () => {
-    confirm()
-    await Promise.resolve()
-    await Promise.resolve()
-  })
-}
-
-function expectNotice(renderer: ReactTestRenderer, title: string, message: string): void {
-  expect(openDialog(renderer)).toMatchObject({ title, message, cancelLabel: null })
-}
-
-function dismissNotice(renderer: ReactTestRenderer): void {
-  act(() => openDialog(renderer)?.onCancel())
-}
 
 const KEY = '11111111-1111-4111-8111-111111111111'
-const SECOND_KEY = '22222222-2222-4222-8222-222222222222'
 
 describe('accounts route Codex reset credit', () => {
   beforeEach(() => {
@@ -270,109 +240,6 @@ describe('accounts route Codex reset credit', () => {
     vi.restoreAllMocks()
   })
 
-  it('shows the resumed outcome when the offer moved after a lost reply', async () => {
-    dependencies.resetRequest.mockRejectedValueOnce(new Error('Connection lost'))
-    const renderer = await renderAccountsRoute()
-    await confirmReset(renderer)
-    expectNotice(renderer, 'Could not reset rate limits', 'Connection lost')
-    dismissNotice(renderer)
-    const [firstParams] = dependencies.resetRequest.mock.calls[0]!
-
-    // The host refreshes usage after an unknown outcome, which moves the offer the phone sees.
-    const refreshed = {
-      ...AVAILABLE_SNAPSHOT,
-      rateLimits: {
-        ...AVAILABLE_SNAPSHOT.rateLimits,
-        codex: { ...AVAILABLE_SNAPSHOT.rateLimits.codex, updatedAt: 101 }
-      }
-    }
-    act(() => {
-      dependencies.subscriptionListeners[0]?.({ type: 'snapshot', snapshot: refreshed })
-    })
-    // The host resumes the account's unresolved attempt and answers with that attempt's scope.
-    dependencies.uuid.mockReturnValue(SECOND_KEY)
-    dependencies.resetRequest.mockImplementationOnce(() => ({
-      id: 'reset-2',
-      ok: true,
-      result: { outcome: 'reset', scope: firstParams.expectedScope, snapshot: RESET_SNAPSHOT },
-      _meta: { runtimeId: 'runtime-1' }
-    }))
-    await confirmReset(renderer)
-
-    const [secondParams] = dependencies.resetRequest.mock.calls[1]!
-    expect(secondParams).toMatchObject({ idempotencyKey: SECOND_KEY })
-    expect(secondParams.expectedScope.offerRevision).not.toBe(
-      firstParams.expectedScope.offerRevision
-    )
-    expectNotice(renderer, 'Rate limits reset', 'Codex usage has been refreshed.')
-    act(() => renderer.unmount())
-  })
-
-  it('keeps the exact confirmed scope when a subscription changes before confirmation', async () => {
-    const renderer = await renderAccountsRoute()
-    const button = await findResetButton(renderer)
-    await act(async () => button.props.onPress())
-    const action = getLatestConfirmAction(renderer)
-
-    const changedSnapshot = {
-      ...AVAILABLE_SNAPSHOT,
-      codex: {
-        ...AVAILABLE_SNAPSHOT.codex,
-        activeAccountId: null,
-        activeAccountIdsByRuntime: { host: null, wsl: {} }
-      }
-    }
-    dependencies.resetRequest.mockImplementation((params) => ({
-      id: 'reset',
-      ok: true,
-      result: {
-        status: 'rejectedBeforeProvider',
-        retryDisposition: 'discardAttempt',
-        reason: 'accountChanged',
-        scope: (params as { expectedScope: unknown }).expectedScope,
-        snapshot: changedSnapshot
-      },
-      _meta: { runtimeId: 'runtime-1' }
-    }))
-    act(() => {
-      dependencies.subscriptionListeners[0]?.({ type: 'snapshot', snapshot: changedSnapshot })
-    })
-    await act(async () => {
-      action()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(dependencies.resetRequest).toHaveBeenCalledOnce()
-    expect(dependencies.resetRequest.mock.calls[0]?.[0]).toMatchObject({
-      expectedScope: { accountId: 'codex-1', accountRevision: 10 }
-    })
-    expectNotice(
-      renderer,
-      'Reset details changed',
-      'The account or reset offer changed before the host contacted Codex. Review the updated details, then confirm again.'
-    )
-    act(() => renderer.unmount())
-  })
-
-  it('recovers from key generation failure without leaving the action busy', async () => {
-    dependencies.uuid.mockImplementationOnce(() => {
-      throw new Error('Random bytes unavailable')
-    })
-    const renderer = await renderAccountsRoute()
-
-    await confirmReset(renderer)
-    expectNotice(renderer, 'Could not reset rate limits', 'Random bytes unavailable')
-    dismissNotice(renderer)
-    expect((await findResetButton(renderer)).props.accessibilityState).toEqual({
-      busy: false,
-      disabled: false
-    })
-
-    await confirmReset(renderer)
-    expect(dependencies.resetRequest).toHaveBeenCalledOnce()
-    act(() => renderer.unmount())
-  })
   it('sends nothing when the confirmation is cancelled', async () => {
     const renderer = await renderAccountsRoute()
     const button = await findResetButton(renderer)

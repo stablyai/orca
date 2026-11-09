@@ -9,7 +9,7 @@ import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { registerPtyHandlers } from './register-handlers'
 import { setLocalPtyProvider } from './provider/registry'
-import { TerminalIntentionalStops } from '../../runtime/terminal-intentional-stops'
+import { TerminalIntentionalStops } from '../../runtime/terminal/stop/terminal-intentional-stops'
 
 // An explicit Mock return type keeps the exported fixture type portable.
 function stub(): Mock<(...args: unknown[]) => unknown> {

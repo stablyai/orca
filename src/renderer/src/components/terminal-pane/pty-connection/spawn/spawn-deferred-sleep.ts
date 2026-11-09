@@ -3,7 +3,7 @@ import { releaseDeferredCwdFence } from './fresh-spawn-start'
 import { isMainResumedSleepPaneCurrent, mainResumedSleepPane } from './main-resumed-sleep-pane'
 import { useAppStore } from '@/store/index'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import type { SpawnDeferralReason } from '../../../../../../shared/host-spawn-admission'
+import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,

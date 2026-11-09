@@ -12,14 +12,16 @@ import {
   type UseQueryResult
 } from '@tanstack/react-query'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useHostConnectionInvalidation } from './host-connection-invalidation'
+import { useHostEventRouter } from './host-event-router'
 import {
   hostQueryKey,
   type HostQueryKey,
   type HostQueryParams,
   type HostQueryTarget
 } from './host-query-key'
+import { holdsRestoredHostQueryData, type HostQueryPersist } from './host-query-persistence'
 import { hostReadClient } from './host-read-client'
 
 // Exported with the query hooks so the router lands in their page chunk, not a chunk of its own.
@@ -32,7 +34,7 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
   fetch?: HostQueryFetch<TInput, TData>
   staleTime?: StaleTimeFunction<TData, Error, TData, HostQueryKey>
   gcTime?: number
-  // Only for families the desktop sends no change signal for.
+  // Reads a stale answer on foreground: one with no change signal, or one an event marked while hidden.
   refetchOnWindowFocus?: boolean
   // For a screen that offers its own Retry, so a lost read is reported instead of sent again.
   retry?: false
@@ -40,19 +42,30 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
   streamBacked?: boolean
   // Desktop change events that make this family stale (host-event-router), and the least time between reads they cause.
   signal?: HostQuerySignal
+  // Kept on the phone between launches (host-query-persistence); absent means memory only.
+  persist?: HostQueryPersist<TData>
 }
 
+export type HostSignalEvent = Exclude<RuntimeClientEventStreamMessage, { type: 'ready' | 'end' }>
+
 export type HostQuerySignal = {
-  events: readonly Exclude<RuntimeClientEventStreamMessage['type'], 'ready' | 'end'>[]
+  events: readonly HostSignalEvent['type'][]
   floorMs?: number
+  // Narrows a listed event to the queries it names; without it every query in the family is stale.
+  matches?: (event: HostSignalEvent, target: HostQueryTarget) => boolean
 }
 
 type HostQueryFetch<TInput extends HostQueryParams, TData> = (
   client: RpcClient,
   target: HostQueryTarget,
   input: TInput,
-  previous: TData | undefined
+  previous: TData | undefined,
+  read: HostQueryRead
 ) => Promise<TData>
+
+// `live` marks an action's read (readHostQueryLive), which must not be served from a host-side cache.
+// `previousFromStore` says `previous` is an earlier launch's copy that no read in this document confirmed.
+export type HostQueryRead = { live: boolean; previousFromStore: boolean }
 
 export function defineHostQuery<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData> & { fetch: HostQueryFetch<TInput, TData> }
@@ -73,7 +86,7 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
   target: HostQueryTarget,
   input: TInput
 ) {
-  const { family, fetch, streamBacked, signal, ...freshness } = query
+  const { family, fetch, streamBacked, signal, persist, ...freshness } = query
   const queryKey = hostQueryKey(hostId, family, target, input)
   return queryOptions({
     ...freshness,
@@ -81,9 +94,12 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
     // No abort signal: the host has no cancel, and a screen that unmounts still wants the answer cached.
     queryFn: fetch
       ? ({ client: queryClient }) =>
-          fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey))
+          fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey), {
+            live: false,
+            previousFromStore: holdsRestoredHostQueryData(queryClient, hashKey(queryKey))
+          })
       : skipToken,
-    meta: { streamBacked, signal }
+    meta: { streamBacked, signal, persist }
   })
 }
 
@@ -105,7 +121,13 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   }
   const { fetch } = query
   const { read } = options
-  const live = fetch && (() => fetch(hostReadClient(client), target, input, undefined))
+  const live =
+    fetch &&
+    (() =>
+      fetch(hostReadClient(client), target, input, undefined, {
+        live: true,
+        previousFromStore: false
+      }))
   if (!read && !live) {
     throw new Error(`${query.family} is read by its screen`)
   }
@@ -143,7 +165,11 @@ function observerOptions<TInput extends HostQueryParams, TData>(
 ): UseQueryOptions<TData, Error, TData, HostQueryKey> {
   return client
     ? hostQueryOptions(query, client, hostId, target, input)
-    : { queryKey: hostQueryKey(hostId, query.family, target, input), queryFn: skipToken }
+    : {
+        queryKey: hostQueryKey(hostId, query.family, target, input),
+        queryFn: skipToken,
+        meta: { streamBacked: query.streamBacked, signal: query.signal, persist: query.persist }
+      }
 }
 
 export function useHostQuery<TInput extends HostQueryParams, TData>(
@@ -151,19 +177,30 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   host: { hostId: string; client: RpcClient | null },
   target: HostQueryTarget,
   input: TInput,
-  options?: { enabled?: boolean; subscribed?: boolean; refetchInterval?: number | false }
+  options?: {
+    enabled?: boolean
+    subscribed?: boolean
+    refetchInterval?: number | false
+    // Replaces the family's own, e.g. once the host is known to signal every change.
+    staleTime?: number
+  }
 ): UseQueryResult<TData> {
   const { hostId, client } = host
   const enabled = client !== null && options?.enabled !== false
   useHostConnectionInvalidation(hostId, enabled ? client : null)
+  // A screen alone on its page has no host list to keep the router; its signalled reads hold one.
+  useHostEventRouter(hostId, enabled && query.signal ? client : null)
   // Same options object while nothing changed (target and input count by value), so TanStack's per-render setOptions is a no-op.
   const keyHash = hashKey([target, input])
   const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
     const observer = observerOptions(query, client, hostId, target, input)
-    return enabled ? observer : { ...observer, queryFn: skipToken }
+    // Disable through the observer, not skipToken: observers share the query's options, so a disabled
+    // screen's skipToken would leave an enabled one's key with no fetch for invalidation or intervals.
+    return enabled ? observer : { ...observer, enabled: false }
   }, [query, client, hostId, keyHash, enabled])
   return useQuery({
     ...queryOptions,
+    ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
     subscribed: options?.subscribed,
     refetchInterval: options?.refetchInterval
   })
@@ -179,6 +216,7 @@ export function useHostQueries<TInput extends HostQueryParams, TData, TCombined>
 ): TCombined {
   const { hostId, client } = host
   useHostConnectionInvalidation(hostId, client)
+  useHostEventRouter(hostId, query.signal ? client : null)
   const keyHash = hashKey([target, inputs])
   const queries = useMemo(
     () => inputs.map((input) => observerOptions(query, client, hostId, target, input)),

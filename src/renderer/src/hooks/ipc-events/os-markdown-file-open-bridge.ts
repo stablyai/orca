@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { FileDocument } from '../../../../shared/filesystem-entry-types'
+import type { FileDocument } from '../../../../shared/file-listing/file-document'
 import { revealFloatingWorkspacePanel } from '@/lib/floating-workspace-panel-reveal'
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { translate } from '@/i18n/i18n'

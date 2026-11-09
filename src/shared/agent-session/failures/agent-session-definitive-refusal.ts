@@ -19,6 +19,24 @@ export function isAgentSessionCreateAdmissionRefusal(
   )
 }
 
+/** Source admission can prove these refusals only before the native fork begins. */
+export function isAgentSessionForkSourceAdmissionRefusal(
+  refusal: Pick<AgentSessionWireRefusal, 'code' | 'details'>
+): boolean {
+  return (
+    (refusal.code === 'agent_session_identity_required' &&
+      refusal.details?.reason === 'recordMissing') ||
+    (refusal.code === 'agent_session_operation_invalid' &&
+      [
+        'savedConversationMissing',
+        'conversationCleared',
+        'rewindUnconfirmed',
+        'turnActive',
+        'launchFolderMissing'
+      ].includes(refusal.details?.reason ?? ''))
+  )
+}
+
 /** Proves the host neither created a session nor will on a retry. */
 const DEFINITIVE_REFUSAL_CODES: ReadonlySet<string> = new Set<AgentSessionWireRefusalCode>([
   'structured_agent_session_unsupported'

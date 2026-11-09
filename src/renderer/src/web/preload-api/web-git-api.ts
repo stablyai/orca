@@ -1,3 +1,4 @@
+import { createGitCommitActionsApi } from './web-git-commit-actions-api'
 import { createGitHistoryApi } from './web-git-history-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { callAbortableRuntimeEnvironment } from '../../runtime/rpc/calls/abortable-runtime-environment-call'
@@ -220,6 +221,7 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         message
       })
     },
+    ...createGitCommitActionsApi(),
     completeMerge: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.completeMerge', {

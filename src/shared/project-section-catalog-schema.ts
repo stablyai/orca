@@ -71,6 +71,7 @@ export const ProjectGroupSchema = z.object({
   parentGroupId: z.string().nullable(),
   createdFrom: z.enum(PROJECT_GROUP_CREATED_FROM_ARMS).catch('manual'),
   tabOrder: z.number(),
+  rootProjectOrder: salvagedOptional('rootProjectOrder', z.number().finite()),
   isCollapsed: z.boolean(),
   color: z.string().nullable(),
   createdAt: z.number(),

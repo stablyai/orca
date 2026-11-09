@@ -1,7 +1,7 @@
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { joinPath } from '@/lib/path'
 import { normalizeRelativePath } from '../../../../../shared/cross-platform-path'
-import type { StagedRuntimeUploadFileIdentity } from '../../../../../shared/runtime-upload-staging-contract'
+import type { StagedRuntimeUploadFileIdentity } from '../../../../../shared/file-import/runtime-upload-staging-contract'
 import {
   DROP_STAGING_GITIGNORE_CONTENT,
   DROP_STAGING_RELATIVE_DIR

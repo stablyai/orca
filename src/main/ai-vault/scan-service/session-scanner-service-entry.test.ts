@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { listLocalAiVaultSubagentSessions } from '../session-subagent-reader'
 import { noteAiVaultScanWorkChanged } from '../ai-vault-scan-progress'
 import { AI_VAULT_SERVICE_PROTOCOL_VERSION } from './session-scanner-service-protocol'
 
@@ -109,6 +110,27 @@ describe('AI Vault service entry cache invalidation', () => {
       expect(progress()).toHaveLength(2)
     } finally {
       clock.mockRestore()
+    }
+  })
+  it('answers search status at admission while the interactive lane is occupied', async () => {
+    let release!: () => void
+    vi.mocked(listLocalAiVaultSubagentSessions).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ sessions: [], issues: [] })
+        })
+    )
+    emit({ type: 'request', id: 30, operation: 'subagents', request: {} })
+    await vi.waitFor(() => expect(release).toBeDefined())
+    try {
+      emit({ type: 'request', id: 31, operation: 'searchStatus' })
+      await vi.waitFor(() =>
+        expect(sent).toContainEqual(expect.objectContaining({ type: 'result', id: 31 }))
+      )
+      expect(sent.some((message) => message.id === 30)).toBe(false)
+    } finally {
+      release()
+      await vi.waitFor(() => expect(sent.some((message) => message.id === 30)).toBe(true))
     }
   })
 })

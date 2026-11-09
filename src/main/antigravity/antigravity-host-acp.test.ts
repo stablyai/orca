@@ -1,11 +1,10 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { selectAcpHostAccountHome } from '../acp/acp-launch-command'
-import type { AcpHostBackendSettings } from '../acp/acp-launch-specs'
+import { selectAcpHostAccountHome } from '../acp/launch/acp-launch-command'
+import type { AcpHostBackendSettings } from '../acp/launch/acp-launch-contract'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
-import { antigravityHostAcpReady } from './antigravity-host-acp'
 
 // agy's own sign-in, read from the host's keyring or token file.
 const agyCredential = vi.hoisted(() => ({ present: true }))
@@ -119,7 +118,7 @@ it.skipIf(process.platform === 'win32')(
     const managedAcp = join(stateDirectory, 'antigravity-chat', 'antigravity-acp')
     await mkdir(managedAcp, { recursive: true })
     await expect(select(HOST_INITIALIZE)).resolves.not.toBeNull()
-    await writeFile(join(managedAcp, 'antigravity-oauth-token'), '{}')
+    await writeFile(join(managedAcp, 'acp_token.json'), '{}')
     await expect(select(HOST_INITIALIZE)).resolves.toBeNull()
   }
 )
@@ -166,18 +165,5 @@ it.skipIf(process.platform === 'win32')(
     }
     await expect(select('{"model":"Gemini 4 Argon (Medium)"}')).resolves.not.toBeNull()
     await expect(select('{"modelProvider":"gemini"}')).resolves.toBeNull()
-  }
-)
-
-it.skipIf(process.platform === 'win32')(
-  'an agy that rejects the skip-permissions flag is not asked again',
-  async () => {
-    vi.stubEnv('ELECTRON_RUN_AS_NODE', '1')
-    const folder = await fakeAgy(HOST_INITIALIZE, SIGNED_IN_LIST, [])
-    const check = (at: number) => antigravityHostAcpReady(join(folder, 'agy'), {}, [], () => at)
-    await expect(check(1_000)).resolves.toBe(false)
-    // An hour later, past the recheck of any other answer.
-    await expect(check(3_601_000)).resolves.toBe(false)
-    expect(await readFile(join(folder, 'launches'), 'utf8')).toBe('x')
   }
 )

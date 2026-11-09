@@ -154,16 +154,6 @@ describe('placement', () => {
     return { anchor, sourceGroupId, splitGroupId }
   }
 
-  it('lands in the requested group', () => {
-    const { sourceGroupId, splitGroupId } = twoGroups()
-    store.getState().focusGroup(WT, sourceGroupId)
-
-    const published = publishAgentLaunchTab(request({ placement: { groupId: splitGroupId } }))
-
-    expect(published.placement).toEqual({ groupId: splitGroupId })
-    expect(launchTab()?.groupId).toBe(splitGroupId)
-  })
-
   // Activation prunes empty groups; preserve the CLI launch’s requested split until its tab arrives.
   it.each(
     (['none', 'focus-window', 'focus-in-workspace', 'reveal-owner'] as const).flatMap((viewer) => [

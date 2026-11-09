@@ -3,7 +3,7 @@ import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 import {
   getExecutionHostLabel,
   getRepoExecutionHostId,

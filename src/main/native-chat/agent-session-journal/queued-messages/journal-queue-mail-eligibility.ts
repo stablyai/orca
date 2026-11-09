@@ -4,7 +4,7 @@ import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import type { JournalReducerState } from '../projection/journal-reducer'
-import { journalManualStop } from './queued-message-pause'
+import { journalManualStop } from './queued-message-pause-marks'
 import type { QueuedMessageRow } from './queued-message-table'
 
 type QueueWalk = { key: string; first: QueuedMessageRow | null; pastMail?: QueuedMessageRow | null }

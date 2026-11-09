@@ -1,7 +1,7 @@
 import {
   subscribeSharedClientEvents,
   type SharedClientEventsClient
-} from '../transport/shared-client-events'
+} from '../transport/connection/shared-client-events'
 import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
 
 // Keep lifecycle callers independent of RN types.
@@ -68,14 +68,15 @@ export function startHostWorktreeRefresh({
     if (event.type === 'end' || event.type === 'error') {
       return
     }
-    if (hidden()) {
-      owed = true
-      return
-    }
-    if (event.type === 'sidebarInputsChanged') {
+    if (event.type === 'workspaceViewChanged') {
+      if (hidden()) {
+        owed = true
+      } else {
+        void syncViewSettings()
+      }
+    } else if (event.type === 'sidebarInputsChanged' && !hidden()) {
+      // Coming back to the foreground refreshes the feed anyway.
       sidebarFeed?.changed(event)
-    } else if (event.type === 'workspaceViewChanged') {
-      void syncViewSettings()
     }
   })
 

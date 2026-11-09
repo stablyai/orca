@@ -1,7 +1,10 @@
 import { connect, createServer, type Server, type Socket } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ProcessHost from '@orca/process-host'
-import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../../ssh/orcad-stdio-bridge'
+import {
+  checkOrcadStdioBridge,
+  openOrcadStdioBridgeChannel
+} from '../../managed-server/lifecycle/orcad-stdio-bridge'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import {
   fakeWslBridgeChildren,

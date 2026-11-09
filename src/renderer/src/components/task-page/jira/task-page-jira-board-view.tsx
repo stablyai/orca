@@ -10,7 +10,7 @@ import type {
   JiraProjectStatusOrder,
   JiraTransition
 } from '../../../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { TaskPageJiraBoard, jiraBoardIssueRefKey } from './task-page-jira-board'
 import type { TaskPageJiraBoardSection } from './task-page-jira-board-sections'
