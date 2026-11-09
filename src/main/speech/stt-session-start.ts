@@ -26,7 +26,7 @@ import {
   initializeSttWorker,
   waitForSttWorkerReady
 } from './stt-worker-startup'
-import { START_DICTATION_TIMEOUT_MS } from './stt-session-timeouts'
+import { START_DICTATION_TIMEOUT_MS } from '../../shared/dictation-finish-deadlines'
 import { STT_WORKER_EXITED_ERROR } from './stt-worker-process'
 
 export async function startSttDictation(

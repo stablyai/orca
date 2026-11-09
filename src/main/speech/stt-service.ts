@@ -16,7 +16,7 @@ import {
   teardownIdleSttEngine
 } from './stt-session-stop'
 
-export { START_DICTATION_TIMEOUT_MS } from './stt-session-timeouts'
+export { START_DICTATION_TIMEOUT_MS } from '../../shared/dictation-finish-deadlines'
 
 export type SttEvent =
   | { type: 'ready' }
