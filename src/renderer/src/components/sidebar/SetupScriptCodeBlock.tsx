@@ -84,7 +84,6 @@ export function SetupScriptCodeBlock({
             size="xs"
             aria-expanded={expanded}
             aria-controls={contentId}
-            className="text-muted-foreground"
             onClick={toggleExpanded}
           >
             <ChevronDown
