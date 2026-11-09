@@ -175,6 +175,11 @@ async function adoptStaleWake(deps: LifecycleDeps, row: SandboxRow): Promise<San
       // Someone else moved the row meanwhile; report what they left.
       return (await getSandbox(deps.db, row.id)) ?? row
     }
+    // Leave it resumable (and reported as failed for a minute) rather than stuck in `resuming`.
+    const current = await getSandbox(deps.db, row.id)
+    if (current?.status === 'resuming' && current.generation === row.generation) {
+      await transition(deps.db, current, { status: 'suspended', ...NO_SESSION, last_error: 'resume_failed' }, deps.now())
+    }
     throw error
   }
 }
