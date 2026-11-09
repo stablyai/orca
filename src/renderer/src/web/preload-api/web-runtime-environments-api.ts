@@ -193,6 +193,27 @@ export function createRuntimeEnvironmentsApi(): PreloadApi['runtimeEnvironments'
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
       return { removed: redactStoredWebRuntimeEnvironment(environment) }
     },
+    rename: async ({ selector, name }) => {
+      const environment = resolveEnvironment(selector)
+      const trimmed = name.trim()
+      if (!trimmed) {
+        throw new Error(
+          translate(
+            'auto.web.webPreloadApi.runtimeEnvironmentNameRequired',
+            'A server name is required.'
+          )
+        )
+      }
+      if (trimmed === environment.name) {
+        return { environment: redactStoredWebRuntimeEnvironment(environment) }
+      }
+      const next = { ...environment, name: trimmed, updatedAt: Date.now() }
+      saveStoredWebRuntimeEnvironment(next)
+      if (webRuntimeState.activeEnvironment?.id === environment.id) {
+        webRuntimeState.activeEnvironment = next
+      }
+      return { environment: redactStoredWebRuntimeEnvironment(next) }
+    },
     disconnect: async ({ selector }) => {
       const environment = resolveEnvironment(selector)
       if (webRuntimeState.activeEnvironment?.id === environment.id) {

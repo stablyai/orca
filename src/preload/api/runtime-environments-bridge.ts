@@ -67,6 +67,11 @@ export const runtimeEnvironmentsApi = {
     ipcRenderer.invoke('runtimeEnvironments:resolve', args),
   remove: (args: { selector: string }): Promise<RuntimeEnvironmentRemoval> =>
     ipcRenderer.invoke('runtimeEnvironments:remove', args),
+  rename: (args: {
+    selector: string
+    name: string
+  }): Promise<{ environment: PublicKnownRuntimeEnvironment }> =>
+    ipcRenderer.invoke('runtimeEnvironments:rename', args),
   disconnect: (args: {
     selector: string
   }): Promise<{ disconnected: PublicKnownRuntimeEnvironment }> =>

@@ -12,6 +12,7 @@ import {
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
 import {
   RuntimeEnvironmentRemoveDialog,
+  RuntimeEnvironmentRenameDialog,
   RuntimeEnvironmentSwitchDialog
 } from './runtime-environment-dialogs'
 import { RuntimeAddServerDialog } from '../pairing/runtime-add-server-dialog'
@@ -45,6 +46,7 @@ export function RuntimeEnvironmentsPane({
   const { dialog, setDialog } = useRuntimeServersPage()
   const [pendingSwitchValue, setPendingSwitchValue] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<PublicKnownRuntimeEnvironment | null>(null)
+  const [pendingRename, setPendingRename] = useState<PublicKnownRuntimeEnvironment | null>(null)
   const remoteServerUpdates = useAppStore((state) => state.remoteServerUpdates)
   const remoteServerUpdatesRunning = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refreshRemoteServerUpdates = useAppStore((state) => state.refreshRemoteServerUpdates)
@@ -96,6 +98,9 @@ export function RuntimeEnvironmentsPane({
     removingId,
     removeError,
     setRemoveError,
+    renamingId,
+    renameError,
+    setRenameError,
     name,
     setName,
     pairingCode,
@@ -104,7 +109,8 @@ export function RuntimeEnvironmentsPane({
     setAddServerFailure,
     closeAddServerForm,
     addEnvironment,
-    removeEnvironment
+    removeEnvironment,
+    renameEnvironment
   } = useRuntimeEnvironmentMutationActions({
     settings,
     allowLocalRuntime,
@@ -145,6 +151,7 @@ export function RuntimeEnvironmentsPane({
     connectingId !== null ||
     switchingValue !== null ||
     removingId !== null ||
+    renamingId !== null ||
     disconnectingId !== null
   const removingActiveServer = pendingRemove
     ? isRuntimeEnvironmentRemovalBlocked(settings.activeRuntimeEnvironmentId, pendingRemove.id)
@@ -183,6 +190,17 @@ export function RuntimeEnvironmentsPane({
       }
     })
   }
+  const confirmRename = (name: string): void => {
+    const environment = pendingRename
+    if (!environment) {
+      return
+    }
+    void renameEnvironment(environment, name).then((renamed) => {
+      if (renamed && mountedRef.current) {
+        setPendingRename(null)
+      }
+    })
+  }
 
   return (
     <SearchableSetting
@@ -217,6 +235,10 @@ export function RuntimeEnvironmentsPane({
         onRemove={(environment) => {
           setRemoveError(null)
           setPendingRemove(environment)
+        }}
+        onRename={(environment) => {
+          setRenameError(null)
+          setPendingRename(environment)
         }}
         onMakeDefault={(environment) => requestSwitch(environment.id)}
         onCheckForUpdates={(options) => {
@@ -287,6 +309,23 @@ export function RuntimeEnvironmentsPane({
           setPendingSwitchValue(null)
         }}
         onConfirm={confirmSwitch}
+      />
+
+      <RuntimeEnvironmentRenameDialog
+        pendingRename={pendingRename}
+        renamingId={renamingId}
+        renameError={renameError}
+        onOpenChange={(open) => {
+          if (!open && renamingId === null) {
+            setRenameError(null)
+            setPendingRename(null)
+          }
+        }}
+        onCancel={() => {
+          setRenameError(null)
+          setPendingRename(null)
+        }}
+        onSubmit={confirmRename}
       />
 
       <RuntimeEnvironmentRemoveDialog

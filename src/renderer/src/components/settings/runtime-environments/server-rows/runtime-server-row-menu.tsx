@@ -1,6 +1,7 @@
 import {
   ArrowUpCircle,
   Info,
+  Pencil,
   RefreshCw,
   Server,
   ServerOff,
@@ -18,6 +19,7 @@ type RuntimeServerRowMenuProps = {
   showConnect: boolean
   showDisconnect: boolean
   showMakeDefault: boolean
+  showRename: boolean
   /** null hides the item; otherwise whether the route is already linked. */
   sshAccessLinked: boolean | null
   detailsExpanded: boolean
@@ -33,6 +35,7 @@ type RuntimeServerRowMenuProps = {
   onCheckForUpdates?: (options: UpdateCheckOptions) => void
   onSshAccess: () => void
   onToggleDetails: () => void
+  onRename: () => void
   onRemove: () => void
 }
 
@@ -41,6 +44,7 @@ export function RuntimeServerRowMenuItems({
   showConnect,
   showDisconnect,
   showMakeDefault,
+  showRename,
   sshAccessLinked,
   detailsExpanded,
   actionBusy,
@@ -54,6 +58,7 @@ export function RuntimeServerRowMenuItems({
   onCheckForUpdates,
   onSshAccess,
   onToggleDetails,
+  onRename,
   onRemove
 }: RuntimeServerRowMenuProps): React.JSX.Element {
   const t = useTranslate()
@@ -107,6 +112,12 @@ export function RuntimeServerRowMenuItems({
           ? t('auto.components.settings.serverList.hideDetails', 'Hide details')
           : t('auto.components.settings.serverList.details', 'Details')}
       </DropdownMenuItem>
+      {showRename ? (
+        <DropdownMenuItem disabled={isBusy} onSelect={onRename}>
+          <Pencil />
+          {t('auto.components.settings.serverList.rename', 'Rename…')}
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuSeparator />
       {managedItems}
       <DropdownMenuItem variant="destructive" disabled={isBusy} onSelect={onRemove}>
