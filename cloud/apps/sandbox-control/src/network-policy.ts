@@ -33,6 +33,9 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   'nodejs.org',
   'archive.ubuntu.com',
   'security.ubuntu.com',
+  // Public clones/fetches work without a GitHub App install; a minted repo token adds the credential
+  // route on top (placeholder in, real token out, everything else on that host 403s).
+  'github.com',
   'codeload.github.com',
   'objects.githubusercontent.com',
   'raw.githubusercontent.com',
