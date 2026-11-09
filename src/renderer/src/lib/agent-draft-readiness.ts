@@ -1,8 +1,8 @@
-import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
-import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
-import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'
+import type { DraftPasteReadySignal } from '../../../shared/agent-launch/catalog/tui-agent-config-types'
+import { subscribeToPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions'
+import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
-import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
+import { subscribeToRuntimeTerminalData } from '@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription'
 import { createDraftPasteReadyScanner } from '../../../shared/draft-paste-ready-scanner'
 
 const BRACKETED_PASTE_QUIET_MS = 1500

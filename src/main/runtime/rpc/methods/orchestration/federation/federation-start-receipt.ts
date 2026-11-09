@@ -1,5 +1,5 @@
-import { formatTerminalStartFailure } from '../../../../../../shared/terminal-start-failure'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import { formatTerminalStartFailure } from '../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { isFederationEffectUnknown } from './federation-effects'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from '../worker/worker-launch-preferences'

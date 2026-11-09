@@ -1,9 +1,12 @@
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type {
-  FolderWorkspacePathStatus,
-  FolderWorkspacePathStatusReason
-} from '../../../shared/folder-workspace-path-status'
-import { blocksFolderWorkspaceActivation } from '../../../shared/folder-workspace-path-status'
+import type { Translate } from '@/i18n/use-translate'
+
+import {
+  type FolderWorkspacePathStatus,
+  type FolderWorkspacePathStatusReason,
+  blocksFolderWorkspaceActivation
+} from '../../../shared/folder-workspaces/folder-workspace-path-status'
 import { isHandledWireDiscriminant } from '../../../shared/handled-wire-discriminant'
 
 // Guard unknown RPC reasons at runtime; union-keyed records make newly known reasons fail typecheck here and in both switches.
@@ -20,48 +23,41 @@ function isHandledPathStatusReason(reason: unknown): boolean {
 }
 
 export function getFolderWorkspacePathStatusTitle(
-  status: FolderWorkspacePathStatus | null | undefined
+  status: FolderWorkspacePathStatus | null | undefined,
+  t: Translate = translate
 ): string | null {
   if (!status || status.exists) {
     return null
   }
   // Unknown wire values must not drop the marker and make a broken folder appear healthy.
   if (!isHandledPathStatusReason(status.reason)) {
-    return translate(
-      'auto.lib.folderWorkspacePathStatus.title.unrecognized',
-      'Folder is not usable'
-    )
+    return t('auto.lib.folderWorkspacePathStatus.title.unrecognized', 'Folder is not usable')
   }
   switch (status.reason) {
     case 'missing':
-      return translate('auto.lib.folderWorkspacePathStatus.title.missing', 'Folder not found')
+      return t('auto.lib.folderWorkspacePathStatus.title.missing', 'Folder not found')
     case 'not-directory':
-      return translate(
-        'auto.lib.folderWorkspacePathStatus.title.notDirectory',
-        'Path is not a folder'
-      )
+      return t('auto.lib.folderWorkspacePathStatus.title.notDirectory', 'Path is not a folder')
     case 'ambiguous-connection':
-      return translate(
+      return t(
         'auto.lib.folderWorkspacePathStatus.title.ambiguousConnection',
         'Cannot determine connection'
       )
     case undefined:
     case 'unavailable':
-      return translate(
-        'auto.lib.folderWorkspacePathStatus.title.unavailable',
-        'Cannot check folder'
-      )
+      return t('auto.lib.folderWorkspacePathStatus.title.unavailable', 'Cannot check folder')
   }
 }
 
 export function getFolderWorkspacePathStatusDescription(
-  status: FolderWorkspacePathStatus | null | undefined
+  status: FolderWorkspacePathStatus | null | undefined,
+  t: Translate = translate
 ): string | null {
   if (!status || status.exists) {
     return null
   }
   if (!isHandledPathStatusReason(status.reason)) {
-    return translate(
+    return t(
       'auto.lib.folderWorkspacePathStatus.description.unrecognized',
       'Orca cannot use {{path}}, and this version does not recognize the reason. Update Orca to see the details.',
       { path: status.path }
@@ -69,25 +65,25 @@ export function getFolderWorkspacePathStatusDescription(
   }
   switch (status.reason) {
     case 'missing':
-      return translate(
+      return t(
         'auto.lib.folderWorkspacePathStatus.description.missing',
         'Orca cannot find {{path}}. Remove and re-import this folder workspace.',
         { path: status.path }
       )
     case 'not-directory':
-      return translate(
+      return t(
         'auto.lib.folderWorkspacePathStatus.description.notDirectory',
         '{{path}} exists, but it is not a folder.',
         { path: status.path }
       )
     case 'ambiguous-connection':
-      return translate(
+      return t(
         'auto.lib.folderWorkspacePathStatus.description.ambiguousConnection',
         'Orca cannot tell which SSH connection owns this folder scope.'
       )
     case undefined:
     case 'unavailable':
-      return translate(
+      return t(
         'auto.lib.folderWorkspacePathStatus.description.unavailable',
         'Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.'
       )
@@ -196,4 +192,18 @@ export function folderWorkspaceActivationBlocked(
   status: FolderWorkspacePathStatus | null | undefined
 ): boolean {
   return blocksFolderWorkspaceActivation(status)
+}
+
+export function notifyBlockedFolderWorkspacePath(
+  status: FolderWorkspacePathStatus | null | undefined,
+  folderPath: string
+): void {
+  toast.error(
+    getFolderWorkspacePathStatusTitle(status) ??
+      translate(
+        'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
+        'Cannot open folder workspace'
+      ),
+    { description: getFolderWorkspacePathStatusDescription(status) ?? folderPath }
+  )
 }

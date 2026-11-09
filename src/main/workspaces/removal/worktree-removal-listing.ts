@@ -1,6 +1,9 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { areWorktreePathsEqual, canonicalWorktreePath } from '../../git/worktree-path-comparison'
+import {
+  areWorktreePathsEqual,
+  canonicalWorktreePath
+} from '../../git/worktrees/catalog/worktree-path-comparison'
 import { isRecordedCheckout, isUnregisteredRemovalLeftover } from './worktree-removal-leftover'
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import {

@@ -1,5 +1,5 @@
 import { translate } from '../i18n/mobile-i18n'
-import type { SourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control-primary-action-decision'
+import type { SourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control/decisions/source-control-primary-action-decision-types'
 
 // "Commit 2 files", "Push 3 commits": the commit area's action named with its count.
 export function getMobilePrimaryActionLabel(

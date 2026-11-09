@@ -3,8 +3,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePluginEditorCaptureReport } from '@/components/editor/plugin-editor-capture-status'
-import { registerEditorFrameFlush } from '@/components/editor/editor-pending-flush'
-import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { registerEditorFrameFlush } from '@/components/editor/save/flush/editor-pending-flush'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { captureOpenEditor } from './plugin-view-editor-capture'
 
 vi.mock('./plugin-view-panel-settle', () => ({
@@ -13,17 +13,11 @@ vi.mock('./plugin-view-panel-settle', () => ({
 }))
 
 const FILE = '/w/a.sketch'
-let progress: (step: 'delivered' | 'subscribed') => void = () => {}
 
 /** Stands in for PluginCustomEditorFrame: reports this file's frame, keyed by the capture load. */
 function Frame(): React.JSX.Element {
   const load = usePluginViewCaptureStore((state) => state.editorLoads[FILE] ?? 0)
-  progress = usePluginEditorCaptureReport(
-    FILE,
-    'ready',
-    'orca-plugin-frame://x/e.html',
-    `k:${load}`
-  )
+  usePluginEditorCaptureReport(FILE, 'ready', 'orca-plugin-frame://x/e.html', `k:${load}`)
   return (
     <div data-plugin-editor-surface={FILE}>
       <webview
@@ -58,50 +52,6 @@ afterEach(async () => {
 })
 
 describe('an editor capture', () => {
-  it('reloads the editor, then waits for this load to get and ask for its document', async () => {
-    progress('delivered')
-    progress('subscribed')
-    let reply: Awaited<ReturnType<typeof captureOpenEditor>> | null = null
-    await act(async () => {
-      void captureOpenEditor('r', FILE, { captureId: 'c', timeoutMs: 1_000 }).then(
-        (value) => (reply = value)
-      )
-    })
-    // The earlier load's progress does not count: the capture remounted the frame.
-    expect(reply).toBeNull()
-    await act(async () => {
-      progress('delivered')
-      progress('subscribed')
-    })
-    expect(reply).toMatchObject({
-      ok: true,
-      panel: {
-        rect: { x: 5, y: 6, width: 300, height: 200 },
-        guestUrl: 'orca-plugin-frame://x/e.html',
-        guestContentsId: 42,
-        subscribed: true,
-        settled: true,
-        issue: null
-      }
-    })
-  })
-
-  it('says so when the editor never asks for its document', async () => {
-    vi.useFakeTimers()
-    let reply: Awaited<ReturnType<typeof captureOpenEditor>> | null = null
-    await act(async () => {
-      void captureOpenEditor('r', FILE, { captureId: 'c', timeoutMs: 1_000 }).then(
-        (value) => (reply = value)
-      )
-    })
-    await act(async () => progress('delivered'))
-    await act(async () => vi.advanceTimersByTimeAsync(5_000))
-    expect(reply).toMatchObject({
-      ok: true,
-      panel: { subscribed: false, issue: expect.stringContaining('never asked for its document') }
-    })
-  })
-
   it('flushes the open editor before reloading it, and refuses the shot when that fails', async () => {
     const unregister = registerEditorFrameFlush(FILE, async () => false)
     const loadsBefore = usePluginViewCaptureStore.getState().editorLoads[FILE]

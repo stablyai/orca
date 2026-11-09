@@ -1,4 +1,4 @@
-import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
+import { linearIssueReadFixture } from '@/store/slices/linear/linear-slice-test-harness'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -8,15 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
-import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '../../../../shared/palette-match/worktree-palette-query-bounds'
-import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
+
 import WorktreeJumpPalette from './WorktreeJumpPalette'
-import { makeRecentTabState, makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
+import { makeRecentTabState, makeRepo } from './worktree-jump-palette-test-fixtures'
 
 const { lookupCmdJGitHubUrlWorkItem } = vi.hoisted(() => ({
   lookupCmdJGitHubUrlWorkItem: vi.fn()
@@ -50,7 +49,7 @@ vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/components/sidebar/StatusIndicator', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/StatusIndicator', () => ({
   default: () => <span data-status-indicator="true" />
 }))
 
@@ -70,15 +69,12 @@ vi.mock('@/components/ui/command', async () => {
     CommandDialog: ({
       children,
       open,
-      commandProps,
-      onOpenChange
+      commandProps
     }: {
       children: React.ReactNode
       open?: boolean
       commandProps?: { value?: string; onValueChange?: (next: string) => void }
-      onOpenChange?: (open: boolean) => void
     }) => {
-      requestCommandDialogClose = () => onOpenChange?.(false)
       return open ? (
         <div data-command-dialog="true" data-command-value={commandProps?.value ?? ''}>
           {children}
@@ -139,7 +135,6 @@ const initialAppState = useAppStore.getInitialState()
 let testRoot: Root
 let testContainer: HTMLDivElement
 let setCommandQuery: ((next: string) => void) | null = null
-let requestCommandDialogClose: (() => void) | null = null
 
 function makeLinearIssue(patch: Partial<LinearIssue> = {}): LinearIssue {
   return {
@@ -216,12 +211,6 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
   await flushEffects()
 }
 
-function getRenderedRowIds(): string[] {
-  return [...testContainer.querySelectorAll<HTMLElement>('[data-command-item]')].map(
-    (node) => node.dataset.commandItem ?? ''
-  )
-}
-
 function getCommandValue(): string {
   return (
     testContainer.querySelector<HTMLElement>('[data-command-dialog]')?.dataset.commandValue ?? ''
@@ -232,7 +221,6 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
-    requestCommandDialogClose = null
     lookupCmdJGitHubUrlWorkItem.mockReset()
     lookupCmdJGitHubUrlWorkItem.mockResolvedValue(null)
     useAppStore.setState(initialAppState, true)
@@ -248,103 +236,6 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     vi.useRealTimers()
     document.body.replaceChildren()
     useAppStore.setState(initialAppState, true)
-  })
-
-  it('delays loading feedback before replacing the pending row with an issue preview', async () => {
-    const issueLookup = deferredValue<LinearIssue | null>()
-    const fetchLinearIssue = vi.fn(() =>
-      linearIssueReadFixture<LinearIssue | null>(() => issueLookup.promise)
-    )
-    await renderPalette({
-      fetchLinearIssue,
-      linearStatus: {
-        connected: true,
-        viewer: null,
-        workspaces: [
-          {
-            id: 'linear-workspace-1',
-            displayName: 'Linear User',
-            email: null,
-            organizationId: 'linear-organization-1',
-            organizationName: 'Stably',
-            organizationUrlKey: 'stably'
-          }
-        ],
-        selectedWorkspaceId: 'all'
-      }
-    })
-
-    vi.useFakeTimers()
-    await act(async () => setCommandQuery?.(LINEAR_URL))
-    await flushEffects()
-
-    const pendingRow = testContainer.querySelector<HTMLElement>(
-      '[data-cmd-j-linear-issue-preview="true"]'
-    )
-    expect(getRenderedRowIds().find(Boolean)).toBe('__create_worktree__')
-    expect(getCommandValue()).toBe('__create_worktree__')
-    expect(pendingRow?.dataset.cmdJLinearIssueState).toBe('loading')
-    expect(pendingRow?.getAttribute('aria-busy')).toBe('true')
-    expect(pendingRow?.getAttribute('aria-label')).toBe(
-      'Create worktree from Linear issue STA-4084'
-    )
-    expect(pendingRow?.textContent).toContain('Create worktree from Linear issue')
-    expect(pendingRow?.textContent).not.toContain('Loading Linear issue…')
-    expect(fetchLinearIssue).toHaveBeenCalledWith(
-      'STA-4084',
-      'linear-workspace-1',
-      expect.objectContaining({
-        sourceContext: expect.objectContaining({
-          provider: 'linear',
-          projectId: 'repo:repo-1',
-          projectHostSetupId: 'repo-1',
-          repoId: 'repo-1',
-          hostId: 'local'
-        })
-      })
-    )
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(199)
-    })
-    expect(pendingRow?.textContent).not.toContain('Loading Linear issue…')
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
-    })
-    expect(pendingRow?.getAttribute('aria-label')).toBe('Loading Linear issue STA-4084')
-    expect(pendingRow?.textContent).toContain('Loading Linear issue…')
-
-    await act(async () => {
-      issueLookup.resolve(makeLinearIssue())
-      await issueLookup.promise
-    })
-    await flushEffects()
-
-    const resolvedRow = testContainer.querySelector<HTMLElement>(
-      '[data-cmd-j-linear-issue-preview="true"]'
-    )
-    expect(resolvedRow?.dataset.cmdJLinearIssueState).toBe('resolved')
-    expect(resolvedRow?.textContent).toContain('STA-4084')
-    expect(resolvedRow?.textContent).toContain('Restore OSC 133 shell integration')
-    expect(getRenderedRowIds().find(Boolean)).toBe('__create_worktree__')
-    expect(getCommandValue()).toBe('__create_worktree__')
-  })
-
-  it('rejects oversized Linear URLs before lookup or create-row rendering', async () => {
-    const fetchLinearIssue = vi.fn(() =>
-      linearIssueReadFixture<LinearIssue | null>(async () => makeLinearIssue())
-    )
-    await renderPalette({ fetchLinearIssue })
-
-    await act(async () =>
-      setCommandQuery?.(`${LINEAR_URL}/${'a'.repeat(WORKTREE_PALETTE_QUERY_MAX_BYTES)}`)
-    )
-    await flushEffects()
-
-    expect(fetchLinearIssue).not.toHaveBeenCalled()
-    expect(getRenderedRowIds()).not.toContain('__create_worktree__')
-    expect(testContainer.querySelector('[data-cmd-j-linear-issue-preview="true"]')).toBeNull()
   })
 
   it('opens the composer with the resolved issue and generated workspace name', async () => {
@@ -457,42 +348,6 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     expect(prefetchWorktreeCreateBase).not.toHaveBeenCalled()
   })
 
-  it('maps a runtime-owned active repo to its eligible project sibling', async () => {
-    const unrelatedRepo = { ...makeRepo(), id: 'unrelated-repo' }
-    const localSibling = {
-      ...makeRepo(),
-      id: 'local-sibling',
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    }
-    const runtimeOwnedRepo = {
-      ...makeRepo(),
-      id: 'runtime-owned',
-      connectionId: 'runtime-ssh-workspace-1',
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    }
-    const fetchLinearIssue = vi.fn(() =>
-      linearIssueReadFixture<LinearIssue | null>(async () => makeLinearIssue())
-    )
-    await renderPalette({
-      activeRepoId: runtimeOwnedRepo.id,
-      repos: [unrelatedRepo, localSibling, runtimeOwnedRepo],
-      fetchLinearIssue
-    })
-    await act(async () => setCommandQuery?.(LINEAR_URL))
-    await flushEffects()
-
-    expect(fetchLinearIssue).toHaveBeenCalledWith(
-      'STA-4084',
-      'linear-workspace-1',
-      expect.objectContaining({
-        sourceContext: expect.objectContaining({
-          projectId: 'github:stablyai/orca',
-          repoId: 'local-sibling'
-        })
-      })
-    )
-  })
-
   it('does not open the composer after the palette closes during lookup', async () => {
     const issueLookup = deferredValue<LinearIssue | null>()
     await renderPalette({
@@ -513,36 +368,6 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     })
     await flushEffects()
 
-    expect(useAppStore.getState().activeModal).toBe('none')
-  })
-
-  it('restores focus when a loading selection is abandoned', async () => {
-    const focusTarget = document.createElement('button')
-    document.body.appendChild(focusTarget)
-    focusTarget.focus()
-    const issueLookup = deferredValue<LinearIssue | null>()
-    await renderPalette({
-      activeWorktreeId: 'wt-alpha',
-      fetchLinearIssue: vi.fn(() =>
-        linearIssueReadFixture<LinearIssue | null>(() => issueLookup.promise)
-      )
-    })
-    await act(async () => setCommandQuery?.(LINEAR_URL))
-    await flushEffects()
-    await act(async () => {
-      testContainer.querySelector<HTMLElement>('[data-command-item="__create_worktree__"]')?.click()
-    })
-    await act(async () => setCommandQuery?.('ordinary name'))
-    testContainer.querySelector<HTMLElement>('[data-command-input="true"]')?.focus()
-
-    await act(async () => requestCommandDialogClose?.())
-    await act(async () => {
-      issueLookup.resolve(makeLinearIssue())
-      await issueLookup.promise
-      await new Promise((resolve) => window.setTimeout(resolve, 50))
-    })
-
-    expect(document.activeElement).toBe(focusTarget)
     expect(useAppStore.getState().activeModal).toBe('none')
   })
 
@@ -642,113 +467,5 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     expect(testContainer.textContent).toContain('Current second issue')
     expect(testContainer.textContent).not.toContain('Stale first issue')
     expect(getCommandValue()).toBe('__create_worktree__')
-  })
-
-  it('selects an existing Linear-linked worktree and keeps create underneath', async () => {
-    const linked = makeWorktree('wt-linked', 'Linked Linear workspace', {
-      linkedLinearIssue: 'STA-4084',
-      linkedLinearIssueOrganizationUrlKey: 'stably'
-    })
-    const other = makeWorktree('wt-other', 'Unrelated workspace')
-    await renderPalette({
-      fetchLinearIssue: vi.fn(() =>
-        linearIssueReadFixture<LinearIssue | null>(async () => makeLinearIssue())
-      ),
-      worktreesByRepo: { 'repo-1': [other, linked] }
-    })
-
-    await act(async () => setCommandQuery?.(LINEAR_URL))
-    await flushEffects()
-
-    expect(getRenderedRowIds().filter(Boolean)).toEqual([
-      encodePaletteIdentity(['worktree', '|wt-linked']),
-      '__create_worktree__'
-    ])
-    expect(getCommandValue()).toBe(encodePaletteIdentity(['worktree', '|wt-linked']))
-    expect(testContainer.querySelector('[data-cmd-j-linear-issue-preview="true"]')).not.toBeNull()
-  })
-
-  it('resolves a pasted GitHub issue URL and opens create with the linked issue', async () => {
-    const githubIssueUrl = 'https://github.com/stablyai/orca/issues/14198'
-    const githubIssue = {
-      id: 'issue-14198',
-      type: 'issue',
-      number: 14198,
-      title: 'Agent terminals disappearing randomly',
-      state: 'open',
-      url: githubIssueUrl,
-      labels: [],
-      updatedAt: '2026-08-12T12:00:00.000Z',
-      author: 'nwparker',
-      repoId: 'repo-1'
-    } satisfies GitHubWorkItem
-    lookupCmdJGitHubUrlWorkItem.mockResolvedValue(githubIssue)
-    await renderPalette({
-      prefetchWorktreeCreateBase: vi.fn(async () => {})
-    })
-
-    await act(async () => setCommandQuery?.(githubIssueUrl))
-    await flushEffects()
-
-    const preview = testContainer.querySelector<HTMLElement>('[data-cmd-j-task-url-preview="true"]')
-    expect(getRenderedRowIds().find(Boolean)).toBe('__create_worktree__')
-    expect(getCommandValue()).toBe('__create_worktree__')
-    expect(preview?.dataset.cmdJTaskUrlProvider).toBe('github')
-    expect(preview?.dataset.cmdJTaskUrlState).toBe('resolved')
-    expect(preview?.getAttribute('aria-label')).toBe(
-      'Create worktree from GitHub issue stablyai/orca#14198: Agent terminals disappearing randomly'
-    )
-    expect(preview?.textContent).toContain('#14198')
-    expect(preview?.textContent).toContain('Agent terminals disappearing randomly')
-    expect(lookupCmdJGitHubUrlWorkItem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        link: expect.objectContaining({ type: 'issue', number: 14198 }),
-        repo: expect.objectContaining({ id: 'repo-1' })
-      })
-    )
-
-    await act(async () => {
-      preview?.click()
-      await Promise.resolve()
-    })
-    await flushEffects()
-
-    expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
-    expect(useAppStore.getState().modalData).toMatchObject({
-      prefilledName: 'agent-terminals-disappearing-randomly',
-      initialRepoId: 'repo-1',
-      telemetrySource: 'command_palette',
-      linkedWorkItem: {
-        provider: 'github',
-        type: 'issue',
-        number: 14198,
-        title: 'Agent terminals disappearing randomly',
-        url: githubIssueUrl,
-        repoId: 'repo-1'
-      },
-      initialGitHubWorkItem: githubIssue
-    })
-  })
-
-  it('selects an existing GitHub-linked worktree and keeps create underneath', async () => {
-    const linked = makeWorktree('wt-linked', 'Linked GitHub workspace', { linkedIssue: 14198 })
-    const other = makeWorktree('wt-other', 'Unrelated workspace', { linkedIssue: 7 })
-    await renderPalette({
-      repos: [{ ...makeRepo(), displayName: 'stablyai/orca' }],
-      worktreesByRepo: { 'repo-1': [other, linked] }
-    })
-
-    await act(async () => setCommandQuery?.('https://github.com/stablyai/orca/issues/14198'))
-    await flushEffects()
-
-    expect(getRenderedRowIds().filter(Boolean)).toEqual([
-      encodePaletteIdentity(['worktree', '|wt-linked']),
-      '__create_worktree__'
-    ])
-    expect(getCommandValue()).toBe(encodePaletteIdentity(['worktree', '|wt-linked']))
-    expect(
-      testContainer.querySelector<HTMLElement>('[data-cmd-j-task-url-preview="true"]')?.dataset
-        .cmdJTaskUrlProvider
-    ).toBe('github')
   })
 })

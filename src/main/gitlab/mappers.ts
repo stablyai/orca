@@ -1,15 +1,13 @@
-import type { CheckStatus } from '../../shared/github/pull-request-types'
-import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
 import {
   mapGitLabPipelineJobStatusToCheckStatus,
   mapGitLabPipelineJobStatusToConclusion
-} from '../../shared/gitlab-pipeline-checks'
-import { summarizeProviderChecks } from '../../shared/provider-check-summary'
+} from '../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
+import type { CheckStatus } from '../../shared/github/pull-request-types'
+import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
+
+import { summarizeProviderChecks } from '../../shared/source-control/checks/provider-check-summary'
 
 // Split GitLab's combined job lifecycle/outcome into the common check-row shape.
-
-export const mapPipelineJobStatusToCheckStatus = mapGitLabPipelineJobStatusToCheckStatus
-export const mapPipelineJobStatusToConclusion = mapGitLabPipelineJobStatusToConclusion
 
 export function mapMRState(state: string, isDraft?: boolean, title?: string): MRState {
   const s = state?.toLowerCase()
@@ -166,8 +164,8 @@ export function derivePipelineStatus(
     rollup.map((job) => {
       const s = job.status?.toLowerCase() ?? ''
       return {
-        status: mapPipelineJobStatusToCheckStatus(s),
-        conclusion: mapPipelineJobStatusToConclusion(s)
+        status: mapGitLabPipelineJobStatusToCheckStatus(s),
+        conclusion: mapGitLabPipelineJobStatusToConclusion(s)
       }
     })
   )

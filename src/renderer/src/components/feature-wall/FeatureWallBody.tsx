@@ -17,12 +17,12 @@ import { BrowserAnimatedVisual } from './BrowserAnimatedVisual'
 import { AgentsOrchestrationVisual } from './AgentsOrchestrationVisual'
 import { ReviewAnimatedVisual } from './ReviewAnimatedVisual'
 import { GitHubRow, LinearRow } from '../onboarding/IntegrationsStep'
-import { OrchestrationSetupCard } from '../settings/OrchestrationSetupCard'
+import { OrchestrationSetupCard } from './OrchestrationSetupCard'
 import { BrowserUseSkillSetupCard } from './BrowserUseSkillSetupCard'
 import { UsageAccountsCard } from './agents-orchestration/UsageAccountsCard'
 import { AiCommitPrSettingsCard } from './AiCommitPrSettingsCard'
 import { KeepAwakeCard } from './KeepAwakeCard'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function FeatureWallBody(props: {
   selected: FeatureWallWorkflow
@@ -40,6 +40,7 @@ export function FeatureWallBody(props: {
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): JSX.Element {
+  const t = useTranslate()
   const {
     selected,
     posterUrl,
@@ -259,7 +260,7 @@ export function FeatureWallBody(props: {
           >
             <>
               <div className="text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                {translate('auto.components.feature.wall.FeatureWallBody.25ec5356d6', 'Setup')}
+                {t('auto.components.feature.wall.FeatureWallBody.25ec5356d6', 'Setup')}
               </div>
               {settingContent}
             </>

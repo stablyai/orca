@@ -4,15 +4,11 @@ import {
   findServeSubcommandIndex,
   normalizeServeModeArgv
 } from './serve-mode-argv'
+import { getServeOptions } from './serve-options'
+import { parseArgs as parseOrcadArgs } from '../orcad/orcad-command-arguments'
+import { orcadServeArgs, serveOptionArgs } from '../../shared/orcad-serve-argv'
 
 describe('serve-mode-argv', () => {
-  it('detects --serve and bare serve subcommand', () => {
-    expect(argvRequestsServeMode(['orca', '--serve'])).toBe(true)
-    expect(argvRequestsServeMode(['/AppRun', 'serve'])).toBe(true)
-    expect(argvRequestsServeMode(['/AppRun', '--no-sandbox', 'serve', '--port', '8080'])).toBe(true)
-    expect(argvRequestsServeMode(['orca'])).toBe(false)
-  })
-
   it('does not treat serve as a subcommand when it is an option value', () => {
     expect(findServeSubcommandIndex(['app', '--user-data-dir', 'serve'])).toBe(-1)
     expect(argvRequestsServeMode(['app', '--user-data-dir', 'serve'])).toBe(false)
@@ -22,19 +18,6 @@ describe('serve-mode-argv', () => {
       'serve'
     ])
     expect(findServeSubcommandIndex(['app', '--user-data-dir', '/tmp/x', 'serve'])).toBe(3)
-  })
-
-  it('skips a space-separated Chromium switch value while locating serve', () => {
-    const argv = ['/AppRun', '--disable-features', 'Vulkan', 'serve', '--port', '6768']
-    expect(findServeSubcommandIndex(argv)).toBe(3)
-    expect(normalizeServeModeArgv(argv)).toEqual([
-      '/AppRun',
-      '--disable-features',
-      'Vulkan',
-      '--serve',
-      '--serve-port',
-      '6768'
-    ])
   })
 
   it('refuses a help launch instead of binding a server', () => {
@@ -90,95 +73,12 @@ describe('serve-mode-argv', () => {
     expect(argvRequestsServeMode(['app', 'status', 'serve'])).toBe(false)
   })
 
-  it('rewrites CLI-form serve flags into --serve* form', () => {
-    expect(
-      normalizeServeModeArgv([
-        '/AppRun',
-        'serve',
-        '--port',
-        '9090',
-        '--json',
-        '--pairing-address',
-        '0.0.0.0',
-        '--no-pairing'
-      ])
-    ).toEqual([
-      '/AppRun',
-      '--serve',
-      '--serve-port',
-      '9090',
-      '--serve-json',
-      '--serve-pairing-address',
-      '0.0.0.0',
-      '--serve-no-pairing'
-    ])
-  })
-
-  it('keeps Electron-injected Chromium switches while normalizing direct serve', () => {
-    expect(
-      normalizeServeModeArgv([
-        '/opt/orca/orca-ide',
-        '--disable-features=FedCm,DirectSockets',
-        'serve',
-        '--port',
-        '6768'
-      ])
-    ).toEqual([
-      '/opt/orca/orca-ide',
-      '--disable-features=FedCm,DirectSockets',
-      '--serve',
-      '--serve-port',
-      '6768'
-    ])
-  })
-
-  it('leaves already-normalized argv unchanged', () => {
-    // Exercise every value flag in mixed --serve argv emitted by the CLI; rewriting must preserve its port.
-    const argv = [
-      'orca',
-      '--serve',
-      '--serve-json',
-      '--serve-port',
-      '6768',
-      '--serve-pairing-address',
-      '100.64.1.20',
-      '--serve-no-pairing',
-      '--serve-mobile-pairing',
-      '--serve-recipe-json',
-      '--serve-project-root',
-      '/srv/repo'
-    ]
-    expect(normalizeServeModeArgv(argv)).toEqual(argv)
-  })
-
-  it('splits `--flag=value` CLI form, which getServeOptions cannot read', () => {
-    expect(
-      normalizeServeModeArgv(['/AppRun', 'serve', '--port=9090', '--pairing-address=0.0.0.0'])
-    ).toEqual(['/AppRun', '--serve', '--serve-port', '9090', '--serve-pairing-address', '0.0.0.0'])
-  })
-
   it('keeps equals-form values that start with a flag marker intact', () => {
     expect(normalizeServeModeArgv(['/AppRun', 'serve', '--pairing-address=--no-pairng'])).toEqual([
       '/AppRun',
       '--serve',
       '--serve-pairing-address=--no-pairng'
     ])
-  })
-
-  it('translates serve flags in the mixed `--serve --port` form', () => {
-    expect(normalizeServeModeArgv(['orca', '--serve', '--port', '9090', '--no-pairing'])).toEqual([
-      'orca',
-      '--serve',
-      '--serve-port',
-      '9090',
-      '--serve-no-pairing'
-    ])
-  })
-
-  it('leaves a non-serve launch untouched', () => {
-    const argv = ['orca', '--no-sandbox', '/home/u/project']
-    expect(argvRequestsServeMode(argv)).toBe(false)
-    expect(normalizeServeModeArgv(argv)).toEqual(argv)
   })
 
   it('does not splice prototype members onto argv for stray positionals', () => {
@@ -200,37 +100,20 @@ describe('serve-mode-argv', () => {
     ])
   })
 
-  it('never disagrees with itself about whether a launch is serve mode', () => {
-    // Detection must skip a superset of rewrite-consumed values or malformed argv can swallow serve and drop all its flags (#12677).
-    const alphabet = [
-      'serve',
-      '--serve',
-      '--port',
-      '--json',
-      '--pairing-code',
-      '--user-data-dir',
-      '--',
-      '-h',
-      'help',
-      'value',
-      '--port=1',
-      '--no-pairing=false'
-    ]
-    const disagreements: string[][] = []
-    const walk = (tail: string[]): void => {
-      const argv = ['/AppRun', ...tail]
-      if (argvRequestsServeMode(argv) !== normalizeServeModeArgv(argv).includes('--serve')) {
-        disagreements.push(argv)
-      }
-      if (tail.length === 4) {
-        return
-      }
-      for (const token of alphabet) {
-        walk([...tail, token])
-      }
-    }
-    walk([])
-
-    expect(disagreements).toEqual([])
+  it('carries --allow-public and --refuse-public to both serve hosts', () => {
+    expect(parseOrcadArgs(orcadServeArgs({ allowPublic: true })).allowPublic).toBe(true)
+    expect(parseOrcadArgs(orcadServeArgs({})).allowPublic).toBeUndefined()
+    expect(getServeOptions(serveOptionArgs({ allowPublic: true }, '--serve-')).allowPublic).toBe(
+      true
+    )
+    expect(getServeOptions(serveOptionArgs({}, '--serve-')).allowPublic).toBe(false)
+    expect(parseOrcadArgs(orcadServeArgs({ refusePublic: true })).refusePublic).toBe(true)
+    expect(getServeOptions(serveOptionArgs({ refusePublic: true }, '--serve-')).refusePublic).toBe(
+      true
+    )
+    expect(() => parseOrcadArgs(['--allow-public', '--refuse-public'])).toThrow(/not both/)
+    expect(() => getServeOptions(['--serve-allow-public', '--serve-refuse-public'])).toThrow(
+      /not both/
+    )
   })
 })

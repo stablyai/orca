@@ -24,7 +24,7 @@ vi.mock('electron', () => ({
 vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
-vi.mock('../../shared/runtime-environment-store', () => ({
+vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: (_userDataPath: string, selector: string) => ({ id: selector })
 }))
 vi.mock('./clipboard-remote-file-copy', () => ({

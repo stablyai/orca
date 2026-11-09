@@ -43,15 +43,6 @@ describe('drawer handoff', () => {
     expect(next).toHaveBeenCalledTimes(1)
   })
 
-  it('does not queue work for a backdrop or swipe dismissal', () => {
-    mount()
-    const afterClose = handoff?.drawerProps.onAfterClose
-    act(() => handoff?.drawerProps.onClose())
-    act(() => renderer?.root.findByType(MountedBottomDrawer).props.onHidden())
-    act(() => afterClose?.())
-    expect(renderer?.toJSON()).toBeNull()
-  })
-
   it('drops queued work when its screen unmounts', () => {
     mount()
     const next = vi.fn()

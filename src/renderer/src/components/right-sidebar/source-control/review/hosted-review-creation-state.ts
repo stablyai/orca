@@ -1,7 +1,7 @@
 import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
-} from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 
 // Key every state by repo/worktree/branch to discard late responses after navigation.
 export type HostedReviewCreationState = {

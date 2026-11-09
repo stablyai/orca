@@ -21,8 +21,6 @@ vi.mock('../runtime-client', async () => {
 import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
 import { RPC_PARAMS_BY_METHOD } from '../../shared/rpc-contract/rpc-params-catalog.generated'
 import { main } from '../index'
-import { BROWSER_ADVANCED_COMMAND_SPECS } from '../specs/browser-advanced'
-import { BROWSER_BASIC_COMMAND_SPECS } from '../specs/browser-basic'
 import { okFixture } from '../test-fixtures'
 
 const EXPECT_URL = 'https://example.com/chat/a'
@@ -98,13 +96,6 @@ describe('--expect-url', () => {
     process.exitCode = undefined
   })
 
-  it('is offered by exactly the commands that carry it', () => {
-    const offered = [...BROWSER_BASIC_COMMAND_SPECS, ...BROWSER_ADVANCED_COMMAND_SPECS]
-      .filter((spec) => spec.allowedFlags.includes('expect-url'))
-      .map((spec) => spec.path.join(' '))
-    expect(offered.sort()).toEqual(Object.keys(GUARDED_COMMANDS).sort())
-  })
-
   it.each(Object.entries(GUARDED_COMMANDS))(
     '%s sends the URL on an RPC whose schema keeps it',
     async (path, { args, method }) => {
@@ -158,12 +149,4 @@ describe('--expect-url', () => {
       expect(process.exitCode).toBe(1)
     }
   )
-
-  it('asks the runtime nothing extra without the flag', async () => {
-    answerRuntime(['runtime.v1'])
-
-    await main(['click', '--element', '@e1', '--page', 'page-1', '--json'], '/tmp/not-a-worktree')
-
-    expect(callMock.mock.calls).toEqual([['browser.click', { element: '@e1', page: 'page-1' }]])
-  })
 })

@@ -4,7 +4,7 @@ import { ArrowRight, ChevronDown, ChevronRight, ExternalLink } from 'lucide-reac
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { JiraIssueRowCopyMenu } from '../../JiraIssueRowCopyMenu'
 import { JiraLinkedWorkspaceAction } from '../../JiraLinkedWorkspaceAction'
@@ -12,7 +12,7 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 import { jiraListColumnVisibility, type JiraListColumn } from '../../jira-list-columns'
 import { JiraIssueCell, JiraPriorityText, unassignedLabel } from './task-page-jira-issue-cells'
 import type { JiraIssue, JiraProjectStatusOrder } from '../../../../../shared/jira/jira-types'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export type TaskPageJiraIssueSection = {
   key: string
@@ -116,6 +116,7 @@ function JiraIssueRow({
   getIssueWorkspaces?: (issue: JiraIssue) => readonly Worktree[]
   onOpenWorkspace?: (workspace: Worktree) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const workspaces = getIssueWorkspaces?.(issue) ?? []
   const labels = issue.labels.slice(0, 3)
   const contextLabel =
@@ -171,7 +172,7 @@ function JiraIssueRow({
             </span>
             <JiraPriorityText issue={issue} className="shrink-0 text-2xs" />
             <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-              {issue.assignee?.displayName ?? unassignedLabel()}
+              {issue.assignee?.displayName ?? unassignedLabel(t)}
             </span>
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-1 @max-5xl:!hidden">
@@ -229,7 +230,7 @@ function JiraIssueRow({
                     event.stopPropagation()
                     onStartWorkspace(issue)
                   }}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.TaskPage.ff90d0abc7',
                     'Start workspace from {{value0}}',
                     { value0: issue.key }
@@ -239,7 +240,7 @@ function JiraIssueRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.components.TaskPage.9497f2787c', 'Start workspace')}
+                {t('auto.components.TaskPage.9497f2787c', 'Start workspace')}
               </TooltipContent>
             </Tooltip>
           )}
@@ -252,17 +253,15 @@ function JiraIssueRow({
                   event.stopPropagation()
                   openAppHttpLink(issue.url, { event })
                 }}
-                aria-label={translate(
-                  'auto.components.TaskPage.4ac8ff2275',
-                  'Open {{value0}} in Jira',
-                  { value0: issue.key }
-                )}
+                aria-label={t('auto.components.TaskPage.4ac8ff2275', 'Open {{value0}} in Jira', {
+                  value0: issue.key
+                })}
               >
                 <ExternalLink className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.TaskPage.eee68073b2', 'Open in Jira')}
+              {t('auto.components.TaskPage.eee68073b2', 'Open in Jira')}
             </TooltipContent>
           </Tooltip>
         </div>

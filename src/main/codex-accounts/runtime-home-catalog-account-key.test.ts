@@ -1,6 +1,6 @@
 import type * as NodeOs from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
@@ -31,14 +31,16 @@ vi.mock('node:os', async () => {
 })
 
 // Hook install and session bridges are launch chores outside the key; keep them off disk.
-vi.mock('../codex/hook-service', () => ({
+vi.mock('../codex/hooks/installation/hook-service', () => ({
   codexHookService: { prepareRuntimeHomeForLaunch: async () => ({ state: 'installed' }) }
 }))
-vi.mock('../codex/codex-hook-reconcile', () => ({ reconcileCodexHooksForLaunch: async () => {} }))
-vi.mock('../codex/codex-session-bridge', () => ({
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', () => ({
+  reconcileCodexHooksForLaunch: async () => {}
+}))
+vi.mock('../codex/history/bridges/codex-session-bridge', () => ({
   startSystemCodexSessionBridgeInBackground: async () => {}
 }))
-vi.mock('../codex/codex-account-session-bridge', () => ({
+vi.mock('../codex/history/bridges/codex-account-session-bridge', () => ({
   startCodexAccountSessionBridgeInBackground: async () => {}
 }))
 
@@ -48,7 +50,7 @@ async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) 
   const { mainProcessState } = await import('../startup/main-process-state')
   const { codexStructuredLaunchHomeResolvers } = await import('../startup/codex-launch-preparation')
   const { structuredAgentRuntimeRegistration } =
-    await import('../runtime/structured-agent-runtime-registrations')
+    await import('../runtime/agent-session/installation/structured-agent-runtime-registrations')
   const { agentModelCatalogFingerprint } =
     await import('../native-chat/agent-model-catalog/agent-model-catalog-fingerprint')
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the harness store implements the settings read/update surface the service uses.
@@ -60,7 +62,10 @@ async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) 
     prepareCodexLaunchHome: codexStructuredLaunchHomeResolvers.prepareCodexStructuredLaunch,
     readCodexLaunchHome: codexStructuredLaunchHomeResolvers.resolveCodexStructuredLaunchHome,
     workspaceTrustSettings: () => settings,
-    stateDirectory: '/orca-data'
+    workspaceTrustRepoDecision: () => undefined,
+    stateDirectory: '/orca-data',
+    hostLaunchEnvironment: async () => ({}),
+    hostSettings: () => ({})
   }
   const resolve = (purpose: 'launch' | 'read') =>
     codex.resolveAccountHome(

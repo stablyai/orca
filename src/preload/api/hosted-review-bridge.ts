@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { HostedReviewForBranchArgs } from '../../shared/hosted-review'
+import type { HostedReviewForBranchArgs } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PreloadApi } from '../api-types'
 
 export const hostedReviewApi = {

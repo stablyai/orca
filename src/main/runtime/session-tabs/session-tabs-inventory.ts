@@ -9,20 +9,18 @@ import type { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminal
 import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSessionTabsForWorktreeMethods } from './mobile-session-membership'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as PruneMobileSessionTabGroupLayoutMethods } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import { OrcaRuntimeWithSyncWindowGraph } from '../session-graph/session-window-graph'
-import {
-  mainTerminalSurfaces,
-  type MainTerminalSurfacesHost
-} from '../terminal/surface/main-terminal-surfaces'
-import type { WorkspaceLayoutReads } from '../workspace-layout-stream'
+import { mainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
+import type { MainTerminalSurfacesHost } from '../terminal/surface/main-terminal-surfaces-host'
+import type { WorkspaceLayoutReads } from '../terminal/surface/workspace-layout-stream'
+import type { MainSessionTabRows } from './main-session-tab-rows'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph
-} from '../../../shared/runtime-types'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
-import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
-import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { PaneStartStatuses } from '../pane-start-statuses'
+} from '../../../shared/runtime-session-contracts'
+import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
+import type { PtyControllerInventory } from '../terminal/lifecycle/runtime-pty-controller-contract'
+import type { PaneStartStatuses } from '../terminal/surface/pane-start-statuses'
 import {
   paneOfPty,
   type PtyPane,
@@ -55,6 +53,10 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     return (pty) => paneOfPty(pty, mainPane)
   }
 
+  protected savedStructuredSessionTabOrder(worktreeId: string): MainSessionTabRows | undefined {
+    return this.mainSurfaces().savedSessionTabsOf(worktreeId) ?? undefined
+  }
+
   private mainSurfaces(): ReturnType<typeof mainTerminalSurfaces> {
     const host = (): MainTerminalSurfacesHost => ({
       store: () => this.store,
@@ -67,7 +69,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null,
       readyGraphPublisher: () => (this.graphStatus === 'ready' ? this.authoritativeWindowId : null),
       publish: (publisher, next) => {
-        this.syncWindowGraph(publisher, next)
+        this.syncWindowGraph(publisher, next, { includeAgentSenders: false })
       },
       heldRows: () => this.mobileSessionTabsByWorktree,
       replaceHeldRows: (worktreeId, next) => {
@@ -145,9 +147,13 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     RestoreLivePairedRendererSessionOwnedMobileTerminalsMethods['restoreLivePairedRendererSessionOwnedMobileTerminals']
   >
 
-  protected abstract toMobileSessionTabsResult(
-    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsResult']>
-  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsResult']>
+  protected abstract toMobileSessionTabsFrame(
+    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
+  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
+
+  protected abstract toMobileSessionTabsFrames(
+    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrames']>
+  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrames']>
 
   protected abstract waitForSessionTabsInventoryPublication(
     ...args: Parameters<
@@ -172,7 +178,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
   async listMobileSessionTabs(
     worktreeSelector: string,
     clientNavigationId?: string,
-    options?: { includeInitialSurfaceLaunch?: true }
+    options?: { includeInitialSurfaceLaunch?: true; includeAgentSenders?: boolean }
   ): Promise<RuntimeMobileSessionTabsResult> {
     const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
     if (explicitWorktreeId) {
@@ -200,20 +206,28 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
   }
 
   async listAllMobileSessionTabs(
-    clientNavigationId?: string
+    clientNavigationId?: string,
+    options?: { includeAgentSenders?: boolean }
   ): Promise<RuntimeMobileSessionTabsResult[]> {
-    return (await this.listAllMobileSessionTabsWithChangeSequence(clientNavigationId)).snapshots
+    return (await this.listAllMobileSessionTabsWithChangeSequence(clientNavigationId, options))
+      .snapshots
   }
 
-  async listAllMobileSessionTabsWithChangeSequence(clientNavigationId?: string): Promise<{
+  async listAllMobileSessionTabsWithChangeSequence(
+    clientNavigationId?: string,
+    options?: { includeAgentSenders?: boolean }
+  ): Promise<{
     snapshots: RuntimeMobileSessionTabsResult[]
     changeSequence: number
   }> {
-    const inventory = await this.collectAllMobileSessionTabs(clientNavigationId)
+    const inventory = await this.collectAllMobileSessionTabs(clientNavigationId, options)
     return { snapshots: inventory.snapshots, changeSequence: inventory.changeSequence }
   }
 
-  protected async collectAllMobileSessionTabs(clientNavigationId?: string): Promise<{
+  protected async collectAllMobileSessionTabs(
+    clientNavigationId?: string,
+    options?: { includeAgentSenders?: boolean }
+  ): Promise<{
     snapshots: RuntimeMobileSessionTabsResult[]
     ptyInventory: PtyControllerInventory | null
     changeSequence: number
@@ -227,27 +241,31 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     const ptyInventory = await this.refreshMobileSessionPtyInventory()
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(null)
-    const snapshots = [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
-      this.projectMobileSessionTabsForClient(
-        this.toMobileSessionTabsResult(snapshot),
-        clientNavigationId
-      )
-    )
+    const snapshots = this.toMobileSessionTabsFrames(
+      this.mobileSessionTabsByWorktree.values(),
+      options?.includeAgentSenders
+    ).map((frame) => this.projectMobileSessionTabsForClient(frame, clientNavigationId))
     return { snapshots, ptyInventory, changeSequence: this.mobileSessionTabsChangeSequence }
   }
 
   async listAllMobileSessionTabsInventory(
     clientNavigationId?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: { includeAgentSenders?: boolean }
   ): Promise<{ snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: true }> {
     const { snapshots, authoritative } =
-      await this.listAllMobileSessionTabsInventoryWithChangeSequence(clientNavigationId, signal)
+      await this.listAllMobileSessionTabsInventoryWithChangeSequence(
+        clientNavigationId,
+        signal,
+        options
+      )
     return { snapshots, ...(authoritative ? { authoritative } : {}) }
   }
 
   async listAllMobileSessionTabsInventoryWithChangeSequence(
     clientNavigationId?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: { includeAgentSenders?: boolean }
   ): Promise<{
     snapshots: RuntimeMobileSessionTabsResult[]
     authoritative?: true
@@ -255,13 +273,13 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
   }> {
     this.assertSessionTabsInventoryRequestActive(signal)
     const primedPublicationEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
-    const primed = await this.collectAllMobileSessionTabs(clientNavigationId)
+    const primed = await this.collectAllMobileSessionTabs(clientNavigationId, options)
     this.assertSessionTabsInventoryRequestActive(signal)
     if (
       primedPublicationEpoch !== null &&
       this.getAuthoritativeSessionTabsInventoryEpoch() === primedPublicationEpoch
     ) {
-      return await this.settleSessionTabsInventory(primed, clientNavigationId, signal)
+      return await this.settleSessionTabsInventory(primed, clientNavigationId, signal, options)
     }
     while (true) {
       const publicationEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
@@ -269,10 +287,10 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
         await this.waitForSessionTabsInventoryPublication(signal)
         continue
       }
-      const inventory = await this.collectAllMobileSessionTabs(clientNavigationId)
+      const inventory = await this.collectAllMobileSessionTabs(clientNavigationId, options)
       this.assertSessionTabsInventoryRequestActive(signal)
       if (this.getAuthoritativeSessionTabsInventoryEpoch() === publicationEpoch) {
-        return await this.settleSessionTabsInventory(inventory, clientNavigationId, signal)
+        return await this.settleSessionTabsInventory(inventory, clientNavigationId, signal, options)
       }
     }
   }
@@ -284,7 +302,8 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       changeSequence: number
     },
     clientNavigationId?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: { includeAgentSenders?: boolean }
   ): Promise<{
     snapshots: RuntimeMobileSessionTabsResult[]
     authoritative?: true
@@ -297,7 +316,7 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
         changeSequence: inventory.changeSequence
       }
     }
-    const retried = await this.collectAllMobileSessionTabs(clientNavigationId)
+    const retried = await this.collectAllMobileSessionTabs(clientNavigationId, options)
     this.assertSessionTabsInventoryRequestActive(signal)
     return { snapshots: retried.snapshots, changeSequence: retried.changeSequence }
   }
@@ -306,20 +325,8 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     return process.env.ORCA_E2E_DISABLE_AUTHORITATIVE_SESSION_TABS_INVENTORY !== '1'
   }
 
-  protected assertSessionTabsInventoryRequestActive(signal?: AbortSignal): void {
-    if (signal?.aborted) {
-      throw new Error('client_disconnected')
-    }
-  }
-
-  protected isCompleteSessionTabsPtyCensus(inventory: PtyControllerInventory | null): boolean {
-    if (!inventory) {
-      return false
-    }
-    const knownHostIds = this.listKnownExecutionHostIds(inventory.queriedHostIds)
-    return ![...knownHostIds].some((hostId) => {
-      const parsed = parseExecutionHostId(hostId)
-      return parsed?.kind !== 'runtime' && !inventory.queriedHostIds.has(hostId)
-    })
-  }
+  protected abstract assertSessionTabsInventoryRequestActive(signal?: AbortSignal): void
+  protected abstract isCompleteSessionTabsPtyCensus(
+    inventory: PtyControllerInventory | null
+  ): boolean
 }

@@ -86,8 +86,8 @@ it("shows a chat's last answer on return, without its reports, until its new rea
   expect(currentValueOf(shown.optionSnapshot, 'effort')).toBe('low')
   expect(shown.conversationCommands).toEqual([COMMAND])
   expect(shown.acceptsImages).toBe(true)
-  // The process restarted and another device may have moved the chat while it was away.
-  expect(currentValueOf(shown.optionSnapshot, 'permissionMode')).toBeUndefined()
+  // Saved permission intent survives a restart independently of runtime reports.
+  expect(currentValueOf(shown.optionSnapshot, 'permissionMode')).toBe('own')
   expect(shown.sendSelection()).toEqual({ selection: {} })
 
   await act(async () => {
@@ -100,7 +100,7 @@ it("shows a chat's last answer on return, without its reports, until its new rea
   await settle()
   const answered = harness.current()
   expect(currentValueOf(answered.optionSnapshot, 'model')).toBe('gpt-live')
-  expect(currentValueOf(answered.optionSnapshot, 'permissionMode')).toBe('ask')
+  expect(currentValueOf(answered.optionSnapshot, 'permissionMode')).toBe('own')
   expect(answered.conversationCommands).toEqual([])
   expect(answered.sendSelection()).toEqual({ selection: { model: 'gpt-live', effort: 'low' } })
   await harness.unmount()

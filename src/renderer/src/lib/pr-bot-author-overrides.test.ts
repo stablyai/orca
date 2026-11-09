@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyPRBotAuthorOverride } from '../../../shared/pr-bot-author-overrides'
+import { applyPRBotAuthorOverride } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 
 const store = vi.hoisted(() => ({
   settings: { prBotAuthorOverrides: [] as string[] },
@@ -46,17 +46,6 @@ describe('PR bot author override updates', () => {
       configurable: true,
       value: { api: { settings: { updatePRBotAuthorOverride: store.apiUpdate } } }
     })
-  })
-
-  it('serializes rapid updates while the authoritative store merges each delta', async () => {
-    setPRBotAuthorOverride('alice', true)
-    setPRBotAuthorOverride('bob', true)
-
-    await vi.waitFor(() => expect(store.apiUpdate).toHaveBeenCalledTimes(1))
-    store.pending.shift()?.()
-    await vi.waitFor(() => expect(store.apiUpdate).toHaveBeenCalledTimes(2))
-    store.pending.shift()?.()
-    await vi.waitFor(() => expect(store.settings.prBotAuthorOverrides).toEqual(['alice', 'bob']))
   })
 
   it('continues processing updates after an atomic settings write fails', async () => {

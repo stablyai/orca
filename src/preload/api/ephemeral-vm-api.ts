@@ -1,8 +1,11 @@
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
-import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import type { PublicKnownRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../../shared/ephemeral-vm-recipe-diagnostics'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import type {
+  EphemeralVmProvisionedRuntimeRecord,
+  EphemeralVmRuntimeRecord
+} from '../../shared/ephemeral-vm-runtimes'
 import type { EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
 
 export type EphemeralVmApi = {
@@ -38,7 +41,7 @@ export type EphemeralVmApi = {
     | {
         ok: true
         connectionType: 'orca-server'
-        runtime: EphemeralVmRuntimeRecord
+        runtime: EphemeralVmProvisionedRuntimeRecord
         environment: PublicKnownRuntimeEnvironment
         stderr: string
         warnings: EphemeralVmRecipeResultWarning[]
@@ -46,7 +49,7 @@ export type EphemeralVmApi = {
     | {
         ok: true
         connectionType: 'ssh'
-        runtime: EphemeralVmRuntimeRecord
+        runtime: EphemeralVmProvisionedRuntimeRecord
         sshTargetId: string
         /** The managed Orca server the host runs; its workspace lives there. */
         environmentId?: string
@@ -68,6 +71,8 @@ export type EphemeralVmApi = {
   resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
+  /** Drops an interrupted write-ahead record that never received a recipe result. */
+  forgetRuntime: (args: { runtimeId: string }) => Promise<void>
   getCleanupCommand: (args: { runtimeId: string }) => Promise<{
     runtimeId: string
     command: string | null

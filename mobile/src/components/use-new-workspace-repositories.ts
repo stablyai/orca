@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { RpcClient } from '../transport/rpc-client'
-import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { cachedHostRepos } from '../host-screen/host-list-queries'
 import { listHostRepos } from '../worktree/server-repos'
 import { useServerRepos } from '../worktree/use-server-repos'
 import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
@@ -39,11 +40,10 @@ export function useNewWorkspaceRepositories(args: {
   retryLoad: () => void
 } {
   const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible } = args
-  const [initialRepos] = useState(() =>
-    hostId ? (getCachedRepos(hostId) as MobileWorkspaceRepo[] | null) : null
-  )
+  const queryClient = useQueryClient()
+  // The host list's repos, so the form opens with them while repo.list answers.
+  const [initialRepos] = useState(() => cachedHostRepos<MobileWorkspaceRepo>(queryClient, hostId))
   const [desktopRepos, setDesktopRepos] = useState<MobileWorkspaceRepo[]>(initialRepos ?? [])
-  const lastCachedDesktopRepos = useRef(desktopRepos)
   const addedReposRef = useRef<Map<string, MobileWorkspaceRepo>>(new Map())
   const [addedServerRepos, setAddedServerRepos] = useState<
     ReadonlyMap<ExecutionHostId, MobileWorkspaceRepo[]>
@@ -128,16 +128,6 @@ export function useNewWorkspaceRepositories(args: {
       stale = true
     }
   }, [visible, client, hostId, loadAttempt])
-
-  useEffect(() => {
-    if (lastCachedDesktopRepos.current === desktopRepos) {
-      return
-    }
-    lastCachedDesktopRepos.current = desktopRepos
-    if (hostId) {
-      setCachedRepos(hostId, desktopRepos)
-    }
-  }, [desktopRepos, hostId])
 
   function upsertRepo(repo: MobileWorkspaceRepo): void {
     addedReposRef.current.set(repo.id, repo)

@@ -1,3 +1,4 @@
+import type { SkillInstallProviderId } from '../../../shared/skill-install-providers'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -6,13 +7,13 @@ import {
 import {
   getManagedOrcadSshTargetId,
   type ManagedOrcadEnvironmentSummary
-} from '../../../shared/managed-orcad-execution-host'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+} from '../../../shared/execution-host/managed-orcad-execution-host'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /** The host whose Orca skills the Update dialog, badge and nudge plan and update. */
 export type BundledSkillTarget =
-  | { kind: 'local' }
+  | { kind: 'local'; agent?: SkillInstallProviderId }
   /** A paired server or the managed server on an SSH host; it plans its own disk. */
   | { kind: 'environment'; environmentId: string }
   /** An SSH host no Orca server serves yet: nothing can plan it until it connects. */
@@ -22,7 +23,7 @@ export type BundledSkillTarget =
 export function bundledSkillTargetKey(target: BundledSkillTarget): string {
   switch (target.kind) {
     case 'local':
-      return 'local'
+      return target.agent ? `local:${target.agent}` : 'local'
     case 'environment':
       return `runtime:${target.environmentId}`
     case 'ssh':

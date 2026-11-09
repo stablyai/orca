@@ -1,5 +1,5 @@
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session/agent-session-host-authority'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { ForegroundProcessEvidence } from '../../shared/foreground-process-evidence'
 import type { WslGuestRoot } from '../../shared/wsl-guest-root-marker'
 

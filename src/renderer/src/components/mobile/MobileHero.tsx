@@ -1,16 +1,14 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Copy } from 'lucide-react'
 import { cn } from '../../lib/utils'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
 import type { InstallCopy } from './mobile-platform-copy'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
-import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import { MobileHeroPairingStep } from './MobileHeroPairingStep'
 import { MobileAndroidInstallHelp } from './MobileAndroidInstallHelp'
-export { HeroIntro } from './MobileHeroIntro'
-export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type Platform = 'ios' | 'android'
 export type StepIndex = 0 | 1
@@ -38,7 +36,7 @@ type HeroFlowProps = {
   onRegeneratePairing: () => void
   canGeneratePairing: boolean
   onCopyPairingCode: () => void
-  networkInterfaces: readonly MobileNetworkInterface[]
+  networkInterfaces: readonly PairingNetworkInterface[]
   customAddresses: readonly string[]
   selectedAddress: string | undefined
   selectedAddressIsCustom: boolean
@@ -90,6 +88,7 @@ export function HeroFlow({
   onContinue,
   onDone
 }: HeroFlowProps): React.JSX.Element {
+  const t = useTranslate()
   const isLast = stepIdx === 1
   const screenRefs = useRef<(HTMLDivElement | null)[]>([])
   const [viewportHeight, setViewportHeight] = useState<number>()
@@ -130,14 +129,14 @@ export function HeroFlow({
               <div className="mp-eyebrow-row">
                 <div className="mp-step-num">{stepIdx + 1}</div>
                 <span className="mp-eyebrow">
-                  {translate('auto.components.mobile.MobileHero.92ddfdfa1f', 'Step 1 of 2')}
+                  {t('auto.components.mobile.MobileHero.92ddfdfa1f', 'Step 1 of 2')}
                 </span>
               </div>
               <h2 className="mp-h2">
-                {translate('auto.components.mobile.MobileHero.0d9b33299e', 'Download the app.')}
+                {t('auto.components.mobile.MobileHero.0d9b33299e', 'Download the app.')}
               </h2>
               <p className="mp-lead-sm">
-                {translate(
+                {t(
                   'auto.components.mobile.MobileHero.e75647ace0',
                   "Scan this download QR with your phone's camera. Already have Orca Mobile? Continue to step 2 for the pairing QR."
                 )}
@@ -150,7 +149,7 @@ export function HeroFlow({
                   onClick={() => onPlatformChange('ios')}
                 >
                   <IosBrandIcon />
-                  {translate('auto.components.mobile.MobileHero.711e6f4b47', 'iOS')}
+                  {t('auto.components.mobile.MobileHero.711e6f4b47', 'iOS')}
                 </button>
                 <button
                   type="button"
@@ -159,7 +158,7 @@ export function HeroFlow({
                   onClick={() => onPlatformChange('android')}
                 >
                   <AndroidLogo />
-                  {translate('auto.components.mobile.MobileHero.ac1eb64952', 'Android')}
+                  {t('auto.components.mobile.MobileHero.ac1eb64952', 'Android')}
                 </button>
               </div>
               <div className="mp-inline-actions">
@@ -168,7 +167,7 @@ export function HeroFlow({
                 </button>
                 <button type="button" className="mp-text-link" onClick={onCopyInstallUrl}>
                   <Copy className="size-3.5" />
-                  {translate('auto.components.mobile.MobileHero.aa97420ba4', 'Copy install link')}
+                  {t('auto.components.mobile.MobileHero.aa97420ba4', 'Copy install link')}
                 </button>
               </div>
               {platform === 'android' ? (
@@ -179,7 +178,7 @@ export function HeroFlow({
               {installQrUrl ? (
                 <img
                   src={installQrUrl}
-                  alt={translate('auto.components.mobile.MobileHero.3241f3c26a', 'Install QR')}
+                  alt={t('auto.components.mobile.MobileHero.3241f3c26a', 'Install QR')}
                 />
               ) : null}
             </div>
@@ -226,7 +225,7 @@ export function HeroFlow({
       <div className="mp-flow-actions">
         <button type="button" className="mp-flow-back" onClick={onBack}>
           <ArrowLeft className="size-3" />
-          {translate('auto.components.mobile.MobileHero.b622eba64d', 'Back')}
+          {t('auto.components.mobile.MobileHero.b622eba64d', 'Back')}
         </button>
         {isLast ? (
           onDone ? (
@@ -235,7 +234,7 @@ export function HeroFlow({
               className="mp-primary-action mp-flow-primary-action"
               onClick={onDone}
             >
-              {translate('auto.components.mobile.MobileHero.3f90dbd274', 'Done')}
+              {t('auto.components.mobile.MobileHero.3f90dbd274', 'Done')}
               <ArrowRight className="size-3.5" />
             </button>
           ) : (
@@ -247,7 +246,7 @@ export function HeroFlow({
             className="mp-flow-continue mp-flow-primary-action"
             onClick={onContinue}
           >
-            {translate('auto.components.mobile.MobileHero.a8fb43cf1c', 'Continue')}
+            {t('auto.components.mobile.MobileHero.a8fb43cf1c', 'Continue')}
             <ArrowRight className="size-3.5" />
           </button>
         )}

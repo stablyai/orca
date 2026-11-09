@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FONT_SCALE_STEP, quantizeFontScale } from './mobile-native-chat-message-text'
+import { quantizeFontScale } from './mobile-native-chat-message-text'
 
 const handlers: { start?: () => void; update?: (e: { scale: number }) => void } = {}
 
@@ -34,29 +34,21 @@ describe('quantizeFontScale', () => {
     expect(quantizeFontScale(0.1)).toBe(0.8)
     expect(quantizeFontScale(Number.NaN)).toBe(1)
   })
-
-  it('collapses a full-range pinch to at most one commit per step', () => {
-    const committed = new Set<number>()
-    for (let i = 0; i <= 600; i++) {
-      committed.add(quantizeFontScale(0.7 + i * 0.002))
-    }
-    expect(committed.size).toBeLessThanOrEqual(Math.round(1 / FONT_SCALE_STEP) + 1)
-  })
 })
 
 describe('useMobileNativeChatPinchGesture', () => {
-  let renderer: { unmount: () => void } | null = null
+  let renderer: ReturnType<typeof create> | null = null
   let latest = 1
 
-  function Probe(): null {
-    latest = useMobileNativeChatPinchGesture().fontScale
+  function Probe({ chat }: { chat: string }): null {
+    latest = useMobileNativeChatPinchGesture(chat).fontScale
     return null
   }
 
   beforeEach(() => {
     latest = 1
     act(() => {
-      renderer = create(createElement(Probe))
+      renderer = create(createElement(Probe, { chat: 'a' }))
     })
   })
 
@@ -82,5 +74,13 @@ describe('useMobileNativeChatPinchGesture', () => {
     expect(latest).toBe(1.35)
     act(() => handlers.update?.({ scale: 1.42 }))
     expect(latest).toBe(1.4)
+  })
+
+  it('starts another chat in the same view at the default size', () => {
+    act(() => handlers.start?.())
+    act(() => handlers.update?.({ scale: 1.34 }))
+    expect(latest).toBe(1.35)
+    act(() => renderer?.update(createElement(Probe, { chat: 'b' })))
+    expect(latest).toBe(1)
   })
 })

@@ -1,7 +1,16 @@
-import type { Automation, AutomationUpdateInput } from '../../../../shared/automations-types'
-import { hasExtraAgentArgs } from '../../../../shared/automation-extra-agent-args'
+import { encodeAutomationLaunchEdit } from '../../../../shared/automations/launch/automation-launch-source-edits'
+import {
+  applyAutomationLaunchSetupPatch,
+  hasModernAutomationLaunchSetup
+} from '../../../../shared/automations/launch/automation-launch-setup'
+import { automationCanonicalLaunchSetup } from '../../../../shared/automations/launch/automation-canonical-launch-setup'
+import type {
+  Automation,
+  AutomationUpdateInput,
+  AutomationCreateInput
+} from '../../../../shared/automations/automation-definition'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { AUTOMATION_SURFACE_RUNTIME_CAPABILITY } from '../../../../shared/automations/automation-runtime-capabilities'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
@@ -12,8 +21,8 @@ import {
   buildAgentLaunchRouteInput,
   type AgentLaunchRouteStore,
   type ProspectiveWorkspace
-} from '@/lib/agent-launch-route-input'
-import { structuredAgentLaunchSupport } from '@/lib/agent-launch-routing'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { structuredAgentLaunchSupport } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import type { AutomationCreateDestinationResolution } from './automation-create-destination'
 
@@ -87,12 +96,18 @@ export function automationDraftSurface(
 }
 
 export function automationDraftLaunchSetup(
-  draft: Pick<AutomationDraft, 'extraAgentArgs'>,
+  draft: Pick<AutomationDraft, 'extraAgentArgs' | 'launchSetupPatch'>,
   surface: 'chat' | 'terminal',
   currentAutomation: Automation | null
 ): Pick<AutomationUpdateInput, 'launchSetupPatch' | 'extraAgentArgs'> {
+  if (draft.launchSetupPatch) {
+    return { launchSetupPatch: encodeAutomationLaunchEdit(draft.launchSetupPatch, surface) }
+  }
   const argumentsChanged =
-    hasExtraAgentArgs(draft.extraAgentArgs) || currentAutomation?.extraAgentArgs
+    draft.extraAgentArgs !==
+    (currentAutomation
+      ? (automationCanonicalLaunchSetup(currentAutomation).extraAgentArgs ?? '')
+      : '')
   return surface === 'chat' || currentAutomation?.surface === 'chat'
     ? {
         launchSetupPatch: {
@@ -105,4 +120,51 @@ export function automationDraftLaunchSetup(
     : argumentsChanged
       ? { extraAgentArgs: draft.extraAgentArgs }
       : {}
+}
+
+export function automationCopyLaunchSetup(
+  current: Automation | null,
+  updates: AutomationUpdateInput,
+  input: AutomationCreateInput
+): AutomationCreateInput {
+  if (!current && input.launchSetupPatch?.sources === undefined) {
+    return input
+  }
+  const copied = applyAutomationLaunchSetupPatch(
+    current ? { ...updates, agentId: updates.agentId ?? current.agentId } : input,
+    current ?? undefined
+  )
+  const canonical = automationCanonicalLaunchSetup(copied)
+  if (!hasModernAutomationLaunchSetup(canonical)) {
+    const patch = current ? updates.launchSetupPatch : input.launchSetupPatch
+    const modernIntent =
+      patch?.copy !== undefined ||
+      patch?.choices !== undefined ||
+      (patch?.arguments !== undefined && patch.arguments.kind !== 'legacy-extras') ||
+      patch?.sources?.arguments !== undefined ||
+      Boolean(patch?.sources?.retiredChoices?.length)
+    if (modernIntent) {
+      return input
+    }
+    const { extraAgentArgs: _extras, launchSetupPatch: _patch, ...rest } = input
+    return input.launchSetupPatch || canonical.surface !== undefined
+      ? {
+          ...rest,
+          launchSetupPatch: {
+            ...(canonical.surface !== undefined ? { surface: canonical.surface } : {}),
+            arguments: { kind: 'legacy-extras', value: canonical.extraAgentArgs ?? '' }
+          }
+        }
+      : {
+          ...rest,
+          ...(canonical.extraAgentArgs !== undefined
+            ? { extraAgentArgs: canonical.extraAgentArgs }
+            : {})
+        }
+  }
+  if (!current) {
+    return input
+  }
+  const { extraAgentArgs: _extras, ...rest } = input
+  return { ...rest, launchSetupPatch: { copy: canonical } }
 }

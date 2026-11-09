@@ -8,6 +8,7 @@ import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
 import { getRequiredEntry } from './issue-context/client'
+import { readLinearIssueDetail } from './linear-issue-detail'
 import { getDescriptionImageUrls } from './linear-description-images'
 import {
   ATTACHMENT_BY_UUID_QUERY,
@@ -21,7 +22,6 @@ import {
   type LinearRawVariables
 } from './linear-issue-query-documents'
 import {
-  mapIssueForWorkspace,
   mapRawIssueForWorkspace,
   shouldThrowAuthError,
   sortAndLimitIssues
@@ -67,11 +67,10 @@ async function readIssueWithSignal(
   for (const entry of entries) {
     await acquire(signal)
     try {
-      const issue = await entry.client.issue(id)
-      const mapped = await mapIssueForWorkspace(entry, issue, {
-        includeChildren: true,
-        includeProject: true
-      })
+      const mapped = await readLinearIssueDetail(entry, id)
+      if (!mapped) {
+        continue
+      }
       const descriptionImageUrls = await getDescriptionImageUrls(
         entry,
         mapped.id,

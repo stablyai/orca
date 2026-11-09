@@ -20,7 +20,7 @@ import {
   getWorktreePathSettings,
   hasRepoWorktreeBasePath
 } from '../../../ipc/worktree-logic'
-import { worktreePathComparisonKey } from '../../../worktree-path-comparison-key'
+import { worktreePathComparisonKey } from '../../catalog/worktree-path-comparison-key'
 import {
   retirementHostIdentity,
   retirementNamespaceKey,
@@ -29,10 +29,10 @@ import {
 } from './worktree-retirement-namespace'
 import { discoverRetiredWorktreeNames } from './worktree-retirement-discovery'
 import { runRetirementBackfillScan } from './worktree-retirement-backfill-scan'
-import { hasCachedWslHome } from '../../../wsl-home-cache'
-import { parseWslPath } from '../../../wsl'
-import { getWorktreeMirrorDistro } from '../../../project-runtime-git-options'
-import type { ProjectRuntimeResolutionStore } from '../../../local-project-runtime-resolution'
+import { hasCachedWslHome } from '../../../wsl/discovery/wsl-home-cache'
+import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
+import { getWorktreeMirrorDistro } from '../../execution-host/project-runtime-git-options'
+import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
 
 const RETIREMENT_PROBE_NAME = 'orca-retirement-probe'
 

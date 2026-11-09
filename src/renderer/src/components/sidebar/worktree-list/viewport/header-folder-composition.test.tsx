@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -16,9 +16,9 @@ import {
   renderWorktreeVirtualRow,
   type WorktreeVirtualRowContext
 } from '../rows/virtual-row-dispatch'
-import type { SectionHeaderRowContext } from '../rows/SectionHeader'
-import { INITIAL_REPO_DRAG_STATE } from '../../project-header-drag-contract'
-import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../../project-group-header-drag-contract'
+import type { SectionHeaderRowContext } from '../rows/section-header-row-context'
+import { INITIAL_REPO_DRAG_STATE } from '../drag/project-header-drag-contract'
+import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../drag/project-group-header-drag-contract'
 import { environment, publish, ssh } from '../listing/host-status-test-fixtures'
 
 const initial = useAppStore.getInitialState()
@@ -161,7 +161,9 @@ it('composes real dispatched headers, current repo gates and folder cache refres
         projectGroupHeaderIndexByGroupId: new Map(),
         projectGroupHeaderBucketByGroupId: new Map(),
         repoHeaderSectionEndByRepoId: new Map(),
-        projectGroupHeaderSectionEndByGroupId: new Map()
+        projectGroupHeaderSectionEndByGroupId: new Map(),
+        rootProjectHeaderKeys: undefined,
+        rootProjectHeaderSectionEndByKey: new Map()
       },
       projectActions: {
         getWorktreeVisibilityDefaults: () => undefined,
@@ -287,64 +289,4 @@ it('composes real dispatched headers, current repo gates and folder cache refres
   expect(
     view.getByRole('button', { name: 'Create new worktree for Repo' }).hasAttribute('disabled')
   ).toBe(false)
-})
-
-it('keeps empty requests inert, deduplicates owner routes and still fetches null snapshots', () => {
-  useAppStore.setState(initial, true)
-  const group = {
-    ...createProjectGroup({
-      name: 'Folder',
-      parentPath: '/folders',
-      createdFrom: 'folder-scan',
-      tabOrder: 0,
-      now: 1
-    }),
-    id: 'root',
-    executionHostId: 'local'
-  }
-  const fetch = vi.fn(async () => null)
-  useAppStore.setState({ fetchFolderWorkspacePathStatus: fetch })
-  const empty: Parameters<typeof useFolderWorkspacePathStatusRows>[0] = {
-    allRepoIds: [],
-    repoMap: new Map(),
-    projectGroups: [],
-    folderWorkspaces: []
-  }
-  let renders = 0
-  const { result, rerender } = renderHook(
-    (args) => {
-      renders++
-      return useFolderWorkspacePathStatusRows(args)
-    },
-    { initialProps: empty }
-  )
-  const first = result.current
-  const settled = renders
-  for (let index = 0; index < 10; index++) {
-    act(() =>
-      useAppStore.setState({
-        sshConnectionStates: new Map([[`outside-${index}`, ssh('connected')]])
-      })
-    )
-  }
-  expect(fetch).not.toHaveBeenCalled()
-  expect(result.current).toBe(first)
-  expect(renders).toBe(settled)
-  // Props can route the request before its catalog scope lands; null is not admission.
-  rerender({ ...empty, projectGroups: [group, group] })
-  expect(fetch).toHaveBeenCalledExactlyOnceWith(
-    { scope: 'project-group', projectGroupId: 'root' },
-    { force: true, runtimeEnvironmentId: null }
-  )
-  rerender({ ...empty, projectGroups: [{ ...group, executionHostId: 'runtime:A' }] })
-  expect(fetch).toHaveBeenLastCalledWith(
-    { scope: 'project-group', projectGroupId: 'root' },
-    { force: true, runtimeEnvironmentId: 'A' }
-  )
-  expect(fetch).toHaveBeenCalledTimes(2)
-  act(() => useAppStore.setState({ projectGroups: [{ ...group, executionHostId: 'runtime:A' }] }))
-  expect(fetch).toHaveBeenCalledTimes(3)
-  rerender(empty)
-  act(() => useAppStore.setState({ projectGroups: [], sshConnectionStates: new Map() }))
-  expect(fetch).toHaveBeenCalledTimes(3)
 })

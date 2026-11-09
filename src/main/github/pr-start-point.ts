@@ -3,10 +3,8 @@ import type { IssueSourcePreference } from '../../shared/repo-types'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../shared/worktree/types'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
-import {
-  isMissingRemoteRefGitError,
-  isTransientReviewHeadFetchError
-} from '../git/fetch-error-classification'
+import { isMissingRemoteRefGitError } from '../../shared/git/refs/git-missing-remote-ref'
+import { isTransientReviewHeadFetchError } from '../git/fetch-error-classification'
 import { getPullRequestPushTarget, getWorkItem } from './client'
 import {
   githubPullRequestHeadLocalRef,

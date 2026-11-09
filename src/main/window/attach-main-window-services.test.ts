@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence/loading-store/store'
-import { cancelHistoryGc } from '../terminal-history-gc'
+import { cancelHistoryGc } from '../pty/history/terminal-history-gc'
 import type { registerSshHandlers } from '../ipc/ssh/ssh'
 import type { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
 import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup/workspace-cleanup'
@@ -108,7 +108,7 @@ vi.mock('../ipc/worktrees', () => ({
   registerWorktreeHandlers: registerWorktreeHandlersMock
 }))
 
-vi.mock('../ipc/worktree-change-invalidators', () => ({
+vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({
   runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 
@@ -135,20 +135,20 @@ vi.mock('../ipc/worktrees/creation/worktree-base-directory-watcher', () => ({
   scheduleWorktreeBaseDirectoryWatcherSync: scheduleWorktreeBaseDirectoryWatcherSyncMock
 }))
 
-vi.mock('../browser/browser-manager', () => ({
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     unregisterAll: browserManagerUnregisterAllMock
   }
 }))
 
-vi.mock('../updater', () => ({
+vi.mock('../updater/updater-service', () => ({
   checkForUpdates: vi.fn(),
   getUpdateStatus: vi.fn(),
   quitAndInstall: vi.fn(),
   dismissNudge: vi.fn(),
   setupAutoUpdater: setupAutoUpdaterMock
 }))
-vi.mock('../updater/electron-updater-proxy-session', () => ({
+vi.mock('../updater/lifecycle/electron-updater-proxy-session', () => ({
   applyProxyToElectronUpdaterSession: vi.fn()
 }))
 

@@ -1,13 +1,13 @@
 import { translate } from '../i18n/mobile-i18n'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import { resolveCreateReviewSeedFromCommits } from '../../../src/shared/hosted-review-create-seed'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import { resolveCreateReviewSeedFromCommits } from '../../../src/shared/source-control/hosted-review/hosted-review-create-seed'
 import {
   normalizeCreateReviewBaseSearchResults,
   normalizeHostedReviewBaseRef
-} from '../../../src/shared/hosted-review-refs'
+} from '../../../src/shared/source-control/hosted-review/hosted-review-refs'
 import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../src/shared/text-generation-client-timeout'
-import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
+import type { HostedReviewProvider } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import { fetchMobileGitHistory } from './mobile-git-history'
 import type { MobileGitHistoryItem, MobileGitHistoryResult } from './git-history-reply-schema'

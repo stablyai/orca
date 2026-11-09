@@ -1,4 +1,4 @@
 export function useOrchestrationPanelEnabled(): boolean {
-  // Suspended: panel subscriptions amplify status updates into host-wide reads and copies.
+  // Suspended after repeated performance regressions; saved opt-ins must not mount producers.
   return false
 }

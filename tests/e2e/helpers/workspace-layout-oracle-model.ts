@@ -1,7 +1,7 @@
 // Compare groups/order, all tab kinds, pane tree/bindings and custom titles; omit viewer-owned selection, focus, sizes and scroll.
 
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { TerminalPaneLayoutNode } from '../../../src/shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../src/shared/workspace-layout/terminal-tab-types'
 import {
   checkWorkspaceLayoutRules,
   type WorkspaceLayoutPartition,

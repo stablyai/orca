@@ -1,5 +1,5 @@
 import type { MutableRefObject } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useMobileNativeChatPermissionSend } from './native-chat/input/mobile-native-chat-permission-send'
 import { useMobileNativeChatAnswerSend } from './native-chat/input/use-mobile-native-chat-answer-send'
 import { useMobileNativeChatCancelAsk } from './native-chat/input/use-mobile-native-chat-cancel-ask'

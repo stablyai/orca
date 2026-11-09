@@ -5,7 +5,7 @@ import { useDaemonActions } from '../shared/useDaemonActions'
 import type { UnifiedSessionRow } from './resource-usage-merge-types'
 import type { ResourceSessionBindingInputs } from './resource-session-bindings'
 import type { SortOption } from './resource-usage-resource-tree'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   getResourceUsageAllWorktrees,
   getResourceUsageBrowserTabsByWorktree,
@@ -36,12 +36,14 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useResourceViewVisible } from './use-resource-view-visible'
 import { useResourcePtyActions } from './use-resource-pty-actions'
 import { useResourceMemorySnapshot } from './use-resource-memory-snapshot'
+import { useTranslate } from '@/i18n/use-translate'
 
 let lastSelectedResourceTab: 'resources' | 'ptys' = 'resources'
 
 const POLL_MS = 2_000
 
 export function useResourceUsageStatusController() {
+  const t = useTranslate()
   const snapshot = useAppStore((s) => s.memorySnapshot)
   const memorySnapshotError = useAppStore((s) => s.memorySnapshotError)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
@@ -139,9 +141,9 @@ export function useResourceUsageStatusController() {
       environmentId
     return {
       runtimeHostResources: toRuntimeHostResourceSamples(runtimeHostResults, hostLabel),
-      runtimeHostNotices: getRuntimeHostResourceNotices(runtimeHostResults, hostLabel)
+      runtimeHostNotices: getRuntimeHostResourceNotices(runtimeHostResults, hostLabel, t)
     }
-  }, [runtimeHostResults, runtimeEnvironments])
+  }, [runtimeHostResults, runtimeEnvironments, t])
   // Why: ptyIdsByTabId tracks mounted/live panes only; Resource Manager reads restored wake hints only for classification.
   const resourceSessionBindings = useMemo<ResourceSessionBindingInputs>(
     () => ({

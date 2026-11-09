@@ -1,16 +1,14 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
-import {
-  getRecentlyClosedTabPosition,
-  pushClosedTerminalTabSnapshot,
-  pushRecentlyClosedTabKind
-} from '../slices/recently-closed-tabs'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { sweepRetiredTerminalTabState } from './retired-terminal-tab-state-sweep'
+import { getRecentlyClosedTabPosition } from '../slices/tabs/recently-closed-tab-position'
+import { pushClosedTerminalTabSnapshot } from './recently-closed-terminal-tabs'
+import { pushRecentlyClosedTabKind } from '../slices/tabs/recently-closed-tabs'
 // Use store-free registry to avoid reentering slice creation through terminal-parked-tab-watchers.
-import { retireParkedTerminalTab } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import { retireParkedTerminalTab } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import {
   buildTerminalTabRetirementPlan,
   removeSleepingAgentSessionsForTab
-} from '../slices/terminal-tab-retirement'
+} from './terminal-tab-retirement'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { stopLegacyRelayBridgedShellsForTab } from './legacy-relay-bridged-tab-close'
@@ -21,12 +19,12 @@ import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { removePaneKeysByTabPrefix } from '../slices/agent-status/agent-status-pane-keyed-records'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
-import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/native-chat-composer-draft-store'
-import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-launch-pane-closes'
-import { settleAgentLaunchPaneStart } from '@/lib/agent-launch-pane-start'
+import { deleteNativeChatComposerDraftsForTab } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
+import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane/agent-launch-pane-closes'
+import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
-import { runAsAutomaticDeselection } from '../active-worktree-deselection-intent'
+import { runAsAutomaticDeselection } from '../workspaces/selection/active-worktree-deselection-intent'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,

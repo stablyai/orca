@@ -4,11 +4,54 @@ import type {
   AgentSessionFailureSay
 } from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
+import { AGENT_SESSION_FAILURE_COPY } from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { START_FAILURE_COPY } from './agent-session-start-failure-copy'
 import { SEND_FAILURE_COPY } from './agent-session-send-failure-copy'
 
 const COPY: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> = {
   ...START_FAILURE_COPY,
+  forkOriginalMissing: (values) =>
+    translate(
+      'session.failure.forkOriginalMissing',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalMissing,
+      values
+    ),
+  forkOriginalUnavailable: (values) =>
+    translate(
+      'session.failure.forkOriginalUnavailable',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalUnavailable,
+      values
+    ),
+  forkOriginalMissingNamed: (values) =>
+    translate(
+      'session.failure.forkOriginalMissingNamed',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalMissingNamed,
+      values
+    ),
+  forkOriginalUnavailableNamed: (values) =>
+    translate(
+      'session.failure.forkOriginalUnavailableNamed',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalUnavailableNamed,
+      values
+    ),
+  forkOriginalLatestOnly: (values) =>
+    translate(
+      'session.failure.forkOriginalLatestOnly',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalLatestOnly,
+      values
+    ),
+  forkOriginalLatestOnlyNamed: (values) =>
+    translate(
+      'session.failure.forkOriginalLatestOnlyNamed',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalLatestOnlyNamed,
+      values
+    ),
+  pluginInputRequired: (values) =>
+    translate(
+      'session.failure.pluginInputRequired',
+      AGENT_SESSION_FAILURE_COPY.pluginInputRequired,
+      values
+    ),
   ...SEND_FAILURE_COPY,
   backgroundTasksRunning: (values) =>
     translate(

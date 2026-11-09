@@ -3,7 +3,7 @@ import { requestMobileCommitMessage } from './mobile-commit-message-ai'
 import { getStageablePaths, type MobileGitStatusResult } from './mobile-git-status'
 import { getMobilePrEligibilityReadiness } from './mobile-open-pr-prefill'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from './mobile-pr-create'
-import { isBehindOnlyUpstream } from '../../../src/shared/git-upstream-status'
+import { isBehindOnlyUpstream } from '../../../src/shared/git/remotes/git-upstream-status'
 import {
   commitMobileHostedReviewStagedChanges,
   fastForwardMobileHostedReviewBranch,
@@ -12,7 +12,7 @@ import {
   stageMobileHostedReviewPaths
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 
 export { mobileHostedReviewCreateIntentProgressMessage } from './hosted-review-copy'
 

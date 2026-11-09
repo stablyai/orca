@@ -1,33 +1,38 @@
+import { useTaskPageGitHubCollectionState } from './use-task-page-github-collection-state'
 import type { TaskPageProviderStateModel } from '../use-task-page-provider-state'
-import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useSyncExternalStore } from 'react'
 import type { TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import {
   PER_REPO_FETCH_LIMIT,
   CROSS_REPO_DISPLAY_LIMIT,
-  getTaskPagePerRepoLimit,
-  sortWorkItemsByNumber
-} from '../../../../../shared/work-items'
-import {
-  buildTaskPageGitHubResumeContextKey,
-  taskPageGitHubResumeCache
-} from '@/components/task-page/github/task-page-github-resume-cache'
+  getTaskPagePerRepoLimit
+} from '../../../../../shared/work-items/work-item-pagination'
+import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
+import { githubTaskBinding } from '@/lib/github-task-observation'
 import { useAppStore } from '@/store/index'
 import type { GitHubListRestoreWrite } from './task-page-github-list-scroll-restore'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
 export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const {
     pageData,
     getCachedWorkItems,
     workItemsInvalidationNonce,
     selectedRepos,
-    selectedReposKey,
+    selectedReposKey: repoSelectionKey,
     defaultTaskViewPreset,
     initialTaskQuery,
     taskSource,
     taskResumeApplied,
     githubMode
   } = model
+  const collections = useAppStore((s) => s.githubSourceCollections)
+  // Why a string snapshot: only the selected owners' lifetimes re-render this view, not other owners' publications.
+  const ownerContexts = useSyncExternalStore(collections.subscribe, () =>
+    JSON.stringify(selectedRepos.map((repo) => collections.context(repo)))
+  )
+  const selectedReposKey =
+    taskSource === 'github'
+      ? JSON.stringify([repoSelectionKey, selectedRepos.map(githubTaskBinding), ownerContexts])
+      : repoSelectionKey
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
   const taskSearchInputRef = useRef<HTMLInputElement>(null)
@@ -35,6 +40,8 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     defaultTaskViewPreset
   )
   const [tasksLoading, setTasksLoading] = useState(false)
+  // The request key the latest landing run dispatched for; a different current key means a request is owed.
+  const [landingRequestKey, setLandingRequestKey] = useState('')
   const [tasksRefreshing, setTasksRefreshing] = useState(false)
   const [tasksFiltering, setTasksFiltering] = useState(false)
   const [tasksError, setTasksError] = useState<string | null>(null)
@@ -60,33 +67,17 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     CROSS_REPO_DISPLAY_LIMIT
   )
   const githubPageSize = githubPerRepoPageLimit * Math.max(1, selectedRepos.length)
-  const githubResumeContextKey = buildTaskPageGitHubResumeContextKey({
-    selectedReposKey,
-    query: appliedTaskSearch.trim(),
-    pageSize: githubPageSize
-  })
-  // Null slots permit direct numbered-page loading without reading intermediate pages.
-  const [pages, setPages] = useState<(GitHubWorkItem[] | null)[]>(() => {
-    const trimmed = initialTaskQuery.trim()
-    const merged: GitHubWorkItem[] = []
-    for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(
-        r.id,
-        githubPerRepoPageLimit,
-        trimmed,
-        r.path,
-        getTaskPageRepoSourceContext(r, 'github')
-      )
-      if (cached) {
-        merged.push(...cached)
-      }
-    }
-    if (merged.length === 0) {
-      return [[]]
-    }
-    const page0 = sortWorkItemsByNumber(merged).slice(0, githubPageSize)
-    return [page0]
-  })
+  const { githubResumeContextKey, pages, setPages, countedTotalPages, setCountedTotalPages } =
+    useTaskPageGitHubCollectionState({
+      collections,
+      selectedRepos,
+      selectedReposKey,
+      initialTaskQuery,
+      getCachedWorkItems,
+      appliedTaskSearch,
+      githubPageSize,
+      githubPerRepoPageLimit
+    })
   const [currentPage, setCurrentPage] = useState(0)
   const pagesRef = useRef(pages)
   const currentPageRef = useRef(currentPage)
@@ -103,11 +94,14 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const githubListRestoreWriteRef = useRef<GitHubListRestoreWrite | null>(null)
   const [paginationLoading, setPaginationLoading] = useState(false)
   const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
-  const [countedTotalPages, setCountedTotalPages] = useState<number | null>(null)
   // Keep proven 422 limits separate so late counts replace speculation without resurrecting unreachable pages.
   const [provenPageLimit, setProvenPageLimit] = useState<number | null>(null)
   // Mirror committed counts synchronously so empty-page handling cannot use a stale click-time closure.
+  // Why every commit: the count also changes from store publications and collection switches, not only its setter.
   const countedTotalPagesRef = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    countedTotalPagesRef.current = countedTotalPages
+  })
   const hardRefreshEpochRef = useRef(0)
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
@@ -116,8 +110,23 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     if (!taskResumeApplied || taskSource !== 'github' || githubMode !== 'items' || !page) {
       return
     }
-    taskPageGitHubResumeCache.write(githubResumeContextKey, currentPage, page)
-  }, [currentPage, githubMode, githubResumeContextKey, pages, taskResumeApplied, taskSource])
+    taskPageGitHubResumeCache.write(
+      githubResumeContextKey,
+      currentPage,
+      page,
+      undefined,
+      selectedRepos.map((repo) => collections.context(repo))
+    )
+  }, [
+    collections,
+    selectedRepos,
+    currentPage,
+    githubMode,
+    githubResumeContextKey,
+    pages,
+    taskResumeApplied,
+    taskSource
+  ])
   const taskListPositionRef = useRef<{
     contextKey: string
     page: number
@@ -169,122 +178,67 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   ])
 
   // Why: the dialog's "Use" button routes through the same direct-launch flow as the row-level "Use" CTA so behavior is consistent regardless of entry point.
-  const nextModel = model as typeof model & {
-    taskSearchInput: typeof taskSearchInput
-    setTaskSearchInput: typeof setTaskSearchInput
-    appliedTaskSearch: typeof appliedTaskSearch
-    setAppliedTaskSearch: typeof setAppliedTaskSearch
-    taskSearchInputRef: typeof taskSearchInputRef
-    activeTaskPreset: typeof activeTaskPreset
-    setActiveTaskPreset: typeof setActiveTaskPreset
-    tasksLoading: typeof tasksLoading
-    setTasksLoading: typeof setTasksLoading
-    tasksRefreshing: typeof tasksRefreshing
-    setTasksRefreshing: typeof setTasksRefreshing
-    tasksFiltering: typeof tasksFiltering
-    setTasksFiltering: typeof setTasksFiltering
-    tasksError: typeof tasksError
-    setTasksError: typeof setTasksError
-    failedCount: typeof failedCount
-    setFailedCount: typeof setFailedCount
-    githubUnavailable: typeof githubUnavailable
-    setGithubUnavailable: typeof setGithubUnavailable
-    taskRefreshNonce: typeof taskRefreshNonce
-    setTaskRefreshNonce: typeof setTaskRefreshNonce
-    quietRefreshNonce: typeof quietRefreshNonce
-    setQuietRefreshNonce: typeof setQuietRefreshNonce
-    githubViewerLogin: typeof githubViewerLogin
-    setGitHubViewerLogin: typeof setGitHubViewerLogin
-    lastFetchedNonceRef: typeof lastFetchedNonceRef
-    lastFetchedInvalidationNonceRef: typeof lastFetchedInvalidationNonceRef
-    paginationGenerationRef: typeof paginationGenerationRef
-    landingGitHubRefreshKeysRef: typeof landingGitHubRefreshKeysRef
-    githubPerRepoPageLimit: typeof githubPerRepoPageLimit
-    githubPageSize: typeof githubPageSize
-    githubResumeContextKey: typeof githubResumeContextKey
-    pages: typeof pages
-    setPages: typeof setPages
-    currentPage: typeof currentPage
-    setCurrentPage: typeof setCurrentPage
-    pagesRef: typeof pagesRef
-    currentPageRef: typeof currentPageRef
-    githubResumeConsumedRef: typeof githubResumeConsumedRef
-    githubResumeContextRef: typeof githubResumeContextRef
-    githubListScrollRef: typeof githubListScrollRef
-    githubListScrollTopRef: typeof githubListScrollTopRef
-    pendingGithubScrollRestoreRef: typeof pendingGithubScrollRestoreRef
-    githubListRestoreWriteRef: typeof githubListRestoreWriteRef
-    paginationLoading: typeof paginationLoading
-    setPaginationLoading: typeof setPaginationLoading
-    loadingTargetPage: typeof loadingTargetPage
-    setLoadingTargetPage: typeof setLoadingTargetPage
-    countedTotalPages: typeof countedTotalPages
-    setCountedTotalPages: typeof setCountedTotalPages
-    provenPageLimit: typeof provenPageLimit
-    setProvenPageLimit: typeof setProvenPageLimit
-    countedTotalPagesRef: typeof countedTotalPagesRef
-    hardRefreshEpochRef: typeof hardRefreshEpochRef
-    fetchWorkItemsNextPage: typeof fetchWorkItemsNextPage
-    countWorkItemsAcrossRepos: typeof countWorkItemsAcrossRepos
-    taskListPositionRef: typeof taskListPositionRef
-  }
-  nextModel.taskSearchInput = taskSearchInput
-  nextModel.setTaskSearchInput = setTaskSearchInput
-  nextModel.appliedTaskSearch = appliedTaskSearch
-  nextModel.setAppliedTaskSearch = setAppliedTaskSearch
-  nextModel.taskSearchInputRef = taskSearchInputRef
-  nextModel.activeTaskPreset = activeTaskPreset
-  nextModel.setActiveTaskPreset = setActiveTaskPreset
-  nextModel.tasksLoading = tasksLoading
-  nextModel.setTasksLoading = setTasksLoading
-  nextModel.tasksRefreshing = tasksRefreshing
-  nextModel.setTasksRefreshing = setTasksRefreshing
-  nextModel.tasksFiltering = tasksFiltering
-  nextModel.setTasksFiltering = setTasksFiltering
-  nextModel.tasksError = tasksError
-  nextModel.setTasksError = setTasksError
-  nextModel.failedCount = failedCount
-  nextModel.setFailedCount = setFailedCount
-  nextModel.githubUnavailable = githubUnavailable
-  nextModel.setGithubUnavailable = setGithubUnavailable
-  nextModel.taskRefreshNonce = taskRefreshNonce
-  nextModel.setTaskRefreshNonce = setTaskRefreshNonce
-  nextModel.quietRefreshNonce = quietRefreshNonce
-  nextModel.setQuietRefreshNonce = setQuietRefreshNonce
-  nextModel.githubViewerLogin = githubViewerLogin
-  nextModel.setGitHubViewerLogin = setGitHubViewerLogin
-  nextModel.lastFetchedNonceRef = lastFetchedNonceRef
-  nextModel.lastFetchedInvalidationNonceRef = lastFetchedInvalidationNonceRef
-  nextModel.paginationGenerationRef = paginationGenerationRef
-  nextModel.landingGitHubRefreshKeysRef = landingGitHubRefreshKeysRef
-  nextModel.githubPerRepoPageLimit = githubPerRepoPageLimit
-  nextModel.githubPageSize = githubPageSize
-  nextModel.githubResumeContextKey = githubResumeContextKey
-  nextModel.pages = pages
-  nextModel.setPages = setPages
-  nextModel.currentPage = currentPage
-  nextModel.setCurrentPage = setCurrentPage
-  nextModel.pagesRef = pagesRef
-  nextModel.currentPageRef = currentPageRef
-  nextModel.githubResumeConsumedRef = githubResumeConsumedRef
-  nextModel.githubResumeContextRef = githubResumeContextRef
-  nextModel.githubListScrollRef = githubListScrollRef
-  nextModel.githubListScrollTopRef = githubListScrollTopRef
-  nextModel.pendingGithubScrollRestoreRef = pendingGithubScrollRestoreRef
-  nextModel.githubListRestoreWriteRef = githubListRestoreWriteRef
-  nextModel.paginationLoading = paginationLoading
-  nextModel.setPaginationLoading = setPaginationLoading
-  nextModel.loadingTargetPage = loadingTargetPage
-  nextModel.setLoadingTargetPage = setLoadingTargetPage
-  nextModel.countedTotalPages = countedTotalPages
-  nextModel.setCountedTotalPages = setCountedTotalPages
-  nextModel.provenPageLimit = provenPageLimit
-  nextModel.setProvenPageLimit = setProvenPageLimit
-  nextModel.countedTotalPagesRef = countedTotalPagesRef
-  nextModel.hardRefreshEpochRef = hardRefreshEpochRef
-  nextModel.fetchWorkItemsNextPage = fetchWorkItemsNextPage
-  nextModel.countWorkItemsAcrossRepos = countWorkItemsAcrossRepos
-  nextModel.taskListPositionRef = taskListPositionRef
-  return nextModel
+  return Object.assign(model, {
+    selectedReposKey,
+    taskSearchInput,
+    setTaskSearchInput,
+    appliedTaskSearch,
+    setAppliedTaskSearch,
+    taskSearchInputRef,
+    activeTaskPreset,
+    setActiveTaskPreset,
+    tasksLoading,
+    setTasksLoading,
+    landingRequestKey,
+    setLandingRequestKey,
+    tasksRefreshing,
+    setTasksRefreshing,
+    tasksFiltering,
+    setTasksFiltering,
+    tasksError,
+    setTasksError,
+    failedCount,
+    setFailedCount,
+    githubUnavailable,
+    setGithubUnavailable,
+    taskRefreshNonce,
+    setTaskRefreshNonce,
+    quietRefreshNonce,
+    setQuietRefreshNonce,
+    githubViewerLogin,
+    setGitHubViewerLogin,
+    lastFetchedNonceRef,
+    lastFetchedInvalidationNonceRef,
+    paginationGenerationRef,
+    landingGitHubRefreshKeysRef,
+    githubPerRepoPageLimit,
+    githubPageSize,
+    githubResumeContextKey,
+    pages,
+    setPages,
+    currentPage,
+    setCurrentPage,
+    pagesRef,
+    currentPageRef,
+    githubResumeConsumedRef,
+    githubResumeContextRef,
+    githubListScrollRef,
+    githubListScrollTopRef,
+    pendingGithubScrollRestoreRef,
+    githubListRestoreWriteRef,
+    paginationLoading,
+    setPaginationLoading,
+    loadingTargetPage,
+    setLoadingTargetPage,
+    countedTotalPages,
+    setCountedTotalPages,
+    provenPageLimit,
+    setProvenPageLimit,
+    countedTotalPagesRef,
+    hardRefreshEpochRef,
+    fetchWorkItemsNextPage,
+    countWorkItemsAcrossRepos,
+    taskListPositionRef
+  })
 }
 export type TaskPageGitHubListStateModel = ReturnType<typeof useTaskPageGitHubListState>

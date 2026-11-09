@@ -2,9 +2,12 @@ import { ActivityIndicator, Pressable, View } from 'react-native'
 import { Mic, Square } from 'lucide-react-native'
 import { useContext } from 'react'
 import { colors } from '../../../theme/mobile-theme'
-import { MobileDictationGrapes, MobileDictationTimer } from '../../MobileDictationMeter'
-import { MobileDictationMeterContext } from '../../mobile-dictation-meter-context'
-import { keepHeldPressThroughLongPress } from '../../held-press-long-press'
+import {
+  MobileDictationGrapes,
+  MobileDictationTimer
+} from '../../../dictation/MobileDictationMeter'
+import { MobileDictationMeterContext } from '../../../dictation/mobile-dictation-meter-context'
+import { keepHeldPressThroughLongPress } from '../../../platform/held-press-long-press'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles as inputStyles
@@ -16,7 +19,7 @@ export type MobileNativeChatMicProps = {
   onMicPress?: () => void
   /** Starting or recording: the mic is live and its release must reach the hook. */
   micActive?: boolean
-  /** Still opening the mic; taps are ignored until recording begins. */
+  /** Waiting on the host; speech is already held, and a tap stops once recording begins. */
   micStarting?: boolean
   /** Transcribing after stop; taps are ignored until the transcript lands. */
   micProcessing?: boolean

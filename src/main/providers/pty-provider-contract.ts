@@ -1,25 +1,25 @@
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
-} from '../../shared/pty-fenced-termination'
-import type { SpawnIntent } from '../../shared/host-spawn-admission'
-import type { TuiAgent } from '../../shared/tui-agent'
-import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
-import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
-import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+} from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
+import type { SpawnIntent } from '../../shared/terminal/pty/admission/spawn-admission-contract'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-launch/permissions/agent-workspace-trust-spawn-request'
+import type { PtyStartupIngressIntent } from '../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
+import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal/protocol/queries/terminal-osc-color-reply'
+import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
+import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from './pty-provider-events'
 import type { PtySpawnResult } from './pty-spawn-result'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
-import type { TerminalOwner } from '../../shared/terminal-owner'
-import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
+import type { WriteSettlement } from '../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -193,6 +193,8 @@ export type IPtyProvider = {
   clearBuffer(id: string): Promise<void>
   /** Grounds the host's own terminal models (Reset Terminal); renderers ground themselves. */
   resetInputModes(id: string): Promise<void>
+  /** Sends ESC [ O to a ?1004 program once no viewer is left to blur; hosts that own no viewers omit it. */
+  reportFocusLost?(id: string): Promise<void>
   /** Ends the startup Kitty-query window; OSC 10/11 authority stays with the owner for life. */
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
   /** Host-wide viewer colours the PTY owner answers OSC 10/11 from. */

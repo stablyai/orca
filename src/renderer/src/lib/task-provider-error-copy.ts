@@ -1,5 +1,6 @@
-import type { TaskProviderErrorCode } from '../../../shared/task-provider-failure'
+import type { TaskProviderErrorCode } from '../../../shared/work-items/task-provider-failure'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { displayIpcErrorMessage } from './ipc-error'
 
 const COPY: Record<TaskProviderErrorCode, () => string> = {
@@ -184,9 +185,9 @@ function isTaskProviderErrorCode(code: unknown): code is TaskProviderErrorCode {
   return typeof code === 'string' && Object.hasOwn(COPY, code)
 }
 
-export function taskProviderErrorText(error: unknown, errorCode?: unknown): string {
+export function taskProviderErrorText(error: unknown, errorCode?: unknown, t?: Translate): string {
   const raw = typeof error === 'string' ? error : ''
-  const message = displayIpcErrorMessage(raw) ?? raw
+  const message = displayIpcErrorMessage(raw, t) ?? raw
   const code = isTaskProviderErrorCode(errorCode)
     ? errorCode
     : Object.hasOwn(LEGACY_CODES, message)

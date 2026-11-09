@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { hasUsageData } from '../../../../shared/usage-provider-windows'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
@@ -32,19 +33,10 @@ type UsageProviderSnapshots = {
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
+  muse?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
-
-export function hasUsageData(provider: ProviderRateLimits): boolean {
-  return Boolean(
-    provider.session ||
-    provider.weekly ||
-    provider.fableWeekly ||
-    provider.monthly ||
-    (provider.buckets && provider.buckets.length > 0)
-  )
-}
 
 function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefined): boolean {
   return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))
@@ -175,7 +167,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
-    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode))
+    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
+    (providers.muse !== undefined && isProviderSnapshotPending(providers.muse))
   ) {
     return false
   }
@@ -190,6 +183,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
-    !isProviderConfigured(providers.zcode)
+    !isProviderConfigured(providers.zcode) &&
+    !isProviderConfigured(providers.muse)
   )
 }

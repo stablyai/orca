@@ -1,6 +1,6 @@
 import { useAppStore } from '../store'
 import { useEditorExternalWatch } from '../hooks/useEditorExternalWatch'
-import { useGitStatusPolling } from '../components/right-sidebar/useGitStatusPolling'
+import { useGitStatusPolling } from '../components/right-sidebar/source-control/sync/useGitStatusPolling'
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync/use-web-session-tabs-sync'
 import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
 

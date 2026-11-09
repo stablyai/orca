@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { buildJiraPresetJql } from '../../../../../shared/jira/jira-preset-jql'
 import {
   getJiraStatusCatalogScopeKey,
@@ -15,6 +15,7 @@ export function TaskPageJiraStatusFilters({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     jiraHasWorkspace,
     selectedJiraStatuses,
@@ -63,7 +64,7 @@ export function TaskPageJiraStatusFilters({
   if (jiraSearchInput.trim() || model.jiraFavouriteFilter) {
     return selectedJiraStatuses.length ? (
       <p className="mt-2 text-xs text-muted-foreground">
-        {translate(
+        {t(
           'jira.statusFilters.manualQuery',
           'Status filters apply to preset views. Clear the search to use them.'
         )}
@@ -81,7 +82,7 @@ export function TaskPageJiraStatusFilters({
             disabled={jiraQuickFiltersLoading || jiraQuickFiltersPending}
             onClick={retryJiraQuickFilters}
           >
-            {translate('jira.savedFilters.retry', 'Retry')}
+            {t('jira.savedFilters.retry', 'Retry')}
           </Button>
         </div>
       ) : null}
@@ -94,7 +95,7 @@ export function TaskPageJiraStatusFilters({
             spacing={1}
             value={selectedJiraStatuses}
             disabled={disabled}
-            aria-label={translate('jira.statusFilters.label', 'Filter Jira issues by status')}
+            aria-label={t('jira.statusFilters.label', 'Filter Jira issues by status')}
             onValueChange={(next) => {
               void selectJiraStatuses(next).catch(() => {})
             }}
@@ -115,7 +116,7 @@ export function TaskPageJiraStatusFilters({
                 void selectJiraStatuses([]).catch(() => {})
               }}
             >
-              {translate('jira.statusFilters.clear', 'Clear statuses')}
+              {t('jira.statusFilters.clear', 'Clear statuses')}
             </Button>
           ) : null}
         </div>
@@ -126,7 +127,7 @@ export function TaskPageJiraStatusFilters({
             <Input
               readOnly
               value={preview}
-              aria-label={translate('jira.statusFilters.jql', 'Status filter JQL')}
+              aria-label={t('jira.statusFilters.jql', 'Status filter JQL')}
             />
             <Button
               variant="outline"
@@ -141,11 +142,11 @@ export function TaskPageJiraStatusFilters({
                   .catch(() => {})
               }}
             >
-              {translate('jira.statusFilters.editJql', 'Edit as JQL')}
+              {t('jira.statusFilters.editJql', 'Edit as JQL')}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'jira.statusFilters.catalogHint',
               'Statuses come from loaded issues. Clear statuses to discover others in this view.'
             )}

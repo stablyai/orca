@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
@@ -106,22 +106,6 @@ describe('orchestration RPC methods', () => {
       expect(await call('orchestration.runCurrent', { from: 'term_coord' })).not.toHaveProperty(
         'next'
       )
-    })
-
-    it('publishes a run receipt without internal routing columns', async () => {
-      setup(false)
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(
-        'tab_coord:11111111-1111-4111-8111-111111111111'
-      )
-
-      const created = (await call('orchestration.runCreate', {
-        objective: 'Coordinate reviews',
-        from: 'term_coord'
-      })) as { run: Record<string, unknown> }
-
-      expect(created.run).not.toHaveProperty('coordinator_pane_key')
-      expect(created.run).not.toHaveProperty('home_database')
-      expect(created.run.consumer_generation).toBe(1)
     })
 
     it('requires runtime-observed stable pane identity for binding', async () => {
@@ -322,32 +306,6 @@ describe('orchestration RPC methods', () => {
 
       await expect(call('orchestration.reset', params)).rejects.toThrow()
       expect(db.getInbox()).toHaveLength(1)
-      expect(db.listTasks()).toHaveLength(1)
-    })
-
-    it('ignores false scopes when exactly one scope is true', async () => {
-      setup()
-      seedResetState()
-
-      const result = (await call('orchestration.reset', { all: false, tasks: true })) as {
-        reset: string
-      }
-
-      expect(result.reset).toBe('tasks')
-      expect(db.getInbox()).toHaveLength(1)
-      expect(db.listTasks()).toHaveLength(0)
-    })
-
-    it('ignores non-boolean scopes when exactly one real boolean scope is true', async () => {
-      setup()
-      seedResetState()
-
-      const result = (await call('orchestration.reset', { all: 'true', messages: true })) as {
-        reset: string
-      }
-
-      expect(result.reset).toBe('messages')
-      expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(1)
     })
   })

@@ -37,15 +37,15 @@ export {
   SlidersHorizontal,
   X
 } from 'lucide-react-native'
-export type { RpcClient } from '../transport/rpc-client'
-export type { RpcSuccess } from '../transport/types'
-export { useHostClient } from '../transport/host-client-hooks'
+export type { RpcClient } from '../transport/rpc/rpc-client-contract'
+export type { RpcSuccess } from '../transport/rpc/rpc-wire-types'
+export { useHostClient } from '../transport/connection/host-client-hooks'
 export {
   useLastConnectedAt,
   useRelayRecoveryStatus,
   useReconnectAttempt
-} from '../transport/client-context-connection-metrics'
-export { classifyConnection } from '../transport/connection-health'
+} from '../transport/connection/client-context-connection-metrics'
+export { classifyConnection } from '../transport/connection/connection-health'
 export { StatusDot } from '../components/StatusDot'
 export { ActionSheetModal } from '../components/ActionSheetModal'
 export { ConfirmModal } from '../components/ConfirmModal'
@@ -64,7 +64,7 @@ export type { GitHubPrFileDiffLine } from './github-pr-file-diff'
 export {
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
-} from '../session/mobile-file-syntax'
+} from '../files/session-documents/mobile-file-syntax'
 export { buildGitHubCheckSummary } from './github-check-summary'
 export { buildGitLabCheckSummary } from './gitlab-check-summary'
 export {
@@ -122,26 +122,12 @@ export { colors, radii, spacing, typography } from '../theme/mobile-theme'
 export type { MobileColorScheme } from '../theme/mobile-theme'
 export { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 export { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-export {
-  CROSS_REPO_DISPLAY_LIMIT,
-  getTaskPagePerRepoLimit,
-  getWorkItemCountedTotalPages,
-  isGitHubWorkItemsSshRemoteRequiredError,
-  PER_REPO_FETCH_LIMIT,
-  sortWorkItemsByNumber,
-  taskPageToGitHubApiPage
-} from '../../../src/shared/work-items'
-export {
-  filterAvailableTaskProviders,
-  normalizeVisibleTaskProviders,
-  resolveVisibleTaskProvider
-} from '../../../src/shared/task-providers'
-export type { TaskProvider } from '../../../src/shared/task-providers'
+
 export { hasSettledHostRepoList } from './host-repo-list'
 export { useHostRepoList } from './use-host-repo-list'
 export { isHostedTaskRepo, reconcileRepoSelection } from './hosted-repo-selection'
 export type { LinearMobileIssue } from './linear-mobile-issue-read'
-export { MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from './mobile-tui-agents'
+
 export { resolveComposerBranchSelection } from './mobile-composer-branch-selection'
 export {
   clearMobileTaskCopyFeedbackTimer,
@@ -154,9 +140,9 @@ export type {
 } from '../../../src/shared/github/pull-request-types'
 export type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 export type { SparsePreset } from '../../../src/shared/worktree/create-types'
-export type { TuiAgent } from '../../../src/shared/tui-agent'
+
 export type { SshConnectionState } from '../../../src/shared/ssh-types'
-export type { HostedReviewDecision } from '../../../src/shared/hosted-review'
+
 export {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey

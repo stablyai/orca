@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -41,7 +44,13 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
+import {
+  buildWorktree,
+  noFolderWorkspacesFixture,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
 
@@ -59,6 +68,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_create', {
         worktree: buildWorktree('/tmp/repo/feature', 'feature', 'abc', 'repo-1')
       })
@@ -70,7 +80,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'worktree.create', {
       repo: 'id:repo-1',
       name: 'feature',
       displayName: 'feature',
@@ -97,6 +107,7 @@ describe('orca cli worktree awareness', () => {
         buildWorktree('/tmp/repo', 'main', 'abc', 'repo-2'),
         buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')
       ]),
+      noFolderWorkspacesFixture(),
       agentLaunchHostFixture(),
       agentLaunchFixture('repo-1::/tmp/repo/agent-task', 'The inferred parent contexts conflict.'),
       okFixture('req_show', {
@@ -128,7 +139,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo/src'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(3, 'agent.launchReplay', {
+    expect(callMock).toHaveBeenNthCalledWith(4, 'agent.launchReplay', {
       target: {
         kind: 'create-worktree',
         create: {
@@ -158,7 +169,7 @@ describe('orca cli worktree awareness', () => {
       launchSource: 'cli',
       operationId: expect.any(String)
     })
-    expect(callMock).toHaveBeenNthCalledWith(4, 'worktree.show', {
+    expect(callMock).toHaveBeenNthCalledWith(5, 'worktree.show', {
       worktree: 'id:repo-1::/tmp/repo/agent-task'
     })
     const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
@@ -213,6 +224,7 @@ describe('orca cli worktree awareness', () => {
           buildWorktree('/tmp/repo', 'main', 'abc', 'repo-2'),
           buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')
         ]),
+        noFolderWorkspacesFixture(),
         okFixture('req_status', { capabilities }),
         okFixture('req_create', {
           worktree: buildWorktree('/tmp/repo/agent-task', 'agent-task', 'abc', 'repo-1'),
@@ -238,7 +250,7 @@ describe('orca cli worktree awareness', () => {
         '/tmp/repo/src'
       )
 
-      expect(callMock).toHaveBeenNthCalledWith(3, 'worktree.create', {
+      expect(callMock).toHaveBeenNthCalledWith(4, 'worktree.create', {
         repo: 'id:repo-1',
         name: 'agent-task',
         displayName: 'agent-task',
@@ -271,7 +283,8 @@ describe('orca cli worktree awareness', () => {
       worktreeListFixture([
         buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1'),
         buildWorktree('/tmp/repo', 'main', 'abc', 'repo-2')
-      ])
+      ]),
+      noFolderWorkspacesFixture()
     )
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const priorExitCode = process.exitCode
@@ -282,7 +295,10 @@ describe('orca cli worktree awareness', () => {
       )
       expect(process.exitCode).toBe(1)
       expect(JSON.parse(String(logSpy.mock.calls[0]?.[0])).error.code).toBe('selector_ambiguous')
-      expect(callMock.mock.calls.map(([method]) => method)).toEqual(['worktree.list'])
+      expect(callMock.mock.calls.map(([method]) => method)).toEqual([
+        'worktree.list',
+        'folderWorkspace.list'
+      ])
     } finally {
       process.exitCode = priorExitCode
     }

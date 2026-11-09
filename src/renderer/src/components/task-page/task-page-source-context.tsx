@@ -1,3 +1,4 @@
+import { githubCandidateOwner } from '@/store/github/sources/source-preference-ownership'
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 export {
   getTaskPageRepoSourceContext,
@@ -11,6 +12,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
 import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
@@ -19,16 +21,17 @@ import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope
-} from '../../../../shared/task-source-context'
-import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
+} from '../../../../shared/work-items/task-source-context'
+import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host/execution-host-registry-entry'
 import {
   getAccountBackedTaskSourceSummary,
   type TaskSourceContextSummary,
   type TaskSourceHostAvailability
 } from '../task-source-context-summary'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { cn } from '@/lib/utils'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
+import type { Translate } from '@/i18n/use-translate'
 export function isGitLabMRFilter(
   value: GitLabTaskFilter | GitLabIssueFilter
 ): value is GitLabTaskFilter {
@@ -110,34 +113,33 @@ export function getTaskSourceHostAvailabilityForHost(
   }
 }
 /** Projects boards have no source row: name the shared row-less host, not the selected repos. */
-export function getGitHubProjectSourceSummary(args: {
-  providerLabel: string
-  hostId: TaskSourceContext['hostId']
-  host: ExecutionHostRegistryEntry | null | undefined
-  hostLabelById: ReadonlyMap<string, string>
-}): TaskSourceContextSummary {
+export function getGitHubProjectSourceSummary(
+  args: {
+    providerLabel: string
+    hostId: TaskSourceContext['hostId']
+    host: ExecutionHostRegistryEntry | null | undefined
+    hostLabelById: ReadonlyMap<string, string>
+  },
+  t?: Translate
+): TaskSourceContextSummary {
   const availability = getTaskSourceHostAvailabilityForHost(args.host, args.hostId)
-  return getAccountBackedTaskSourceSummary(args.providerLabel, {
-    accountLabel: null,
-    accountHostId: args.hostId,
-    hostLabelById: args.hostLabelById,
-    // Why: boards need no task-source capability, so only host health applies.
-    hostAvailability: availability && !availability.reason ? [availability] : []
-  })
+  return getAccountBackedTaskSourceSummary(
+    args.providerLabel,
+    {
+      accountLabel: null,
+      accountHostId: args.hostId,
+      hostLabelById: args.hostLabelById,
+      // Why: boards need no task-source capability, so only host health applies.
+      hostAvailability: availability && !availability.reason ? [availability] : []
+    },
+    t
+  )
 }
-export function getTaskPageRepoCacheInput(repo: Repo): {
-  id: string
-  path: string
-  executionHostId?: string | null
-  connectionId?: string | null
-  sourceCacheScope?: string | null
-} {
+export function getTaskPageRepoCacheInput(repo: Repo): TaskPageRepoCacheRowInput {
   const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
   return {
-    id: repo.id,
-    path: repo.path,
-    executionHostId: repo.executionHostId,
-    connectionId: repo.connectionId,
+    ...repo,
+    candidateOwner: githubCandidateOwner(repo),
     sourceCacheScope:
       sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null
   }

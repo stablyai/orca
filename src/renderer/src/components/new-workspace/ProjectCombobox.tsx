@@ -1,11 +1,11 @@
 import { ImeInput } from '@/lib/ime-text-field'
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { ChevronDown, FolderPlus } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getAmbiguousProjectOptionIds,
   rankProjectOptions,
@@ -43,7 +43,9 @@ export default function ProjectCombobox({
   invalid = false,
   describedBy
 }: ProjectComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
   const recentIds = useRecentProjectIds()
   // Derive keys from the displayed sections: folder grouping changes raw rank order, so keyboard selection must follow what users see.
   const deriveRowKeys = useCallback(
@@ -155,10 +157,7 @@ export default function ProjectCombobox({
                   type="text"
                   role="combobox"
                   data-project-combobox-root="true"
-                  aria-label={translate(
-                    'auto.components.new.workspace.ProjectCombobox.label',
-                    'Project'
-                  )}
+                  aria-label={t('auto.components.new.workspace.ProjectCombobox.label', 'Project')}
                   aria-expanded={open}
                   aria-controls={listId}
                   aria-autocomplete="list"
@@ -172,6 +171,17 @@ export default function ProjectCombobox({
                     setOpen(true)
                   }}
                   onFocus={() => setOpen(true)}
+                  onBlur={(event) => {
+                    const next = event.relatedTarget
+                    // A parent dialog's trap can refocus this field as a nested dialog mounts; Radix misses focus that leaves before the list mounts.
+                    if (
+                      next instanceof Element &&
+                      !isWithinComboboxRoot(next, ROOT_ATTRIBUTE) &&
+                      !contentRef.current?.contains(next)
+                    ) {
+                      close()
+                    }
+                  }}
                   onKeyDown={handleKeyDown}
                   className={cn(
                     'w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground',
@@ -190,7 +200,7 @@ export default function ProjectCombobox({
               <button
                 type="button"
                 tabIndex={-1}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.new.workspace.ProjectCombobox.browse',
                   'Browse projects'
                 )}
@@ -219,6 +229,7 @@ export default function ProjectCombobox({
       {/* Closing must remove the selector before a nested dialog takes focus. */}
       {open ? (
         <PopoverContent
+          ref={contentRef}
           align="start"
           sideOffset={4}
           // Use an opaque nonfading surface so dialog fields cannot show through during animation; match the primitive’s arbitrary background specificity.
@@ -245,10 +256,7 @@ export default function ProjectCombobox({
           <div
             id={listId}
             role="listbox"
-            aria-label={translate(
-              'auto.components.new.workspace.ProjectCombobox.listLabel',
-              'Projects'
-            )}
+            aria-label={t('auto.components.new.workspace.ProjectCombobox.listLabel', 'Projects')}
             className="flex min-h-0 flex-col"
           >
             {/* Presentation preserves listbox ownership through this scrolling wrapper. */}
@@ -261,11 +269,11 @@ export default function ProjectCombobox({
                 // Match row height so empty results stay visually neutral.
                 <p className="flex h-8 items-center justify-center px-2 text-sm text-muted-foreground">
                   {options.length === 0
-                    ? translate(
+                    ? t(
                         'auto.components.new.workspace.ProjectCombobox.noProjects',
                         'No projects yet.'
                       )
-                    : translate(
+                    : t(
                         'auto.components.new.workspace.ProjectCombobox.empty',
                         'No projects match your search.'
                       )}
@@ -317,10 +325,7 @@ export default function ProjectCombobox({
                   <FolderPlus className="size-3.5 text-muted-foreground" />
                 </span>
                 <span className="truncate">
-                  {translate(
-                    'auto.components.new.workspace.ProjectCombobox.addProject',
-                    'Add project'
-                  )}
+                  {t('auto.components.new.workspace.ProjectCombobox.addProject', 'Add project')}
                 </span>
               </div>
             ) : null}

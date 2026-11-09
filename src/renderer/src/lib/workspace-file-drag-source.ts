@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdForWorkspaceOwner } from './resolve-owner'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { writeWorkspaceFileDragSourceIfResolved } from './workspace-file-drag'

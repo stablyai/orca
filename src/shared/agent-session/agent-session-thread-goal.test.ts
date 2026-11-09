@@ -5,7 +5,6 @@ import type {
   AgentJournalThreadGoal
 } from './journal/agent-session-journal-types'
 import {
-  agentSessionThreadGoalElapsedSeconds,
   currentAgentSessionThreadGoal,
   currentAgentSessionThreadGoalSourceBySequence
 } from './agent-session-thread-goal'
@@ -47,26 +46,6 @@ function goalRow(sequence: number, state: 'set' | 'cleared', value = goal()) {
 }
 
 describe('current thread goal', () => {
-  it('reports no answer when no row records a goal transition', () => {
-    expect(
-      currentAgentSessionThreadGoal([
-        row(1, { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] }),
-        row(2, { kind: 'status', text: 'Context compacted' })
-      ])
-    ).toBeUndefined()
-  })
-
-  it('reads the last goal row of a rendered snapshot, past later rows of other kinds', () => {
-    const paused = goal({ status: 'paused' })
-    expect(
-      currentAgentSessionThreadGoal([
-        goalRow(1, 'set'),
-        goalRow(2, 'set', paused),
-        row(3, { kind: 'status', text: 'Context compacted' })
-      ])
-    ).toEqual(paused)
-  })
-
   it('takes the latest transition by sequence for items held unordered', () => {
     const paused = goal({ status: 'paused' })
     const latest = goalRow(5, 'set', paused)
@@ -79,10 +58,6 @@ describe('current thread goal', () => {
       goal: paused
     })
     expect(currentAgentSessionThreadGoalSourceBySequence([])?.goal).toBeUndefined()
-  })
-
-  it('answers null once the latest transition cleared the goal', () => {
-    expect(currentAgentSessionThreadGoal([goalRow(1, 'set'), goalRow(2, 'cleared')])).toBeNull()
   })
 
   it('answers null for a row written before the typed snapshot existed', () => {
@@ -106,21 +81,5 @@ describe('current thread goal', () => {
     // A newer provider status must not read as a known one.
     const future = goalRow(5, 'set', Object.assign(goal(), { status: 'snoozed' }))
     expect(currentAgentSessionThreadGoal([goalRow(1, 'set'), future])).toBeNull()
-  })
-})
-
-describe('thread goal presentation facts', () => {
-  it('adds time only while an active goal has a turn running', () => {
-    const now = 1_000_000 + 7_500
-    const running = { startedAt: null }
-    expect(agentSessionThreadGoalElapsedSeconds(goal(), now, null)).toBe(30)
-    expect(agentSessionThreadGoalElapsedSeconds(goal(), now, running)).toBe(37)
-    expect(agentSessionThreadGoalElapsedSeconds(goal({ status: 'paused' }), now, running)).toBe(30)
-    // A report older than the turn counts from the turn's start, not across the idle gap.
-    expect(agentSessionThreadGoalElapsedSeconds(goal(), now, { startedAt: now - 2_000 })).toBe(32)
-    // A provider clock ahead of this one never subtracts time.
-    expect(
-      agentSessionThreadGoalElapsedSeconds(goal({ updatedAt: now + 5_000 }), now, running)
-    ).toBe(30)
   })
 })

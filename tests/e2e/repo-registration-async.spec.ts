@@ -11,7 +11,7 @@ test('real WSL registration preserves literal paths and fences login output', as
   test.skip(process.platform !== 'win32' || !distro, 'Requires a real Windows WSL distro')
   const { buildWslExecArgs, buildWslCapturedLoginShellCommand } =
     await import('../../src/shared/wsl-login-shell-command')
-  const { quotePosixShell } = await import('../../src/shared/shell-argument-quoting')
+  const { quotePosixShell } = await import('../../src/shared/shell/launch/shell-argument-quoting')
   const root = `/tmp/or60risk/run-${Date.now()}`
   const repoPath = `${root}/repo-$literal space`
   const uncPath = `\\\\wsl.localhost\\${distro}${repoPath.replaceAll('/', '\\')}`

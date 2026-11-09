@@ -2,12 +2,15 @@ import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import type { Repo } from '../../../../shared/repo-types'
-import { getErrorCode } from '../../../git/worktree-operation-options'
-import { resolveLocalProjectRuntimesForRepos } from '../../../local-project-runtime-resolution'
+import { getErrorCode } from '../../../git/worktrees/worktree-operation-options'
+import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { RegisteredWorktreeRootStore as RootStore } from './registered-worktree-root-store'
-import { getWorktreeMirrorDistroForRuntime } from '../../../project-runtime-git-options'
-import { listRepoWorktreeGraph } from '../../../repo-worktrees'
-import { blockedWslDistroForPath, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
+import { getWorktreeMirrorDistroForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
+import { listRepoWorktreeGraph } from '../../../workspaces/catalog/repo-worktrees'
+import {
+  blockedWslDistroForPath,
+  wslDistroForPath
+} from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 const CREATED_WORKTREE_ROOT_PROBE_TIMEOUT_MS = 1_000
 const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8

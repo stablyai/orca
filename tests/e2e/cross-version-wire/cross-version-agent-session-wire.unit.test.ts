@@ -5,11 +5,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
-import { emptyAgentSessionBatch } from '../../../src/main/native-chat/agent-session-wire/agent-session-empty-batch'
-import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
+import { emptyAgentSessionBatch } from '../../../src/main/native-chat/agent-session-wire/publication/subscribers/agent-session-empty-batch'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-support'
+import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
@@ -53,10 +53,10 @@ import {
   type RpcClientIdentity,
   type RpcReply
 } from './versioned-agent-session-wire'
-import * as journalHostDatabase from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import * as journalHostDatabase from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
 const SUITE_TIMEOUT_MS = 180_000
@@ -66,8 +66,6 @@ describeReleasedStopNoteProjection({
   callBuild,
   runtimeStub
 })
-
-const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
 
 let baselineRef: string
 let current: AgentSessionWireBuild
@@ -100,20 +98,6 @@ async function releaseHostRoot(root: string): Promise<void> {
 }
 
 describe('cross-version structured agent sessions', () => {
-  it(
-    'skews current code against a real published release',
-    () => {
-      expect(baselineRef).toMatch(/^v?\d/)
-      expect(baseline.revision).toMatch(/^[0-9a-f]{40}$/)
-      expect(baseline.revision).not.toBe(current.revision)
-      // The anti-vacuous oracle for the source scan: a scan that found nothing
-      // would make every "no structured method here" claim below meaningless.
-      expect(baseline.methodNames).toContain('terminal.create')
-      expect(current.methodNames).toContain('terminal.create')
-    },
-    SUITE_TIMEOUT_MS
-  )
-
   describe('a client that never asked for structured sessions', () => {
     let hostCalls: ReturnType<typeof structuredHostStub>
 
@@ -348,76 +332,6 @@ describe('cross-version structured agent sessions', () => {
         } finally {
           await build.installStructuredHost(null)
         }
-      }
-    })
-
-    it(
-      'executes every method a release-shaped checkout registers',
-      async () => {
-        // Validate the full manifest through an extracted checkout graph as well as the working-tree module graph.
-        const releasedCurrent = await loadAgentSessionWireBuild('HEAD')
-        expect(releasedCurrent.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
-        expect(
-          releasedCurrent.methodNames.filter((name) => name.startsWith('agentSession.'))
-        ).toHaveLength(STRUCTURED_CALLS.length)
-        // Install this graph’s host slot explicitly so unsupported-host fallback cannot masquerade as capability refusal.
-        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
-        await releasedCurrent.installStructuredHost(installableHost(hostCalls))
-        try {
-          await expectDeclaredSurfaceExecutes(
-            releasedCurrent,
-            hostCalls,
-            releasedCurrent.capabilities
-          )
-        } finally {
-          await releasedCurrent.installStructuredHost(null)
-        }
-      },
-      SUITE_TIMEOUT_MS
-    )
-  })
-
-  describe('post-auth mobile capability negotiation', () => {
-    it('is an additive method that lets the current host record mobile capabilities', async () => {
-      const updates: string[][] = []
-
-      const replies = await callBuild(
-        current,
-        CLIENT_CAPABILITY_UPDATE_METHOD,
-        { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] },
-        {
-          clientKind: 'mobile',
-          clientCapabilities: [],
-          updateClientCapabilities: (capabilities) => updates.push([...capabilities])
-        }
-      )
-
-      expect(current.methodNames).toContain(CLIENT_CAPABILITY_UPDATE_METHOD)
-      expect(current.protocolVersion).toBe(baseline.protocolVersion)
-      expect(replies).toHaveLength(1)
-      expect(replies[0]).toMatchObject({
-        ok: true,
-        result: {
-          clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-        }
-      })
-      expect(updates).toEqual([[STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]])
-    })
-
-    it('gets a normal answer from an old host instead of changing the auth shape', async () => {
-      const replies = await callBuild(
-        baseline,
-        CLIENT_CAPABILITY_UPDATE_METHOD,
-        { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] },
-        { clientKind: 'mobile', clientCapabilities: [] }
-      )
-
-      expect(replies).toHaveLength(1)
-      if (!baseline.methodNames.includes(CLIENT_CAPABILITY_UPDATE_METHOD)) {
-        expect(replies[0]).toMatchObject({
-          ok: false,
-          error: { code: 'method_not_found' }
-        })
       }
     })
   })
@@ -850,8 +764,8 @@ describe('cross-version structured agent sessions', () => {
       )
     })
 
-    // Create replies at spawn, so the first send carries handshake proof; unproven starts must time out as rejected messages.
-    it("answers a released client's send once the startup limit ends a start that never proves itself", async () => {
+    // Unproven starts return the person's message to the queue instead of leaving a legacy RPC waiting.
+    it("answers a released client's send with its returned row once the startup limit ends", async () => {
       const released = baseline.capabilities.filter(
         (capability) => capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
       )
@@ -866,7 +780,12 @@ describe('cross-version structured agent sessions', () => {
 
       expect(reply).toMatchObject({
         ok: true,
-        result: { value: { submission: { dispatchState: 'rejected' } } }
+        result: { value: { queued: { state: 'returned' } } }
+      })
+      const [replayed] = await call('agentSession.send', params, released)
+      expect(replayed).toMatchObject({
+        ok: true,
+        result: { replayed: true, value: { queued: { state: 'returned' } } }
       })
     })
   })

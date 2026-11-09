@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { compareBaseSensitivityLocaleText } from '../../../../shared/locale-text-collators'
 import type {
   SkillDeleteBlockReason,
@@ -6,34 +7,37 @@ import type {
   SkillDeleteResultEntry
 } from '../../../../shared/skill-delete-contract'
 
-export function skillDeleteBlockReasonLabel(reason: SkillDeleteBlockReason): string {
+export function skillDeleteBlockReasonLabel(
+  reason: SkillDeleteBlockReason,
+  t: Translate = translate
+): string {
   switch (reason) {
     case 'bundled': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonBundled',
         'Bundled with Orca — it would be restored'
       )
     }
     case 'plugin': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonPlugin',
         'Installed by a plugin — remove the plugin instead'
       )
     }
     case 'unowned': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonUnowned',
         'This skill lives outside Orca’s skill folders — delete it where it is stored'
       )
     }
     case 'missing': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonMissing',
         'This skill is no longer on disk'
       )
     }
     case 'stale': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonStale',
         'This skill changed since the list was loaded — refresh and try again'
       )
@@ -41,8 +45,8 @@ export function skillDeleteBlockReasonLabel(reason: SkillDeleteBlockReason): str
   }
 }
 
-export function skillDeleteActionLabel(count: number): string {
-  return translate('auto.components.skills.count.delete', 'Delete {{count}} skills', {
+export function skillDeleteActionLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.delete', 'Delete {{count}} skills', {
     count,
     defaultValue_one: 'Delete {{count}} skill'
   })
@@ -147,7 +151,8 @@ export type SkillDeleteResultLine = { key: string; label: string }
 
 /** Keep non-deleted results as persistent reason lines so users can act after a toast would disappear. */
 export function skillDeleteResultLines(
-  skills: readonly SkillDeleteResultEntry[]
+  skills: readonly SkillDeleteResultEntry[],
+  t: Translate = translate
 ): SkillDeleteResultLine[] {
   const grouped = new Map<string, { count: number; label: string }>()
   for (const skill of skills) {
@@ -159,45 +164,42 @@ export function skillDeleteResultLines(
     const existing = grouped.get(key)
     grouped.set(key, {
       count: (existing?.count ?? 0) + 1,
-      label: existing?.label ?? statusLabel(skill)
+      label: existing?.label ?? statusLabel(skill, t)
     })
   }
   return [...grouped].map(([key, value]) => ({
     key,
-    label: translate('auto.components.skills.SkillDelete.resultLine', '{{count}} × {{label}}', {
+    label: t('auto.components.skills.SkillDelete.resultLine', '{{count}} × {{label}}', {
       count: value.count,
       label: value.label
     })
   }))
 }
 
-function statusLabel(skill: SkillDeleteResultEntry): string {
+function statusLabel(skill: SkillDeleteResultEntry, t: Translate = translate): string {
   switch (skill.status) {
     case 'skipped': {
       return skill.blocked
-        ? skillDeleteBlockReasonLabel(skill.blocked)
-        : translate('auto.components.skills.SkillDelete.statusSkipped', 'Skipped')
+        ? skillDeleteBlockReasonLabel(skill.blocked, t)
+        : t('auto.components.skills.SkillDelete.statusSkipped', 'Skipped')
     }
     case 'busy': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.statusBusy',
         'Busy — another skill operation is in progress'
       )
     }
     case 'partial': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.statusPartial',
         'Partly removed — some files are still on disk under a hidden name'
       )
     }
     case 'failed': {
-      return translate(
-        'auto.components.skills.SkillDelete.statusFailed',
-        'Failed — nothing changed'
-      )
+      return t('auto.components.skills.SkillDelete.statusFailed', 'Failed — nothing changed')
     }
     case 'deleted': {
-      return translate('auto.components.skills.SkillDelete.statusDeleted', 'Deleted')
+      return t('auto.components.skills.SkillDelete.statusDeleted', 'Deleted')
     }
   }
 }

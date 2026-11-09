@@ -1,4 +1,4 @@
-import { quotePosixShellUnlessPlain } from '../../shared/shell-argument-quoting'
+import { quotePosixShellUnlessPlain } from '../../shared/shell/launch/shell-argument-quoting'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import { existsSync } from 'node:fs'
@@ -6,7 +6,7 @@ import { posix, win32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { isVsCodeLauncherExecutable } from '../../shared/remote-ssh-editor-launcher'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import { envWithoutAppImageRuntime } from '../pty/appimage-terminal-env'
+import { envWithoutAppImageRuntime } from '../pty/shell-startup/appimage-terminal-env'
 import {
   getLauncherBaseName,
   hasMatchingOuterQuotes,

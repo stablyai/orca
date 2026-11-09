@@ -4,11 +4,11 @@ import type {
   AgentChildWorkKind,
   AgentChildWorkOperation,
   AgentChildWorkOutcome
-} from '../../shared/agent-status-child-work'
+} from '../../shared/agent-status/child-work/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
-} from '../../shared/agent-status-child-work-evidence'
+} from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   classifyClaudeBackgroundTaskKind,
   liveClaudeTaskRunState,

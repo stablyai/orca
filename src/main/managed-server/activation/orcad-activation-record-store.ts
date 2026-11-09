@@ -1,6 +1,6 @@
 // Unreadable activation records must fail closed; treating them as absent could overwrite a live install and its rollback target.
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import type { OrcadHostTransport } from '../install/orcad-host-transport'
+import { RELAY_REMOTE_DIR } from '../install/remote-install-root'
 import {
   ORCAD_ACTIVATION_FILENAME,
   emptyOrcadActivationRecord,
@@ -9,7 +9,7 @@ import {
   type OrcadActivationReadResult,
   type OrcadActivationRecord
 } from './orcad-activation-record'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   readBoundedOrcadRemoteRecord,
   writeAtomicOrcadRemoteRecord

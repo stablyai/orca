@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
 import { rightSidebarShowsPullRequestData } from '../lib/right-sidebar-visibility'
-import { findWorktreeById, buildPRRefreshCandidate } from '../store/github/worktree-refresh'
-import { getHostedReviewCacheKey } from '../store/slices/hosted-review-cache-identity'
-import { getVisibleHostedReviewWorkspaces } from '../store/github/visible-hosted-review-refresh-targets'
-import { shouldCoordinateVisibleGitHubReview } from '../store/github/visible-hosted-review-refresh-ownership'
-import { getPRRefreshRuntimeRepoTarget } from '../store/github/repository-routing'
+import { findWorktreeById, buildPRRefreshCandidate } from '../store/github/refresh/worktree-refresh'
+import { getHostedReviewCacheKey } from '../store/slices/hosted-review/hosted-review-cache-identity'
+import { getVisibleHostedReviewWorkspaces } from '../store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets'
+import { shouldCoordinateVisibleGitHubReview } from '../store/slices/hosted-review/refresh/visible-hosted-review-refresh-ownership'
+import { getPRRefreshRuntimeRepoTarget } from '../store/github/repositories/repository-routing'
 import {
   reviewRefreshIntervalMs,
   REVIEW_REFRESH_COOLDOWN_MS
@@ -14,7 +14,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 function visibleReviewWorkspacesForState(state: AppState) {
   const ids = new Set(state.visibleReviewCardWorktreeIds ?? [])

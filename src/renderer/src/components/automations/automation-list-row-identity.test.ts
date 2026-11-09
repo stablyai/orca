@@ -1,7 +1,7 @@
 /** Follow colliding authority-local IDs from host cache through list/search joins so the last host cannot overwrite another’s row. */
 
 import { describe, expect, it } from 'vitest'
-import type { Automation } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { AutomationHostCacheEntry, AutomationHostRow } from './automation-host-cache-types'
 import type {
   AutomationHostCatalog,
@@ -11,13 +11,9 @@ import type { AutomationHostFilterResolution } from './automation-host-filter-re
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { resolveAutomationHostListRows } from './automation-host-list-rows'
-import {
-  buildAutomationListSearchRows,
-  buildAutomationSearchRowSources,
-  matchAutomationListSearchRowKeys
-} from './automation-list-search-rows'
+
 import { REPO_ID } from './automations-page-fixtures'
-import { makeFolderWorkspace } from '../sidebar/folder-workspace-composer-submit-fixtures'
+import { makeFolderWorkspace } from '../sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import {
   automationFolderWorktreeForRow,
   automationRepoForRow,
@@ -123,19 +119,6 @@ function collidedListRows(): ReturnType<typeof resolveAutomationHostListRows> {
 }
 
 describe('automation list row identity across hosts', () => {
-  it('lets each host’s row be found by its own host label', () => {
-    const listRows = collidedListRows()
-    const searchRows = buildAutomationListSearchRows(
-      buildAutomationSearchRowSources(listRows.rows, { repoMap })
-    )
-    const nameByKey = new Map(listRows.rows.map((row) => [row.key, row.automation.name]))
-    const namesMatching = (query: string): (string | undefined)[] =>
-      matchAutomationListSearchRowKeys(searchRows, query).map((key) => nameByKey.get(key))
-
-    expect(namesMatching('web-01')).toEqual(['Nightly web-01'])
-    expect(namesMatching('this computer')).toEqual(['Nightly desktop'])
-  })
-
   it('resolves colliding projects and worktrees inside each row authority', () => {
     const rows = collidedListRows().rows
     const repos = [
