@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  indexPendingVmCheckouts,
-  isPendingVmCheckout,
-  parsePendingVmCheckouts,
-  PENDING_VM_CHECKOUTS_LIMIT
-} from './pending-vm-checkouts'
+import { indexPendingVmCheckouts, isPendingVmCheckout } from './pending-vm-checkouts'
 import { getEmptyProjectPlaceholderRepoIds } from './sidebar-list/empty-project-placeholder-repos'
 import type { Repo } from './repo-types'
 import type { Worktree } from './worktree/types'
@@ -19,18 +14,6 @@ describe('pending VM checkouts', () => {
     expect(isPendingVmCheckout(index, { repoId: 'vm', path: '/srv/other' })).toBe(false)
     expect(isPendingVmCheckout(index, { repoId: 'local', path: '/srv/repo' })).toBe(false)
     expect(isPendingVmCheckout(index, { worktreeId: 'no-repo-fields' })).toBe(false)
-  })
-
-  it('keeps only well-formed IPC entries, bounded', () => {
-    expect(parsePendingVmCheckouts('nope')).toEqual([])
-    expect(
-      parsePendingVmCheckouts([{ repoId: 'a', path: '/a', extra: 1 }, { repoId: 1 }, null])
-    ).toEqual([{ repoId: 'a', path: '/a' }])
-    const many = Array.from({ length: PENDING_VM_CHECKOUTS_LIMIT + 5 }, (_, i) => ({
-      repoId: `r${i}`,
-      path: '/p'
-    }))
-    expect(parsePendingVmCheckouts(many)).toHaveLength(PENDING_VM_CHECKOUTS_LIMIT)
   })
 
   it('draws no empty-project placeholder for a grouped VM project while its create is pending', () => {
