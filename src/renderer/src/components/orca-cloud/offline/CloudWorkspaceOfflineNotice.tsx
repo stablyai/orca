@@ -4,19 +4,8 @@ import type {
   CloudOfflineSnapshot,
   CloudQueuedPrompt
 } from '../../../../../shared/hosted-sandbox/cloud-workspace-offline-api'
-import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
 import { useTranslate } from '@/i18n/use-translate'
 import { CloudWorkspaceOfflineView } from './CloudWorkspaceOfflineView'
-
-function selectWorkspaceHasNoTabs(state: AppState, worktreeId: string): boolean {
-  return (
-    (state.unifiedTabsByWorktree[worktreeId]?.length ?? 0) === 0 &&
-    (state.tabsByWorktree[worktreeId]?.length ?? 0) === 0 &&
-    (state.browserTabsByWorktree[worktreeId]?.length ?? 0) === 0 &&
-    !state.openFiles.some((file) => file.worktreeId === worktreeId)
-  )
-}
 
 let cloudIds: Promise<Set<string>> | null = null
 function knownCloudWorkspaceIds(): Promise<Set<string>> {
@@ -33,16 +22,13 @@ function knownCloudWorkspaceIds(): Promise<Set<string>> {
   return cloudIds
 }
 
-/** A sleeping Orca Cloud workspace has no tabs; instead of a blank pane, show its cached copy. */
+/** A sleeping Orca Cloud workspace: instead of dead panes or a blank pane, show its cached copy. */
 export function CloudWorkspaceOfflineNotice({
   worktreeId
 }: {
   worktreeId: string | null
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const empty = useAppStore(
-    (state) => worktreeId !== null && selectWorkspaceHasNoTabs(state, worktreeId)
-  )
   const [isCloud, setIsCloud] = useState(false)
   const [snapshot, setSnapshot] = useState<CloudOfflineSnapshot | null>(null)
   const [queued, setQueued] = useState<CloudQueuedPrompt[]>([])
@@ -75,7 +61,7 @@ export function CloudWorkspaceOfflineNotice({
   }, [worktreeId])
 
   useEffect(() => {
-    if (!isCloud || !empty || !worktreeId) {
+    if (!isCloud || !worktreeId) {
       return
     }
     void refresh()
@@ -93,16 +79,17 @@ export function CloudWorkspaceOfflineNotice({
         void refresh()
       }
     })
-    // Relative times ("5 minutes ago") stay honest without a re-read.
-    const clock = setInterval(() => setNow(Date.now()), 30_000)
+    // A workspace can fall asleep (idle sleep, phone) while shown; re-read on a slow beat.
+    const clock = setInterval(() => void refresh(), 15_000)
     return () => {
       offQueue?.()
       offWake?.()
       clearInterval(clock)
     }
-  }, [isCloud, empty, worktreeId, refresh])
+  }, [isCloud, worktreeId, refresh])
 
-  if (!worktreeId || !isCloud || !empty || !snapshot || !snapshot.asleep) {
+  // Asleep, its panes are gone (restored ones are dead); the cached copy replaces them.
+  if (!worktreeId || !isCloud || !snapshot || !snapshot.asleep) {
     return null
   }
   const wake = (): void => {
@@ -118,7 +105,7 @@ export function CloudWorkspaceOfflineNotice({
       })
   }
   return (
-    <div className="absolute inset-0 flex justify-center overflow-hidden bg-background">
+    <div className="absolute inset-0 z-10 flex justify-center overflow-hidden bg-background">
       <CloudWorkspaceOfflineView
         snapshot={snapshot}
         queued={queued}

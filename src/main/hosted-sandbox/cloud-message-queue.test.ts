@@ -164,4 +164,31 @@ describe('cloud message queue', () => {
     expect(host.effects).toHaveLength(0)
     expect(queue.list('w')[0]!.state).toBe('queued')
   })
+
+  it('fails a prompt whose chat the host no longer has, without sending it', async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'orca-q-')), 'q.json')
+    const sends: unknown[] = []
+    const call: CloudMessageQueueDeps['call'] = async (_env, method, params) => {
+      if (method === 'agentSession.send') {
+        sends.push(params)
+      }
+      return {
+        id: method,
+        ok: false,
+        error: { code: 'agent_session_identity_required', message: 'x' },
+        _meta: { runtimeId: 'r' }
+      }
+    }
+    const queue = createCloudMessageQueue({
+      path,
+      locate: () => ({ environmentId: 'env', asleep: false }),
+      wake: async () => true,
+      call,
+      log: () => {}
+    })
+    queue.enqueue({ workspaceId: 'w', sessionId: 'gone', text: 'x' })
+    await queue.drive('w')
+    expect(queue.list('w')[0]!.state).toBe('failed')
+    expect(sends).toHaveLength(0)
+  })
 })

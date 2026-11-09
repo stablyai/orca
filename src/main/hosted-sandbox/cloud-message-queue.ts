@@ -91,7 +91,11 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
     deps.onChange?.(prompt.workspaceId)
   }
 
-  async function currentFence(environmentId: string, sessionId: string): Promise<number | null> {
+  /** The session's fence; `refused` when the host says the chat is gone; null to retry later. */
+  async function currentFence(
+    environmentId: string,
+    sessionId: string
+  ): Promise<number | { refused: string } | null> {
     const response = await deps.call(
       environmentId,
       'agentSession.history',
@@ -99,7 +103,12 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
       20_000
     )
     if (!response.ok) {
-      return null
+      // A session refusal is final (the chat was closed or never existed here); anything else
+      // (asleep, unreachable, timeout) is the transport and is retried.
+      const code = response.error.code
+      return code.startsWith('agent_session_') && !RETRYABLE_REFUSALS.has(code)
+        ? { refused: code }
+        : null
     }
     const result = response.result as { ok: boolean; page?: { fence?: number }; fence?: number }
     const fence = result.page?.fence ?? (result.ok ? undefined : result.fence)
@@ -108,7 +117,7 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
 
   /** One attempt; returns false when the workspace should be retried later. */
   async function deliver(prompt: StoredPrompt, environmentId: string): Promise<boolean> {
-    let fence: number | null
+    let fence: number | { refused: string } | null
     try {
       fence = await currentFence(environmentId, prompt.sessionId)
     } catch {
@@ -116,6 +125,10 @@ export function createCloudMessageQueue(deps: CloudMessageQueueDeps): CloudMessa
     }
     if (fence === null) {
       return false
+    }
+    if (typeof fence !== 'number') {
+      update(prompt, { state: 'failed', error: 'This chat is no longer on the workspace.' })
+      return true
     }
     // Durable before the send: a crash from here on resends this same operation id.
     update(prompt, { state: 'sending', attempts: prompt.attempts + 1 })
