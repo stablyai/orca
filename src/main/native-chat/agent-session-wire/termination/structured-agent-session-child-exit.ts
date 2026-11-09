@@ -33,6 +33,7 @@ import {
 } from './structured-agent-session-unfinished-work'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { evictStructuredAgentSession } from './structured-agent-session-eviction'
+import { logExitFailure, logProviderChildExit } from './structured-agent-session-provider-exit-log'
 import type { StructuredAgentSessionHostRuntimeState } from '../host/structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionStartFlights } from '../startup/structured-agent-session-start-flight'
 import type { StructuredAgentSessionStartupAttempts } from '../startup/structured-agent-session-startup-attempt'
@@ -189,6 +190,12 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {}),
     ...(expected && close ? { endedAt: close.requestedAt } : {})
   })
+  logProviderChildExit(context.logger, sessionId, child, {
+    expected,
+    failure,
+    reason: exit.reason,
+    duringStartup: exitedDuringStartup
+  })
   context.generationEnded(sessionId)
   const endChild = (): void => {
     context.startupAttempts?.childEnded(sessionId, child, {
@@ -320,13 +327,4 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     context.generationEnded(sessionId, { restate: released && !expected })
     wakeQueuedDelivery()
   }
-}
-
-function logExitFailure(
-  context: Pick<StructuredAgentSessionChildExitContext, 'logger'>,
-  sessionId: string,
-  scope: string,
-  error: unknown
-): void {
-  context.logger.warn('settling a provider exit did not finish', { scope, sessionId, error })
 }

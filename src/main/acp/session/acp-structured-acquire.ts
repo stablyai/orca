@@ -214,7 +214,15 @@ export async function acquireAcpStructuredSession(input: {
           session.turns?.accept(clientMessageId)
         }
       },
-      onFailed: () => input.forceClose(sessionId)
+      onFailed: (reason) => {
+        // The exit this close causes reads as the agent's, so name Orca's reason here.
+        logger.warn(`Orca stopped ${agentName} after its chat journal refused a write`, {
+          scope: 'acp-lane-refused',
+          sessionId,
+          reason
+        })
+        input.forceClose(sessionId)
+      }
     })
     slot.lane = lane
     slot.reattaching = attaching
