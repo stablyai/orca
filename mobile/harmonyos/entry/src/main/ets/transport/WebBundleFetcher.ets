@@ -228,7 +228,8 @@ export class WebBundleFetcher {
     return raw;
   }
 
-  private async downloadAsset(manifest: BundleManifest, asset: BundleAsset, baseDir: string): Promise<void> {
+  private async downloadAsset(manifest: BundleManifest, asset: BundleAsset, baseDir: string,
+    onWindow: (bytes: number) => void): Promise<void> {
     let bytes = new Uint8Array(asset.byteLength);
     let windowSize = manifest.rangeBytes > 0 ? manifest.rangeBytes : manifest.chunkBytes;
     for (let offset = 0; offset < asset.byteLength; offset += windowSize) {
@@ -237,6 +238,7 @@ export class WebBundleFetcher {
         throw new Error(`window overflows asset ${asset.path}`);
       }
       bytes.set(windowData, offset);
+      onWindow(windowData.length);
     }
     let digest = bytesToHex(sha256(bytes));
     if (digest !== asset.sha256) {
@@ -256,7 +258,7 @@ export class WebBundleFetcher {
   }
 
   /** Downloads every manifest asset into <filesDir>/webshell/<buildId>/; skips when the build is cached. */
-  async ensureBundle(manifest: BundleManifest): Promise<string> {
+  async ensureBundle(manifest: BundleManifest, onProgress?: (received: number, total: number) => void): Promise<string> {
     validateManifest(manifest);
     let fingerprint = bytesToHex(sha256(utf8Encode(JSON.stringify(manifest))));
     let baseDir = `${this.context.cacheDir}/webshell/${manifest.buildId}-${fingerprint}`;
@@ -273,8 +275,15 @@ export class WebBundleFetcher {
     } catch (e) {
       // not cached — fall through to download
     }
+    let received = 0;
+    let total = manifest.assets.reduce((sum: number, asset: BundleAsset): number => sum + asset.byteLength, 0);
+    onProgress?.(received, total);
+    let onWindow = (bytes: number): void => {
+      received += bytes;
+      onProgress?.(received, total);
+    };
     for (let i = 0; i < manifest.assets.length; i++) {
-      await this.downloadAsset(manifest, manifest.assets[i], baseDir);
+      await this.downloadAsset(manifest, manifest.assets[i], baseDir, onWindow);
     }
     try {
       fs.mkdirSync(baseDir, true);

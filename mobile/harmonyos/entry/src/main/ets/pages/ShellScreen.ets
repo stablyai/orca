@@ -131,6 +131,7 @@ struct ShellScreen {
   private hostId: string = '';
   private hostMeta: HostMeta | null = null;
   @State phase: string = '启动中…';
+  @State downloadPercent: number = -1;
   @State logs: string[] = [];
   @State webSrc: string = '';
   @State showLog: boolean = false;
@@ -236,6 +237,7 @@ struct ShellScreen {
   }
 
   private releaseBridge(): void {
+    this.downloadPercent = -1;
     if (this.bridge) {
       this.routePathname = this.bridge.getRoute();
       this.routeParams = this.bridge.getRouteParams();
@@ -355,8 +357,16 @@ struct ShellScreen {
       this.publishPhase('已连接 · 加载会话…');
       let fetcher = new WebBundleFetcher(client, getContext(this));
       let manifest = await fetcher.fetchManifest();
-      let baseDir = await fetcher.ensureBundle(manifest);
       if (this.disposed || generation !== this.generation || this.client !== client) { return; }
+      let startupGeneration = this.startupGeneration;
+      let baseDir = await fetcher.ensureBundle(manifest, (received: number, total: number): void => {
+        if (this.disposed || generation !== this.generation || this.client !== client) { return; }
+        this.startup.progress(startupGeneration);
+        if (total > 0) { this.downloadPercent = Math.floor(received * 100 / total); }
+      });
+      if (this.disposed || generation !== this.generation || this.client !== client) { return; }
+      this.startup.progress(startupGeneration);
+      this.downloadPercent = -1;
       this.manifest = manifest; this.baseDir = baseDir;
       let storage = new PageStorageStore(getContext(this), meta.id);
       let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext, client); this.nativeDevice = nativeDevice;
@@ -501,28 +511,21 @@ struct ShellScreen {
             .height('100%')
             .backgroundColor(this.themeBg)
         } else {
-          Column({ space: 6 }) {
+          Column({ space: 12 }) {
             Text(uiText(this.phase, this.uiLocale))
-              .fontFamily('Geist').fontSize(14)
-              .fontColor(this.themeWarning)
-            List({ space: 2 }) {
-              ForEach(this.logs, (line: string) => {
-                ListItem() {
-                  Text(line)
-                    .fontFamily('Geist').fontSize(9)
-                    .fontColor(this.themeSecondary)
-                    .maxLines(3)
-                    .width('100%')
-                }
-              }, (line: string, index: number) => `${index}-${line}`)
+              .fontFamily('Geist').fontSize(16)
+              .fontColor(this.phase.startsWith('失败') ? this.themeWarning : this.themeText)
+              .textAlign(TextAlign.Center)
+            if (this.downloadPercent >= 0) {
+              Progress({ value: this.downloadPercent, total: 100, type: ProgressType.Linear })
+                .width('100%').color(this.themeText).backgroundColor(this.themeBorder)
+              Text(`${this.downloadPercent}%`).fontFamily('Geist').fontSize(13).fontColor(this.themeSecondary)
+            } else if (!this.phase.startsWith('失败') && !this.phase.includes('重新配对') && this.phase !== '主机不存在') {
+              LoadingProgress().width(24).height(24).color(this.themeSecondary)
             }
-            .layoutWeight(1)
-            .width('100%')
           }
-          .width('100%')
-          .height('100%')
-          .padding({ left: 12, right: 12, top: 8 })
-          .alignItems(HorizontalAlign.Start)
+          .width('100%').constraintSize({ maxWidth: 420 })
+          .padding({ left: 24, right: 24 })
         }
 
         if (this.showLog) {

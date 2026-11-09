@@ -40,6 +40,7 @@ struct PairScan {
   @State busy: boolean = false;
   @State scanning: boolean = false;
   @State advanced: boolean = false;
+  @State showPaste: boolean = false;
   @State stage: string = '';
   @State confirming: boolean = false;
   @State desktopEndpoint: string = '';
@@ -62,7 +63,7 @@ struct PairScan {
   aboutToAppear(): void {
     let params = (router.getParams() ?? {}) as Record<string, string>;
     if (params && typeof params['pairingCode'] === 'string') {
-      this.pairingCode = params['pairingCode']; this.previewOffer();
+      this.pairingCode = params['pairingCode']; this.previewOffer(true);
     }
   }
 
@@ -70,6 +71,8 @@ struct PairScan {
     this.visible = true; this.navigationEpoch++;
     if (this.pairedHostId.length > 0 && !this.busy && !this.navigationBusy) {
       this.continueAfterPair(this.pairedHostId).catch(() => {});
+    } else if (this.confirmedOffer && !this.confirming) {
+      this.doPair().catch(() => {});
     }
   }
   onPageHide(): void { this.visible = false; this.navigationEpoch++; }
@@ -100,11 +103,9 @@ struct PairScan {
         });
       });
       if (this.disposed) { return; }
-      parsePairingOffer(result.originalValue);
       this.pairingCode = result.originalValue;
-      this.appendLog('已读取配对码');
       this.scanning = false;
-      this.previewOffer();
+      this.previewOffer(false);
     } catch (e) {
       if (!this.disposed) { this.appendLog('未读取到有效配对码，可重试扫码或手动粘贴'); }
     } finally {
@@ -114,10 +115,11 @@ struct PairScan {
 
   onBackPress(): boolean {
     if (this.confirming && !this.busy) { this.confirming = false; this.confirmedOffer = null; return true; }
+    if (this.showPaste && !this.busy) { this.showPaste = false; this.pairingCode = ''; return true; }
     return false;
   }
 
-  previewOffer(): void {
+  previewOffer(requireConfirmation: boolean): void {
     if (this.busy || this.disposed || this.pairedHostId.length > 0) { return; }
     try {
       let offer = parsePairingOffer(this.pairingCode);
@@ -130,8 +132,11 @@ struct PairScan {
       this.desktopEndpoint = endpoint;
       let id = hostIdFor(offer.publicKeyB64);
       this.desktopIdentity = `${id.substring(0, 8)} ${id.substring(8, 16)} ${id.substring(16, 24)} ${id.substring(24, 32)}`;
-      this.stage = ''; this.confirming = true;
+      this.pairingCode = '';
+      this.stage = ''; this.confirming = requireConfirmation;
+      if (!requireConfirmation) { this.doPair().catch(() => {}); }
     } catch (e) {
+      this.pairingCode = '';
       this.confirmedOffer = null; this.confirming = false;
       this.stage = '配对信息无效或已过期，请重新获取';
     }
@@ -194,12 +199,14 @@ struct PairScan {
   }
 
   async doPair(): Promise<void> {
-    if (this.busy || this.scanning || this.disposed || !this.visible || !this.confirming || !this.confirmedOffer || this.pairedHostId.length > 0) {
+    let offer = this.confirmedOffer;
+    if (this.busy || this.scanning || this.disposed || !this.visible || !offer || this.pairedHostId.length > 0) {
       return;
     }
     let pairingStartedAt = Date.now();
     let navigationEpoch = this.navigationEpoch;
     this.busy = true;
+    this.logs = [];
     this.timedOut = false;
     this.deadline = setTimeout((): void => {
       this.timedOut = true; if (this.client) { this.client.close(); }
@@ -208,8 +215,6 @@ struct PairScan {
     let client: SpikeRpcClient | null = null;
     try {
       this.appendLog('正在验证配对信息…');
-      let offer: PairingOffer = parsePairingOffer(this.pairingCode);
-      if (!this.confirmedOffer || offer.publicKeyB64 !== this.confirmedOffer.publicKeyB64) { throw new Error('Pairing identity changed'); }
       let endpoint = this.desktopEndpoint;
       this.stage = '正在连接桌面…';
 
@@ -304,6 +309,7 @@ struct PairScan {
       await this.continueAfterPair(meta.id);
     } catch (e) {
       if (this.disposed) { return; }
+      if (!this.confirming) { this.confirmedOffer = null; }
       this.stage = '配对失败，请检查配对码和网络连接后重试';
       this.appendLog(this.stage);
       recordConnection(getContext(this), LOG_LEVEL_ERROR, '桌面配对失败', '').catch(() => {});
@@ -327,21 +333,13 @@ struct PairScan {
       Row({ space: 10 }) {
         Button(uiText('返回', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).backgroundColor(Color.Transparent)
           .onClick(() => {
-            if (this.confirming && !this.busy) { this.confirming = false; this.confirmedOffer = null; }
-            else { router.back(); }
+            if (!this.onBackPress()) { router.back(); }
           })
         Text(uiText('配对桌面', this.uiLocale))
           .fontFamily('Geist').fontSize(20)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.themeText)
           .layoutWeight(1)
-        Button(uiText('扫码', this.uiLocale))
-          .fontFamily('Geist').fontSize(13)
-          .height(36)
-          .enabled(!this.busy && !this.scanning && !this.confirming && this.pairedHostId.length === 0)
-          .onClick(() => {
-            this.doScan();
-          })
       }
       .width('100%')
       .padding({ left: 14, right: 14, top: 10 })
@@ -351,6 +349,11 @@ struct PairScan {
         if (this.stage.length > 0) { Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary) }
         Button(uiText('继续首次设置', this.uiLocale)).fontFamily('Geist').fontSize(16).width('100%').height(48)
           .enabled(!this.navigationBusy).onClick(() => { this.continueAfterPair(this.pairedHostId).catch(() => {}); })
+      } else if (this.busy) {
+        Column({ space: 14 }) {
+          LoadingProgress().width(32).height(32).color(this.themeText)
+          Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(17).fontColor(this.themeText)
+        }.width('100%').padding({ top: 36, bottom: 20 })
       } else if (this.confirming) {
         Text(uiText('信任并配对此桌面？', this.uiLocale)).fontFamily('Geist').fontSize(24).fontWeight(FontWeight.Bold).fontColor(this.themeText)
         Text(uiText('此身份来自你扫描或粘贴的配对信息。确认你信任这台桌面后继续。', this.uiLocale))
@@ -368,23 +371,37 @@ struct PairScan {
           .fontColor(this.themeSecondary).backgroundColor(Color.Transparent).enabled(!this.busy)
           .onClick(() => { this.confirming = false; this.confirmedOffer = null; })
       } else {
-        Text(uiText('在桌面 Orca 的设置 → 移动端生成二维码，然后扫码或粘贴配对链接。', this.uiLocale))
-          .fontFamily('Geist').fontSize(15).fontColor(this.themeSecondary).width('100%')
-        Button(uiText(this.advanced ? '收起连接选项' : '连接选项', this.uiLocale)).fontFamily('Geist').fontSize(13).fontColor(this.themeMuted)
-          .backgroundColor(Color.Transparent).enabled(!this.busy)
-          .onClick(() => { this.advanced = !this.advanced; })
-        if (this.advanced) {
-          TextInput({ placeholder: uiText('桌面 WebSocket 地址（可选）', this.uiLocale), text: this.endpointOverride })
-            .fontFamily('Geist').fontSize(14).height(44).enabled(!this.busy && !this.scanning)
-            .onChange((value: string) => { this.endpointOverride = value; })
+        Column({ space: 12 }) {
+          Text(uiText('在桌面 Orca 的设置 → 移动端生成二维码，然后扫码或粘贴配对链接。', this.uiLocale))
+            .fontFamily('Geist').fontSize(15).fontColor(this.themeSecondary).textAlign(TextAlign.Center)
+          if (!this.showPaste) {
+            Button(uiText('扫码', this.uiLocale)).fontFamily('Geist').fontSize(16).width('100%').height(48)
+              .fontColor(this.themeBg).backgroundColor(this.themeText)
+              .enabled(!this.scanning).onClick(() => { this.doScan().catch(() => {}); })
+            Button(uiText('粘贴配对链接或配对码', this.uiLocale)).fontFamily('Geist').fontSize(14)
+              .fontColor(this.themeSecondary).backgroundColor(Color.Transparent)
+              .enabled(!this.scanning).onClick(() => { this.showPaste = true; })
+          } else {
+            TextArea({ placeholder: uiText('粘贴配对链接或配对码', this.uiLocale), text: this.pairingCode })
+              .fontFamily('Geist').fontSize(14).height(110)
+              .onChange((value: string) => { this.pairingCode = value; })
+            Button(uiText('继续', this.uiLocale)).fontFamily('Geist').fontSize(16).width('100%').height(48)
+              .fontColor(this.themeBg).backgroundColor(this.themeText)
+              .enabled(this.pairingCode.trim().length > 0).onClick(() => this.previewOffer(false))
+            Button(uiText(this.advanced ? '收起连接选项' : '连接选项', this.uiLocale))
+              .fontFamily('Geist').fontSize(13).fontColor(this.themeMuted).backgroundColor(Color.Transparent)
+              .onClick(() => { this.advanced = !this.advanced; })
+            if (this.advanced) {
+              TextInput({ placeholder: uiText('桌面 WebSocket 地址（可选）', this.uiLocale), text: this.endpointOverride })
+                .fontFamily('Geist').fontSize(14).height(44)
+                .onChange((value: string) => { this.endpointOverride = value; })
+            }
+          }
+          if (this.stage.length > 0) {
+            Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary)
+          }
         }
-        TextArea({ placeholder: uiText('粘贴配对链接或配对码', this.uiLocale), text: this.pairingCode })
-          .fontFamily('Geist').fontSize(14).height(110).enabled(!this.busy && !this.scanning)
-          .onChange((value: string) => { this.pairingCode = value; })
-        if (this.stage.length > 0) { Text(uiText(this.stage, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).width('100%') }
-        Button(uiText('继续', this.uiLocale)).fontFamily('Geist').fontSize(16).width('100%').height(48)
-          .enabled(!this.busy && !this.scanning && this.pairingCode.trim().length > 0)
-          .onClick(() => this.previewOffer())
+        .width('100%').constraintSize({ maxWidth: 420 }).padding({ top: 24, left: 12, right: 12 })
       }
 
       List({ space: 2 }) {
