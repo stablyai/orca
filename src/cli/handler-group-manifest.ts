@@ -7,6 +7,7 @@ import { SERVE_PAIRING_HANDLER_GROUPS } from './serve-pairing-handler-groups'
 import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
 import { HOST_HANDLER_GROUPS } from './host-handler-groups'
 import { WORKTREE_HANDLER_GROUPS } from './worktree-handler-groups'
+import { CLOUD_HANDLER_GROUP } from './cloud/cloud-handler-group'
 
 export type HandlerGroup = {
   name: string
@@ -20,6 +21,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,
+  CLOUD_HANDLER_GROUP,
   {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
