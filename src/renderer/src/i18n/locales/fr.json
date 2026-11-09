@@ -20862,7 +20862,7 @@
           "personalScope": "Utilisé dans tous les dépôts.",
           "scope": "Termes pour",
           "personal": "Personnel · {{total}}",
-          "repo": "Dépôt {{repo}} · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "Retirer {{term}}",
           "term": "Mot ou expression",

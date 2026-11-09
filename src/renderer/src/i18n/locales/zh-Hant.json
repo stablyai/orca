@@ -20440,7 +20440,7 @@
           "personalScope": "在所有儲存庫中使用。",
           "scope": "術語範圍",
           "personal": "個人 · {{total}}",
-          "repo": "{{repo}} 儲存庫 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "移除 {{term}}",
           "term": "詞語或片語",

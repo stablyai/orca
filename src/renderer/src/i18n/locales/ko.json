@@ -20038,7 +20038,7 @@
           "personalScope": "모든 저장소에서 사용합니다.",
           "scope": "용어 대상",
           "personal": "개인 · {{total}}",
-          "repo": "{{repo}} 저장소 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "{{term}} 삭제",
           "term": "단어 또는 구문",

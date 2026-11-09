@@ -106,14 +106,14 @@ export function VoiceVocabularySetting({
               {
                 value: 'personal',
                 label: t('components.settings.voice.vocabulary.personal', 'Personal · {{total}}', {
-                  total: personalTerms.length
+                  total: chipsBySpelling(personalTerms).length
                 })
               },
               {
                 value: 'repo',
-                label: t('components.settings.voice.vocabulary.repo', '{{repo}} repo · {{total}}', {
+                label: t('components.settings.voice.vocabulary.repo', '{{repo}} · {{total}}', {
                   repo: repo.displayName,
-                  total: repoTerms.length
+                  total: chipsBySpelling(repoTerms).length
                 })
               }
             ]}
@@ -122,11 +122,11 @@ export function VoiceVocabularySetting({
       </div>
       {terms.length > 0 ? (
         <ul className="flex flex-wrap gap-1.5">
-          {terms.map((entry, index) => (
+          {chipsBySpelling(terms).map((chip) => (
             <VocabularyChip
-              key={`${entry.term}\u0000${entry.heardAs ?? ''}`}
-              entry={entry}
-              onRemove={() => saveTerms(terms.filter((_, i) => i !== index))}
+              key={chip.term}
+              chip={chip}
+              onRemove={() => saveTerms(terms.filter((entry) => entry.term !== chip.term))}
             />
           ))}
         </ul>
@@ -162,21 +162,36 @@ export function VoiceVocabularySetting({
   )
 }
 
+type VocabularyChipModel = { term: string; aliases: string[] }
+
+// One chip per spelling: the stored list keeps one entry per "heard as".
+function chipsBySpelling(terms: readonly DictationTerm[]): VocabularyChipModel[] {
+  const chips = new Map<string, VocabularyChipModel>()
+  for (const { term, heardAs } of terms) {
+    const chip = chips.get(term) ?? { term, aliases: [] }
+    if (heardAs) {
+      chip.aliases.push(heardAs)
+    }
+    chips.set(term, chip)
+  }
+  return [...chips.values()]
+}
+
 function VocabularyChip({
-  entry,
+  chip,
   onRemove
 }: {
-  entry: DictationTerm
+  chip: VocabularyChipModel
   onRemove: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <li className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background py-0.5 pr-1 pl-2.5 text-xs">
-      <span>{entry.term}</span>
-      {entry.heardAs ? (
+      <span>{chip.term}</span>
+      {chip.aliases.length > 0 ? (
         <span className="text-muted-foreground">
           {t('components.settings.voice.vocabulary.heardAsChip', '← {{heardAs}}', {
-            heardAs: entry.heardAs
+            heardAs: chip.aliases.join(', ')
           })}
         </span>
       ) : null}
@@ -186,7 +201,7 @@ function VocabularyChip({
         size="icon-xs-round"
         className="size-4.5"
         aria-label={t('components.settings.voice.vocabulary.remove', 'Remove {{term}}', {
-          term: entry.term
+          term: chip.term
         })}
         onClick={onRemove}
       >

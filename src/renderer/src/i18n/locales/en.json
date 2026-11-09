@@ -21456,7 +21456,7 @@
           "personalScope": "Used in every repo.",
           "scope": "Terms for",
           "personal": "Personal · {{total}}",
-          "repo": "{{repo}} repo · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "Remove {{term}}",
           "term": "Word or phrase",

@@ -20757,7 +20757,7 @@
           "personalScope": "In jedem Repo.",
           "scope": "Begriffe für",
           "personal": "Persönlich · {{total}}",
-          "repo": "Repo {{repo}} · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "{{term}} entfernen",
           "term": "Wort oder Wendung",

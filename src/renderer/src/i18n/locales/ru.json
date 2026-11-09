@@ -21444,7 +21444,7 @@
           "personalScope": "Используется во всех репозиториях.",
           "scope": "Термины для",
           "personal": "Личные · {{total}}",
-          "repo": "Репозиторий {{repo}} · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "Удалить {{term}}",
           "term": "Слово или фраза",

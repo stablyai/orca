@@ -20545,7 +20545,7 @@
           "personalScope": "Se usa en todos los repos.",
           "scope": "Términos para",
           "personal": "Personal · {{total}}",
-          "repo": "Repo {{repo}} · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "Quitar {{term}}",
           "term": "Palabra o frase",

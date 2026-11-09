@@ -20038,7 +20038,7 @@
           "personalScope": "すべてのリポジトリで使います。",
           "scope": "用語の対象",
           "personal": "個人 · {{total}}",
-          "repo": "{{repo}} リポジトリ · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "{{term}} を削除",
           "term": "単語またはフレーズ",

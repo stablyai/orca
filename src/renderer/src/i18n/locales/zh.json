@@ -20037,7 +20037,7 @@
           "personalScope": "在所有仓库中使用。",
           "scope": "术语范围",
           "personal": "个人 · {{total}}",
-          "repo": "{{repo}} 仓库 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "移除 {{term}}",
           "term": "词语或短语",

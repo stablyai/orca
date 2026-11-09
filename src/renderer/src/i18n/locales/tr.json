@@ -20739,7 +20739,7 @@
           "personalScope": "Her depoda kullanılır.",
           "scope": "Terimler",
           "personal": "Kişisel · {{total}}",
-          "repo": "{{repo}} deposu · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "{{term}} kaldır",
           "term": "Sözcük veya ifade",

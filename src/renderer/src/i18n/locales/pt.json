@@ -21727,7 +21727,7 @@
           "personalScope": "Usado em todos os repositórios.",
           "scope": "Termos para",
           "personal": "Pessoal · {{total}}",
-          "repo": "Repositório {{repo}} · {{total}}",
+          "repo": "{{repo}} · {{total}}",
           "heardAsChip": "← {{heardAs}}",
           "remove": "Remover {{term}}",
           "term": "Palavra ou frase",
