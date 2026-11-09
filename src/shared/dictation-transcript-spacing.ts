@@ -2,8 +2,8 @@
 export const DICTATION_TEXT_BLOCK_SELECTOR =
   'p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th, div'
 
-const CJK_BOUNDARY_CHAR_RE =
-  /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]$/u
+// Chinese and Japanese don't space words; Korean does, so Hangul spaces like Latin text.
+const UNSPACED_SCRIPT_CHAR_RE = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]$/u
 const NO_SPACE_BEFORE_CHAR_RE = /^[,.;:!?%。，、！？；：）)\]}”’»]$/u
 const NO_SPACE_AFTER_CHAR_RE = /^[([{（《「『“‘«„]$/u
 const STRAIGHT_QUOTE_RE = /["'`]/
@@ -20,7 +20,7 @@ function getLastChar(text: string): string {
   return Array.from(text.slice(-2)).at(-1) ?? ''
 }
 
-// Dictated text and its neighbour touch with no space between: one is empty or already spaced, either is CJK, or punctuation binds them.
+// Dictated text and its neighbour touch with no space between: one is empty or already spaced, either is Chinese or Japanese, or punctuation binds them.
 function dictationJoinsWithoutSpace(previousText: string, nextText: string): boolean {
   if (!previousText || !nextText || /\s$/.test(previousText) || /^\s/.test(nextText)) {
     return true
@@ -28,14 +28,19 @@ function dictationJoinsWithoutSpace(previousText: string, nextText: string): boo
   const previousChar = getLastChar(previousText)
   const nextChar = getFirstChar(nextText)
   return (
-    CJK_BOUNDARY_CHAR_RE.test(previousChar) ||
-    CJK_BOUNDARY_CHAR_RE.test(nextChar) ||
+    UNSPACED_SCRIPT_CHAR_RE.test(previousChar) ||
+    UNSPACED_SCRIPT_CHAR_RE.test(nextChar) ||
     NO_SPACE_BEFORE_CHAR_RE.test(nextChar) ||
     NO_SPACE_AFTER_CHAR_RE.test(previousChar)
   )
 }
 
-/** The spaces dictated text needs between the text before and after where it lands, unless punctuation, CJK or a quote it sits just inside joins them. */
+/** `before` and `text` joined with the space dictation puts between them, if any. */
+export function appendDictationText(before: string, text: string): string {
+  return `${before}${dictationSeparators(before, text, '').leading}${text}`
+}
+
+/** The spaces dictated text needs between the text before and after where it lands, unless punctuation, Chinese or Japanese, or a quote it sits just inside joins them. */
 export function dictationSeparators(
   before: string,
   text: string,

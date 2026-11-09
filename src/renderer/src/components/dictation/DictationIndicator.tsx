@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { ArrowUp, Check, CornerDownLeft, Loader2 } from 'lucide-react'
 import { isDictationPillShown } from '../../../../shared/dictation-session-machine'
+import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
 import { CLOUD_DICTATION_MAX_SECONDS } from '../../../../shared/rpc-contract/speech-params'
 import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import { dispatchDictationControl } from './dictation-control-events'
@@ -207,7 +208,7 @@ function DictationPill({ captureLive, anchor, failure, queued }: DictationIndica
             >
               <span className="shrink-0">
                 {committed}
-                {committed && tentative ? ' ' : null}
+                {dictationSeparators(committed, tentative, '').leading}
                 <span className="text-muted-foreground">{tentative}</span>
               </span>
             </span>
