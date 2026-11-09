@@ -91,6 +91,8 @@ export function claudeChildEnv(
 ): Record<string, string> {
   const env = decorateEnv({
     ...withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
+    // Name Orca as the client instead of the SDK's sdk-ts default or a launching Claude's value.
+    CLAUDE_CODE_ENTRYPOINT: 'orca',
     ...sources.overlay
   })
   return runtimeOnPath
