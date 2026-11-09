@@ -1,19 +1,13 @@
-export type MobileDiffLineKind = 'context' | 'add' | 'delete'
+import { buildLargeFileDiffLines } from './mobile-diff-bounded'
+import {
+  buildLcsDiffLines,
+  finalizeMobileDiffLines,
+  MAX_DIFF_CELLS,
+  type MobileDiffLine,
+  type MobileDiffLineKind
+} from './mobile-diff-lcs'
 
-export type MobileDiffLine = {
-  kind: MobileDiffLineKind
-  text: string
-  oldLineNumber?: number
-  newLineNumber?: number
-}
-
-const MAX_DIFF_CELLS = 200_000
-const MAX_MOBILE_DIFF_LINES = 2_500
-const MAX_BUILT_DIFF_LINES = MAX_MOBILE_DIFF_LINES + 1
-const TRUNCATED_LINE: MobileDiffLine = {
-  kind: 'context',
-  text: '... diff truncated for mobile preview ...'
-}
+export type { MobileDiffLine, MobileDiffLineKind }
 
 export function buildMobileDiffLines(
   originalContent: string,
@@ -29,12 +23,13 @@ export function buildMobileDiffLines(
   const modifiedKeys = options?.ignoreTrimWhitespace
     ? modifiedLines.map((line) => line.trim())
     : modifiedLines
-  // Why: the LCS table is quadratic. Large generated files still need a
-  // responsive mobile preview, so fall back to prefix/suffix diffing.
+  // Why: the LCS table is quadratic. Past this budget, anchor on lines that
+  // occur once on each side so separated edits keep the unchanged rows.
+  // A region with no such anchor still uses prefix/suffix diffing.
   const lines =
     originalLines.length * modifiedLines.length <= MAX_DIFF_CELLS
       ? buildLcsDiffLines(originalLines, modifiedLines, originalKeys, modifiedKeys)
-      : buildPrefixSuffixDiffLines(originalLines, modifiedLines, originalKeys, modifiedKeys)
+      : buildLargeFileDiffLines(originalLines, modifiedLines, originalKeys, modifiedKeys)
 
   return finalizeMobileDiffLines(lines)
 }
@@ -48,189 +43,4 @@ function splitContentLines(content: string): string[] {
     lines.pop()
   }
   return lines
-}
-
-// Keys are the lines compared for equality; the lines themselves are what the diff shows.
-function buildLcsDiffLines(
-  originalLines: string[],
-  modifiedLines: string[],
-  originalKeys: string[],
-  modifiedKeys: string[]
-): MobileDiffLine[] {
-  const rowWidth = modifiedLines.length + 1
-  const dp = new Uint32Array((originalLines.length + 1) * rowWidth)
-  for (let i = originalLines.length - 1; i >= 0; i -= 1) {
-    for (let j = modifiedLines.length - 1; j >= 0; j -= 1) {
-      dp[i * rowWidth + j] =
-        originalKeys[i] === modifiedKeys[j]
-          ? dp[(i + 1) * rowWidth + j + 1] + 1
-          : Math.max(dp[(i + 1) * rowWidth + j], dp[i * rowWidth + j + 1])
-    }
-  }
-
-  const lines: MobileDiffLine[] = []
-  let originalIndex = 0
-  let modifiedIndex = 0
-  while (originalIndex < originalLines.length && modifiedIndex < modifiedLines.length) {
-    if (originalKeys[originalIndex] === modifiedKeys[modifiedIndex]) {
-      if (
-        !appendDiffLine(lines, {
-          kind: 'context',
-          text: modifiedLines[modifiedIndex] ?? '',
-          oldLineNumber: originalIndex + 1,
-          newLineNumber: modifiedIndex + 1
-        })
-      ) {
-        return lines
-      }
-      originalIndex += 1
-      modifiedIndex += 1
-    } else if (
-      dp[(originalIndex + 1) * rowWidth + modifiedIndex] >=
-      dp[originalIndex * rowWidth + modifiedIndex + 1]
-    ) {
-      if (
-        !appendDiffLine(lines, {
-          kind: 'delete',
-          text: originalLines[originalIndex] ?? '',
-          oldLineNumber: originalIndex + 1
-        })
-      ) {
-        return lines
-      }
-      originalIndex += 1
-    } else {
-      if (
-        !appendDiffLine(lines, {
-          kind: 'add',
-          text: modifiedLines[modifiedIndex] ?? '',
-          newLineNumber: modifiedIndex + 1
-        })
-      ) {
-        return lines
-      }
-      modifiedIndex += 1
-    }
-  }
-
-  while (originalIndex < originalLines.length) {
-    if (
-      !appendDiffLine(lines, {
-        kind: 'delete',
-        text: originalLines[originalIndex] ?? '',
-        oldLineNumber: originalIndex + 1
-      })
-    ) {
-      return lines
-    }
-    originalIndex += 1
-  }
-  while (modifiedIndex < modifiedLines.length) {
-    if (
-      !appendDiffLine(lines, {
-        kind: 'add',
-        text: modifiedLines[modifiedIndex] ?? '',
-        newLineNumber: modifiedIndex + 1
-      })
-    ) {
-      return lines
-    }
-    modifiedIndex += 1
-  }
-
-  return lines
-}
-
-function buildPrefixSuffixDiffLines(
-  originalLines: string[],
-  modifiedLines: string[],
-  originalKeys: string[],
-  modifiedKeys: string[]
-): MobileDiffLine[] {
-  let prefixLength = 0
-  while (
-    prefixLength < originalLines.length &&
-    prefixLength < modifiedLines.length &&
-    originalKeys[prefixLength] === modifiedKeys[prefixLength]
-  ) {
-    prefixLength += 1
-  }
-
-  let suffixLength = 0
-  while (
-    suffixLength + prefixLength < originalLines.length &&
-    suffixLength + prefixLength < modifiedLines.length &&
-    originalKeys[originalLines.length - suffixLength - 1] ===
-      modifiedKeys[modifiedLines.length - suffixLength - 1]
-  ) {
-    suffixLength += 1
-  }
-
-  const lines: MobileDiffLine[] = []
-  for (let i = 0; i < prefixLength; i += 1) {
-    if (
-      !appendDiffLine(lines, {
-        kind: 'context',
-        text: modifiedLines[i] ?? '',
-        oldLineNumber: i + 1,
-        newLineNumber: i + 1
-      })
-    ) {
-      return lines
-    }
-  }
-  for (let i = prefixLength; i < originalLines.length - suffixLength; i += 1) {
-    if (
-      !appendDiffLine(lines, {
-        kind: 'delete',
-        text: originalLines[i] ?? '',
-        oldLineNumber: i + 1
-      })
-    ) {
-      return lines
-    }
-  }
-  for (let i = prefixLength; i < modifiedLines.length - suffixLength; i += 1) {
-    if (
-      !appendDiffLine(lines, {
-        kind: 'add',
-        text: modifiedLines[i] ?? '',
-        newLineNumber: i + 1
-      })
-    ) {
-      return lines
-    }
-  }
-  for (let i = originalLines.length - suffixLength; i < originalLines.length; i += 1) {
-    const modifiedIndex =
-      modifiedLines.length - suffixLength + (i - (originalLines.length - suffixLength))
-    if (
-      !appendDiffLine(lines, {
-        kind: 'context',
-        text: modifiedLines[modifiedIndex] ?? '',
-        oldLineNumber: i + 1,
-        newLineNumber: modifiedIndex + 1
-      })
-    ) {
-      return lines
-    }
-  }
-  return lines
-}
-
-function appendDiffLine(lines: MobileDiffLine[], line: MobileDiffLine): boolean {
-  // Why: the mobile preview only renders the first capped rows; keep one extra
-  // row solely to preserve the existing "truncated" marker decision.
-  lines.push(line)
-  return lines.length < MAX_BUILT_DIFF_LINES
-}
-
-function finalizeMobileDiffLines(lines: MobileDiffLine[]): {
-  lines: MobileDiffLine[]
-  truncated: boolean
-} {
-  if (lines.length <= MAX_MOBILE_DIFF_LINES) {
-    return { lines, truncated: false }
-  }
-  return { lines: [...lines.slice(0, MAX_MOBILE_DIFF_LINES), TRUNCATED_LINE], truncated: true }
 }
