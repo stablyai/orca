@@ -254,7 +254,7 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     act(() => trigger.focus())
     await user.keyboard('co')
     const search = document.querySelector<HTMLInputElement>(
-      'input[placeholder="Search agents and setups…"]'
+      'input[placeholder="Search, e.g. Opus 5.5…"]'
     )!
     expect(document.activeElement).toBe(search)
     expect(search.value).toBe('co')
