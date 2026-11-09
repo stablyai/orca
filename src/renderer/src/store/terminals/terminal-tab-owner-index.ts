@@ -1,4 +1,5 @@
-import { annotateTabBucketReplacement, readTabMapChanges } from '@/store/keyed-record-transitions'
+import { readTabMapChanges } from '@/store/keyed-record-transitions'
+import { isIndexKey } from '@/store/keyed-record-key-checks'
 
 type TerminalTabOwnerBuckets = Readonly<Record<string, readonly { id: string }[]>>
 
@@ -21,12 +22,20 @@ export type TerminalTabOwnerIndex = {
 
 export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
   let source: TerminalTabOwnerBuckets | null = null
-  let orderedKeys: string[] = []
   const bucketOrder = new Map<string, number>()
   let nextBucketOrder = 0
   const bucketByWorktreeId = new Map<string, IndexedBucket>()
   const worktreeIdsByTabId = new Map<string, Set<string>>()
   const ownerByTabId = new Map<string, string>()
+
+  const compareWorkspaceOrder = (a: string, b: string): number => {
+    const numericA = isIndexKey(a)
+    const numericB = isIndexKey(b)
+    if (numericA || numericB) {
+      return numericA && numericB ? Number(a) - Number(b) : numericA ? -1 : 1
+    }
+    return bucketOrder.get(a)! - bucketOrder.get(b)!
+  }
 
   const removeBucketMembership = (worktreeId: string, tabIds: ReadonlySet<string>): void => {
     for (const tabId of tabIds) {
@@ -96,12 +105,9 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
           ownerByTabId.set(tabId, ids.values().next().value!)
         } else {
           let owner: string | undefined
-          let rank = -1
           for (const id of ids) {
-            const order = bucketOrder.get(id) ?? -1
-            if (order > rank) {
+            if (owner === undefined || compareWorkspaceOrder(id, owner) > 0) {
               owner = id
-              rank = order
             }
           }
           if (owner) {
@@ -115,9 +121,6 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
 
     // Unknown snapshots can change key order and duplicate ownership; rebuild that order once.
     const nextOrderedKeys = Object.keys(tabsByWorktree)
-    const orderChanged =
-      orderedKeys.length !== nextOrderedKeys.length ||
-      orderedKeys.some((key, index) => key !== nextOrderedKeys[index])
     const nextKeySet = new Set(nextOrderedKeys)
     const affectedTabIds = new Set<string>()
 
@@ -158,8 +161,7 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     const orderByWorktreeId = new Map(
       nextOrderedKeys.map((worktreeId, index) => [worktreeId, index] as const)
     )
-    const tabIdsToResolve = orderChanged ? worktreeIdsByTabId.keys() : affectedTabIds
-    for (const tabId of tabIdsToResolve) {
+    for (const tabId of worktreeIdsByTabId.keys()) {
       const worktreeIds = worktreeIdsByTabId.get(tabId)
       let owner: string | null = null
       let ownerOrder = -1
@@ -183,7 +185,6 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     }
 
     source = tabsByWorktree
-    orderedKeys = nextOrderedKeys
     bucketOrder.clear()
     for (const [id, order] of orderByWorktreeId) {
       bucketOrder.set(id, order)
@@ -225,12 +226,9 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     getFirstOwner: (tabsByWorktree, tabId) => {
       update(tabsByWorktree)
       let owner: string | null = null
-      let rank = Number.POSITIVE_INFINITY
       for (const id of worktreeIdsByTabId.get(tabId) ?? []) {
-        const order = bucketOrder.get(id) ?? Number.POSITIVE_INFINITY
-        if (order < rank) {
+        if (owner === null || compareWorkspaceOrder(id, owner) < 0) {
           owner = id
-          rank = order
         }
       }
       return owner
@@ -273,5 +271,9 @@ export function adoptTerminalTabOwnerMetadataOnlyBuckets(
   nextTabsByWorktree: TerminalTabOwnerBuckets,
   replacedWorktreeIds: Iterable<string>
 ): void {
-  annotateTabBucketReplacement(previousTabsByWorktree, nextTabsByWorktree, replacedWorktreeIds)
+  sharedTerminalTabOwnerIndex.adoptMetadataOnlyBucketReplacements(
+    previousTabsByWorktree,
+    nextTabsByWorktree,
+    replacedWorktreeIds
+  )
 }

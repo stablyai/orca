@@ -4,7 +4,7 @@ import type {
   RuntimeStatusStoreSetState,
   RuntimeStatusStoreState
 } from './runtime-status-types'
-import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
+import { replaceMapEntries } from '@/store/keyed-record-transitions'
 
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -76,24 +76,20 @@ export const createRuntimeStatusSlice: (
       .filter((id) => !nextIds.has(id))
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))
-      const nextStatuses = new Map(s.runtimeStatusByEnvironmentId)
       const removedStatusIds = new Set<string>()
-      let statusesChanged = false
-      for (const id of nextStatuses.keys()) {
+      for (const id of s.runtimeStatusByEnvironmentId.keys()) {
         if (!keep.has(id)) {
-          nextStatuses.delete(id)
           removedStatusIds.add(id)
           runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
-          statusesChanged = true
         }
       }
       for (const id of replacedEnvironmentIds) {
-        if (nextStatuses.delete(id)) {
+        if (s.runtimeStatusByEnvironmentId.has(id)) {
           removedStatusIds.add(id)
-          statusesChanged = true
         }
         runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
       }
+      const statusesChanged = removedStatusIds.size > 0
       // Tombstone removed IDs, clearing re-added ones, to reject late catalog merges without mistaking pre-hydration absence for removal (#8881).
       const nextRemoved = new Set(s.removedRuntimeEnvironmentIds)
       let removedChanged = false
@@ -130,10 +126,9 @@ export const createRuntimeStatusSlice: (
         runtimeEnvironmentCatalogSettled: true,
         ...(statusesChanged
           ? {
-              runtimeStatusByEnvironmentId: terminalInputRecordTransition(
+              runtimeStatusByEnvironmentId: replaceMapEntries(
                 s.runtimeStatusByEnvironmentId,
-                nextStatuses,
-                removedStatusIds
+                [...removedStatusIds].map((id) => [id, null] as const)
               )
             }
           : {}),
@@ -168,11 +163,9 @@ export const createRuntimeStatusSlice: (
     const apply = (): void =>
       applyRuntimeHostStatusSnapshot(snapshot, get(), (entry) => {
         set((s) => ({
-          runtimeStatusByEnvironmentId: terminalInputRecordTransition(
-            s.runtimeStatusByEnvironmentId,
-            new Map(s.runtimeStatusByEnvironmentId).set(snapshot.environmentId, entry),
-            [snapshot.environmentId]
-          )
+          runtimeStatusByEnvironmentId: replaceMapEntries(s.runtimeStatusByEnvironmentId, [
+            [snapshot.environmentId, entry]
+          ])
         }))
       })
     if (snapshotOutrunsCatalog(snapshot, get())) {
@@ -253,11 +246,7 @@ export const createRuntimeStatusSlice: (
       return {
         runtimeStatusByEnvironmentId: statusUnchanged
           ? s.runtimeStatusByEnvironmentId
-          : terminalInputRecordTransition(
-              s.runtimeStatusByEnvironmentId,
-              new Map(s.runtimeStatusByEnvironmentId).set(environmentId, nextEntry),
-              [environmentId]
-            ),
+          : replaceMapEntries(s.runtimeStatusByEnvironmentId, [[environmentId, nextEntry]]),
         ...(environmentsChanged ? { runtimeEnvironments } : {})
       }
     })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createTerminalTabOwnerIndex } from './terminal-tab-owner-index'
+import { replaceTabBuckets } from '@/store/keyed-record-transitions'
 
 describe('terminal tab owner index', () => {
   it('updates added, removed and moved ownership buckets', () => {
@@ -42,12 +43,35 @@ describe('terminal tab owner index', () => {
     const secondBucket = [{ id: 'duplicate-tab' }]
     const index = createTerminalTabOwnerIndex()
 
-    expect(index.getOwner({ first: firstBucket, second: secondBucket }, 'duplicate-tab')).toBe(
-      'second'
-    )
+    const initial = { first: firstBucket, second: secondBucket }
+    expect(index.getOwner(initial, 'duplicate-tab')).toBe('second')
 
     expect(index.getOwner({ second: secondBucket, first: firstBucket }, 'duplicate-tab')).toBe(
       'first'
     )
+
+    index.getOwners(initial)
+    const removed = replaceTabBuckets(initial, [['first', null]])
+    index.getOwners(removed)
+    const readded = replaceTabBuckets(removed, [['first', firstBucket]])
+    expect(index.getOwner(readded, 'duplicate-tab')).toBe('first')
+    expect(index.getOwner({ first: firstBucket, second: secondBucket }, 'duplicate-tab')).toBe(
+      'second'
+    )
+  })
+
+  it('keeps first and last ownership in object order after integer workspace additions', () => {
+    const duplicate = [{ id: 'duplicate-tab' }]
+    const initial = { '2': duplicate, workspace: duplicate }
+    const index = createTerminalTabOwnerIndex()
+    index.getOwners(initial)
+
+    const next = replaceTabBuckets(initial, [
+      ['3', duplicate],
+      ['1', duplicate]
+    ])
+
+    expect(index.getFirstOwner(next, 'duplicate-tab')).toBe('1')
+    expect(index.getOwner(next, 'duplicate-tab')).toBe('workspace')
   })
 })

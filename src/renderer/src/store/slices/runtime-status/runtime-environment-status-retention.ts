@@ -3,7 +3,7 @@ import type {
   RuntimeStatusStoreSetState,
   RuntimeStatusStoreState
 } from './runtime-status-types'
-import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
+import { replaceMapEntries } from '@/store/keyed-record-transitions'
 import { dismissRuntimeDisconnectedToast } from './runtime-environment-disconnect-toast'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
 
@@ -21,14 +21,10 @@ export function createRuntimeEnvironmentStatusRetention(
         if (!s.runtimeStatusByEnvironmentId.has(environmentId)) {
           return s
         }
-        const next = new Map(s.runtimeStatusByEnvironmentId)
-        next.delete(environmentId)
         return {
-          runtimeStatusByEnvironmentId: terminalInputRecordTransition(
-            s.runtimeStatusByEnvironmentId,
-            next,
-            [environmentId]
-          )
+          runtimeStatusByEnvironmentId: replaceMapEntries(s.runtimeStatusByEnvironmentId, [
+            [environmentId, null]
+          ])
         }
       })
     },
@@ -41,22 +37,12 @@ export function createRuntimeEnvironmentStatusRetention(
         }
       }
       set((s) => {
-        let changed = false
-        const removed: string[] = []
-        const next = new Map(s.runtimeStatusByEnvironmentId)
-        for (const id of next.keys()) {
-          if (!keep.has(id)) {
-            next.delete(id)
-            removed.push(id)
-            changed = true
-          }
-        }
-        return changed
+        const removed = [...s.runtimeStatusByEnvironmentId.keys()].filter((id) => !keep.has(id))
+        return removed.length > 0
           ? {
-              runtimeStatusByEnvironmentId: terminalInputRecordTransition(
+              runtimeStatusByEnvironmentId: replaceMapEntries(
                 s.runtimeStatusByEnvironmentId,
-                next,
-                removed
+                removed.map((id) => [id, null] as const)
               )
             }
           : s

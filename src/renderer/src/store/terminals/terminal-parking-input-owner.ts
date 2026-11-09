@@ -8,7 +8,6 @@ import {
 import type { AppState } from '../types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { readRecordChanges } from '@/store/keyed-record-transitions'
-import { terminalInputRecordChangedKeys } from './terminal-input-record-transition'
 import { sleepingAgentRecordIndex } from './sleeping-agent-record-index'
 import { getTerminalTabOwnerWorktreeId, getTerminalTabOwners } from './terminal-tab-owner-index'
 import {
@@ -209,16 +208,16 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
     replacePtyMembership(state, tabId)
   }
   if (previous?.runtimeStatusByEnvironmentId !== state.runtimeStatusByEnvironmentId) {
-    const environmentIds = previous
-      ? (terminalInputRecordChangedKeys(
-          previous.runtimeStatusByEnvironmentId,
-          state.runtimeStatusByEnvironmentId
-        ) ??
-        new Set([
-          ...previous.runtimeStatusByEnvironmentId.keys(),
-          ...state.runtimeStatusByEnvironmentId.keys()
-        ]))
-      : state.runtimeStatusByEnvironmentId.keys()
+    const changes = previous
+      ? readRecordChanges(state.runtimeStatusByEnvironmentId, previous.runtimeStatusByEnvironmentId)
+      : null
+    const environmentIds =
+      changes?.kind === 'addressed'
+        ? changes.keys
+        : new Set([
+            ...(previous?.runtimeStatusByEnvironmentId.keys() ?? []),
+            ...state.runtimeStatusByEnvironmentId.keys()
+          ])
     for (const environmentId of environmentIds) {
       if (
         previous?.runtimeStatusByEnvironmentId.get(environmentId) ===
