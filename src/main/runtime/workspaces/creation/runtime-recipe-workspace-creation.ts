@@ -7,10 +7,7 @@ import type {
   RecipeWorkspaceCreateParams,
   RecipeWorkspaceCreation
 } from '../../../ephemeral-vm/recipe-workspace-create'
-import {
-  buildManagedWorktreeCreateArgs,
-  worktreeCreateRepoSelector
-} from '../../rpc/methods/workspaces/worktree-create-args'
+import { worktreeCreateRepoSelector } from '../../rpc/methods/workspaces/worktree-create-args'
 import { RuntimeProvisionedWorkspaceAdoption } from './runtime-provisioned-workspace-adoption'
 
 export type RecipeWorkspaceCreateOptions = {
@@ -57,26 +54,23 @@ export abstract class RuntimeRecipeWorkspaceCreation extends RuntimeProvisionedW
       throw new Error('This Orca host cannot create workspaces from environment recipes.')
     }
     const repo = await this.resolveRepoSelector(worktreeCreateRepoSelector(params))
-    const args = buildManagedWorktreeCreateArgs(params, {})
-    // Same lineage input as an ordinary create, so a note-task comment infers its parent here.
-    const lineage = await this.resolveLineageForWorktreeCreate(
-      args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined,
-      repo
-    )
     const result = await this.recipeWorkspaceService.create(params, repo, options)
-    const recorded = this.recordCreatedWorktreeLineage(result.worktree, lineage)
     this.notifyReposChanged()
     this.notifyWorktreesChanged(result.worktree.repoId)
     // No lifecycle event: plugin events carry `path` as a path on this machine, and this one is inside the VM.
     // No activation either: this host's window cannot resolve a workspace that lives on another host.
+    // No lineage: this host's store would record a parent edge to a workspace it does not hold,
+    // which the sidebar reads as a missing parent.
     return {
       ...result,
-      ...recorded,
+      lineage: null,
+      workspaceLineage: null,
+      warnings: [],
       worktree: {
         ...result.worktree,
-        parentWorktreeId: recorded.lineage?.parentWorktreeId ?? null,
-        lineage: recorded.lineage,
-        workspaceLineage: recorded.workspaceLineage
+        parentWorktreeId: null,
+        lineage: null,
+        workspaceLineage: null
       }
     }
   }

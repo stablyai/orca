@@ -273,6 +273,28 @@ describe('CLI worktree create --recipe refusals', () => {
     spawnMock
   })
 
+  it('refuses an explicit parent, which another host cannot record', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:source',
+        '--name',
+        'task',
+        '--recipe',
+        'sandbox',
+        '--parent-worktree',
+        'active',
+        '--json'
+      ],
+      '/outside'
+    )
+    expect(process.exitCode).toBe(1)
+    expect(callMock.mock.calls.some(([method]) => method === 'worktree.create')).toBe(false)
+  })
   it('refuses --activate before asking the host anything', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})

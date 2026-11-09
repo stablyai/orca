@@ -1,7 +1,6 @@
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { z } from 'zod'
-import type { WorktreeCreate } from '../../shared/rpc-contract/worktree-create-params'
 import { WorktreeAdoptProvisionedRoot } from '../../shared/rpc-contract/worktree-provisioned-root-params'
 import type { EphemeralVmCheckoutMode } from '../../shared/orca-yaml-hook-types'
 import {
@@ -15,13 +14,18 @@ import {
 } from '../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import {
+  assertRecipeWorkspaceCreateSupported,
+  forwardedCreateFields,
+  type RecipeWorkspaceCreateParams
+} from './recipe-workspace-create-params'
+import {
   RECIPE_WORKSPACE_CREATE_FAILED_CODE,
   type RecipeWorkspaceCreateFailureData,
   type RecipeWorkspaceCreatePhase
 } from '../../shared/recipe-workspace-create-progress'
 import type { EphemeralVmProvisionIpcResult } from './environment-provision'
 
-export type RecipeWorkspaceCreateParams = z.infer<typeof WorktreeCreate>
+export type { RecipeWorkspaceCreateParams }
 const WorkspaceResult = z
   .object({
     worktree: z
@@ -45,6 +49,27 @@ export type RecipeWorkspaceCreation = z.infer<typeof WorkspaceResult> & {
   environmentWarnings?: string[]
 }
 
+const ENVIRONMENT_OUTCOME = {
+  destroyed: 'destroyed',
+  failed: 'destroy-failed',
+  disabled: 'destroy-disabled'
+} as const satisfies Record<string, NonNullable<RecipeWorkspaceCreateFailureData['environment']>>
+
+/** Never claim a destroy that did not happen: a failed or disabled one leaves a billed machine. */
+function environmentOutcomeSentence(
+  environment: NonNullable<RecipeWorkspaceCreateFailureData['environment']>,
+  runtimeId: string,
+  destroyError?: string
+): string {
+  if (environment === 'destroyed') {
+    return 'Orca destroyed the new environment.'
+  }
+  if (environment === 'destroy-disabled') {
+    return `The recipe has no destroy step, so the environment (runtime ${runtimeId}) is still running; remove it with your provider.`
+  }
+  return `The environment (runtime ${runtimeId}) may still be running because destroying it failed${destroyError ? `: ${destroyError}` : ''}. Retry the cleanup from Settings > Cloud VMs in Orca.`
+}
+
 /** A failed recipe create; `data` says which step failed and whether its VM was destroyed. */
 export class RecipeWorkspaceCreateError extends Error {
   readonly code = RECIPE_WORKSPACE_CREATE_FAILED_CODE
@@ -53,74 +78,6 @@ export class RecipeWorkspaceCreateError extends Error {
   constructor(message: string, data: RecipeWorkspaceCreateFailureData) {
     super(message)
     this.data = data
-  }
-}
-
-// Fields a normal create on the environment's own Orca understands; lineage, activation and the
-// caller's terminal stay on this host, which records them after the environment answers.
-const FORWARDED_CREATE_FIELDS = [
-  'name',
-  'nameWasGenerated',
-  'displayName',
-  'displayNameKind',
-  'baseBranch',
-  'compareBaseRef',
-  'branchNameOverride',
-  'linkedIssue',
-  'linkedPR',
-  'linkedLinearIssue',
-  'linkedLinearIssueWorkspaceId',
-  'linkedLinearIssueOrganizationUrlKey',
-  'linkedGitLabMR',
-  'linkedGitLabIssue',
-  'linkedBitbucketPR',
-  'linkedAzureDevOpsPR',
-  'linkedGiteaPR',
-  'linkedWorkItem',
-  'linkedItems',
-  'linkedTaskSourceContext',
-  'comment',
-  'workspaceStatus',
-  'sparseCheckout',
-  'pushTarget',
-  'runHooks',
-  'setupDecision',
-  'createdWithAgent'
-] as const satisfies readonly (keyof RecipeWorkspaceCreateParams)[]
-
-function forwardedCreateFields(params: RecipeWorkspaceCreateParams): Record<string, unknown> {
-  const forwarded: Record<string, unknown> = {}
-  for (const field of FORWARDED_CREATE_FIELDS) {
-    if (params[field] !== undefined) {
-      forwarded[field] = params[field]
-    }
-  }
-  return forwarded
-}
-
-/** Refuses what a recipe create cannot honor before any machine is started. */
-export function assertRecipeWorkspaceCreateSupported(
-  params: RecipeWorkspaceCreateParams,
-  checkoutMode: EphemeralVmCheckoutMode
-): void {
-  if (!params.name?.trim()) {
-    throw new Error('A recipe workspace requires a name.')
-  }
-  if (params.startupAgent || params.startupCommand || params.startupDraft) {
-    throw new Error(
-      'Launch the agent on the recipe-created workspace with agent.launch after creation.'
-    )
-  }
-  if (params.automationProvenanceRequest) {
-    throw new Error('Recipe workspace creation does not support automation provenance requests.')
-  }
-  if (checkoutMode === 'provisioned-root') {
-    if (params.sparseCheckout) {
-      throw new Error('Provisioned-root recipes do not support sparse checkout.')
-    }
-    if (params.runHooks || params.setupDecision === 'run') {
-      throw new Error("Provisioned-root recipes run setup in the recipe's create step.")
-    }
   }
 }
 
@@ -165,12 +122,24 @@ export async function createProvisionedRecipeWorkspace(
   }
   const provisioned = await ports.provision(enter)
   if (!provisioned.ok) {
-    throw new RecipeWorkspaceCreateError(redactEphemeralVmRecipeDiagnosticText(provisioned.error), {
+    const error = redactEphemeralVmRecipeDiagnosticText(provisioned.error)
+    const environment = provisioned.environmentCleanup
+      ? ENVIRONMENT_OUTCOME[provisioned.environmentCleanup]
+      : undefined
+    const data: RecipeWorkspaceCreateFailureData = {
       phase,
       recipeId,
       ...(provisioned.errorCode ? { failureCode: provisioned.errorCode } : {}),
-      ...(provisioned.errorParams ? { failureParams: provisioned.errorParams } : {})
-    })
+      ...(provisioned.errorParams ? { failureParams: provisioned.errorParams } : {}),
+      ...(provisioned.runtimeId ? { runtimeId: provisioned.runtimeId } : {}),
+      ...(environment ? { environment } : {})
+    }
+    throw new RecipeWorkspaceCreateError(
+      provisioned.runtimeId && environment
+        ? `${error} ${environmentOutcomeSentence(environment, provisioned.runtimeId)}`
+        : error,
+      data
+    )
   }
   const runtimeId = provisioned.runtime.id
   try {
@@ -287,28 +256,13 @@ export async function createProvisionedRecipeWorkspace(
       phase: failedPhase,
       recipeId,
       runtimeId,
-      environment:
-        cleaned.outcome === 'destroyed'
-          ? 'destroyed'
-          : cleaned.outcome === 'disabled'
-            ? 'destroy-disabled'
-            : 'destroy-failed',
+      environment: ENVIRONMENT_OUTCOME[cleaned.outcome],
       ...(cleaned.error
         ? { destroyError: redactEphemeralVmRecipeDiagnosticText(cleaned.error) }
         : {})
     }
-    if (cleaned.outcome === 'destroyed') {
-      throw new RecipeWorkspaceCreateError(`${original} Orca destroyed the new environment.`, data)
-    }
-    if (cleaned.outcome === 'disabled') {
-      throw new RecipeWorkspaceCreateError(
-        `${original} The recipe has no destroy step, so the environment (runtime ${runtimeId}) is still running; remove it with your provider.`,
-        data
-      )
-    }
-    // Why: a failed destroy leaves a billed machine; the caller must hear about it, not just the first error.
     throw new RecipeWorkspaceCreateError(
-      `${original} The environment (runtime ${runtimeId}) may still be running because destroying it failed${data.destroyError ? `: ${data.destroyError}` : ''}. Retry the cleanup from Settings > Cloud VMs in Orca.`,
+      `${original} ${environmentOutcomeSentence(data.environment ?? 'destroy-failed', runtimeId, data.destroyError)}`,
       data
     )
   }

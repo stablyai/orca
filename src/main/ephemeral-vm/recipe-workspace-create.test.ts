@@ -287,6 +287,20 @@ describe('recipe create failures', () => {
     })
     expect(ports.cleanup).not.toHaveBeenCalled()
   })
+  it('says whether the VM survived when the connect step fails after create', async () => {
+    ports.provision.mockResolvedValueOnce({
+      ok: false,
+      error: 'SSH connect refused',
+      runtimeId: 'vm',
+      environmentCleanup: 'failed',
+      stdout: '',
+      stderr: ''
+    })
+    const error = await failure(createProvisionedRecipeWorkspace(request(), ports))
+    expect(error.message).toMatch(/SSH connect refused.*runtime vm\) may still be running/)
+    expect(error.data).toMatchObject({ runtimeId: 'vm', environment: 'destroy-failed' })
+    expect(ports.cleanup).not.toHaveBeenCalled()
+  })
   it('names the failed step and confirms the destroy when the server lacks adoption support', async () => {
     ports.call.mockImplementation(async () => ({
       id: 'req',

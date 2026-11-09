@@ -61,6 +61,13 @@ export async function createWorktreeOnRecipe(args: {
   json: boolean
 }): Promise<void> {
   const { client, create, recipeId, launch, json, flags } = args
+  const parentFlag = ['parent-worktree', 'parent-environment'].find((name) => flags.has(name))
+  if (parentFlag) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--${parentFlag} is not supported with --recipe yet: the new workspace lives on another host, so Orca records no parent for it.`
+    )
+  }
   if (flags.get('activate') === true) {
     throw new RuntimeClientError(
       'invalid_argument',

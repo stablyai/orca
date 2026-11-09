@@ -53,6 +53,9 @@ export type EphemeralVmProvisionIpcResult =
       ok: false
       stderr: string
       stdout: string
+      /** Set when the create step had already started a VM that this failure then destroyed. */
+      runtimeId?: string
+      environmentCleanup?: 'destroyed' | 'failed' | 'disabled'
     } & EphemeralVmFailure)
 
 /** Named steps of provisioning, reported to callers that show progress. */
@@ -151,15 +154,17 @@ export async function provisionRecipeEnvironment(
     }
   }
   const cleanupAndFail = async (error: unknown): Promise<EphemeralVmProvisionIpcResult> => {
-    await cleanupEphemeralVmRuntime({
+    const cleaned = await cleanupEphemeralVmRuntime({
       userDataPath,
       repoPath: repo.repo.path,
       recipe,
       runtimeId: result.runtime.id
-    }).catch(() => undefined)
+    }).catch(() => null)
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
+      runtimeId: result.runtime.id,
+      environmentCleanup: !cleaned?.ok ? 'failed' : cleaned.skipped ? 'disabled' : 'destroyed',
       stdout: redactEphemeralVmRecipeDiagnosticText(result.start.stdout),
       stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr)
     }
