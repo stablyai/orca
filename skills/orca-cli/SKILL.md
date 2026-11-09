@@ -8,7 +8,7 @@ description: >-
   "Orca browser". Also use for opening, reading, testing, or capturing local or external
   web pages while working in Orca, unless the user or project names another browser tool.
   Prefer it over raw git worktree, ad hoc PTYs, or Computer Use when Orca state is involved.
-  Use Computer Use for existing Chrome/Safari windows or Orca's own app UI when GUI control
+  Use Computer Use for existing external browser (Chrome, Edge, or Safari) windows or Orca's own app UI when GUI control
   is needed and a CLI, filesystem, or API cannot do the job.
 ---
 
