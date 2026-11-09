@@ -28,12 +28,18 @@ export function parseJsoncObject(content: string | null): Record<string, unknown
   if (!content) {
     return null
   }
-  const errors: ParseError[] = []
-  const value: unknown = parseJsonc(content, errors, {
-    allowTrailingComma: true,
-    disallowComments: false
-  })
-  return errors.length === 0 ? asRecord(value) : null
+  try {
+    const errors: ParseError[] = []
+    // Editors on Windows often save a BOM, which the parser otherwise reports as an error.
+    const value: unknown = parseJsonc(content.replace(/^﻿/, ''), errors, {
+      allowTrailingComma: true,
+      disallowComments: false
+    })
+    return errors.length === 0 ? asRecord(value) : null
+  } catch {
+    // The parser recurses, so pathological nesting can overflow the stack.
+    return null
+  }
 }
 
 export function parseTomlObject(content: string | null): Record<string, unknown> | null {

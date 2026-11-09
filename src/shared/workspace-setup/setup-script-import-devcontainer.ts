@@ -82,8 +82,13 @@ function lifecycleCommandToShell(
     }
     return command ? [command] : []
   }
+  const keys = Object.keys(record)
+  if (keys.length > SETUP_SCRIPT_IMPORT_MAX_COMMAND_PARTS) {
+    pushSetupScriptImportUnsupportedField(unsupportedFields, field)
+    return []
+  }
   const commands: string[] = []
-  for (const key of Object.keys(record).slice(0, SETUP_SCRIPT_IMPORT_MAX_COMMAND_PARTS)) {
+  for (const key of keys) {
     const command = singleCommandToShell(record[key])
     if (command) {
       commands.push(command)

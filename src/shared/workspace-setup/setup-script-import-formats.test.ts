@@ -103,6 +103,14 @@ describe('devcontainer.json', () => {
     })
   })
 
+  it('reads a BOM-prefixed file and survives pathological nesting elsewhere', async () => {
+    const candidates = await inspect({
+      '.devcontainer/devcontainer.json': '﻿{ "postCreateCommand": "npm ci" }',
+      '.cursor/environment.json': '['.repeat(20_000)
+    })
+    expect(candidates.map((candidate) => candidate.setup)).toEqual(['npm ci'])
+  })
+
   it('converts argv and parallel object forms, rewriting workspace variables', async () => {
     const [candidate] = await inspect({
       '.devcontainer/devcontainer.json': `{
@@ -172,6 +180,31 @@ describe('Copilot setup steps', () => {
     expect(candidate?.setup).not.toContain('sudo')
     expect(candidate?.setup).not.toContain('GITHUB_')
     expect(candidate?.setup).not.toContain('${{')
+  })
+
+  it('isolates each step, applies run defaults and drops conditional steps', async () => {
+    const [candidate] = await inspect({
+      '.github/workflows/copilot-setup-steps.yml': `
+jobs:
+  copilot-setup-steps:
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - run: cd client && npm ci
+      - run: cp "$GITHUB_WORKSPACE/.env.example" .env
+      - if: runner.os == 'Linux'
+        run: apt-get install -y libvips
+      - env:
+          TOKEN: abc
+        run: npm run fetch-assets
+`
+    })
+    expect(candidate).toMatchObject({
+      setup:
+        '(\ncd web || exit 1\ncd client && npm ci\n)\n(\ncd web || exit 1\ncp "${ORCA_WORKTREE_PATH}/.env.example" .env\n)',
+      unsupportedFields: ['steps.2.if', 'steps.3.env']
+    })
   })
 
   it('ignores workflows without the copilot-setup-steps job', async () => {

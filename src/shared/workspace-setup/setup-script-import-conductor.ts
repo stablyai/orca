@@ -24,11 +24,10 @@ export async function inspectConductorConfig(
   ])
   const settings = parseTomlObject(settingsContent)
   const localSettings = parseTomlObject(localSettingsContent)
+  const candidate =
+    settings || localSettings ? buildSettingsTomlCandidate(settings, localSettings) : null
   // Conductor ignores conductor.json once settings.toml exists, so mirror that precedence.
-  if (settings || localSettings) {
-    return buildSettingsTomlCandidate(settings, localSettings)
-  }
-  return inspectLegacyConductorJson(readFile)
+  return candidate ?? (settings ? null : inspectLegacyConductorJson(readFile))
 }
 
 function buildSettingsTomlCandidate(
