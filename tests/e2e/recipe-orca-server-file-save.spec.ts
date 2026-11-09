@@ -15,6 +15,7 @@ test.skip(process.platform === 'win32', 'The recipe scripts are POSIX shell')
 test.use({ seedTestRepo: false })
 
 test('saves an edited file in a recipe-created Orca server workspace', async ({ orcaPage }) => {
+  // Boots a second Orca as the environment's server, then restarts it mid-test.
   test.setTimeout(300_000)
   const host = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
   const sourceRepo = mkdtempSync(path.join(tmpdir(), 'orca-recipe-server-source-'))
