@@ -132,6 +132,18 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.tsv': 'tsv'
 }
 
+const JINJA_EXTENSIONS = new Set(['.j2', '.jinja', '.jinja2'])
+const JINJA_HTML_INNER_EXTENSIONS = new Set(['', '.html', '.htm', '.xml', '.svg'])
+
+// Ansible-style config.yaml.j2 keeps its text plain; only markup templates get HTML coloring.
+function detectJinjaLanguage(lowerName: string, ext: string): string | undefined {
+  if (!JINJA_EXTENSIONS.has(ext)) {
+    return undefined
+  }
+  const innerExt = extname(lowerName.slice(0, -ext.length))
+  return JINJA_HTML_INNER_EXTENSIONS.has(innerExt) ? 'jinja-html' : 'jinja'
+}
+
 const FILENAME_TO_LANGUAGE: Record<string, string> = {
   Dockerfile: 'dockerfile',
   Jenkinsfile: 'groovy',
@@ -217,6 +229,7 @@ export function detectLanguage(filePath: string, content?: string): string {
   const lowerName = filename.toLowerCase()
   // Scoped dotenv names fall back to dotenv only when no specific extension matches.
   const language =
+    detectJinjaLanguage(lowerName, ext) ??
     EXT_TO_LANGUAGE[ext] ??
     detectMonacoFilenameLanguage(filename) ??
     // Pipeline variants like Jenkinsfile.release; a known extension (Jenkinsfile.md) still wins.

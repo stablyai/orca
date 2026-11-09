@@ -10,8 +10,10 @@ import {
 
 type TextMateTokensProvider = Monaco.languages.TokensProvider
 
-/** A vendored grammar, named by its Monaco language id. */
-export type TextMateGrammarLoader = () => Promise<LanguageRegistration>
+/** A vendored grammar, or its embedded grammars followed by it as the last entry. */
+export type TextMateGrammarLoader = () => Promise<
+  LanguageRegistration | readonly LanguageRegistration[]
+>
 
 export type TextMateTokensProviderOptions = {
   loadGrammar: TextMateGrammarLoader
@@ -97,8 +99,10 @@ export function createTokensProvider(
 export async function createTextMateTokensProvider(
   options: TextMateTokensProviderOptions
 ): Promise<TextMateTokensProvider> {
-  const [editorCore, registration] = await Promise.all([loadEditorCore(), options.loadGrammar()])
-  await editorCore.core.loadLanguage(registration)
+  const [editorCore, loaded] = await Promise.all([loadEditorCore(), options.loadGrammar()])
+  const grammars = Array.isArray(loaded) ? loaded : [loaded]
+  const registration = grammars.at(-1)!
+  await editorCore.core.loadLanguage(...grammars)
   return createTokensProvider(
     editorCore,
     editorCore.core.getLanguage(registration.name),
