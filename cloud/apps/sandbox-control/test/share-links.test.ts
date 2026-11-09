@@ -110,7 +110,7 @@ describe('share links', () => {
     expect(share).toMatchObject({ audience: 'public', allowWake: false, state: 'active', port: appPort, revokedAt: null })
     expect(share.url).toMatch(/^https:\/\/sandbox\.test\/s\/[0-9a-f]{52}\/$/)
     expect(share.expiresAt - share.createdAt).toBe(3_600_000)
-    for (const body of [{ port: 6768, audience: 'public', expiresIn: '1h' }, { port: 3000, audience: 'world', expiresIn: '1h' }, { port: 3000, audience: 'public', expiresIn: '2y' }]) {
+    for (const body of [{ port: 6768, audience: 'public', expiresIn: '1h' }, { port: 6080, audience: 'public', expiresIn: '1h' }, { port: 3000, audience: 'world', expiresIn: '1h' }, { port: 3000, audience: 'public', expiresIn: '2y' }]) {
       expect((await h.call('POST', `/v1/sandboxes/${sandbox.id}/shares`, { body })).status).toBe(400)
     }
     expect((await h.call('GET', `/v1/sandboxes/${sandbox.id}/shares`, { as: 'bob' })).status).toBe(404)
@@ -187,6 +187,7 @@ describe('share links', () => {
     expect(await status(await signProxyHeader(await shareProxyKey('x'.repeat(40), 'sbx', 'sess'), grant(appPort), Date.now()))).toBe(404)
     expect(await status(await signProxyHeader(key, grant(6768), Date.now()))).toBe(404)
     expect(await status(await signProxyHeader(key, grant(2222), Date.now()))).toBe(404)
+    expect(await status(await signProxyHeader(key, grant(6080), Date.now()))).toBe(404)
     expect(await status(await signProxyHeader(key, grant(appPort), Date.now() - 120_000))).toBe(404)
     // Link already expired: nothing to serve.
     expect(await status(await signProxyHeader(key, grant(appPort, Date.now() - 1000), Date.now()))).toBe(404)

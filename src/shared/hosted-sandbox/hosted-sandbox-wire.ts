@@ -123,6 +123,17 @@ export const HostedSandboxListResponseSchema = z
   .object({ sandboxes: z.array(HostedSandboxViewSchema).max(1000) })
   .strict()
 
+/** `POST /v1/sandboxes/:id/desktop`: the remote desktop's port on the VM's loopback, never a public route. */
+export const HostedSandboxDesktopResponseSchema = z.object({
+  desktop: z.object({
+    port: z.number().int().min(1024).max(65_535),
+    path: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
+    password: z.string().regex(/^[A-Za-z0-9]{8}$/)
+  })
+})
+
+export type HostedSandboxDesktop = z.infer<typeof HostedSandboxDesktopResponseSchema>['desktop']
+
 export const HostedSandboxErrorResponseSchema = z
   .object({
     error: z.enum(HOSTED_SANDBOX_ERROR_CODES),

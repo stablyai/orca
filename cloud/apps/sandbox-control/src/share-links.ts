@@ -10,7 +10,7 @@ import type { SandboxCaller } from './auth'
 import type { Env } from './env'
 import { newShareId, openClaims, sealClaims, ticketFor, verifyTicket, type ShareSecrets } from './share-crypto'
 import { getSandbox, type SandboxRow } from './store'
-import { SHARE_PROXY_PORT, ORCAD_PORT } from './sandbox-vm-commands'
+import { DESKTOP_PORT, SHARE_PROXY_PORT, ORCAD_PORT } from './sandbox-vm-commands'
 
 export type ShareAudience = 'public' | 'team'
 export type ShareState = 'active' | 'expired' | 'revoked'
@@ -33,7 +33,7 @@ const HOUR_MS = 3_600_000
 export const SHARE_EXPIRY_MS = { '1h': HOUR_MS, '24h': 24 * HOUR_MS, '7d': 7 * 24 * HOUR_MS } as const
 export const MAX_ACTIVE_SHARES_PER_SANDBOX = 20
 /** Never shareable: in-VM sshd, orcad and the share proxy (the proxy refuses them too). */
-export const SHARE_RESERVED_PORTS: readonly number[] = [2222, ORCAD_PORT, SHARE_PROXY_PORT]
+export const SHARE_RESERVED_PORTS: readonly number[] = [2222, ORCAD_PORT, SHARE_PROXY_PORT, DESKTOP_PORT]
 /** Visitor wakes per workspace per day, across all its links; the owner's own wakes don't count. */
 export const MAX_SHARE_WAKES_PER_DAY = 20
 /** Ended links stay listed (greyed) this long so the owner sees what just stopped working. */

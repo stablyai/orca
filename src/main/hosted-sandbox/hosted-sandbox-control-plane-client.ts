@@ -3,6 +3,7 @@
 import type { z } from 'zod'
 import { HostedEntitlementDeniedError } from './hosted-environment-provider'
 import {
+  HostedSandboxDesktopResponseSchema,
   HostedArchiveResponseSchema,
   HostedWakeResponseSchema,
   HostedWorkspaceStatusResponseSchema,
@@ -17,6 +18,7 @@ import {
   HostedSandboxStatusResponseSchema,
   type HostedSandboxSshAccess,
   type HostedSandboxCreateRequest,
+  type HostedSandboxDesktop,
   type HostedSandboxReadyResponse,
   type HostedSandboxView
 } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
@@ -64,6 +66,8 @@ export type HostedSandboxControlPlaneClient = {
     publicKey: string,
     signal?: AbortSignal
   ): Promise<HostedSandboxSshAccess>
+  /** Starts the VM's remote desktop (idempotent); it listens on the VM's loopback only. */
+  startDesktop(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxDesktop>
 }
 
 export type HostedSandboxControlPlaneClientOptions = {
@@ -248,7 +252,14 @@ export function createHostedSandboxControlPlaneClient(
           kind: 'control',
           signal
         })
-      ).ssh
+      ).ssh,
+    startDesktop: async (id, signal) =>
+      (
+        await call('POST', sandboxPath(id, '/desktop'), HostedSandboxDesktopResponseSchema, {
+          kind: 'control',
+          signal
+        })
+      ).desktop
   }
 }
 

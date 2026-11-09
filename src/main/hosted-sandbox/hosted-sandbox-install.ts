@@ -11,6 +11,7 @@ import { getHostedSandboxConfig } from './hosted-sandbox-config'
 import { createHostedSandboxDeviceEnroller } from './hosted-sandbox-device-enrollment'
 import { registerOrcaCloudDeviceEnroller } from '../runtime/rpc/methods/orca-cloud/orca-cloud-device-enrollment'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
+import { registerCloudRemoteDesktopHandlers } from '../ipc/cloud-remote-desktop'
 import {
   ORCA_CLOUD_RECIPE,
   createHostedSandboxRecipeClient,
@@ -98,6 +99,7 @@ export function installHostedSandbox(): void {
       })
   })
   installed = { registry }
+  registerCloudRemoteDesktopHandlers(client)
   registerOrcaCloudDeviceEnroller(createHostedSandboxDeviceEnroller(config))
   setHostedSessionSync(() => void registry.sync())
   schedule(0)

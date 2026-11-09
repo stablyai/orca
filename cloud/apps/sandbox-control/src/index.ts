@@ -84,7 +84,7 @@ import { cachedProviderEnv } from './session-env'
 import { credentialTargets } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
-import { VmCommandError } from './sandbox-vm-commands'
+import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-commands'
 import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
 import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
@@ -789,7 +789,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return answer ? json(answer.body, answer.status) : fail('not_found', 404)
     }
     const match =
-      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|ssh-keys))?)?$/.exec(
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|ssh-keys|desktop))?)?$/.exec(
         url.pathname
       )
     if (!match) {
@@ -874,6 +874,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       case 'POST env/refresh':
         return json({ applied: await refreshSandboxEnv(life, row) })
+      case 'POST desktop': {
+        // Runs only the image's fixed entry point; the desktop listens on the VM's loopback and is
+        // reached through the paired runtime's port forward, never a public route.
+        if (row.status !== 'running' || !row.session_id) {
+          return fail('conflict', 409, `sandbox_${row.status}`)
+        }
+        const started = Date.now()
+        const desktop = await startDesktop(life.provider, row.session_id)
+        console.log(JSON.stringify({ event: 'desktop_start', ms: Date.now() - started }))
+        return json({ desktop: { port: desktop.port, path: desktop.path, password: desktop.password } })
+      }
       case 'POST lease': {
         const body = LeaseRequestSchema.safeParse(await readJson(request))
         if (!body.success) {
@@ -967,6 +978,11 @@ function errorResponse(error: unknown): Response {
   if (error instanceof LifecycleError) {
     const status = { not_found: 404, conflict: 409, entitlement_denied: 403, provider_unavailable: 502 }[error.code]
     return fail(error.code, status, error.reason)
+  }
+  if (error instanceof DesktopCommandError) {
+    return error.code === 'desktop_not_installed'
+      ? fail('conflict', 409, error.code)
+      : fail('provider_unavailable', 502, error.code)
   }
   if (error instanceof BillingUnavailableError) {
     return fail('billing_unavailable', 503)

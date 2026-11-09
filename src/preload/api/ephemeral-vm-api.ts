@@ -18,6 +18,7 @@ import type {
   CloudSshRevokeResult,
   CloudSshStatus
 } from '../../shared/cloud-ssh'
+import type { CloudRemoteDesktopResult } from '../../shared/hosted-sandbox/cloud-remote-desktop'
 
 export type EphemeralVmApi = {
   listRecipes: (args: { repoId: string }) => Promise<{
@@ -81,6 +82,10 @@ export type EphemeralVmApi = {
   /** Orca Cloud: the workspace has been idle long enough to sleep through the ordinary Sleep flow. */
   onCloudIdleSleepRequested: (callback: (event: HostedSessionIdleSleepEvent) => void) => () => void
   listRuntimes: () => Promise<EphemeralVmRuntimeRecord[]>
+  /** Orca Cloud: runtime environment ids that are Orca Cloud VMs. Absent in the web client. */
+  cloudEnvironmentIds?: () => Promise<string[]>
+  /** Orca Cloud: starts the VM's desktop and forwards it to this computer's localhost. */
+  openCloudRemoteDesktop?: (args: { environmentId: string }) => Promise<CloudRemoteDesktopResult>
   attachWorkspace: (args: {
     runtimeId: string
     workspaceId: string

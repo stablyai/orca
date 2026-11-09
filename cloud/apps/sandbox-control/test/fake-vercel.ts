@@ -9,7 +9,7 @@ import {
   type RunCommandParams,
   type SandboxProviderApi
 } from '../src/sandbox-provider'
-import { DRAIN_COMMAND, ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
+import { DESKTOP_COMMAND, DRAIN_COMMAND, ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
 import type { GoldenImageProviderApi } from '../src/golden-image-provider'
 
 type FakeBox = {
@@ -50,6 +50,8 @@ export type FakeVercel = SandboxProviderApi & GoldenImageProviderApi & {
   sshKeysExit: number
   /** authorized_keys per sandbox name, as orca-ssh-keys maintains it. */
   authorizedKeys: Map<string, string[]>
+  /** What orca-desktop-start answers; exitCode 127 = the image has no such command. */
+  desktop: { exitCode: number; stdout: string }
   failCreate: boolean
   /** Answers `bash -c <script>` probes (metrics, archive capture); undefined falls through to 127. */
   onScript?: (script: string, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
@@ -143,6 +145,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
     failEnvRefresh: false,
     sshKeysExit: 0,
     authorizedKeys: new Map(),
+    desktop: { exitCode: 0, stdout: '{"schemaVersion":1,"port":6080,"display":":1","path":"vnc.html","password":"Ab3dE6gH"}\n' },
     failCreate: false,
     snapshotExpirations: new Map(),
     expire(name) {
@@ -257,6 +260,13 @@ export function createFakeVercel(now: () => number): FakeVercel {
       }
       if (params.command === '/opt/orca/bin/orca-image-wipe') {
         return { exitCode: 0, stdout: '{"wiped":true}\n', stderr: '' }
+      }
+      if (params.command === DESKTOP_COMMAND) {
+        if (fake.desktop.exitCode === 127) {
+          // Real Vercel behaviour for a missing executable.
+          throw new ProviderError(400, 'command_failed')
+        }
+        return { ...fake.desktop, stderr: '' }
       }
       if (params.command === DRAIN_COMMAND) {
         return { exitCode: 0, stdout: '', stderr: '' }

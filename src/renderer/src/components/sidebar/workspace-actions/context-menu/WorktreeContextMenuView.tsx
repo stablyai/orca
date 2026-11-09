@@ -16,6 +16,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
+import { WorktreeRemoteDesktopMenuItem } from '../../workspace-card/host/WorktreeRemoteDesktopMenuItem'
+import { usePrimeCloudEnvironmentIds } from '@/lib/cloud-remote-desktop/cloud-environment-ids'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
 import {
@@ -70,6 +72,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const t = useTranslate()
+  usePrimeCloudEnvironmentIds()
   return (
     <div
       ref={scopeRef}
@@ -130,6 +133,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             </span>
           </DropdownMenuLabel>
           {!isMultiContext && <WorktreeWslHostStartMenuItem worktreeId={worktree.id} />}
+          {!isMultiContext && <WorktreeRemoteDesktopMenuItem worktreeId={worktree.id} />}
           <WorkspaceSleepMenuItems
             isMultiContext={isMultiContext}
             sleepLabel={sleepLabel}
