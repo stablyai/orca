@@ -1,6 +1,7 @@
 import type { KeybindingActionId, KeybindingOverrides } from '../../../shared/keybindings'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '../store'
+import type { AppState } from '../store/types'
 import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
@@ -29,25 +30,31 @@ export function readAgentTabShortcutActions(
     {
       actionId: 'tab.newAgent' as const,
       get agent() {
-        const detectedAgentIds = readDetectedAgentsForWorktree(state, activeWorktreeId)
-        const agent = resolveDefaultAgentForNewTab({
-          ...preferences,
-          detectedAgentIds,
-          chatIn: { store: state, worktreeId: activeWorktreeId }
-        })
-        return agent &&
-          !chosenAgentChatUnlearned(
-            state,
-            preferences.defaultTuiAgent,
-            detectedAgentIds,
-            worktreeLaunchWorkspace(activeWorktreeId)
-          )
-          ? agent
-          : null
+        return readNewAgentTabDefault(state, activeWorktreeId)
       }
     },
     ...listBoundAgentTabActions(keybindings, preferences.disabledTuiAgents)
   ]
+}
+
+/** The agent New Agent opens right now, or null while the workspace's host hasn't answered. */
+export function readNewAgentTabDefault(state: AppState, worktreeId: string): TuiAgent | null {
+  const preferences = readAgentLaunchPreferencesForWorktree(state, worktreeId)
+  const detectedAgentIds = readDetectedAgentsForWorktree(state, worktreeId)
+  const agent = resolveDefaultAgentForNewTab({
+    ...preferences,
+    detectedAgentIds,
+    chatIn: { store: state, worktreeId }
+  })
+  return agent &&
+    !chosenAgentChatUnlearned(
+      state,
+      preferences.defaultTuiAgent,
+      detectedAgentIds,
+      worktreeLaunchWorkspace(worktreeId)
+    )
+    ? agent
+    : null
 }
 
 export function resolveAgentTabShortcutAction(

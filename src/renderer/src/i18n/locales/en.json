@@ -21538,7 +21538,16 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "New Agent"
+        "browser": "Browser",
+        "chooseAgent": "Choose agent",
+        "closePane": "Close pane",
+        "goToFile": "Go to file",
+        "heading": "Open in this pane",
+        "markdown": "Markdown",
+        "mobileEmulator": "Mobile emulator",
+        "newAgent": "New Agent",
+        "reopenClosedTab": "Reopen closed tab",
+        "terminal": "Terminal"
       }
     }
   },
