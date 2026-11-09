@@ -97,14 +97,13 @@ describe('generation store', () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     const other = deriveHostCacheKey('host-b')
+    // The manifest is written last, so a download cut off mid-stage leaves assets without one.
+    fs.seed(`${HOST}/tmp/${BUILD}/index.html`, { kind: 'file', bytes: new Uint8Array(4) })
+    fs.seed(`${other}/tmp/${BUILD}/index.html`, { kind: 'file', bytes: new Uint8Array(4) })
 
-    await store.stageGeneration(HOST, buildResult({}))
-    await store.stageGeneration(other, buildResult({}))
-    await store.sweepStagedGenerations()
-
-    expect(fs.paths().some((path) => path.includes('/tmp'))).toBe(false)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
     expect(await store.readActiveGeneration(other)).toBeNull()
+    expect(fs.paths().some((path) => path.includes('/tmp'))).toBe(false)
   })
 
   it('replaces the previous generation when the build id changes', async () => {
@@ -311,7 +310,7 @@ describe('generation store', () => {
     const store = createGenerationStore({ fileSystem: fs })
     const manifest = `${HOST}/generations/${BUILD}/manifest.json`
     await activate(store, HOST)
-    const before = fs.paths()
+    const before = fs.paths().filter((path) => !path.endsWith('/tmp'))
 
     fs.failReadsAt(manifest)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
@@ -503,5 +502,64 @@ describe('a pending manifest left by an older build', () => {
     expect(await store.readActiveGeneration(HOST)).toBeNull()
 
     expect(fs.paths().some((path) => path.startsWith(`${HOST}/generations`))).toBe(false)
+  })
+})
+
+// Commit deletes the old build first, so it must not run under a page still loading that build's chunks.
+describe('an update staged behind a live page', () => {
+  it('stays staged while a page reads the old build, and the next read after it commits', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+    const release = store.holdGeneration(HOST)
+    store.deferCommit(await store.stageGeneration(HOST, buildResult(SECOND)))
+
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${BUILD}/index.html`)).toBe(true)
+
+    release()
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${BUILD}/index.html`)).toBe(false)
+  })
+
+  it('lets a page that waited on another page fetch the build itself when that page gives up', async () => {
+    const store = createGenerationStore({ fileSystem: createFakeFileSystem() })
+    const first = await store.claimUpdate(HOST, SECOND_BUILD)
+    const second = store.claimUpdate(HOST, SECOND_BUILD)
+
+    first?.()
+
+    expect(await second).not.toBeNull()
+  })
+
+  it('commits at the next launch when the app ends while the page still reads the old build', async () => {
+    const fs = createFakeFileSystem()
+    const first = createGenerationStore({ fileSystem: fs })
+    await activate(first, HOST)
+    first.holdGeneration(HOST)
+    first.deferCommit(await first.stageGeneration(HOST, buildResult(SECOND)))
+
+    const relaunched = createGenerationStore({ fileSystem: fs })
+
+    expect((await relaunched.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${SECOND_BUILD}/index.html`)).toBe(true)
+  })
+
+  it('lets a reader of a host’s build go before a commit or a removal deletes it', async () => {
+    const fs = createFakeFileSystem()
+    const onDisk: boolean[] = []
+    let reading = BUILD
+    const store = createGenerationStore({
+      fileSystem: fs,
+      beforeHostFilesDeleted: async (hostKey) => {
+        onDisk.push(await fs.fileExists(`${ROOT}/${hostKey}/generations/${reading}/manifest.json`))
+      }
+    })
+    await activate(store, HOST)
+    onDisk.length = 0
+    await activate(store, HOST, buildResult(SECOND))
+    reading = SECOND_BUILD
+    await store.deleteHostCache(HOST)
+    expect(onDisk).toEqual([true, true])
   })
 })

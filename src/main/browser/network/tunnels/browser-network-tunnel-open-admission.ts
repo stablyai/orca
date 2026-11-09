@@ -15,6 +15,7 @@ import {
 type BrowserNetworkTunnelOpenAdmissionContext = {
   openedStreamIds: Set<number>
   streamCount: number
+  windowBytes: number
   resourceBudget: BrowserNetworkTunnelResourceBudget
   connect: BrowserNetworkTunnelSessionOptions['connect']
   sendError: (streamId: number, code: string) => void
@@ -55,6 +56,7 @@ export function admitBrowserNetworkTunnelOpen(
   return createBrowserNetworkTunnelStream({
     id: frame.streamId,
     socket,
+    windowBytes: context.windowBytes,
     onConnectTimeout: context.onConnectTimeout
   })
 }

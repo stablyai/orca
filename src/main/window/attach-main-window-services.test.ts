@@ -135,7 +135,7 @@ vi.mock('../ipc/worktrees/creation/worktree-base-directory-watcher', () => ({
   scheduleWorktreeBaseDirectoryWatcherSync: scheduleWorktreeBaseDirectoryWatcherSyncMock
 }))
 
-vi.mock('../browser/browser-manager', () => ({
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     unregisterAll: browserManagerUnregisterAllMock
   }

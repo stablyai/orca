@@ -18,6 +18,10 @@ import { unwrapClaudeBashInputBlock } from '../../shared/claude-bash-input'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
 import { claudeStopHookFeedbackRow } from '../claude/claude-stop-hook-feedback'
 import { structuredAgentSessionStatusBlock } from '../../shared/agent-session/view/structured-agent-session-status-block'
+import {
+  claudeMessageWithoutSyntheticText,
+  isClaudeInjectedUserMessage
+} from '../claude/claude-internal-message-content'
 
 const MAX_EDIT_PATCH_HUNKS = 40
 const MAX_EDIT_PATCH_HUNK_LINES = 400
@@ -76,7 +80,10 @@ export function decodeClaudeTranscriptLine(
   if (!parsed) {
     return null
   }
-  const record = claudeQueuedPromptAsUserRecord(parsed) ?? parsed
+  const record = claudeMessageWithoutSyntheticText(claudeQueuedPromptAsUserRecord(parsed) ?? parsed)
+  if (!record) {
+    return null
+  }
   const role = record.type
   if (role !== 'user' && role !== 'assistant') {
     return null
@@ -105,9 +112,7 @@ export function decodeClaudeTranscriptLine(
     return null
   }
   // Meta user turns may still contain genuine tool output.
-  const isInjectedUserTurn =
-    role === 'user' &&
-    (record.isMeta === true || record.isSynthetic === true || record.isCompactSummary === true)
+  const isInjectedUserTurn = isClaudeInjectedUserMessage(record)
   const stopHookFeedback = isInjectedUserTurn ? claudeStopHookFeedbackMessage(decodedBlocks) : null
   if (stopHookFeedback) {
     return { id: recordMessageId, timestamp, source: 'transcript', ...stopHookFeedback, ...parent }
@@ -203,4 +208,27 @@ function isThinkingOnlyContent(content: unknown): boolean {
 function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+/** Anything but a typed record with no message, or a user record Claude flags as meta, may be a
+ *  turn: what a transcript nothing was sent in lacks. */
+export function mayBeClaudeConversationRecord(line: string): boolean {
+  let record: unknown
+  try {
+    record = JSON.parse(line)
+  } catch {
+    return true
+  }
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return true
+  }
+  // A local command's caveat or output; the decoder still keeps any meta record it can show.
+  if ('isMeta' in record && record.isMeta === true && 'type' in record && record.type === 'user') {
+    return false
+  }
+  if ('message' in record) {
+    return true
+  }
+  const type = 'type' in record ? record.type : undefined
+  return typeof type !== 'string' || !type.trim() || type === 'user' || type === 'assistant'
 }

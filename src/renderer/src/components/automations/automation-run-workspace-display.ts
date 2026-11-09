@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { Translate } from '@/i18n/use-translate'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 export type AutomationRunWorkspaceDisplay = {
@@ -9,23 +10,20 @@ export type AutomationRunWorkspaceDisplay = {
   title?: string
 }
 
-export function getAutomationRunWorkspaceDisplay({
-  run,
-  worktree
-}: {
-  run: AutomationRun
-  worktree: Worktree | null
-}): AutomationRunWorkspaceDisplay {
+export function getAutomationRunWorkspaceDisplay(
+  {
+    run,
+    worktree
+  }: {
+    run: AutomationRun
+    worktree: Worktree | null
+  },
+  t: Translate = translate
+): AutomationRunWorkspaceDisplay {
   if (!run.workspaceId) {
     return {
-      rowLabel: translate(
-        'auto.components.automations.runWorkspaceDisplay.notLaunched',
-        'Not launched'
-      ),
-      detailLabel: translate(
-        'auto.components.automations.runWorkspaceDisplay.notLaunched',
-        'Not launched'
-      ),
+      rowLabel: t('auto.components.automations.runWorkspaceDisplay.notLaunched', 'Not launched'),
+      detailLabel: t('auto.components.automations.runWorkspaceDisplay.notLaunched', 'Not launched'),
       muted: true
     }
   }
@@ -40,7 +38,7 @@ export function getAutomationRunWorkspaceDisplay({
 
   const previousName = run.workspaceDisplayName?.trim()
   if (previousName) {
-    const deletedLabel = translate(
+    const deletedLabel = t(
       'auto.components.automations.runWorkspaceDisplay.namedWorkspaceGone',
       '{{name}} (no longer available)',
       { name: previousName }
@@ -54,11 +52,11 @@ export function getAutomationRunWorkspaceDisplay({
   }
 
   return {
-    rowLabel: translate(
+    rowLabel: t(
       'auto.components.automations.runViewState.workspaceGone',
       'Workspace no longer available'
     ),
-    detailLabel: translate(
+    detailLabel: t(
       'auto.components.automations.runViewState.workspaceGone',
       'Workspace no longer available'
     ),

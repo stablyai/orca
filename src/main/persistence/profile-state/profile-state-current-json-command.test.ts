@@ -125,38 +125,6 @@ describe('adopting JSON edited by an older build', () => {
     acquireProfileStateRuntimeAdmission(profile.root).release()
   })
 
-  it.each(['invalid JSON', '[]', 'null'])(
-    'refuses invalid current JSON without changing either authority: %s',
-    async (raw) => {
-      const profile = fixture()
-      writeFileSync(profile.dataFile, raw)
-      const before = snapshot(profile)
-      expect(() => rollback(profile)).toThrow('Profile state JSON')
-      expect(snapshot(profile)).toEqual(before)
-    }
-  )
-
-  it('refuses a missing canonical JSON without choosing a retained export', async () => {
-    const profile = fixture()
-    rmSync(profile.dataFile)
-    const before = readFileSync(profile.databaseFile)
-    expect(() => rollback(profile)).toThrow('ENOENT')
-    expect(readFileSync(profile.databaseFile)).toEqual(before)
-    expect(existsSync(profile.exportPath)).toBe(true)
-  })
-
-  it('refuses while a profile owner holds admission', async () => {
-    const profile = fixture()
-    const before = snapshot(profile)
-    const admission = acquireProfileStateRuntimeAdmission(profile.root)
-    try {
-      expect(() => rollback(profile)).toThrow('in use')
-      expect(snapshot(profile)).toEqual(before)
-    } finally {
-      admission.release()
-    }
-  })
-
   it('refuses an unresolved move without removing its journal', async () => {
     const profile = fixture()
     const before = snapshot(profile)

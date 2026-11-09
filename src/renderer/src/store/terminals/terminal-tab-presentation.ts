@@ -1,14 +1,14 @@
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import {
   applyGeneratedTabTitleUpdates,
   applyTerminalTabTitleUpdates
-} from '../slices/terminal-tab-title-batch'
+} from './terminal-tab-title-batch'
 import {
   adoptTerminalTabOwnerMetadataOnlyBuckets,
   getTerminalTabOwnerWorktreeId
-} from '../slices/terminal-tab-owner-index'
+} from './terminal-tab-owner-index'
 import { getTabIdFromPaneKey } from './terminal-pty-identities'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { sameAiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'

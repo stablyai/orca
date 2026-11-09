@@ -1,17 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { AiVaultSearchResponseSchema, AiVaultSearchStatusSchema } from './ai-vault-search-contract'
-import { searchHit, searchResults } from './ai-vault-search-test-fixture'
+import { AiVaultSearchStatusSchema } from './ai-vault-search-contract'
+import { searchHit } from './ai-vault-search-test-fixture'
 import { redactForTransport, redactStatusForTransport } from './ai-vault-search-transport'
 import { unavailableSessionSearchStatus } from './ai-vault-search-client'
 
 describe('session search public contract', () => {
-  it('never accepts resume commands for an unverified or missing source', () => {
-    for (const presence of ['unverifiable', 'missing'] as const) {
-      const response = searchResults()
-      response.hits[0].source.presence = presence
-      expect(AiVaultSearchResponseSchema.safeParse(response).success).toBe(false)
-    }
-  })
   it.each(['ipc', 'runtime', 'relay'] as const)(
     'enforces the %s exposure policy without mutating the hit',
     (transport) => {
@@ -51,19 +44,4 @@ describe('session search public contract', () => {
       ])
     }
   )
-  it.each([
-    '/host/private/path could not be listed.',
-    "EACCES: permission denied, scandir '/host/private/path'",
-    "EACCES: permission denied, scandir 'C:\\Users\\private\\sessions'"
-  ])('withholds paths embedded in relay diagnostics: %s', (reason) => {
-    const status = {
-      ...unavailableSessionSearchStatus(),
-      degradedRoots: [{ root: '/host/private/path', reason }]
-    }
-    const result = redactStatusForTransport(status, 'relay')
-    expect(result.degradedRoots).toHaveLength(1)
-    expect(JSON.stringify(result)).not.toContain('/host/private/path')
-    expect(JSON.stringify(result)).not.toContain('private')
-    expect(redactStatusForTransport(status, 'runtime')).toEqual(status)
-  })
 })

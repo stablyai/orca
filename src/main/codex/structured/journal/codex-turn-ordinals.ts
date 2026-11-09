@@ -1,7 +1,7 @@
 import {
   boundPayload,
   digestPayload
-} from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+} from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 
 /** Codex persists the initial user message first, giving restored submissions ordinal 0. */
 export const CODEX_USER_MESSAGE_ORDINAL = 0

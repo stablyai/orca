@@ -4,7 +4,7 @@ import {
   type RuntimeHostStatusSnapshot
 } from '../../shared/remote-runtime/host-status/runtime-host-status'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-runtime/pairing/remote-pairing-verification'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type {
   PublicKnownRuntimeEnvironment,

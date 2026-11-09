@@ -1,4 +1,4 @@
-import { useThemeBackgroundStore } from '@/store/theme-background'
+import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import { activeWindowMaterial } from './window-material-runtime'
 
 /** Something paints under translucent terminals: the window material (fixed per window) or a theme background image. */

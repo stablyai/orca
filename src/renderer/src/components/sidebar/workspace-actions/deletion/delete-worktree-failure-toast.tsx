@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { Button } from '../../../ui/button'
 import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/nested-removal'
@@ -70,6 +70,7 @@ function DeleteWorktreeFailureToastBody({
   worktreeName: string
   onNestedDeleted?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const viewChanges = (): void => {
     toast.dismiss(toastId)
     onViewChanges()
@@ -87,7 +88,7 @@ function DeleteWorktreeFailureToastBody({
       <div className="flex flex-wrap justify-end gap-2">
         {showViewChanges ? (
           <Button type="button" variant="outline" size="sm" onClick={viewChanges}>
-            {translate('auto.components.sidebar.delete.worktree.flow.7488ed8711', 'View')}
+            {t('auto.components.sidebar.delete.worktree.flow.7488ed8711', 'View')}
           </Button>
         ) : null}
         {nestedRemovalTarget ? (
@@ -107,10 +108,7 @@ function DeleteWorktreeFailureToastBody({
         ) : null}
         {canWaiveArchiveHook ? (
           <Button type="button" variant="destructive" size="sm" onClick={deleteAnyway}>
-            {translate(
-              'auto.components.sidebar.delete.worktree.failure.archive.waiver',
-              'Delete Anyway'
-            )}
+            {t('auto.components.sidebar.delete.worktree.failure.archive.waiver', 'Delete Anyway')}
           </Button>
         ) : null}
       </div>

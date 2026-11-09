@@ -64,10 +64,16 @@ export class GitStatusReadLeaseOwner<T> {
   }
 
   invalidate(): void {
+    this.invalidateWhere(() => true)
+  }
+
+  // Later leases start fresh; callers already holding a detached read keep it.
+  invalidateWhere(matches: (key: string) => boolean): void {
     for (const [key, entry] of this.entries) {
-      this.detach(key, entry)
+      if (matches(key)) {
+        this.detach(key, entry)
+      }
     }
-    this.entries.clear()
   }
 
   private createLease(

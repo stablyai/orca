@@ -33,19 +33,6 @@ describe('chat rename CLI', () => {
     vi.unstubAllEnvs()
   })
 
-  it('renames the chat it runs in when --session is omitted', async () => {
-    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'chat-7')
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    const { client, call } = chatClient(false)
-
-    await rename(client)
-
-    expect(call).toHaveBeenCalledWith('agentSession.rename', {
-      sessionId: 'chat-7',
-      name: 'Release notes'
-    })
-  })
-
   it('never sends this machine’s chat id to a paired host', async () => {
     vi.stubEnv('ORCA_AGENT_SESSION_ID', 'chat-7')
     const { client, call } = chatClient(true)

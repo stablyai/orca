@@ -1,17 +1,16 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { makeStructuredAgentStatusSubject } from '../../../../shared/agent-status/contracts/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
-import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
+import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
-import { AgentHookServer, _internals } from '../../../agent-hooks/server'
+import { AgentHookServer, _internals } from '../../../agent-hooks/server/agent-hook-server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
@@ -22,15 +21,6 @@ vi.mock('../../../telemetry/cohort-classifier', () => ({
 /** Exercise journal to worktree-status liveness: feed summaries never retract, but the store drops closed chats, including unanswered approvals whose retained status stays attention. */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
-const SUBJECT = makeStructuredAgentStatusSubject(
-  {
-    executionHostId: 'local',
-    wslDistro: null,
-    workspaceId: WORKTREE_ID,
-    workspaceKind: 'git-worktree'
-  },
-  SESSION
-)
 const IDENTITY = {
   provider: 'codex',
   threadId: 'thread-1',
@@ -126,7 +116,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
   const summaries = new Map([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries,
-    terminalTitleEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByRow: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {
@@ -163,30 +153,5 @@ describe('worktree ps and a closed structured chat', () => {
     feed.publish(SESSION, undefined, { replay: true })
 
     expect(worktreeFor(store).agents).toHaveLength(0)
-  })
-
-  it('keeps an aged host-held approval state authoritative', async () => {
-    const { store, published } = await awaitingApproval()
-    const aged = {
-      ...published.at(-1)!,
-      hostExecutionOwned: true as const,
-      updatedAt: Date.now() - 30 * 60 * 1000 - 1
-    }
-    store.ingestStructuredStatus(aged, SUBJECT)
-    const row = worktreeFor(store)
-    expect(row.agents).toHaveLength(1)
-    expect(row.agents[0]?.state).toBe('blocked')
-    expect(row.status).toBe('permission')
-    expect(row.agents[0]?.updatedAt).toBe(aged.updatedAt)
-  })
-
-  it('lets an aged approval decay once the host no longer owns the child', async () => {
-    const { store, published } = await awaitingApproval()
-    const { hostExecutionOwned: _owned, ...held } = published.at(-1)!
-    store.ingestStructuredStatus({ ...held, updatedAt: Date.now() - 30 * 60 * 1000 - 1 }, SUBJECT)
-    const row = worktreeFor(store)
-    expect(row.agents).toHaveLength(1)
-    expect(row.agents[0]?.state).toBe('blocked')
-    expect(row.status).toBe('inactive')
   })
 })

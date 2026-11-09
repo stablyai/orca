@@ -1,5 +1,8 @@
 import { ipcMain, webContents } from 'electron'
-import { browserCertificateTrustController, browserManager } from '../../browser/browser-manager'
+import {
+  browserCertificateTrustController,
+  browserManager
+} from '../../browser/guest-lifecycle/manager/browser-manager'
 import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import { isWorkspaceDocPageId } from '../../browser/document-preview/doc-preview-guest-policy'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
@@ -26,7 +29,7 @@ import type {
 } from '../../../shared/browser-page-prompt'
 import { respondToBrowserPagePrompt } from '../../browser/guest-lifecycle/prompts/browser-page-prompts'
 import { recordActiveBrowserPage } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-model'
-import { announceRegisteredBrowserExtensionTab } from '../../browser/extensions/api/tabs-lifecycle'
+import { announceRegisteredBrowserExtensionTab } from '../../browser/extensions/tabs-and-windows/browser-extension-tab-lifecycle'
 import { registerBrowserExtensionHandlers } from './browser-extensions'
 import { registerBrowserExtensionContextMenuHandlers } from './browser-extension-context-menu'
 import {

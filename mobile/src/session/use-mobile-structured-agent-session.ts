@@ -26,6 +26,7 @@ import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useHostModelCatalogCache } from './mobile-host-model-catalog-query'
 import { useMobileStructuredCommandController } from './use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
@@ -38,6 +39,7 @@ import { useMobileStructuredSendWithOutcome } from './use-mobile-structured-send
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import { useMobileStructuredSends } from './use-mobile-structured-sends'
+import { useMobileStructuredSendRecorded } from './mobile-structured-send-recorded-read'
 import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
 import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
@@ -49,6 +51,7 @@ import {
 } from './use-mobile-structured-thread-goal'
 import { useMobileStructuredTranscript } from './use-mobile-structured-transcript'
 import { useMobileStructuredAgentRewind } from './use-mobile-structured-agent-rewind'
+import { useMobileNativeChatUsageLimit } from './native-chat/use-mobile-native-chat-usage-limit'
 
 export function useMobileStructuredAgentSession(
   args: MobileStructuredAgentSessionArgs
@@ -56,6 +59,7 @@ export function useMobileStructuredAgentSession(
   const {
     agent,
     client,
+    hostId,
     pairedHostClient: paired,
     connected,
     sessionId,
@@ -86,20 +90,21 @@ export function useMobileStructuredAgentSession(
     ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {})
   })
 
-  const optionStamp = useMobileStructuredSessionOptionStamp({
-    client,
-    sessionId,
-    enabled: enabled && connected && hostSupport?.statusFeed === true
-  })
   const turnId = runningStructuredAgentSessionTurnId(state)
   const options = useMobileStructuredAgentOptions({
     agent,
+    modelCatalogCache: useHostModelCatalogCache({ hostId, client, agent, enabled }),
     client,
     sessionId,
     enabled,
     fence: state.fence,
     mutate,
-    optionStamp,
+    onOptionError: onSendError,
+    optionStamp: useMobileStructuredSessionOptionStamp({
+      client,
+      sessionId,
+      enabled: enabled && connected && hostSupport?.statusFeed === true
+    }),
     turnId,
     hasTurn: state.latestTurn != null || state.submissions.length > 0,
     unloadedTurnRevisions: state.unloadedTurnRevisions,
@@ -116,17 +121,15 @@ export function useMobileStructuredAgentSession(
   })
 
   const sends = useMobileStructuredSends({
-    sessionKey,
+    ...stateArgs,
     cursor: state.cursor,
     submissions: state.submissions,
     queuedMessages,
-    onSendError
+    onSendError,
+    confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
-  const { transcriptItems, messages, receipts } = useMobileStructuredTranscript(
-    agent,
-    state,
-    sends.optimistic
-  )
+  const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey)
+  const { clearing, transcriptItems, messages, receipts } = transcript
   const turnTiming = useMobileStructuredAgentTurnTiming(
     { ...state, items: transcriptItems },
     turnId
@@ -182,10 +185,9 @@ export function useMobileStructuredAgentSession(
     commandsWait,
     stateRef,
     stopping: turnIndicator.stopping,
-    accept: sends.accept,
-    acknowledge: sends.acknowledge,
-    reject: sends.reject,
+    ...sends,
     commandPending: commandPendingRef,
+    onClearSent: transcript.onClearSent,
     sendsOut,
     controller: goal.commands,
     sessionCommands: args.sessionCommands,
@@ -220,6 +222,10 @@ export function useMobileStructuredAgentSession(
     send: sendWithOutcomeUngated
   })
   useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
+  const usageLimit = useMobileNativeChatUsageLimit(args, state, {
+    busy: isWorking || queueSendsNext || sendsOut.sending(),
+    send: sendWithOutcome
+  })
   const queued = useMobileStructuredQueuedMessageControls({
     ...args,
     appendComposerText: args.appendComposerText,
@@ -265,7 +271,8 @@ export function useMobileStructuredAgentSession(
       transcriptLoading: status === 'loading',
       error: state.error,
       readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
-      hasMore: state.hasOlder && olderPages !== 'unavailable',
+      clearing,
+      hasMore: state.hasOlder && olderPages !== 'unavailable' && !clearing,
       loadingEarlier: olderPages === 'loading',
       olderPages,
       loadEarlier
@@ -277,6 +284,7 @@ export function useMobileStructuredAgentSession(
     turnIndicator,
     ...turnTiming,
     sendWithOutcome,
+    holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current)),
@@ -294,6 +302,7 @@ export function useMobileStructuredAgentSession(
       isWorking || queueSendsNext
     ),
     threadGoal: goal.threadGoal,
-    rewind
+    rewind,
+    usageLimit
   }
 }

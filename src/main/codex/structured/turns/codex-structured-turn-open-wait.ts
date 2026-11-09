@@ -1,4 +1,4 @@
-import type { AgentSessionCancelOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-stop'
+import type { AgentSessionCancelOutcome } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import {

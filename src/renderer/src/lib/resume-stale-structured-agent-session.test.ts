@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionTabId } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { resumeSleepingAgentSessionsForWorktree } from './agent-session/resume/resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
 const WORKTREE_ID = 'stale-structured-worktree'

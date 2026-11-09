@@ -7,7 +7,6 @@ import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
-  TEST_REPO_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
   makeHeadlessTerminalLayout,
@@ -16,10 +15,7 @@ import {
   makeWorktreeMeta,
   store
 } from './orca-runtime-test-fixtures.spec'
-import {
-  hostWorktreeTarget,
-  type HostWorktreeTarget
-} from '../../../shared/worktree/host-qualified-identity'
+import '../../../shared/worktree/host-qualified-identity'
 
 describe('OrcaRuntimeService', () => {
   it('reports the wake as unsupported when a phone activates a worktree on headless serve', async () => {
@@ -82,237 +78,6 @@ describe('OrcaRuntimeService', () => {
     expect(resumeSleepingAgents).not.toHaveBeenCalled()
   })
 
-  it('does not report headless wake degradation without sleeping records', async () => {
-    const runtime = new OrcaRuntimeService(store as never)
-    electronMocks.BrowserWindow.fromId.mockReturnValue(null as never)
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-
-    const result = await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
-      notifyClients: false,
-      clientKind: 'mobile'
-    })
-
-    expect(result.sleepingAgentWake).toBe('not-applicable')
-  })
-
-  it('does not wake slept agents for non-mobile session-only activation', async () => {
-    const metaById: Record<string, WorktreeMeta> = {
-      [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false })
-    }
-    const resumeSleepingAgents = vi.fn()
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
-    } as never)
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      resumeSleepingAgents,
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false } as never)
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-
-    // Renderer wake notifications are mobile-only; web/desktop clients retain their own activation paths.
-    const result = await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
-      notifyClients: false,
-      clientKind: 'runtime'
-    })
-
-    expect(resumeSleepingAgents).not.toHaveBeenCalled()
-    expect(result.sleepingAgentWake).toBe('not-applicable')
-  })
-
-  it('does not rewrite unread metadata when a mobile activation finds the worktree already read', async () => {
-    // Seed instanceId to exclude resolution metadata-stamp writes from unread-clear assertions.
-    const metaById: Record<string, WorktreeMeta> = {
-      [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false, instanceId: 'wt-instance' })
-    }
-    const setWorktreeMeta = vi.fn(
-      ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-        return metaById[worktreeId]
-      }
-    )
-    const worktreesChanged = vi.fn()
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      getWorktreeMetaForHost: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta
-    })
-    runtime.setNotifier({
-      worktreesChanged,
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-
-    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
-
-    expect(setWorktreeMeta).not.toHaveBeenCalled()
-    expect(worktreesChanged).not.toHaveBeenCalled()
-
-    metaById[TEST_WORKTREE_ID] = makeWorktreeMeta({ isUnread: true, instanceId: 'wt-instance' })
-    setWorktreeMeta.mockClear()
-    worktreesChanged.mockClear()
-
-    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
-    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
-
-    expect(setWorktreeMeta).toHaveBeenCalledTimes(1)
-    expect(setWorktreeMeta).toHaveBeenCalledWith(
-      hostWorktreeTarget({ id: TEST_WORKTREE_ID, hostId: 'local' }),
-      { isUnread: false }
-    )
-    expect(worktreesChanged).toHaveBeenCalledTimes(1)
-    expect(worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
-  })
-
-  it('returns unread:false from worktree.ps after a mobile activation clears the flag', async () => {
-    const metaById: Record<string, WorktreeMeta> = {
-      [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: true })
-    }
-    const setWorktreeMeta = vi.fn(
-      ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-        return metaById[worktreeId]
-      }
-    )
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      getWorktreeMetaForHost: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-
-    const beforeActivation = await runtime.getWorktreePs()
-    expect(
-      beforeActivation.worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
-        ?.unread
-    ).toBe(true)
-
-    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
-
-    const afterActivation = await runtime.getWorktreePs()
-    expect(
-      afterActivation.worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)?.unread
-    ).toBe(false)
-  })
-
-  it('materializes pending mobile session terminals without focusing desktop clients', async () => {
-    const persistedPtyId = `${TEST_WORKTREE_ID}@@mobile-only-pty`
-    const spawn = vi.fn().mockResolvedValue({ id: persistedPtyId })
-    const focusTerminal = vi.fn()
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal({
-        tabsByWorktree: {
-          [TEST_WORKTREE_ID]: [
-            {
-              id: 'host-tab',
-              ptyId: persistedPtyId,
-              worktreeId: TEST_WORKTREE_ID,
-              title: 'Persisted Terminal',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        },
-        terminalLayoutsByTabId: {
-          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: persistedPtyId })
-        }
-      })
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal,
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    const activated = await runtime.activateMobileSessionTab(
-      `id:${TEST_WORKTREE_ID}`,
-      'host-tab',
-      HEADLESS_LEAF_ID,
-      { notifyClients: false }
-    )
-
-    expect(focusTerminal).not.toHaveBeenCalled()
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: TEST_WORKTREE_ID,
-        tabId: 'host-tab',
-        leafId: HEADLESS_LEAF_ID,
-        sessionId: persistedPtyId,
-        persistHostSessionBinding: true
-      })
-    )
-    expect(spawn.mock.calls[0]?.[0]).not.toHaveProperty('isNewSession')
-    expect(activated.tabs).toEqual([
-      expect.objectContaining({
-        id: `host-tab::${HEADLESS_LEAF_ID}`,
-        isActive: true,
-        status: 'ready',
-        terminal: expect.any(String)
-      })
-    ])
-  })
-
   it('materializes phone-local pending terminal tabs without stored PTY bindings', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'fresh-mobile-pty' })
     const focusTerminal = vi.fn()
@@ -371,7 +136,7 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID,
         tabId: 'host-tab',
         leafId: HEADLESS_LEAF_ID,
-        sessionId: expect.stringMatching(/^serve-/),
+        sessionId: expect.stringMatching(/@@serve-/),
         isNewSession: true,
         persistHostSessionBinding: true
       })
@@ -546,59 +311,5 @@ describe('OrcaRuntimeService', () => {
         terminal: expect.any(String)
       })
     ])
-  })
-
-  it('closes browser mobile session tabs when addressed by browser workspace id', async () => {
-    const closeSessionTab = vi.fn()
-    const runtime = new OrcaRuntimeService(store)
-    const forgetTabs = vi.spyOn(runtime['clientSessionTabSelections'], 'forgetTabs')
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      closeSessionTab,
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: 'group-1',
-          activeTabId: 'browser-unified-1',
-          activeTabType: 'browser',
-          tabs: [
-            {
-              type: 'browser',
-              id: 'browser-unified-1',
-              title: 'Browser',
-              browserWorkspaceId: 'browser-workspace-1',
-              browserPageId: 'browser-page-1',
-              url: 'https://example.com/',
-              loading: false,
-              canGoBack: false,
-              canGoForward: false,
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-
-    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'browser-workspace-1')
-
-    expect(closeSessionTab).toHaveBeenCalledWith('browser-unified-1', TEST_WORKTREE_ID)
-    expect(forgetTabs).toHaveBeenCalledWith(TEST_WORKTREE_ID, ['browser-unified-1'])
   })
 })

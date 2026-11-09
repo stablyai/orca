@@ -36,6 +36,13 @@ export type RuntimeGitCommandHost = {
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
   getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
   getWorktreeLinkedIssueMeta?(worktreeId: string): PullRequestLinkedIssueMeta | null | undefined
+  /** A user-facing reason when an agent is working in the checkout at this path, else null. */
+  getAgentSwitchBlocker?(worktreePath: string): Promise<string | null>
+  /** Clear the old branch's review links and push target, then publish the new branch to every client. */
+  recordBranchSwitched?(
+    worktree: Pick<Worktree, 'id' | 'hostId' | 'repoId'>,
+    detached?: boolean
+  ): void
   /** Persist lazily created push remotes for orphan cleanup (#17842); sync materialization skips Store to avoid ownership/refspec side effects (#17828). */
   persistMaterializedPushTarget?(
     worktree: Pick<Worktree, 'id' | 'hostId'>,

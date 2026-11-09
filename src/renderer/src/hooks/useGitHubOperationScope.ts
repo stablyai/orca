@@ -5,10 +5,10 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { webRuntimeState } from '@/web/preload-api/web-runtime-session'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { resolveGitHubRepoOperationOwner } from '@/lib/github-source-runtime-context'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 export function useGitHubOperationOwner(args: {
   target?: RuntimeClientTarget | null

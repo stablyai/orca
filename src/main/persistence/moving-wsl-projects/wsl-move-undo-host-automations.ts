@@ -6,7 +6,7 @@
  * refused undo turns back on what it turned off and changes nothing here; one it cannot turn back
  * on is recorded, shown and retried.
  */
-import type { Automation } from '../../../shared/automations-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
 import { listWslMoveCutovers, writeWslMoveCutover } from './wsl-move-cutover-journal'
 

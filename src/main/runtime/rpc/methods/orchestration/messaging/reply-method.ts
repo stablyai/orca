@@ -1,9 +1,9 @@
-import { acceptedAnswerSender } from '../../../../orchestration/accepted-answer-sender'
-import { answerSenderRelayReport } from '../../../../orchestration/answer-sender-relay-report'
+import { acceptedAnswerSender } from '../../../../orchestration/mailbox/senders/accepted-answer-sender'
+import { answerSenderRelayReport } from '../../../../orchestration/mailbox/senders/answer-sender-relay-report'
 import { defineMethod } from '../../../core'
-import { deliverQuestionAnswer } from '../../../../orchestration/question-answer-delivery'
+import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
 import {
   readMutationReplayNudge,
@@ -15,7 +15,12 @@ import { resolveReplyRecipient } from './recipient-routing'
 import { helperQuestionAnswerer } from './helper-question-answerer'
 import { replyToRemoteRunHome } from './reply-remote'
 import { withAnswerNext } from '../receipt-next'
-import { ReplyParams } from '../schemas'
+import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import {
+  completionReportDispatchId,
+  reportFollowUpAction
+} from '../../../../orchestration/workers/reports/report-follow-up-action'
+import { formatFinishedReportReplyRefusal } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
 export const ORCHESTRATION_REPLY_METHOD = defineMethod({
   name: 'orchestration.reply',
@@ -155,6 +160,16 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
     if (db.getRun(original.run_id)?.home_database === 'remote') {
       return await replyToRemoteRunHome({ runtime, db, original, params, signal })
     }
+    // A finished task's worker never reads a reply to its report; refuse before marking or storing anything.
+    const reportDispatchId = completionReportDispatchId(db, original)
+    const followUp = reportDispatchId ? reportFollowUpAction(db, reportDispatchId) : undefined
+    if (reportDispatchId && followUp) {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        formatFinishedReportReplyRefusal(reportDispatchId, followUp),
+        { effectsApplied: false, followUp }
+      )
+    }
     const recipient = resolveReplyRecipient({
       runtime,
       db,
@@ -171,7 +186,10 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       runId: recipient.runId
     })
 
-    const receipt = { message: exposeMessage(reply) }
+    const receipt = {
+      message: exposeMessage(reply),
+      ...(recipient.warning ? { warnings: [recipient.warning] } : {})
+    }
     return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
       runtime.notifyMessageArrived(reply.to_handle, reply.type)
     )

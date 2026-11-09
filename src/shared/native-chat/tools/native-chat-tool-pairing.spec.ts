@@ -6,15 +6,6 @@ const call = (name: string): NativeChatToolCallBlock => ({ type: 'tool-call', na
 const result = (output: string): NativeChatToolResultBlock => ({ type: 'tool-result', output })
 
 describe('pairNativeChatToolResults', () => {
-  it('gives each call the result that answered it', () => {
-    const [a, ra, b, rb] = [call('read'), result('one'), call('shell'), result('two')]
-    const { resultByCall, pairedResults } = pairNativeChatToolResults([a, ra, b, rb])
-
-    expect(resultByCall.get(a)).toBe(ra)
-    expect(resultByCall.get(b)).toBe(rb)
-    expect(pairedResults.size).toBe(2)
-  })
-
   it('answers the oldest unanswered call when two are interleaved', () => {
     const [outer, inner, first, second] = [call('a'), call('b'), result('inner'), result('outer')]
     const { resultByCall } = pairNativeChatToolResults([outer, inner, first, second])

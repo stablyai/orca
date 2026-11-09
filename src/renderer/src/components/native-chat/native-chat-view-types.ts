@@ -2,7 +2,7 @@ import type { AgentType } from '../../../../shared/agent-status/contracts/agent-
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { NativeChatSession } from '../../../../shared/native-chat/native-chat-types'
-import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
+import type { NativeChatContextMenuActions } from './pane/actions/use-native-chat-context-menu'
 
 export type NativeChatBridgeViewProps = {
   mode?: 'bridge'

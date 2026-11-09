@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { TB_ICON, ToolbarBtn, ToolbarSep } from './editor-animated-toolbar-icons'
 import { activeLineClass, caretClass } from './editor-animated-visual-markup'
 import { useEditorAnimatedVisualAnimation } from './use-editor-animated-visual-animation'
@@ -59,6 +59,7 @@ function SlashRow(props: {
 }
 
 export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
+  const t = useTranslate()
   const { reducedMotion } = props
   const editorShortcutPrefix = getShortcutPlatform() === 'darwin' ? '⌘' : 'Ctrl+'
   const boldShortcutLabel = `${editorShortcutPrefix}B`
@@ -91,7 +92,7 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
         <span className="size-2.5 rounded-full bg-amber-400/70" />
         <span className="size-2.5 rounded-full bg-emerald-400/70" />
         <span className="ml-2 font-mono text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.feature.wall.EditorAnimatedVisual.cda56c5915',
             'notes / launch-plan.md'
           )}
@@ -116,7 +117,7 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
         <span className="ml-auto inline-flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
           <span className="size-1.5 rounded-full bg-emerald-500" />
           <span>
-            {translate('auto.components.feature.wall.EditorAnimatedVisual.218503f9f3', 'autosaved')}
+            {t('auto.components.feature.wall.EditorAnimatedVisual.218503f9f3', 'autosaved')}
           </span>
         </span>
       </div>
@@ -128,24 +129,24 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
         style={{ minHeight: 280 }}
       >
         <DocTitle>
-          {translate('auto.components.feature.wall.EditorAnimatedVisual.5a55c00a81', 'Launch plan')}
+          {t('auto.components.feature.wall.EditorAnimatedVisual.5a55c00a81', 'Launch plan')}
         </DocTitle>
 
         <DocBlock>
-          {translate(
+          {t(
             'auto.components.feature.wall.EditorAnimatedVisual.22ae7b4d9d',
             "A quick note for the team — pulling together what's left before we ship."
           )}
         </DocBlock>
 
         <DocBlock listItem>
-          {translate(
+          {t(
             'auto.components.feature.wall.EditorAnimatedVisual.95f0c3a46f',
             'Smoke-test the install flow on a fresh machine.'
           )}
         </DocBlock>
         <DocBlock listItem>
-          {translate(
+          {t(
             'auto.components.feature.wall.EditorAnimatedVisual.4426aab46f',
             'Update the docs index once the new tile lands.'
           )}
@@ -170,25 +171,19 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
             data-slash-show="all"
             className="px-2 pb-1 pt-1.5 text-[9.5px] font-bold uppercase tracking-[0.06em] text-muted-foreground"
           >
-            {translate('auto.components.feature.wall.EditorAnimatedVisual.1fb29ad710', 'Headings')}
+            {t('auto.components.feature.wall.EditorAnimatedVisual.1fb29ad710', 'Headings')}
           </div>
           <SlashRow
             refCb={(el) => {
               rowH1Ref.current = el
             }}
             iconKey="h1"
-            label={translate(
-              'auto.components.feature.wall.EditorAnimatedVisual.722170663a',
-              'Heading 1'
-            )}
+            label={t('auto.components.feature.wall.EditorAnimatedVisual.722170663a', 'Heading 1')}
             shortcut="#"
           />
           <SlashRow
             iconKey="h2"
-            label={translate(
-              'auto.components.feature.wall.EditorAnimatedVisual.a26a68d30c',
-              'Heading 2'
-            )}
+            label={t('auto.components.feature.wall.EditorAnimatedVisual.a26a68d30c', 'Heading 2')}
             shortcut="##"
           />
           <div data-slash-show="all" className="my-1 h-px bg-foreground/[0.08]" />
@@ -196,25 +191,16 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
             data-slash-show="all"
             className="px-2 pb-1 pt-1.5 text-[9.5px] font-bold uppercase tracking-[0.06em] text-muted-foreground"
           >
-            {translate(
-              'auto.components.feature.wall.EditorAnimatedVisual.abbdeea15d',
-              'Basic blocks'
-            )}
+            {t('auto.components.feature.wall.EditorAnimatedVisual.abbdeea15d', 'Basic blocks')}
           </div>
           <SlashRow
             iconKey="quote"
-            label={translate(
-              'auto.components.feature.wall.EditorAnimatedVisual.f25687c588',
-              'Quote'
-            )}
+            label={t('auto.components.feature.wall.EditorAnimatedVisual.f25687c588', 'Quote')}
             shortcut=">"
           />
           <SlashRow
             iconKey="list"
-            label={translate(
-              'auto.components.feature.wall.EditorAnimatedVisual.37fa4948ce',
-              'Bullet List'
-            )}
+            label={t('auto.components.feature.wall.EditorAnimatedVisual.37fa4948ce', 'Bullet List')}
             shortcut="-"
           />
           <SlashRow
@@ -222,10 +208,7 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
               rowCodeRef.current = el
             }}
             iconKey="code"
-            label={translate(
-              'auto.components.feature.wall.EditorAnimatedVisual.8268b2376b',
-              'Code Block'
-            )}
+            label={t('auto.components.feature.wall.EditorAnimatedVisual.8268b2376b', 'Code Block')}
             shortcut="```"
           />
         </div>
@@ -250,18 +233,18 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
 
       {/* Match the workbench sub-step footer. */}
       <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
-        {translate('auto.components.feature.wall.EditorAnimatedVisual.3fe42a1da0', 'Type')}
+        {t('auto.components.feature.wall.EditorAnimatedVisual.3fe42a1da0', 'Type')}
         <kbd className={KBD_CLASS_DOC}>/</kbd>{' '}
-        {translate('auto.components.feature.wall.EditorAnimatedVisual.8341391520', 'for blocks ·')}{' '}
+        {t('auto.components.feature.wall.EditorAnimatedVisual.8341391520', 'for blocks ·')}{' '}
         <kbd className={KBD_CLASS_DOC}>{boldShortcutLabel}</kbd>{' '}
-        {translate('auto.components.feature.wall.EditorAnimatedVisual.8521536429', 'bold ·')}{' '}
+        {t('auto.components.feature.wall.EditorAnimatedVisual.8521536429', 'bold ·')}{' '}
         <kbd className={KBD_CLASS_DOC}>{italicShortcutLabel}</kbd>{' '}
-        {translate('auto.components.feature.wall.EditorAnimatedVisual.7a763daf2f', 'italic')}
+        {t('auto.components.feature.wall.EditorAnimatedVisual.7a763daf2f', 'italic')}
       </div>
 
       {/* Keep class-driven animation styling here while the loop changes only state attributes. */}
       <style>
-        {translate(
+        {t(
           'auto.components.feature.wall.EditorAnimatedVisual.e16479c1c5',
           '[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role="active"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role="h1"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking="1"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }'
         )}

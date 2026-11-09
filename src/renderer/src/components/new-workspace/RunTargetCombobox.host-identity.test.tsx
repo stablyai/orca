@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReadyProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import RunTargetCombobox from './RunTargetCombobox'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { buildRunTargetRows } from './run-target-options'
 
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -92,13 +91,18 @@ describe('run target host identity', () => {
     expect(field.parentElement?.parentElement?.textContent).toContain('Builder')
   })
 
-  it('gives duplicate setup IDs distinct keyboard navigation keys', () => {
-    const { rows } = buildRunTargetRows({
-      hostOptions: options,
-      recipes: [],
-      query: '',
-      hasAddHost: false
-    })
-    expect(new Set(rows.map((row) => row.key)).size).toBe(2)
+  it('never labels an unlisted selection with another host (#38669)', () => {
+    render(
+      <RunTargetCombobox
+        hostOptions={[localOption]}
+        hostValue="vm-setup"
+        hostExecutionHostId="runtime:vm-1"
+        recipes={[]}
+        recipeValue={null}
+      />
+    )
+
+    const field = screen.getByRole('combobox', { name: 'Run on' })
+    expect(field.parentElement?.parentElement?.textContent).not.toContain('Local')
   })
 })

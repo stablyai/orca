@@ -290,6 +290,26 @@ environmentRecipes:
 fresh recipe JSON because the pairing may have changed. `destroy` may be omitted only with
 `destroy: none`. The legacy keys `command` and `cleanup` still map to `create` and `destroy`.
 
+Steps have no time limit by default. Set `timeoutSeconds` on the recipe to give them one, either
+one number for every step or a map with any of `create`, `suspend`, `resume`, and `destroy`; values
+are whole seconds from 1 to 86400. When a step runs past its limit, Orca stops the whole process
+tree and reports a timeout. An invalid value is reported and the steps stay unlimited.
+
+```yaml
+timeoutSeconds:
+  create: 1800 # slow image builds
+  destroy: 120
+```
+
+A timed-out `create` may still have started a VM, so make `create` idempotent per
+`ORCA_VM_INSTANCE_ID` or have it record the resource before slow work starts.
+
+Orca records each VM before `create` runs. If `create` started but never returned a result (it
+failed, timed out, or Orca quit), Settings keeps the VM listed so the user can clean it up; if it
+was cancelled or rejected before starting, nothing is kept. That destroy
+payload has `instanceId` but no `recipeResult`, so `destroy` should find the resource from the
+instance id (for example, a name built from `ORCA_VM_INSTANCE_ID`) or exit non-zero if it can't.
+
 The base result, which is what Orca-server mode prints:
 
 ```json
