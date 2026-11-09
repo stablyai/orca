@@ -169,7 +169,7 @@ export function CloudMcpSyncPanel({
           {status.running ? t('cloudMcpSync.syncing', 'Syncing MCP servers…') : summary}
         </span>
         <span className="flex-1" />
-        {hasRows ? (
+        {hasRows && !mcpSyncErrorRetryable(status.error) ? (
           <Button
             type="button"
             variant="ghost"
