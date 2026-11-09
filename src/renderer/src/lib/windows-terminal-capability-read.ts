@@ -1,6 +1,6 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type { WindowsTerminalCapabilities } from './windows-terminal-capabilities'
 
 export type WindowsTerminalCapabilityLoadTarget = RuntimeClientTarget

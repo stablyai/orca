@@ -20,6 +20,8 @@ import { nativeChatWorkRunEntries } from '../../../../../src/shared/native-chat/
 import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
+import { MobileNativeChatPullRequestEventLine } from './MobileNativeChatPullRequestEventLine'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-pull-request-event'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
 import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFold'
 import { TextAttachmentActions } from './MobileNativeChatTextAttachmentActions'
@@ -171,6 +173,12 @@ function MobileNativeChatMessageImpl({
           backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
         )
   const isSystem = message.role === 'system'
+  const pullRequestEvent = isSystem
+    ? drawnProse.find(
+        (block): block is Chat.NativeChatTextBlock =>
+          Chat.isTextBlock(block) && block.presentation === PULL_REQUEST_EVENT_PRESENTATION
+      )
+    : undefined
   const showToolRun = tools.length > 0 || workRun !== undefined
   const askPending = structuredActivityUi
     ? selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
@@ -312,7 +320,14 @@ function MobileNativeChatMessageImpl({
           ) : (
             <>
               {/* A roster is not tool activity, so it stays out of the settled-tools collapse. */}
-              {isSystem && !workRun ? (
+              {pullRequestEvent ? (
+                <MobileNativeChatPullRequestEventLine
+                  block={pullRequestEvent}
+                  messageId={message.id}
+                  fontScale={fontScale}
+                  onLongPress={onLongPress}
+                />
+              ) : isSystem && !workRun ? (
                 <MobileNativeChatNoticeRow
                   blocks={drawnProse}
                   fontScale={fontScale}

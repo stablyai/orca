@@ -4122,6 +4122,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "開啟"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "已依其他視窗調整大小",
+            "fitHere": "在此調整"
           }
         }
       },
@@ -16080,6 +16084,7 @@
           "kernelStartFailed": "核心啟動失敗。",
           "noPython": "在此電腦上未找到 Python。請從 [python.org](https://www.python.org/downloads/) 安裝，然後重新執行儲存格。",
           "kernelDied": "核心已停止。",
+          "outputTruncated": "輸出已截斷：Orca 保留了此儲存格輸出的開頭部分，並捨棄其餘內容。如需保留全部輸出，請改為寫入檔案。",
           "localOnly": "筆記本儲存格只能針對此電腦上的檔案執行。",
           "pythonOnly": "Orca 中只能執行 Python 筆記本。",
           "ownerUnresolved": "Orca 尚無法判斷此筆記本位於哪台電腦，因此無法執行其中的儲存格。",
@@ -19882,6 +19887,7 @@
         "copyIdentity": "複製 {{value0}}",
         "folder": "資料夾",
         "mainCheckout": "主要工作副本",
+        "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
       },
       "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。",
@@ -20981,6 +20987,7 @@
       "switch": "切換分支：{{branch}}",
       "search": "搜尋分支",
       "recover": "切換到 {{branch}}",
+      "copy": "複製分支名稱",
       "create": "從 {{branch}} 建立分支 {{name}}",
       "open": "開啟工作區",
       "occupied": "已在 {{path}} 中簽出",

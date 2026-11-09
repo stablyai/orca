@@ -1,3 +1,9 @@
+import { createRestTestRig } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { forkTestSource } from '../../../../../native-chat/agent-session-wire/acquisition/testing/structured-agent-session-fork.test-fixture'
+import { agentSessionRecordFixture } from '../../../../../native-chat/agent-session-record-test-fixture'
+import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { resolveStructuredAgentSessionForkIntent } from '../../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-fork-intent'
+import { structuredAgentSessionCreateParams } from '../../../../../../shared/agent-session/structured-agent-session-create'
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 // Before attach, classify no-effects refusal; at/after attach, failure cannot prove no session exists.
 
@@ -163,4 +169,144 @@ describe('a create refused before it commits', () => {
     expect(refusal).not.toHaveProperty('details')
     expect(attach).not.toHaveBeenCalled()
   })
+})
+
+async function forkHost() {
+  const rig = await createRestTestRig({ idleSweep: { intervalMs: 60_000 } })
+  const test = forkTestSource(rig)
+  test.snapshot.items[2]!.itemId = 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1'
+  const child = agentSessionRecordFixture({
+    ...test.record,
+    sessionId: 'copied-chat',
+    providerHandleChain: [
+      {
+        ...test.record.providerHandleChain[0]!,
+        handle: codexProviderHandle('019e6b26-18e2-7103-b7a0-7ba6bb071124')
+      }
+    ],
+    forkedFrom: {
+      sessionId: 'source-chat',
+      itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071123:completed-turn:1',
+      childBoundary: {
+        kind: 'item',
+        itemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071124:completed-turn:1'
+      }
+    }
+  })
+  const childSnapshot = {
+    ...structuredClone(test.snapshot),
+    sessionId: child.sessionId,
+    items: test.snapshot.items.map((item) => ({
+      ...item,
+      itemId: item.itemId.replace(
+        '019e6b26-18e2-7103-b7a0-7ba6bb071123',
+        '019e6b26-18e2-7103-b7a0-7ba6bb071124'
+      )
+    }))
+  }
+  const records = new Map([
+    ['copied-chat', child],
+    ['source-chat', test.record]
+  ])
+  const getRecord = rig.store.getRecord.bind(rig.store)
+  const select = rig.store.selectWritableRecord.bind(rig.store)
+  const writable = rig.store.requireWritableRecord.bind(rig.store)
+  vi.spyOn(rig.store, 'getRecord').mockImplementation((id) => records.get(id) ?? getRecord(id))
+  vi.spyOn(rig.store, 'requireWritableRecord').mockImplementation(
+    (id) => records.get(id) ?? writable(id)
+  )
+  vi.spyOn(rig.store, 'selectWritableRecord').mockImplementation((id) =>
+    records.has(id) ? { kind: 'writable', record: records.get(id)! } : select(id)
+  )
+  const snapshot = rig.host.journalSnapshot.bind(rig.host)
+  vi.spyOn(rig.host, 'journalSnapshot').mockImplementation((id) =>
+    id === 'copied-chat'
+      ? Promise.resolve(childSnapshot)
+      : id === 'source-chat'
+        ? Promise.resolve(test.snapshot)
+        : snapshot(id)
+  )
+  const capabilities = rig.host.deps.agents.capabilities.bind(rig.host.deps.agents)
+  vi.spyOn(rig.host.deps.agents, 'capabilities').mockImplementation((agent) => {
+    const supported = capabilities(agent)
+    return supported ? { ...supported, fork: 'checkpoint' } : null
+  })
+  rig.host.deps.adapter.copyConversation = test.copy
+  setStructuredAgentSessionHost(rig.host)
+  const createFork = (sessionId: string) =>
+    create(
+      {
+        resolveStructuredAgentSessionCreateIntent: async (
+          input: Parameters<OrcaRuntimeService['resolveStructuredAgentSessionCreateIntent']>[0]
+        ) => {
+          if (!input.forkFrom) {
+            throw new Error('Expected a fork intent')
+          }
+          return resolveStructuredAgentSessionForkIntent({
+            ...input,
+            forkFrom: input.forkFrom,
+            host: rig.host,
+            location: test.record.location
+          })
+        }
+      },
+      structuredAgentSessionCreateParams({
+        sessionId,
+        worktree: WORKTREE,
+        agent: 'codex',
+        forkFrom: {
+          sessionId: 'copied-chat',
+          throughItemId: 'codex:019e6b26-18e2-7103-b7a0-7ba6bb071124:completed-turn:1'
+        },
+        randomUuid: () => '00000000-0000-0000-0000-000000000001',
+        now: 1800000000000
+      })
+    )
+  return { rig, test, records, createFork }
+}
+
+it('preserves source-admission proof through real fork create without publishing a destination', async () => {
+  const { rig, test, records, createFork } = await forkHost()
+  try {
+    records.delete('source-chat')
+    expect(refusalOf(await createFork('codex_missing_original'))).toMatchObject({
+      code: 'agent_session_identity_required',
+      details: { reason: 'recordMissing' },
+      createAttemptRefusedBeforeCommit: true
+    })
+    expect(rig.store.getRecord('codex_missing_original')).toBeNull()
+    records.set('source-chat', test.record)
+    test.snapshot.items = test.snapshot.items.slice(0, 1)
+    expect(refusalOf(await createFork('codex_removed_original_reply'))).toMatchObject({
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'savedConversationMissing' },
+      createAttemptRefusedBeforeCommit: true
+    })
+    expect(rig.store.getRecord('codex_removed_original_reply')).toBeNull()
+  } finally {
+    setStructuredAgentSessionHost(null)
+    await rig.dispose()
+  }
+})
+
+it('does not prove no copy when source revalidation fails after the native copy', async () => {
+  const { rig, test, createFork } = await forkHost()
+  try {
+    const nativeCopy = test.copy.getMockImplementation()!
+    test.copy.mockImplementationOnce(async (input) => {
+      const copy = await nativeCopy(input)
+      test.snapshot.items = test.snapshot.items.slice(0, 1)
+      return copy
+    })
+    const refusal = refusalOf(await createFork('codex_changed_after_copy'))
+    expect(refusal).toMatchObject({
+      code: 'agent_session_operation_invalid',
+      details: { reason: 'savedConversationMissing' }
+    })
+    expect(refusal).not.toHaveProperty('createAttemptRefusedBeforeCommit')
+    expect(rig.store.getRecord('codex_changed_after_copy')).toBeNull()
+  } finally {
+    setStructuredAgentSessionHost(null)
+    await rig.dispose()
+  }
 })

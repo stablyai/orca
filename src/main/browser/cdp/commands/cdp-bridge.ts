@@ -33,10 +33,11 @@ import type {
   BrowserViewportResult,
   BrowserWaitResult
 } from '../../../../shared/runtime-browser-contracts'
-import type { BrowserManager } from '../../browser-manager'
+import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
 import type { CdpAuxiliaryCommands, CdpTabState } from './cdp-auxiliary-commands'
 import { CdpBridgeCommandSet } from './cdp-bridge-command-set'
-import { CdpBridgeState, type CdpQueuedCommand } from './cdp-bridge-state'
+import { CdpBridgeState } from './cdp-bridge-state'
+import type { CdpQueuedCommand } from './cdp-bridge-state'
 
 // Preserve existing imports; runtime code uses browser-error without loading Chromium.
 

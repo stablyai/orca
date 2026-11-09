@@ -322,6 +322,7 @@ function PullRequestPageItem({
             sourceContext={sourceContext}
             projectOrigin={projectOrigin}
             body={body}
+            bodyImageUrls={details?.bodyImageUrls}
             comments={comments}
             files={files}
             filesUnavailable={filesUnavailable}

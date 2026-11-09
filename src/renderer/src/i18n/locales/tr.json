@@ -4178,6 +4178,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aç"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Başka bir pencereye göre boyutlandı",
+            "fitHere": "Buraya sığdır"
           }
         }
       },
@@ -16286,6 +16290,7 @@
           "kernelStartFailed": "Çekirdek başlatılamadı.",
           "noPython": "Bu bilgisayarda Python bulunamadı. [python.org](https://www.python.org/downloads/) adresinden yükleyin, ardından hücreyi yeniden çalıştırın.",
           "kernelDied": "Çekirdek sonlandı.",
+          "outputTruncated": "Çıktı kısaltıldı: Orca bu hücrenin çıktısının başını tuttu ve gerisini attı. Tamamını korumak için çıktıyı bir dosyaya yazın.",
           "localOnly": "Not defteri hücreleri yalnızca bu bilgisayardaki dosyalar için çalıştırılabilir.",
           "pythonOnly": "Orca'da yalnızca Python not defterleri çalıştırılabilir.",
           "ownerUnresolved": "Orca bu not defterinin hangi bilgisayarda olduğunu henüz belirleyemediği için hücreleri çalıştırılamıyor.",
@@ -20173,6 +20178,7 @@
         "copyIdentity": "{{value0}} kopyala",
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
+        "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın.",
@@ -21281,6 +21287,7 @@
       "switch": "Dal değiştir: {{branch}}",
       "search": "Dallarda ara",
       "recover": "{{branch}} dalına geç",
+      "copy": "Dal adını kopyala",
       "create": "{{branch}} dalından {{name}} dalını oluştur",
       "open": "Çalışma alanını aç",
       "occupied": "{{path}} konumunda kullanımda",

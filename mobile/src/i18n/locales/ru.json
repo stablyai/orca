@@ -310,6 +310,11 @@
       "signInHint": "Открывает терминал на компьютере с этим чатом",
       "forkedFrom": "Ответвление от"
     },
+    "ciResultLine": {
+      "failingLead": "CI с ошибками в",
+      "greenLead": "CI зелёный в",
+      "at": "на"
+    },
     "orcaStop": {
       "canContinue": "Вы можете продолжить этот разговор.",
       "crash": "Во время ответа Orca на {{machine}} неожиданно завершилась.",
@@ -1487,12 +1492,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "Активных: {{count}}",
-      "heading": "Агенты",
-      "showAll": "Показать все ({{count}})",
-      "showFewer": "Свернуть"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Скрыть уведомление об обновлении Orca {{version}}",
       "title": "Доступна Orca {{version}}",

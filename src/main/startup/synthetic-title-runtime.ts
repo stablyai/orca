@@ -1,5 +1,5 @@
 import { registerPaneKeyTeardownListener, getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import { normalizeTerminalTitle } from '../../shared/agent-status/title/agent-title-status'
 import {
