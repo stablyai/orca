@@ -20301,8 +20301,7 @@
         "runLiveTool_one": "Использует {{count}} инструмент",
         "runLiveTool_few": "Использует {{count}} инструмента",
         "runLiveTool_many": "Использует {{count}} инструментов",
-        "runLiveTool_other": "Использует {{count}} инструмента",
-        "activity": "Активность"
+        "runLiveTool_other": "Использует {{count}} инструмента"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} байт",
