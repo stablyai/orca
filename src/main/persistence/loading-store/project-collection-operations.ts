@@ -29,7 +29,7 @@ import {
 import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
 import {
   type MetadataLineageOperations,
-  removeWorkspaceLineageForFolderParent
+  removeWorkspaceLineageForRemovedFolder
 } from './metadata-lineage-operations'
 import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
@@ -138,6 +138,12 @@ export class ProjectCollectionOperations {
     return getProjectGroupOperations(this).deleteProjectGroup(groupId)
   }
 
+  updateProjectGroups(
+    mutations: Parameters<ProjectGroupPersistenceOperations['updateProjectGroups']>[0]
+  ): ProjectGroup[] | null {
+    return getProjectGroupOperations(this).updateProjectGroups(mutations)
+  }
+
   getFolderWorkspaces(): FolderWorkspace[] {
     return getFolderWorkspaceOperations(this).getFolderWorkspaces()
   }
@@ -222,8 +228,8 @@ export function getProjectGroupOperations(
     new ProjectGroupPersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling),
-      removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
-        removeWorkspaceLineageForFolderParent(
+      removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
+        removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,
           folderWorkspaceId
         ),
@@ -243,8 +249,8 @@ export function getFolderWorkspaceOperations(
     new FolderWorkspacePersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling),
-      removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
-        removeWorkspaceLineageForFolderParent(
+      removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
+        removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,
           folderWorkspaceId
         ),

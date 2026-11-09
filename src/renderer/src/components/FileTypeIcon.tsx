@@ -4,8 +4,11 @@ import {
   getFileTypeIcon,
   getPluginFileTypeIconIndex,
   getPluginFolderIconIndex
-} from '@/lib/file-type-icons'
-import { PLUGIN_ICON_ATTRIBUTE, useActivePluginIconTheme } from '@/store/plugin-icon-themes'
+} from '@/lib/file-icons/file-type-icons'
+import {
+  PLUGIN_ICON_ATTRIBUTE,
+  useActivePluginIconTheme
+} from '@/store/plugins/appearance/plugin-icon-themes'
 
 type IconProps = { className?: string; style?: CSSProperties }
 

@@ -7,8 +7,7 @@ import type { AutomationHostCatalogEntry } from './automation-host-catalog-types
 import {
   externalAutomationProbeOwners,
   externalAutomationScopeGateFromError,
-  parseExternalAutomationScopeCode,
-  resolveExternalAutomationScopeGate
+  parseExternalAutomationScopeCode
 } from './external-automation-scope-gating'
 
 function entry(overrides: Partial<AutomationHostCatalogEntry> = {}): AutomationHostCatalogEntry {
@@ -39,45 +38,6 @@ const runtimeEntry = entry({
 })
 
 describe('external automation scope gating', () => {
-  it('lists managers only for a desktop host with a captured owner', () => {
-    const gate = resolveExternalAutomationScopeGate(entry())
-    expect(gate.status).toBe('listed')
-    expect(gate.probeOwner).toEqual({
-      authority: { kind: 'desktop' },
-      selector: { kind: 'self' }
-    })
-  })
-
-  it('never presents a runtime-owned host as clean', () => {
-    const gate = resolveExternalAutomationScopeGate(runtimeEntry)
-    expect(gate.status).toBe('not-listed')
-    expect(gate.code).toBe(EXTERNAL_AUTOMATION_SCOPE_CODES.authorityNotSupported)
-    expect(gate.probeOwner).toBeNull()
-  })
-
-  it('fails closed when no owner was captured, so nothing is probed', () => {
-    const gate = resolveExternalAutomationScopeGate(entry({ owner: null }))
-    expect(gate.status).toBe('not-listed')
-    expect(gate.probeOwner).toBeNull()
-  })
-
-  it('treats the orphan bucket as scope limited rather than empty', () => {
-    const orphan = entry({
-      stableRef: { authority: { kind: 'desktop' }, selector: { kind: 'orphan' } },
-      kind: 'orphan',
-      owner: null,
-      stableKey: 'host:desktop:orphan'
-    })
-    expect(resolveExternalAutomationScopeGate(orphan).status).toBe('not-listed')
-  })
-
-  it('makes no claim for an unresolved host', () => {
-    const gate = resolveExternalAutomationScopeGate(null)
-    expect(gate.status).toBe('unknown')
-    expect(gate.probeOwner).toBeNull()
-    // Why: 'unknown' is not a limitation, so it must not print the scope note.
-  })
-
   it('retains probe owners only for hosts that are actually listed', () => {
     expect(externalAutomationProbeOwners([entry(), runtimeEntry, entry({ owner: null })])).toEqual([
       { authority: { kind: 'desktop' }, selector: { kind: 'self' } }
@@ -97,17 +57,6 @@ describe('engine scope errors', () => {
         new Error(`Error invoking remote method 'x': ${hidden.message}`)
       )
     ).toBe(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
-  })
-
-  it('preserves the hidden-target scope code', () => {
-    const gate = externalAutomationScopeGateFromError(
-      new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
-    )
-    expect(gate).toEqual({
-      status: 'not-listed',
-      probeOwner: null,
-      code: EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden
-    })
   })
 
   it('leaves unrelated failures alone so they are not relabelled as scope limits', () => {

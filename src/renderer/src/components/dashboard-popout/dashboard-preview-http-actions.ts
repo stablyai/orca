@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { intentPresentation } from '@/lib/workspace-browser-tab-presentation'
+import { intentPresentation } from '@/lib/browser/workspace/workspace-browser-tab-presentation'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { parseRoutableExecutionHostId } from '../../../../shared/execution-host'
@@ -8,22 +8,22 @@ import {
   isRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
-import { resolveOwner } from '@/lib/resolve-owner'
-import { resolveWorktreeOperationRoute } from '@/lib/worktree-operation-route'
-import { createBrowserLinkHostMatcher } from '@/lib/browser-link-owner'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { resolveWorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
+import { createBrowserLinkHostMatcher } from '@/lib/browser/navigation/browser-link-owner'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-route-eligibility'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   buildHttpLinkActions,
   httpLinkActionDestinationsFor,
   openRoutedHttpLink,
   type HttpLinkDestination,
   type HttpLinkActionDestinations
-} from '@/lib/http-link-destinations'
+} from '@/lib/browser/navigation/http-link-destinations'
 
 export type DashboardPreviewLinkSource = Pick<
   DashboardCard,

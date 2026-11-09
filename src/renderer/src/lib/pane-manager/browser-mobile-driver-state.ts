@@ -1,16 +1,15 @@
 import { useSyncExternalStore } from 'react'
-import type { RuntimeBrowserDriverState } from '../../../../shared/runtime-types'
+import { recomputeOn } from '@/lib/recompute-on'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 
-export type BrowserDriverState = RuntimeBrowserDriverState
-
-const driverByBrowserPageId = new Map<string, BrowserDriverState>()
+const driverByBrowserPageId = new Map<string, RuntimeTerminalDriverState>()
 
 // Why: a shared instance keeps getDriverForBrowserPage referentially stable for useSyncExternalStore snapshots.
-export const IDLE_BROWSER_DRIVER: BrowserDriverState = { kind: 'idle' }
+export const IDLE_BROWSER_DRIVER: RuntimeTerminalDriverState = { kind: 'idle' }
 
 type BrowserDriverChangeEvent = {
   browserPageId: string
-  driver: BrowserDriverState
+  driver: RuntimeTerminalDriverState
 }
 
 type BrowserDriverChangeListener = (event: BrowserDriverChangeEvent) => void
@@ -48,7 +47,10 @@ function notifyChange(event: BrowserDriverChangeEvent): void {
   }
 }
 
-export function setDriverForBrowserPage(browserPageId: string, driver: BrowserDriverState): void {
+export function setDriverForBrowserPage(
+  browserPageId: string,
+  driver: RuntimeTerminalDriverState
+): void {
   if (driver.kind === 'idle') {
     driverByBrowserPageId.delete(browserPageId)
   } else {
@@ -57,15 +59,17 @@ export function setDriverForBrowserPage(browserPageId: string, driver: BrowserDr
   notifyChange({ browserPageId, driver })
 }
 
-export function getDriverForBrowserPage(browserPageId: string): BrowserDriverState {
+export function getDriverForBrowserPage(browserPageId: string): RuntimeTerminalDriverState {
   return driverByBrowserPageId.get(browserPageId) ?? IDLE_BROWSER_DRIVER
 }
 
 export function useBrowserDriverForPage(
   browserPageId: string | null | undefined
-): BrowserDriverState {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return browserPageId ? getDriverForBrowserPage(browserPageId) : IDLE_BROWSER_DRIVER
+): RuntimeTerminalDriverState {
+  const storeVersion = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return recomputeOn([storeVersion], () =>
+    browserPageId ? getDriverForBrowserPage(browserPageId) : IDLE_BROWSER_DRIVER
+  )
 }
 
 export function isBrowserPageMobileDriven(browserPageId: string): boolean {
@@ -93,19 +97,19 @@ export function getBrowserMobileDrivenPageIds(
 export function useBrowserMobileDriverForAny(
   browserPageIds: readonly (string | null | undefined)[]
 ): boolean {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return hasMobileDriverForAnyBrowserPage(browserPageIds)
+  const storeVersion = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return recomputeOn([storeVersion], () => hasMobileDriverForAnyBrowserPage(browserPageIds))
 }
 
 export function useBrowserMobileDrivenPageIds(
   browserPageIds: readonly (string | null | undefined)[]
 ): Set<string> {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return getBrowserMobileDrivenPageIds(browserPageIds)
+  const storeVersion = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return recomputeOn([storeVersion], () => getBrowserMobileDrivenPageIds(browserPageIds))
 }
 
 export function hydrateBrowserDrivers(
-  drivers: { browserPageId: string; driver: BrowserDriverState }[]
+  drivers: { browserPageId: string; driver: RuntimeTerminalDriverState }[]
 ): void {
   const affectedPageIds = new Set(driverByBrowserPageId.keys())
   driverByBrowserPageId.clear()

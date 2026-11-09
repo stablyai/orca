@@ -12,10 +12,11 @@ import {
   type BrowserPasswordFillOutcome,
   type BrowserPasswordFillRequest,
   type BrowserPasswordFillResult,
+  type BrowserPasswordGuestEnable,
   type BrowserPasswordGuestFieldFocused,
   type BrowserPasswordSuggestion
 } from '../../shared/browser-passwords-types'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { BrowserPasswordLoginTracker } from './browser-password-login-tracker'
 import { toBrowserPasswordOrigin } from './browser-password-origin'
 import {
@@ -89,7 +90,8 @@ export function attachBrowserPasswordGuest(guest: WebContents): void {
   guest.on('dom-ready', () => {
     state.tracker.documentReady()
     if (vaultForGuest(guest)) {
-      guest.send(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable)
+      const enable: BrowserPasswordGuestEnable = { reportPageForms: state.tracker.wantsPageForms() }
+      guest.send(BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable, enable)
     }
   })
   guest.on('did-start-navigation', (details) => {

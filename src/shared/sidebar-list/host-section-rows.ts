@@ -7,7 +7,10 @@ import {
   type ExecutionHostKind,
   type ExecutionHostScope
 } from '../execution-host'
-import type { ExecutionHostHealth } from '../execution-host-registry'
+import type {
+  ExecutionHostHealth,
+  ExecutionHostVmState
+} from '../execution-host/execution-host-health'
 import type { RuntimeCompatVerdict } from '../protocol-compat'
 import type { RuntimeHostBlockedReason } from '../remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionStatus } from '../ssh-types'
@@ -28,6 +31,8 @@ export type HostHeaderRow = {
   compatibility?: RuntimeCompatVerdict
   // Why: a revoked pairing needs "Re-pair", not the update guidance a version block gets.
   blockedReason?: RuntimeHostBlockedReason
+  // A VM-backed host's lifecycle explains suspended/waking/resume-failed without a transport fault.
+  vmState?: ExecutionHostVmState
   connectionStatus?: SshConnectionStatus
   collapsed: boolean
   count: number
@@ -43,6 +48,7 @@ export type HostSectionOption = {
   health: ExecutionHostHealth
   compatibility?: RuntimeCompatVerdict
   blockedReason?: RuntimeHostBlockedReason
+  vmState?: ExecutionHostVmState
   connectionStatus?: SshConnectionStatus
 }
 
@@ -82,7 +88,7 @@ function localizePendingRowsForHost(
   const localized: Extract<Row, { type: 'header' }>[] = []
   for (const row of rows) {
     if (!row.hostWorktreeCounts) {
-      localized.push(row)
+      localized.push({ ...row, hostId })
       continue
     }
     const count = row.hostWorktreeCounts.get(hostId)
@@ -206,6 +212,8 @@ export function addHostSectionRows(args: {
     pendingRows = kept
   }
 
+  // A nested child stays in its lineage root's section, even when it runs on another machine.
+  let lineageRootHostId: ExecutionHostId | null = null
   for (const row of args.rows) {
     if (row.type === 'header' && row.repo) {
       retainPendingAncestors(row.projectGroupDepth ?? 0)
@@ -217,7 +225,12 @@ export function addHostSectionRows(args: {
       }
       continue
     }
-    const rowHostId = getRowHostId(row, args.defaultHostId)
+    const ownHostId = getRowHostId(row, args.defaultHostId)
+    if ((row.type === 'item' || row.type === 'folder-workspace') && row.depth === 0) {
+      lineageRootHostId = ownHostId
+    }
+    const rowHostId =
+      row.type === 'item' && row.depth > 0 && lineageRootHostId ? lineageRootHostId : ownHostId
     if (rowHostId) {
       pushHostRow(row, rowHostId)
       continue
@@ -271,6 +284,7 @@ export function addHostSectionRows(args: {
       health: host.health,
       compatibility: host.compatibility,
       ...(host.blockedReason ? { blockedReason: host.blockedReason } : {}),
+      ...(host.vmState ? { vmState: host.vmState } : {}),
       connectionStatus: host.connectionStatus,
       collapsed,
       count: countWorkspaceRows(hostRows)
@@ -287,8 +301,10 @@ export function addHostSectionRows(args: {
             }
             return { ...row, hostId: row.hostId ?? hostId, ...(repeated ? { repeated: true } : {}) }
           }
-          // The enclosing host header already names the owner of cards and notices.
-          return 'hostContextLabel' in row && row.hostContextLabel
+          // The enclosing host header already names the owner, unless a nested child runs elsewhere.
+          return 'hostContextLabel' in row &&
+            row.hostContextLabel &&
+            getRowHostId(row, args.defaultHostId) === hostId
             ? { ...row, hostContextLabel: undefined }
             : row
         })

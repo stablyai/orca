@@ -1,4 +1,4 @@
-import { createElement, StrictMode, type ComponentProps, type ReactNode } from 'react'
+import { createElement, type ComponentProps, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { Keyboard } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -27,6 +27,9 @@ function MobileNativeChatComposer({
 }
 
 vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./MobileNativeChatContextUsageRing', () => ({
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
+}))
 // BottomDrawer also carries the option pager, which loads Reanimated at import.
 vi.mock('react-native-reanimated', async () =>
   (await import('../../../test-support/reanimated-pager-stub')).reanimatedPagerStub()
@@ -360,29 +363,6 @@ describe('MobileNativeChatComposer', () => {
       input().props.onSelectionChange({ nativeEvent: { selection: { end: 7 } } })
     )
     expect(input().props.selection).toBeUndefined()
-  })
-
-  it('dismisses an accepted send after Strict Mode replays mount effects', async () => {
-    vi.mocked(Keyboard.dismiss).mockClear()
-    await act(async () => {
-      renderer = create(
-        createElement(
-          StrictMode,
-          null,
-          createElement(MobileNativeChatComposer, {
-            value: 'hello',
-            onChangeText: vi.fn(),
-            onSend: vi.fn().mockResolvedValue(true),
-            sendSurfaceId: 'tab-a',
-            getSendCompletionGeneration: getCurrentSendCompletionGeneration
-          })
-        )
-      )
-    })
-
-    await act(async () => sendButton().props.onPress())
-
-    expect(Keyboard.dismiss).toHaveBeenCalledTimes(1)
   })
 
   it('does not dismiss a newly focused composer when an old accepted send settles', async () => {

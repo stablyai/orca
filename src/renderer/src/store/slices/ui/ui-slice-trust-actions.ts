@@ -167,6 +167,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
         return { codexSharedSettingsNoticeSeen: true }
       }),
+    speechModelUpdateNoticeSeen: true,
+    markSpeechModelUpdateNoticeSeen: () =>
+      set((s) => {
+        if (s.speechModelUpdateNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ speechModelUpdateNoticeSeen: true }).catch(console.error)
+        return { speechModelUpdateNoticeSeen: true }
+      }),
     claudeDiffPanelNoticeSeen: true,
     markClaudeDiffPanelNoticeSeen: () =>
       set((s) => {

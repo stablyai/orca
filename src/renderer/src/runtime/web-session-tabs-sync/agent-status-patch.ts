@@ -11,10 +11,10 @@ import {
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   MirroredTerminalTab,
-  TerminalSurface,
   WebSessionTabsBatchContext,
   WebSessionTabsSyncState
 } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import {
   isClientOwnedAgentStatus,
   isMirroredAgentStatusOwnedBy,
@@ -35,7 +35,7 @@ import {
 export function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
   currentTerminalTabs: readonly TerminalTab[],
-  terminalSurfaceTabs: readonly TerminalSurface[],
+  terminalSurfaceTabs: readonly RuntimeMobileSessionTerminalClientTab[],
   mirroredTerminalTabs: readonly MirroredTerminalTab[],
   environmentId: string,
   worktreeId: string,
@@ -58,7 +58,7 @@ export function buildMirroredAgentStatusPatch(
   }
 
   let retainedSurfaceByHostTabAndPrunedLeafId:
-    | Map<string, ReadonlyMap<string, TerminalSurface>>
+    | Map<string, ReadonlyMap<string, RuntimeMobileSessionTerminalClientTab>>
     | undefined
   for (const entry of mirroredTerminalTabs) {
     if (entry.retainedSurfaceByPrunedLeafId) {
@@ -74,7 +74,7 @@ export function buildMirroredAgentStatusPatch(
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
-    const hostEntry = remapHostAgentStatus(surface, retainedSurface)
+    const hostEntry = remapHostAgentStatus(surface, worktreeId, retainedSurface)
     if (!hostEntry) {
       continue
     }

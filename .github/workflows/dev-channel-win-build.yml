@@ -174,8 +174,8 @@ jobs:
           upper="$(printf '%s' "$CHANNEL" | tr '[:lower:]' '[:upper:]')"
           echo "ORCA_WIN_${upper}=1" >>"$GITHUB_ENV"
           echo "ORCA_${upper}_BUILD_VERSION=${VERSION}" >>"$GITHUB_ENV"
-          if [[ ! -f config/scripts/verify-dev-channel-packaging.mjs ]]; then
-            echo "::error::$TAG was built from a commit with no config/scripts/verify-dev-channel-packaging.mjs; that commit predates Windows dev builds, so it cannot produce one."
+          if [[ ! -f config/scripts/desktop-distribution/channel-policy/verify-dev-channel-packaging.mjs ]]; then
+            echo "::error::$TAG was built from a commit with no config/scripts/desktop-distribution/channel-policy/verify-dev-channel-packaging.mjs; that commit predates Windows dev builds, so it cannot produce one."
             exit 1
           fi
 
@@ -228,7 +228,7 @@ jobs:
       # Validate packaging config after install, before the expensive build.
       - name: Verify dev-channel packaging identity
         shell: bash
-        run: node config/scripts/verify-dev-channel-packaging.mjs --channel="$CHANNEL" --platform=win32
+        run: node config/scripts/desktop-distribution/channel-policy/verify-dev-channel-packaging.mjs --channel="$CHANNEL" --platform=win32
 
       - name: Download shared JavaScript
         if: inputs.javascript_source_sha != ''

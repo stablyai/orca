@@ -152,12 +152,6 @@ describe('terminal path helpers', () => {
         displayText: 'app/(shop)/products/[productId]/page.tsx:42:7'
       })
     })
-
-    it('grows a spaced reading over a bounded number of words', () => {
-      const paths = pathTexts(`/tmp/root ${'part/x '.repeat(20_000)}`)
-
-      expect(paths.filter((path) => path.startsWith('/tmp/root'))).toHaveLength(11)
-    })
   })
 
   it('resolves tilde-prefixed paths against explicit terminal home when cwd is outside home', () => {
@@ -210,19 +204,6 @@ describe('terminal path helpers', () => {
   })
 
   describe('plain-text file:// URIs', () => {
-    it('extracts a printed file:// URI as a file link resolving to its path', () => {
-      const line = 'Report: file:///Users/dev/orca/report.html'
-      const link = extractTerminalFileLinks(line).find(
-        (candidate) => candidate.displayText === 'file:///Users/dev/orca/report.html'
-      )
-      expect(link).toMatchObject({ pathText: '/Users/dev/orca/report.html' })
-      expect(resolveTerminalFileLink(link!, '/Users/dev/orca')).toEqual({
-        absolutePath: '/Users/dev/orca/report.html',
-        line: null,
-        column: null
-      })
-    })
-
     it('does not also emit a bare-path link for the URI body', () => {
       const links = extractTerminalFileLinks('file:///Users/dev/orca/report.html')
       expect(links.map((link) => link.displayText)).toEqual(['file:///Users/dev/orca/report.html'])

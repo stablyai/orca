@@ -2,8 +2,13 @@ import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { PublicKnownRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../../shared/ephemeral-vm-recipe-diagnostics'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import type {
+  EphemeralVmProvisionedRuntimeRecord,
+  EphemeralVmRuntimeRecord,
+  EphemeralVmWorkspaceLifecycleResult
+} from '../../shared/ephemeral-vm-runtimes'
 import type { EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+import type { PendingVmCheckout } from '../../shared/pending-vm-checkouts'
 
 export type EphemeralVmApi = {
   listRecipes: (args: { repoId: string }) => Promise<{
@@ -38,7 +43,7 @@ export type EphemeralVmApi = {
     | {
         ok: true
         connectionType: 'orca-server'
-        runtime: EphemeralVmRuntimeRecord
+        runtime: EphemeralVmProvisionedRuntimeRecord
         environment: PublicKnownRuntimeEnvironment
         stderr: string
         warnings: EphemeralVmRecipeResultWarning[]
@@ -46,7 +51,7 @@ export type EphemeralVmApi = {
     | {
         ok: true
         connectionType: 'ssh'
-        runtime: EphemeralVmRuntimeRecord
+        runtime: EphemeralVmProvisionedRuntimeRecord
         sshTargetId: string
         /** The managed Orca server the host runs; its workspace lives there. */
         environmentId?: string
@@ -65,9 +70,15 @@ export type EphemeralVmApi = {
     runtimeId: string
     workspaceId: string
   }) => Promise<EphemeralVmRuntimeRecord>
-  resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
+  resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>
+  /** Suspends the workspace's VM without closing panels; sleep closes them first. */
+  suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>
+  /** Fires after any runtime record write; re-list to read the new lifecycle status. */
+  onRuntimesChanged: (callback: () => void) => () => void
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
+  /** Drops an interrupted write-ahead record that never received a recipe result. */
+  forgetRuntime: (args: { runtimeId: string }) => Promise<void>
   getCleanupCommand: (args: { runtimeId: string }) => Promise<{
     runtimeId: string
     command: string | null
@@ -75,4 +86,9 @@ export type EphemeralVmApi = {
     cleanupDisabled: boolean
     message?: string
   }>
+  /** This window's VM checkouts whose creates have not adopted them yet; replaces its last set. */
+  publishPendingCheckouts: (checkouts: PendingVmCheckout[]) => void
+  listPendingCheckouts: () => Promise<PendingVmCheckout[]>
+  /** Every window's pending VM checkouts, whenever any window's set changes. */
+  onPendingCheckoutsChanged: (callback: (checkouts: PendingVmCheckout[]) => void) => () => void
 }

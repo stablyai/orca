@@ -1,5 +1,6 @@
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { Automation, AutomationRun } from '../../../shared/automations-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type {
   OrcadMigrationDormantStatePayload,
@@ -8,7 +9,7 @@ import type {
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { computeOrcadMigrationManifestSha256 } from '../../orcad/orcad-migration-manifest-digest'
 
 export const PROJECT_GROUP: ProjectGroup = {
@@ -169,11 +170,12 @@ export function dormantState(): OrcadMigrationDormantStatePayload {
         lineage: {
           childWorkspaceKey: worktreeWorkspaceKey(DORMANT_WORKTREE_ID),
           childInstanceId: 'instance-1',
-          parentWorkspaceKey: folderWorkspaceKey(FOLDER_WORKSPACE.id),
-          parentInstanceId: null,
+          // Mirrors the worktree row above: a worktree has one parent.
+          parentWorkspaceKey: worktreeWorkspaceKey(REPOSITORY.id),
+          parentInstanceId: 'main-instance',
           origin: 'manual',
           capture: { source: 'manual-action', confidence: 'explicit' },
-          createdAt: 4
+          createdAt: 3
         }
       }
     ],

@@ -1,9 +1,12 @@
-import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
-import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
+import { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'
+import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
 import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
-import type { StructuredAgentSessionResumeSource } from '../../../../../shared/agent-session/structured-agent-session-create'
+import type {
+  StructuredAgentSessionForkSource,
+  StructuredAgentSessionResumeSource
+} from '../../../../../shared/agent-session/structured-agent-session-create'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
 import type { StructuredLaunchSelection } from './structured-agent-session-launch-options'
@@ -15,6 +18,7 @@ import {
   deleteStructuredAgentLaunchRecord,
   hasStructuredAgentLaunchCancellationTombstonePersisted,
   readStructuredAgentLaunchRecord,
+  updateStructuredAgentLaunchRecords,
   writeStructuredAgentLaunchRecord
 } from './structured-agent-session-launch-persistence'
 import {
@@ -52,7 +56,9 @@ export type StructuredAgentSessionLaunchLifecycle =
   | 'cancelled'
 
 const structuredLaunchesBySessionId = new Map<string, StructuredLaunchState>()
-const structuredLaunchListeners = new Set<() => void>()
+/** Null when the writer can't name its sessions, so subscribers re-read every launch. */
+type StructuredLaunchListener = (sessionIds: readonly string[] | null) => void
+const structuredLaunchListeners = new Set<StructuredLaunchListener>()
 
 export function resetStructuredAgentLaunchRegistryForTests(): void {
   for (const sessionId of structuredLaunchesBySessionId.keys()) {
@@ -64,16 +70,26 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   resetStructuredAgentLocalLaunchCancelsForTests()
 }
 
-export function notifyStructuredLaunchListeners(): void {
-  for (const state of structuredLaunchesBySessionId.values()) {
-    persistStructuredLaunchState(state)
+export function notifyStructuredLaunchListeners(sessionIds?: string | readonly string[]): void {
+  function* changes(): Generator<readonly [string, StructuredAgentLaunchPersistedRecord | null]> {
+    for (const state of structuredLaunchesBySessionId.values()) {
+      yield [state.intent.sessionId, structuredLaunchRecord(state)]
+    }
   }
+  updateStructuredAgentLaunchRecords(changes())
+  publishStructuredLaunchChange(sessionIds)
+}
+
+export function publishStructuredLaunchChange(sessionIds?: string | readonly string[]): void {
+  const changed = typeof sessionIds === 'string' ? [sessionIds] : (sessionIds ?? null)
   for (const listener of structuredLaunchListeners) {
-    listener()
+    listener(changed)
   }
 }
 
-export function subscribeStructuredAgentLaunchStatus(listener: () => void): () => void {
+export function subscribeStructuredAgentLaunchStatus(
+  listener: StructuredLaunchListener
+): () => void {
   structuredLaunchListeners.add(listener)
   return () => structuredLaunchListeners.delete(listener)
 }
@@ -82,9 +98,16 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
 export function structuredLaunchIdentity(
   worktreeId: string,
   agent: TuiAgent,
-  scope: { resumeFrom?: StructuredAgentSessionResumeSource; executionHostId?: string } = {}
+  scope: {
+    resumeFrom?: StructuredAgentSessionResumeSource
+    forkFrom?: StructuredAgentSessionForkSource
+    executionHostId?: string
+  } = {}
 ): string {
-  const { resumeFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
+  const { resumeFrom, forkFrom, executionHostId = LOCAL_EXECUTION_HOST_ID } = scope
+  if (forkFrom) {
+    return `${agent}:${worktreeId}:fork:${executionHostId}:${forkFrom.sessionId}:${forkFrom.throughItemId}`
+  }
   // A conversation id names a transcript on one host; never join a resume running on another.
   return resumeFrom
     ? `${agent}:${worktreeId}:resume:${executionHostId}:${resumeFrom.providerSessionId}`
@@ -112,15 +135,25 @@ export function deleteStructuredLaunchStateIfCurrent(state: StructuredLaunchStat
 }
 
 function persistStructuredLaunchState(state: StructuredLaunchState): void {
+  const record = structuredLaunchRecord(state)
+  if (record) {
+    writeStructuredAgentLaunchRecord(record)
+  } else {
+    deleteStructuredAgentLaunchRecord(state.intent.sessionId)
+  }
+}
+
+function structuredLaunchRecord(
+  state: StructuredLaunchState
+): StructuredAgentLaunchPersistedRecord | null {
   const lifecycle = launchStateLifecycle(state)
   if (lifecycle === 'published' || lifecycle === 'cancelled') {
-    deleteStructuredAgentLaunchRecord(state.intent.sessionId)
-    return
+    return null
   }
-  writeStructuredAgentLaunchRecord({
+  return {
     ...structuredAgentLaunchRecordFor(state.intent, lifecycle),
     ...(lifecycle === 'failed' ? { failedAt: state.callers.failedAt } : {})
-  })
+  }
 }
 
 export function getPersistedStructuredAgentLaunchRecord(
@@ -168,7 +201,12 @@ export function getStructuredAgentSessionLaunchFailure(
   sessionId: string
 ): StructuredLaunchFailure | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  return state && state.intent.worktreeId === worktreeId && launchStateLifecycle(state) === 'failed'
+  if (!state || state.intent.worktreeId !== worktreeId) {
+    return null
+  }
+  const lifecycle = launchStateLifecycle(state)
+  return lifecycle === 'failed' ||
+    (lifecycle === 'visibility-unknown' && !!state.intent.params.firstMessage)
     ? (state.failure ?? null)
     : null
 }
@@ -218,7 +256,7 @@ export function retireStructuredAgentSessionLaunchCancellationTombstone(
     return false
   }
   retireStructuredAgentLaunchCancellation(sessionId)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
   return true
 }
 
@@ -227,13 +265,13 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
   authoritativeInventory: number,
   executionHostId: ExecutionHostId
 ): boolean {
-  const changed = retireAbsentStructuredAgentLaunchCancellations(
+  const retired = retireAbsentStructuredAgentLaunchCancellations(
     publishedSessionIds,
     authoritativeInventory,
     executionHostId
   )
-  if (changed) {
-    notifyStructuredLaunchListeners()
+  if (retired.length) {
+    notifyStructuredLaunchListeners(retired)
   }
-  return changed
+  return retired.length > 0
 }

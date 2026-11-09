@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { StableAutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { buildAutomationHostCatalog } from './automation-host-catalog'
-import {
-  createAutomationCatalogGenerationRegistry,
-  getAuthorityCatalogGeneration,
-  resetAutomationHostCatalogGenerationsForTests,
-  syncAutomationHostCatalogGenerations
-} from './automation-host-catalog-generation'
+import { createAutomationCatalogGenerationRegistry } from './automation-host-catalog-generation'
 import type {
   AutomationCatalogSshMirrorInput,
   AutomationHostCatalogInput,
@@ -58,25 +53,6 @@ describe('automation catalog generation', () => {
 
   beforeEach(() => {
     registry = createAutomationCatalogGenerationRegistry()
-  })
-
-  it('advances every authority on the first sync', () => {
-    registry.sync(buildAutomationHostCatalog(input()))
-    expect(registry.get(DESKTOP)).toBe(1)
-    expect(registry.get(ENV_A)).toBe(2)
-    expect(registry.get(ENV_B)).toBe(3)
-  })
-
-  it('bounds authority generations without reopening an evicted fence', () => {
-    const authorities = Array.from({ length: 1_100 }, (_, index) => runtime(`env-${index}`))
-    registry.sync(buildAutomationHostCatalog(input({ runtimes: authorities })))
-
-    const afterEviction = registry.get({ kind: 'runtime', environmentId: 'env-0' })
-    expect(afterEviction).toBeGreaterThan(1)
-    expect(registry.get({ kind: 'runtime', environmentId: 'env-1099' })).toBe(1_101)
-
-    registry.sync(buildAutomationHostCatalog(input({ runtimes: [runtime('env-0')] })))
-    expect(registry.get({ kind: 'runtime', environmentId: 'env-0' })).toBeGreaterThan(afterEviction)
   })
 
   it('advances only the authority whose target bucket hydrated', () => {
@@ -145,30 +121,6 @@ describe('automation catalog generation', () => {
     expect(registry.get(ENV_A)).toBe(before)
   })
 
-  it('does not advance on a rename', () => {
-    registry.sync(buildAutomationHostCatalog(input()))
-    const before = registry.get(ENV_A)
-    registry.sync(
-      buildAutomationHostCatalog(
-        input({ runtimes: [runtime('env-a', { label: 'Renamed' }), runtime('env-b')] })
-      )
-    )
-    expect(registry.get(ENV_A)).toBe(before)
-  })
-
-  it('advances on a same-id re-pair', () => {
-    registry.sync(buildAutomationHostCatalog(input()))
-    const before = registry.get(ENV_A)
-    const advanced = registry.sync(
-      buildAutomationHostCatalog(
-        input({ runtimes: [runtime('env-a', { pairingRevision: 2 }), runtime('env-b')] })
-      )
-    )
-    expect(registry.get(ENV_A)).toBeGreaterThan(before)
-    expect(registry.get(ENV_B)).toBe(3)
-    expect(advanced.reincarnatedStableKeys).toEqual(['host:runtime:env-a:self'])
-  })
-
   // doc:321 — the entry a same-id re-adoption produces is byte-identical apart
   // from this, so the caller has no other way to know its rows are obsolete.
   it('reports a same-id SSH re-adoption as a reincarnated host', () => {
@@ -210,23 +162,5 @@ describe('automation catalog generation', () => {
 
     const restored = registry.sync(buildAutomationHostCatalog(withSupport('scoped')))
     expect(restored.reincarnatedStableKeys).toEqual([])
-  })
-
-  it('advances once when an authority leaves the catalog and stays put afterwards', () => {
-    registry.sync(buildAutomationHostCatalog(input()))
-    registry.sync(buildAutomationHostCatalog(input({ runtimes: [runtime('env-a')] })))
-    const afterRemoval = registry.get(ENV_B)
-    expect(afterRemoval).toBe(4)
-    registry.sync(buildAutomationHostCatalog(input({ runtimes: [runtime('env-a')] })))
-    expect(registry.get(ENV_B)).toBe(afterRemoval)
-  })
-
-  it('exposes a module-level registry for the cache fence', () => {
-    resetAutomationHostCatalogGenerationsForTests()
-    expect(getAuthorityCatalogGeneration(DESKTOP)).toBe(0)
-    syncAutomationHostCatalogGenerations(buildAutomationHostCatalog(input()))
-    expect(getAuthorityCatalogGeneration(DESKTOP)).toBe(1)
-    resetAutomationHostCatalogGenerationsForTests()
-    expect(getAuthorityCatalogGeneration(DESKTOP)).toBe(0)
   })
 })

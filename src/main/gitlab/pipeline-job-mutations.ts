@@ -17,6 +17,7 @@ import {
   type ProjectRef
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
+import { gitLabRunTimes } from './gitlab-run-times'
 import { withProjectRef } from './merge-request-project-resolution'
 import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
 
@@ -30,8 +31,11 @@ function mapRetriedPipelineJob(
     name?: string
     stage?: string
     status?: string
+    allow_failure?: boolean
     web_url?: string
     duration?: number | null
+    started_at?: string | null
+    finished_at?: string | null
   },
   fallbackJobId: number
 ): GitLabPipelineJob {
@@ -41,8 +45,10 @@ function mapRetriedPipelineJob(
     name: data.name ?? '',
     stage: data.stage ?? '',
     status: data.status ?? '',
+    ...(typeof data.allow_failure === 'boolean' ? { allowFailure: data.allow_failure } : {}),
     webUrl: data.web_url ?? '',
-    duration: typeof data.duration === 'number' ? data.duration : null
+    duration: typeof data.duration === 'number' ? data.duration : null,
+    ...gitLabRunTimes(data)
   }
 }
 

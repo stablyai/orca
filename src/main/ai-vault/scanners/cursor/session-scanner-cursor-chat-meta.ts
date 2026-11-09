@@ -1,3 +1,4 @@
+import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
@@ -123,13 +124,13 @@ export async function readCursorChatMeta(
   transcriptPath: string,
   signal?: AbortSignal
 ): Promise<CursorChatMeta | null> {
-  const metaPath = await cursorChatMetaPath(transcriptPath)
+  const metaPath = await waitForAiVaultScan(cursorChatMetaPath(transcriptPath), signal)
   if (!metaPath) {
     return null
   }
   let record: Record<string, unknown> | null
   try {
-    record = await readJsonObjectIfExists(metaPath, signal)
+    record = await waitForAiVaultScan(readJsonObjectIfExists(metaPath, signal), signal)
   } catch (error) {
     if (!(error instanceof WslTranscriptFsError)) {
       throw error

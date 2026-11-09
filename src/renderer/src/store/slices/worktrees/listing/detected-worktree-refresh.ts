@@ -1,9 +1,9 @@
-import { getEnvironmentSshStateGeneration } from '../../runtime-environment-ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status'
+import { getEnvironmentSshStateGeneration } from '../../ssh/runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/runtime-status-connection-generation'
 import {
   createDetectedWorktreeRefreshLeaseRegistry,
   type DetectedWorktreeRefreshLease
-} from '../../detected-worktree-refresh-leases'
+} from './detected-worktree-refresh-leases'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,

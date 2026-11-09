@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { View, StyleSheet } from 'react-native'
-import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
+import { MobileSourceControlRoutePanel } from '../source-control/MobileSourceControlRoutePanel'
 import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
 import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -56,7 +56,7 @@ const DockPanelContent = memo(function DockPanelContent({
   // Reuse the source-control hub so dock icon switches retain commit draft, visited tabs and scroll.
   if (activePanel === 'sourceControl' || activePanel === 'pr') {
     return (
-      <MobileSourceControlPanel
+      <MobileSourceControlRoutePanel
         hostId={hostId}
         worktreeId={worktreeId}
         name={name}

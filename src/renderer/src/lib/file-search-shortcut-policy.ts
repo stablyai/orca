@@ -1,6 +1,10 @@
 import { keybindingRunsInTextField, type KeybindingActionId } from '../../../shared/keybindings'
-import { isEditableTarget } from './editable-target'
+import { isEditableTarget, isNativeChatPromptTarget } from './editable-target'
 import { getShortcutPlatform } from './shortcut-platform'
+import {
+  nativeChatPromptClaimsShortcut,
+  textInputOwnsComposition
+} from '../../../shared/text-input-shortcut-policy'
 
 type TextKeyEvent = {
   target: EventTarget | null
@@ -25,13 +29,7 @@ export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
   ) {
     return true
   }
-  if (
-    event.isComposing ||
-    event.key === 'Process' ||
-    event.key === 'Dead' ||
-    event.altGraph ||
-    event.getModifierState?.('AltGraph')
-  ) {
+  if (textInputOwnsComposition(event)) {
     return true
   }
   const isMac = getShortcutPlatform() === 'darwin'
@@ -68,8 +66,11 @@ export function fileSearchClaimsTextKey(event: TextKeyEvent): boolean {
 
 export function textFieldClaimsActionKey(
   event: TextKeyEvent,
-  actionId: KeybindingActionId
+  actionId?: KeybindingActionId
 ): boolean {
+  if (isNativeChatPromptTarget(event.target)) {
+    return nativeChatPromptClaimsShortcut(event, getShortcutPlatform(), actionId)
+  }
   if (!fileSearchClaimsTextKey(event)) {
     return false
   }
@@ -86,5 +87,5 @@ export function textFieldClaimsActionKey(
   ) {
     return true
   }
-  return !keybindingRunsInTextField(actionId, event, platform)
+  return !actionId || !keybindingRunsInTextField(actionId, event, platform)
 }

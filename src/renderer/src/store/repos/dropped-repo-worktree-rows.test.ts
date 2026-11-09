@@ -5,9 +5,10 @@ import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { createTestStore, makeWorktree, seedStore } from '../slices/store-test-helpers'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 
 const SERVER = toRuntimeExecutionHostId('env-1')
 

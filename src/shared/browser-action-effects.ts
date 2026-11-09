@@ -1,4 +1,4 @@
-import type { BrowserActionEffects } from './runtime-browser-contracts'
+import type { BrowserActionEffects } from './browser/runtime/runtime-browser-contracts'
 
 /** The `effects` an agent's page action result carries, if any. */
 export function readBrowserActionEffects(result: unknown): BrowserActionEffects | undefined {

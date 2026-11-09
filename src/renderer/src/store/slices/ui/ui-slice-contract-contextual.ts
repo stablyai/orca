@@ -3,7 +3,7 @@ import type {
   FeatureInteractionId,
   FeatureInteractionState
 } from '../../../../../shared/feature-interactions'
-import type { FeatureTipId } from '../../../../../shared/feature-tips'
+import type { FeatureTipId, FeatureTipSeenId } from '../../../../../shared/feature-tips'
 import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
@@ -55,11 +55,12 @@ export type UISliceContextual = {
     | 'confirm-orca-yaml-hooks'
     | 'diagram-viewer'
     | 'agent-session-history'
+    | 'chat-account-usage'
     | 'node-dist-mirror'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
-  featureTipsSeenIds: FeatureTipId[]
+  featureTipsSeenIds: FeatureTipSeenId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   /** Main's once-decided Chat UI launch tip variant; null until read. */
   chatUiLaunchTipVariant: ChatUiLaunchTipVariant | null
@@ -133,6 +134,8 @@ export type UISliceContextual = {
   markCodexTerminalServerIsolationNoticeSeen: () => void
   codexSharedSettingsNoticeSeen: boolean
   markCodexSharedSettingsNoticeSeen: () => void
+  speechModelUpdateNoticeSeen: boolean
+  markSpeechModelUpdateNoticeSeen: () => void
   claudeDiffPanelNoticeSeen: boolean
   markClaudeDiffPanelNoticeSeen: () => void
 }

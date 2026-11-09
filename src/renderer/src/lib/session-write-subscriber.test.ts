@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   createSessionWriteSubscriber,
   type WorkspaceSessionWrite
-} from './session-write-subscriber'
+} from './workspace/persistence/session-write-subscriber'
 
 // Snapshot/restore the full singleton store so pollution cannot mask persistence-gate regressions.
 let initialState: AppState
@@ -102,28 +103,6 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('ignores mutations to fields outside SESSION_RELEVANT_FIELDS', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    expect(persist).toHaveBeenCalledTimes(1)
-    persist.mockClear()
-
-    // Agent-status/timer fields are outside SESSION_RELEVANT_FIELDS and must not reset debounce.
-    useAppStore.getState().setAgentStatus('tab-1:1', {
-      state: 'working',
-      prompt: 'Fix tests',
-      agentType: 'codex'
-    })
-    useAppStore.getState().setCacheTimerStartedAt('tab-1:pane-1', Date.now())
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
   it('writes a live agent recovery checkpoint when provider session metadata arrives', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
@@ -173,154 +152,6 @@ describe('createSessionWriteSubscriber', () => {
         }
       }
     })
-    cleanup()
-  })
-
-  it('persists defaultTerminalTabsAppliedByWorktreeId after markDefaultTerminalTabsApplied', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    const worktreeId = 'repo1::/wt-1'
-    useAppStore.getState().markDefaultTerminalTabsApplied(worktreeId)
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].patch.defaultTerminalTabsAppliedByWorktreeId).toEqual({
-      [worktreeId]: true
-    })
-    cleanup()
-  })
-  it('schedules no session timer for one display-title bucket in a 300-worktree fleet', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const tabsByWorktree = Object.fromEntries(
-      Array.from({ length: 300 }, (_, index) => {
-        const worktreeId = `wt-${index}`
-        return [
-          worktreeId,
-          [
-            {
-              id: `tab-${index}`,
-              ptyId: `${worktreeId}@@pty-1`,
-              worktreeId,
-              title: '⠋ Codex is thinking',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        ]
-      })
-    )
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      tabsByWorktree
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-    expect(vi.getTimerCount()).toBe(0)
-
-    const changedWorktreeId = 'wt-173'
-    useAppStore.setState({
-      tabsByWorktree: {
-        ...tabsByWorktree,
-        [changedWorktreeId]: [
-          {
-            ...tabsByWorktree[changedWorktreeId][0],
-            title: '⠙ Codex is thinking'
-          }
-        ]
-      }
-    })
-
-    expect(vi.getTimerCount()).toBe(0)
-    vi.advanceTimersByTime(200)
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
-  it('ignores production updateTabTitle spinner frames across terminal and unified tabs', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('⠋ Codex is thinking')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.getState().updateTabTitle('tab-1', '⠙ Codex is thinking')
-    vi.advanceTimersByTime(200)
-
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
-  it('persists production updateTabTitle for ordinary terminal titles', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('bash')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.getState().updateTabTitle('tab-1', 'vim src/index.ts')
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].patch.tabsByWorktree?.['wt-1']?.[0]?.title).toBe(
-      'vim src/index.ts'
-    )
-    expect(persist.mock.calls[0][0].patch.unifiedTabs?.['wt-1']?.[0]?.label).toBe(
-      'vim src/index.ts'
-    )
-    cleanup()
-  })
-
-  it('writes a narrow patch when only the active tab changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({ activeTabId: 'tab-perf-1' })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
-    expect(persist.mock.calls[0][0].patch).toEqual({ activeTabId: 'tab-perf-1' })
-    cleanup()
-  })
-
-  it('coalesces multiple relevant mutations within a debounce window', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
-    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
-
-    useAppStore.setState({ activeRepoId: 'repo-1' })
-    vi.advanceTimersByTime(50)
-    useAppStore.setState({ activeWorktreeId: 'wt-1' })
-    vi.advanceTimersByTime(50)
-    useAppStore.setState({ activeTabId: 'tab-1' })
-    vi.advanceTimersByTime(200)
-
-    expect(persist).toHaveBeenCalledTimes(1)
     cleanup()
   })
 

@@ -1,5 +1,7 @@
-import type { ConnectionState, RpcResponse } from '../transport/types'
-import { BridgeCapExceededError, BridgeReplyUndeliverableError } from './bridge-host-errors'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { BRIDGE_APP_INACTIVE_FRAME } from './bridge/bridge-app-inactive'
+
+import { BridgeCapExceededError } from './bridge-host-errors'
 import { createNativeVerbServer } from './bridge-host-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
@@ -13,14 +15,14 @@ import {
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
-import { splitBridgeReply } from './bridge/bridge-reply-chunking'
+import { createBridgeHostReplySender } from './bridge-host-reply-sender'
 import { createBridgeHostFrames } from './bridge-host-frames'
 import { createBridgeHostBack } from './bridge-host-back'
 import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
 import { pageStorageForReader } from './page-storage-keys'
 import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/bridge-terminal-key'
-import { readBridgeConnectionSnapshot } from './bridge/bridge-connection-snapshot'
+import { createBridgeVerdictHold, isDesktopBound } from './bridge-host-verdict-hold'
 import type { BridgeHost, BridgeHostOptions } from './bridge-host-contract'
 
 export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
@@ -66,6 +68,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // re-handshake. Null is a page older than `storageKeys`, which gets the legacy keys only.
   let pageStorageKeys: readonly string[] | null = options.sessionBack?.storageKeys ?? null
   let pageReadsConnectionPath = options.sessionBack?.connectionPathFrames === true
+  let pageReadsAppInactive = options.sessionBack?.appInactiveFrames === true
 
   const frames = createBridgeHostFrames({
     post: options.post,
@@ -74,8 +77,10 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
   const { postJson, sendJson, send, sendError } = frames
 
+  const verdict = createBridgeVerdictHold(options.readHostStatus, sendError)
   const subscriptions = new BridgeHostSubscriptions({
     client,
+    holdReplay: verdict.holdReplay,
     post: sendJson,
     onBinaryFrameDropped: ({ id, bytes, droppedOnStream }) => {
       options.onDiagnostic?.({ kind: 'binary-frame-dropped', id, bytes, dropped: droppedOnStream })
@@ -88,7 +93,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
 
   // Use the event’s state; listeners can run before the mirrored getter updates.
-  const snapshot = (state?: ConnectionState) => readBridgeConnectionSnapshot(client, state)
+  const snapshot = (state?: ConnectionState) => verdict.snapshot(client, state)
 
   /**
    * Posts `init`, and answers nothing (ruling 34).
@@ -112,6 +117,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       return
     }
     initSent = true
+    verdict.noteInit()
     void postJson(
       JSON.stringify(
         createBridgeInitFrame({
@@ -141,16 +147,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     )
   }
 
-  function sendReply(id: string, payload: RpcResponse): void {
-    const split = splitBridgeReply(id, payload)
-    if (!split.ok) {
-      sendError(id, new BridgeReplyUndeliverableError(split.refusal))
-      return
-    }
-    for (const frame of split.frames) {
-      send(frame)
-    }
-  }
+  const sendReply = createBridgeHostReplySender(sendJson, sendError)
 
   const requests = new BridgeHostRequests({
     client,
@@ -204,6 +201,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   function settleAll(notify: boolean): void {
     requests.closeAll(notify)
     subscriptions.closeAll(notify ? 'closed' : null)
+    verdict.settle(notify)
   }
 
   function dispose(): void {
@@ -222,6 +220,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       serving = true
       pageStorageKeys = message.storageKeys ?? null
       pageReadsConnectionPath = message.connectionPathFrames === true
+      pageReadsAppInactive = message.appInactiveFrames === true
       back.readReady()
       // Dropped like the Back claim: a page still showing a terminal claims again on this `init`.
       reportRailClaim(false)
@@ -237,9 +236,12 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       return
     }
     // A session with no handshake has no grants/caps; refuse requests and streams too. Inherited handshake state keeps client-rebuilt hosts serving live pages.
-    if (!initSent && (message.type === 'request' || message.type === 'subscribe')) {
+    if (!initSent && isDesktopBound(message)) {
       options.onDiagnostic?.({ kind: 'notify-refused', name: message.method, why: 'before-ready' })
       sendError(message.id, new BridgeCapExceededError('before-ready'))
+      return
+    }
+    if (!verdict.admit(message)) {
       return
     }
     switch (message.type) {
@@ -310,6 +312,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishKeyboardInset: (next) => routes.publishKeyboardInset(next, deliverable()),
     publishStorage: () => sendInit(true),
+    publishHostStatus: () => verdict.publish(() => deliverable() && sendInit(), dispatch),
     publishPageGeometry: (next) => routes.publishPageGeometry(next, deliverable()),
     publishFoldDivision: (next) => routes.publishFoldDivision(next, deliverable()),
     publishTerminalKeyRail: (next) => routes.publishTerminalKeyRail(next, deliverable()),
@@ -331,11 +334,17 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     publishUiLocale: (next) => {
       routes.publishUiLocale(next, deliverable())
     },
+    sendAppInactive: () => {
+      if (pageReadsAppInactive && deliverable()) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, type: BRIDGE_APP_INACTIVE_FRAME })
+      }
+    },
     sendBack: back.send,
     readSessionBack: () => ({
       ...back.read(),
       ...(pageStorageKeys === null ? {} : { storageKeys: pageStorageKeys }),
       ...(pageReadsConnectionPath ? { connectionPathFrames: true as const } : {}),
+      ...(pageReadsAppInactive ? { appInactiveFrames: true as const } : {}),
       ...(railClaimed ? { terminalKeyRailClaim: { inputOwner: railOwner } } : {})
     }),
     dispose

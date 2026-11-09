@@ -3,10 +3,10 @@ import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { CompactAgentExpansion } from './worktree-card-compact-agents'
 import { SUMMARY_STATE_ORDER } from './worktree-card-agent-summary'
-import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-row-dot-state'
+import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-status/presentation/agent-row-dot-state'
 import type { AgentDotState } from '@/components/AgentStateDot'
 
 // A lone idle child costs the same row as its group, so only fold two or more.
@@ -83,7 +83,8 @@ export function IdleChildAgentGroupRow({
   layout,
   ariaLevel
 }: IdleChildAgentGroupRowProps): React.JSX.Element {
-  const label = translate('sidebar.agentSummary.idleChildCount', '{{count}} idle', { count })
+  const t = useTranslate()
+  const label = t('sidebar.agentSummary.idleChildCount', '{{count}} idle', { count })
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault()
@@ -117,10 +118,10 @@ export function IdleChildAgentGroupRow({
       aria-expanded={expanded}
       aria-label={
         expanded
-          ? translate('sidebar.agentSummary.hideIdleChildren', 'Hide {{count}} idle child agents', {
+          ? t('sidebar.agentSummary.hideIdleChildren', 'Hide {{count}} idle child agents', {
               count
             })
-          : translate('sidebar.agentSummary.showIdleChildren', 'Show {{count}} idle child agents', {
+          : t('sidebar.agentSummary.showIdleChildren', 'Show {{count}} idle child agents', {
               count
             })
       }

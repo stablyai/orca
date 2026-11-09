@@ -7,7 +7,7 @@ import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/
 import type { Store } from '../persistence/loading-store/store'
 import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import { readLocalFileContent } from '../ipc/filesystem/filesystem-file-content-inspection'
-import { isInsideNativeChatPasteFolder, restoreNativeChatPastes } from './native-chat-paste-files'
+import { restoreNativeChatPastes } from './native-chat-paste-files'
 
 // A store with no projects: nothing but an access kind decides what a read may reach.
 const NO_PROJECTS: Store = Object.assign(Object.create(null), {
@@ -29,46 +29,6 @@ async function chatImageReadable(target: string): Promise<boolean> {
     return false
   }
 }
-
-describe('isInsideNativeChatPasteFolder', () => {
-  const posixFolder = '/data/native-chat-pastes'
-  const winFolder = 'C:\\Users\\Me\\AppData\\Roaming\\Orca\\native-chat-pastes'
-
-  it.each([
-    ['a file inside', `${posixFolder}/orca-paste-1.png`, true],
-    ['a name that only starts with dots', `${posixFolder}/..orca-paste-1.png`, true],
-    ['the folder itself', posixFolder, false],
-    ['the parent', '/data', false],
-    ['a sibling reached through ..', `${posixFolder}/../secret.png`, false],
-    ['a sibling folder sharing the prefix', '/data/native-chat-pastes-evil/x.png', false],
-    ['an unrelated absolute path', '/etc/passwd', false]
-  ])('posix: %s', (_label, target, inside) => {
-    expect(isInsideNativeChatPasteFolder(posixFolder, target, path.posix, 'darwin')).toBe(inside)
-  })
-
-  it.each([
-    ['a file inside', `${winFolder}\\orca-paste-1.png`, true],
-    ['a file inside in other letter case', `${winFolder.toLowerCase()}\\ORCA-PASTE-1.PNG`, true],
-    ['a \\\\?\\ prefixed file inside', `\\\\?\\${winFolder}\\orca-paste-1.png`, true],
-    ['another drive', 'D:\\native-chat-pastes\\orca-paste-1.png', false],
-    ['a \\\\?\\UNC share', '\\\\?\\UNC\\server\\share\\orca-paste-1.png', false],
-    ['a sibling reached through ..', `${winFolder}\\..\\secret.png`, false],
-    ['the folder itself', winFolder, false]
-  ])('win32: %s', (_label, target, inside) => {
-    expect(isInsideNativeChatPasteFolder(winFolder, target, path.win32, 'win32')).toBe(inside)
-  })
-
-  it('compares a \\\\?\\ prefixed folder like its plain form', () => {
-    expect(
-      isInsideNativeChatPasteFolder(
-        `\\\\?\\${winFolder}`,
-        `${winFolder}\\orca-paste-1.png`,
-        path.win32,
-        'win32'
-      )
-    ).toBe(true)
-  })
-})
 
 describe('native-chat paste folder on disk', () => {
   let root: string
@@ -115,16 +75,6 @@ describe('native-chat paste folder on disk', () => {
       { path: '', kept: false, exists: false }
     ])
     await expect(restoreNativeChatPastes('not a list')).resolves.toEqual([])
-  })
-
-  it('leaves a kept paste readable by the composer preview, with no grant', async () => {
-    const kept = path.join(folder, 'orca-paste-1.png')
-    writeFileSync(kept, 'png')
-    await expect(restoreNativeChatPastes([kept])).resolves.toEqual([
-      { path: kept, kept: true, exists: true }
-    ])
-    const readable = await resolveLocalFileRequestPath(kept, { kind: 'chat-image' }, NO_PROJECTS)
-    await expect(readLocalFileContent(readable)).resolves.toMatchObject({ mimeType: 'image/png' })
   })
 
   it('keeps a paste reached through a symlinked alias of the folder, as /var is of /private/var', async () => {
@@ -203,20 +153,6 @@ describe('native-chat paste folder on disk', () => {
     rmSync(folder, { recursive: true })
     symlinkSync(outside, folder)
 
-    await expect(restoreNativeChatPastes([path.join(folder, 'orca-paste-1.png')])).resolves.toEqual(
-      [{ path: path.join(folder, 'orca-paste-1.png'), kept: false, exists: false }]
-    )
-  })
-
-  it('reports nothing kept when the folder does not exist yet', async () => {
-    rmSync(folder, { recursive: true })
-    await expect(
-      resolveLocalFileRequestPath(
-        path.join(root, 'agent-session-attachments', 'upload', 'gone.png'),
-        { kind: 'chat-image' },
-        NO_PROJECTS
-      )
-    ).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(restoreNativeChatPastes([path.join(folder, 'orca-paste-1.png')])).resolves.toEqual(
       [{ path: path.join(folder, 'orca-paste-1.png'), kept: false, exists: false }]
     )

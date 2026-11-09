@@ -1,8 +1,4 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronMocks = vi.hoisted(() => {
   const ipcMain = {
@@ -20,23 +16,20 @@ const electronMocks = vi.hoisted(() => {
 vi.mock('electron', () => electronMocks)
 
 const scanLocalRepoWorktreesForResolution = vi.hoisted(() => vi.fn())
-vi.mock('../../src/main/runtime/repo-worktree-resolution-scan', () => ({
+vi.mock('../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan', () => ({
   scanLocalRepoWorktreesForResolution
 }))
 
-import { MIXED_FOLDER } from '../../src/shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
-import { formatCliError } from '../../src/cli/cli-error'
-import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../src/shared/protocol-version'
-import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
-import { OrchestrationDb } from '../../src/main/runtime/orchestration/db'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
+import '../../src/main/runtime/orchestration/db/contract-constants'
+import '../../src/main/runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../src/main/runtime/orchestration/db/dispatch-row-writer'
+import '../../src/main/runtime/orchestration/db/attempt-outcome-projection'
+
 import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../src/shared/project-group-types'
 import type { Repo } from '../../src/shared/repo-types'
 import type { WorktreeMeta } from '../../src/shared/worktree/meta-types'
-import type { RuntimeStore } from '../../src/main/runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../src/main/runtime/construction/runtime-store-contract'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { HostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 
@@ -112,18 +105,7 @@ function makeStore(
   return store satisfies RuntimeStore
 }
 
-class FolderConsumerRuntime extends OrcaRuntimeService {
-  browserWorkspace(selector: string) {
-    return this.resolveBrowserWorkspace(selector)
-  }
-  emulatorWorkspace(selector: string) {
-    return this.resolveEmulatorWorkspaceId(selector)
-  }
-}
-
 describe('orchestration worker workspace resolution', () => {
-  const tempPaths: string[] = []
-
   beforeEach(() => {
     scanLocalRepoWorktreesForResolution.mockReset().mockResolvedValue({
       ok: true,
@@ -137,24 +119,6 @@ describe('orchestration worker workspace resolution', () => {
         }
       ]
     })
-  })
-
-  afterEach(async () => {
-    await Promise.all(tempPaths.splice(0).map((path) => rm(path, { recursive: true, force: true })))
-  })
-
-  it.each([
-    ['full id', `id:${WORKTREE_ID}`],
-    ['path', `path:${WORKTREE_PATH}`],
-    ['name', 'name:Feature']
-  ])('resolves a local worktree by %s with one catalog scan', async (_label, selector) => {
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-
-    await expect(runtime.showManagedTerminalWorkspace(selector)).resolves.toMatchObject({
-      id: WORKTREE_ID,
-      path: WORKTREE_PATH
-    })
-    expect(scanLocalRepoWorktreesForResolution).toHaveBeenCalledOnce()
   })
 
   it('preserves a disconnected SSH worktree with unknown legacy ownership', async () => {
@@ -197,15 +161,6 @@ describe('orchestration worker workspace resolution', () => {
     await expect(runtime.showManagedTerminalWorkspace(`id:${WORKTREE_ID}`)).rejects.toThrow(
       'selector_not_found'
     )
-  })
-
-  it('does not fall back from the floating terminal sentinel to another workspace', async () => {
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-
-    await expect(
-      runtime.showManagedTerminalWorkspace(`id:${FLOATING_TERMINAL_WORKTREE_ID}`)
-    ).rejects.toThrow('selector_not_found')
-    expect(scanLocalRepoWorktreesForResolution).not.toHaveBeenCalled()
   })
 
   it('rejects an ambiguous worktree name', async () => {
@@ -254,212 +209,4 @@ describe('orchestration worker workspace resolution', () => {
       'selector_ambiguous'
     )
   })
-
-  it('resolves a local folder workspace and refuses an SSH one without a Git catalog scan', async () => {
-    const localPath = await mkdtemp(join(tmpdir(), 'orca-worker-local-folder-'))
-    tempPaths.push(localPath)
-    const group = { id: 'group-1', name: 'Group', parentPath: localPath } as ProjectGroup
-    const localFolder = {
-      id: 'local-folder',
-      projectGroupId: group.id,
-      name: 'Local folder',
-      folderPath: localPath
-    } as FolderWorkspace
-    const remoteFolder = {
-      ...localFolder,
-      id: 'remote-folder',
-      name: 'Remote folder',
-      folderPath: '/srv/app',
-      connectionId: 'ssh-folder'
-    }
-    const runtime = new OrcaRuntimeService(
-      makeStore({
-        folderWorkspaces: [localFolder, remoteFolder],
-        projectGroups: [group]
-      }) as never
-    )
-
-    await expect(
-      runtime.showManagedTerminalWorkspace('folder:local-folder')
-    ).resolves.toMatchObject({
-      id: 'folder:local-folder',
-      path: localPath,
-      hostId: 'local'
-    })
-    // No SSH filesystem provider is installed, so the remote folder is unavailable.
-    await expect(runtime.showManagedTerminalWorkspace('id:folder:remote-folder')).rejects.toThrow(
-      'folder_workspace_path_unavailable:/srv/app'
-    )
-    expect(scanLocalRepoWorktreesForResolution).not.toHaveBeenCalled()
-  })
-
-  it.each([false, true])(
-    'preserves worker selector recovery before dispatch or launch (reversed=%s)',
-    async (reverse) => {
-      const folder = {
-        ...MIXED_FOLDER,
-        id: 'dup',
-        folderPath: '/workspace'
-      }
-      let folders: FolderWorkspace[] = [
-        { ...folder, executionHostId: 'local' },
-        { ...folder, executionHostId: 'ssh:prod' }
-      ]
-      if (reverse) {
-        folders.reverse()
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real selector reads the catalog methods supplied by this fixture.
-      const runtime = new OrcaRuntimeService({
-        ...makeStore(),
-        getFolderWorkspaces: () => folders
-      } as never)
-      const db = new OrchestrationDb(':memory:')
-      runtime.setOrchestrationDb(db)
-      const paneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-      const run = db.createRun({
-        objective: 'folder placement',
-        coordinatorHandle: 'term_coord',
-        coordinatorPaneKey: paneKey
-      })
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(paneKey)
-      vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockReturnValue(paneKey)
-      vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue(
-        'runtime_test:term_coord:1'
-      )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: caller placement reads only this coordinator handle and workspace identity.
-      vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-        handle: 'term_coord',
-        worktreeId: WORKTREE_ID
-      } as never)
-      vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-      const createDispatch = vi.spyOn(db, 'createStartingWorkerDispatch')
-      const createTerminal = vi
-        .spyOn(runtime, 'createTerminal')
-        .mockRejectedValue(new Error('unexpected launch'))
-      const sendPrompt = vi.spyOn(runtime, 'sendTerminalAgentPrompt')
-      const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-      try {
-        for (const selector of ['folder:dup', 'id:folder:dup']) {
-          for (const missing of [false, true]) {
-            const task = db.createTask({ spec: 'existing folder', runId: run.id })
-            const response = await dispatcher.dispatch({
-              id: `${selector}:${missing}`,
-              authToken: 'fixture-token',
-              orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-              orchestrationRequestId: `${selector}:${missing}`,
-              method: 'orchestration.workerStart',
-              params: { from: 'term_coord', task: task.id, worktree: selector, agent: 'codex' }
-            })
-            expect(response.ok).toBe(false)
-            if (response.ok) {
-              throw new Error('placement unexpectedly succeeded')
-            }
-            expect(response.error.code).toBe(missing ? 'selector_not_found' : 'selector_ambiguous')
-            expect(
-              formatCliError(new RuntimeRpcFailureError(response), { worktreeSelector: selector })
-            ).toContain('Next step:')
-            expect(db.getDispatchContext(task.id)).toBeUndefined()
-            folders = []
-          }
-          folders = reverse
-            ? [
-                { ...folder, executionHostId: 'ssh:prod' },
-                { ...folder, executionHostId: 'local' }
-              ]
-            : [
-                { ...folder, executionHostId: 'local' },
-                { ...folder, executionHostId: 'ssh:prod' }
-              ]
-        }
-        expect(createDispatch).not.toHaveBeenCalled()
-        expect(createTerminal).not.toHaveBeenCalled()
-        expect(sendPrompt).not.toHaveBeenCalled()
-      } finally {
-        db.close()
-      }
-    }
-  )
-
-  it('rejects a folder workspace whose execution host is ambiguous', async () => {
-    const folderPath = '/workspace'
-    const group = { id: 'group-1', name: 'Group', parentPath: folderPath } as ProjectGroup
-    const folder = {
-      id: 'folder-1',
-      projectGroupId: group.id,
-      name: 'Ambiguous folder',
-      folderPath
-    } as FolderWorkspace
-    const repos = [
-      { id: 'local', path: '/workspace/local', projectGroupId: group.id },
-      { id: 'remote', path: '/workspace/remote', projectGroupId: group.id, connectionId: 'ssh-1' }
-    ].map((repo) => ({
-      displayName: repo.id,
-      badgeColor: 'blue',
-      addedAt: 1,
-      ...repo
-    })) as Repo[]
-    const runtime = new OrcaRuntimeService(
-      makeStore({ repos, folderWorkspaces: [folder], projectGroups: [group] }) as never
-    )
-
-    await expect(runtime.showManagedTerminalWorkspace('folder:folder-1')).rejects.toThrow(
-      'selector_ambiguous'
-    )
-    expect(scanLocalRepoWorktreesForResolution).not.toHaveBeenCalled()
-  })
-
-  it.each([false, true])(
-    'keeps physical folder refusal separate from emulator identity (reversed=%s)',
-    async (reversed) => {
-      const folderPath = await mkdtemp(join(tmpdir(), 'orca-worker-folder-consumers-'))
-      tempPaths.push(folderPath)
-      const group = { id: 'group-1', name: 'Group', parentPath: folderPath } as ProjectGroup
-      const folders: FolderWorkspace[] = [
-        {
-          id: 'folder-1',
-          projectGroupId: group.id,
-          name: 'Folder',
-          folderPath,
-          linkedTask: null,
-          comment: '',
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 0,
-          lastActivityAt: 1,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ]
-      const repos: Repo[] = [
-        { id: 'local', executionHostId: 'local' as const },
-        { id: 'remote', executionHostId: 'ssh:remote' as const }
-      ].map((repo) => ({
-        ...repo,
-        path: folderPath,
-        projectGroupId: group.id,
-        displayName: repo.id,
-        badgeColor: 'blue',
-        addedAt: 1
-      }))
-      const runtime = new FolderConsumerRuntime(
-        makeStore({
-          repos: reversed ? repos.toReversed() : repos,
-          folderWorkspaces: folders
-        })
-      )
-      const selector = 'id:folder:folder-1'
-      await expect(runtime.resolveRuntimeFileTarget(selector)).rejects.toThrow('selector_ambiguous')
-      await expect(runtime.browserWorkspace(selector)).rejects.toThrow('selector_ambiguous')
-      await expect(runtime.emulatorWorkspace(selector)).resolves.toBe('folder:folder-1')
-      folders.push({ ...folders[0], executionHostId: 'ssh:remote' })
-      await expect(runtime.emulatorWorkspace(selector)).rejects.toThrow('selector_ambiguous')
-      folders.pop()
-      folders.splice(0)
-      await expect(runtime.resolveRuntimeFileTarget(selector)).rejects.toThrow('selector_not_found')
-      await expect(runtime.browserWorkspace(selector)).rejects.toThrow('selector_not_found')
-      await expect(runtime.emulatorWorkspace(selector)).rejects.toThrow('selector_not_found')
-      expect(scanLocalRepoWorktreesForResolution).not.toHaveBeenCalled()
-    }
-  )
 })

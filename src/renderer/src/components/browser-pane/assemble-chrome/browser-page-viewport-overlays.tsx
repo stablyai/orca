@@ -107,7 +107,12 @@ export function BrowserPageViewportOverlays({
         containerRef={containerRef}
         webviewRef={webviewRef}
       />
-      <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
+      <BrowserFind
+        browserPageId={browserTab.id}
+        isOpen={findOpen}
+        onClose={() => setFindOpen(false)}
+        webviewRef={webviewRef}
+      />
       <BrowserLinkStatusBubble browserPageId={browserTab.id} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserPageLoadFailure

@@ -10,11 +10,8 @@ import {
 import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hosted-browser-rows'
 import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
 import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
-import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
-import type {
-  RuntimeBrowserDriverState,
-  RuntimeTerminalDriverState
-} from '../../../../shared/runtime-types'
+import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 import { useAppStore } from '../../store/index'
 
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
@@ -32,7 +29,7 @@ type PendingMobileStateEvent =
   | { kind: 'driver'; event: { ptyId: string; driver: RuntimeTerminalDriverState } }
   | {
       kind: 'browser-driver'
-      event: { browserPageId: string; driver: RuntimeBrowserDriverState }
+      event: { browserPageId: string; driver: RuntimeTerminalDriverState }
     }
 
 export function registerMobileDriverIpcBridge(

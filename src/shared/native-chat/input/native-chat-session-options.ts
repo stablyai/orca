@@ -6,6 +6,8 @@ export type SessionOptionSelectChoice = {
   value: string
   label: string
   description?: string
+  /** An alias of a listed versioned row: listed only for a matching search. */
+  searchOnly?: true
 }
 
 /** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.
@@ -108,6 +110,8 @@ export type NativeChatSessionOptionSettingsMutation =
 
 export type SessionOptionsSurface = {
   demandModelCatalog?: () => void
+  /** Live local admission for a structured action, before consuming its composer trigger. */
+  admits?: (id: string, value: SessionOptionValue) => boolean
   getSnapshot(): SessionOptionDescriptor[]
   /** Apply an absolute target; known flip-only options use their tracked baseline. */
   setOption(id: string, value: SessionOptionValue): Promise<SessionOptionSetResult>

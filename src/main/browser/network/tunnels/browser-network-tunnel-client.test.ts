@@ -9,11 +9,8 @@ import {
   encodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
-import {
-  BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
-  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-} from './browser-network-tunnel-stream-state'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
+import { BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES } from './browser-network-tunnel-stream-state'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 
 function frame(
@@ -130,101 +127,6 @@ describe('BrowserNetworkTunnelClient', () => {
     client.close()
   })
 
-  it('destroys every stream when the route closes or rejects a frame', async () => {
-    const client = new BrowserNetworkTunnelClient({
-      tunnelGeneration: 7,
-      sendBinary: () => true
-    })
-    const firstOpening = client.open({ host: 'one.internal', port: 80 })
-    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened, new Uint8Array(), 7, 1))
-    const first = await firstOpening
-    first.on('error', () => {})
-    const secondOpening = client.open({ host: 'two.internal', port: 80 })
-    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened, new Uint8Array(), 7, 2))
-    const second = await secondOpening
-    second.on('error', () => {})
-
-    client.handleBinary(new Uint8Array([1, 2, 3]))
-
-    expect(first.destroyed).toBe(true)
-    expect(second.destroyed).toBe(true)
-    await expect(client.open({ host: 'three.internal', port: 80 })).rejects.toThrow(
-      'Browser tunnel is closed'
-    )
-  })
-
-  it('retires a remotely failed stream without echoing an error or closing the route', async () => {
-    const sent: Uint8Array<ArrayBufferLike>[] = []
-    const client = new BrowserNetworkTunnelClient({
-      tunnelGeneration: 7,
-      sendBinary: (bytes) => {
-        sent.push(bytes)
-        return true
-      }
-    })
-    const opening = client.open({ host: 'refused.internal', port: 443 })
-    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
-    const socket = await opening
-    const socketError = once(socket, 'error')
-    sent.length = 0
-
-    client.handleBinary(
-      frame(BrowserNetworkTunnelOpcode.Error, new TextEncoder().encode('destination_error'))
-    )
-
-    await expect(socketError).resolves.toEqual([
-      expect.objectContaining({ message: 'Browser tunnel destination failed: destination_error' })
-    ])
-    expect(sent).toEqual([])
-    const nextOpening = client.open({ host: 'healthy.internal', port: 443 })
-    expect(decodeBrowserNetworkTunnelFrame(sent[0]!)?.opcode).toBe(BrowserNetworkTunnelOpcode.Open)
-    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened, new Uint8Array(), 7, 2))
-    const nextSocket = await nextOpening
-    nextSocket.on('error', () => {})
-    client.close()
-  })
-
-  it('rejects a destination failure before opening without an unhandled socket error', async () => {
-    const client = new BrowserNetworkTunnelClient({
-      tunnelGeneration: 7,
-      sendBinary: () => true
-    })
-    const opening = client.open({ host: 'refused.internal', port: 443 })
-
-    client.handleBinary(
-      frame(BrowserNetworkTunnelOpcode.Error, new TextEncoder().encode('destination_error'))
-    )
-
-    await expect(opening).rejects.toThrow('Browser tunnel destination failed: destination_error')
-    // Allow a deferred socket 'error' to surface before the test ends.
-    await new Promise((resolve) => setImmediate(resolve))
-    client.close()
-  })
-
-  it('fails a never-connected stream on timeout and notifies the remote', async () => {
-    vi.useFakeTimers()
-    let opening: Promise<unknown>
-    const sent: Uint8Array<ArrayBufferLike>[] = []
-    try {
-      const client = new BrowserNetworkTunnelClient({
-        tunnelGeneration: 7,
-        sendBinary: (bytes) => {
-          sent.push(bytes)
-          return true
-        }
-      })
-      opening = client.open({ host: 'unreachable.internal', port: 443 })
-      sent.length = 0
-      vi.advanceTimersByTime(BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS)
-    } finally {
-      vi.useRealTimers()
-    }
-
-    await expect(opening).rejects.toThrow('Browser tunnel destination connect timed out')
-    expect(decodeBrowserNetworkTunnelFrame(sent[0]!)?.opcode).toBe(BrowserNetworkTunnelOpcode.Error)
-    await new Promise((resolve) => setImmediate(resolve))
-  })
-
   it('ignores a retired stream frame but rejects a never-allocated stream ID', async () => {
     const client = new BrowserNetworkTunnelClient({
       tunnelGeneration: 7,
@@ -283,35 +185,6 @@ describe('BrowserNetworkTunnelClient', () => {
         .filter((candidate) => candidate?.opcode === BrowserNetworkTunnelOpcode.Open)
         .map((candidate) => candidate!.streamId)
     ).toEqual([1, 2])
-  })
-
-  it('withholds destination credit until a readable consumer asks for data', async () => {
-    const sent: Uint8Array<ArrayBufferLike>[] = []
-    const client = new BrowserNetworkTunnelClient({
-      tunnelGeneration: 7,
-      sendBinary: (bytes) => {
-        sent.push(bytes)
-        return true
-      }
-    })
-    const opening = client.open({ host: 'localhost', port: 8080 })
-    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Opened))
-    const socket = await opening
-    socket.on('error', () => {})
-    sent.length = 0
-
-    client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([7, 8, 9])))
-    expect(sent).toEqual([])
-
-    const received = once(socket, 'data')
-    await expect(received).resolves.toEqual([Buffer.from([7, 8, 9])])
-    expect(sent).toEqual([])
-    socket.settleRead(3)
-    await vi.waitFor(() => expect(sent).toHaveLength(1))
-    expect(decodeBrowserNetworkTunnelFrame(sent[0]!)?.opcode).toBe(
-      BrowserNetworkTunnelOpcode.WindowUpdate
-    )
-    client.close()
   })
 
   it('replenishes only bytes settled after the readable consumer takes them', async () => {

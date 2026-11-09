@@ -1,7 +1,7 @@
-import type { BrowserPaletteSearchResult } from '@/lib/browser-palette-search'
-import type { PaletteSearchResult } from '@/lib/worktree-palette-search'
-import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search-types'
-import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace-tab-palette-results'
+import type { BrowserPaletteSearchResult } from '@/lib/browser/palette/browser-palette-search'
+import type { PaletteSearchResult } from '@/lib/workspace/search/worktrees/worktree-palette-search'
+import type { SimulatorPaletteSearchResult } from '@/lib/simulator/search/simulator-palette-search-types'
+import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 import type {
   CmdJActionResult,
   CmdJRankedMiddleResult,
@@ -14,7 +14,7 @@ import type {
 import type { RecentWorkspaceTabRow } from '@/lib/recent-workspace-tab-rows'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { CREATE_WORKSPACE_QUICK_ACTION_ID } from '@/components/cmd-j/quick-actions'
-import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/worktree-palette-create-action'
+import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 import type { CmdJTaskSearchResult } from '../cmd-j/task-search-results'
 

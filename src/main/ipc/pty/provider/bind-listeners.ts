@@ -1,5 +1,5 @@
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
-import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-relay/wsl-bridge-pty-presence'
 import {
   localBackgroundStreamUnsub,
   localDataUnsub,
@@ -30,6 +30,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     localProvider.onWriteUnavailable?.((payload) => {
       // Before the window check: a headless host has no window, only remote streams.
       publishPtyEndpointLoss(payload.id)
+      session.runtime?.notePtyEndpointLoss(payload.id)
       if (
         !session.mainWindow ||
         session.mainWindow.isDestroyed() ||

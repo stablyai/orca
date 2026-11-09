@@ -1,6 +1,6 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
@@ -9,8 +9,8 @@ import {
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
-import { orchestrationMigrationData } from '../../../../../../shared/orchestration-rpc-contract'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { orchestrationMigrationData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   assertWorkerLaunchPreferencesRuntimeSupported,
@@ -25,7 +25,7 @@ import {
   isReadyRemoteFederatedWorkerStartReceipt,
   parseRemoteFederatedWorkerStartReceipt
 } from './federated-attach-receipt'
-import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../../../shared/orchestration-timing-budgets'
+import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import {
   federatedFailedReceipt,
   federatedUnknownReceipt,
@@ -34,11 +34,12 @@ import {
 import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-release'
 import { withWorkerStartNext } from '../receipt-next'
 import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
-import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
+import { resolveFederatedChildParent } from './federated-worker-child-parent'
+import { prepareWorkerStartCard } from '../../../../orchestration/workers/launch/worker-start-card'
 import {
   recordWorkerLaunchObservation,
   workerLaunchAgent
-} from '../../../../orchestration/worker-launch-observation'
+} from '../../../../orchestration/workers/launch/worker-launch-observation'
 
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
@@ -56,13 +57,13 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     )
   }
   const worktree = params.worktree ?? 'current'
-  if (worktree === 'current' || worktree === 'new-child') {
+  if (worktree === 'current') {
     throw new OrchestrationError(
       'invalid_argument',
-      '--on requires an exact remote worktree selector or new-top-level.'
+      '--on requires an exact remote worktree selector, new-child or new-top-level.'
     )
   }
-  const createsWorktree = worktree === 'new-top-level'
+  const createsWorktree = worktree === 'new-top-level' || worktree === 'new-child'
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
   const requestedLaunch = createPendingWorkerLaunchReceipt({
@@ -100,6 +101,16 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     capabilities: status.capabilities,
     serverName: server.name
   })
+  const childParent =
+    worktree === 'new-child'
+      ? await resolveFederatedChildParent({
+          runtime,
+          from: params.from,
+          callerSession: args.callerSession,
+          serverCapabilities: status.capabilities,
+          serverName: server.name
+        })
+      : undefined
   const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )
@@ -170,7 +181,14 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           // Carry home dispatch depth so remote workers cannot re-enter as roots when nesting.
           depth: started.dispatch.depth,
           protocolVersion: federationProtocolVersion,
-          worktree,
+          // A server creates new-child as top-level plus this parent, so older servers parse it too.
+          worktree: createsWorktree ? 'new-top-level' : worktree,
+          ...(childParent && 'crossStoreParent' in childParent
+            ? {
+                crossStoreParent: childParent.crossStoreParent,
+                crossStoreParentInferredFrom: childParent.crossStoreParentInferredFrom
+              }
+            : {}),
           name: params.name,
           repo: params.repo,
           baseBranch: params.baseBranch,
@@ -226,7 +244,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           launch,
           timeoutMs: budgets.readinessTimeoutMs,
           effects: remote.effects ?? [],
-          residualResources: remote.residualResources ?? []
+          residualResources: remote.residualResources ?? [],
+          ...(childParent && 'warning' in childParent ? { warning: childParent.warning } : {})
         },
         reportsTurnStops
           ? undefined

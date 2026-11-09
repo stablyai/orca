@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { getLocalPreflightContext } from '@/lib/local-preflight-context'
 import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store/index'
 
 export function useIntegrationProviderStatusRefresh(): void {

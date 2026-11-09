@@ -12,27 +12,23 @@ import {
 } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
-import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
-import { renameFileWithWindowsRetry } from '../../codex-accounts/fs-utils'
+import { ProfileStateAccessError } from './profile-state-access-error'
+import {
+  bestEffortFsyncDirectorySync,
+  fsyncFileSync
+} from '../../../shared/secure-storage/secure-file'
+import '../../filesystem/atomic-file-publication'
+import { renameFileWithWindowsRetry } from '../../../shared/windows-retry-file-operations'
 import {
   START_TIME_TOLERANCE_MS,
   startTimesWithinTolerance
-} from '../../daemon/daemon-process-start-time'
+} from '../../daemon/endpoint/identity/daemon-process-start-time'
 import {
   profileStateAccessBootIdentity,
   profileStateAccessMachineIdentity,
   profileStateAccessProcessIdentity,
   profileStateAccessWrittenThisBoot
 } from './profile-state-access-identity'
-
-export class ProfileStateAccessError extends Error {
-  readonly code = 'profile-state-access-refused' as const
-
-  constructor(message: string) {
-    super(message)
-    this.name = 'ProfileStateAccessError'
-  }
-}
 
 export type ProfileStateAccessPaths = ReturnType<typeof profileStateAccessPaths>
 

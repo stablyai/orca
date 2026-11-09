@@ -1,17 +1,18 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ChevronLeft, ExternalLink } from 'lucide-react'
 import {
   LinearProjectTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearCustomViewProjects({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     setTaskResumeState,
     selectedLinearWorkspaceId,
@@ -38,7 +39,7 @@ export function TaskPageLinearCustomViewProjects({
                 linearContext: undefined
               })
             }}
-            aria-label={translate('auto.components.TaskPage.bc06ed0fb0', 'Back to views')}
+            aria-label={t('auto.components.TaskPage.bc06ed0fb0', 'Back to views')}
           >
             <ChevronLeft className="size-3.5" />
           </Button>
@@ -47,7 +48,7 @@ export function TaskPageLinearCustomViewProjects({
               {selectedLinearCustomView!.name}
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
-              {translate('auto.components.TaskPage.733b8f2421', 'Linear / Views')}
+              {t('auto.components.TaskPage.733b8f2421', 'Linear / Views')}
             </div>
           </div>
         </div>
@@ -59,7 +60,7 @@ export function TaskPageLinearCustomViewProjects({
             className="gap-1 border-border/50 bg-background/70"
           >
             <ExternalLink className="size-3.5" />
-            {translate('auto.components.TaskPage.8675cd6188', 'Linear')}
+            {t('auto.components.TaskPage.8675cd6188', 'Linear')}
           </Button>
         ) : null}
       </div>

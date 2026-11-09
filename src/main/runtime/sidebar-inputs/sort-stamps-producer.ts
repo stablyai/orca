@@ -19,7 +19,7 @@ import {
   type AgentPaneChange,
   type AgentPaneWorkspace,
   type AgentTransitionDetector
-} from '../../agent-hooks/agent-transition-detector'
+} from '../../agent-hooks/observations/agent-transition-detector'
 import {
   listTieredWorkspaces,
   readSortStamps,
@@ -28,8 +28,6 @@ import {
   writeUnreadFlag,
   type SortStampsStore
 } from './sort-stamp-records'
-
-export type { SortStampsStore } from './sort-stamp-records'
 
 /** What the startup reconcile asks of the host, once its hook rows and PTYs have settled. */
 export type StoredTierEvidence = {

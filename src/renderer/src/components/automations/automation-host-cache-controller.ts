@@ -1,11 +1,11 @@
 /** Apply catalog membership/incarnation generations before fetching, discard stale work and evict missing entries. Background All-hosts refresh preserves unreachable authorities without dialing them. */
 
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import type { LegacyAutomationPartitionContext } from '../../../../shared/automation-legacy-list-partition'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import type { LegacyAutomationPartitionContext } from '../../../../shared/automations/ownership/automation-legacy-list-partition'
 import type {
   AutomationAuthorityRef,
   StableAutomationAuthorityRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import { syncAutomationHostCatalogGenerations } from './automation-host-catalog-generation'
 import type {
   AutomationHostCatalog,

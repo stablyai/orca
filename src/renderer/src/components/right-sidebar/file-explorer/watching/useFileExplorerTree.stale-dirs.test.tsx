@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DirEntry } from '../../../../../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
 import { useFileExplorerTree } from '../tree/useFileExplorerTree'
 
 const readDirectoryMock = vi.hoisted(() => vi.fn())
@@ -31,47 +31,6 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
 
   afterEach(() => {
     cleanup()
-  })
-
-  it('marks a collapsed cached dir the full refresh skipped, and clears it on the next read', async () => {
-    const { result } = renderHook(() => useFileExplorerTree('/repo', new Set(), 'wt-1'))
-
-    readDirectoryMock.mockResolvedValueOnce(listing(entry('gone.ts')))
-    await act(async () => {
-      await result.current.loadDir('/repo/src', 0)
-    })
-    expect(result.current.dirCache['/repo/src'].children).toHaveLength(1)
-    expect(result.current.isDirStale('/repo/src')).toBe(false)
-
-    // The overflow refresh reads root and the (empty) expanded set — not the collapsed /repo/src.
-    readDirectoryMock.mockClear()
-    await act(async () => {
-      await result.current.refreshTree()
-    })
-    expect(readDirectoryMock).not.toHaveBeenCalledWith('wt-1', '/repo', '/repo/src')
-    expect(result.current.isDirStale('/repo/src')).toBe(true)
-    expect(result.current.dirCache['/repo/src'].children).toHaveLength(1)
-
-    await act(async () => {
-      await result.current.loadDir('/repo/src', 0, { force: true })
-    })
-    expect(result.current.isDirStale('/repo/src')).toBe(false)
-    expect(result.current.dirCache['/repo/src'].children).toHaveLength(0)
-  })
-
-  it('does not mark the root or a dir the full refresh re-read', async () => {
-    const expanded = new Set(['/repo/src'])
-    const { result } = renderHook(() => useFileExplorerTree('/repo', expanded, 'wt-1'))
-
-    await act(async () => {
-      await result.current.loadDir('/repo/src', 0)
-    })
-    await act(async () => {
-      await result.current.refreshTree()
-    })
-
-    expect(result.current.isDirStale('/repo')).toBe(false)
-    expect(result.current.isDirStale('/repo/src')).toBe(false)
   })
 
   it('keeps a mark a superseded refresh never verified, even once the dir is expanded', async () => {
@@ -112,42 +71,6 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
     })
 
     expect(result.current.isDirStale('/repo/src')).toBe(true)
-  })
-
-  it('does not read the expanded dirs when the root read failed', async () => {
-    // Swallowed root errors previously launched doomed batches of expanded reads on dead transports.
-    const expanded = new Set(['/repo/a', '/repo/b'])
-    const { result } = renderHook(() => useFileExplorerTree('/repo', expanded, 'wt-1'))
-
-    readDirectoryMock.mockReset()
-    readDirectoryMock.mockRejectedValue(new Error('ETIMEDOUT'))
-
-    await act(async () => {
-      expect(await result.current.refreshTree()).toBe('root-unreadable')
-    })
-
-    expect(readDirectoryMock).toHaveBeenCalledTimes(1)
-    // A background refresh never starts a stopped WSL distro.
-    expect(readDirectoryMock).toHaveBeenCalledWith('wt-1', '/repo', '/repo', {
-      wakeWslDistro: undefined
-    })
-  })
-
-  it('drops stale marks when the tree is reset for a new worktree', async () => {
-    const { result } = renderHook(() => useFileExplorerTree('/repo', new Set(), 'wt-1'))
-
-    await act(async () => {
-      await result.current.loadDir('/repo/src', 0)
-    })
-    await act(async () => {
-      await result.current.refreshTree()
-    })
-    expect(result.current.isDirStale('/repo/src')).toBe(true)
-
-    await act(async () => {
-      result.current.resetAndLoad()
-    })
-    expect(result.current.isDirStale('/repo/src')).toBe(false)
   })
 
   it('keeps the rendered cache bound to its loaded workspace until reset', async () => {

@@ -44,6 +44,14 @@ function removeLocalRepoSession(
     ? session
     : removeRepoFromWorkspaceSession(session, repoId)
 }
+function countSessionTerminalTabs(session: WorkspaceSessionState): number {
+  let count = 0
+  for (const tabs of Object.values(session.tabsByWorktree)) {
+    count += tabs.length
+  }
+  return count
+}
+
 type RepoLifecycleOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'gitUsernameCache'
@@ -140,6 +148,7 @@ export class RepoLifecycleOperations {
     if (orphanRepoIds.size === 0) {
       return []
     }
+    const tabCountBefore = countSessionTerminalTabs(state.workspaceSession)
     for (const repoId of orphanRepoIds) {
       retireLocalWorktreeScanGeneration(repoId)
       releaseWslStoppedWorktreeRescan(repoId)
@@ -152,6 +161,10 @@ export class RepoLifecycleOperations {
       )
     }
     pruneDeregisteredRepoUiResidue(state.ui, orphanRepoIds)
+    console.info(
+      `[persistence] swept residue of ${orphanRepoIds.size} deregistered repo(s), dropping ${tabCountBefore - countSessionTerminalTabs(state.workspaceSession)} local terminal tab(s):`,
+      [...orphanRepoIds]
+    )
     return [...orphanRepoIds]
   }
 
@@ -174,18 +187,20 @@ export class RepoLifecycleOperations {
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
+        | 'dictationTerms'
         | 'issueSourcePreference'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null

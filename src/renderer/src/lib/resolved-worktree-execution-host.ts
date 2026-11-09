@@ -9,11 +9,11 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner
-} from './worktree-runtime-owner-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
-import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { resolveQualifiedWorktreeExecutionOwner } from './workspace/ownership/qualified-worktree-execution-owner'
+import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 function getResolvedFolderHost(

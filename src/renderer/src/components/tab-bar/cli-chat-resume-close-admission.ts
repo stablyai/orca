@@ -1,12 +1,12 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
 import { structuredChatUnavailableText } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
-import { structuredAgentSessionHostSupports } from '@/runtime/structured-agent-session-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
+import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { probePtyRunningWork } from '../terminal/pty-running-work-probe'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
@@ -21,7 +21,7 @@ import type { CliChatResumeSource } from './cli-chat-resume-source'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'
 import { cliChatResumeClosingPaneKeys } from './cli-chat-resume-close-terminal'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
-import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
+import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { structuredLaunchesHoldingIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-holders'
 import {
   structuredLaunchIdentity,
@@ -161,9 +161,9 @@ export async function admitCliChatResumeClose(
     toast.error(structuredChatUnavailableText(support.reason))
     return null
   }
-  // Closing is irreversible: a host that could not say whether it checked the other writers has
-  // not admitted it.
-  if (support.kind !== 'admitted' || support.writers === 'unknown') {
+  // A host that could not say whether it checked the other writers still lets the switch go on:
+  // the create judges them again.
+  if (support.kind !== 'admitted') {
     throw new Error('chat unavailable')
   }
   const permission = await readStructuredChatHostPermissionVerdict(target, agent)

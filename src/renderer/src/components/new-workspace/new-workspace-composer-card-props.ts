@@ -22,7 +22,7 @@ import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
@@ -114,6 +114,8 @@ export type NewWorkspaceComposerCardProps = {
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: (invoker: HTMLButtonElement) => void
   advancedOpen: boolean
+  setupChoiceRevealRequest: number
+  onSetupChoiceRevealed: () => void
   onToggleAdvanced: () => void
   createDisabled: boolean
   projectError: string | null

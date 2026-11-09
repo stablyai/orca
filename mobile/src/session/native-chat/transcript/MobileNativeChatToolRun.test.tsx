@@ -65,8 +65,6 @@ vi.mock('../../../components/MobileSourceCopyButton', () => ({
 }))
 vi.mock('../../../platform/external-link', () => ({ openExternalLink: vi.fn() }))
 vi.mock('../../../components/inline-text-selection', () => ({ INLINE_TEXT_SELECTION: false }))
-
-import '../../../platform/external-link'
 import { ToolRun } from './MobileNativeChatToolRun'
 import {
   MobileNativeChatDisclosureContext,

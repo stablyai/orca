@@ -1,9 +1,10 @@
 import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
-import type { BundledSkillUnsupportedReason } from '@/runtime/runtime-bundled-skills-client'
+import type { BundledSkillUnsupportedReason } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { cn } from '@/lib/utils'
@@ -13,46 +14,44 @@ import {
   hasSkillCopyNeedingAttention,
   skillPlanHasDetails,
   type SkillFreshnessDisplayStatus
-} from '@/lib/skill-freshness-display-status'
+} from '@/lib/skills/presentation/skill-freshness-display-status'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 
-function statusPill(status: SkillFreshnessDisplayStatus): React.JSX.Element {
+function statusPill(
+  status: SkillFreshnessDisplayStatus,
+  t: Translate = translate
+): React.JSX.Element {
   if (status === 'update-available') {
     return (
       <IntegrationStatusPill tone="attention">
-        {translate(
-          'auto.components.skills.SkillFreshnessStatusPill.updateAvailable',
-          'Update available'
-        )}
+        {t('auto.components.skills.SkillFreshnessStatusPill.updateAvailable', 'Update available')}
       </IntegrationStatusPill>
     )
   }
   if (status === 'needs-attention') {
     return (
       <IntegrationStatusPill tone="attention">
-        {translate(
-          'auto.components.skills.SkillFreshnessStatusPill.needsAttention',
-          'Review skill'
-        )}
+        {t('auto.components.skills.SkillFreshnessStatusPill.needsAttention', 'Review skill')}
       </IntegrationStatusPill>
     )
   }
   if (status === 'up-to-date') {
     return (
       <IntegrationStatusPill tone="connected">
-        {translate('auto.components.skills.SkillFreshnessStatusPill.upToDate', 'Up to date')}
+        {t('auto.components.skills.SkillFreshnessStatusPill.upToDate', 'Up to date')}
       </IntegrationStatusPill>
     )
   }
   return (
     <IntegrationStatusPill tone="connected">
-      {translate('auto.components.skills.SkillFreshnessStatusPill.installed', 'Installed')}
+      {t('auto.components.skills.SkillFreshnessStatusPill.installed', 'Installed')}
     </IntegrationStatusPill>
   )
 }
 
 // Presence alone cannot imply freshness; copies the updater cannot reach need attention instead of green.
 export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): React.JSX.Element {
+  const t = useTranslate()
   const { plan, unsupported, loading, error } = useSkillFreshness(
     useActiveProjectSkillRuntime().bundledSkillTarget
   )
@@ -62,14 +61,14 @@ export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): 
   if (loading && !plan) {
     return (
       <IntegrationStatusPill tone="neutral">
-        {translate('auto.components.skills.SkillFreshnessStatusPill.checking', 'Checking...')}
+        {t('auto.components.skills.SkillFreshnessStatusPill.checking', 'Checking...')}
       </IntegrationStatusPill>
     )
   }
   if (error && !plan) {
     return (
       <IntegrationStatusPill tone="attention">
-        {translate('auto.components.skills.SkillFreshnessStatusPill.checkFailed', 'Check failed')}
+        {t('auto.components.skills.SkillFreshnessStatusPill.checkFailed', 'Check failed')}
       </IntegrationStatusPill>
     )
   }
@@ -81,14 +80,12 @@ export function SkillUnsupportedStatusPill({
 }: {
   reason: BundledSkillUnsupportedReason
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <IntegrationStatusPill tone="neutral">
       {reason === 'connect-host'
-        ? translate(
-            'auto.components.skills.SkillFreshnessStatusPill.connectHost',
-            'Connect the SSH host'
-          )
-        : translate(
+        ? t('auto.components.skills.SkillFreshnessStatusPill.connectHost', 'Connect the SSH host')
+        : t(
             'auto.components.skills.SkillFreshnessStatusPill.updateServer',
             'Update Orca on the server'
           )}
@@ -105,6 +102,7 @@ export function SkillPlanStatusPill({
   skillName: string
   target?: BundledSkillTarget | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const status = getSkillFreshnessDisplayStatus(plan, skillName)
   const entry = plan?.skills.find((skill) => skill.name === skillName)
   const needsAttention =
@@ -126,7 +124,8 @@ export function SkillPlanStatusPill({
                 (op) => op.kind === 'write' || op.kind === 'link' || op.kind === 'copy'
               )
             ? 'installed'
-            : status
+            : status,
+        t
       )}
       {hasDetails ? (
         <Button
@@ -140,7 +139,7 @@ export function SkillPlanStatusPill({
           onClick={() => requestSkillFreshnessUpdateDialog(target)}
         >
           {needsAttention ? <AlertTriangle className="size-3" /> : null}
-          {translate('auto.components.skills.SkillFreshnessStatusPill.details', 'Details')}
+          {t('auto.components.skills.SkillFreshnessStatusPill.details', 'Details')}
           {/* Point right for dialog navigation; down chevrons disclose content within that dialog. */}
           <ChevronRight className="size-3" />
         </Button>

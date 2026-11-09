@@ -1,10 +1,10 @@
-import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
+import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
 import {
   markStructuredAgentSessionLaunchesPublished,
   publishedStructuredSessions
 } from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { AppState } from '../../store'
+import type { AppState } from '../../store/types'
 import { useAppStore } from '../../store'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
@@ -14,7 +14,7 @@ import {
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeTurnCompletedAtField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { isSeenHostReplay } from '@/hooks/ipc-events/agent-status-routing'
-import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
+import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { observeAgentHookCompletionForNotification } from '@/hooks/agent-hook-completion-notifications'
 import { remapHostAgentStatus } from './agent-status-primitives'
 import { agentStatusEntryEqual } from './state-equality-core'
@@ -23,7 +23,8 @@ import {
   hostWorkingClientBoundaryByPaneKey,
   type WebSessionTabsSyncState
 } from './state'
-import { reportVisibleTabPickToHost } from '../web-session-visible-tab-pick-report'
+import { markHostMirrorPatchFullResync } from './scoped-patch-annotation'
+import { reportVisibleTabPickToHost } from './navigation/web-session-visible-tab-pick-report'
 import {
   createHostSessionMirrorSettle,
   type HostSessionMirrorPatchVerdict,
@@ -63,6 +64,7 @@ export function applyWebSessionTabsStorePatch(
     changedAgentPaneKeys: Set<string>
   ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> => {
     const patch = buildPatch(state, changedAgentPaneKeys)
+    markHostMirrorPatchFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
@@ -74,7 +76,7 @@ export function applyWebSessionTabsStorePatch(
           if (surface.type !== 'terminal') {
             continue
           }
-          const remapped = remapHostAgentStatus(surface)
+          const remapped = remapHostAgentStatus(surface, snapshot.worktree)
           const accepted = remapped ? nextAgentStatuses[remapped.paneKey] : undefined
           const turnCompletedAt = remapped
             ? normalizeTurnCompletedAtField(surface.turnCompletedAt, remapped.state)

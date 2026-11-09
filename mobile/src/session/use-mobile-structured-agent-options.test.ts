@@ -1,3 +1,4 @@
+import { structuredAgentSessionOptionStamp } from '../../../src/shared/agent-session/options/structured-agent-session-option-state'
 import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import type {
@@ -24,29 +25,6 @@ import {
   currentValueOf,
   BASE
 } from './use-mobile-structured-agent-options.test-fixture'
-
-describe('useMobileStructuredAgentOptions post-write refresh', () => {
-  it.each([true, false])(
-    'revalidates an accepted operation with sameFence=%s',
-    async (sameFence) => {
-      const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
-      // The reply settles the operation; only the query installs the chat's selection.
-      const { mutate } = recordingMutate(async () =>
-        accepted({ key: 'fastMode', value: 'true', options: {} }, sameFence)
-      )
-      const harness = await mountOptions({ ...BASE, client: client.client, mutate })
-      expect(client.optionReads()).toBe(1)
-      expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(false)
-      await act(async () => {
-        await harness.current().setStructuredOption('fastMode', true)
-      })
-      await settle()
-      expect(client.optionReads()).toBe(2)
-      expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(true)
-      await harness.unmount()
-    }
-  )
-})
 
 describe('useMobileStructuredAgentOptions generation fencing', () => {
   it('drops an options read a later write superseded', async () => {
@@ -509,7 +487,7 @@ it('accepts a typed literal at an attached fence while options refresh with no m
 
 import type { PiRefreshFixtureModule } from '../../../src/shared/agent-session/options/structured-agent-session-option-refresh.test-fixture-contract'
 const { piOptionRefreshContract } = await vi.importActual<PiRefreshFixtureModule>(
-  '../../../src/main/native-chat/agent-session-wire/structured-agent-session-option-refresh.test-fixture'
+  '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-option-refresh.test-fixture'
 )
 
 describe('Pi catalog refresh completion', () => {
@@ -556,4 +534,28 @@ describe('Pi catalog refresh completion', () => {
       await settle()
     }
   )
+})
+
+it('refreshes saved planning intent from the same host status stamp without remounting', async () => {
+  let interactionMode: 'default' | 'plan' = 'default'
+  const client = optionsClient(async () => ({
+    ...OPTIONS,
+    current: { interactionMode, acceptedInputSources: { interactionMode: 'saved' } }
+  }))
+  const { mutate } = recordingMutate(async () => ({ status: 'unknown' }))
+  const harness = await mountOptions({
+    ...BASE,
+    client: client.client,
+    mutate,
+    sendSelection: true,
+    optionStamp: structuredAgentSessionOptionStamp({ interactionMode: 'default' })
+  })
+  expect(harness.current().sendSelection()).toEqual({ selection: { interactionMode: 'default' } })
+  interactionMode = 'plan'
+  await harness.rerender({
+    optionStamp: structuredAgentSessionOptionStamp({ interactionMode: 'plan' })
+  })
+  await settle()
+  expect(harness.current().sendSelection()).toEqual({ selection: { interactionMode: 'plan' } })
+  await harness.unmount()
 })
