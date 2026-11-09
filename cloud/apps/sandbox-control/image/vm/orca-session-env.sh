@@ -17,4 +17,11 @@ if [ -r "$__orca_env_file" ]; then
   done <"$__orca_env_file"
   export ORCA_SESSION_ENV_NAMES="${__orca_names# }"
 fi
-unset __orca_env_file __orca_line __orca_n __orca_names
+# Default branch of the cloud workspace repo, once its first-boot clone exists (computed once per shell tree).
+if [ -n "${ORCA_WORKSPACE_PATH-}" ] && [ -z "${ORCA_DEFAULT_BRANCH-}" ]; then
+  __orca_branch="$(git -C "$ORCA_WORKSPACE_PATH" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  if [ -n "$__orca_branch" ]; then
+    export ORCA_DEFAULT_BRANCH="${__orca_branch#origin/}" CONDUCTOR_DEFAULT_BRANCH="${__orca_branch#origin/}"
+  fi
+fi
+unset __orca_env_file __orca_line __orca_n __orca_names __orca_branch
