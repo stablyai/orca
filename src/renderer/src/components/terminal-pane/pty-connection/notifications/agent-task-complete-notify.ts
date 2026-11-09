@@ -10,7 +10,7 @@ import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
   AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS,
   canDispatchAgentNotificationAfterGrace
-} from '../../agent-task-complete-policy'
+} from '../../notifications/agent-task-complete-policy'
 
 import { subscribeAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
 

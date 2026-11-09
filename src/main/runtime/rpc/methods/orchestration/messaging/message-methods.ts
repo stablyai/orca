@@ -2,11 +2,16 @@ import { ORCHESTRATION_REPLY_METHOD } from './reply-method'
 import { defineMethod } from '../../../core'
 import type { TaskStatus } from '../../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestration-task-summary'
+import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestration/orchestration-task-summary'
 import { parseOrchestrationTaskDepsFlag } from '../../../../orchestration/coordinator/dispatch/task-deps-flag'
 import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
 import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
-import { InboxParams, TaskCreateParams, TaskListParams, TaskUpdateParams } from '../schemas'
+import {
+  InboxParams,
+  TaskCreateParams,
+  TaskListParams
+} from '../../../../../../shared/rpc-contract/orchestration-params'
+import { TaskUpdateParams } from './task-update-params'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   ORCHESTRATION_REPLY_METHOD,

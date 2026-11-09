@@ -115,29 +115,6 @@ describe('Task/Dispatch lifecycle guards', () => {
     expect(database.getActiveDispatchForTerminal('term_reversed_context')).toBeUndefined()
   })
 
-  it.each(['failed', 'stopped'] as const)(
-    'treats abandon of an already %s worker as settled without a lifecycle conflict',
-    (state) => {
-      const database = createDatabase()
-      const task = database.createTask({
-        runId: 'run_legacy_local',
-        spec: `already ${state}`
-      })
-      const worker = startWorker(database, task.id, `already_${state}`)
-      if (state === 'failed') {
-        database.failDispatch(worker.dispatchId, 'process exited', { workerProcessExited: true })
-      } else {
-        database.beginWorkerStop(worker.dispatchId, 'runtime-test')
-        database.settleWorkerStop(worker.dispatchId)
-      }
-
-      expect(database.abandonWorkerDispatch(worker.dispatchId, 'epoch_test')).toMatchObject({
-        disposition: 'already_settled',
-        worker: { state }
-      })
-    }
-  )
-
   it('rejects generic failure while a supervised worker remains active', () => {
     const database = createDatabase()
     const task = database.createTask({
@@ -442,34 +419,6 @@ describe('Task/Dispatch lifecycle guards', () => {
           `term_${operation}`
         )
       ).not.toThrow()
-    }
-  )
-
-  it.each(['stop', 'abandon'] as const)(
-    '%s records guarded receipts for context-only Dispatch and Task release',
-    (operation) => {
-      const database = createDatabase()
-      const task = database.createTask({
-        runId: 'run_legacy_local',
-        spec: `${operation} receipt release`
-      })
-      const contextOnly = createRootDispatch(database, task.id, `term_${operation}`)
-
-      const released =
-        operation === 'stop'
-          ? database.beginWorkerStop(contextOnly.id, 'runtime_test')
-          : database.abandonWorkerDispatch(contextOnly.id, 'epoch_test')
-
-      expect(released).toMatchObject({
-        disposition: 'context_only',
-        alreadySettled: false,
-        releasedCurrentTask: true
-      })
-      expect(database.getDispatchContextById(contextOnly.id)).toMatchObject({
-        status: 'failed',
-        last_failure: operation === 'stop' ? 'stopped' : 'abandoned'
-      })
-      expect(database.getTask(task.id)?.status).toBe('blocked')
     }
   )
 

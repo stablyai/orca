@@ -1,5 +1,5 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /**

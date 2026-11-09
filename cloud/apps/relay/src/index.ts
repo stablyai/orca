@@ -15,6 +15,7 @@ import {
   cellFlagParser
 } from './cell/control-flags/cell-flags.js'
 import { startControlFlagChannel } from './cell/control-flags/relay-control-flag-channel.js'
+import { startEdgeControl } from './edge-relay-control.js'
 import { readCloudRunInstanceZone } from './process-lifecycle/cloud-run-instance-zone.js'
 import { readSandboxTcpCounters } from './observability/sandbox-tcp-counters.js'
 import {
@@ -68,6 +69,8 @@ const cellFlagChannel =
       })
     : null
 cellFlagsApplied = cellFlagChannel ? () => cellFlagChannel.applied().flags : null
+// Directors with an edge read director/edge.json; until it lands, mode on and the env rollout.
+const edgeControl = config.role === 'director' && config.edge ? startEdgeControl() : undefined
 const {
   server,
   sessions,
@@ -79,7 +82,7 @@ const {
   ready,
   cellIncarnation,
   shadowSeatPoller
-} = createRelayServer(config, database, { cellFlags: cellFlagChannel?.applied })
+} = createRelayServer(config, database, { cellFlags: cellFlagChannel?.applied, edgeControl })
 // Cloud Run sets K_SERVICE; GCE cells and local runs skip the metadata read.
 if (process.env.K_SERVICE) {
   void readCloudRunInstanceZone().then((zone) => observability.setInstanceZone(zone))
@@ -229,6 +232,7 @@ const shutdown = (): void => {
   regionalRehomeWorker?.stop()
   shadowSeatPoller?.stop()
   cellFlagChannel?.stop()
+  edgeControl?.stop()
   sessions.drain(0)
   server.close(() => void closeDatabaseAndExit(shutdownStartedAt).catch(() => undefined))
 }

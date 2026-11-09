@@ -5,7 +5,7 @@ import type {
 } from '../../../../../shared/browser-user-agent-mode'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { BROWSER_USER_AGENT_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 
@@ -16,11 +16,12 @@ type BrowserUserAgentSettingProps = {
 export function BrowserUserAgentSetting({
   hostId
 }: BrowserUserAgentSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const [status, setStatus] = useState<BrowserIdentityModeStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const title = translate('settings.browser.userAgent.title', 'Browser identity')
-  const description = translate(
+  const title = t('settings.browser.userAgent.title', 'Browser identity')
+  const description = t(
     'settings.browser.userAgent.description',
     'Choose the user agent for every browser profile and page. Changes take effect after a restart.'
   )
@@ -57,9 +58,7 @@ export function BrowserUserAgentSetting({
       .identitySet(mode)
       .then((result) => {
         if (!result) {
-          setError(
-            translate('settings.browser.userAgent.unavailable', 'Browser identity is unavailable.')
-          )
+          setError(t('settings.browser.userAgent.unavailable', 'Browser identity is unavailable.'))
         } else if (!result.ok) {
           setError(result.error.message)
         } else {
@@ -74,7 +73,7 @@ export function BrowserUserAgentSetting({
   if (!isLocal) {
     control = (
       <span className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'settings.browser.userAgent.remoteUnsupported',
           'Manage browser identity on the remote host with the Orca CLI.'
         )}
@@ -83,7 +82,7 @@ export function BrowserUserAgentSetting({
   } else if (!status) {
     control = (
       <span className="text-xs text-muted-foreground">
-        {error ?? translate('settings.browser.userAgent.loading', 'Loading…')}
+        {error ?? t('settings.browser.userAgent.loading', 'Loading…')}
       </span>
     )
   } else if (status.identity.configuredMode === null) {
@@ -91,13 +90,13 @@ export function BrowserUserAgentSetting({
     control = (
       <div className="space-y-1 text-right">
         <div className="text-xs text-destructive">
-          {translate(
+          {t(
             'settings.browser.userAgent.resetRequired',
             'Identity data must be reset explicitly before it can be changed.'
           )}
         </div>
         <div className="text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'settings.browser.userAgent.resetRequiredCommand',
             'Reset it from the command line: orca browser identity set --mode <mode> --reset'
           )}
@@ -116,8 +115,8 @@ export function BrowserUserAgentSetting({
             {
               value: 'clean',
               disabled: saving,
-              label: translate('settings.browser.userAgent.optionClean', 'Cleaned'),
-              tooltip: translate(
+              label: t('settings.browser.userAgent.optionClean', 'Cleaned'),
+              tooltip: t(
                 'settings.browser.userAgent.optionCleanTooltip',
                 'Removes Orca and Electron tokens to match imported Chrome sessions.'
               )
@@ -125,8 +124,8 @@ export function BrowserUserAgentSetting({
             {
               value: 'native',
               disabled: saving,
-              label: translate('settings.browser.userAgent.optionNative', 'Native'),
-              tooltip: translate(
+              label: t('settings.browser.userAgent.optionNative', 'Native'),
+              tooltip: t(
                 'settings.browser.userAgent.optionNativeTooltip',
                 "Keeps Electron's built-in identity for sites that reject the cleaned identity."
               )
@@ -135,7 +134,7 @@ export function BrowserUserAgentSetting({
         />
         {status.identity.restartRequired ? (
           <div className="text-[11px] text-muted-foreground">
-            {translate('settings.browser.userAgent.restartRequired', 'Restart required')}
+            {t('settings.browser.userAgent.restartRequired', 'Restart required')}
           </div>
         ) : null}
         {error ? <div className="text-[11px] text-destructive">{error}</div> : null}

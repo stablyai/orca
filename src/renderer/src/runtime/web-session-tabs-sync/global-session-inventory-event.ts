@@ -3,7 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import { recheckUnconfirmedStructuredAgentLaunches } from '../../lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
 import { useAppStore } from '../../store'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
-import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
+import { queueAcceptedWebSessionTerminalSnapshot } from './terminal-handles/web-session-terminal-handle-events'
 import {
   recordReceivedWebSessionTabsInventory,
   recordReceivedWebSessionTabsSnapshot,
@@ -13,13 +13,14 @@ import {
   decideWebSessionTabsSnapshot,
   WEB_SESSION_TABS_FRAME_OUTRANKED
 } from './tracking-decisions'
-import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
-import { applyReceivedAgentSenderPublications } from './received-agent-sender-publications'
-import { applyWebSessionTabsSnapshots } from './snapshot-api'
 import {
+  acceptReplayedWebSessionTabsSnapshot,
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree
 } from './state'
+import { applyReceivedAgentSenderPublications } from './received-agent-sender-publications'
+import { applyWebSessionTabsSnapshots } from './snapshot-api'
+
 import { applyWebSessionTabsStorePatch } from './store-patch'
 import { isHostMirroredWorktree } from './visibility-types'
 import type { VisibilityResumeCoordinator } from './visibility-resume-coordinator'

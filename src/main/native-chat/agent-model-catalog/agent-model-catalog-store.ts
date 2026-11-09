@@ -1,4 +1,5 @@
 import { createAgentModelEffortDiscovery } from './agent-model-catalog-effort-discovery'
+import { createAgentModelCatalogFences } from './agent-model-catalog-fences'
 import {
   evictAgentModelCatalogEntries,
   createAgentModelCatalogEntryFactory,
@@ -49,6 +50,8 @@ export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 import {
   refreshAgentModelCatalogListing,
   retireAgentModelCatalogListing,
+  type AgentModelCatalogListModels,
+  type AgentModelCatalogListingBudget,
   type InFlightListing
 } from './agent-model-catalog-lister'
 export type { AgentModelCatalogSessionAccess } from './agent-model-catalog-lister'
@@ -65,6 +68,8 @@ export class AgentModelCatalogStore {
   private readonly dueEntries = new Set<string>()
   private readonly partialAttempts = new Map<string, { agent: string; at: number }>()
   private readonly retirementRevisions = new Map<string, number>()
+  // Aborts when an agent's scopes are next retired.
+  readonly retirements = createAgentModelCatalogFences<string>()
   private readonly retiredObservations = new Set<string>()
   private persistence: AgentModelCatalogPersistence | null = null
   readonly efforts: ReturnType<typeof createAgentModelEffortDiscovery>
@@ -146,6 +151,7 @@ export class AgentModelCatalogStore {
 
   private retireListings(agent: string): void {
     this.retirementRevisions.set(agent, this.retirementRevision(agent) + 1)
+    this.retirements.retire(agent)
     for (const [fingerprint, flight] of this.refreshes) {
       if (flight.agent === agent) {
         retireAgentModelCatalogListing(this.refreshes, this.listingWaiters, fingerprint, flight)
@@ -256,13 +262,12 @@ export class AgentModelCatalogStore {
     return entry
   }
 
-  /** One probe per canonical scope; failures resolve null. */
+  /** One probe per canonical scope; failures resolve null. Its starter's budget bounds it. */
   refresh(
     fingerprint: string,
     agent: string,
-    listModels: (selectedModels?: readonly string[]) => Promise<AgentModelCatalogSuccess>,
-    current?: () => boolean,
-    signal?: AbortSignal,
+    listModels: AgentModelCatalogListModels,
+    budget?: AgentModelCatalogListingBudget,
     selectedModel?: string
   ): Promise<AgentModelCatalogEntry | null> {
     this.isListing(fingerprint)
@@ -274,8 +279,7 @@ export class AgentModelCatalogStore {
       maxTargets: AGENT_MODEL_CATALOG_MAX_ENTRIES,
       targetDue: (model) => this.efforts.due(fingerprint, model),
       targetAttempted: (model) => this.efforts.attempted(fingerprint, agent, model),
-      current,
-      signal,
+      budget,
       refreshes: this.refreshes,
       failures: this.failures,
       listingWaiters: this.listingWaiters,
@@ -285,7 +289,7 @@ export class AgentModelCatalogStore {
 
   isListing(fingerprint: string): boolean {
     const flight = this.refreshes.get(fingerprint)
-    if (flight?.current?.() === false) {
+    if (flight && !flight.current()) {
       retireAgentModelCatalogListing(this.refreshes, this.listingWaiters, fingerprint, flight)
     }
     return this.refreshes.has(fingerprint)
@@ -304,11 +308,9 @@ export class AgentModelCatalogStore {
   }
 
   pendingListing(
-    fingerprint: string,
-    waitForChange = false,
-    terminal = false
-  ): Promise<AgentModelCatalogEntry | null> | null {
-    return this.listingWaiters.wait(fingerprint, waitForChange, terminal)
+    ...wait: Parameters<AgentModelCatalogListingWaiters['wait']>
+  ): ReturnType<AgentModelCatalogListingWaiters['wait']> {
+    return this.listingWaiters.wait(...wait)
   }
 
   shouldRefresh(fingerprint: string): boolean {

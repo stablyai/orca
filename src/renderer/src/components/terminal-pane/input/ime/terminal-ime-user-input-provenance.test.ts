@@ -6,7 +6,7 @@ import type { IDisposable } from '@xterm/xterm'
 
 import { IPAD_DESKTOP_MODE_UA, pretendIosWeb } from './terminal-ios-hangul-preedit-fixture'
 import { installTerminalPaneInputHandling } from '../terminal-pane-pane-input'
-import { subscribeToTerminalInputData } from '../../terminal-user-input-signal'
+import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
 
 const MAC_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'

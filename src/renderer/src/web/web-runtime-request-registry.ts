@@ -1,3 +1,4 @@
+import { RuntimeConnectionChangedBeforeSendError } from '../runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { WebRuntimePendingRequest } from './web-runtime-connection-frame-router'
 
@@ -55,7 +56,7 @@ export class WebRuntimeRequestRegistry {
       callOptions?.expectedConnectionEpoch !== undefined &&
       callOptions.expectedConnectionEpoch !== this.connectionEpoch
     ) {
-      throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+      throw new RuntimeConnectionChangedBeforeSendError(RUNTIME_CONNECTION_CHANGED_MESSAGE)
     }
     return new Promise((resolve, reject) => {
       const id = this.options.nextId()

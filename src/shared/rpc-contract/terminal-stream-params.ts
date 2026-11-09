@@ -37,6 +37,16 @@ export const TerminalSubscribe = TerminalHandle.extend({
       outputAck: z.literal(1).optional()
     })
     .optional(),
+  /** Continue an ended stream: `units` is the Output text, in UTF-16 code units, the client applied from that
+   * stream id after its snapshot (or its `resumed` reply), read once it stops applying that stream. The host
+   * answers `resumed: true` and sends only what was missed, or a snapshot as usual. Each token resumes at
+   * most once; older hosts strip this and snapshot. */
+  resume: z
+    .object({
+      streamToken: requiredString('Missing stream token'),
+      units: z.number().int().nonnegative()
+    })
+    .optional(),
   /** Budget the JSON frame, not raw text: ESC expands sixfold and can push a 512 KiB snapshot past a 640 KiB bridge cap.
    * Optional for legacy raw-byte trimming; never infer from client.type because mobile socket clients have no frame cap. */
   snapshotByteBudget: z.number().int().positive().optional()

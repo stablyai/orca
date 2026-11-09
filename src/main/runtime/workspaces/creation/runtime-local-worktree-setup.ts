@@ -13,9 +13,12 @@ import {
   getDefaultTabsLaunch,
   shouldRunSetupForCreate
 } from '../../../workspace-hooks/effective-hook-config'
-import { checkCreatedWorktreeSetupTrust } from '../../../workspace-hooks/created-worktree-setup-trust'
+import {
+  checkCreatedWorktreeSetupTrust,
+  defaultTabsWithoutCommands
+} from '../../../workspace-hooks/created-worktree-setup-trust'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 /** Share setup decision between pre-add admission and post-add execution so allowed creates cannot fail after making the worktree. */
 export function resolveRuntimeSetupDecision(
@@ -52,13 +55,19 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     repo,
     yamlHooks,
     effectiveDecision,
-    request.approvedSetupHash
+    request
   )
   // Only the approved content may run; the client re-prompts with the branch's.
   const runDecision = setupTrustMismatch ? 'skip' : effectiveDecision
+  if (setupTrustMismatch) {
+    // Automations have no prompt to re-ask; the host log is their record of the skip.
+    console.warn(`[hooks] setup skipped for ${worktreePath}: it differs from the approved content`)
+  }
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   try {
-    defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, runDecision)
+    const launch = getDefaultTabsLaunch(yamlHooks, repo, runDecision)
+    // Approving the branch's commands opens the command tabs later.
+    defaultTabs = setupTrustMismatch ? defaultTabsWithoutCommands(launch) : launch
   } catch (error) {
     console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
     defaultTabs = yamlHooks?.defaultTabs

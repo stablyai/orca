@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import type { Components } from 'react-markdown'
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import CodeBlockCopyButton from '../../CodeBlockCopyButton'
 import MermaidBlock from '../../MermaidBlock'
 import { useMermaidDiagramExpand } from '../../use-mermaid-diagram-expand'

@@ -74,6 +74,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
                 : {}),
               ...(params.launchToken ? { launchToken: params.launchToken } : {}),
               ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+              ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
               terminalImageViewerSupported: terminalImageViewerSupported(context)
             }
           )
@@ -101,6 +102,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
             ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+            ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
             ...(params.terminalKittyKeyboardProtocol === true
               ? { terminalKittyKeyboardProtocol: true }
               : {}),

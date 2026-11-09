@@ -7,7 +7,7 @@ const client = vi.hoisted(() => ({
   read: vi.fn(),
   write: vi.fn(async () => undefined)
 }))
-vi.mock('@/runtime/runtime-hooks-client', () => ({
+vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({
   readRuntimeIssueCommand: client.read,
   writeRuntimeIssueCommand: client.write
 }))

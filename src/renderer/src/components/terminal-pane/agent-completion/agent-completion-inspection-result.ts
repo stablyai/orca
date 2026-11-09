@@ -8,7 +8,7 @@ import {
   isClientOnlyUnverifiableInspection,
   type TerminalProcessInspection as RuntimeTerminalProcessInspection
 } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import { getRemoteRuntimeTerminalHandle } from '@/runtime/runtime-terminal-stream'
+import { getRemoteRuntimeTerminalHandle } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 import type {

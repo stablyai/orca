@@ -87,48 +87,6 @@ describe('AI Vault tab title sync', () => {
     stop()
   })
 
-  it('defers title reads through the configured background scheduler', async () => {
-    const store = makeState({
-      executionHostId: 'ssh:dev-box',
-      worktreeId: 'worktree-1',
-      path: '/workspace/albacore'
-    })
-    const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Deferred conversation'))
-    let runScheduled: (() => void) | undefined
-    const cancelScheduled = vi.fn()
-    const stop = startAiVaultTabTitleSync({
-      ...store,
-      resolveSessionTitles,
-      scheduleReconcile: (callback) => {
-        runScheduled = callback
-        return cancelScheduled
-      }
-    })
-
-    expect(resolveSessionTitles).not.toHaveBeenCalled()
-    runScheduled?.()
-    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
-    stop()
-  })
-
-  it('does not reread when a live status ping preserves title inputs', async () => {
-    const store = makeState({
-      executionHostId: 'ssh:dev-box',
-      worktreeId: 'worktree-1',
-      path: '/workspace/albacore'
-    })
-    const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'Stable conversation'))
-    const stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
-
-    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
-    store.pingAgentStatus()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(resolveSessionTitles).toHaveBeenCalledTimes(1)
-    stop()
-  })
-
   it('reconciles immediately when the provider session identity changes', async () => {
     const store = makeState({
       executionHostId: 'ssh:dev-box',

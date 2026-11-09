@@ -19,7 +19,7 @@ import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME
 } from '../../../shared/orcad-artifacts'
-import { requestOrcadTerminalCensus } from '../../ssh/orcad-terminal-census-client'
+import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { readConfirmedRunningWslDistros } from '../discovery/wsl-background-distro-gate'
 import { readWindowsProcessTableFresh } from '../../windows/windows-process-table'

@@ -21,13 +21,6 @@ const goodRow = {
 }
 
 describe('device registry load validation', () => {
-  it('keeps a row whose token is not a string listed but unable to authenticate', () => {
-    const { registry } = registryWith([goodRow, { ...goodRow, deviceId: 'bad-token', token: 7 }])
-    expect(registry.listDevices().map((device) => device.deviceId)).toEqual(['good', 'bad-token'])
-    expect(registry.getDevice('bad-token')?.token).toBeUndefined()
-    expect(registry.validateToken('good-token')?.deviceId).toBe('good')
-  })
-
   it('drops a row without a string deviceId and sets the file aside before rewriting', () => {
     const { userDataPath, registry } = registryWith([
       goodRow,

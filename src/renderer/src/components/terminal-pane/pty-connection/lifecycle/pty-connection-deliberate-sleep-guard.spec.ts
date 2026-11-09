@@ -32,7 +32,6 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
 
   describe('deliberate sleep keeps mounted panes cold', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

@@ -12,6 +12,10 @@ export function findEnvironmentWithHostKey<T extends Pick<KnownRuntimeEnvironmen
   )
 }
 
+export function sameHostKeyB64(a: string, b: string): boolean {
+  return canonicalHostKeyB64(a) === canonicalHostKeyB64(b)
+}
+
 /** Why: pairing links accept unpadded and URL-safe Base64, which decode to the same key. */
 function canonicalHostKeyB64(publicKeyB64: string): string {
   return publicKeyB64.trim().replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '')

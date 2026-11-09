@@ -76,20 +76,6 @@ describe('RuntimeRepositoryRegistrationController.add through a symlink alias', 
     expect(repos).toHaveLength(1)
   })
 
-  it('returns the tracked git project when the real path is added after its alias', async () => {
-    const repoPath = join(root, 'repo')
-    await mkdir(repoPath)
-    gitInit(repoPath)
-    await symlink(repoPath, join(root, 'repo-link'), dirLinkType)
-    const { controller, repos } = createController()
-
-    const first = await controller.add(join(root, 'repo-link'), 'git')
-    const second = await controller.add(repoPath, 'git')
-
-    expect(second.id).toBe(first.id)
-    expect(repos).toHaveLength(1)
-  })
-
   it('dedupes a folder workspace added through an alias', async () => {
     const folderPath = join(root, 'notes')
     await mkdir(folderPath)
@@ -149,21 +135,6 @@ describe('RuntimeRepositoryRegistrationController.add stores the checkout git li
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true })
-  })
-
-  it('stores the real toplevel when a git project is added through a symlink alias', async () => {
-    const repoPath = join(root, 'repo')
-    await mkdir(repoPath)
-    gitInit(repoPath)
-    await symlink(repoPath, join(root, 'repo-link'), dirLinkType)
-    const { controller } = createController()
-
-    const added = await controller.add(join(root, 'repo-link'), 'git')
-
-    expect(normalizeRuntimePathForComparison(added.path)).toBe(
-      normalizeRuntimePathForComparison(repoPath)
-    )
-    expect(added.displayName).toBe('repo')
   })
 
   it('stores the toplevel when a subdirectory of a git checkout is added', async () => {

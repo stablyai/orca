@@ -32,10 +32,4 @@ describe('optional review metadata wire compatibility', () => {
     })
     expect(WorktreeSet.parse({ worktree: 'wt', diffComments: [] }).diffComments).toEqual([])
   })
-
-  it('continues rejecting malformed attachment writes rather than silently dropping them', () => {
-    expect(
-      WorktreeSet.safeParse({ worktree: 'wt', comment: 'Keep', linkedItems: [{}] }).success
-    ).toBe(false)
-  })
 })

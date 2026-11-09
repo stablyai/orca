@@ -4,8 +4,8 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../../shared/execution-host'
 import { ORCA_BROWSER_PARTITION } from '../../../../../shared/constants'
 import { getOrcaProfileBrowserDefaultPartition } from '../../../../../shared/orca-profiles'
-import { resolveNewBrowserTabProfile } from '@/store/slices/browser/browser-new-tab-profile'
-import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
+import { resolveNewBrowserTabProfile } from '@/store/slices/browser/profiles/browser-new-tab-profile'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
 import { getManagedBrowserProfileOwner } from '../../../../../shared/browser-profile-scope'
 
 function createPartitionResolver(

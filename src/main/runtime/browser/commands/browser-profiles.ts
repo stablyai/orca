@@ -13,16 +13,16 @@ import type {
   BrowserProfileImportFromBrowserResult
 } from '../../../../shared/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
-import { browserSessionRegistry } from '../../../browser/sessions/browser-session-registry'
-import { browserManager } from '../../../browser/browser-manager'
+import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import {
   detectInstalledBrowsers,
-  importCookiesFromBrowser,
   selectBrowserProfile
-} from '../../../browser/cookies/browser-cookie-import'
+} from '../../../browser/cookies/sources/browser-cookie-detection'
+import { importCookiesFromBrowser } from '../../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost

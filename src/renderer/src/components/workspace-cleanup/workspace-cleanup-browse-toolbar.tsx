@@ -1,5 +1,5 @@
 import React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupBrowseController } from './use-workspace-cleanup-browse-state'
 import type { WorkspaceCleanupFacetRows } from './use-workspace-cleanup-facet-rows'
 import { listActiveWorkspaceCleanupFacetGroups } from './workspace-cleanup-active-facets'
@@ -41,6 +41,7 @@ export function WorkspaceCleanupBrowseToolbar({
   onToggleSelectAll: (selectAll: boolean) => void
   onDeleteSelected: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   // Filter-group comparisons must ignore keystroke/stream rerenders until filters themselves change.
   const activeFacetGroupCount = React.useMemo(
     () => listActiveWorkspaceCleanupFacetGroups(browse.filters).length,
@@ -88,11 +89,11 @@ export function WorkspaceCleanupBrowseToolbar({
       />
       {browse.sort.field === 'size' && facetRows.measuredSizeCount === 0 && !spaceScanning ? (
         <WorkspaceCleanupEmptyState
-          title={translate(
+          title={t(
             'components.workspace.cleanup.browse.noSizes',
             'No workspace sizes measured yet.'
           )}
-          description={translate(
+          description={t(
             'components.workspace.cleanup.browse.noSizesDescription',
             'Sizes appear after disk usage has been measured.'
           )}

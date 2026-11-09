@@ -4,7 +4,7 @@ import type { PtyRendererDeliveryHealthReply } from '../../../../../../shared/te
 import { redactPtyIdForDiagnostics } from '../../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import { deliverPulledPtyModelRestoreMarkers } from './pty-model-restore-channel'
 import { getProcessedPtyCharTotals } from './terminal-pty-ack-gate'
-import { recordTerminalFreezeBreadcrumb } from '../../terminal-freeze-breadcrumbs'
+import { recordTerminalFreezeBreadcrumb } from '../../render-health/diagnostics/terminal-freeze-breadcrumbs'
 
 const WATCHDOG_INTERVAL_MS = 15_000
 // Two silent ticks distinguish a wedge from one probe racing in-transit output.

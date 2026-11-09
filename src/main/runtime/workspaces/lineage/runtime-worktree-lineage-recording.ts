@@ -10,7 +10,7 @@ import type {
   WorkspaceLineage
 } from '../../../../shared/worktree/lineage-types'
 import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 
 type LineageParent =
@@ -157,7 +157,8 @@ export function recordCreatedWorktreeLineage(
     childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
     childInstanceId,
     parentWorkspaceKey: resolution.parent.workspaceKey,
-    parentInstanceId,
+    parentInstanceId:
+      resolution.parent.type === 'folder' ? resolution.parent.folderWorkspace.id : parentInstanceId,
     origin: resolution.origin,
     capture: resolution.capture,
     ...(resolution.taskId ? { taskId: resolution.taskId } : {}),
@@ -169,6 +170,7 @@ export function recordCreatedWorktreeLineage(
     createdAt
   }
   if (resolution.parent.type === 'folder') {
+    // Created already: a same-id twin owning the bucket leaves the folder link unsaved, with a warning.
     workspaceLineage = (target && store?.setFolderParentLineage?.(target, row)) ?? null
     if (!workspaceLineage) {
       warnings.push({

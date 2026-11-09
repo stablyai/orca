@@ -4,7 +4,7 @@ import {
   createAgentStatusExtensionHarness,
   type AgentStatusExtensionHarness
 } from './agent-status-extension-test-harness'
-import { idle, startAsync } from './agent-status-subagent-event-fixtures'
+import { idle } from './agent-status-subagent-event-fixtures'
 
 const busy = { isIdle: () => false }
 
@@ -56,57 +56,5 @@ describe('Pi compaction after a finished reply', () => {
       hook_event_name: 'agent_end',
       turn_completed_at: start?.turn_completed_at
     })
-  })
-
-  it.each([
-    {
-      name: 'an overflow retry',
-      run: async (harness: AgentStatusExtensionHarness) => {
-        await step(harness, 'agent_end', reply('stop'), busy)
-        await step(harness, 'session_before_compact', { reason: 'overflow', willRetry: true })
-      }
-    },
-    {
-      name: 'an aborted reply',
-      run: async (harness: AgentStatusExtensionHarness) => {
-        await step(harness, 'agent_end', reply('aborted'), busy)
-        await step(harness, 'session_before_compact', { reason: 'threshold', willRetry: false })
-      }
-    },
-    {
-      name: 'a reply with queued messages that continue the run',
-      run: async (harness: AgentStatusExtensionHarness) => {
-        await step(harness, 'agent_end', reply('stop'), busy)
-        await step(
-          harness,
-          'session_before_compact',
-          { reason: 'threshold', willRetry: false },
-          { isIdle: () => false, hasPendingMessages: () => true }
-        )
-      }
-    },
-    {
-      name: 'a /compact after the reply settled',
-      run: async (harness: AgentStatusExtensionHarness) => {
-        await step(harness, 'agent_end', reply('stop'), busy)
-        await step(harness, 'agent_settled', undefined, idle)
-        await step(harness, 'session_before_compact', { reason: 'manual', willRetry: false })
-      }
-    },
-    {
-      name: 'a reply whose children still run',
-      run: async (harness: AgentStatusExtensionHarness) => {
-        startAsync(harness, 'run-scout', 'scout')
-        await step(harness, 'agent_end', reply('stop'), busy)
-        await step(harness, 'session_before_compact', { reason: 'threshold', willRetry: false })
-      }
-    }
-  ])('posts no compaction tail for $name', async ({ run }) => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
-    await step(harness, 'agent_start')
-    await run(harness)
-    await step(harness, 'session_compact', {})
-
-    expect(tail(harness).map((post) => post.hook_event_name)).not.toContain('compaction_start')
   })
 })

@@ -1,4 +1,4 @@
-import type { CliStatusCaller } from '../shared/orchestration-caller-status'
+import type { CliStatusCaller } from '../shared/orchestration/orchestration-caller-status'
 import type { CliStatusResult } from '../shared/runtime-types'
 import { formatBrowserActionEffects } from './browser/browser-format'
 import { prepareComputerCliJsonResult } from './computer-format'

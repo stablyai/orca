@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   evaluateRuntimeCompat,
   type RuntimeCompatVerdict
@@ -12,11 +13,10 @@ import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/worktree-runtime-capabilities'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/task-source-runtime-capabilities'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/work-items/task-source-runtime-capabilities'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
-import '@/runtime/runtime-host-connection-state'
+import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
-  isConnectedRuntimeHostState,
   runtimeHostConnectionState,
   type RuntimeHostConnectionState as RuntimeServerConnectionState
 } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
@@ -68,7 +68,10 @@ export function getHostDetailsSummary(details: RuntimeHostDetails | undefined): 
   return translate('auto.components.settings.RuntimeEnvironmentsPane.9a91c4a0eb', 'Compatible')
 }
 
-export function getHostDetailsDescription(details: RuntimeHostDetails | undefined): string | null {
+export function getHostDetailsDescription(
+  details: RuntimeHostDetails | undefined,
+  t: Translate = translate
+): string | null {
   if (!details || details.status === 'loading') {
     return null
   }
@@ -76,10 +79,10 @@ export function getHostDetailsDescription(details: RuntimeHostDetails | undefine
     return details.error
   }
   if (details.compatibility?.kind === 'blocked') {
-    return describeRuntimeCompatBlock(details.compatibility)
+    return describeRuntimeCompatBlock(details.compatibility, t)
   }
   if (details.runtimeStatus === null && details.compatibility === null) {
-    const unavailableDescription = translate(
+    const unavailableDescription = t(
       'auto.components.settings.RuntimeEnvironmentsPane.serverRuntimeUnavailableDescription',
       'SSH transport is connected, but the Orca runtime did not answer. The host may still be running.'
     )
@@ -88,10 +91,13 @@ export function getHostDetailsDescription(details: RuntimeHostDetails | undefine
   return null
 }
 
-export function getRuntimeCapabilitiesSummary(status: RuntimeStatus | null | undefined): string {
+export function getRuntimeCapabilitiesSummary(
+  status: RuntimeStatus | null | undefined,
+  t: Translate = translate
+): string {
   const capabilities = status?.capabilities ?? []
   if (capabilities.length === 0) {
-    return translate(
+    return t(
       'auto.components.settings.RuntimeEnvironmentsPane.4b5c6d7e8f',
       'No capabilities reported'
     )
@@ -102,14 +108,15 @@ export function getRuntimeCapabilitiesSummary(status: RuntimeStatus | null | und
 }
 
 export function getHostModelCapabilitySummary(
-  status: RuntimeStatus | null | undefined
+  status: RuntimeStatus | null | undefined,
+  t: Translate = translate
 ): string | null {
   if (!status) {
     return null
   }
   const capabilities = status.capabilities
   if (!capabilities) {
-    return translate(
+    return t(
       'auto.components.settings.RuntimeEnvironmentsPane.hostModelCapabilityUnknown',
       'Host model support: checking server capabilities'
     )
@@ -120,13 +127,13 @@ export function getHostModelCapabilitySummary(
     WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
   ].filter((capability) => !capabilities.includes(capability))
   if (missing.length === 0) {
-    return translate(
+    return t(
       'auto.components.settings.RuntimeEnvironmentsPane.hostModelCapabilitySupported',
       'Host model support: ready'
     )
   }
   const missingLabels = missing.map(getHostModelCapabilityLabel)
-  return translate(
+  return t(
     'auto.components.settings.RuntimeEnvironmentsPane.hostModelCapabilityMissing',
     'Host model support: update server for {{value0}}',
     { value0: missingLabels.join(', ') }
@@ -155,13 +162,16 @@ function getHostModelCapabilityLabel(capability: string): string {
   }
 }
 
-export function getActiveServerModeDescription(allowLocalRuntime: boolean): string {
+export function getActiveServerModeDescription(
+  allowLocalRuntime: boolean,
+  t: Translate = translate
+): string {
   return allowLocalRuntime
-    ? translate(
+    ? t(
         'auto.components.settings.serverList.defaultHostHelp',
         'Existing projects stay where they are.'
       )
-    : translate(
+    : t(
         'auto.components.settings.serverList.defaultHostWebHelp',
         'This browser opens new projects on the chosen server.'
       )
@@ -200,39 +210,32 @@ export function getRuntimeServerConnectionState(
   })
 }
 
-export function isRuntimeServerTransportConnected(state: RuntimeServerConnectionState): boolean {
-  return isConnectedRuntimeHostState(state)
-}
-
-export function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionState): string {
+export function getRuntimeServerConnectionLabel(
+  state: RuntimeServerConnectionState,
+  t: Translate = translate
+): string {
   switch (state) {
     case 'connected':
-      return translate(
-        'auto.components.settings.RuntimeEnvironmentsPane.serverConnected',
-        'Connected'
-      )
+      return t('auto.components.settings.RuntimeEnvironmentsPane.serverConnected', 'Connected')
     case 'runtime-unavailable':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeEnvironmentsPane.serverRuntimeUnavailable',
         'Orca unavailable'
       )
     case 'workspace-window-closed':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeEnvironmentsPane.serverWorkspaceWindowClosed',
         'Workspace window closed'
       )
     case 'reconnecting':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeEnvironmentsPane.serverReconnecting',
         'Reconnecting'
       )
     case 'checking':
-      return translate(
-        'auto.components.settings.RuntimeEnvironmentsPane.serverChecking',
-        'Checking…'
-      )
+      return t('auto.components.settings.RuntimeEnvironmentsPane.serverChecking', 'Checking…')
     case 'disconnected':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeEnvironmentsPane.serverDisconnected',
         'Disconnected'
       )

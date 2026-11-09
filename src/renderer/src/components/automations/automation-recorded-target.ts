@@ -1,5 +1,5 @@
-import type { Automation } from '../../../../shared/automations-types'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automations/ownership/automation-list-scope'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
 import type { AutomationCapturedOwner } from './automation-captured-owner'

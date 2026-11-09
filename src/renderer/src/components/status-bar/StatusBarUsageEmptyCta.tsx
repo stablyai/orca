@@ -6,7 +6,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getUsageOwnerHostScope, type RemoteUsageOwner } from './use-owner-usage-rate-limits'
 
 // Name the empty usage surface and route setup to its owning host; client-local setup cannot fill a remote bar.
@@ -15,6 +15,7 @@ export function StatusBarUsageEmptyCta({
 }: {
   remoteOwner: RemoteUsageOwner | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -32,15 +33,10 @@ export function StatusBarUsageEmptyCta({
   }, [openSettingsPage, openSettingsTarget, recordFeatureInteraction, remoteOwner])
 
   const label = remoteOwner
-    ? translate(
-        'auto.components.status.bar.StatusBarUsageEmptyCta.remoteLabel',
-        'No usage on {{host}}',
-        { host: remoteOwner.label }
-      )
-    : translate(
-        'auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9',
-        'Configure usage tracking'
-      )
+    ? t('auto.components.status.bar.StatusBarUsageEmptyCta.remoteLabel', 'No usage on {{host}}', {
+        host: remoteOwner.label
+      })
+    : t('auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9', 'Configure usage tracking')
 
   const handleHide = useCallback(() => {
     dismissUsageEmptyState()
@@ -64,19 +60,19 @@ export function StatusBarUsageEmptyCta({
           <div className="flex items-start justify-between gap-2">
             <div className="font-semibold text-foreground">
               {remoteOwner
-                ? translate(
+                ? t(
                     'auto.components.status.bar.StatusBarUsageEmptyCta.remoteTitle',
                     'Usage on {{host}}',
                     { host: remoteOwner.label }
                   )
-                : translate(
+                : t(
                     'auto.components.status.bar.StatusBarUsageEmptyCta.84c3b15dca',
                     'Agent usage limits'
                   )}
             </div>
             {/* Mirror the setup-guide dismiss control so hiding this teaching CTA stays recognizable. */}
             <EyeOffDismissButton
-              label={translate(
+              label={t(
                 'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
                 'Hide from status bar'
               )}
@@ -86,7 +82,7 @@ export function StatusBarUsageEmptyCta({
           </div>
           {remoteOwner ? (
             <p className="text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.status.bar.StatusBarUsageEmptyCta.remoteBody',
                 "This workspace runs on {{host}}, so the bar shows that host's usage. Sign in to an agent there, or focus a local workspace to see this computer's usage.",
                 { host: remoteOwner.label }
@@ -95,7 +91,7 @@ export function StatusBarUsageEmptyCta({
           ) : (
             <>
               <p className="text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.status.bar.StatusBarUsageEmptyCta.97957ad3a3',
                   'Connect your AI provider accounts to see their usage in real time and easily switch between accounts.'
                 )}
@@ -103,10 +99,7 @@ export function StatusBarUsageEmptyCta({
               {/* Name the provider set so setup does not imply support for only one agent. */}
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <span>
-                  {translate(
-                    'auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811',
-                    'Supports:'
-                  )}
+                  {t('auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811', 'Supports:')}
                 </span>
                 <ClaudeIcon size={13} />
                 <OpenAIIcon size={13} />
@@ -124,12 +117,12 @@ export function StatusBarUsageEmptyCta({
             className="mt-0.5 h-7 w-full text-xs"
           >
             {remoteOwner
-              ? translate(
+              ? t(
                   'auto.components.status.bar.StatusBarUsageEmptyCta.remoteOpenAccounts',
                   'Open {{host}} accounts',
                   { host: remoteOwner.label }
                 )
-              : translate(
+              : t(
                   'auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79',
                   'Connect an account'
                 )}

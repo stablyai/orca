@@ -102,7 +102,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['github-project-board'],
     [
       `${COMPONENTS}github-project/`,
-      'src/renderer/src/store/github/project-',
+      'src/renderer/src/store/github/projects/',
       'src/main/github/project-view/',
       'src/main/ipc/source-control/github-project-view-handlers.ts'
     ]
@@ -149,11 +149,23 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['runtime-host-status-recovery'],
     [
       'src/main/ipc/runtime-environments/runtime-environment-status-',
-      'src/renderer/src/store/runtime-status-subscriptions.ts',
-      'src/renderer/src/store/slices/runtime-status-',
+      'src/renderer/src/store/slices/runtime-status/views/runtime-status-subscriptions.ts',
+      'src/renderer/src/store/slices/runtime-status/',
       'src/shared/remote-runtime/host-store/runtime-environment-pairing-replace-guards.ts',
       'src/shared/remote-runtime/host-store/runtime-environment-store.ts',
       `${COMPONENTS}sidebar/workspace-card/identity/worktree-card-header-items.tsx`
+    ]
+  ),
+  featureRoute(
+    'feature.startup-exec-readiness',
+    ['paired-startup-exec-readiness'],
+    [
+      'src/main/daemon/sessions/session-shell-ready-barrier.ts',
+      'src/main/daemon/shell-readiness/',
+      'src/main/pty/shell-startup/shell-prompt-readiness-probe.ts',
+      'src/main/pty/shell-startup/shell-startup-output-scanner.ts',
+      'src/main/pty/shell-startup/shell-templates.ts',
+      'tests/e2e/helpers/startup-exec-readiness-oracle.ts'
     ]
   )
 ]

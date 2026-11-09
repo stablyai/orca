@@ -11,7 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiscoveredSkill } from '../../../../shared/skills'
@@ -78,6 +78,8 @@ export function SkillDetailDialog({
   /** Host the skill file lives on. */
   ownerHostId: ExecutionHostId
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   if (!skill) {
     return null
   }
@@ -86,7 +88,7 @@ export function SkillDetailDialog({
     await window.api.ui.writeClipboardText(
       formatClipboardFilePath(skill.skillFilePath, ownerHostId)
     )
-    toast.success(translate('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
+    toast.success(t('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
   }
 
   const agents = agentNames(skill, agentByRootPath)
@@ -100,12 +102,12 @@ export function SkillDetailDialog({
             <DialogTitle className="min-w-0 break-words text-base">{skill.name}</DialogTitle>
             {!skill.installed ? (
               <Badge variant="outline" className="h-4 shrink-0 px-1 text-[10px]">
-                {translate('auto.components.skills.SkillsPage.35b9a724a0', 'Available')}
+                {t('auto.components.skills.SkillsPage.35b9a724a0', 'Available')}
               </Badge>
             ) : null}
           </div>
           <DialogDescription className="text-xs">
-            {sourceKindLabel(skill.sourceKind)}
+            {sourceKindLabel(skill.sourceKind, t)}
             {' · '}
             {skill.sourceLabel}
           </DialogDescription>
@@ -114,24 +116,20 @@ export function SkillDetailDialog({
         <div className="scrollbar-sleek max-h-[60vh] space-y-4 overflow-y-auto px-5 py-4">
           <p className="whitespace-pre-wrap text-sm leading-6">
             {skill.description ??
-              translate('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')}
+              t('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')}
           </p>
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 border-t border-border pt-4 text-xs">
             {agents.length > 0 ? (
-              <DetailRow
-                label={translate('auto.components.skills.SkillDetailDialog.agents', 'Agents')}
-              >
+              <DetailRow label={t('auto.components.skills.SkillDetailDialog.agents', 'Agents')}>
                 {agents.join(', ')}
               </DetailRow>
             ) : null}
-            <DetailRow
-              label={translate('auto.components.skills.SkillDetailDialog.updated', 'Updated')}
-            >
+            <DetailRow label={t('auto.components.skills.SkillDetailDialog.updated', 'Updated')}>
               {skill.updatedAt
-                ? uiDateTimeFormat(UPDATED_OPTIONS).format(new Date(skill.updatedAt))
-                : translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')}
+                ? uiDateTimeFormat(UPDATED_OPTIONS, intlLocale).format(new Date(skill.updatedAt))
+                : t('auto.components.skills.SkillRow.updatedUnknown', 'No date')}
             </DetailRow>
-            <DetailRow label={translate('auto.components.skills.SkillRow.detailPath', 'Path')}>
+            <DetailRow label={t('auto.components.skills.SkillRow.detailPath', 'Path')}>
               {/* Use a labelled button so its tooltip cannot cover the path itself. */}
               <span className="flex min-w-0 items-start gap-2">
                 <span className="min-w-0 flex-1 break-all font-mono">{skill.skillFilePath}</span>
@@ -143,7 +141,7 @@ export function SkillDetailDialog({
                   onClick={() => void copyPath()}
                 >
                   <ClipboardCopy />
-                  {translate('auto.components.skills.SkillDetailDialog.copy', 'Copy')}
+                  {t('auto.components.skills.SkillDetailDialog.copy', 'Copy')}
                 </Button>
               </span>
             </DetailRow>
@@ -153,7 +151,7 @@ export function SkillDetailDialog({
         <DialogFooter className="border-t border-border px-5 py-3">
           <Button type="button" variant="ghost" size="sm" onClick={onReveal}>
             <FolderOpen className="size-3.5" />
-            {translate('auto.components.skills.SkillsPage.dc4c3328ee', 'Reveal file')}
+            {t('auto.components.skills.SkillsPage.dc4c3328ee', 'Reveal file')}
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -167,7 +165,7 @@ export function SkillDetailDialog({
                   onClick={onDelete}
                 >
                   <Trash2 className="size-3.5" />
-                  {translate('auto.components.skills.SkillRow.deleteSkill', 'Delete…')}
+                  {t('auto.components.skills.SkillRow.deleteSkill', 'Delete…')}
                 </Button>
               </span>
             </TooltipTrigger>
@@ -179,7 +177,7 @@ export function SkillDetailDialog({
           </Tooltip>
           <Button type="button" size="sm" disabled={!shareable} onClick={onShare}>
             <Share2 className="size-3.5" />
-            {translate('auto.components.skills.SkillCard.d25a1b8ae6', 'Share skill')}
+            {t('auto.components.skills.SkillCard.d25a1b8ae6', 'Share skill')}
           </Button>
         </DialogFooter>
       </DialogContent>

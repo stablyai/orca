@@ -6,13 +6,13 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { type SettingsSearchEntry, matchesSettingsSearch } from '../../search/settings-search'
 import { ProjectWindowsRuntimeSetting } from './ProjectWindowsRuntimeSetting'
 import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useWslMoveTargetForRepo } from '../../../wsl-move/wsl-move-entry'
 import { WslMoveRuntimeRow } from '../../../wsl-move/WslMoveRuntimeRow'
 import { WslDriveProjectGitRow } from '../../../wsl-drive-project/WslDriveProjectGitRow'
 import { WslDriveUncConversionRow } from '../../../wsl-drive-project/WslDriveUncConversionRow'
 import { useWslHostsAcceptNewWork } from '../../../sidebar/use-wsl-hosts-enabled'
-import { resolveProjectExecutionRuntime } from '../../../../../../shared/project-execution-runtime'
+import { resolveProjectExecutionRuntime } from '../../../../../../shared/execution-host/project-execution-runtime'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 
 type RepositoryWindowsRuntimeSectionProps = {
@@ -49,6 +49,7 @@ export function RepositoryWindowsRuntimeSection({
   searchQuery,
   searchEntries
 }: RepositoryWindowsRuntimeSectionProps): React.JSX.Element | null {
+  const t = useTranslate()
   // Owner decision: for a WSL project with a host, the runtime toggle becomes "Move project".
   const wslMoveDistro = useWslMoveTargetForRepo(repo)
   // D1c ships with WSL hosts; serve-only, a live block or the setting off hide its offers, as main
@@ -60,8 +61,8 @@ export function RepositoryWindowsRuntimeSection({
 
   return (
     <SearchableSetting
-      title={translate('auto.components.settings.RepositoryPane.projectRuntime', 'Project Runtime')}
-      description={translate(
+      title={t('auto.components.settings.RepositoryPane.projectRuntime', 'Project Runtime')}
+      description={t(
         'auto.components.settings.RepositoryPane.projectRuntimeDescription',
         'Choose whether this project runs on Windows or WSL.'
       )}

@@ -1,6 +1,6 @@
 import { addWslEnvKeys } from '../../../../shared/wsl-env'
 import { detectExplicitPiAgentKindFromCommand } from '../../../../shared/pi-agent-kind'
-import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
+import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { resolveLoginShellEnvironment } from '../../../startup/login-shell-environment'
 
 const OMP_DIRECTORY_ENV_KEYS = [

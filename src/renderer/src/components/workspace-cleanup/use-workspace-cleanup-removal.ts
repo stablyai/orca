@@ -8,7 +8,7 @@ import {
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { getWorktreeDeleteStateKey } from '@/store/slices/worktrees/teardown/worktree-delete-state'
-import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import {
   startWorkspaceCleanupBackgroundRemoval,
   type WorkspaceCleanupRemovalProgress

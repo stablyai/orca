@@ -8,6 +8,7 @@ import { Button } from '../../../ui/button'
 import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -24,6 +25,7 @@ const AGENT_PROMPT =
   'Use the orca-per-workspace-env skill to set up a per-workspace environment for this repo.'
 
 export function EphemeralVmsPane(): React.JSX.Element {
+  const t = useTranslate()
   const openModal = useAppStore((state) => state.openModal)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const [catalog, setCatalog] = useState<RecipeCatalogEntry[]>([])
@@ -119,10 +121,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
       }, 1500)
     } catch {
       toast.error(
-        translate(
-          'auto.components.settings.EphemeralVmsPane.copyError',
-          'Could not copy the prompt.'
-        )
+        t('auto.components.settings.EphemeralVmsPane.copyError', 'Could not copy the prompt.')
       )
     }
   }
@@ -132,11 +131,11 @@ export function EphemeralVmsPane(): React.JSX.Element {
   return (
     <div className="space-y-6" data-settings-section="ephemeral-vms">
       <AgentSkillSetupPanel
-        title={translate(
+        title={t(
           'auto.components.settings.EphemeralVmsPane.cloudVmSkillTitle',
           'Cloud VM setup skill'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.EphemeralVmsPane.skillDescription',
           'Sets up, builds, authenticates, and validates repo-owned environment recipes.'
         )}
@@ -154,26 +153,26 @@ export function EphemeralVmsPane(): React.JSX.Element {
 
       <div className="space-y-3 rounded-lg border border-border/60 bg-card/30 p-4">
         <div className="text-sm font-medium">
-          {translate(
+          {t(
             'auto.components.settings.EphemeralVmsPane.whatTitle',
             'What the skill does, with you'
           )}
         </div>
         <ul className="space-y-2">
           <WhatItem
-            text={translate(
+            text={t(
               'auto.components.settings.EphemeralVmsPane.whatScaffold',
               'Writes the recipe & scripts for your provider — connected over an Orca server or SSH.'
             )}
           />
           <WhatItem
-            text={translate(
+            text={t(
               'auto.components.settings.EphemeralVmsPane.whatBuild',
               'Builds a reusable base image and signs your agent in.'
             )}
           />
           <WhatItem
-            text={translate(
+            text={t(
               'auto.components.settings.EphemeralVmsPane.whatValidate',
               'Validates it so you can create a workspace on it.'
             )}
@@ -181,7 +180,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
         </ul>
         <div className="space-y-2 pt-1">
           <div className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.EphemeralVmsPane.promptHint',
               'In any workspace, ask your agent:'
             )}
@@ -195,13 +194,13 @@ export function EphemeralVmsPane(): React.JSX.Element {
               variant="outline"
               size="xs"
               className="shrink-0 gap-1.5"
-              aria-label={translate('auto.components.settings.EphemeralVmsPane.copy', 'Copy')}
+              aria-label={t('auto.components.settings.EphemeralVmsPane.copy', 'Copy')}
               onClick={() => void copyPrompt()}
             >
               {promptCopied ? (
                 <>
                   <Check className="size-3" />
-                  {translate('auto.components.settings.EphemeralVmsPane.copied', 'Copied')}
+                  {t('auto.components.settings.EphemeralVmsPane.copied', 'Copied')}
                 </>
               ) : (
                 <Copy className="size-3" />
@@ -215,10 +214,10 @@ export function EphemeralVmsPane(): React.JSX.Element {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 space-y-0.5">
             <div className="text-sm font-medium">
-              {translate('auto.components.settings.EphemeralVmsPane.recipes', 'Recipes')}
+              {t('auto.components.settings.EphemeralVmsPane.recipes', 'Recipes')}
             </div>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.EphemeralVmsPane.recipesHelp',
                 'Recipes from orca.yaml and enabled plugins show up here, ready to launch a workspace on.'
               )}
@@ -228,7 +227,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
             type="button"
             variant="outline"
             size="icon-sm"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.EphemeralVmsPane.cloudVmRefresh',
               'Refresh Cloud VM recipes'
             )}
@@ -243,14 +242,8 @@ export function EphemeralVmsPane(): React.JSX.Element {
           {recipes.length === 0 ? (
             <div className="px-3 py-4 text-sm text-muted-foreground">
               {isLoading
-                ? translate(
-                    'auto.components.settings.EphemeralVmsPane.checking',
-                    'Checking recipes...'
-                  )
-                : translate(
-                    'auto.components.settings.EphemeralVmsPane.none',
-                    'No recipes found yet.'
-                  )}
+                ? t('auto.components.settings.EphemeralVmsPane.checking', 'Checking recipes...')
+                : t('auto.components.settings.EphemeralVmsPane.none', 'No recipes found yet.')}
             </div>
           ) : (
             <div className="divide-y divide-border/50">

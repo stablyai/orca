@@ -29,13 +29,13 @@ import {
   retryStructuredAgentSessionLaunch
 } from './structured-agent-session-launch'
 import { getStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
-import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import { renderHook } from '@testing-library/react'
 import { recheckUnconfirmedStructuredAgentLaunches } from './structured-agent-session-launch-unconfirmed-recheck'
 import {
   settleStructuredAgentSessionSendsFromJournal,
   resetStructuredAgentSessionSendsForTests
-} from '@/components/native-chat/structured-agent-session-message-sender'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   resetStructuredAgentLaunchRegistryForTests,
   getStructuredLaunchStateBySessionId
@@ -44,7 +44,7 @@ import {
   holdStructuredAgentSessionLaunchOption,
   structuredLaunchOptionOverlay
 } from './structured-agent-session-launch-options'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
   resetStructuredAgentLaunchPersistenceForTests,
   readStructuredAgentLaunchRecord
@@ -52,15 +52,15 @@ import {
 import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
 import { markStructuredAgentSessionLaunchPublished } from './structured-agent-session-launch-publication'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
-import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
-import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
+import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
+import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import {
   getStructuredAgentSessionPendingSends,
   getStructuredAgentSessionSendNotice
-} from '@/components/native-chat/structured-agent-session-pending-sends'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 
-import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+import { writeNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 
 import {
   CreateIntentParams,

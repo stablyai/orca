@@ -20,7 +20,7 @@ const { warnTerminalLifecycleAnomaly } = vi.hoisted(() => ({
 }))
 
 // Require the iteration-cap warning to prove the backstop fired rather than natural loop completion.
-vi.mock('../../terminal-lifecycle-diagnostics', async (importOriginal) => ({
+vi.mock('../../layout/reconciliation/terminal-lifecycle-diagnostics', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   warnTerminalLifecycleAnomaly
 }))

@@ -6,7 +6,7 @@ import {
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,

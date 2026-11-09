@@ -83,6 +83,8 @@ export function queuedCardFromChange(
     consumedAs: null,
     queuedAt: readQueuedAt(change.queuedAt),
     ...(options ? { options } : {}),
+    ...(change.deliveryMode !== undefined ? { deliveryMode: change.deliveryMode } : {}),
+    ...(change.unattended !== undefined ? { unattended: change.unattended } : {}),
     ...(typeof change.recovers === 'string' ? { recovers: change.recovers } : {})
   }
   const attempt =

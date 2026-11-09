@@ -6,7 +6,7 @@ import {
   importCookiesIntoClientRoutePartition
 } from '../../browser/cookies/client-route/browser-client-route-cookie-import'
 import { clientRouteCookieImportSources } from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
-import { pickCookieFile } from '../../browser/cookies/browser-cookie-import'
+import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
 export function registerClientHostCookieImportHandlers(): void {

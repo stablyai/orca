@@ -16,7 +16,10 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
-import { structuredSummaryConversationNaming } from './structured-agent-session-status-summary'
+import {
+  structuredSummaryConversationNaming,
+  structuredSummaryHostProgram
+} from './structured-agent-session-status-summary'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
 import {
   normalizeOptionalField,
@@ -52,6 +55,7 @@ export function savedStructuredAgentSessionStatus(
       ? { permissionMode: record.permissionMode }
       : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
+    ...structuredSummaryHostProgram(record),
     ...structuredSummaryConversationNaming(record, undefined),
     ...(typeof record.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: at ?? record.createdAt

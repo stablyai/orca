@@ -141,6 +141,54 @@ describe('Muse hook events', () => {
     expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('done')
   })
 
+  // Muse 1.4.14 subagent_spawn trace: the child starts before the lead's Stop and ends long after it.
+  const SPAWNED_ID = '01a1afae-e716-7a93-8ecf-67cb69c7e7aa'
+  const spawned = { ...envelope, session_id: CHILD_ID, turn_id: CHILD_ID }
+  const leadStop = {
+    ...main,
+    hook_event_name: 'Stop',
+    stop_hook_active: false,
+    last_assistant_message: 'SPAWNED'
+  }
+
+  function holdLeadStopForSpawnedChild(): void {
+    normalizeAndAccept(state, 'muse', {
+      ...main,
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'go'
+    })
+    normalizeAndAccept(state, 'muse', {
+      ...spawned,
+      hook_event_name: 'SubagentStart',
+      subagent_id: SPAWNED_ID,
+      child_session_id: CHILD_ID
+    })
+    expect(normalizeAndAccept(state, 'muse', leadStop)?.payload).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done' }
+    })
+  }
+
+  it('holds the finished turn working until the spawned subagent stops', () => {
+    holdLeadStopForSpawnedChild()
+    expect(
+      normalizeAndAccept(state, 'muse', {
+        ...spawned,
+        hook_event_name: 'SubagentStop',
+        subagent_id: SPAWNED_ID,
+        child_session_id: CHILD_ID
+      })
+    ).toBeNull()
+    // The transcript poll replays the held Stop.
+    expect(normalizeAndAccept(state, 'muse', leadStop)?.payload.state).toBe('done')
+  })
+
+  it('releases a held turn when the user interrupts Muse', () => {
+    holdLeadStopForSpawnedChild()
+    expect(normalizeAndAccept(state, 'muse', { ...main, hook_event_name: 'Interrupt' })).toBeNull()
+    expect(normalizeAndAccept(state, 'muse', leadStop)?.payload.state).toBe('done')
+  })
+
   it('reports a request_user_input question from the session log until it settles', () => {
     const logPath = sessionLogPath()
     const body = { ...main, hook_event_name: 'UserPromptSubmit', prompt: 'ask my favorite color' }

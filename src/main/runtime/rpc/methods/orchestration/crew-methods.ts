@@ -1,4 +1,4 @@
-import { CrewSubscribeParams } from '../../../../../shared/orchestration-crew'
+import { CrewSubscribeParams } from '../../../../../shared/orchestration/orchestration-crew'
 import { subscribeCrew } from '../../../orchestration/crew/crew-stream'
 import { defineStreamingMethod } from '../../core'
 

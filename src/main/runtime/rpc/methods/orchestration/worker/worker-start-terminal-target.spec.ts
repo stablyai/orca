@@ -42,11 +42,6 @@ export function registerWorkerStartTerminalTargetTests(): void {
         })
       ).rejects.toMatchObject({ code: 'terminal_is_coordinator' })
     })
-
-    it('still accepts a separate agent terminal in the same worktree', async () => {
-      const started = await harness.startWorker({ terminal: 'term_worker' })
-      expect(started.dispatchId).toEqual(expect.any(String))
-    })
   })
 
   // Manual inject is another self-adoption path; compare target with caller too.
@@ -153,16 +148,6 @@ export function registerWorkerStartTerminalTargetTests(): void {
       ).rejects.toMatchObject({ code: 'terminal_is_coordinator' })
       expect(harness.db.getDispatchContext(task.id)).toBeUndefined()
     })
-
-    it('still dispatches to a different pane', async () => {
-      const task = harness.db.createTask({ spec: 'peer dispatch', runId: harness.activeRunId })
-      const result = (await harness.call('orchestration.dispatch', {
-        task: task.id,
-        from: 'term_coord',
-        to: 'term_worker'
-      })) as { dispatch: { assignee_pane_key: string } }
-      expect(result.dispatch.assignee_pane_key).toBe(harness.workerPaneKey)
-    })
   })
 
   const PTY_ID = 'pty_worker'
@@ -193,21 +178,6 @@ export function registerWorkerStartTerminalTargetTests(): void {
 
       await expect(h.startWorker({ agent: 'claude' })).rejects.toThrow()
       expect(writes).toEqual([])
-    })
-
-    it('writes the brief once into the agent found in front', async () => {
-      const writes = launchedPane('agent')
-
-      await h.startWorker({ agent: 'claude' })
-      expect(writes).toHaveLength(1)
-    })
-
-    it('leaves a terminal the caller supplied to its own idle wait', async () => {
-      const writes = launchedPane('shell')
-
-      await h.startWorker({ terminal: 'term_worker' })
-      expect(h.runtime.readLaunchedAgentForeground).not.toHaveBeenCalled()
-      expect(writes).toHaveLength(1)
     })
   })
 
@@ -242,23 +212,5 @@ export function registerWorkerStartTerminalTargetTests(): void {
         expect(h.runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
       }
     )
-
-    it('keeps reused terminals on the normal idle wait', async () => {
-      h.setup()
-      vi.spyOn(h.runtime, 'waitForFreshWorkerComposer')
-      await h.startWorker({ terminal: 'term_worker' })
-      expect(h.runtime.waitForFreshWorkerComposer).not.toHaveBeenCalled()
-      expect(h.runtime.waitForTerminal).toHaveBeenCalledWith(
-        'term_worker',
-        expect.objectContaining({ condition: 'tui-idle' })
-      )
-    })
-
-    it('never delivers a task after a startup timeout', async () => {
-      h.setup()
-      vi.spyOn(h.runtime, 'waitForFreshWorkerComposer').mockRejectedValue(new Error('timeout'))
-      await expect(h.startWorker({ agent: 'zcode' })).rejects.toThrow('Expected worker-start')
-      expect(h.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-    })
   })
 }

@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { ClaudeUsageDailyPoint } from '../../../../shared/claude-usage-types'
 import type { CodexUsageDailyPoint } from '../../../../shared/codex-usage-types'
 import { ClaudeUsageDailyChart } from './ClaudeUsageDailyChart'
@@ -7,6 +9,8 @@ import { CodexUsageDailyChart } from './CodexUsageDailyChart'
 function makeDay(index: number): string {
   return new Date(Date.UTC(2026, 0, 1 + index)).toISOString().slice(0, 10)
 }
+
+afterEach(cleanup)
 
 describe('usage daily charts', () => {
   it('renders Codex/OpenCode daily charts for very large histories', () => {
@@ -19,7 +23,7 @@ describe('usage daily charts', () => {
       totalTokens: index + 1
     }))
 
-    expect(() => CodexUsageDailyChart({ daily })).not.toThrow()
+    expect(() => render(<CodexUsageDailyChart daily={daily} />)).not.toThrow()
   })
 
   it('renders Claude daily charts for very large histories', () => {
@@ -31,6 +35,6 @@ describe('usage daily charts', () => {
       cacheWriteTokens: 0
     }))
 
-    expect(() => ClaudeUsageDailyChart({ daily })).not.toThrow()
+    expect(() => render(<ClaudeUsageDailyChart daily={daily} />)).not.toThrow()
   })
 })
