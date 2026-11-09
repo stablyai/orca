@@ -3,7 +3,7 @@ import {
   GitGraphCommitActionControls,
   GitGraphCommitConfirmStrip
 } from './git-graph-commit-action-controls'
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { RefreshCw } from 'lucide-react'
@@ -18,6 +18,7 @@ import {
   buildDefaultGitHistoryColorMap,
   buildGitHistoryViewModels
 } from '../../../../../shared/git/history/git-history-graph'
+import type { GitHistoryResult } from '../../../../../shared/git/history/git-history-types'
 import { useGitGraphHistory, gitGraphFilterSupported } from './use-git-graph-history'
 import { GitGraphFilter } from './git-graph-filter'
 import { GitGraphDetails } from './git-graph-details'
@@ -26,6 +27,8 @@ import { cn } from '@/lib/utils'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const sameGroup = () => undefined
+const nearEnd = (element: HTMLElement) =>
+  element.scrollHeight - element.scrollTop - element.clientHeight < 200
 
 export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const t = useTranslate()
@@ -104,6 +107,36 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
       controller.clearReveal()
     }
   }, [rows, revealId, virtualizer, controller])
+  const { loading, loadMore } = history
+  const stalledFill = useRef<GitHistoryResult>(undefined)
+  // A first page shorter than the pane leaves nothing to scroll, so onScroll never asks for more.
+  useEffect(() => {
+    const element = scroll.current
+    if (!element || !result?.hasMore || loading) {
+      return
+    }
+    const fillPane = () => {
+      // Another load still in flight would hand back its own result, not the next page.
+      const busy = controller.view.getState().loading
+      if (!busy && stalledFill.current !== result && element.clientHeight > 0 && nearEnd(element)) {
+        const { historyToken, items } = result
+        void loadMore().then((next) => {
+          // A failed or empty page keeps hasMore, so asking again would repeat it forever.
+          if (next && next.historyToken === historyToken && next.items.length === items.length) {
+            stalledFill.current = next
+          }
+        })
+      }
+    }
+    // Next frame: the load that produced `result` has released its request and its rows are laid out.
+    const frame = requestAnimationFrame(fillPane)
+    const observer = new ResizeObserver(fillPane)
+    observer.observe(element)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+    }
+  }, [result, loading, loadMore, controller])
   const actions = useGitHistoryCommitActions({
     activeWorktreeId: worktreeId,
     worktreePath: scope?.worktree.path ?? null,
@@ -189,11 +222,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
               if (element) {
                 controller.scrollOffset = element.scrollTop
               }
-              if (
-                element &&
-                element.scrollHeight - element.scrollTop - element.clientHeight < 200 &&
-                !history.loading
-              ) {
+              if (element && nearEnd(element) && !history.loading) {
                 void history.loadMore()
               }
             }}

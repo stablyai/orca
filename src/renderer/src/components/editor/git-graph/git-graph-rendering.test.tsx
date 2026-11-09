@@ -59,6 +59,7 @@ afterEach(async () => {
   disposeGitGraphHistory(`${workspaceId}::git-graph`)
   useAppStore.setState(initialState, true)
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 const result: GitHistoryResult = {
   items: [{ id: 'a', subject: 'subject', message: 'subject', parentIds: [] }],
@@ -673,4 +674,157 @@ it('canonicalizes selected refs before requesting history', async () => {
     await history!.controller.settledResult()
   })
   expect(getHistory.mock.calls[0]?.[1].refs).toEqual(['refs/heads/main', 'refs/heads/topic'])
+})
+
+let paneHeight = 0
+const resizeCallbacks = new Set<() => void>()
+const frames = new Map<number, FrameRequestCallback>()
+function measurePane() {
+  paneHeight = 0
+  resizeCallbacks.clear()
+  frames.clear()
+  let nextFrame = 0
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    nextFrame += 1
+    frames.set(nextFrame, callback)
+    return nextFrame
+  })
+  vi.stubGlobal('cancelAnimationFrame', (frame: number) => frames.delete(frame))
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      readonly callback: () => void
+      constructor(callback: () => void) {
+        this.callback = callback
+      }
+      observe() {
+        resizeCallbacks.add(this.callback)
+      }
+      unobserve() {}
+      disconnect() {
+        resizeCallbacks.delete(this.callback)
+      }
+    }
+  )
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return this === container.querySelector('div.overflow-y-auto') ? paneHeight : 0
+  })
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    return this.querySelectorAll('[data-current]').length * 28
+  })
+}
+const fillItems = Array.from({ length: 150 }, (_, index) => ({
+  id: `commit-${index}`,
+  subject: `Commit ${index}`,
+  message: `Commit ${index}`,
+  parentIds: index < 149 ? [`commit-${index + 1}`] : []
+}))
+const fillPage = (skip: number): GitHistoryResult => ({
+  ...result,
+  refs: 'all',
+  historyToken: 'fill',
+  items: fillItems.slice(skip, skip + 50),
+  hasMore: skip < 100
+})
+// Each pass paints one frame and waits for the load it starts, so a load loop shows as extra requests.
+async function settle() {
+  for (let pass = 0; pass < 6; pass += 1) {
+    await act(async () => {
+      const due = [...frames.values()]
+      frames.clear()
+      due.forEach((callback) => callback(0))
+      await gitGraphHistoryForTab(workspaceId).settledResult()
+    })
+  }
+}
+const renderTab = () =>
+  act(async () =>
+    root.render(
+      <TooltipProvider>
+        <GitGraphTab worktreeId={workspaceId} />
+      </TooltipProvider>
+    )
+  )
+
+const servePages = () =>
+  getHistory
+    .mockReset()
+    .mockImplementation(async (_target, options: { skip?: number }) => fillPage(options.skip ?? 0))
+const loadedRows = () => container.querySelectorAll('[data-current]').length
+
+it('loads older pages until a tall pane can scroll', async () => {
+  measurePane()
+  paneHeight = 3000
+  servePages()
+  await renderTab()
+  await settle()
+  expect(loadedRows()).toBe(150)
+})
+
+it('waits while the pane is hidden or already overflowing, then fills it when it grows', async () => {
+  measurePane()
+  servePages()
+  await renderTab()
+  await settle()
+  expect(loadedRows()).toBe(50)
+  paneHeight = 600
+  await act(async () => resizeCallbacks.forEach((callback) => callback()))
+  await settle()
+  expect(loadedRows()).toBe(50)
+  paneHeight = 1500
+  await act(async () => resizeCallbacks.forEach((callback) => callback()))
+  await settle()
+  expect(loadedRows()).toBe(100)
+})
+
+it('fills a pane that grows while a refresh is still loading', async () => {
+  measurePane()
+  servePages()
+  paneHeight = 600
+  await renderTab()
+  await settle()
+  await act(async () => {
+    void gitGraphHistoryForTab(workspaceId).refresh()
+    paneHeight = 3000
+    resizeCallbacks.forEach((callback) => callback())
+  })
+  await settle()
+  expect(loadedRows()).toBe(150)
+})
+
+it('keeps filling when history changes under a page and reloads with the same row count', async () => {
+  measurePane()
+  paneHeight = 3000
+  let changed = false
+  getHistory
+    .mockReset()
+    .mockImplementation(async (_target, options: { skip?: number; historyToken?: string }) => {
+      if (options.historyToken === 'before' && !changed) {
+        changed = true
+        return { ...result, items: [], historyChanged: true }
+      }
+      return { ...fillPage(options.skip ?? 0), historyToken: changed ? 'after' : 'before' }
+    })
+  await renderTab()
+  await settle()
+  expect(loadedRows()).toBe(150)
+})
+
+it.each([
+  ['fails', () => getHistory.mockRejectedValue(new Error('history unavailable'))],
+  ['adds no rows', () => getHistory.mockResolvedValue(fillPage(0))]
+])('stops filling when the next page %s instead of asking again', async (_, serveNext) => {
+  measurePane()
+  paneHeight = 3000
+  getHistory.mockReset()
+  serveNext()
+  getHistory.mockResolvedValueOnce(fillPage(0))
+  await renderTab()
+  await settle()
+  expect(loadedRows()).toBe(50)
+  expect(getHistory).toHaveBeenCalledTimes(2)
 })
