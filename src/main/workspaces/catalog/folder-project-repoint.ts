@@ -15,6 +15,7 @@ import {
 } from '../../../shared/worktree/id'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getResolvedFolderWorkspacePathStatus } from '../../project-groups/folder-workspace-path-status'
+import { findProjectAtSameRealPath } from './project-realpath-identity'
 import type { Store } from '../../persistence/loading-store/store'
 
 export type FolderProjectRepointResult =
@@ -42,10 +43,13 @@ export async function repointMovedFolderProject(
   args: { projectId: string; folderPath: string; kind?: 'git' | 'folder' }
 ): Promise<FolderProjectRepointResult> {
   const repoId = repoIdForHostLocalProjectId(args.projectId)
-  const newPath = args.folderPath.trim()
-  if (!repoId || !newPath || args.kind === 'git') {
+  // Only an explicit folder request repoints: an omitted kind falls back to a git import.
+  if (!repoId || !args.folderPath.trim() || args.kind !== 'folder') {
     return { outcome: 'not-applicable' }
   }
+  // The picker can return a path whose last component ends in a space; trimming it could name a
+  // different folder. Keep the selected spelling for every check and write.
+  const newPath = args.folderPath
   const repo = findLocalFolderRepo(store, repoId)
   if (!repo) {
     return { outcome: 'not-applicable' }
@@ -82,15 +86,25 @@ export async function repointMovedFolderProject(
     return { outcome: 'not-applicable' }
   }
   const newPathKey = normalizeRuntimePathForComparison(newPath)
-  if (
-    store
-      .getRepos()
-      .some(
-        (entry) =>
-          !entry.connectionId && normalizeRuntimePathForComparison(entry.path) === newPathKey
-      )
-  ) {
+  const sameHostRepos = store
+    .getRepos()
+    .filter(
+      (entry) =>
+        !entry.connectionId &&
+        entry.id !== current.id &&
+        getRepoExecutionHostId(entry) === LOCAL_EXECUTION_HOST_ID
+    )
+  if (sameHostRepos.some((entry) => normalizeRuntimePathForComparison(entry.path) === newPathKey)) {
     return { outcome: 'refused', reason: `Another project already uses this folder: ${newPath}` }
+  }
+  // A symlink can name an already registered folder; only real paths prove the alias.
+  if (await findProjectAtSameRealPath(sameHostRepos, newPath)) {
+    return { outcome: 'refused', reason: `Another project already uses this folder: ${newPath}` }
+  }
+  // The realpath probe awaits; re-check the row before mutating it.
+  const stillCurrent = findLocalFolderRepo(store, repoId)
+  if (!stillCurrent || stillCurrent.path !== repo.path) {
+    return { outcome: 'not-applicable' }
   }
   migrateFolderProjectWorktreeIds(store, current, newPath)
   const updated = store.updateRepo(current, { path: newPath })

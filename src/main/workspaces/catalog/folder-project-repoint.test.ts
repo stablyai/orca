@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -160,4 +160,58 @@ describe('repointMovedFolderProject', () => {
     expect(result).toEqual({ outcome: 'not-applicable' })
     expect(store.getRepos()[0]?.path).toBe(oldFolder)
   })
+
+  it('leaves an import without an explicit folder kind to the import flow', async () => {
+    rmSync(oldFolder, { recursive: true, force: true })
+    mkdirSync(newFolder)
+
+    const result = await repointMovedFolderProject(store, {
+      projectId: `repo:${repo.id}`,
+      folderPath: newFolder
+    })
+
+    expect(result).toEqual({ outcome: 'not-applicable' })
+    expect(store.getRepos()[0]?.path).toBe(oldFolder)
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps the selected folder spelling instead of trimming it',
+    async () => {
+      rmSync(oldFolder, { recursive: true, force: true })
+      mkdirSync(newFolder)
+      // A sibling whose name is the selected path minus its trailing space must not win.
+      const selected = `${newFolder} `
+      mkdirSync(selected)
+
+      const result = await repointMovedFolderProject(store, {
+        projectId: `repo:${repo.id}`,
+        folderPath: selected,
+        kind: 'folder'
+      })
+
+      expect(result).toMatchObject({ outcome: 'repointed' })
+      expect(store.getRepos()[0]?.path).toBe(selected)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses a repoint onto a symlink alias of another project',
+    async () => {
+      rmSync(oldFolder, { recursive: true, force: true })
+      const registered = join(root, 'registered')
+      mkdirSync(registered)
+      store.addRepo(makeRepo({ id: 'repo-2', path: registered, kind: 'folder' }))
+      const alias = join(root, 'alias')
+      symlinkSync(registered, alias, 'dir')
+
+      const result = await repointMovedFolderProject(store, {
+        projectId: `repo:${repo.id}`,
+        folderPath: alias,
+        kind: 'folder'
+      })
+
+      expect(result).toMatchObject({ outcome: 'refused' })
+      expect(store.getRepo(repo.id)?.path).toBe(oldFolder)
+    }
+  )
 })
