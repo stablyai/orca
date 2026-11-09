@@ -5291,6 +5291,9 @@
             "readAgo": "Read {{time}}",
             "notRead": "Usage unknown: not read yet"
           },
+          "InlineUsageBars": {
+            "resetsAt": "Resets {{when}}"
+          },
           "RemoteHostStatusRow": {
             "unreachable_since": "Can't reach this host since {{time}}.",
             "copy_error": "Copy error",
@@ -6430,15 +6433,19 @@
           "b0a7bfc34c": "Hide from sidebar",
           "88d402b71d": "Onboarding checklist"
         },
+        "SetupScriptCodeBlock": {
+          "showLess": "Show less",
+          "showMore_one": "Show {{count}} more line",
+          "showMore_other": "Show {{count}} more lines"
+        },
         "SetupScriptPromptCard": {
           "ff1e819a11": "Add a setup script",
           "70715947fb": "Setup script cannot be empty",
           "888b83bf78": "Failed to save setup script",
           "a49196d538": "Runs when Orca creates a new worktree.",
           "savedSetupCommand": "Saved the setup command.",
-          "savedWithSkippedFields_one": "{{count}} unsupported field skipped. Saved the setup command.",
-          "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command.",
-          "savedInProjectSettings": "Saved in this <settings>project's settings</settings>"
+          "savedInProjectSettings": "Saved in this <settings>project's settings</settings>",
+          "importTitle": "Import setup script"
         },
         "SetupScriptPromptCardViews": {
           "3933401d28": "Configure",
@@ -6450,20 +6457,23 @@
           "eefa756190": "Configure manually",
           "ca4efcbc25": "Save",
           "fdbc6cb064": "Detected setup script",
-          "7275f674cc": "Detected setup",
           "822ff300ad": "Dismiss",
           "5bfd5c8779": "Dismiss setup scripts",
-          "detectedFromSource": "Detected from <source>{{source}}</source>",
           "ignoresSharedSetup": "This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.",
-          "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees.",
-          "reviewSetupScript": "Review setup script"
+          "reviewSetupScript": "Review setup script",
+          "foundSetupScriptIn": "Found a setup script in <file>{{source}}</file>.",
+          "7275f674cc": "Detected setup",
+          "detectedFromSource": "Detected from <file>{{source}}</file>"
         },
         "SetupScriptReviewDialog": {
           "title": "Review setup script",
           "description": "Saving runs this whenever Orca creates a worktree for {{repo}}.",
           "setupScript": "Setup script",
           "archiveScript": "Archive script",
-          "save": "Save local setup"
+          "save": "Save local setup",
+          "descriptionWithSource": "From <file>{{source}}</file>. Saving runs this whenever Orca creates a worktree for {{repo}}.",
+          "notImported": "Not imported",
+          "notImportedHint": "These settings have no Orca equivalent and won't be saved."
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",
@@ -17389,7 +17399,8 @@
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
           "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit.",
-          "stoppedAfterSilence": "Stopped after a minute of silence"
+          "stoppedAfterSilence": "Stopped after a minute of silence",
+          "retryUnmatched": "Retry couldn't tell which words were already typed, so it inserted them all."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Dictation couldn't be inserted, so it was copied to the clipboard.",
@@ -17397,13 +17408,19 @@
           "lost": "Dictation couldn't be inserted or copied."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Stop dictation",
-          "7f3660a7ba": "Starting mic…",
-          "f082d0cb9d": "Processing…",
-          "3de5a129e7": "Listening",
           "4977162383": "Too loud",
-          "25f2b7a6a5": "Speaking",
-          "loadingModel": "Loading speech model…"
+          "finishing": "Finishing…",
+          "listening": "Listening…",
+          "cancel": "Cancel",
+          "finish": "Finish",
+          "oneMinuteLeft": "One minute left."
+        },
+        "DictationPillFailure": {
+          "discard": "Discard recording",
+          "modelFailed": "Speech model couldn't load.",
+          "transcribeFailed": "Couldn't transcribe. Recording kept.",
+          "openSettings": "Open settings",
+          "retry": "Retry"
         }
       },
       "dashboard": {

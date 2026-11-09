@@ -84,6 +84,7 @@ export function createWebSpeechApi(): Pick<
   | 'startDictation'
   | 'feedAudio'
   | 'stopDictation'
+  | 'cancelDictation'
   | 'onPartialTranscript'
   | 'onFinalTranscript'
   | 'onStopped'
@@ -152,6 +153,10 @@ export function createWebSpeechApi(): Pick<
       active = dictation
       try {
         await callRuntimeResult('speech.dictation.start', { dictationId: dictation.dictationId })
+        // A cancel that landed while the host was starting couldn't reach this dictation yet.
+        if (active !== dictation) {
+          void cancelOnHost(dictation)
+        }
       } catch (error) {
         if (active === dictation) {
           active = null
@@ -212,6 +217,17 @@ export function createWebSpeechApi(): Pick<
       } finally {
         emit(stoppedListeners, { sessionId })
       }
+    },
+    cancelDictation: async (sessionId) => {
+      const dictation = active?.sessionId === sessionId ? active : null
+      if (!dictation) {
+        return
+      }
+      active = null
+      dictation.failed = true
+      dictation.pending = []
+      await cancelOnHost(dictation)
+      emit(stoppedListeners, { sessionId })
     },
     onPartialTranscript: (callback) => subscribe(partialListeners, callback),
     onFinalTranscript: (callback) => subscribe(finalListeners, callback),

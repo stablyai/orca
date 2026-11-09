@@ -4457,6 +4457,9 @@
             "readAgo": "{{time}} に取得",
             "notRead": "使用量は不明：未取得"
           },
+          "InlineUsageBars": {
+            "resetsAt": "{{when}} にリセット"
+          },
           "RemoteHostStatusRow": {
             "unreachable_since": "{{time}}からこのホストに接続できません。",
             "copy_error": "エラーをコピー",
@@ -5517,8 +5520,6 @@
           "888b83bf78": "セットアップスクリプトの保存に失敗しました",
           "a49196d538": "Orca が新規ワークツリーを作成するときに実行されます。",
           "savedSetupCommand": "セットアップコマンドを保存しました。",
-          "savedWithSkippedFields_one": "未対応の項目を {{count}} 件スキップしました。セットアップコマンドを保存しました。",
-          "savedWithSkippedFields_other": "未対応の項目を {{count}} 件スキップしました。セットアップコマンドを保存しました。",
           "savedInProjectSettings": "この<settings>プロジェクトの設定</settings>に保存済み"
         },
         "SetupScriptPromptCardViews": {
@@ -5531,13 +5532,12 @@
           "eefa756190": "手動で構成する",
           "ca4efcbc25": "保存",
           "fdbc6cb064": "検出されたセットアップスクリプト",
-          "7275f674cc": "検出されたセットアップ",
           "822ff300ad": "閉じる",
           "5bfd5c8779": "セットアップスクリプトを閉じる",
-          "detectedFromSource": "<source>{{source}}</source> から検出",
           "ignoresSharedSetup": "このリポジトリは共有の <yaml>orca.yaml</yaml> セットアップスクリプトを無視します。ローカルコマンドを追加するか、設定でソースを変更してください。",
-          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。",
-          "reviewSetupScript": "セットアップスクリプトを確認"
+          "reviewSetupScript": "セットアップスクリプトを確認",
+          "7275f674cc": "検出されたセットアップ",
+          "detectedFromSource": "<file>{{source}}</file> から検出"
         },
         "SetupScriptReviewDialog": {
           "title": "セットアップスクリプトを確認",
@@ -16301,13 +16301,7 @@
           "lost": "音声入力を挿入もコピーもできませんでした。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "ディクテーションを停止する",
-          "7f3660a7ba": "マイクを起動中…",
-          "f082d0cb9d": "処理中…",
-          "3de5a129e7": "聞き取り中",
-          "4977162383": "音量が大きすぎます",
-          "25f2b7a6a5": "発話中",
-          "loadingModel": "音声モデルを読み込み中…"
+          "4977162383": "音量が大きすぎます"
         }
       },
       "dashboard": {

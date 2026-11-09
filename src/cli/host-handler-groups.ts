@@ -35,8 +35,8 @@ export const HOST_HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/vm.js')).VM_HANDLERS
   },
   {
-    name: 'vm-recipe-list',
-    keys: ['vm recipe list'],
-    load: async () => (await import('./handlers/vm-recipe-list.js')).VM_RECIPE_LIST_HANDLERS
+    name: 'vm-env',
+    keys: ['vm env doctor'],
+    load: async () => (await import('./handlers/vm-env.js')).VM_ENV_HANDLERS
   }
 ]

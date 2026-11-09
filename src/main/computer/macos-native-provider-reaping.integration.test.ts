@@ -1,11 +1,11 @@
 import { once } from 'node:events'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { reapMacOSProviderProcess } from './macos-native-provider-process-reaping'
 
 describe.skipIf(process.platform === 'win32')('real macOS provider process reaping', () => {
-  const children: ChildProcessHandle[] = []
+  const children: ChildProcess[] = []
 
   afterEach(async () => {
     await Promise.all(
