@@ -6,7 +6,8 @@ import {
   SHARE_RESERVED_PORTS,
   type ShareLink
 } from '../../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
-import { CopyShareLinkButton, ShareAudienceIcon, formatShareTimeLeft } from './share-link-row'
+import { CopyShareLinkButton, ShareAudienceIcon } from './share-link-row'
+import { formatShareTimeLeft } from './share-link-status'
 
 /** Port field for "Share a port", with the listening ports as one-click choices. */
 export function PortPicker({
@@ -89,11 +90,14 @@ export function PortPicker({
 
 export function CreatedLink({
   created,
+  copied,
   now,
   urlRef,
   onCopy
 }: {
   created: ShareLink
+  /** The create already copied it: the Copy button starts on "Copied". */
+  copied: boolean
   now: number
   urlRef: React.RefObject<HTMLInputElement | null>
   onCopy: (url: string) => Promise<boolean>
@@ -101,7 +105,7 @@ export function CreatedLink({
   const t = useTranslate()
   const audienceLabel =
     created.audience === 'public'
-      ? t('auto.components.right.sidebar.CloudShare.audiencePublic', 'Anyone with the link')
+      ? t('auto.components.right.sidebar.CloudShare.audiencePublicShort', 'Public')
       : t('auto.components.right.sidebar.CloudShare.audienceTeam', 'Team only')
   return (
     <div className="space-y-2">
@@ -115,7 +119,13 @@ export function CreatedLink({
           className="h-8"
           onFocus={(event) => event.currentTarget.select()}
         />
-        <CopyShareLinkButton url={created.url} onCopy={onCopy} withLabel className="h-8" />
+        <CopyShareLinkButton
+          url={created.url}
+          onCopy={onCopy}
+          withLabel
+          initialCopied={copied}
+          className="h-8"
+        />
       </div>
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
         <ShareAudienceIcon audience={created.audience} />
@@ -135,6 +145,23 @@ export function CreatedLink({
           </>
         )}
       </div>
+      {created.audience === 'public' ? (
+        // Warning tint: this link works for anyone it reaches, signed in or not.
+        <p className="rounded-md border border-status-warning-border bg-status-warning-background px-2.5 py-2 text-xs text-status-warning-text">
+          {t(
+            'auto.components.right.sidebar.CloudShare.publicNote',
+            'Anyone with this link can open port {{value0}} without signing in. Turn it off anytime in Ports → Shared links.',
+            { value0: created.port }
+          )}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {t(
+            'auto.components.right.sidebar.CloudShare.teamNote',
+            'Teammates open it from Orca, signed in to your team.'
+          )}
+        </p>
+      )}
     </div>
   )
 }
