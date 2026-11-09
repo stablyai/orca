@@ -1,7 +1,4 @@
-import {
-  annotateRecordReplacement,
-  annotateTabBucketReplacement
-} from '@/store/keyed-record-transitions'
+import { replaceRecordEntries, replaceTabBuckets } from '@/store/keyed-record-transitions'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
@@ -113,21 +110,11 @@ export function createTerminalPaneHibernationActions(
           for (const ptyId of exitGuardPtyIds) {
             delete next[ptyId]
           }
-          const nextSleeping = { ...s.sleepingAgentSessionsByPaneKey }
-          for (const key of sleepingRecordKeys) {
-            const replaced = replacedSleepingRecords[key]
-            if (replaced) {
-              nextSleeping[key] = replaced
-            } else {
-              delete nextSleeping[key]
-            }
-          }
           return {
             suppressedPtyExitIds: next,
-            sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries(
               s.sleepingAgentSessionsByPaneKey,
-              nextSleeping,
-              sleepingRecordKeys
+              sleepingRecordKeys.map((key) => [key, replacedSleepingRecords[key] ?? null] as const)
             )
           }
         })
@@ -137,13 +124,9 @@ export function createTerminalPaneHibernationActions(
           ...s.suppressedPtyExitIds,
           ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
         },
-        sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
+        sleepingAgentSessionsByPaneKey: replaceRecordEntries(
           s.sleepingAgentSessionsByPaneKey,
-          {
-            ...s.sleepingAgentSessionsByPaneKey,
-            ...sleepingAgentSessionRecords
-          },
-          sleepingRecordKeys
+          Object.entries(sleepingAgentSessionRecords)
         )
       }))
       if (expectedRuntimePtyIds.length > 0) {
@@ -215,8 +198,8 @@ export function createTerminalPaneHibernationActions(
           const existingPtyIds = s.ptyIdsByTabId[opts.tabId] ?? []
           const shutdownPtyIdSet = new Set(rendererShutdownPtyIds)
           const remainingPtyIds = existingPtyIds.filter((ptyId) => !shutdownPtyIdSet.has(ptyId))
-          const nextTabsByWorktree = { ...s.tabsByWorktree }
-          const tabs = nextTabsByWorktree[worktreeId] ?? []
+          const tabs = s.tabsByWorktree[worktreeId] ?? []
+          const replacements: [string, typeof tabs][] = []
           const tabIndex = tabs.findIndex((candidate) => candidate.id === opts.tabId)
           if (tabIndex !== -1) {
             const nextTabs = [...tabs]
@@ -224,7 +207,7 @@ export function createTerminalPaneHibernationActions(
               ...nextTabs[tabIndex],
               ptyId: remainingPtyIds.at(-1) ?? null
             }
-            nextTabsByWorktree[worktreeId] = nextTabs
+            replacements.push([worktreeId, nextTabs])
           }
           const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
           for (const ptyId of exitGuardPtyIds) {
@@ -232,11 +215,8 @@ export function createTerminalPaneHibernationActions(
           }
           const nextLastKnownRelay =
             remainingPtyIds.length === 0
-              ? { ...s.lastKnownRelayPtyIdByTabId }
+              ? replaceRecordEntries(s.lastKnownRelayPtyIdByTabId, [[opts.tabId, null]])
               : s.lastKnownRelayPtyIdByTabId
-          if (remainingPtyIds.length === 0) {
-            delete nextLastKnownRelay[opts.tabId]
-          }
           let nextRuntimePaneTitlesByTabId = s.runtimePaneTitlesByTabId
           const numericPaneId = Number(opts.leafId)
           if (
@@ -245,32 +225,16 @@ export function createTerminalPaneHibernationActions(
           ) {
             const nextByPane = { ...s.runtimePaneTitlesByTabId[opts.tabId] }
             delete nextByPane[numericPaneId]
-            nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
-            if (Object.keys(nextByPane).length > 0) {
-              nextRuntimePaneTitlesByTabId[opts.tabId] = nextByPane
-            } else {
-              delete nextRuntimePaneTitlesByTabId[opts.tabId]
-            }
+            nextRuntimePaneTitlesByTabId = replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+              [opts.tabId, Object.keys(nextByPane).length > 0 ? nextByPane : null]
+            ])
           }
           const nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
           delete nextLastTerminalInputAtByPaneKey[opts.paneKey]
           return {
-            tabsByWorktree: annotateTabBucketReplacement(s.tabsByWorktree, nextTabsByWorktree, [
-              worktreeId
-            ]),
-            ptyIdsByTabId: annotateRecordReplacement(
-              s.ptyIdsByTabId,
-              {
-                ...s.ptyIdsByTabId,
-                [opts.tabId]: remainingPtyIds
-              },
-              [opts.tabId]
-            ),
-            lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
-              s.lastKnownRelayPtyIdByTabId,
-              nextLastKnownRelay,
-              [opts.tabId]
-            ),
+            tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, replacements),
+            ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [[opts.tabId, remainingPtyIds]]),
+            lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
             suppressedPtyExitIds: {
               ...s.suppressedPtyExitIds,
               ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
@@ -278,11 +242,7 @@ export function createTerminalPaneHibernationActions(
             codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
             ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
               ? {
-                  runtimePaneTitlesByTabId: annotateRecordReplacement(
-                    s.runtimePaneTitlesByTabId,
-                    nextRuntimePaneTitlesByTabId,
-                    [opts.tabId]
-                  )
+                  runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId
                 }
               : {}),
             ...removePanesAttention(s, new Set([opts.paneKey])),
