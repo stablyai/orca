@@ -297,6 +297,44 @@ describe('Claude profile refresh from the default home', () => {
       mcpServers: { shared: { command: 'default' }, mine: { command: 'mine' } }
     })
   })
+  it.each([750, 7500])(
+    'publishes only configuration changes with %i saved folders',
+    async (count) => {
+      const f = fixture()
+      const projects = Object.fromEntries(
+        Array.from({ length: count }, (_, i) => [
+          `/folder-${i}`,
+          { allowedTools: ['Read'], lastSessionId: 'profile' }
+        ])
+      )
+      const rejected = Array.from({ length: count }, (_, i) => `REJECTED_SUFFIX_${i}`)
+      const state = join(f.profileHome, '.claude.json')
+      f.json(state, {
+        theme: 'dark',
+        numStartups: 30,
+        projects,
+        customApiKeyResponses: { rejected }
+      })
+      const personal = {
+        theme: 'light',
+        numStartups: 1,
+        projects,
+        customApiKeyResponses: { rejected }
+      }
+      f.json(join(f.userHome, '.claude.json'), personal)
+      const publish = vi.spyOn(fs, 'renameSync')
+      expect((await provision(f)).surfaces['.claude.json']).toBe('merged')
+      expect(publish.mock.calls.filter(([, target]) => target === state)).toHaveLength(1)
+      expect(f.read(state).theme).toBe('light')
+      f.json(join(f.userHome, '.claude.json'), { ...personal, numStartups: 1000 })
+      publish.mockClear()
+      expect((await provision(f)).surfaces['.claude.json']).toBe('unchanged')
+      expect(publish.mock.calls.filter(([, target]) => target === state)).toHaveLength(0)
+      expect(f.read(state).numStartups).toBe(30)
+      publish.mockRestore()
+    }
+  )
+
   it('skips the state write while Claude holds its lock and records nothing for it', async () => {
     const f = fixture()
     f.json(join(f.userHome, '.claude.json'), { theme: 'dark' })
