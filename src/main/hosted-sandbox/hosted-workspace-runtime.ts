@@ -17,6 +17,7 @@ import {
 } from '../environment-providers/environment-provider-driver'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { isHostedEntitlementDenied } from './hosted-environment-provider'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import type { HostedWorkspaceService } from './hosted-workspace-service'
 
@@ -162,4 +163,25 @@ export function setHostedWorkspaceService(next: HostedWorkspaceService | null): 
 /** Null when Orca Cloud is not configured in this build. */
 export function getHostedWorkspaceService(): HostedWorkspaceService | null {
   return current
+}
+
+/** Polls a cheap terminal listing until the woken server answers it (or the deadline passes). */
+export async function waitForTerminalsReachable(
+  userDataPath: string,
+  environmentId: string,
+  deadline: number
+): Promise<void> {
+  while (Date.now() < deadline) {
+    const response = await callRuntimeEnvironment(
+      userDataPath,
+      environmentId,
+      'terminal.list',
+      { limit: 1 },
+      5_000
+    ).catch(() => null)
+    if (response?.ok) {
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
 }

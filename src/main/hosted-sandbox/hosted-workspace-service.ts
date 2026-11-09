@@ -27,6 +27,7 @@ import {
   failure,
   findCloudRuntime,
   readCachedCheckouts,
+  waitForTerminalsReachable,
   type CloudRuntime
 } from './hosted-workspace-runtime'
 
@@ -99,6 +100,12 @@ export function installHostedWorkspaceService(deps: {
     while (Date.now() < deadline && wakes.has(workspaceId)) {
       const runtime = findCloudRuntime(deps.userDataPath, workspaceId)?.runtime
       if (runtime?.status === 'running') {
+        // Running is not yet usable: panes rebind to the restarted server's new terminals a moment
+        // later, and keys typed before that are dropped by design. Ready = the server answers a
+        // terminal listing through the window's own transport.
+        if (runtime.runtimeEnvironmentId) {
+          await waitForTerminalsReachable(deps.userDataPath, runtime.runtimeEnvironmentId, deadline)
+        }
         service.emitWakeProgress({ workspaceId, phase: 'ready', source: 'open', startedAt })
         return
       }
