@@ -47,8 +47,12 @@ vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () 
 vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-failure-notice', () => ({
   notifyWebRuntimeTerminalCreateFailure: notifyFailure
 }))
-vi.mock('@/runtime/hosts/wsl/wsl-host-user-start', () => ({ startStoppedWslHostForUserAct: startHost }))
-vi.mock('@/lib/provider-accounts/claude-account-sign-in', () => ({ signInToClaudeAccount: managedSignIn }))
+vi.mock('@/runtime/hosts/wsl/wsl-host-user-start', () => ({
+  startStoppedWslHostForUserAct: startHost
+}))
+vi.mock('@/lib/provider-accounts/claude-account-sign-in', () => ({
+  signInToClaudeAccount: managedSignIn
+}))
 vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'linux' }))
 
 beforeEach(() => {
