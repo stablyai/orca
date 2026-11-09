@@ -107,7 +107,7 @@ export class DesktopConnection {
   getPhase(): SessionPhase { return this.phase; }
   isCredentialMissing(): boolean { return this.phase === 'auth-failed' && this.detail === CREDENTIAL_MISSING; }
   getClient(): SpikeRpcClient | null { return this.client; }
-  getMeta(): HostMeta | null { return this.meta; }
+  getPairedMeta(): HostMeta | null { return this.session ? this.meta : null; }
   getActivePath(): string { return this.activePath; }
   getPendingPath(): string | undefined { return this.session?.getPendingPath(); }
   getConnectedAt(): number | null { return this.connectedAt; }

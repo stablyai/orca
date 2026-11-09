@@ -102,6 +102,36 @@ test('a refused duplicate request sends the page a readable definite failure', a
   client.close()
 })
 
+test('a cold offline document restores its live stream after authentication and drops its offline write', async () => {
+  const peer = createRpcPeer()
+  const { bridge, frames } = createBridge(peer, null)
+  post(bridge, { type: 'ready' })
+  const initial = frames.find((frame) => frame.type === 'init')
+  assert.equal(initial.connection.state, 'reconnecting')
+  assert.equal(initial.connection.lastConnectedAt, null)
+  post(bridge, { type: 'subscribe', id: 'catalog', method: 'session.tabs.subscribeAll' })
+  post(bridge, { id: 'write', method: 'worktree.create', params: { name: 'offline draft' } })
+  assert.equal(frames.find((frame) => frame.id === 'write').error.isRpcDeliveryUnknown, false)
+
+  const client = new peer.SpikeRpcClient()
+  await client.connect('ws://test', 'test-token', 'key', 'v2')
+  bridge.attachTransport(client, 'lan')
+  const [wire] = peer.sent.map(JSON.parse)
+  assert.deepEqual(
+    peer.sent.map((entry) => JSON.parse(entry).method),
+    ['session.tabs.subscribeAll']
+  )
+  peer.receiveText(
+    JSON.stringify({ id: wire.id, ok: true, streaming: true, result: { title: 'recovered' } })
+  )
+  await new Promise(setImmediate)
+  assert.equal(frames.find((frame) => frame.id === 'catalog').payload.title, 'recovered')
+  post(bridge, { type: 'ready' })
+  assert.equal(frames.findLast((frame) => frame.type === 'init').sessionId, initial.sessionId)
+  bridge.dispose()
+  client.close()
+})
+
 test('reconnect preserves the page and restores live streams without repeating writes', async () => {
   const first = createRpcPeer()
   const next = createRpcPeer()

@@ -38,9 +38,15 @@ export interface BundleManifest {
   rangeBytes: number; // 0 when the host does not advertise range support
 }
 
+export interface CachedWebBundle {
+  manifest: BundleManifest;
+  directory: string;
+}
+
 const RANGE_METHOD = 'mobileWeb.bundle.range';
 const CHUNK_METHOD = 'mobileWeb.bundle.chunk';
 const MANIFEST_METHOD = 'mobileWeb.bundle.manifest';
+const MAX_CACHE_METADATA_BYTES = 8 * 1024 * 1024;
 
 export function isSafeBundlePath(path: string): boolean {
   if (path.length === 0 || path.length > 1024 || /[\\%?#\x00-\x1f:]/.test(path)) { return false; }
@@ -76,6 +82,19 @@ function bytesToHex(bytes: Uint8Array): string {
     out += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
   }
   return out;
+}
+
+function bundleFingerprint(manifest: BundleManifest): string {
+  return bytesToHex(sha256(utf8Encode(JSON.stringify(manifest))));
+}
+
+function bundleDirectory(context: common.Context, manifest: BundleManifest, fingerprint: string): string {
+  return `${context.cacheDir}/webshell/${manifest.buildId}-${fingerprint}`;
+}
+
+function pairedBundlePath(context: common.Context, hostId: string): string {
+  if (!/^[a-f0-9]{32}$/.test(hostId)) { throw new Error('Invalid cached bundle host'); }
+  return `${context.cacheDir}/webshell/paired-${hostId}.json`;
 }
 
 type BundleProgress = (received: number, total: number) => void;
@@ -139,7 +158,10 @@ export class WebBundleFetcher {
   }
 
   async fetchManifest(): Promise<BundleManifest> {
-    let parsed: Object | null = await this.requestJson(MANIFEST_METHOD, null);
+    return WebBundleFetcher.readManifest(await this.requestJson(MANIFEST_METHOD, null));
+  }
+
+  private static readManifest(parsed: Object | null): BundleManifest {
     if (parsed === null || typeof parsed !== 'object') {
       throw new Error('manifest reply is not an object');
     }
@@ -287,7 +309,7 @@ export class WebBundleFetcher {
     finally { fs.closeSync(file); }
   }
 
-  private isComplete(manifest: BundleManifest, baseDir: string, fingerprint: string): boolean {
+  private static isComplete(manifest: BundleManifest, baseDir: string, fingerprint: string): boolean {
     let marker = `${baseDir}/.complete`;
     try {
       if (fs.readTextSync(marker) === fingerprint) {
@@ -304,11 +326,47 @@ export class WebBundleFetcher {
     return false;
   }
 
+  static readPairedBundle(context: common.Context, hostId: string, pairedAt: number): CachedWebBundle | null {
+    try {
+      let path = pairedBundlePath(context, hostId);
+      if (fs.statSync(path).size > MAX_CACHE_METADATA_BYTES) { return null; }
+      let metadata = JSON.parse(fs.readTextSync(path)) as Record<string, Object>;
+      if (metadata['pairedAt'] !== pairedAt) { return null; }
+      let manifest = WebBundleFetcher.readManifest(metadata);
+      let fingerprint = bundleFingerprint(manifest);
+      let directory = bundleDirectory(context, manifest, fingerprint);
+      return WebBundleFetcher.isComplete(manifest, directory, fingerprint)
+        ? { manifest: manifest, directory: directory } : null;
+    } catch (e) { return null; }
+  }
+
+  static rememberPairedBundle(context: common.Context, hostId: string, pairedAt: number, manifest: BundleManifest): void {
+    let path = pairedBundlePath(context, hostId);
+    let temp = `${path}.tmp`;
+    let content = utf8Encode(JSON.stringify({ pairedAt: pairedAt, manifest: manifest,
+      chunkBytes: manifest.chunkBytes, rangeBytes: manifest.rangeBytes }));
+    if (content.length > MAX_CACHE_METADATA_BYTES) { return; }
+    try {
+      let file = fs.openSync(temp, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+      try {
+        if (fs.writeSync(file.fd, content.buffer) !== content.byteLength) { return; }
+        fs.fsyncSync(file.fd);
+      } finally { fs.closeSync(file); }
+      fs.renameSync(temp, path);
+    } finally {
+      try { fs.unlinkSync(temp); } catch (e) {}
+    }
+  }
+
+  static forgetPairedBundle(context: common.Context, hostId: string): void {
+    try { fs.unlinkSync(pairedBundlePath(context, hostId)); } catch (e) {}
+  }
+
   async ensureBundle(manifest: BundleManifest, onProgress?: BundleProgress): Promise<string> {
     validateManifest(manifest);
-    let fingerprint = bytesToHex(sha256(utf8Encode(JSON.stringify(manifest))));
-    let baseDir = `${this.context.cacheDir}/webshell/${manifest.buildId}-${fingerprint}`;
-    if (this.isComplete(manifest, baseDir, fingerprint)) { return baseDir; }
+    let fingerprint = bundleFingerprint(manifest);
+    let baseDir = bundleDirectory(this.context, manifest, fingerprint);
+    if (WebBundleFetcher.isComplete(manifest, baseDir, fingerprint)) { return baseDir; }
     let pending = bundleInstalls.get(baseDir);
     if (pending) {
       try { return await pending.join(onProgress); }

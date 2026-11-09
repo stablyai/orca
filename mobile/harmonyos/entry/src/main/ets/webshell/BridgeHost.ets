@@ -86,7 +86,7 @@ const SERVER_STREAM_RELEASE: Map<string, string> = new Map([
 interface BridgeConnectionSnapshot {
   state: string;
   reconnectAttempt: number;
-  lastConnectedAt: number;
+  lastConnectedAt: number | null;
   lastInboundAt: number | null;
   generation: number;
   activePath: string;
@@ -241,7 +241,7 @@ export class BridgeHost {
   hasTerminalRail(): boolean { return this.routeGrants(this.entryPathname).includes('terminalKeyRail'); }
 
   private isTerminalRailRoute(path: string): boolean {
-    return !this.overlayNavigation && this.routeMatches('/h/[hostId]/session/[worktreeId]', path);
+    return !this.overlayNavigation && BridgeHost.routeMatches('/h/[hostId]/session/[worktreeId]', path);
   }
 
   private reportRailClaim(): void {
@@ -323,7 +323,7 @@ export class BridgeHost {
   }
   private logSink: ((line: string) => void) | null = null;
 
-  constructor(client: SpikeRpcClient, controller: webview.WebviewController,
+  constructor(client: SpikeRpcClient | null, controller: webview.WebviewController,
     manifest: BundleManifest, meta: HostMeta, routePathname: string, path: string = 'lan') {
     this.client = client;
     this.controller = controller;
@@ -333,10 +333,10 @@ export class BridgeHost {
     this.entryPathname = routePathname;
     this.sessionId = `sess-${meta.id}-${Date.now()}-${this.wirePrefix}`;
     this.connection = {
-      state: 'connected', reconnectAttempt: 0, lastConnectedAt: Date.now(),
-      lastInboundAt: null, generation: 1, activePath: path
+      state: client ? 'connected' : 'reconnecting', reconnectAttempt: 0, lastConnectedAt: client ? Date.now() : null,
+      lastInboundAt: null, generation: client ? 1 : 0, activePath: path
     };
-    this.bindBinary(client);
+    if (client) { this.bindBinary(client); }
   }
 
   private bindBinary(client: SpikeRpcClient): void {
@@ -428,7 +428,7 @@ export class BridgeHost {
   }
 
   /** Upstream matchesRoutePattern: [dyn] segments match any non-empty path segment. */
-  private routeMatches(pattern: string, pathname: string): boolean {
+  static routeMatches(pattern: string, pathname: string): boolean {
     let pat = pattern.split('/');
     let act = pathname.split('/');
     if (pat.length !== act.length) {
@@ -450,7 +450,7 @@ export class BridgeHost {
   private ownsHostArea(pathname: string = this.routePathname): boolean {
     for (let i = 0; i < this.manifest.routes.length; i++) {
       let route: BundleRoute = this.manifest.routes[i];
-      if (route.canOwnHostArea && this.routeMatches(route.pathname, pathname)) {
+      if (route.canOwnHostArea && BridgeHost.routeMatches(route.pathname, pathname)) {
         return true;
       }
     }
@@ -481,7 +481,7 @@ export class BridgeHost {
     let hostArea = this.ownsHostArea(pathname);
     for (let i = 0; i < this.manifest.routes.length; i++) {
       let route: BundleRoute = this.manifest.routes[i];
-      let include = hostArea || this.routeMatches(route.pathname, pathname);
+      let include = hostArea || BridgeHost.routeMatches(route.pathname, pathname);
       if (!include) {
         continue;
       }
@@ -692,7 +692,7 @@ export class BridgeHost {
       return;
     }
     if (this.overlayNavigation && pathname !== this.routePathname) {
-      if (navigate && this.manifest.routes.some((route: BundleRoute): boolean => this.routeMatches(route.pathname, pathname))) {
+      if (navigate && this.manifest.routes.some((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname))) {
         this.overlayNavigated = true;
         this.overlayNavigation(pathname, params);
       }
@@ -736,7 +736,7 @@ export class BridgeHost {
         if (!/[\\/ ]/.test(decoded)) { continue; }
         // Workspace IDs carry an absolute path, but the encoded segment stays opaque to routing.
         let opaque = this.manifest.routes.some((route: BundleRoute): boolean =>
-          route.pathname.split('/')[i] === '[worktreeId]' && this.routeMatches(route.pathname, pathname));
+          route.pathname.split('/')[i] === '[worktreeId]' && BridgeHost.routeMatches(route.pathname, pathname));
         if (!opaque) { return false; }
       }
       return true;
@@ -1238,8 +1238,8 @@ export class BridgeHost {
     let pageRoutes: string[] = [];
     for (let i = 0; i < this.manifest.routes.length; i++) {
       let pattern = this.manifest.routes[i].pathname;
-      if (this.desktopListBack && this.routeMatches(pattern, `/h/${this.meta.id}`)) { continue; }
-      if (!this.overlayNavigation || this.routeMatches(pattern, this.routePathname)) { pageRoutes.push(pattern); }
+      if (this.desktopListBack && BridgeHost.routeMatches(pattern, `/h/${this.meta.id}`)) { continue; }
+      if (!this.overlayNavigation || BridgeHost.routeMatches(pattern, this.routePathname)) { pageRoutes.push(pattern); }
     }
     let rpcGrants: BridgeRpcGrants = {
       maxPendingRequests: MAX_PENDING_REQUESTS,

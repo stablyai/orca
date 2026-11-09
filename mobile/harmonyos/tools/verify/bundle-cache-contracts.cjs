@@ -18,7 +18,10 @@ const fileIo = {
   readTextSync: (name) => fs.readFileSync(name, 'utf8'),
   openSync: (name, mode) => ({ fd: fs.openSync(name, mode) }),
   writeSync: (fd, data) => fs.writeSync(fd, typeof data === 'string' ? data : Buffer.from(data)),
-  closeSync: (file) => fs.closeSync(file.fd)
+  closeSync: (file) => fs.closeSync(file.fd),
+  fsyncSync: fs.fsyncSync,
+  renameSync: fs.renameSync,
+  unlinkSync: fs.unlinkSync
 }
 class RpcSuccess {
   constructor(id, result) {
@@ -53,8 +56,11 @@ function fetcher(root, content) {
     base64Decode: (value) => new Uint8Array(Buffer.from(value, 'base64'))
   })
   const client = {
-    buildWire: (_id, _method, params) => params,
-    requestRaw: async (id, params) => {
+    buildWire: (_id, method, params) => ({ method, params }),
+    requestRaw: async (id, { method, params }) => {
+      if (method === 'mobileWeb.bundle.manifest') {
+        return new RpcSuccess(id, JSON.stringify({ manifest: manifest(content) }))
+      }
       const request = JSON.parse(params)
       return new RpcSuccess(
         id,
@@ -81,4 +87,32 @@ test('a completion marker does not hide an evicted bundle asset', async (t) => {
   fs.unlinkSync(path.join(directory, 'index.html'))
   const restored = await loader.ensureBundle(manifest('complete bundle'))
   assert.equal(fs.readFileSync(path.join(restored, 'index.html'), 'utf8'), 'complete bundle')
+})
+
+test('cold offline startup can reopen only the verified bundle for this pairing', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-bundle-cache-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const context = { cacheDir: root }
+  const hostA = 'a'.repeat(32)
+  const hostB = 'b'.repeat(32)
+  const online = fetcher(root, 'desktop A offline bundle')
+  const installed = await online.fetchManifest()
+  const directory = await online.ensureBundle(installed)
+  online.constructor.rememberPairedBundle(context, hostA, 100, installed)
+
+  const offline = fetcher(root, 'unrelated response').constructor
+  const restored = offline.readPairedBundle(context, hostA, 100)
+  assert.equal(restored.directory, directory)
+  assert.equal(
+    fs.readFileSync(path.join(restored.directory, 'index.html'), 'utf8'),
+    'desktop A offline bundle'
+  )
+  assert.equal(offline.readPairedBundle(context, hostB, 100), null)
+  assert.equal(offline.readPairedBundle(context, hostA, 200), null)
+  fs.unlinkSync(path.join(directory, 'index.html'))
+  assert.equal(offline.readPairedBundle(context, hostA, 100), null)
+
+  await online.ensureBundle(installed)
+  offline.forgetPairedBundle(context, hostA)
+  assert.equal(offline.readPairedBundle(context, hostA, 100), null)
 })

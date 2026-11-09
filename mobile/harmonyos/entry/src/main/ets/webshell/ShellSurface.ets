@@ -8,7 +8,7 @@ import { appendLog as recordConnection, LOG_LEVEL_INFO, LOG_LEVEL_ERROR } from '
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { SpikeRpcClient } from '../transport/SpikeRpcClient';
-import { WebBundleFetcher } from '../transport/WebBundleFetcher';
+import { BundleManifest, WebBundleFetcher } from '../transport/WebBundleFetcher';
 import { ShellStartup } from './ShellStartup';
 import { ShellDocument, ShellDocumentMount } from './ShellDocument';
 import { claimHomeDocument } from './HomeShellPrewarm';
@@ -90,6 +90,9 @@ export struct ShellSurface {
   private pendingDrawerRoute: ShellRoute | null = null;
   private pendingSession: ShellRoute | null = null;
   private opensSessionNatively: boolean = false;
+  private triedCachedBundle: boolean = false;
+  private cacheOnly: boolean = false;
+  private cacheRefreshClient: SpikeRpcClient | null = null;
   private foregroundListener: () => void = (): void => {
     this.foreground = true; this.publishKeyboardInset(); this.publishPageRegions(); this.updateViewing();
     this.flushDrawerRoute();
@@ -157,7 +160,8 @@ export struct ShellSurface {
 
   private openPendingNativeSession(): void {
     let target = this.pendingSession;
-    if (!target || !this.opensSessionNatively || !this.painted || !this.pageVisible || !this.foreground || this.disposed) { return; }
+    if (!target || !this.opensSessionNatively || !this.painted || !this.client
+      || !this.pageVisible || !this.foreground || this.disposed) { return; }
     this.pendingSession = null;
     this.onNativeSession(target);
   }
@@ -224,6 +228,7 @@ export struct ShellSurface {
   }
 
   private releaseBridge(): void {
+    this.cacheOnly = false; this.cacheRefreshClient = null;
     this.downloadPercent = -1; this.downloadCaption = '';
     this.railClaim = null; this.railKeys = []; this.sideRail = null; this.directionPadAvailable = false;
     if (this.bridge) {
@@ -239,6 +244,11 @@ export struct ShellSurface {
     this.client = null;
   }
   private suspendTransport(attempt: number): void {
+    if (this.cacheOnly && this.bridge) {
+      this.cacheRefreshClient = null;
+      this.bridge.suspendTransport(attempt);
+      return;
+    }
     this.startup.cancel(); this.generation++;
     if (!this.painted || !this.bridge) { this.releaseBridge(); return; }
     this.client = null;
@@ -259,10 +269,17 @@ export struct ShellSurface {
     }
   }
 
-  private pagePainted(client: SpikeRpcClient, generation: number): void {
-    if (this.disposed || generation !== this.generation || this.client !== client) { return; }
+  private rememberBundle(meta: HostMeta, document: ShellDocument): void {
+    try { WebBundleFetcher.rememberPairedBundle(getContext(this), meta.id, meta.lastConnected, document.manifest); }
+    catch (e) {}
+  }
+
+  private pagePainted(meta: HostMeta, document: ShellDocument, generation: number): void {
+    if (this.disposed || generation !== this.generation || this.document !== document) { return; }
     if (this.startup.complete(this.startupGeneration)) {
-      this.painted = true; this.publishPhase('已连接', 'ready'); this.updateViewing();
+      this.painted = true;
+      if (this.client) { this.rememberBundle(meta, document); this.publishPhase('已连接', 'ready'); }
+      this.updateViewing();
       this.publishPageRegions();
       if (this.opensSessionNatively) { this.openPendingNativeSession(); }
       else { this.pendingSession = null; }
@@ -286,13 +303,16 @@ export struct ShellSurface {
       if (this.disposed || this.desktop !== desktop) { return; }
       if (phase === 'connected') {
         let client = desktop.connection.getClient();
-        let meta = desktop.connection.getMeta();
+        let meta = desktop.connection.getPairedMeta();
         if (client && meta && client !== this.client) { this.loadConnected(client, meta).catch(() => {}); }
       } else if (phase === 'reconnecting' || phase === 'connecting') {
         if (this.client || this.bridge) { this.suspendTransport(desktop.connection.getReconnectAttempt()); }
         this.publishPhase(phase === 'connecting' ? '连接桌面…' : `连接中断 · ${detail}`,
           phase === 'connecting' ? 'checking' : 'offline');
+        let meta = desktop.connection.getPairedMeta();
+        if (meta) { this.openCachedBundle(meta); }
       } else if (phase === 'auth-failed') {
+        WebBundleFetcher.forgetPairedBundle(context, this.hostId);
         if (this.asDrawer) { this.failStartup('凭证已失效，请重新配对'); return; }
         this.startup.cancel(); this.generation++; this.releaseBridge();
         this.publishPhase('凭证已失效，请重新配对', 'repair'); this.painted = false;
@@ -310,12 +330,13 @@ export struct ShellSurface {
     let connection = this.desktop?.connection;
     if (!connection) { this.boot(); return; }
     let client = connection.getClient();
-    let meta = connection.getMeta();
+    let meta = connection.getPairedMeta();
     if (client && meta) { this.loadConnected(client, meta).catch(() => {}); }
     else { connection.reconnect(); }
   }
 
   private async loadConnected(client: SpikeRpcClient, meta: HostMeta): Promise<void> {
+    if (this.cacheOnly && this.document) { await this.refreshCachedBundle(client, meta, this.document); return; }
     let path = this.desktop?.connection.getActivePath() ?? 'lan';
     if (this.painted && this.bridge && this.nativeDevice) {
       this.client = client;
@@ -347,68 +368,127 @@ export struct ShellSurface {
       if (this.disposed || generation !== this.generation || this.client !== client) { return; }
       this.startup.progress(startupGeneration);
       this.downloadPercent = -1;
-      let warm = claimHomeDocument(meta.id, baseDir);
-      let document = warm ?? new ShellDocument(manifest, baseDir, false);
-      this.document = document;
-      let storage = new PageStorageStore(getContext(this), meta.id);
-      let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext, client); this.nativeDevice = nativeDevice;
-      let root = desktopPath(meta.id);
-      let shown: ShellRoute = { hostId: meta.id, pathname: this.routePathname, params: this.routeParams };
-      if (!this.pendingSession && this.request.pathname === root && isDesktopSession(shown)) { this.pendingSession = shown; }
-      let target = this.pendingSession;
-      let open = target && manifest.routes.some((route): boolean => route.pathname === '/h/[hostId]' && route.canOwnHostArea)
-        ? sessionOpenParam(target, manifest.pageVersion) : '';
-      this.opensSessionNatively = target !== null && open === '';
-      let params: Record<string, string> = open ? { 'open': open } : target ? {} : shown.params;
-      let bridge = new BridgeHost(client, document.controller, manifest, meta, target ? root : shown.pathname, path);
-      bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale); bridge.setRouteParams(params);
-      if (!this.asDrawer) {
-        bridge.setTerminalRailClaimSink((claim: TerminalRailClaim | null): void => {
-          if (this.bridge === bridge) { this.railClaim = claim; this.publishPageRegions(); }
-        });
-      }
-      if (this.returnsToDesktop) { bridge.setDesktopListBack(); }
-      bridge.setLivenessSink((): void => {
-        if (this.pageVisible && this.foreground && this.bridge === bridge) { this.desktop?.connection.revive(); }
-      });
-      bridge.setLocationSink((pathname: string, params: Record<string, string>): void => this.recordResume(pathname, params));
-      bridge.setNativeNavigation((page: BridgeNativePage, replace: boolean): void => {
-        if (this.disposed || !this.pageVisible || !this.foreground || this.bridge !== bridge) { return; }
-        let url = page === 'edit-host' ? 'pages/HostDetail' : 'pages/ConnectionLog';
-        let params: Record<string, string> = { 'hostId': meta.id };
-        let navigation = replace ? router.replaceUrl({ url: url, params: params }) : router.pushUrl({ url: url, params: params });
-        navigation.catch(() => {});
-      });
-      this.recordResume(this.routePathname, this.routeParams);
-      bridge.setDeviceNotifies((target: string): Promise<void> => nativeDevice.notifyExternalLink(target),
-        (kind: string): Promise<void> => nativeDevice.notifyHaptic(kind), true);
-      bridge.setNativeHandler(nativeDevice.methods, (method: string, params: ESObject): Promise<Object> => nativeDevice.serve(method, params));
-      bridge.setNavigation((home: boolean): void => this.navigateBack(home), (): void => this.pagePainted(client, generation));
-      if (this.asDrawer) {
-        bridge.setOverlayNavigation((pathname: string, params: Record<string, string>): void => {
-          if (this.bridge === bridge) { this.openOverlayRoute(pathname, params); }
-        });
-      }
-      bridge.setFaultSink((_message: string): void => this.failStartup('会话页面发生错误，请重试'));
-      this.bridge = bridge;
-      this.publishKeyboardInset();
-      this.publishPageRegions();
-      document.onReady = (): void => {};
-      document.allowExternal = (): boolean => this.pageVisible && this.foreground && this.document === document;
-      document.onLoaded = (): void => {
-        if (this.document === document && !this.painted) { this.publishPhase('页面已加载，正在初始化…', 'opening'); }
-      };
-      document.onFailure = (message: string): void => { if (this.document === document) { this.failStartup(message); } };
-      this.publishPhase('正在打开会话…', 'opening');
-      document.bind(bridge, this.asDrawer);
-      document.prepare(this.getUIContext());
-      this.documentMount.setDocument(document);
-      document.activate();
-      if (warm) {
-        recordConnection(getContext(this), LOG_LEVEL_INFO, '已复用预热页面', '', meta.id, 'web-shell-flow').catch(() => {});
-      }
+      this.mountBundle(client, meta, manifest, baseDir, generation);
     } catch (e) {
       if (!this.disposed && generation === this.generation) { this.failStartup('会话加载未完成，请重试'); }
+    }
+  }
+
+  private bundleServes(manifest: BundleManifest, pathname: string): boolean {
+    return manifest.routes.some((route): boolean => BridgeHost.routeMatches(route.pathname, pathname));
+  }
+
+  private openCachedBundle(meta: HostMeta): void {
+    if (this.asDrawer || this.bridge || this.triedCachedBundle || this.disposed) { return; }
+    this.triedCachedBundle = true;
+    let cached = WebBundleFetcher.readPairedBundle(getContext(this), meta.id, meta.lastConnected);
+    if (!cached || !this.bundleServes(cached.manifest, this.routePathname)) { return; }
+    let generation = ++this.generation;
+    this.cacheOnly = true;
+    this.startupGeneration = this.startup.begin();
+    try {
+      this.mountBundle(null, meta, cached.manifest, cached.directory, generation);
+      recordConnection(getContext(this), LOG_LEVEL_INFO, '已离线打开缓存页面', '', meta.id, 'web-shell-flow').catch(() => {});
+    } catch (e) { this.failStartup('会话加载未完成，请重试'); }
+  }
+
+  private async refreshCachedBundle(client: SpikeRpcClient, meta: HostMeta, document: ShellDocument): Promise<void> {
+    if (this.cacheRefreshClient === client) { return; }
+    this.cacheRefreshClient = client;
+    let current = (): boolean => !this.disposed && this.document === document && this.cacheOnly
+      && this.cacheRefreshClient === client && this.desktop?.connection.getClient() === client;
+    try {
+      let fetcher = new WebBundleFetcher(client, getContext(this));
+      let manifest = await fetcher.fetchManifest();
+      if (!current() || !this.bundleServes(manifest, this.request.pathname)) { return; }
+      let baseDir = await fetcher.ensureBundle(manifest);
+      if (!current()) { return; }
+      if (baseDir === document.baseDir && this.bridge && this.nativeDevice) {
+        this.cacheOnly = false; this.client = client;
+        this.nativeDevice.setDesktopClient(client);
+        this.bridge.attachTransport(client, this.desktop?.connection.getActivePath() ?? 'lan');
+        if (this.painted) {
+          this.rememberBundle(meta, document); this.publishPhase('已连接', 'ready'); this.openPendingNativeSession();
+        }
+        return;
+      }
+      let generation = ++this.generation;
+      this.releaseBridge();
+      this.painted = false; this.client = client;
+      this.startupGeneration = this.startup.begin();
+      this.mountBundle(client, meta, manifest, baseDir, generation);
+    } catch (e) {
+      if (!this.cacheOnly && !this.disposed && this.client === client) { this.failStartup('会话加载未完成，请重试'); }
+    } finally {
+      if (this.cacheRefreshClient === client) { this.cacheRefreshClient = null; }
+    }
+  }
+
+  private mountBundle(client: SpikeRpcClient | null, meta: HostMeta, manifest: BundleManifest, baseDir: string,
+    generation: number): void {
+      let path = this.desktop?.connection.getActivePath() ?? 'lan';
+    let warm = claimHomeDocument(meta.id, baseDir);
+    let document = warm ?? new ShellDocument(manifest, baseDir, false);
+    this.document = document;
+    let storage = new PageStorageStore(getContext(this), meta.id);
+    let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext, client); this.nativeDevice = nativeDevice;
+    let root = desktopPath(meta.id);
+    let shown: ShellRoute = { hostId: meta.id, pathname: this.routePathname, params: this.routeParams };
+    if (!this.pendingSession && this.request.pathname === root && isDesktopSession(shown)) { this.pendingSession = shown; }
+    let target = this.pendingSession;
+    let open = target && manifest.routes.some((route): boolean => route.pathname === '/h/[hostId]' && route.canOwnHostArea)
+      ? sessionOpenParam(target, manifest.pageVersion) : '';
+    this.opensSessionNatively = target !== null && open === '';
+    let params: Record<string, string> = open ? { 'open': open } : target ? {} : shown.params;
+    let bridge = new BridgeHost(client, document.controller, manifest, meta, target ? root : shown.pathname, path);
+    bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale); bridge.setRouteParams(params);
+    if (!this.asDrawer) {
+      bridge.setTerminalRailClaimSink((claim: TerminalRailClaim | null): void => {
+        if (this.bridge === bridge) { this.railClaim = claim; this.publishPageRegions(); }
+      });
+    }
+    if (this.returnsToDesktop) { bridge.setDesktopListBack(); }
+    bridge.setLivenessSink((): void => {
+      if (!this.pageVisible || !this.foreground || this.bridge !== bridge) { return; }
+      let connected = this.desktop?.connection.getClient();
+      if (this.cacheOnly && connected) { this.refreshCachedBundle(connected, meta, document).catch(() => {}); }
+      else { this.desktop?.connection.revive(); }
+    });
+    bridge.setLocationSink((pathname: string, params: Record<string, string>): void => this.recordResume(pathname, params));
+    bridge.setNativeNavigation((page: BridgeNativePage, replace: boolean): void => {
+      if (this.disposed || !this.pageVisible || !this.foreground || this.bridge !== bridge) { return; }
+      let url = page === 'edit-host' ? 'pages/HostDetail' : 'pages/ConnectionLog';
+      let params: Record<string, string> = { 'hostId': meta.id };
+      let navigation = replace ? router.replaceUrl({ url: url, params: params }) : router.pushUrl({ url: url, params: params });
+      navigation.catch(() => {});
+    });
+    this.recordResume(this.routePathname, this.routeParams);
+    bridge.setDeviceNotifies((target: string): Promise<void> => nativeDevice.notifyExternalLink(target),
+      (kind: string): Promise<void> => nativeDevice.notifyHaptic(kind), true);
+    bridge.setNativeHandler(nativeDevice.methods, (method: string, params: ESObject): Promise<Object> => nativeDevice.serve(method, params));
+    bridge.setNavigation((home: boolean): void => this.navigateBack(home), (): void => this.pagePainted(meta, document, generation));
+    if (this.asDrawer) {
+      bridge.setOverlayNavigation((pathname: string, params: Record<string, string>): void => {
+        if (this.bridge === bridge) { this.openOverlayRoute(pathname, params); }
+      });
+    }
+    bridge.setFaultSink((_message: string): void => this.failStartup('会话页面发生错误，请重试'));
+    this.bridge = bridge;
+    this.publishKeyboardInset();
+    this.publishPageRegions();
+    document.onReady = (): void => {};
+    document.allowExternal = (): boolean => this.pageVisible && this.foreground && this.document === document;
+    document.onLoaded = (): void => {
+      if (this.document === document && !this.painted) { this.publishPhase('页面已加载，正在初始化…', 'opening'); }
+    };
+    document.onFailure = (message: string): void => { if (this.document === document) { this.failStartup(message); } };
+    this.publishPhase('正在打开会话…', 'opening');
+    document.bind(bridge, this.asDrawer);
+    document.prepare(this.getUIContext());
+    this.documentMount.setDocument(document);
+    document.activate();
+    if (warm) {
+      recordConnection(getContext(this), LOG_LEVEL_INFO, '已复用预热页面', '', meta.id, 'web-shell-flow').catch(() => {});
     }
   }
 
