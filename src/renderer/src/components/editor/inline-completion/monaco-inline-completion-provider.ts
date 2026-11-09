@@ -37,6 +37,22 @@ function pausedWithoutCancel(token: CancellationToken): Promise<boolean> {
   })
 }
 
+/** Whether the editor showing this model moved its cursor off the requested position. */
+function cursorMovedAway(
+  monaco: MonacoApi,
+  model: editor.ITextModel,
+  requested: { lineNumber: number; column: number }
+): boolean {
+  return monaco.editor.getEditors().some((candidate) => {
+    const current = candidate.getModel() === model ? candidate.getPosition() : null
+    return (
+      candidate.hasTextFocus() &&
+      current !== null &&
+      (current.lineNumber !== requested.lineNumber || current.column !== requested.column)
+    )
+  })
+}
+
 function ensureInlineCompletionProvider(monaco: MonacoApi): void {
   // Re-register when Monaco is recreated; the old provider belongs to the previous instance.
   if (provider && providerMonaco === monaco) {
@@ -55,6 +71,7 @@ function ensureInlineCompletionProvider(monaco: MonacoApi): void {
       if (!(await pausedWithoutCancel(token))) {
         return { items: [] }
       }
+      const requestedVersion = model.getVersionId()
       const offset = model.getOffsetAt(position)
       const prefixStart = model.getPositionAt(
         Math.max(0, offset - INLINE_COMPLETION_PREFIX_MAX_CHARS)
@@ -79,8 +96,13 @@ function ensureInlineCompletionProvider(monaco: MonacoApi): void {
             endColumn: suffixEnd.column
           })
         })
-        // Why: a slow answer for a cursor that already moved would flash stale ghost text.
-        if (!suggestion || token.isCancellationRequested) {
+        // Why: a slow answer for a cursor or text that already moved would flash stale ghost text.
+        if (
+          !suggestion ||
+          token.isCancellationRequested ||
+          model.getVersionId() !== requestedVersion ||
+          cursorMovedAway(monaco, model, position)
+        ) {
           return { items: [] }
         }
         return {

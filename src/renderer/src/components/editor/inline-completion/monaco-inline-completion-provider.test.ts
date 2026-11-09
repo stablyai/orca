@@ -12,10 +12,17 @@ type MonacoApi = Parameters<OnMount>[1]
 const TEXT = 'const x = ;'
 const CURSOR_COLUMN = 11
 
+// Mutable fake editor state that tests change while a request is in flight.
+const world: { version: number; cursor: { lineNumber: number; column: number } | null } = {
+  version: 1,
+  cursor: null
+}
+
 function fakeModel(): editor.ITextModel {
   const clamp = (offset: number): number => Math.min(Math.max(offset, 0), TEXT.length)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The provider reads only these offset and range methods.
   return {
+    getVersionId: () => world.version,
     getOffsetAt: (position: Position) => position.column - 1,
     getPositionAt: (offset: number) => ({ lineNumber: 1, column: clamp(offset) + 1 }),
     getValueInRange: (range: { startColumn: number; endColumn: number }) =>
@@ -47,7 +54,14 @@ function fakeToken(): { token: CancellationToken; cancel: () => void } {
 
 function mountProvider() {
   let provider: languages.InlineCompletionsProvider | undefined
+  const model = fakeModel()
   const api = {
+    editor: {
+      getEditors: () =>
+        world.cursor
+          ? [{ getModel: () => model, hasTextFocus: () => true, getPosition: () => world.cursor }]
+          : []
+    },
     languages: {
       registerInlineCompletionsProvider: vi.fn(
         (_selector: string, next: languages.InlineCompletionsProvider) => {
@@ -57,7 +71,6 @@ function mountProvider() {
       )
     }
   }
-  const model = fakeModel()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Setup uses only this languages API.
   setupInlineCompletion(api as unknown as MonacoApi, model, {
     workspaceId: 'wt1',
@@ -82,6 +95,8 @@ describe('inline completion provider', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     wanted.value = true
+    world.version = 1
+    world.cursor = null
     run.mockReset().mockResolvedValue({ suggestion: '42' })
     Object.assign(window, { api: { plugins: { editorInlineCompletion: run } } })
   })
@@ -137,6 +152,37 @@ describe('inline completion provider', () => {
     await vi.advanceTimersByTimeAsync(300)
 
     expect((await pending)?.items).toEqual([])
+  })
+
+  it('drops an answer when the text changed while the plugin was thinking', async () => {
+    run.mockImplementation(async () => {
+      world.version += 1
+      return { suggestion: '42' }
+    })
+    const pending = mountProvider()(fakeToken().token)
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect((await pending)?.items).toEqual([])
+  })
+
+  it('drops an answer when the focused editor moved its cursor meanwhile', async () => {
+    world.cursor = { lineNumber: 1, column: CURSOR_COLUMN }
+    run.mockImplementation(async () => {
+      world.cursor = { lineNumber: 1, column: 3 }
+      return { suggestion: '42' }
+    })
+    const pending = mountProvider()(fakeToken().token)
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect((await pending)?.items).toEqual([])
+  })
+
+  it('keeps an answer when the focused editor stayed on the requested position', async () => {
+    world.cursor = { lineNumber: 1, column: CURSOR_COLUMN }
+    const pending = mountProvider()(fakeToken().token)
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect((await pending)?.items).toHaveLength(1)
   })
 
   it('offers nothing when the plugin answers empty or fails', async () => {

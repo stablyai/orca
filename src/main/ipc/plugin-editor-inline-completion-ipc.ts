@@ -16,8 +16,13 @@ export function registerPluginEditorInlineCompletionHandler(): void {
       if (!parsed.success) {
         return { suggestion: '' }
       }
-      const decided = await runPluginHook('editor.inlineCompletion', schema, parsed.data)
-      return { suggestion: decided.suggestion }
+      try {
+        const decided = await runPluginHook('editor.inlineCompletion', schema, parsed.data)
+        return { suggestion: decided.suggestion }
+      } catch {
+        // Why: a failing plugin chain must not reject the invoke on every typing pause.
+        return { suggestion: '' }
+      }
     }
   )
 }
