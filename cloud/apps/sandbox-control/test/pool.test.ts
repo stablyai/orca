@@ -75,6 +75,39 @@ describe('warm pool', () => {
     expect(h.vercel.boxes.get(`orca-test-${res.body.sandbox.id}`)!.params.tags.orcaPool).toBeUndefined()
   })
 
+  it('a failed adopt whose cleanup stops short still gives the caller a fresh VM (no sandbox_destroying conflict)', async () => {
+    const { h, deps, poolRows } = await pooledHarness('1')
+    await maintainPool(deps())
+    const pooledId = poolRows()[0]!.id as string
+    const pooledName = `orca-test-${pooledId}`
+    const realPolicy = h.vercel.updateNetworkPolicy.bind(h.vercel)
+    h.vercel.updateNetworkPolicy = async (sessionId, policy) => {
+      if (sessionId === h.vercel.boxes.get(pooledName)?.sessionId) {
+        throw new Error('policy update failed')
+      }
+      return realPolicy(sessionId, policy)
+    }
+    // The pooled VM's delete leaves a snapshot that will not delete yet: destroy stops at 'destroying'.
+    const realDeleteSnapshot = h.vercel.deleteSnapshot.bind(h.vercel)
+    h.vercel.deleteSnapshot = async (id) => {
+      if (h.vercel.snapshots.get(id)?.sandboxName === pooledName) {
+        throw new Error('snapshot still being written')
+      }
+      return realDeleteSnapshot(id)
+    }
+    const res = await h.call('POST', '/v1/sandboxes', { body: create })
+    expect(res.status).toBe(200)
+    expect(res.body.sandbox.id).not.toBe(pooledId)
+    const abandoned = h.raw.prepare('SELECT status, workspace_id FROM sandboxes WHERE id = ?').get(pooledId) as { status: string; workspace_id: string }
+    expect(abandoned.status).not.toBe('destroyed')
+    expect(abandoned.workspace_id).toBe(`ws-1#abandoned:${pooledId}`)
+    // The cron finishes the abandoned row once the provider lets go.
+    h.vercel.deleteSnapshot = realDeleteSnapshot
+    h.advance(30 * MIN)
+    await h.reconcile()
+    expect((h.raw.prepare('SELECT status FROM sandboxes WHERE id = ?').get(pooledId) as { status: string }).status).toBe('destroyed')
+  })
+
   it('skips the pool for sizes and regions it does not hold', async () => {
     const { h, deps, poolRows } = await pooledHarness('1')
     await maintainPool(deps())
