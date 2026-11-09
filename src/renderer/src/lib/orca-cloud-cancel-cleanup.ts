@@ -12,7 +12,11 @@ import {
 type CleanupStep = Promise<boolean>
 
 /** Which runtime records belong to the canceled create. */
-export type OrcaCloudCancelScope = { runtimeId?: string; createStartedAt: number }
+export type OrcaCloudCancelScope = {
+  runtimeId?: string
+  createStartedAt: number
+  canceledAt: number
+}
 
 type Cleanup = {
   pending: number
@@ -115,37 +119,56 @@ function finish(creationId: string, cleanup: Cleanup, timedOut: boolean): void {
 
 const SETTLED_STATUSES = new Set(['cleaned', 'failed'])
 
-/** This create's Orca Cloud runtimes that are not yet deleted. */
-async function liveRuntimeIds(scope: OrcaCloudCancelScope, timedOut: boolean): Promise<string[]> {
-  const runtimes = await window.api.ephemeralVm.listRuntimes().catch(() => [])
+/** This create's Orca Cloud runtimes that may still be up; null when the records can't be read.
+ *  `failedOnly` limits it to sandboxes whose delete failed, the only ones safe to delete again. */
+async function leftoverRuntimeIds(
+  scope: OrcaCloudCancelScope,
+  { timedOut, failedOnly }: { timedOut: boolean; failedOnly: boolean }
+): Promise<string[] | null> {
+  const runtimes = await window.api.ephemeralVm.listRuntimes().catch(() => null)
+  if (!runtimes) {
+    return null
+  }
   return runtimes
     .filter(
       (runtime) =>
         runtime.recipe?.provider === 'orca-cloud' &&
         (scope.runtimeId
           ? runtime.id === scope.runtimeId
-          : runtime.createdAt >= scope.createStartedAt) &&
-        (runtime.status === 'cleanup_failed' || (timedOut && !SETTLED_STATUSES.has(runtime.status)))
+          : // Without an id, only sandboxes created by this attempt, never a later create's.
+            runtime.createdAt >= scope.createStartedAt && runtime.createdAt <= scope.canceledAt) &&
+        (runtime.status === 'cleanup_failed' ||
+          (!failedOnly && timedOut && !SETTLED_STATUSES.has(runtime.status)))
     )
     .map((runtime) => runtime.id)
 }
 
 // The create's own cleanups only log failures, so confirm against this create's runtime records.
 async function cleanupLeftSandboxRunning(cleanup: Cleanup, timedOut: boolean): Promise<boolean> {
-  return cleanup.failed || (await liveRuntimeIds(cleanup.scope, timedOut)).length > 0
+  if (cleanup.failed) {
+    return true
+  }
+  const ids = await leftoverRuntimeIds(cleanup.scope, { timedOut, failedOnly: false })
+  return ids === null || ids.length > 0
 }
 
-/** "Try again": delete every sandbox of this create that is still around, with the same feedback. */
+/** "Try again": delete again every sandbox of this create whose delete failed, with the same feedback. */
 function retryCleanup(creationId: string, scope: OrcaCloudCancelScope): void {
-  const steps = liveRuntimeIds(scope, true).then((ids) =>
-    Promise.all(
-      ids.map((runtimeId) =>
-        window.api.ephemeralVm
-          .cleanup({ runtimeId })
-          .then((runtime) => runtime.cleanupStatus !== 'failed')
-          .catch(() => false)
-      )
-    ).then((results) => results.every(Boolean))
+  // A second click while the retry runs must not send the deletes twice.
+  if (cleanups.has(creationId)) {
+    return
+  }
+  const step = leftoverRuntimeIds(scope, { timedOut: false, failedOnly: true }).then((ids) =>
+    ids === null
+      ? false
+      : Promise.all(
+          ids.map((runtimeId) =>
+            window.api.ephemeralVm
+              .cleanup({ runtimeId })
+              .then((runtime) => runtime.cleanupStatus !== 'failed')
+              .catch(() => false)
+          )
+        ).then((results) => results.every(Boolean))
   )
-  beginOrcaCloudCancelCleanup(creationId, [steps], scope)
+  beginOrcaCloudCancelCleanup(creationId, [step], scope)
 }

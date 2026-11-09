@@ -135,7 +135,8 @@ export function createRemovePendingWorktreeCreation(
     if (removedEntry.status === 'creating' && isOrcaCloudCreateRequest(removedEntry.request)) {
       beginOrcaCloudCancelCleanup(creationId, cleanup ? [cleanup] : [], {
         runtimeId: removedEntry.request.ephemeralVmRuntimeId,
-        createStartedAt: removedEntry.startedAt
+        createStartedAt: removedEntry.startedAt,
+        canceledAt: Date.now()
       })
     }
   }
