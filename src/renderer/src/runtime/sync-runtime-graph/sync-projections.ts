@@ -200,8 +200,8 @@ function buildBrowserPagesProjection(
                 loading: page.loading,
                 canGoBack: page.canGoBack,
                 canGoForward: page.canGoForward,
-                // The published value, so an icon change the snapshot drops does not resync.
-                faviconUrl: remoteTabFaviconUrl(page.faviconUrl)
+                // An icon arriving resyncs; later swaps (animated icons) ride the next sync.
+                hasRemoteFavicon: remoteTabFaviconUrl(page.faviconUrl) !== null
               }))
             )
           }

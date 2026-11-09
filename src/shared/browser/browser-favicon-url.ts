@@ -32,6 +32,8 @@ export function pickDisplayableFaviconUrl(favicons: readonly string[] | undefine
 
 // Session-tab rows resend whole on every change, so a page's inline data: icon must not grow them.
 const MAX_REMOTE_TAB_FAVICON_URL_LENGTH = 2048
+// URL serializes [::ffff:127.0.0.1] as [::ffff:7f00:1].
+const IPV4_MAPPED_LOOPBACK = /^\[::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}\]$/i
 
 /** The favicon a host publishes for a remote client, which loads it from its own network. */
 export function remoteTabFaviconUrl(faviconUrl: string | null | undefined): string | null {
@@ -44,7 +46,9 @@ export function remoteTabFaviconUrl(faviconUrl: string | null | undefined): stri
   }
   // The host's loopback names a different machine on the client.
   const hostname = new URL(displayable).hostname
-  return isWildcardBindHost(hostname) || isEligibleLocalCertificateHost(hostname)
+  return isWildcardBindHost(hostname) ||
+    isEligibleLocalCertificateHost(hostname) ||
+    IPV4_MAPPED_LOOPBACK.test(hostname)
     ? null
     : displayable
 }
