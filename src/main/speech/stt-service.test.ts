@@ -1,6 +1,9 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { ModelManager } from './model-manager'
 import type { SpeechModelState } from '../../shared/speech-types'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.hoisted(() => {
   class HoistedMockWorker extends EventTarget {
@@ -104,9 +107,16 @@ const stoppedReply = (worker: InstanceType<typeof MockWorker>) => ({
   streamId: worker.messages.findLast((message) => message.type === 'stop')?.streamId
 })
 
-const testModels = (models: Pick<ModelManager, 'getModelState' | 'getModelDir'>): ModelManager =>
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService reads getModelState and getModelDir, and fetches the VAD with downloadModel.
-  ({ ...models, downloadModel: vi.fn().mockResolvedValue(undefined) }) as never
+const testModels = (
+  models: Pick<ModelManager, 'getModelState' | 'getModelDir'>,
+  onModelStateChange: ModelManager['setProgressCallback'] = () => () => {}
+): ModelManager =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService reads getModelState and getModelDir, fetches the VAD with downloadModel and watches it land.
+  ({
+    ...models,
+    downloadModel: vi.fn().mockResolvedValue(undefined),
+    setProgressCallback: onModelStateChange
+  }) as never
 
 const readyModels = (): ModelManager =>
   testModels({
@@ -122,6 +132,7 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 vi.mock('./model-catalog', () => ({
+  isLocalSpeechModel: (manifest: { provider: string }) => manifest.provider === 'local',
   getCatalogModel: (id: string) =>
     id === 'openai-model'
       ? {
@@ -172,6 +183,31 @@ const DEFAULT_IDLE_UNLOAD_MS = 15 * 60 * 1000
 describe('SttService', () => {
   beforeEach(() => {
     resetWorkers()
+  })
+
+  it('reloads a recognizer loaded before the VAD landed once the dictation using it ends', async () => {
+    const modelsDir = mkdtempSync(join(tmpdir(), 'stt-vad-'))
+    onTestFinished(() => rmSync(modelsDir, { recursive: true, force: true }))
+    const watchModels = vi.fn<ModelManager['setProgressCallback']>(() => () => {})
+    const models = testModels(
+      { getModelState: readyModels().getModelState, getModelDir: (id) => join(modelsDir, id) },
+      watchModels
+    )
+    const service = new SttService(models, spawnMockWorker)
+    await service.startDictation('model-a', vi.fn<SttEventSink>(), undefined, 'desktop')
+    const initOf = (worker = getLastWorker()) => worker?.messages.find((m) => m.type === 'init')
+    expect(initOf()).toMatchObject({ vadModelPath: undefined })
+
+    const vadPath = join(modelsDir, 'silero-vad-v6.2', 'silero-vad-v6.2-F32.gguf')
+    mkdirSync(join(modelsDir, 'silero-vad-v6.2'))
+    writeFileSync(vadPath, Buffer.alloc(1_241_056))
+    watchModels.mock.calls[0]?.[0]('silero-vad-v6.2', -1)
+    await flushMicrotasks()
+    expect(getCreatedWorkerCount()).toBe(1)
+
+    await service.stopDictation('desktop')
+    await vi.waitFor(() => expect(getCreatedWorkerCount()).toBe(2))
+    expect(initOf()).toMatchObject({ vadModelPath: vadPath })
   })
 
   it('gives each device dictating at once only its own text from one recognizer', async () => {
@@ -739,15 +775,19 @@ describe('SttService', () => {
     async (event) => {
       vi.useFakeTimers()
       try {
-        const models: Pick<ModelManager, 'getModelState' | 'getModelDir' | 'downloadModel'> = {
+        const models: Pick<
+          ModelManager,
+          'getModelState' | 'getModelDir' | 'downloadModel' | 'setProgressCallback'
+        > = {
           getModelState: vi.fn<ModelManager['getModelState']>().mockResolvedValue({
             id: 'model-a',
             status: 'ready'
           }),
           getModelDir: vi.fn<ModelManager['getModelDir']>().mockReturnValue('/tmp/model-a'),
-          downloadModel: vi.fn().mockResolvedValue(undefined)
+          downloadModel: vi.fn().mockResolvedValue(undefined),
+          setProgressCallback: () => () => {}
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This lifecycle reads getModelState/getModelDir and downloadModel (VAD) on the model manager.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This lifecycle reads getModelState/getModelDir, downloadModel (VAD) and setProgressCallback on the model manager.
         const service = new SttService(models as ModelManager, spawnMockWorker)
         const sink = vi.fn<SttEventSink>()
         await service.startDictation('model-a', sink, undefined, 'desktop')
