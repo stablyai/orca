@@ -5,8 +5,9 @@ import {
 } from '../../../shared/agent-status/presentation/agent-child-row-lead-trail'
 import type { AgentChildRowModel } from '../../../shared/agent-status/presentation/agent-child-row-model'
 import { agentStateLabel } from '@/components/AgentStateDot'
-import { sayBackgroundTaskTranslated } from '@/components/native-chat/background-task-words-text'
+import { sayBackgroundTaskTranslated } from '@/components/native-chat/tools/tasks/background-task-words-text'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { agentNoUpdateLabel } from '../../../shared/agent-status/presentation/agent-row-decay-state'
 
 export type AgentChildRowText = {
@@ -32,11 +33,14 @@ export function agentChildRowDetailText(row: AgentChildRowModel, now: number): s
 }
 
 /** The line beneath a full-width row: what the child said, or that it ended; '' otherwise. */
-export function agentChildRowMessageLine(row: AgentChildRowModel): string {
+export function agentChildRowMessageLine(
+  row: AgentChildRowModel,
+  t: Translate = translate
+): string {
   if (row.detail?.kind === 'message') {
     return row.detail.text
   }
-  return row.detail?.kind === 'ended' ? translate('components.agentChildRow.ended', 'Ended') : ''
+  return row.detail?.kind === 'ended' ? t('components.agentChildRow.ended', 'Ended') : ''
 }
 
 /** The row's name, or its state when the child reported none. */

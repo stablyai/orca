@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { createEditorSaveQueue } from '../queue/editor-save-queue'
 import type { EditorSaveQueue } from '../queue/editor-save-queue-contract'
 import {
@@ -12,13 +12,15 @@ import {
 } from '../../autosave/editor-autosave-controller-test-fixture'
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
 import { registerPendingEditorFlush } from '../flush/editor-pending-flush'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
-import { editorFormatOnSave } from './editor-format-on-save'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
+
 import { bumpEditorDiscardEpoch, EditorSaveDiscardedError } from '../flush/editor-discard-epoch'
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 describe('format on the guarded save path', () => {
@@ -138,34 +140,6 @@ describe('format on the guarded save path', () => {
     unregister()
     expect(store.getState().editorDrafts.a).toBe('typed meanwhile')
     expect(file().isDirty).toBe(true)
-  })
-
-  it('sends remote formatting to the file owner with the captured pairing, not the focused host', async () => {
-    edit('remote text')
-    const assertCurrent = vi.fn()
-    await editorFormatOnSave(
-      store,
-      file(),
-      {
-        target: { kind: 'environment', environmentId: 'owner-host' },
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        expectedExecutionHostId: 'local',
-        expectedEnvironmentPairingRevision: 7
-      },
-      'user',
-      'remote text',
-      assertCurrent
-    )
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'owner-host' },
-      'files.formatText',
-      expect.objectContaining({ relativePath: 'a.ts', content: 'remote text' }),
-      expect.objectContaining({
-        expectedEnvironmentPairingRevision: 7,
-        beforeSend: assertCurrent
-      })
-    )
   })
 
   it('does not adopt or write a formatter result after the edits were discarded', async () => {

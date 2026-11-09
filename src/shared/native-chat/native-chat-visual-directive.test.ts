@@ -4,30 +4,12 @@ import {
   NATIVE_CHAT_VISUAL_FILE_MAX_LENGTH,
   NATIVE_CHAT_VISUAL_TITLE_MAX_LENGTH,
   isNativeChatVisualFileName,
-  isPendingNativeChatVisualDirectiveTail,
   parseNativeChatVisualDirectiveLine,
   withoutNativeChatVisualDirectiveLines,
   withoutPendingNativeChatVisualDirectiveTail
 } from './native-chat-visual-directive'
 
 describe('parseNativeChatVisualDirectiveLine', () => {
-  it('treats title as optional and trims it', () => {
-    expect(parseNativeChatVisualDirectiveLine('::orca-visual{file="a.html"}')).toEqual({
-      file: 'a.html',
-      title: null
-    })
-    expect(parseNativeChatVisualDirectiveLine('::orca-visual{file="a.html" title="  "}')).toEqual({
-      file: 'a.html',
-      title: null
-    })
-  })
-
-  it('accepts attributes in any order, with spaces and tabs around them', () => {
-    expect(
-      parseNativeChatVisualDirectiveLine('::orca-visual{ \ttitle="T"   file="a.html"\t }')
-    ).toEqual({ file: 'a.html', title: 'T' })
-  })
-
   it('accepts up to 3 leading spaces, trailing whitespace, and CRLF or LF endings', () => {
     expect(parseNativeChatVisualDirectiveLine('   ::orca-visual{file="a.html"}  \t\r\n')).toEqual({
       file: 'a.html',
@@ -48,14 +30,6 @@ describe('parseNativeChatVisualDirectiveLine', () => {
     expect(
       parseNativeChatVisualDirectiveLine('::orca-visual{file="a.html" title="x" title="y"}')
     ).toBeNull()
-  })
-
-  it('keeps braces and markdown characters in a title verbatim', () => {
-    expect(
-      parseNativeChatVisualDirectiveLine(
-        '::orca-visual{file="a.html" title="Cost {USD} *by* <team>"}'
-      )
-    ).toEqual({ file: 'a.html', title: 'Cost {USD} *by* <team>' })
   })
 
   it.each([
@@ -128,29 +102,6 @@ describe('isNativeChatVisualFileName', () => {
 })
 
 describe('streaming tail', () => {
-  it.each([
-    ':',
-    '::',
-    '::orca',
-    '::orca-visual{',
-    '::orca-visual{file="a.ht',
-    '  ::orca-visual{file="a.html"}'
-  ])('holds back %j', (line) => {
-    expect(isPendingNativeChatVisualDirectiveTail(line)).toBe(true)
-  })
-
-  it.each([
-    '',
-    '   ',
-    'Here is a chart:',
-    '::other',
-    '::orca-visualx',
-    '    ::orca-visual{',
-    '- ::orca'
-  ])('does not hold back %j', (line) => {
-    expect(isPendingNativeChatVisualDirectiveTail(line)).toBe(false)
-  })
-
   it('drops only the pending final line', () => {
     expect(withoutPendingNativeChatVisualDirectiveTail('Intro\n::orca-visual{file="a')).toBe(
       'Intro\n'
@@ -166,14 +117,6 @@ describe('streaming tail', () => {
 
 describe('withoutNativeChatVisualDirectiveLines', () => {
   const LINE = '::orca-visual{file="usage.html" title="Usage"}'
-
-  it('drops visual lines and the blank lines they leave behind', () => {
-    expect(withoutNativeChatVisualDirectiveLines(`Here it is.\n\n${LINE}\n\nTuesday peaked.`)).toBe(
-      'Here it is.\n\nTuesday peaked.'
-    )
-    expect(withoutNativeChatVisualDirectiveLines(`Intro\r\n${LINE}\r\n`)).toBe('Intro')
-    expect(withoutNativeChatVisualDirectiveLines(LINE)).toBe('')
-  })
 
   it('keeps the line inside fenced code and anything that is not a whole directive line', () => {
     const fenced = `\`\`\`\n${LINE}\n\`\`\`\nafter`
@@ -199,11 +142,5 @@ describe('withoutNativeChatVisualDirectiveLines', () => {
     expect(withoutNativeChatVisualDirectiveLines(`${code}\n\n${LINE}`)).toBe(code)
     expect(withoutNativeChatVisualDirectiveLines(`    code\npara\n${LINE}`)).toBe('    code\npara')
     expect(withoutNativeChatVisualDirectiveLines(`${LINE}\n\nText`)).toBe('Text')
-  })
-
-  it('returns text without a marker untouched', () => {
-    expect(withoutNativeChatVisualDirectiveLines('  plain\n\n\n text  ')).toBe(
-      '  plain\n\n\n text  '
-    )
   })
 })

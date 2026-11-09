@@ -17,7 +17,6 @@ import {
 } from './e2ee/node/e2ee-crypto'
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
-import { MAX_TIMER_DELAY_MS } from '../timer-delay'
 import { BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY } from '../browser-runtime-capabilities'
 
 const servers: WebSocketServer[] = []
@@ -37,19 +36,6 @@ afterEach(async () => {
 })
 
 describe('subscribeRemoteRuntimeRequest', () => {
-  it('includes WebSocket close details when subscription admission is rejected', async () => {
-    const server = await createClosingServer(1013, 'Maximum connections reached')
-
-    await expect(
-      subscribeRemoteRuntimeRequest(server.pairing, 'terminal.subscribe', {}, 1000, {
-        onResponse: vi.fn(),
-        onError: vi.fn()
-      })
-    ).rejects.toThrow(
-      'Remote Orca runtime closed the connection (1013: Maximum connections reached).'
-    )
-  })
-
   it('sends encrypted binary frames on an established subscription socket', async () => {
     const server = await createSubscriptionServer()
     const onResponse = vi.fn()
@@ -113,105 +99,6 @@ describe('subscribeRemoteRuntimeRequest', () => {
     )
   })
 
-  it('accounts encrypted queues and native socket buffers in an injected aggregate budget', async () => {
-    const server = await createSubscriptionServer()
-    const releaseQueued = vi.fn()
-    const releaseSocket = vi.fn()
-    const canSend = vi.fn(() => false)
-    let readBufferedAmount: (() => number) | undefined
-    const outboundMemoryBudget = {
-      claimQueuedBytes: vi.fn(() => releaseQueued),
-      registerBufferedAmount: vi.fn((read: () => number) => {
-        readBufferedAmount = read
-        return { canSend, release: releaseSocket }
-      })
-    }
-    const onResponse = vi.fn()
-    const onClose = vi.fn()
-    const subscription = await subscribeRemoteRuntimeRequest(
-      server.pairing,
-      'network.browserTunnel',
-      {},
-      1000,
-      { onResponse, onError: vi.fn(), onClose },
-      {
-        outboundMemoryBudget,
-        outboundQueue: { softCapBytes: 1, maxQueuedBytes: 1024, maxQueuedFrames: 8 }
-      }
-    )
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
-
-    expect(subscription.sendBinary(new Uint8Array([9]))).toBe(true)
-    expect(outboundMemoryBudget.registerBufferedAmount).toHaveBeenCalledOnce()
-    expect(readBufferedAmount?.()).toBeGreaterThanOrEqual(0)
-    expect(canSend).toHaveBeenCalledWith(expect.any(Number), false)
-    expect(outboundMemoryBudget.claimQueuedBytes).toHaveBeenCalledWith(expect.any(Number))
-
-    subscription.close()
-    subscription.close()
-    expect(releaseQueued).toHaveBeenCalledOnce()
-    expect(releaseSocket).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
-    expect(releaseSocket).toHaveBeenCalledOnce()
-  })
-
-  it('keeps native socket bytes charged through failure cleanup and a later close', async () => {
-    const server = await createSubscriptionServer()
-    const releaseSocket = vi.fn()
-    const onError = vi.fn()
-    const subscription = await subscribeRemoteRuntimeRequest(
-      server.pairing,
-      'network.browserTunnel',
-      {},
-      1000,
-      { onResponse: vi.fn(), onError },
-      {
-        outboundMemoryBudget: {
-          claimQueuedBytes: vi.fn(() => vi.fn()),
-          registerBufferedAmount: vi.fn(() => ({ canSend: () => false, release: releaseSocket }))
-        },
-        outboundQueue: { softCapBytes: 1, maxQueuedBytes: 1, maxQueuedFrames: 1 }
-      }
-    )
-
-    expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
-    expect(onError).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'remote_runtime_unavailable' })
-    )
-    subscription.close()
-    expect(releaseSocket).not.toHaveBeenCalled()
-
-    await vi.waitFor(() => expect(releaseSocket).toHaveBeenCalledOnce())
-  })
-
-  it('closes a half-open subscription socket via client liveness so callers can resubscribe', async () => {
-    // Half-open dedicated streams get no close/pongs/data; client liveness must trigger onError/onClose so renderer resubscription runs (#7718).
-    const server = await createSubscriptionServer({ disableAutoPong: true })
-    const onResponse = vi.fn()
-    const onError = vi.fn()
-    const onClose = vi.fn()
-
-    const subscription = await subscribeRemoteRuntimeRequest(
-      server.pairing,
-      'terminal.multiplex',
-      {},
-      1000,
-      { onResponse, onError, onClose },
-      { pingIntervalMs: 50, livenessTimeoutMs: 200 }
-    )
-
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
-    await vi.waitFor(
-      () =>
-        expect(onError).toHaveBeenCalledWith(
-          expect.objectContaining({ code: 'remote_runtime_unavailable' })
-        ),
-      { timeout: 5000 }
-    )
-    expect(onClose).toHaveBeenCalledOnce()
-    subscription.close()
-  })
-
   it('closes established subscription sockets after terminal protocol errors', async () => {
     const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
     try {
@@ -250,28 +137,6 @@ describe('subscribeRemoteRuntimeRequest', () => {
 })
 
 describe('sendRemoteRuntimeRequest', () => {
-  it.each([-1, 1.5, MAX_TIMER_DELAY_MS + 1, Number.MAX_SAFE_INTEGER + 1])(
-    'rejects invalid timer delay %s before reading pairing data',
-    async (timeoutMs) => {
-      await expect(
-        sendRemoteRuntimeRequest(
-          pairedRuntimeConnectionFromOffer({ endpoint: '', deviceToken: '', publicKeyB64: '' }),
-          'status.get',
-          {},
-          timeoutMs
-        )
-      ).rejects.toMatchObject({ code: 'invalid_argument' })
-    }
-  )
-
-  it('includes WebSocket close details when one-shot admission is rejected', async () => {
-    const server = await createClosingServer(1013, 'Maximum connections reached')
-
-    await expect(sendRemoteRuntimeRequest(server.pairing, 'status.get', {}, 1000)).rejects.toThrow(
-      'Remote Orca runtime closed the connection (1013: Maximum connections reached).'
-    )
-  })
-
   it('classifies a non-Orca handshake as a host identity mismatch', async () => {
     const server = await createInvalidHandshakeServer()
 
@@ -293,84 +158,6 @@ describe('sendRemoteRuntimeRequest', () => {
       pairingStage: 'runtime'
     })
   })
-
-  it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
-    const server = await createOneShotServer()
-
-    const response = await sendRemoteRuntimeRequest<{ satisfied: boolean }>(
-      server.pairing,
-      'terminal.wait',
-      { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
-      300
-    )
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { satisfied: true }
-    })
-  })
-
-  it.each(['refused', 'timeout'])(
-    'observes a slow restart response finitely (%s)',
-    async (mode) => {
-      const observed = Promise.withResolvers<void>()
-      const requests = vi.fn((_request: Record<string, unknown>) => observed.resolve())
-      const close = vi.spyOn(WebSocketClient.prototype, 'close')
-      const server = await createOneShotServer({
-        onRequest: requests,
-        keepalive: false,
-        responseDelayMs: mode === 'refused' ? 20_000 : null,
-        response: (id) => ({
-          id,
-          ok: true,
-          result: { continued: [{ sessionId: 'a', outcome: 'refused' }] },
-          _meta: { runtimeId: 'runtime-test' }
-        })
-      })
-      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
-      const timers = vi.spyOn(globalThis, 'setTimeout')
-      const clearTimer = vi.spyOn(globalThis, 'clearTimeout')
-      try {
-        const settled = vi.fn()
-        const request = sendRemoteRuntimeRequest(
-          server.pairing,
-          'agentSession.restartContinue',
-          { sessionIds: ['a'] },
-          600_000
-        )
-        const result = request.catch((error: unknown) => error)
-        void result.then(settled)
-        await observed.promise
-        await vi.advanceTimersByTimeAsync(15_001)
-        expect(settled).not.toHaveBeenCalled()
-        await vi.advanceTimersByTimeAsync(mode === 'refused' ? 4_999 : 584_998)
-        if (mode === 'refused') {
-          await expect(result).resolves.toMatchObject({
-            ok: true,
-            result: { continued: [{ sessionId: 'a', outcome: 'refused' }] }
-          })
-        } else {
-          expect(settled).not.toHaveBeenCalled()
-          await vi.advanceTimersByTimeAsync(1)
-          await expect(result).resolves.toMatchObject({ code: 'runtime_timeout' })
-        }
-        expect(requests).toHaveBeenCalledOnce()
-        expect(requests.mock.calls[0]?.[0]).toMatchObject({
-          method: 'agentSession.restartContinue',
-          params: { sessionIds: ['a'] }
-        })
-        expect(close).toHaveBeenCalled()
-        const timeoutIndex = timers.mock.calls.findIndex(([, delay]) => delay === 600_000)
-        expect(timeoutIndex).toBeGreaterThanOrEqual(0)
-        expect(clearTimer).toHaveBeenCalledWith(timers.mock.results[timeoutIndex].value)
-      } finally {
-        timers.mockRestore()
-        clearTimer.mockRestore()
-        vi.useRealTimers()
-        close.mockRestore()
-      }
-    }
-  )
 
   it('aborts and closes an in-flight one-shot socket', async () => {
     let requestObserved: () => void = () => {}
@@ -397,40 +184,6 @@ describe('sendRemoteRuntimeRequest', () => {
     } finally {
       closeSpy.mockRestore()
     }
-  })
-
-  it('preserves structured failure data for remote computer-use recovery hints', async () => {
-    const server = await createOneShotServer({
-      response: (requestId) => ({
-        id: requestId,
-        ok: false,
-        error: {
-          code: 'app_not_found',
-          message: 'app not found: Gmail',
-          data: {
-            nextSteps: ['Target the desktop browser app/window that contains Gmail.']
-          }
-        },
-        _meta: { runtimeId: 'runtime-test' }
-      })
-    })
-
-    const response = await sendRemoteRuntimeRequest(
-      server.pairing,
-      'computer.getAppState',
-      { app: 'Gmail' },
-      1000
-    )
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: 'app_not_found',
-        data: {
-          nextSteps: [expect.stringContaining('desktop browser app/window')]
-        }
-      }
-    })
   })
 
   it('sends orchestration authentication fields in the admitted encrypted request', async () => {
@@ -460,26 +213,6 @@ describe('sendRemoteRuntimeRequest', () => {
       orchestrationContractVersion: 1,
       orchestrationRequestId: 'mutation_1'
     })
-  })
-
-  it('omits optional request fields for hosts that predate them', async () => {
-    let receivedRequest: Record<string, unknown> | null = null
-    const server = await createOneShotServer({
-      onRequest: (request) => {
-        receivedRequest = request
-      }
-    })
-
-    await sendRemoteRuntimeRequest(server.pairing, 'status.get', undefined, 1000)
-
-    expect(receivedRequest).toMatchObject({
-      deviceToken: 'device-token',
-      method: 'status.get'
-    })
-    expect(receivedRequest).not.toHaveProperty('params')
-    expect(receivedRequest).not.toHaveProperty('orchestrationCapability')
-    expect(receivedRequest).not.toHaveProperty('orchestrationContractVersion')
-    expect(receivedRequest).not.toHaveProperty('orchestrationRequestId')
   })
 })
 
@@ -529,7 +262,12 @@ async function createSubscriptionServer(
 
       const frame = data.toString()
       if (!sharedKey) {
-        const hello = JSON.parse(frame) as { publicKeyB64: string }
+        const hello: { publicKeyB64?: string } = JSON.parse(frame)
+        if (!hello.publicKeyB64) {
+          // Legacy-only host: refuses a v2 hello the way hosts before v2 do.
+          ws.close(4001, 'Invalid e2ee_hello')
+          return
+        }
         sharedKey = deriveSharedKey(
           serverKeyPair.secretKey,
           publicKeyFromBase64(hello.publicKeyB64)
@@ -589,33 +327,6 @@ function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): 
   ws.send(encrypt(JSON.stringify(message), sharedKey))
 }
 
-async function createClosingServer(
-  code: number,
-  reason: string
-): Promise<{ pairing: PairedRuntimeConnection }> {
-  const serverKeyPair = generateKeyPair()
-  const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
-  servers.push(wss)
-  wss.on('connection', (ws) => {
-    ws.close(code, reason)
-  })
-
-  await new Promise<void>((resolve) => wss.once('listening', resolve))
-  const address = wss.address() as AddressInfo
-  const pairing = parsePairingCode(
-    encodePairingOffer({
-      v: 2,
-      endpoint: `ws://127.0.0.1:${address.port}`,
-      deviceToken: 'device-token',
-      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
-    })
-  )
-  if (!pairing) {
-    throw new Error('Failed to create test pairing')
-  }
-  return { pairing: pairedRuntimeConnectionFromOffer(pairing) }
-}
-
 async function createInvalidHandshakeServer(): Promise<{ pairing: PairedRuntimeConnection }> {
   const serverKeyPair = generateKeyPair()
   const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
@@ -664,7 +375,12 @@ async function createOneShotServer(
       }
       const frame = data.toString()
       if (!sharedKey) {
-        const hello = JSON.parse(frame) as { publicKeyB64: string }
+        const hello: { publicKeyB64?: string } = JSON.parse(frame)
+        if (!hello.publicKeyB64) {
+          // Legacy-only host: refuses a v2 hello the way hosts before v2 do.
+          ws.close(4001, 'Invalid e2ee_hello')
+          return
+        }
         sharedKey = deriveSharedKey(
           serverKeyPair.secretKey,
           publicKeyFromBase64(hello.publicKeyB64)

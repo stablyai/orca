@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import {
   canonicalizeLinearIssueAttributeFilter,
   isEmptyLinearIssueAttributeFilter,

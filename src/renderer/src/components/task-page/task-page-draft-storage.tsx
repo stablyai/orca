@@ -6,7 +6,7 @@ import {
   isTaskCreationDraftContentful,
   type NewLinearIssueDraft,
   type NewJiraIssueDraft
-} from '@/store/slices/task-creation-drafts'
+} from '@/store/slices/task-creation/task-creation-drafts'
 import { useAppStore } from '@/store/index'
 export const hasDivergentSources = (
   s: TaskPageRepoSourceState

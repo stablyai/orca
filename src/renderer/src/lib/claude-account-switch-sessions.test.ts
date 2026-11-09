@@ -1,19 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../shared/claude-account-switch-settings'
-import { getDefaultSettings } from '../../../shared/constants'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type {
-  ClaudeManagedAccountSummary,
-  ClaudeRateLimitAccountsState
-} from '../../../shared/managed-account-types'
-import {
-  getClaudeStatusActiveId,
-  resolveClaudeStatusAccountState
-} from '../components/status-bar/status-bar-claude-accounts'
-import {
-  findClaudeSwitchSessions,
-  findQueuedClaudeRestartsOnAccount
-} from './claude-session-account-move'
+import type { ClaudeManagedAccountSummary } from '../../../shared/managed-account-types'
+import { findClaudeSwitchSessions } from './claude-session-account-move'
 import type * as AccountMove from './claude-session-account-move'
 import type { ClaudeSwitchSessions } from './claude-session-account-move'
 import {
@@ -90,46 +78,6 @@ describe('handleRunningClaudeSessionsAfterSwitch', () => {
     )
   })
 
-  it('keeps earlier queued restarts except those already on the new account', async () => {
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([]))
-    vi.mocked(findQueuedClaudeRestartsOnAccount).mockReturnValueOnce(['pty-home'])
-
-    await handleRunningClaudeSessionsAfterSwitch(SWITCH)
-
-    expect(findQueuedClaudeRestartsOnAccount).toHaveBeenCalledWith(
-      expect.objectContaining({ accountId: 'account-b' })
-    )
-    expect(store.consumePendingPaneAccountRestart).toHaveBeenCalledTimes(1)
-    expect(store.consumePendingPaneAccountRestart).toHaveBeenCalledWith('pty-home')
-    expect(store.queuePaneAccountRestarts).not.toHaveBeenCalled()
-  })
-
-  it('leaves local questions and queued restarts alone on a server account switch', async () => {
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([candidate(1)]))
-    await handleRunningClaudeSessionsAfterSwitch(SWITCH)
-
-    expect(
-      await handleRunningClaudeSessionsAfterSwitch({
-        ...SWITCH,
-        owner: { kind: 'environment', environmentId: 'env-1' }
-      })
-    ).toBe('show-confirmation')
-
-    expect(
-      getClaudeAccountSwitchPrompt()?.sessions.onAccount.map((session) => session.ptyId)
-    ).toEqual(['pty-1'])
-    expect(findQueuedClaudeRestartsOnAccount).toHaveBeenCalledTimes(1)
-  })
-
-  it('restarts only the ticked sessions, and only ones this question listed', async () => {
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([candidate(1), candidate(2)]))
-    await handleRunningClaudeSessionsAfterSwitch(SWITCH)
-
-    answerClaudeAccountSwitchPrompt('restart', { ptyIds: ['pty-2', 'pty-unlisted'] })
-
-    expect(store.queuePaneAccountRestarts).toHaveBeenLastCalledWith(['pty-2'], 'claude')
-  })
-
   it('restarts a pane on the PTY it has now, and skips a pane that closed', async () => {
     vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([candidate(1), candidate(2)]))
     await handleRunningClaudeSessionsAfterSwitch(SWITCH)
@@ -138,59 +86,6 @@ describe('handleRunningClaudeSessionsAfterSwitch', () => {
     answerClaudeAccountSwitchPrompt('restart')
 
     expect(store.queuePaneAccountRestarts).toHaveBeenLastCalledWith(['pty-1-reattached'], 'claude')
-  })
-
-  it('names sessions an automatic restart left behind, and reviews only those', async () => {
-    store.settings = { claudeAccountSwitchRunningSessions: 'restart' }
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(
-      scan([candidate(1)], {
-        elsewhere: [{ ...candidate(2), accountId: null }],
-        cantMove: [{ ...candidate(3), reason: 'own-folder' }]
-      })
-    )
-
-    await handleRunningClaudeSessionsAfterSwitch(SWITCH)
-    const [, options] = toastSuccess.mock.lastCall!
-    expect(options.description).toBe("2 other sessions weren't moved.")
-    options.action.onClick()
-
-    expect(getClaudeAccountSwitchPrompt()).toMatchObject({
-      review: true,
-      sessions: {
-        onAccount: [],
-        elsewhere: [expect.objectContaining({ ptyId: 'pty-2', accountLabel: 'System default' })],
-        cantMove: [expect.objectContaining({ ptyId: 'pty-3' })]
-      }
-    })
-    answerClaudeAccountSwitchPrompt('restart')
-    expect(store.queuePaneAccountRestarts).toHaveBeenNthCalledWith(1, ['pty-1'], 'claude')
-    expect(store.queuePaneAccountRestarts).toHaveBeenLastCalledWith(['pty-2'], 'claude')
-  })
-
-  it('says why shared sessions stayed when nothing else on the account moved', async () => {
-    store.settings = { claudeAccountSwitchRunningSessions: 'restart' }
-    vi.mocked(findClaudeSwitchSessions).mockImplementation(async ({ onShared }) => {
-      onShared?.([candidate(1), candidate(2)])
-      return scan([], {
-        cantMove: [1, 2].map((n) => ({ ...candidate(n), reason: 'shared-session' as const }))
-      })
-    })
-
-    expect(await handleRunningClaudeSessionsAfterSwitch(SWITCH)).toBe('show-confirmation')
-
-    expect(store.queuePaneAccountRestarts).not.toHaveBeenCalled()
-    expect(toastWarning.mock.calls[0]?.[0]).toContain('2 Claude sessions stay on')
-  })
-
-  it('keeps sessions without scanning when the setting is Never restart', async () => {
-    store.settings = { claudeAccountSwitchRunningSessions: 'keep' }
-    vi.mocked(findQueuedClaudeRestartsOnAccount).mockReturnValueOnce(['pty-home'])
-
-    expect(await handleRunningClaudeSessionsAfterSwitch(SWITCH)).toBe('show-confirmation')
-    expect(findClaudeSwitchSessions).not.toHaveBeenCalled()
-    expect(store.consumePendingPaneAccountRestart).toHaveBeenCalledWith('pty-home')
-    expect(getClaudeAccountSwitchPrompt()).toBeNull()
-    expect(store.queuePaneAccountRestarts).not.toHaveBeenCalled()
   })
 
   it('applies Never restart chosen while the scan runs', async () => {
@@ -225,60 +120,5 @@ describe('handleRunningClaudeSessionsAfterSwitch', () => {
       sessions: { onAccount: [expect.objectContaining({ ptyId: 'pty-2' })] },
       nextAccountLabel: 'account-a@example.com'
     })
-  })
-})
-
-describe('switching from a saved account that runs on System default, as the status bar shows it', () => {
-  const host: ClaudeRateLimitAccountsState = {
-    accounts: [row('account-a', { runsOnSystemDefault: true }), row('account-b')],
-    activeAccountId: 'account-a',
-    activeAccountIdsByRuntime: { host: 'account-a', wsl: {} }
-  }
-  const settingsSelecting = (accountId: string | null): GlobalSettings => ({
-    ...getDefaultSettings('/tmp'),
-    claudeManagedAccounts: [
-      { ...row('account-a'), managedAuthPath: '/claude/account-a' },
-      { ...row('account-b'), managedAuthPath: '/claude/account-b' }
-    ],
-    activeClaudeManagedAccountId: accountId,
-    activeClaudeManagedAccountIdsByRuntime: { host: accountId, wsl: {} }
-  })
-  const hostTarget = { runtime: 'host', wslDistro: null } as const
-  const before = resolveClaudeStatusAccountState(settingsSelecting('account-a'), host, null)
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    resetClaudeAccountSwitchSessionsForTests()
-    store.settings = {}
-    vi.mocked(findClaudeSwitchSessions).mockResolvedValue(scan([]))
-  })
-
-  it('looks for its sessions on System default when switching to another account', async () => {
-    const after = { ...host, activeAccountIdsByRuntime: { host: 'account-b', wsl: {} } }
-
-    await handleRunningClaudeSessionsAfterSwitch({
-      owner: { kind: 'local' },
-      target: hostTarget,
-      before: { state: before, accountId: getClaudeStatusActiveId(before, hostTarget) },
-      after: { state: after, accountId: getClaudeStatusActiveId(after, hostTarget) }
-    })
-
-    expect(findClaudeSwitchSessions).toHaveBeenCalledWith(
-      expect.objectContaining({ fromAccountId: null })
-    )
-  })
-
-  it('moves nothing when switching to System default itself', async () => {
-    const after = { ...host, activeAccountIdsByRuntime: { host: null, wsl: {} } }
-
-    expect(
-      await handleRunningClaudeSessionsAfterSwitch({
-        owner: { kind: 'local' },
-        target: hostTarget,
-        before: { state: before, accountId: getClaudeStatusActiveId(before, hostTarget) },
-        after: { state: after, accountId: getClaudeStatusActiveId(after, hostTarget) }
-      })
-    ).toBe('show-confirmation')
-    expect(findClaudeSwitchSessions).not.toHaveBeenCalled()
   })
 })

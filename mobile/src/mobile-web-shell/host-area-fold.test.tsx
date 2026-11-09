@@ -21,11 +21,15 @@ vi.mock('@orca/expo-two-way-audio', mocks['@orca/expo-two-way-audio'])
 vi.mock('expo-keep-awake', mocks['expo-keep-awake'])
 vi.mock('expo-image-picker', mocks['expo-image-picker'])
 vi.mock('expo-file-system', mocks['expo-file-system'])
+vi.mock('../device-store/device-store', mocks['../device-store/device-store'])
 vi.mock('lucide-react-native', mocks['lucide-react-native'])
 vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'])
 vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
 vi.mock('../app-update/use-wall-app-update', mocks['../app-update/use-wall-app-update'])
-vi.mock('../transport/host-client-hooks', mocks['../transport/host-client-hooks'])
+vi.mock(
+  '../transport/connection/host-client-hooks',
+  mocks['../transport/connection/host-client-hooks']
+)
 vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
 vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
 

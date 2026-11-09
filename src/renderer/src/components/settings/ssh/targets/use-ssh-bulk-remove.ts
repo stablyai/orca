@@ -1,11 +1,12 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useRef } from 'react'
 import { toast } from 'sonner'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import { useAppStore } from '@/store/index'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { resolveSshHostRemoval } from '../../../sidebar/ssh-host-remove-resolution'
 import { isManagedServerSshHost } from './SshManagedHostRemoveDialog'
 import type { SshBulkRemoveRequest, SshBulkRemoveResult } from './SshTargetDestructiveActions'
@@ -30,6 +31,7 @@ export function useSshBulkRemove(args: {
   ) => void
   finishBulkRemove: (result: SshBulkRemoveResult) => Promise<void>
 } {
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   // Retain click-time skip decisions until the confirmed removal finishes.
@@ -43,7 +45,7 @@ export function useSshBulkRemove(args: {
         label: target.label,
         message: extractIpcErrorMessage(
           error,
-          translate('auto.components.settings.SshPane.c2a69510e3', 'Failed to remove target')
+          t('auto.components.settings.SshPane.c2a69510e3', 'Failed to remove target')
         )
       }))
     })
@@ -72,7 +74,7 @@ export function useSshBulkRemove(args: {
       return
     }
     const state = useAppStore.getState()
-    const worktrees = getAllWorktreesFromState(state)
+    const worktrees = getIndexedAllWorktrees(selectWorktreesByRepo(state))
     const plan = planSshBulkRemove(chosen, (target) => {
       if (isManagedServerSshHost(target)) {
         return 'managed-server'

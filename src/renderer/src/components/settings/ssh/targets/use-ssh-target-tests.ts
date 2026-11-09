@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isSshTargetConnecting } from './ssh-target-action-state'
 
 type TestOutcome = { ok: true } | { ok: false; message: string }
@@ -17,6 +17,7 @@ export function useSshTargetTests(): {
   testMany: (targets: readonly SshTarget[]) => Promise<void>
   bulkTesting: boolean
 } {
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [testingIds, setTestingIds] = useState<ReadonlySet<string>>(new Set())
@@ -50,7 +51,7 @@ export function useSshTargetTests(): {
             ok: false,
             message:
               result.error ??
-              translate('auto.components.settings.SshPane.0cda732f43', 'Connection test failed')
+              t('auto.components.settings.SshPane.0cda732f43', 'Connection test failed')
           }
     } catch (err) {
       return {
@@ -58,7 +59,7 @@ export function useSshTargetTests(): {
         message:
           err instanceof Error
             ? err.message
-            : translate('auto.components.settings.SshPane.68c13b4589', 'Test failed')
+            : t('auto.components.settings.SshPane.68c13b4589', 'Test failed')
       }
     } finally {
       setTesting([targetId], false)
@@ -71,9 +72,7 @@ export function useSshTargetTests(): {
       return
     }
     if (outcome.ok) {
-      toast.success(
-        translate('auto.components.settings.SshPane.81d08bcddf', 'Connection successful')
-      )
+      toast.success(t('auto.components.settings.SshPane.81d08bcddf', 'Connection successful'))
     } else {
       toast.error(outcome.message)
     }
@@ -116,17 +115,17 @@ export function useSshTargetTests(): {
     }
     const title = [
       passed > 0
-        ? translate('auto.components.settings.sshBulkTest.passed', '{{count}} reachable', {
+        ? t('auto.components.settings.sshBulkTest.passed', '{{count}} reachable', {
             count: passed
           })
         : null,
       failed.length > 0
-        ? translate('auto.components.settings.sshBulkTest.failed', '{{count}} failed', {
+        ? t('auto.components.settings.sshBulkTest.failed', '{{count}} failed', {
             count: failed.length
           })
         : null,
       skippedConnected > 0
-        ? translate(
+        ? t(
             'auto.components.settings.sshBulkTest.alreadyConnected',
             '{{count}} already connected',
             { count: skippedConnected }

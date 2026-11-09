@@ -1,5 +1,5 @@
-import type { RuntimeSyncedTab } from '../../../shared/runtime-types'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
+import type { RuntimeSyncedTab } from '../../../shared/runtime-session-contracts'
+import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 export function visibleGraphChangedWorktrees(
   previousTabs: ReadonlyMap<string, RuntimeSyncedTab>,

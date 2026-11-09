@@ -3,11 +3,11 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import { getAutomationRunContent } from '../../../src/shared/automation-run-content'
+import { getAutomationRunContent } from '../../../src/shared/automations/history/automation-run-content'
 import { mobileSessionRouteTarget } from '../session/mobile-session-route'
 import { hostStackRouteHref } from '../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { AutomationButton, AutomationMetadata } from './AutomationControls'
 import {
   automationDate,
@@ -17,6 +17,7 @@ import {
 import { canOpenAutomationRunAgent } from './automation-run-agent'
 import type { MobileAutomationRun } from './automation-reply-schema'
 import type { AutomationRunObservation } from './use-automation-runs'
+import { useFullAutomationRun } from './use-full-automation-run'
 import { automationStyles as styles } from './automation-styles'
 
 export function AutomationRunDetails(props: {
@@ -31,7 +32,13 @@ export function AutomationRunDetails(props: {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const history = props.history
-  const run = history.selected ?? props.run
+  const full = useFullAutomationRun(
+    props.client,
+    props.connected,
+    history.selected ?? props.run,
+    history.scope
+  )
+  const run = full.run
   const runError = automationRunErrorText(run)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -177,6 +184,18 @@ export function AutomationRunDetails(props: {
       </View>
       {runError ? <Text style={styles.error}>{runError}</Text> : null}
       <Text style={styles.heading}>{t('automations.mobile.output', 'Output')}</Text>
+      {full.failed ? (
+        <>
+          <Text accessibilityRole="alert" style={styles.error}>
+            {t('automations.mobile.fullOutputUnavailable', "Couldn't load the full output.")}
+          </Text>
+          <AutomationButton
+            label={t('automations.mobile.retryFullOutput', 'Retry')}
+            onPress={full.retry}
+            disabled={!props.connected}
+          />
+        </>
+      ) : null}
       <Text selectable style={styles.output}>
         {getAutomationRunContent(
           { ...run, error: runError },
@@ -201,7 +220,9 @@ export function AutomationRunDetails(props: {
           {error}
         </Text>
       ) : null}
-      {!run.terminalPaneKey || !run.workspaceId ? (
+      {(!run.terminalPaneKey || !run.workspaceId) &&
+      run.status !== 'pending' &&
+      run.status !== 'dispatching' ? (
         <Text style={styles.meta}>
           {t(
             'automations.mobile.theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere',

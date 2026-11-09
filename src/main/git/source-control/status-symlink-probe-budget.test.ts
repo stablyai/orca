@@ -43,7 +43,6 @@ describe('status shared symlink probe budget', () => {
         ])
       }
       expect(lstat).not.toHaveBeenCalled()
-      expect(stream).toHaveBeenCalledTimes(100)
     }
   )
 

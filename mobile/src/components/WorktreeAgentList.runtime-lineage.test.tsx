@@ -10,6 +10,7 @@ import { WorktreeAgentList } from './WorktreeAgentList'
 beforeEach(clearDisclosuresForTests)
 
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
@@ -25,7 +26,7 @@ vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 it('renders production-built canonical assignments as nested rows and groups only roots', async () => {
   const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
   const { publicLineageFixture, canonicalChatRow, LINEAGE_PARENT, LINEAGE_CHILD } =
-    await import('../../../src/main/runtime/runtime-agent-lineage.test-fixture')
+    await import('../../../src/main/runtime/workspaces/process-listing/runtime-agent-lineage.test-fixture')
   const { flattenAgentRowLineage } = await import('../worktree/agent-row-lineage')
   const f = publicLineageFixture()
   let tree: ReactTestRenderer | undefined
@@ -39,7 +40,6 @@ it('renders production-built canonical assignments as nested rows and groups onl
       tree = create(
         createElement(WorktreeAgentList, {
           agents,
-          now: 1_800_000_000_000,
           unvisited: false,
           statusLive: true
         })
@@ -73,7 +73,6 @@ it('renders production-built canonical assignments as nested rows and groups onl
       tree?.update(
         createElement(WorktreeAgentList, {
           agents: [...agents, orphan],
-          now: 1_800_000_000_000,
           unvisited: false
         })
       )

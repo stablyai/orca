@@ -1,17 +1,19 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
-import type { TerminalArtifactGrantTarget } from '@/runtime/runtime-terminal-artifact-grant'
+import type { TerminalArtifactGrantTarget } from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 import { readDocPreviewArtifactRequest } from './doc-preview-artifact-share'
 
 const mocks = vi.hoisted(() => ({ acquire: vi.fn(), call: vi.fn() }))
-vi.mock('@/runtime/runtime-terminal-artifact-grant', () => ({
+vi.mock('@/runtime/files/grants/runtime-terminal-artifact-grant', () => ({
   acquireTerminalArtifactGrant: mocks.acquire,
   pinTerminalArtifactGrantTarget: (target: TerminalArtifactGrantTarget) => ({
     ...target,
     expectedEnvironmentPairingRevision: 12
   })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.call }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.call
+}))
 
 beforeEach(() => {
   vi.resetAllMocks()

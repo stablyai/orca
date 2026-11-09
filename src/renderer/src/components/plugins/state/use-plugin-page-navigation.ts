@@ -1,5 +1,5 @@
 import { pluginHostVersion } from '../../../../../shared/plugins/installation/plugin-host-version'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 function isBackShortcut(event: KeyboardEvent): boolean {
   const mac = navigator.userAgent.includes('Mac')
@@ -22,18 +22,24 @@ function belongsToFieldOrDialog(target: EventTarget | null): boolean {
 
 export type PluginPageNavigation = {
   openKey: string | null
-  open: (pluginKey: string) => void
+  previousKey: string | null
+  open: (pluginKey: string, options?: { replace?: boolean }) => void
   back: () => void
-  /** Goes back only if this plugin's page is the one open; stable across renders. */
+  toCatalog: () => void
+  /** Removes a deleted plugin from page history; stable across renders. */
   leave: (pluginKey: string) => void
 }
 
 /**
  * Which plugin's page is open, and the way back: the back link, Alt+← or ⌘[ on Mac. Going back
- * returns focus to that plugin's name in the list. Esc stays with Settings.
+ * traverses detail pages, then returns focus to the first plugin's name in the list.
  */
-export function usePluginPageNavigation(onBack?: () => void): PluginPageNavigation {
-  const [openKey, setOpenKey] = useState<string | null>(null)
+export function usePluginPageNavigation(
+  onNavigate?: (pluginKey: string | null) => void
+): PluginPageNavigation {
+  const [history, setHistory] = useState<string[]>([])
+  const historyRef = useRef(history)
+  const openKey = history.at(-1) ?? null
   const [returnKey, setReturnKey] = useState<string | null>(null)
 
   useEffect(() => {
@@ -47,15 +53,35 @@ export function usePluginPageNavigation(onBack?: () => void): PluginPageNavigati
     setReturnKey(null)
   }, [openKey, returnKey])
 
-  const openKeyRef = useRef(openKey)
-  useLayoutEffect(() => {
-    openKeyRef.current = openKey
-  })
+  const open = useCallback<PluginPageNavigation['open']>(
+    (pluginKey, options) => {
+      if (historyRef.current.at(-1) === pluginKey) {
+        return
+      }
+      onNavigate?.(pluginKey)
+      historyRef.current = [
+        ...(options?.replace ? historyRef.current.slice(0, -1) : historyRef.current),
+        pluginKey
+      ]
+      setHistory(historyRef.current)
+    },
+    [onNavigate]
+  )
   const back = useCallback(() => {
-    onBack?.()
-    setReturnKey(openKeyRef.current)
-    setOpenKey(null)
-  }, [onBack])
+    const previous = historyRef.current
+    historyRef.current = previous.slice(0, -1)
+    onNavigate?.(historyRef.current.at(-1) ?? null)
+    if (historyRef.current.length === 0) {
+      setReturnKey(previous[0] ?? null)
+    }
+    setHistory(historyRef.current)
+  }, [onNavigate])
+  const toCatalog = useCallback(() => {
+    onNavigate?.(null)
+    setReturnKey(historyRef.current[0] ?? null)
+    historyRef.current = []
+    setHistory([])
+  }, [onNavigate])
   useEffect(() => {
     if (!openKey) {
       return
@@ -74,12 +100,18 @@ export function usePluginPageNavigation(onBack?: () => void): PluginPageNavigati
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [openKey, back])
 
-  const leave = useCallback((pluginKey: string) => {
-    if (openKeyRef.current === pluginKey) {
-      setOpenKey(null)
-    }
-  }, [])
-  return { openKey, open: setOpenKey, back, leave }
+  const leave = useCallback(
+    (pluginKey: string) => {
+      const previousKey = historyRef.current.at(-1)
+      historyRef.current = historyRef.current.filter((key) => key !== pluginKey)
+      if (previousKey !== historyRef.current.at(-1)) {
+        onNavigate?.(historyRef.current.at(-1) ?? null)
+      }
+      setHistory(historyRef.current)
+    },
+    [onNavigate]
+  )
+  return { openKey, previousKey: history.at(-2) ?? null, open, back, toCatalog, leave }
 }
 
 /** The version plugins are gated against, for "Needs Orca X" checks; null until known. Why not

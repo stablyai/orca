@@ -1,10 +1,14 @@
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './headless-terminal-tab-close'
-import { recordPtySurface, spawnSurfaceClaimSequence } from '../pty-recorded-surface-topology'
-import { withSelectedTabs } from '../headless-tab-group-selection'
+import {
+  recordPtySurface,
+  spawnSurfaceClaimSequence
+} from '../terminal/surface/pty-recorded-surface-topology'
+import { withSelectedTabs } from './headless-tab-group-selection'
 import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,
@@ -20,7 +24,7 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
   ): ReturnType<HeadlessTabGroupsMethods['persistHeadlessTabGroups']>
 
   // Why: a client's pane-to-new-tab move must reach the host session or the next snapshot rebuilds
-  // the old tab. A window-owned host keeps its layout in the renderer, so only headless hosts commit.
+  // the old tab. A window-owned host keeps its layout in the renderer, so its window makes the move.
   async moveMobileSessionLeafToNewTab(
     worktreeSelector: string,
     args: { sourceTabId: string; targetTabId: string; leafId: string },
@@ -31,7 +35,17 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
     if (this.getAvailableAuthoritativeWindow()) {
-      return { status: 'not_held' }
+      // Switch point: the relay hands the move to a window that owns the layout. Where main owns
+      // it, the window's move goes back through main and cannot keep the client's tab id.
+      if (ORCA_LAYOUT_OWNER_IS_MAIN || !this.notifier?.movePaneToNewTab) {
+        return { status: 'not_held' }
+      }
+      if (!isValidHostTerminalTabId(args.targetTabId)) {
+        return { status: 'refused', reason: 'invalid_request' }
+      }
+      return this.notifier
+        .movePaneToNewTab({ worktreeId, ...args, ...placement })
+        .catch((): TerminalLeafMoveResult => ({ status: 'refused', reason: 'pane_unavailable' }))
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     // Why: the client's pty id mirrors a host handle, so the host names its own live pty; an SSH

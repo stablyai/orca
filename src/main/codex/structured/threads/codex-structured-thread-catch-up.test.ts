@@ -1,12 +1,18 @@
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordedCodexRollout } from '../../__fixtures__/codex-rollout-recordings'
+import {
+  prepareLegacyTranscriptImport,
+  importLegacyTranscriptIntoJournal
+} from '../../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { codexNonMessageIdentity } from '../items/codex-thread-item-identity'
+import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { writeFile } from 'node:fs/promises'
-import { importLegacyTranscriptIntoJournal } from '../../../native-chat/agent-session-journal/journal-legacy-import'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { join } from 'node:path'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { openTestAgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { recoverStructuredRewind } from '../../../native-chat/agent-session-wire/structured-rewind-recovery'
-import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/journal-history-origin'
+import { recoverStructuredRewind } from '../../../native-chat/agent-session-wire/rewind/structured-rewind-recovery'
+import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { describe, expect, it } from 'vitest'
 import { registerCodexCatchUpEchoTests } from './codex-structured-thread-catch-up-echo.spec'
 import { projectStructuredItemsToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -174,7 +180,7 @@ describe('Codex chat catch-up', () => {
     await c.reopen()
     expect(c.journal.submission('old-gap')?.dispatchState).toBe('accepted')
     expect(c.journal.submission('fetched-known')?.dispatchState).toBe('accepted')
-    expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+    expect(c.journal.submission('V')?.dispatchState).toBe('rejected')
 
     for (const n of [100, 1_000]) {
       for (const id of [`tail-${n}`, `second-${n}`]) {
@@ -262,10 +268,11 @@ describe('Codex chat catch-up', () => {
       })
       expect(settled).toContain(first)
       expect(settled).not.toContain(next)
+      expect(c.journal.submission(next)?.dispatchState).toBe('pending')
       await c.reopen()
       expect(c.journal.submission(first)?.dispatchState).toBe('accepted')
-      expect(c.journal.submission(next)?.dispatchState).toBe('pending')
-      expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+      expect(c.journal.submission(next)?.dispatchState).toBe('rejected')
+      expect(c.journal.submission('V')?.dispatchState).toBe('rejected')
       // Losing ownership or cancellation during a read forbids a new proof callback.
       const blocked = new AbortController()
       current = true
@@ -284,55 +291,6 @@ describe('Codex chat catch-up', () => {
         }
       })
       expect(settled).not.toContain(next)
-    }
-  })
-
-  it('does zero proof-only item work after its final target at N and 10N', async () => {
-    for (const n of [100, 1_000]) {
-      const c = await chat({ now: 1_000 })
-      await c.journal.appendSubmission({
-        clientMessageId: 'last',
-        body: { kind: 'message', role: 'user', blocks: [] },
-        payloadFingerprint: 'last',
-        fence: 1
-      })
-      let visits = 0
-      const known = {
-        ...turn(0),
-        items: [
-          { type: 'userMessage', id: 'exact', clientId: 'last', content: [] },
-          ...Array.from({ length: n }, (_, i) => ({
-            get type() {
-              visits++
-              return 'agentMessage'
-            },
-            id: `tail-${i}`,
-            text: 'old'
-          }))
-        ]
-      }
-      await c.journal.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'turn-0', ordinal: 0 },
-        { kind: 'turn', turnId: 'turn-0', state: 'completed' },
-        { fence: 1, turnScope: { kind: 'thread' } }
-      )
-      await c.open([known], {
-        connection: {
-          request: async (_method, params) => ({
-            data: [params?.itemsView === 'summary' ? { ...known, items: [] } : known],
-            nextCursor: null
-          })
-        },
-        onReceipt: (id, providerIdentity) =>
-          c.journal.acceptLate({
-            clientMessageId: id,
-            providerIdentity,
-            state: 'accepted',
-            fence: 1
-          })
-      })
-      expect(visits).toBe(0)
-      expect(c.journal.submission('last')?.dispatchState).toBe('accepted')
     }
   })
 
@@ -357,40 +315,6 @@ describe('Codex chat catch-up', () => {
     })
     const displayed = projectStructuredItemsToNativeChat(items).flatMap((message) => message.blocks)
     expect(displayed).toContainEqual({ type: 'text', text: answer })
-  })
-
-  it('adds the turns made outside the chat once, in order, after the chat rows', async () => {
-    const c = await chat({ now: 1_000 })
-
-    await c.open([turn(1)])
-    expect(c.texts()).toEqual(['user:ask 1', 'assistant:answer 1'])
-
-    await c.open([turn(1), turn(2), turn(3)])
-    const caughtUp = [
-      'user:ask 1',
-      'assistant:answer 1',
-      '(continued-outside)',
-      'user:ask 2',
-      'assistant:answer 2',
-      'user:ask 3',
-      'assistant:answer 3'
-    ]
-    expect(c.texts()).toEqual(caughtUp)
-
-    await c.open([turn(1), turn(2), turn(3)])
-    expect(c.texts()).toEqual(caughtUp)
-
-    // An external rewind preserves displayed rows and adds a notice.
-    await c.open([turn(1), turn(2), turn(4)])
-    expect(c.texts().slice(caughtUp.length)).toEqual([
-      '(continued-outside-rewound)',
-      'user:ask 4',
-      'assistant:answer 4'
-    ])
-
-    // Summary-only history cannot be imported.
-    await c.open([turn(1), turn(2), turn(4), turn(6, 'summary')])
-    expect(c.texts().slice(caughtUp.length + 3)).toEqual([])
   })
 
   it('recovers an older gap behind newer native work after a failed read and restart', async () => {
@@ -431,25 +355,6 @@ describe('Codex chat catch-up', () => {
     ])
     await c.open([turn(1), turn(2), turn(3), turn(4)])
     expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 4', 'assistant:answer 4'])
-  })
-
-  it('uses the continued-outside notice after a receipt-only known turn', async () => {
-    const c = await chat({ now: 1_000 })
-    const body = { kind: 'message' as const, role: 'user' as const, blocks: [] }
-    await c.journal.appendSubmission({
-      clientMessageId: 'receipt',
-      body,
-      payloadFingerprint: 'receipt',
-      fence: 1
-    })
-    await c.journal.resolveDispatch({
-      clientMessageId: 'receipt',
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 },
-      fence: 1
-    })
-    await c.open([turn(1), turn(2)])
-    expect(c.texts().slice(-3)).toEqual(['(continued-outside)', 'user:ask 2', 'assistant:answer 2'])
   })
 
   it('commits a 600-message import once, rolls back a later partition failure, and recovers', async () => {
@@ -631,7 +536,10 @@ describe('Codex chat catch-up', () => {
     store = await openTestAgentSessionRecordStore(c.root)
     await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
     expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
-    expect(usableJournalHistoryOrigin(c.journal.historyOrigin())?.importedAt).toBe(200_000)
+    expect(usableJournalHistoryOrigin(c.journal.historyOrigin())).toMatchObject({
+      kind: 'legacy_import',
+      importedAt: 200_000
+    })
     await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
     expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
       'assistant:old A answer',
@@ -679,3 +587,131 @@ describe('Codex chat catch-up', () => {
     expect(c.texts()).toEqual(['user:legacy', 'assistant:ordinary reply'])
   })
 })
+
+it.each(['a', 'b'] as const)(
+  'conserves recorded %s interruption in an admitted returned-turn transaction',
+  async (label) => {
+    const c = await chat({ now: 1_000 })
+    const records = await recordedCodexRollout(label)
+    const filePath = join(c.root, `rollout-${String(records[0]!.payload.id)}.jsonl`)
+    await writeFile(filePath, records.map((record) => JSON.stringify(record)).join('\n'))
+    const imported = await prepareLegacyTranscriptImport({
+      agent: 'codex',
+      sessionId: SESSION,
+      options: { filePath }
+    })
+    expect(imported.ok).toBe(true)
+    if (!imported.ok) {
+      return
+    }
+    const turnId =
+      label === 'a'
+        ? '01a1b0de-97e0-7c01-babd-9d697204ab3e'
+        : '01a1b0e1-897d-73e0-b910-5b854abbfcb7'
+    const id =
+      label === 'a'
+        ? 'exec-422971fb-5f49-4f00-8701-a031ef77f289'
+        : 'exec-b421ed59-e65b-4311-acc8-685624133938'
+    const body = imported.items.find(
+      (row) => row.body.kind === 'tool-call' && row.body.callId === id
+    )!.body
+    const nativeId = codexNonMessageIdentity(THREAD, turnId, id)
+    const key = agentJournalItemKey(nativeId)
+    const turnIdentity = codexTurnLifecycleIdentity(SESSION, turnId)
+    // Saved-live setup has no adoption cutoff; returned full turns are an admitted caller path.
+    await c.journal.appendItem(
+      turnIdentity,
+      {
+        kind: 'turn',
+        turnId,
+        state: label === 'a' ? 'interrupted' : 'completed',
+        outcome: label === 'a' ? 'cancellation' : 'success'
+      },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+    await c.journal.appendItem(nativeId, body, {
+      fence: 1,
+      turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(turnIdentity) }
+    })
+    const before = c.journal.item(key)!.revision
+    // API contract derived from recorded command fields, not a captured list/read response.
+    const command = {
+      type: 'commandExecution',
+      id,
+      status: 'failed',
+      command: "/bin/zsh -lc 'sleep 60'",
+      cwd: '/Users/brennanbenson/orca/workspaces/orca/qa-codex-exec-import-qg/codex-exec-import/run/workspace',
+      exitCode: -1,
+      durationMs: label === 'a' ? 9915 : 53631
+    }
+    const supplied = {
+      id: turnId,
+      status: label === 'a' ? 'interrupted' : 'completed',
+      items: [
+        { ...command, aggregatedOutput: 'partial output contract' },
+        { ...command, id: 'unsaved-minus-one' },
+        { ...command, id: 'still-running', status: 'inProgress', exitCode: undefined },
+        { ...command, id: 'failed-seven', exitCode: 7, durationMs: 11872 }
+      ]
+    }
+    await c.open([], { returnedTurns: [supplied], paginate: false })
+    const saved = c.journal.item(key)!
+    expect(saved.revision).toBeGreaterThan(before)
+    expect(saved.body).toMatchObject({
+      kind: 'tool-call',
+      state: 'failed',
+      endedAs: 'interrupted',
+      output: { head: 'partial output contract' }
+    })
+    expect(saved.body).not.toHaveProperty('exitCode')
+    expect(saved.body).not.toHaveProperty('durationMs')
+    expect(c.journal.item(agentJournalItemKey(turnIdentity))?.body).toMatchObject({
+      state: label === 'a' ? 'interrupted' : 'completed'
+    })
+    const calls = projectStructuredItemsToNativeChat(c.journal.snapshot().items)
+      .flatMap((message) => message.blocks)
+      .filter((block) => block.type === 'tool-call')
+    expect(calls.find((call) => call.callId === id)).not.toHaveProperty('exitCode')
+    expect(calls.find((call) => call.callId === id)).not.toHaveProperty('durationMs')
+    expect(calls.find((call) => call.callId === 'unsaved-minus-one')).toMatchObject({
+      state: 'failed',
+      exitCode: -1
+    })
+    expect(calls.find((call) => call.callId === 'unsaved-minus-one')).not.toHaveProperty('endedAs')
+    expect(calls.find((call) => call.callId === 'still-running')).toMatchObject({
+      state: 'running'
+    })
+    expect(calls.find((call) => call.callId === 'failed-seven')).toMatchObject({
+      state: 'failed',
+      exitCode: 7,
+      durationMs: 11872
+    })
+    await c.open([], {
+      returnedTurns: [
+        {
+          ...supplied,
+          items: [
+            command,
+            {
+              ...command,
+              id: 'failed-seven',
+              status: undefined,
+              exitCode: undefined,
+              durationMs: undefined
+            }
+          ]
+        }
+      ],
+      paginate: false
+    })
+    expect(c.journal.item(key)?.body).toEqual(saved.body)
+    expect(
+      c.journal
+        .snapshot()
+        .items.find((row) => row.body.kind === 'tool-call' && row.body.callId === 'failed-seven')
+        ?.body
+    ).toMatchObject({ state: 'failed', exitCode: 7, durationMs: 11872 })
+    await c.reopen()
+    expect(c.journal.item(key)?.body).toEqual(saved.body)
+  }
+)

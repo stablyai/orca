@@ -1,5 +1,5 @@
 import type { ExecutionHostKind } from '../../../../shared/execution-host'
-import type { ExecutionHostHealth } from '../../../../shared/execution-host-registry'
+import type { ExecutionHostHealth } from '../../../../shared/execution-host/execution-host-health'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import type { RuntimeHostBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 
@@ -74,6 +74,7 @@ export function buildHostHeaderMenuModel(input: HostHeaderMenuInput): HostHeader
   const blocked =
     input.health === 'blocked' &&
     input.blockedReason !== 'access-revoked' &&
+    input.blockedReason !== 'server-replaced' &&
     input.compatibility?.kind === 'blocked'
       ? { reason: input.compatibility.reason }
       : null

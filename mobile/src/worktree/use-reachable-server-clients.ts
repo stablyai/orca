@@ -1,11 +1,8 @@
 import { useMemo } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
-import {
-  reachableServerClients,
-  relaysToServers
-} from '../transport/execution-host-scoped-rpc-client'
-import type { RpcClient } from '../transport/rpc-client'
+import { reachableServerClients, relaysToServers } from './execution-host-scoped-rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useRelayHosts } from './relay-hosts-feed'
 
 // Key clients by the ready-server set so health/label changes cannot trigger repo reloads.

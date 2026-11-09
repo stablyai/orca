@@ -224,6 +224,8 @@ export type AgentSessionStatusSummary = {
   effort?: string
   fastMode?: string
   serviceTier?: string
+  /** Saved next-turn intent; moves clients' option stamps without a turn or model change. */
+  interactionMode?: 'default' | 'plan'
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string
@@ -247,6 +249,9 @@ export type AgentSessionStatusSummary = {
   /** The record's Sleep mark: the user's Sleep stopped this chat and nothing has been sent since.
    *  Absent from older hosts. */
   sleptAt?: number
+  /** The chat runs a program the host already has, so it needs no Orca-installed runtime.
+   *  Absent from older hosts. */
+  hostProgram?: true
   /** Host-path directory the session is held to regardless of its workspace's current directory
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string
@@ -317,7 +322,7 @@ export type AgentSessionAttachResult = {
   tabId?: string
 }
 
-/** Only queue-if-active callers with queued-messages.v2 receive this draft arm; non-waiting states occur only on settled-draft replays. */
+/** Waiting input answers with its row; non-waiting states can occur on same-id replays. */
 export type AgentSessionQueuedSendReceipt = {
   messageId: string
   position: number
@@ -328,7 +333,7 @@ export type AgentSessionSendResult =
   | { clientMessageId: string; submission: AgentJournalSubmission }
   | { clientMessageId: string; queued: AgentSessionQueuedSendReceipt }
 
-/** Undefined for queued replies; callers never sending delivery cannot receive that arm and read undefined as delivery-unknown. */
+/** Undefined while the input is a waiting row rather than a handed-off submission. */
 export function agentSessionSendSubmission(
   result: AgentSessionSendResult | undefined
 ): AgentJournalSubmission | undefined {

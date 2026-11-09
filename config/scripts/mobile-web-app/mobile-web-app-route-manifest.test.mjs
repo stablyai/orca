@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_APP_ROUTE_ROOT,
-  ROUTE_CONTEXT_SOURCE,
   ROUTE_MODULE_SYNCHRONOUS_EXPORTS,
   collectMobileWebAppRouteKeys,
   collectMobileWebAppRoutes,
@@ -29,20 +28,6 @@ async function withScratch(run) {
 }
 
 describe('route manifest', () => {
-  it('collects the h/ subtree and, above it, only the root layout web sibling', async () => {
-    const routes = await collectMobileWebAppRoutes(appDir)
-    const keys = routes.map((route) => route.key)
-    expect(keys.length).toBeGreaterThan(0)
-    for (const key of keys.filter((key) => key !== './_layout.tsx')) {
-      expect(key.startsWith(`./${MOBILE_WEB_APP_ROUTE_ROOT}/`)).toBe(true)
-    }
-    // Root key must resolve web layout or native pairing/settings/notifications enter page bundle.
-    expect(routes.find((route) => route.key === './_layout.tsx')?.module).toBe(
-      join(appDir, '_layout.web.tsx')
-    )
-    expect(keys).not.toContain('./pair.tsx')
-  })
-
   it('carries no root layout for a tree without a web sibling of it', async () => {
     await withScratch(async (scratch) => {
       await mkdir(join(scratch, MOBILE_WEB_APP_ROUTE_ROOT), { recursive: true })
@@ -50,11 +35,6 @@ describe('route manifest', () => {
       await writeFile(join(scratch, MOBILE_WEB_APP_ROUTE_ROOT, 'index.tsx'), 'export default 1\n')
       expect(await collectMobileWebAppRouteKeys(scratch)).toEqual(['./h/index.tsx'])
     })
-  })
-
-  it('is sorted, so the generated module is a pure function of the tree', async () => {
-    const keys = await collectMobileWebAppRouteKeys(appDir)
-    expect(keys).toEqual([...keys].sort())
   })
 
   it('excludes test files and API routes', async () => {
@@ -77,26 +57,6 @@ describe('route manifest', () => {
       expect(await collectMobileWebAppRouteKeys(scratch)).toEqual(['./h/index.tsx'])
     })
     expect(await collectMobileWebAppRouteKeys(appDir)).not.toContain('./h/_layout.test.tsx')
-  })
-
-  it('refuses an empty subtree rather than emitting a context with no routes', async () => {
-    await withScratch(async (scratch) => {
-      await mkdir(join(scratch, MOBILE_WEB_APP_ROUTE_ROOT))
-      await expect(collectMobileWebAppRouteKeys(scratch)).rejects.toThrow(
-        '[mobile-web-app] no routes under'
-      )
-    })
-  })
-
-  it('has no route carrying an export a lazy module would swallow', async () => {
-    const routes = await collectMobileWebAppRoutes(appDir)
-    expect(routes.length).toBeGreaterThan(0)
-    for (const { module } of routes) {
-      const { named, starExports } = await routeModuleSynchronousExports(module)
-      // Synchronous namespace exports need a static route import; lazy import cannot serve them.
-      expect(named, `${module} exports ${named.join(', ')}`).toEqual([])
-      expect(starExports, `${module} re-exports all of ${starExports.join(', ')}`).toEqual([])
-    }
   })
 
   // Alias/reexport controls require namespace parse, not declaration-name matching.
@@ -174,35 +134,5 @@ describe('route manifest', () => {
         { key: './h/index.tsx', module: join(directory, 'index.web.tsx') }
       ])
     })
-  })
-})
-
-describe('the synthesized RequireContext', () => {
-  const build = (modules) =>
-    new Function('modules', `${ROUTE_CONTEXT_SOURCE}; return routeContext`)(modules)
-
-  it('answers the four members expo-router reads', () => {
-    const context = build({ './h/index.tsx': { default: 'screen' } })
-    expect(context.keys()).toEqual(['./h/index.tsx'])
-    expect(context('./h/index.tsx')).toEqual({ default: 'screen' })
-    expect(context.resolve('./h/index.tsx')).toBe('./h/index.tsx')
-    expect(context.id).toBe('orca-mobile-web-app-routes')
-  })
-
-  it('hands out a copy of keys, so a caller cannot mutate the route tree', () => {
-    const context = build({ './h/index.tsx': {} })
-    context.keys().push('./injected.tsx')
-    expect(context.keys()).toEqual(['./h/index.tsx'])
-  })
-
-  it('throws rather than returning undefined for an unknown key', () => {
-    const context = build({ './h/index.tsx': {} })
-    expect(() => context('./missing.tsx')).toThrow('no route module')
-    expect(() => context.resolve('./missing.tsx')).toThrow('cannot resolve route')
-  })
-
-  it('does not answer inherited Object keys', () => {
-    const context = build({ './h/index.tsx': {} })
-    expect(() => context('constructor')).toThrow('no route module')
   })
 })

@@ -9,7 +9,7 @@ type MockStoreState = {
   tabsByWorktree: Record<string, { id: string }[]>
   unifiedTabsByWorktree: Record<
     string,
-    { entityId: string; contentType: string; groupId: string }[]
+    { id: string; entityId: string; contentType: string; groupId: string }[]
   >
   activeGroupIdByWorktree: Record<string, string>
   openFiles: { id: string; worktreeId: string }[]
@@ -29,7 +29,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mocks.launchAgentInNewTab
 }))
 
@@ -41,7 +41,7 @@ function createStoreState(): MockStoreState {
     setRecentQuickCommandForGroup: vi.fn(),
     tabsByWorktree: { 'wt-1': [{ id: 'tab-existing' }, { id: 'tab-new' }] },
     unifiedTabsByWorktree: {
-      'wt-1': [{ entityId: 'tab-new', contentType: 'terminal', groupId: 'group-1' }]
+      'wt-1': [{ id: 'tab-new', entityId: 'tab-new', contentType: 'terminal', groupId: 'group-1' }]
     },
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
     openFiles: [],
@@ -58,6 +58,12 @@ describe('runQuickCommandInNewTab', () => {
 
   it('appends the new terminal after editor and browser tabs in the stored tab order', () => {
     mockState.openFiles = [{ id: 'file-1', worktreeId: 'wt-1' }]
+    mockState.unifiedTabsByWorktree['wt-1'].push({
+      id: 'file-1',
+      entityId: 'file-1',
+      contentType: 'editor',
+      groupId: 'group-1'
+    })
     mockState.browserTabsByWorktree = { 'wt-1': [{ id: 'browser-1' }] }
     mockState.tabBarOrderByWorktree = { 'wt-1': ['file-1', 'tab-existing'] }
 

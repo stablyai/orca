@@ -1,6 +1,6 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
-import { buildImageDataUri } from '../../../../shared/image-data-uri'
+import { buildImageDataUri } from '../../../../shared/file-preview/image-data-uri'
 import { readString } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 
@@ -40,7 +40,11 @@ export function codexImageItemBody(item: CodexThreadItem): AgentJournalMessageIt
     if (item.failure || status === 'failed') {
       text = 'Image generation failed'
     } else if (status !== 'completed') {
-      text = status === 'inProgress' ? 'Generating image…' : 'Image generation: preview unavailable'
+      // Codex passes the Responses API status through, not the app-server's camelCase enum.
+      text =
+        status === 'in_progress' || status === 'generating'
+          ? 'Generating image…'
+          : 'Image generation: preview unavailable'
     } else {
       const path = imagePath(item, 'savedPath')
       const url = path ? null : generatedImageUrl(item)

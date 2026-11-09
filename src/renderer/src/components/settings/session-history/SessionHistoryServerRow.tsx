@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import {
   getRuntimeServerConnectionState,
@@ -35,6 +35,8 @@ export function SessionHistoryServerRow({
   /** Lets the pane count and order computers it does not itself poll. */
   onStateChange?: (environmentId: string, state: SessionSearchComputerState) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const hostId = toRuntimeExecutionHostId(environment.id)
   const mounted = useMountedRef()
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
@@ -77,7 +79,7 @@ export function SessionHistoryServerRow({
         return
       }
       onError(
-        translate(
+        t(
           'sessionHistory.settings.serverToggleError',
           'Could not change session search on {{host}}. Try again.',
           { host: environment.name }
@@ -112,9 +114,9 @@ export function SessionHistoryServerRow({
         dimmed
         checked={false}
         disabled
-        status={translate('sessionHistory.settings.serverTooOld', 'Needs a newer version of Orca.')}
+        status={t('sessionHistory.settings.serverTooOld', 'Needs a newer version of Orca.')}
         action={{
-          label: translate('sessionHistory.settings.updateServer', 'Update server'),
+          label: t('sessionHistory.settings.updateServer', 'Update server'),
           onClick: openServerSettings
         }}
       />
@@ -131,17 +133,17 @@ export function SessionHistoryServerRow({
         disabled
         status={
           checking
-            ? sessionSearchCheckingMessage()
-            : translate('sessionHistory.settings.serverOffline', 'Offline')
+            ? sessionSearchCheckingMessage(t)
+            : t('sessionHistory.settings.serverOffline', 'Offline')
         }
       />
     )
   }
-  let statusText: string | undefined = sessionSearchCheckingMessage()
+  let statusText: string | undefined = sessionSearchCheckingMessage(t)
   if (failed) {
-    statusText = sessionSearchReadErrorMessage()
+    statusText = sessionSearchReadErrorMessage(t)
   } else if (status) {
-    statusText = enabled ? sessionSearchStatusMessage(status) : undefined
+    statusText = enabled ? sessionSearchStatusMessage(status, t, intlLocale) : undefined
   }
   return (
     <SessionHistoryComputerRow
@@ -149,7 +151,7 @@ export function SessionHistoryServerRow({
       checked={enabled}
       disabled={busy}
       {...(statusText === undefined ? {} : { status: statusText })}
-      details={sessionSearchStatusDetails(status)}
+      details={sessionSearchStatusDetails(status, t)}
     />
   )
 }

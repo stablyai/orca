@@ -282,13 +282,13 @@ describe('canonical source positions', () => {
     'rejoins image units across page and append boundaries, source-first=%s',
     async (sourceFirst) => {
       const { createIncrementalAssembler, reset, applyAppends } =
-        await import('../../src/renderer/src/components/native-chat/native-chat-incremental-assembler')
+        await import('../../src/renderer/src/components/native-chat/session/terminal/assembly/native-chat-incremental-assembler')
       const { prepareNativeChatLiveMessages } =
-        await import('../../src/renderer/src/components/native-chat/native-chat-live-message-preparation')
+        await import('../../src/renderer/src/components/native-chat/session/terminal/assembly/native-chat-live-message-preparation')
       const { commandMarkersAsMessages } =
-        await import('../../src/renderer/src/components/native-chat/native-chat-command-marker')
+        await import('../../src/renderer/src/components/native-chat/session/terminal/delivery/native-chat-command-marker')
       const { createNativeChatMessageListProjection } =
-        await import('../../src/renderer/src/components/native-chat/native-chat-message-list-projection')
+        await import('../../src/renderer/src/components/native-chat/conversation/projection/native-chat-message-list-projection')
       const pair = (id: string, path: string) => {
         const prompt = record(id, PROMPT.timestamp, `${id} [Image #1]`, 'user')
         const images = [1, 2].map((n) =>
@@ -338,9 +338,9 @@ describe('canonical source positions', () => {
     const { mergeNativeChatLiveSession } =
       await import('../../src/shared/native-chat/native-chat-live-status')
     const { applyCommandMarkerBoundaries, commandMarkersAsMessages } =
-      await import('../../src/renderer/src/components/native-chat/native-chat-command-marker')
+      await import('../../src/renderer/src/components/native-chat/session/terminal/delivery/native-chat-command-marker')
     const { assembleNativeChatSession } =
-      await import('../../src/renderer/src/components/native-chat/native-chat-session-assembler')
+      await import('../../src/renderer/src/components/native-chat/session/terminal/assembly/native-chat-session-assembler')
     const { NATIVE_CHAT_STREAMING_ID } =
       await import('../../src/shared/native-chat/native-chat-streaming')
     const filePath = await transcriptFile(

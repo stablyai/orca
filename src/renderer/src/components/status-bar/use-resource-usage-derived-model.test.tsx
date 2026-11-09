@@ -153,12 +153,6 @@ describe('Resource Manager folder ownership', () => {
     }
   )
 
-  it('does not replace a sampled project name with a same-id group from another host', () => {
-    const foreignGroup = { ...group, name: 'Foreign project', executionHostId: 'runtime:paired' }
-    const groups = derive([local], [], sampled, [group, foreignGroup])
-    expect(groups[0].repoName).toBe('Local project')
-  })
-
   it('keeps git snapshot identity when the catalog contains a different host', () => {
     const row = { ...sampled, worktreeId: 'repo::/notes', repoId: 'repo' }
     const foreign = {

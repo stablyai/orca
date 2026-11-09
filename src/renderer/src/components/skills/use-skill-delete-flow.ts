@@ -13,7 +13,7 @@ import {
   deleteSkillsOnRuntimeTarget,
   previewSkillDeletionOnRuntimeTarget,
   runtimeTargetSupportsSkillDelete
-} from '../../runtime/runtime-skills-client'
+} from '../../runtime/skills/configuration/runtime-skills-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   skillDeleteActionLabel,
@@ -22,7 +22,7 @@ import {
   skillDeletePlacementSummary,
   skillDeleteRetainedSourceLines
 } from './skill-delete-copy'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type SkillDeleteFlow = {
   /** False while the target is unresolved or the host predates the capability. */

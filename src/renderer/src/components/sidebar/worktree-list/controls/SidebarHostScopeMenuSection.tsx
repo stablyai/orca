@@ -10,7 +10,7 @@ import type {
   VisibleWorkspaceHostIds,
   WorkspaceHostScope
 } from '../../../../../../shared/ui-chrome-types'
-import { pickerExecutionHosts } from '../../../../../../shared/managed-orcad-execution-host'
+import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import {
   getCheckedHostRows,
   toggleAllVisibleHosts,
@@ -21,6 +21,7 @@ import { useBoundedHostRows } from '../../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type SidebarHostScopeMenuSectionProps = {
   hostVisibilityLabel: string
@@ -31,31 +32,28 @@ type SidebarHostScopeMenuSectionProps = {
   setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
 }
 
-function getHostMetadata(host: SidebarHostOption): string {
-  const healthLabel = getSidebarHostHealthLabel(host.health, host.blockedReason)
+function getHostMetadata(host: SidebarHostOption, t: Translate = translate): string {
+  const healthLabel = getSidebarHostHealthLabel(host.health, host.blockedReason, t)
   if (host.kind === 'local') {
     return host.detail
   }
   if (host.kind === 'ssh') {
     const presenceLabel =
       host.presence === 'configured'
-        ? translate(
+        ? t(
             'auto.components.sidebar.SidebarWorkspaceOptionsMenu.configuredSshHost',
             'Configured SSH'
           )
-        : translate(
-            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectSshHost',
-            'Project SSH'
-          )
+        : t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectSshHost', 'Project SSH')
     return `${presenceLabel} · ${healthLabel}`
   }
   const presenceLabel =
     host.presence === 'active'
-      ? translate(
+      ? t(
           'auto.components.sidebar.SidebarWorkspaceOptionsMenu.activeRuntimeHost',
           'Default for new projects'
         )
-      : translate(
+      : t(
           'auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectRuntimeHost',
           'Project server'
         )
@@ -70,6 +68,7 @@ export function SidebarHostScopeMenuSection({
   visibleWorkspaceHostIds,
   setVisibleWorkspaceHostIds
 }: SidebarHostScopeMenuSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const allVisible = !visibleWorkspaceHostIds
   const hostRows = pickerExecutionHosts(hostOptions)
   const checkedRowIds = new Set(
@@ -102,9 +101,7 @@ export function SidebarHostScopeMenuSection({
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between gap-3">
-          <span>
-            {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.hosts', 'Hosts')}
-          </span>
+          <span>{t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.hosts', 'Hosts')}</span>
           <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
             {hostVisibilityLabel}
           </span>
@@ -122,10 +119,10 @@ export function SidebarHostScopeMenuSection({
         >
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="truncate">
-              {translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')}
+              {t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')}
             </span>
             <span className="truncate text-[11px] font-normal text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.sidebar.SidebarWorkspaceOptionsMenu.allHostsDetail',
                 'Show every host'
               )}
@@ -149,7 +146,7 @@ export function SidebarHostScopeMenuSection({
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="truncate">{host.label}</span>
                 <span className="text-[11px] font-normal text-muted-foreground">
-                  {getHostMetadata(host)}
+                  {getHostMetadata(host, t)}
                 </span>
               </span>
             </DropdownMenuCheckboxItem>

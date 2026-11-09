@@ -126,12 +126,18 @@ if (
  * Returns the store's own promise so callers can report refusals.
  */
 export function persistMirrored(key: string, value: string | null): Promise<void> {
+  return persistMirroredReadBack(key, value).then(() => {})
+}
+
+/** Resolves with what storage holds afterwards, which is not `value` when a page store dropped the write. */
+export function persistMirroredReadBack(key: string, value: string | null): Promise<string | null> {
   const write = value === null ? AsyncStorage.removeItem(key) : AsyncStorage.setItem(key, value)
   // Read back before noting: the page adapter can resolve a refused write, so requested value is not proof of persistence.
   return write
     .then(() => AsyncStorage.getItem(key))
     .then((stored) => {
       note(key, stored, 'persisted')
+      return stored
     })
 }
 

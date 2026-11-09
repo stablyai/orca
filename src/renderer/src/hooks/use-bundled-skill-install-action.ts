@@ -13,14 +13,14 @@ import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-sk
 import {
   planBundledSkillsOnTarget,
   type BundledSkillUnsupportedReason
-} from '@/runtime/runtime-bundled-skills-client'
+} from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import {
   INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
   INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
 } from './installed-agent-skills-change-event'
 import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store'
-import { getManagedOrcadSshTargetId } from '../../../shared/managed-orcad-execution-host'
+import { getManagedOrcadSshTargetId } from '../../../shared/execution-host/managed-orcad-execution-host'
 
 /** `unknown`: the owning host's check failed. */
 export type BundledSkillInstallActionState =

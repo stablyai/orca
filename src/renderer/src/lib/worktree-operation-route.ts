@@ -6,17 +6,19 @@ import {
 } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { resolveExactWorktreeRoute } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
   findIndexedWorktrees,
-  findIndexedRepoOwnerForHost,
-  findIndexedWorktreeOwners,
+  findIndexedWorktrees as findIndexedWorktreeOwners,
   hasIndexedDetectedWorktree,
-  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import {
+  findIndexedRepoOwnerForHost,
+  resolveIndexedRepoOwner
+} from './workspace/ownership/repo-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 import { onPairedWebClientHost } from './paired-web-client-host'
 import {

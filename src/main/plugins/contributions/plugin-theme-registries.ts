@@ -52,9 +52,13 @@ async function readTheme<T>(
   }
 }
 
-export function createPluginThemeRegistry(contentVerifier: PluginContentVerifier) {
+export function createPluginThemeRegistry(
+  contentVerifier: PluginContentVerifier,
+  overlay?: (entries: readonly PluginThemeRegistration[]) => readonly PluginThemeRegistration[]
+) {
   return new PluginArtifactPackRegistry<PluginThemeContribution, PluginThemeRegistration>({
     contentVerifier,
+    overlay,
     contributions: (plugin) => plugin.manifest.contributes.themes,
     load: async (plugin, contribution) => {
       const { background, ...theme } = await readTheme(
@@ -73,9 +77,15 @@ export function createPluginThemeRegistry(contentVerifier: PluginContentVerifier
   })
 }
 
-export function createPluginTerminalThemeRegistry(contentVerifier: PluginContentVerifier) {
+export function createPluginTerminalThemeRegistry(
+  contentVerifier: PluginContentVerifier,
+  overlay?: (
+    entries: readonly PluginTerminalThemeRegistration[]
+  ) => readonly PluginTerminalThemeRegistration[]
+) {
   return new PluginArtifactPackRegistry<PluginThemeContribution, PluginTerminalThemeRegistration>({
     contentVerifier,
+    overlay,
     contributions: (plugin) => plugin.manifest.contributes.terminalThemes,
     load: (plugin, contribution) =>
       readTheme(plugin, contribution, 'terminal theme', parsePluginTerminalThemeArtifact)

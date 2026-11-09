@@ -1,6 +1,6 @@
 import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { hasRemoteRuntimeOwner } from '@/runtime/runtime-file-routing'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { hasRemoteRuntimeOwner } from '@/runtime/files/runtime-file-routing'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { useAppStore } from '@/store'
 

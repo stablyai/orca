@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { startAiVaultTabTitleSync } from '@/lib/ai-vault-tab-title-sync'
+import { startAiVaultTabTitleSync } from '@/lib/agent-session/history/title-sync/ai-vault-tab-title-sync'
 import { scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { useAppStore } from '@/store'
 

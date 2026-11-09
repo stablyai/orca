@@ -5,7 +5,8 @@ import type {
   SshRemotePtyLease,
   SshTarget
 } from './ssh-types'
-import type { Automation, AutomationRun } from './automations-types'
+import type { Automation } from './automations/automation-definition'
+import type { AutomationRun } from './automations/history/automation-run'
 import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agent-status-ipc-payload'
 import type { FeatureInteractionTelemetryBucketState } from './feature-interactions'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'
@@ -84,6 +85,9 @@ export type PersistedState = {
   worktreeIdentityAliases?: Record<string, string[]>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
+  /** Parents in other stores, as saved: entries this build can't read are kept, never trusted.
+   * Separate so older builds' same-store cleanup never reads them; read through validCrossStoreLineage. */
+  crossStoreLineageByChildKey?: Record<string, unknown>
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {

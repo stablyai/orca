@@ -17,7 +17,7 @@ import {
   type WorkspaceActivityFacts,
   type WorkspaceActivityFactsSnapshot
 } from '../../../shared/sidebar-list/workspace-activity-facts'
-import type { AgentHookServer } from '../../agent-hooks/server'
+import type { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { SidebarClock } from './sidebar-clock'
 
 export type WorkspaceSurfaceActivity = Omit<WorkspaceActivityFacts, 'agent'>

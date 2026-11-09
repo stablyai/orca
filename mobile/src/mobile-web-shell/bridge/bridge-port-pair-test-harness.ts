@@ -1,4 +1,4 @@
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { createBridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
 import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge-caps'

@@ -2,44 +2,40 @@ import React from 'react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
+import { holdNativeChatStagedInput } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import {
   pendingCreationChatDraftScopeKey,
   pendingCreationHeldChatMessage,
   type PendingWorktreeCreation
-} from '@/lib/pending-worktree-creation'
-import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
-import {
-  NativeChatComposer,
-  type NativeChatComposerHandle
-} from '@/components/native-chat/NativeChatComposer'
-import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/native-chat-composer-types'
-import { deleteNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
-import { useNativeChatComposerError } from '@/components/native-chat/use-native-chat-composer-notice'
-import type { NativeChatComposerNotice } from '@/components/native-chat/native-chat-composer-notice'
-import { NativeChatEmptyState } from '@/components/native-chat/NativeChatEmptyState'
-import { NativeChatUserMessageRow } from '@/components/native-chat/NativeChatUserMessageRow'
+} from '@/lib/workspace/creation/pending-worktree-creation'
+import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
+import { NativeChatComposer } from '@/components/native-chat/composer/NativeChatComposer'
+import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
+import { useNativeChatComposerError } from '@/components/native-chat/composer/controls/use-native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '@/components/native-chat/composer/controls/native-chat-composer-notice'
+import { NativeChatEmptyState } from '@/components/native-chat/host-access/NativeChatEmptyState'
+import { NativeChatUserMessageRow } from '@/components/native-chat/messages/rows/NativeChatUserMessageRow'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS,
   nativeChatTranscriptOuterClass
-} from '@/components/native-chat/native-chat-appearance-style'
-import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/use-native-chat-store-appearance-style'
+} from '@/components/native-chat/appearance/native-chat-appearance-style'
+import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
-import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
 import { WorktreeSetupSteps } from './WorktreeSetupSteps'
 import { deriveWorktreeSetupSteps } from './worktree-setup-steps'
 import { useWorktreeCreationClock } from './worktree-creation-clock'
+import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
+import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { usePendingNativeChatOptions } from './use-pending-native-chat-options'
 
-const NO_OPTIONS_SURFACE: SessionOptionsSurface = {
-  getSnapshot: () => [],
-  setOption: async () => ({ snapshot: [] }),
-  invokeAction: async () => ({ snapshot: [] }),
-  subscribe: () => () => {}
-}
 const NO_COMMAND_CAUSES = {
   working: false,
   prompt: false,
@@ -48,10 +44,10 @@ const NO_COMMAND_CAUSES = {
   retry: false
 } as const
 
-function failureText(entry: PendingWorktreeCreation): string {
+function failureText(entry: PendingWorktreeCreation, t: Translate = translate): string {
   return (
     entry.error ??
-    translate(
+    t(
       'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
       'Something went wrong while creating the worktree.'
     )
@@ -66,7 +62,21 @@ export default function PendingNativeChatCreation({
   creationId: string
   reserveCollapsedSidebarHeaderSpace?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
+  const sourceWorktreeId = useAppStore((s) => {
+    const repo = s.repos.find((repo) => repo.id === entry?.request.repoId)
+    return repo ? getRepoMainWorktreeId(repo) : undefined
+  })
+  const executionHostId = useAppStore((s) => {
+    const repo = s.repos.find((repo) => repo.id === entry?.request.repoId)
+    return (
+      entry?.request.executionHostId ??
+      entry?.request.workspaceRunContext?.hostId ??
+      (repo ? getRepoExecutionHostId(repo) : undefined)
+    )
+  })
+  const options = usePendingNativeChatOptions(entry, executionHostId, sourceWorktreeId)
   const appearanceStyle = useNativeChatStoreAppearanceStyle()
   const composerRef = React.useRef<NativeChatComposerHandle>(null)
   const { composerError, reportComposerError } = useNativeChatComposerError(NO_COMMAND_CAUSES)
@@ -79,27 +89,28 @@ export default function PendingNativeChatCreation({
   const suppressFocus = entry?.request.suppressTerminalFocusOnCompletion === true
 
   const transport = React.useMemo((): NativeChatStructuredComposerTransport => {
-    const sendBlockedReason = handedOff
-      ? translate(
-          'auto.components.worktree.creation.PendingNativeChatCreation.openingChat',
-          'Opening chat…'
-        )
-      : status === 'error'
+    const sendBlockedReason =
+      handedOff && status !== 'error'
         ? translate(
-            'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedFailed',
-            'Retry creating the worktree to send'
+            'auto.components.worktree.creation.PendingNativeChatCreation.openingChat',
+            'Opening chat…'
           )
-        : held
+        : status === 'error'
           ? translate(
-              'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedHeld',
-              'Sends when the worktree is ready'
+              'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedFailed',
+              'Retry creating the worktree to send'
             )
-          : undefined
+          : held
+            ? translate(
+                'auto.components.worktree.creation.PendingNativeChatCreation.sendBlockedHeld',
+                'Sends when the worktree is ready'
+              )
+            : undefined
     return {
       capturePresentation: () => () => true,
       // Commands go to the agent as the first message, so nothing is handled here.
       dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
-      send: (text) => {
+      send: (text, attachments, request) => {
         const store = useAppStore.getState()
         const current = store.pendingWorktreeCreations[creationId]
         if (
@@ -110,19 +121,41 @@ export default function PendingNativeChatCreation({
         ) {
           return false
         }
-        store.updatePendingWorktreeCreation(creationId, { heldChatMessage: text })
+        holdNativeChatStagedInput(pendingCreationChatDraftScopeKey(creationId), {
+          text,
+          attachments
+        })
+        store.updatePendingWorktreeCreation(creationId, {
+          heldChatMessage: text,
+          heldChatAttachments: attachments.map(({ id, path, connectionId }) => ({
+            id,
+            path,
+            ...(connectionId ? { connectionId } : {})
+          })),
+          heldChatSkills: request?.skills
+        })
         return true
       },
       ...(sendBlockedReason ? { sendBlockedReason } : {}),
-      optionsSurface: NO_OPTIONS_SURFACE,
-      optionSnapshot: [],
-      acceptsImages: false,
+      optionsSurface: options.surface,
+      optionSnapshot: options.snapshot,
+      worktreeId: sourceWorktreeId,
+      attachmentStagingScope: pendingCreationChatDraftScopeKey(creationId),
       onError: reportComposerError,
       runtime: 'local',
       sessionId: pendingCreationChatDraftScopeKey(creationId),
       runtimeEnvironmentId: null
     }
-  }, [creationId, handedOff, held, reportComposerError, status])
+  }, [
+    creationId,
+    handedOff,
+    held,
+    options.snapshot,
+    options.surface,
+    reportComposerError,
+    sourceWorktreeId,
+    status
+  ])
 
   const notices = React.useMemo(
     (): NativeChatComposerNotice[] =>
@@ -153,14 +186,13 @@ export default function PendingNativeChatCreation({
   // Explicit back-outs drop the unsent draft; completion leaves it for the launch to move.
   const dismiss = (): void => {
     useAppStore.getState().removePendingWorktreeCreation(creationId)
-    deleteNativeChatComposerDraft(pendingCreationChatDraftScopeKey(creationId))
   }
   const steps =
     held || isError ? (
       <WorktreeSetupSteps
         steps={deriveWorktreeSetupSteps(entry, now)}
         agentLabel={agentLabel}
-        error={isError ? failureText(entry) : null}
+        error={isError ? failureText(entry, t) : null}
         onRetry={() => retryBackgroundWorktreeCreation(creationId)}
         onDismiss={dismiss}
       />
@@ -186,7 +218,11 @@ export default function PendingNativeChatCreation({
               <div className={nativeChatTranscriptOuterClass(false)}>
                 <div className={NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS}>
                   {heldMessage !== null ? (
-                    <HeldMessageRow creationId={creationId} text={heldMessage} />
+                    <HeldMessageRow
+                      creationId={creationId}
+                      text={heldMessage}
+                      images={entry.heldChatAttachments}
+                    />
                   ) : null}
                   {steps}
                 </div>
@@ -214,21 +250,26 @@ export default function PendingNativeChatCreation({
 
 function HeldMessageRow({
   creationId,
-  text
+  text,
+  images
 }: {
   creationId: string
   text: string
+  images?: readonly NativeChatComposerDraftImage[]
 }): React.JSX.Element {
   const rowRef = React.useRef<HTMLDivElement | null>(null)
   const message = React.useMemo(
     (): NativeChatMessage => ({
       id: `${pendingCreationChatDraftScopeKey(creationId)}:first-message`,
       role: 'user',
-      blocks: [{ type: 'text', text }],
+      blocks: [
+        { type: 'text', text },
+        ...(images ?? []).map(({ path }) => ({ type: 'image-ref' as const, path }))
+      ],
       timestamp: null,
       source: 'transcript'
     }),
-    [creationId, text]
+    [creationId, images, text]
   )
   const { markdown, prose } = deriveNativeChatRowContent(message.blocks)
   return (
@@ -238,7 +279,6 @@ function HeldMessageRow({
       prose={prose}
       rowRef={rowRef}
       onRefolded={() => {}}
-      allowFileUriLinks={false}
     />
   )
 }

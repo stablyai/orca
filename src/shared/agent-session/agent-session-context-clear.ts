@@ -83,7 +83,19 @@ export function agentSessionCurrentContextRows(
         items: items.filter((item) => item.sequence > sequence),
         submissions: submissions.filter(
           (submission) => (submission.acceptedSequence ?? 0) > sequence
-        )
+        ),
+        sequence
       }
-    : { items, submissions }
+    : { items, submissions, sequence }
+}
+
+/** A body read that answers only for rows after the `/clear` at `sequence`, matching `agentSessionCurrentContextRows`. */
+export function agentSessionCurrentContextBody(
+  itemOf: (itemId: string) => Pick<AgentJournalRenderItem, 'sequence' | 'body'> | null,
+  sequence: number
+): (itemId: string) => AgentJournalRenderItem['body'] | undefined {
+  return (itemId) => {
+    const item = itemOf(itemId)
+    return item && (sequence === 0 || item.sequence > sequence) ? item.body : undefined
+  }
 }

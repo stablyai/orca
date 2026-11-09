@@ -2,15 +2,15 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { View, Text, Pressable } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
-import { loadHosts } from '../src/transport/host-store'
-import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
-import { useRpcClientContext } from '../src/transport/client-context'
-import { useHostClient } from '../src/transport/host-client-hooks'
+import { loadHosts } from '../src/transport/hosts/host-store'
+import { connectionLogStore } from '../src/diagnostics/connection/persisted-connection-log-store'
+import { useRpcClientContext } from '../src/transport/connection/client-context'
+import { useHostClient } from '../src/transport/connection/host-client-hooks'
 import {
   useConnectionPathStatus,
   useReconnectAttempt
-} from '../src/transport/client-context-connection-metrics'
-import { useHostStatusGates } from '../src/transport/host-status-gates'
+} from '../src/transport/connection/client-context-connection-metrics'
+import { useHostStatusGates } from '../src/transport/connection/host-status-gates'
 import { ConnectionDiagnosticsScreen } from '../src/diagnostics/connection-diagnostics-screen'
 import { createNativeDiagnosticsOperations } from '../src/diagnostics/native-diagnostics-operations'
 import {
@@ -21,7 +21,8 @@ import {
 import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { NATIVE_APP_LOG_ID } from '../src/diagnostics/native-render-log'
-import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
+import type { HostProfile } from '../src/transport/hosts/host-profile'
 import { pressedStyle } from '../src/theme/mobile-theme'
 
 // Keep empty snapshot identity stable or useSyncExternalStore rerenders forever.
