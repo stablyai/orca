@@ -12,6 +12,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import type { HostRecoveryObservation } from './use-remote-host-menu-state'
+import { runHostMenuAction } from './remote-host-menu-action'
 
 export function RemoteHostStatusRow({
   label,
@@ -60,16 +61,14 @@ export function RemoteHostStatusRow({
     const token = Symbol()
     pending.current = { token, kind }
     setBusy(kind)
-    try {
-      await action()
-    } finally {
+    await runHostMenuAction(action, () => {
       if (pending.current?.token === token) {
         pending.current = null
         if (mounted.current) {
           setBusy(null)
         }
       }
-    }
+    })
   }
   let relativeTime = ''
   if (reconnectCard) {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { runHostMenuAction } from './remote-host-menu-action'
 
 export type HostRecoveryObservation = { since: number; attempt: number }
 export type HostMenuConnection = { id: string; recovering: boolean; attempt: number }
@@ -47,16 +48,17 @@ export function useRemoteHostMenuState(open: boolean, hostExists: (id: string) =
       const controller = new AbortController()
       controllers.current.set(id, controller)
       setPending(new Set(controllers.current.keys()))
-      try {
-        await action(controller.signal)
-      } finally {
-        if (controllers.current.get(id) === controller) {
-          controllers.current.delete(id)
-          if (mounted.current) {
-            setPending(new Set(controllers.current.keys()))
+      await runHostMenuAction(
+        () => action(controller.signal),
+        () => {
+          if (controllers.current.get(id) === controller) {
+            controllers.current.delete(id)
+            if (mounted.current) {
+              setPending(new Set(controllers.current.keys()))
+            }
           }
         }
-      }
+      )
     },
     [mounted]
   )

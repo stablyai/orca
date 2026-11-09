@@ -90,7 +90,6 @@ export function buildRemoteHostMenuInventory(
           : null,
         snapshot: statusEntry?.snapshot,
         status: statusEntry?.status ?? null,
-        active: settings?.activeRuntimeEnvironmentId === environment.id,
         remoteControl: statusEntry?.remoteControl ?? statusEntry?.status?.remoteControl ?? null
       }
     })
