@@ -175,3 +175,15 @@ describe('OpenAPI', () => {
     expect(await docs.text()).toContain('Orca Cloud API')
   })
 })
+
+describe('member removal', () => {
+  it('revokes every key the departed member made, via the operator route', async () => {
+    const h = await createHarness({ OPERATOR_TOKEN: 'o'.repeat(40) })
+    const member = await h.token('bob', 'acme', 'sandbox', { orgRole: 'member' })
+    const { secret } = (await h.call('POST', '/v1/api-keys', { bearer: member, body: { name: 'bob ci', scopes: ['workspaces:read'] } })).body
+    expect((await h.call('GET', '/v1/me', { bearer: secret })).status).toBe(200)
+    const removed = await h.call('POST', '/v1/internal/members/removed', { bearer: 'o'.repeat(40), body: { accountId: 'org:acme', userId: 'bob' } })
+    expect(removed.body).toEqual({ revoked: 1 })
+    expect((await h.call('GET', '/v1/me', { bearer: secret })).status).toBe(401)
+  })
+})
