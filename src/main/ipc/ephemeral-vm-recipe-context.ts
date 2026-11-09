@@ -1,5 +1,5 @@
-import type { Store } from '../persistence'
-import { loadHooks } from '../hooks'
+import type { Store } from '../persistence/loading-store/store'
+import { loadHooks } from '../workspace-hooks/hooks'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
@@ -110,12 +110,18 @@ export function getRuntimeRecipeContext(
   if (!repo.ok) {
     throw new EphemeralVmFailureError(repo.failure)
   }
+  const repoRecipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
+    (entry) => entry.id === runtime.recipeId
+  )
   // Legacy runtimes lack snapshots; never substitute a newer same-ID plugin recipe for their repo-owned recipe.
-  const recipe =
-    runtime.recipe ??
-    (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
-      (entry) => entry.id === runtime.recipeId
-    )
+  // Snapshots never persist timeoutSeconds, so take the repo's current limits (lifecycle commands stay
+  // snapshotted). Only when the repo recipe has the same create command, so a different recipe that
+  // later took this id (e.g. a repo recipe shadowing a plugin one) cannot impose its limits.
+  const limits =
+    repoRecipe?.timeoutSeconds && repoRecipe.create === runtime.recipe?.create
+      ? { timeoutSeconds: repoRecipe.timeoutSeconds }
+      : {}
+  const recipe = runtime.recipe ? { ...runtime.recipe, ...limits } : repoRecipe
   if (!recipe) {
     throw new EphemeralVmFailureError(
       ephemeralVmFailure('recipeNotFound', { recipeId: runtime.recipeId })

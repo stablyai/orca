@@ -1,7 +1,7 @@
 import React from 'react'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
 
 type AutomationTemplateEmptyStateProps = {
@@ -11,13 +11,11 @@ type AutomationTemplateEmptyStateProps = {
 export function AutomationTemplateEmptyState({
   onOpenCreate
 }: AutomationTemplateEmptyStateProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="mx-auto grid max-w-2xl gap-2 p-4">
       <div className="px-1 pb-1 text-sm font-medium">
-        {translate(
-          'auto.components.automations.AutomationsPage.d207ab4c25',
-          'Start from a template'
-        )}
+        {t('auto.components.automations.AutomationsPage.d207ab4c25', 'Start from a template')}
       </div>
       {getAutomationTemplates().map((template) => (
         <button
@@ -42,7 +40,7 @@ export function AutomationTemplateEmptyState({
         onClick={() => onOpenCreate()}
       >
         <Plus className="size-4" />
-        {translate('auto.components.automations.AutomationsPage.25060635c6', 'Add new')}
+        {t('auto.components.automations.AutomationsPage.25060635c6', 'Add new')}
       </Button>
     </div>
   )

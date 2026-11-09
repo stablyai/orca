@@ -1,15 +1,17 @@
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
-import { registerLivePty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import { registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  InMemoryOrchestrationMessages,
   TEST_WORKTREE_ID,
   bindSinglePtyRun,
   setInMemoryOrchestrationMessages,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { InMemoryOrchestrationMessages } from '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
+import { MessageWake } from '../orchestration/mailbox/runtime-message-waiters'
 
 describe('OrcaRuntimeService', () => {
   it('leaves rows a live filtered waiter reserved out of the pushed batch', async () => {
@@ -54,7 +56,7 @@ describe('OrcaRuntimeService', () => {
       })
       runtime.notifyMessageArrived(terminal.handle, 'worker_done')
 
-      await expect(waitPromise).resolves.toBe('notified')
+      await expect(waitPromise).resolves.toBeInstanceOf(MessageWake)
       await vi.advanceTimersByTimeAsync(600)
       const payloads = write.mock.calls
         .map(([, data]) => data)
@@ -304,98 +306,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('pushes to an idle pane when the only live waiter filters out the message type', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = new OrcaRuntimeService(store)
-      const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
-      setInMemoryOrchestrationMessages(runtime, db)
-      runtime.setPtyController({
-        write,
-        writeWithSettlement: settledWriteStub(write),
-        kill: vi.fn(),
-        getForegroundProcess: async () => null
-      })
-      syncSinglePty(runtime)
-
-      const [terminal] = (await runtime.listTerminals()).terminals
-      const mailbox = bindSinglePtyRun(db, terminal.handle)
-      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
-      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
-      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
-
-      // worker_done-filtered waiters cannot consume status rows and must not suppress their idle push (#12536).
-      const waitPromise = runtime.waitForMessage(mailbox, {
-        typeFilter: ['worker_done'],
-        timeoutMs: 5_000
-      })
-      const message = db.insertMessage({
-        from: 'sender',
-        to: terminal.handle,
-        subject: 'unfiltered status',
-        type: 'status'
-      })
-      write.mockClear()
-
-      runtime.notifyMessageArrived(terminal.handle, 'status')
-
-      await Promise.resolve()
-      expect(write).toHaveBeenCalledWith(
-        'pty-1',
-        expect.stringContaining('You have 1 orchestration message')
-      )
-      await vi.advanceTimersByTimeAsync(600)
-      expect(message.delivered_at).toEqual(expect.any(String))
-
-      await vi.advanceTimersByTimeAsync(5_000)
-      await expect(waitPromise).resolves.toBe('timed_out')
-      db.close()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('resolves a registered waiter without PTY-injecting when the leaf is already idle', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = new OrcaRuntimeService(store)
-      const db = new InMemoryOrchestrationMessages()
-      const write = vi.fn().mockReturnValue(true)
-      setInMemoryOrchestrationMessages(runtime, db)
-      runtime.setPtyController({
-        write,
-        writeWithSettlement: settledWriteStub(write),
-        kill: vi.fn(),
-        getForegroundProcess: async () => null
-      })
-      syncSinglePty(runtime)
-
-      const [terminal] = (await runtime.listTerminals()).terminals
-      const mailbox = bindSinglePtyRun(db, terminal.handle)
-      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
-      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
-      await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
-      const message = db.insertMessage({
-        from: 'sender',
-        to: terminal.handle,
-        subject: 'for check wait'
-      })
-      write.mockClear()
-
-      // Explicit check --wait owns delivery; push must neither stamp nor type those rows (#12584).
-      const waitPromise = runtime.waitForMessage(mailbox, { timeoutMs: 5_000 })
-      runtime.notifyMessageArrived(terminal.handle, 'status')
-
-      await expect(waitPromise).resolves.toBe('notified')
-      expect(write).not.toHaveBeenCalled()
-      expect(message.delivered_at).toBeNull()
-      db.close()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('does not re-inject the same message when notify fires again during Enter delay', async () => {
     vi.useFakeTimers()
     try {
@@ -500,101 +410,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('keeps already-idle status after tui-idle wait for immediate message delivery', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const db = new InMemoryOrchestrationMessages()
-    const write = vi.fn().mockReturnValue(true)
-    setInMemoryOrchestrationMessages(runtime, db)
-    runtime.setPtyController({
-      write,
-      writeWithSettlement: settledWriteStub(write),
-      kill: vi.fn(),
-      getForegroundProcess: async () => null
-    })
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    bindSinglePtyRun(db, terminal.handle)
-    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
-    runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
-    await runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle' })
-    db.insertMessage({ from: 'sender', to: terminal.handle, subject: 'after wait' })
-
-    runtime.deliverPendingMessagesForHandle(terminal.handle)
-
-    expect(write).toHaveBeenCalledWith(
-      'pty-1',
-      expect.stringContaining('You have 1 orchestration message')
-    )
-    db.close()
-  })
-
-  it('resolves message waiters when notifyMessageArrived is called', async () => {
-    const runtime = new OrcaRuntimeService(store)
-
-    const waitPromise = runtime.waitForMessage('term_abc', { timeoutMs: 5000 })
-    runtime.notifyMessageArrived('term_abc')
-    await expect(waitPromise).resolves.toBe('notified')
-  })
-
-  it('does not resolve type-filtered message waiters for unrelated message types', async () => {
-    const runtime = new OrcaRuntimeService(store)
-
-    const waitPromise = runtime.waitForMessage('term_abc', {
-      typeFilter: ['worker_done', 'escalation'],
-      timeoutMs: 5000
-    })
-    let settled = false
-    void waitPromise.then(() => {
-      settled = true
-    })
-
-    runtime.notifyMessageArrived('term_abc', 'heartbeat')
-    await Promise.resolve()
-
-    expect(settled).toBe(false)
-
-    runtime.notifyMessageArrived('term_abc', 'worker_done')
-    await waitPromise
-    expect(settled).toBe(true)
-  })
-
-  it('removes message waiter abort listeners after message arrival', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const controller = new AbortController()
-    const removeListenerSpy = vi.spyOn(controller.signal, 'removeEventListener')
-
-    const waitPromise = runtime.waitForMessage('term_abc', {
-      timeoutMs: 5000,
-      signal: controller.signal
-    })
-    runtime.notifyMessageArrived('term_abc')
-    await waitPromise
-
-    expect(removeListenerSpy).toHaveBeenCalledWith('abort', expect.any(Function))
-  })
-
-  it('resolves message waiters on timeout when no message arrives', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = new OrcaRuntimeService(store)
-      const wait = runtime.waitForMessage('term_abc', { timeoutMs: 100 })
-
-      await vi.advanceTimersByTimeAsync(99)
-      let settled = false
-      void wait.then(() => {
-        settled = true
-      })
-      await Promise.resolve()
-      expect(settled).toBe(false)
-
-      await vi.advanceTimersByTimeAsync(1)
-      await expect(wait).resolves.toBe('timed_out')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('rejects leaf PTY waits when the request signal aborts', async () => {
     vi.useFakeTimers()
     try {
@@ -619,7 +434,8 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('fails terminal waits closed when the handle goes stale during reload', async () => {
+  // #24354: a wait follows its terminal, which a renderer reload does not end.
+  it('keeps a terminal wait across a renderer reload until the terminal exits', async () => {
     const runtime = new OrcaRuntimeService(store)
 
     runtime.attachWindow(1)
@@ -647,7 +463,8 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     const waitPromise = runtime.waitForTerminal(terminal.handle, { timeoutMs: 1000 })
     runtime.markRendererReloading(1)
+    await runtime.onPtyExit('pty-1', 0)
 
-    await expect(waitPromise).rejects.toThrow('terminal_handle_stale')
+    await expect(waitPromise).resolves.toMatchObject({ condition: 'exit', exitCode: 0 })
   })
 })

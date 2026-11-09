@@ -1,8 +1,9 @@
-import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
-import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
-import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
-import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
+import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
+import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
+import { createWorkerBriefWriteGuard } from '../../../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
@@ -15,15 +16,16 @@ import {
   persistFederatedSetupSpawnFailure,
   persistFederatedSetupWaitOutcome
 } from './federation-setup'
-import { FederationAttachStartParams } from './federation-start-schema'
+import { FederationAttachStartParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
 import { prepareFederationWorkerLaunchOnHost } from '../worker/worker-opencode-model-preflight'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
-} from '../../../../../../shared/orchestration-timing-budgets'
+} from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../../workspace-creator-context'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
@@ -31,7 +33,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
     requires: ['accounts'],
     permission: 'workspace',
     params: FederationAttachStartParams,
-    handler: async (params, { runtime, orchestrationMutation }) => {
+    handler: async (params, context) => {
+      const { runtime, orchestrationMutation } = context
       if (!orchestrationMutation) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -81,6 +84,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       let failedStage = createsWorktree ? 'worktree_create' : 'worktree_resolve'
       let worktree
       let terminalHandle = params.terminal
+      let terminalCreation: RuntimeTerminalCreate | undefined
       const setupSource = createsWorktree
         ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
         : 'existing_worktree'
@@ -100,7 +104,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             params,
             agent,
             launchPreferences: launch.preferences,
-            ...(existing ? { worktree: existing } : {}),
+            ...(existing
+              ? { worktree: existing }
+              : { creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context) }),
             setupSource,
             effects,
             onSetup: (created) => {
@@ -111,7 +117,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             }
           })
         if (createsWorktree) {
-          ;({ worktree, terminalHandle } = await launchAgent())
+          ;({ worktree, terminalHandle, terminalCreation } = await launchAgent())
         } else {
           worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
             throw new OrchestrationError(
@@ -145,7 +151,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             })
           } else {
             failedStage = 'terminal_create'
-            ;({ terminalHandle } = await launchAgent(worktree))
+            ;({ terminalHandle, terminalCreation } = await launchAgent(worktree))
           }
         }
         if (!worktree || !terminalHandle) {
@@ -168,6 +174,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         const wait = await waitForWorkerAgentReady(runtime, terminalHandle, {
           agent,
           reusesTerminal: Boolean(params.terminal),
+          creation: terminalCreation,
           timeoutMs: readinessTimeoutMs
         })
         persistFederatedSetupWaitOutcome({ ...setupStage, wait })
@@ -211,7 +218,6 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               devMode: params.devMode,
               // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
-              heartbeatIntervalMinutes: runtime.getOrchestrationHeartbeatMinutes(),
               subWorkersInOwnRun: true,
               cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
             })

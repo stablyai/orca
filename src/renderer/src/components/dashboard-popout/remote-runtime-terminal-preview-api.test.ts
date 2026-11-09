@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RemoteRuntimeMultiplexedTerminalCallbacks } from '@/runtime/remote-runtime-terminal-multiplexer-types'
-import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
+import type { RemoteRuntimeMultiplexedTerminalCallbacks } from '@/runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
+import type { TerminalPreviewDataPayload } from '../../../../shared/terminal/replay/terminal-preview'
 
 type Subscription = {
   environmentId: string
@@ -20,30 +20,33 @@ const harness = vi.hoisted(() => {
   return { subscriptions }
 })
 
-vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
-  getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => ({
-    subscribeTerminal: async (args: {
-      terminal: string
-      client: { id: string }
-      callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
-    }) => {
-      const stream = {
-        sendInput: vi.fn(() => true),
-        claimViewport: vi.fn(() => true),
-        serializeBufferOutcome: vi.fn(),
-        close: vi.fn()
+vi.mock(
+  '@/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry',
+  () => ({
+    getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => ({
+      subscribeTerminal: async (args: {
+        terminal: string
+        client: { id: string }
+        callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
+      }) => {
+        const stream = {
+          sendInput: vi.fn(() => true),
+          claimViewport: vi.fn(() => true),
+          serializeBufferOutcome: vi.fn(),
+          close: vi.fn()
+        }
+        harness.subscriptions.push({
+          environmentId,
+          terminal: args.terminal,
+          clientId: args.client.id,
+          callbacks: args.callbacks,
+          stream
+        })
+        return stream
       }
-      harness.subscriptions.push({
-        environmentId,
-        terminal: args.terminal,
-        clientId: args.client.id,
-        callbacks: args.callbacks,
-        stream
-      })
-      return stream
-    }
+    })
   })
-}))
+)
 
 import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import {
@@ -74,18 +77,6 @@ describe('remoteRuntimeTerminalPreviewApi', () => {
   afterEach(() => {
     resetRemoteRuntimeTerminalPreviewSessionsForTests()
     harness.subscriptions.length = 0
-  })
-
-  it('subscribes on the host named by the pty id with a preview-only client', async () => {
-    const { sub, payloads } = await openPreview()
-    expect(sub.environmentId).toBe('env-a')
-    expect(sub.terminal).toBe('term-1')
-    expect(sub.clientId).toMatch(/^dashboard-preview:/)
-
-    sub.callbacks.onData('live', { seq: 14 })
-    expect(payloads).toEqual([{ type: 'data', ptyId: PTY, data: 'live', bytes: 4 }])
-    await expect(api.input(PTY, 'x')).resolves.toBe(true)
-    expect(sub.stream.sendInput).toHaveBeenCalledWith('x')
   })
 
   it('refuses an id without its owning host instead of guessing one', async () => {

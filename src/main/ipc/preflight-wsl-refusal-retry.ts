@@ -1,6 +1,9 @@
 import { BrowserWindow } from 'electron'
-import { deferUntilWslDistroRunning } from '../wsl-background-distro-gate'
-import { WslDistroStoppedError, WslDistroUnverifiableError } from '../wsl/wsl-unc-access-gate'
+import { deferUntilWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
+import {
+  WslDistroStoppedError,
+  WslDistroUnverifiableError
+} from '../wsl/filesystem/wsl-unc-access-gate'
 
 export const PREFLIGHT_WSL_DISTRO_RUNNING_CHANNEL = 'preflight:wslDistroRunning'
 const RETRY_KEY = 'preflight-refused'

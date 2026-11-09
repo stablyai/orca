@@ -3,7 +3,7 @@ import type { RawData } from 'ws'
 import {
   DeviceCredentialInstalledSchema,
   DeviceResumeConfirmedSchema
-} from '../../../shared/mobile-relay-credential-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 
 const OpaqueIdSchema = z.string().min(1).max(128)
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
@@ -30,8 +30,12 @@ const ConnectionKindSchema = z.enum(['invite', 'resume'])
 
 // Strict deployed cells reject new hello keys; mirror contract capabilities in upgrade headers.
 export const RELAY_HOST_CAPABILITY_HEADERS = {
-  'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1'
+  'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1,client-keepalive-v1'
 } as const
+
+// Mirror relay-contract RELAY_CLIENT_KEEPALIVE_*: sent only after a relay's keepalive-offer. The
+// relay answers it without waking, so the bytes must match exactly.
+export const RELAY_CLIENT_KEEPALIVE_FRAME = '{"type":"keepalive"}'
 
 // Mirror RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs, the phone's data-socket attach window.
 export const RELAY_HOST_ATTACH_DEADLINE_MS = 10_000
@@ -83,6 +87,18 @@ export const RelayDrainMessageSchema = z
 
 export const RelayPingMessageSchema = z
   .object({ type: z.literal('ping'), t: EpochMsSchema })
+  .strict()
+
+export const RelayKeepaliveOfferMessageSchema = z
+  .object({
+    type: z.literal('keepalive-offer'),
+    v: z.literal(1),
+    intervalMs: z.number().int().min(1_000).max(60_000)
+  })
+  .strict()
+
+export const RelayKeepaliveAckMessageSchema = z
+  .object({ type: z.literal('keepalive-ack') })
   .strict()
 
 export const RelayInviteCreatedMessageSchema = z

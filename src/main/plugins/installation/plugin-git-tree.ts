@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { gitExecFileAsyncBuffer } from '../../git/runner'
 import { pluginGitTreeArgs } from '../../../shared/plugins/installation/plugin-git-arguments'
 import {
   isPluginRepositoryPath,
@@ -12,6 +11,12 @@ const MAX_PATH_BYTES = 1024
 const MAX_PATH_DEPTH = 64
 const TREE_METADATA_MAX_BYTES = MAX_PLUGIN_FILES * (MAX_PATH_BYTES + 128)
 const PLUGIN_GIT_TREE_TIMEOUT_MS = 120_000
+
+/** Runs one read-only Git command in `cwd` and resolves its stdout bytes; rejects on failure. */
+export type PluginGitBytesRunner = (
+  args: string[],
+  options: { cwd: string; timeoutMs: number; maxBytes: number; stdin?: string }
+) => Promise<Buffer>
 
 export type PluginGitTreeEntry =
   | { kind: 'tree'; path: string }
@@ -32,7 +37,10 @@ function validatePath(path: string): void {
     segments.length > MAX_PATH_DEPTH ||
     segments.some((segment) => {
       // Why: HFS+ ignores these code points and NTFS 8.3 names alias `.git`.
-      const name = portablePathIdentity(segment).replace(/[‌-‏‪-‮⁪-⁯﻿]/g, '')
+      const name = portablePathIdentity(segment).replace(
+        /[\u200c-\u200f\u202a-\u202e\u206a-\u206f\ufeff]/g,
+        ''
+      )
       return name === '.git' || /^\.?git~[0-9]+$/.test(name)
     })
   ) {
@@ -133,27 +141,29 @@ export async function materializePluginGitTree(input: {
   destination: string
   /** Plugin directory inside the repository; only its subtree is written. */
   path?: string
+  // Why injected: the CLI has no main-process Git runner.
+  git: PluginGitBytesRunner
 }): Promise<void> {
   if (input.path !== undefined && !isPluginRepositoryPath(input.path)) {
     throw new Error(`unsafe plugin repository path: ${input.path}`)
   }
-  const options = { cwd: input.repository, timeout: PLUGIN_GIT_TREE_TIMEOUT_MS }
-  const metadata = await gitExecFileAsyncBuffer(pluginGitTreeArgs(input.commit, input.path), {
+  const options = { cwd: input.repository, timeoutMs: PLUGIN_GIT_TREE_TIMEOUT_MS }
+  const metadata = await input.git(pluginGitTreeArgs(input.commit, input.path), {
     ...options,
-    maxBuffer: TREE_METADATA_MAX_BYTES
+    maxBytes: TREE_METADATA_MAX_BYTES
   })
-  const entries = parsePluginGitTree(metadata.stdout)
+  const entries = parsePluginGitTree(metadata)
   const objects = [
     ...new Set(entries.flatMap((entry) => (entry.kind === 'blob' ? [entry.object] : [])))
   ]
   const data = objects.length
-    ? await gitExecFileAsyncBuffer(['cat-file', '--batch'], {
+    ? await input.git(['cat-file', '--batch'], {
         ...options,
-        maxBuffer: MAX_PLUGIN_TOTAL_BYTES + MAX_PLUGIN_FILES * 128,
+        maxBytes: MAX_PLUGIN_TOTAL_BYTES + MAX_PLUGIN_FILES * 128,
         stdin: `${objects.join('\n')}\n`
       })
-    : { stdout: Buffer.alloc(0) }
-  const blobs = readPluginGitBatchBlobs(data.stdout, entries)
+    : Buffer.alloc(0)
+  const blobs = readPluginGitBatchBlobs(data, entries)
   for (const entry of entries) {
     const target = join(input.destination, ...entry.path.split('/'))
     if (entry.kind === 'tree') {

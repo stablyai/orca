@@ -3,7 +3,7 @@ import { repositionOverlay } from './selection-overlay'
 import { cancelSelect } from './selection-mode'
 import { notify } from './host-notify'
 import type { TerminalDocumentScope } from './document-scope'
-import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal-scrollback-policy'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal/replay/terminal-scrollback-policy'
 
 // Tap slop must exceed long-press slop so small finger jitter can cancel selection without dropping link/path taps.
 

@@ -3,7 +3,7 @@ import {
   paneTitleForEvent,
   statusPreviewForEntry
 } from './activity-thread-presentation'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   ActivityEvent,
   ActivityLiveAgentSnapshot,
@@ -130,6 +130,7 @@ export function buildAgentPaneThreads(
         latestTimestamp: liveAgent.timestamp,
         latestEvent: null,
         events: [],
+        migrationUnsupportedPtyId: liveAgent.migrationUnsupportedPtyId,
         unread: false
       })
       continue
@@ -142,6 +143,7 @@ export function buildAgentPaneThreads(
     existing.agentType = liveAgent.agentType
     existing.currentAgentState = liveAgent.state
     existing.currentAgentEntry = liveAgent.entry
+    existing.migrationUnsupportedPtyId ??= liveAgent.migrationUnsupportedPtyId
     existing.responsePreview = statusPreviewForEntry(
       liveAgent.entry,
       liveAgent.entry.state,

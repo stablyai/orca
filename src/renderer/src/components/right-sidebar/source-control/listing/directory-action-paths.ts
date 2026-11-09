@@ -1,15 +1,15 @@
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   getDiscardAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry
-} from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import {
   collectSourceControlTreeFileEntries,
   type SourceControlTreeNode
-} from '../../source-control-tree'
-import type { SourceControlSectionArea } from '../../../../../../shared/source-control-section-order'
+} from '../../../../../../shared/source-control/listing/source-control-tree'
+import type { SourceControlSectionArea } from '../../../../../../shared/source-control/listing/source-control-section-order'
 
 export type GitStatusSourceControlTreeNode = SourceControlTreeNode<
   GitStatusEntry,

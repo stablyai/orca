@@ -1,11 +1,11 @@
 /** Commit only while request, authority-catalog and connection generations match. This rejects stale answers after re-pair, re-registration or host changes; removal tombstones advance the same catalog fence. */
 
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { hostStableKey } from '../../../../shared/automation-owner-key'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import type {
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
 import { getAuthorityCatalogGeneration } from './automation-host-catalog-generation'
 import {

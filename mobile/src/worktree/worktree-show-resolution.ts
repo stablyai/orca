@@ -1,4 +1,4 @@
-import type { RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 // Only missing permits a destructive route bounce; ambiguous/transient failures remain unknown.
 export type WorktreeShowResolution = 'present' | 'missing' | 'unknown'

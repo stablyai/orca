@@ -1,15 +1,18 @@
+import { useState } from 'react'
 import { Activity } from 'lucide-react-native'
-import { Animated, View } from 'react-native'
-import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
+import { View } from 'react-native'
+import type { AgentWorkingMode } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
+import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useWorkingRingRotation } from './use-working-ring-rotation'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { ArrivalFade } from './ArrivalFade'
+import { WorkingRing } from './AgentStateDot'
 
 // Match desktop sidebar StatusIndicator colors/sizes for the worktree rollup; palette distinguishes moving/alive/completed states.
-const statusColors = (): Record<WorktreeStatus, string> => ({
+export const agentStatusColors = (): Record<WorktreeStatus, string> => ({
   working: '#eab308',
   monitoring: '#eab308',
   active: '#10b981',
@@ -21,7 +24,45 @@ const statusColors = (): Record<WorktreeStatus, string> => ({
   inactive: 'rgba(115,115,115,0.4)'
 })
 
+/** `status` null is a state not known yet (rows from the phone's store): the slot keeps its width, empty. */
 export function AgentSpinner({
+  status,
+  workingMode
+}: {
+  status: WorktreeStatus | null
+  workingMode?: AgentWorkingMode
+}) {
+  const [startedEmpty] = useState(status === null)
+  if (startedEmpty) {
+    return <ArrivingAgentStatus status={status} workingMode={workingMode} />
+  }
+  return status === null ? (
+    <View style={styles.wrapper} />
+  ) : (
+    <AgentStatusGlyph status={status} workingMode={workingMode} />
+  )
+}
+
+// Mounted with the empty slot, so the motion preference is read before the dot arrives and fades in.
+function ArrivingAgentStatus({
+  status,
+  workingMode
+}: {
+  status: WorktreeStatus | null
+  workingMode?: AgentWorkingMode
+}) {
+  const reducedMotion = useReducedMotionEnabled()
+  if (status === null) {
+    return <View style={styles.wrapper} />
+  }
+  return (
+    <ArrivalFade animate={reducedMotion === false}>
+      <AgentStatusGlyph status={status} workingMode={workingMode} />
+    </ArrivalFade>
+  )
+}
+
+function AgentStatusGlyph({
   status,
   workingMode
 }: {
@@ -32,9 +73,8 @@ export function AgentSpinner({
   useMobileColorScheme()
   const monitoring =
     status === 'monitoring' || (status === 'working' && workingMode === 'monitoring')
-  const rotate = useWorkingRingRotation(status === 'working' && !monitoring)
 
-  const palette = statusColors()
+  const palette = agentStatusColors()
   const color = palette[status] ?? palette.inactive
 
   if (monitoring) {
@@ -62,7 +102,7 @@ export function AgentSpinner({
   if (status === 'working') {
     return (
       <View style={styles.wrapper}>
-        <Animated.View style={[styles.spinner, { borderColor: color, transform: [{ rotate }] }]} />
+        <WorkingRing color={color} style={styles.spinner} />
       </View>
     )
   }
@@ -85,20 +125,20 @@ const styles = themedStyleSheet(() => ({
   dot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   dashedRing: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radii.pill,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: statusColors().unconfirmed
+    borderColor: agentStatusColors().unconfirmed
   },
   spinner: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radii.pill,
     borderWidth: 2,
     borderTopColor: 'transparent'
   }

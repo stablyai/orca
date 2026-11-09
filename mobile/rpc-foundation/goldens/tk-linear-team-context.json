@@ -4,32 +4,10 @@
   "family": "tasks.linear-team-context",
   "namedDeltas": [],
   "values": {
-    "045de1beb41b": {
-      "name": "prFileCommentDrafts",
-      "ordinal": 16,
-      "value": {}
-    },
-    "0b7bf56895e2": {
-      "name": "linearStatesLoading",
-      "ordinal": 24,
-      "value": true
-    },
-    "1e2b9e124f23": {
-      "name": "linearCommentDraft",
-      "ordinal": 25,
-      "value": ""
-    },
-    "2388b2964070": {
-      "name": "linearCommentDraft",
-      "ordinal": 2,
-      "value": ""
-    },
-    "269660c94afa": {
-      "name": "expandedPrFilePath",
+    "1288b8513745": {
+      "name": "linearStatesError",
       "ordinal": 13,
-      "value": {
-        "$rpc": "null"
-      }
+      "value": ""
     },
     "2afc4b1311c1": {
       "createTeamId": "team-1",
@@ -44,56 +22,36 @@
         }
       ]
     },
-    "2d7c523e8a27": {
-      "name": "itemCommentDraft",
-      "ordinal": 6,
-      "value": ""
-    },
-    "337ce7504f5b": {
-      "name": "createTeamId",
-      "ordinal": 23,
-      "value": "team-1"
-    },
-    "3e0c86d3ff78": {
-      "name": "prFileLoadingPath",
-      "ordinal": 15,
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "4b830d961da2": {
-      "name": "itemReplyDrafts",
-      "ordinal": 12,
-      "value": {}
-    },
-    "542704953557": {
-      "name": "linear.listTeams#1",
-      "ordinal": 21,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\"}"
-    },
-    "58780d31c844": {
-      "name": "linearSubIssueTitle",
-      "ordinal": 3,
-      "value": ""
-    },
-    "6cfd8be99e71": {
-      "name": "linearStatesLoading",
-      "ordinal": 30,
-      "value": false
-    },
-    "70cbb5292625": {
+    "33218d06f656": {
       "name": "linearStates",
-      "ordinal": 1,
+      "ordinal": 6,
       "value": []
     },
-    "715b8a858916": {
-      "name": "itemRemoveAssigneesDraft",
-      "ordinal": 10,
-      "value": ""
+    "356f2cb9a0df": {
+      "name": "linearStatesLoading",
+      "ordinal": 17,
+      "value": false
     },
-    "77586df9fa2a": {
+    "3abc893d377b": {
+      "name": "mutatingStatus",
+      "ordinal": 3,
+      "value": false
+    },
+    "475ec9a66266": {
+      "name": "linearTeams",
+      "ordinal": 10,
+      "value": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "5711e2717b76": {
       "name": "linearStates",
-      "ordinal": 29,
+      "ordinal": 16,
       "value": [
         {
           "color": "#000000",
@@ -103,49 +61,24 @@
         }
       ]
     },
-    "96b613832e2d": {
-      "name": "expandedResolvedCommentGroups",
-      "ordinal": 17,
-      "value": []
+    "60a0395d07c7": {
+      "name": "linearStatesLoading",
+      "ordinal": 12,
+      "value": true
     },
-    "9ffa64bfd433": {
-      "name": "itemAddLabelsDraft",
-      "ordinal": 7,
-      "value": ""
-    },
-    "b2da94d284a1": {
+    "610f6c28e7a1": {
       "name": "linearSubIssueTitle",
-      "ordinal": 26,
+      "ordinal": 5,
       "value": ""
     },
-    "b6bf81e9e237": {
-      "createTeamId": "team-1",
-      "states": [
-        {
-          "color": "#000000",
-          "id": "state-1",
-          "name": "Todo",
-          "type": "unstarted"
-        }
-      ],
-      "statesLoading": false,
-      "teams": [
-        {
-          "id": "team-1",
-          "key": "ENG",
-          "name": "Engineering",
-          "workspaceId": "linear-workspace"
-        }
-      ]
-    },
-    "b8b7d9212631": {
+    "9131972798ca": {
       "name": "linear.teamStates#1",
-      "ordinal": 28,
+      "ordinal": 15,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.teamStates\",\"params\":{\"teamId\":\"team-1\",\"workspaceId\":\"linear-workspace\"}}"
     },
-    "b8d6de13d3a3": {
+    "95b075d66243": {
       "name": "linear.teamStates#1",
-      "ordinal": 27,
+      "ordinal": 14,
       "args": [
         {
           "name": "method",
@@ -183,31 +116,51 @@
         }
       }
     },
-    "c69b02881ede": {
+    "9dc1f136772e": {
+      "name": "linearCommentDraft",
+      "ordinal": 4,
+      "value": ""
+    },
+    "b164dfd464b3": {
+      "name": "linear.listTeams#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\"}"
+    },
+    "b1adae647a3f": {
       "name": "createTeamId",
-      "ordinal": 19,
+      "ordinal": 11,
+      "value": "team-1"
+    },
+    "b6bf81e9e237": {
+      "createTeamId": "team-1",
+      "states": [
+        {
+          "color": "#000000",
+          "id": "state-1",
+          "name": "Todo",
+          "type": "unstarted"
+        }
+      ],
+      "statesLoading": false,
+      "teams": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "cc2ece9478f0": {
+      "name": "actionItem",
+      "ordinal": 1,
       "value": {
         "$rpc": "null"
       }
     },
-    "c94e95b05aae": {
-      "name": "itemTitleDraft",
-      "ordinal": 4,
-      "value": ""
-    },
-    "d4e3e2ea2ca4": {
-      "name": "itemReviewersDraft",
-      "ordinal": 11,
-      "value": ""
-    },
-    "d79a27912054": {
-      "name": "itemRemoveLabelsDraft",
-      "ordinal": 8,
-      "value": ""
-    },
-    "ddf392ecde5d": {
+    "ceb71a750e06": {
       "name": "linear.listTeams#1",
-      "ordinal": 20,
+      "ordinal": 8,
       "args": [
         {
           "name": "method",
@@ -244,32 +197,10 @@
         }
       }
     },
-    "e0fdfc89107a": {
-      "name": "itemBodyDraft",
-      "ordinal": 5,
-      "value": ""
-    },
-    "e986d1eb07e5": {
+    "e9a162defc32": {
       "name": "creatingTask",
-      "ordinal": 18,
+      "ordinal": 7,
       "value": false
-    },
-    "e9df19e2ad7e": {
-      "name": "linearTeams",
-      "ordinal": 22,
-      "value": [
-        {
-          "id": "team-1",
-          "key": "ENG",
-          "name": "Engineering",
-          "workspaceId": "linear-workspace"
-        }
-      ]
-    },
-    "eabd45d970b7": {
-      "name": "prFileContents",
-      "ordinal": 14,
-      "value": {}
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -279,10 +210,12 @@
         "$rpc": "undefined"
       }
     },
-    "ef99ee625bd8": {
-      "name": "itemAddAssigneesDraft",
-      "ordinal": 9,
-      "value": ""
+    "eda130337c99": {
+      "name": "detailPayload",
+      "ordinal": 2,
+      "value": {
+        "$rpc": "null"
+      }
     }
   },
   "recording": {
@@ -291,43 +224,31 @@
       {
         "id": "open-composer-settled",
         "observation": {
-          "sender": ["ddf392ecde5d"],
-          "payloads": ["542704953557"],
+          "sender": ["ceb71a750e06"],
+          "payloads": ["b164dfd464b3"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open-composer-0": "eb79a9b3682a"
           },
           "state": "2afc4b1311c1",
           "effects": [
-            "70cbb5292625",
-            "2388b2964070",
-            "58780d31c844",
-            "c94e95b05aae",
-            "e0fdfc89107a",
-            "2d7c523e8a27",
-            "9ffa64bfd433",
-            "d79a27912054",
-            "ef99ee625bd8",
-            "715b8a858916",
-            "d4e3e2ea2ca4",
-            "4b830d961da2",
-            "269660c94afa",
-            "eabd45d970b7",
-            "3e0c86d3ff78",
-            "045de1beb41b",
-            "96b613832e2d",
-            "e986d1eb07e5",
-            "c69b02881ede",
-            "e9df19e2ad7e",
-            "337ce7504f5b"
+            "cc2ece9478f0",
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "610f6c28e7a1",
+            "33218d06f656",
+            "e9a162defc32",
+            "475ec9a66266",
+            "b1adae647a3f"
           ]
         }
       },
       {
         "id": "select-metadata-item-settled",
         "observation": {
-          "sender": ["ddf392ecde5d", "b8d6de13d3a3"],
-          "payloads": ["542704953557", "b8b7d9212631"],
+          "sender": ["ceb71a750e06", "95b075d66243"],
+          "payloads": ["b164dfd464b3", "9131972798ca"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "open-composer-0": "eb79a9b3682a",
@@ -335,32 +256,19 @@
           },
           "state": "b6bf81e9e237",
           "effects": [
-            "70cbb5292625",
-            "2388b2964070",
-            "58780d31c844",
-            "c94e95b05aae",
-            "e0fdfc89107a",
-            "2d7c523e8a27",
-            "9ffa64bfd433",
-            "d79a27912054",
-            "ef99ee625bd8",
-            "715b8a858916",
-            "d4e3e2ea2ca4",
-            "4b830d961da2",
-            "269660c94afa",
-            "eabd45d970b7",
-            "3e0c86d3ff78",
-            "045de1beb41b",
-            "96b613832e2d",
-            "e986d1eb07e5",
-            "c69b02881ede",
-            "e9df19e2ad7e",
-            "337ce7504f5b",
-            "0b7bf56895e2",
-            "1e2b9e124f23",
-            "b2da94d284a1",
-            "77586df9fa2a",
-            "6cfd8be99e71"
+            "cc2ece9478f0",
+            "eda130337c99",
+            "3abc893d377b",
+            "9dc1f136772e",
+            "610f6c28e7a1",
+            "33218d06f656",
+            "e9a162defc32",
+            "475ec9a66266",
+            "b1adae647a3f",
+            "60a0395d07c7",
+            "1288b8513745",
+            "5711e2717b76",
+            "356f2cb9a0df"
           ]
         }
       }

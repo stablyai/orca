@@ -11,13 +11,6 @@
         "handle": "terminal-1"
       }
     },
-    "32947a33faab": {
-      "name": "clear-live-input",
-      "ordinal": 4,
-      "value": {
-        "handle": "terminal-1"
-      }
-    },
     "50a46af5cf5c": {
       "name": "session.tabs.close#1",
       "ordinal": 2,
@@ -93,7 +86,7 @@
             "close-tab": "eb79a9b3682a"
           },
           "state": "567d11711027",
-          "effects": ["1195cdf08e57", "32947a33faab"]
+          "effects": ["1195cdf08e57"]
         }
       }
     ]

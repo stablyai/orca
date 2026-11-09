@@ -9,7 +9,7 @@ import {
   type LocalFileSink
 } from './local-file-sink'
 import { getDaemonLogFilePath, getTraceFilePath } from './logs-directory'
-import { DAEMON_LOG_MAX_FILES } from '../daemon/daemon-file-log'
+import { DAEMON_LOG_MAX_FILES } from '../daemon/observability/daemon-file-log'
 import {
   collectBundle as _collectBundle,
   type CollectBundleOptions,
@@ -23,7 +23,7 @@ import {
   type UploadBundleResult
 } from './diagnostic-bundle-upload'
 import { setActiveSink, startSpan } from './tracer'
-import { setSecurePathHardeningReporter } from '../../shared/secure-path-hardening-report'
+import { setSecurePathHardeningReporter } from '../../shared/secure-storage/secure-path-hardening-report'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 
 const CI_ENV_VARS = [

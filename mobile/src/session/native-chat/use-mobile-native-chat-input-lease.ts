@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { nativeChatTurnStatusCopy } from './native-chat-turn-status-copy'
 import { translate, type Translate } from '../../i18n/mobile-i18n'
-import type { MobileNativeChatInputLockReason } from '../MobileNativeChatView'
+import type { MobileNativeChatInputLockReason } from './MobileNativeChatView'
 
 export function useMobileNativeChatInputLease(args: {
   activeHandle: string | null
@@ -97,9 +97,7 @@ export function mobileNativeChatComposerPlaceholder(
   afterStop?: 'queue' | 'send',
   t: Translate = translate
 ): string {
-  if (lockReason === 'disconnected') {
-    return t('chat.composerPlaceholder.reconnecting', 'Reconnecting…')
-  }
+  // Offline still takes typing: Send queues, so the usual prompt stays.
   if (lockReason === 'waiting') {
     return t('chat.composerPlaceholder.waitingForTerminal', 'Waiting for terminal…')
   }

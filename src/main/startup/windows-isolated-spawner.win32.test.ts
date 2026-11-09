@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import {
   setIsolatedSpawner,
@@ -16,6 +16,27 @@ const describeOnWindows = process.platform === 'win32' ? describe : describe.ski
 const ADDON = resolve(__dirname, '..', '..', '..', 'native', 'windows-security', 'index.js')
 const root = mkdtempSync(join(tmpdir(), 'orca-isolated-spawn-'))
 const entry = join(root, 'main.cjs')
+
+// Holders now break away from the runner's job, so nothing reaps one a test leaves behind.
+const started = new Set<number>()
+function track(pid: number | undefined): void {
+  if (pid !== undefined && Number.isInteger(pid) && pid > 0) {
+    started.add(pid)
+  }
+}
+
+afterEach(async () => {
+  const pids = [...started]
+  started.clear()
+  for (const pid of pids.filter(isAlive)) {
+    try {
+      process.kill(pid)
+    } catch {
+      // Exited between the check and the kill.
+    }
+  }
+  await vi.waitFor(() => expect(pids.filter(isAlive)).toEqual([]), { timeout: 10_000 })
+})
 
 function isAlive(pid: number): boolean {
   try {
@@ -47,6 +68,7 @@ async function runElectron(mode: 'isolated' | 'libuv', holderMs: number) {
   const [code] = await once(child, 'close', { signal: AbortSignal.timeout(holderMs + 30_000) })
   const result = readFileSync(resultFile, 'utf8')
   const holderPid = Number(result)
+  track(holderPid)
   const holderAliveAtClose = isAlive(holderPid)
   if (holderAliveAtClose) {
     process.kill(holderPid)
@@ -114,6 +136,8 @@ describeOnWindows('isolated detached spawn against real Windows processes', () =
       }
       const own = start()
       const outside = start()
+      track(own.pid)
+      track(outside.pid)
       await Promise.all([once(own, 'spawn'), once(outside, 'spawn')])
       const ownExit = once(own, 'exit', { signal: AbortSignal.timeout(10_000) })
       const outsideExit = once(outside, 'exit', { signal: AbortSignal.timeout(10_000) })
@@ -208,6 +232,8 @@ describeOnWindows('isolated detached spawn inside a kill-on-close job', () => {
   // A cold Node start on a loaded Windows runner can exceed the 5 s default.
   it('the child breaks away and outlives the job closing with its parent', async (context) => {
     const result = await spawnInJob('breakaway-ok')
+    track(result.pid)
+    track(result.controlPid)
     if (!result.joined || result.breakawayDenied) {
       // The runner's own job refuses nesting or breakaway; SSH sessions and terminals permit it.
       context.skip()
@@ -226,6 +252,8 @@ describeOnWindows('isolated detached spawn inside a kill-on-close job', () => {
   // A cold Node start on a loaded Windows runner can exceed the 5 s default.
   it('a job that forbids breakaway gets the child instead, and says so', async (context) => {
     const result = await spawnInJob('strict')
+    track(result.pid)
+    track(result.controlPid)
     if (!result.joined) {
       context.skip()
     }

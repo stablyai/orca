@@ -1,4 +1,4 @@
-import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 

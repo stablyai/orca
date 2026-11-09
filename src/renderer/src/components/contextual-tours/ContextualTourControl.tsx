@@ -3,7 +3,7 @@ import { Switch } from '@/components/ui/switch'
 import { useAppStore } from '@/store'
 import type { ContextualTourStepControl } from '../../../../shared/contextual-tours'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from './contextual-tour-composer-events'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ContextualTourControl({
   control
@@ -29,6 +29,7 @@ export function toggleAutoRenameBranchFromWork(args: {
 }
 
 function AutoRenameBranchFromWorkControl(): JSX.Element {
+  const t = useTranslate()
   const enabled = useAppStore((s) => s.settings?.autoRenameBranchFromWork === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
 
@@ -37,7 +38,7 @@ function AutoRenameBranchFromWorkControl(): JSX.Element {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-medium text-foreground">
-            {translate(
+            {t(
               'auto.components.contextual.tours.ContextualTourControl.731c5573df',
               'Auto-name from first message'
             )}
@@ -45,7 +46,7 @@ function AutoRenameBranchFromWorkControl(): JSX.Element {
         </div>
         <Switch
           checked={enabled}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.contextual.tours.ContextualTourControl.186eecc34f',
             'Auto-name workspace from first agent message'
           )}

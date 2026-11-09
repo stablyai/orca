@@ -1,4 +1,4 @@
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 
 const TERMINAL_PROMPT_REPLAY_REPLACEMENT_ERRORS = new Set([

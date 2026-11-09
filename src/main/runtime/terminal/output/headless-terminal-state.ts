@@ -1,29 +1,34 @@
 import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './headless-terminal-hydration'
-import type { RuntimeHeadlessTerminal } from '../../runtime-terminal-state-records'
-import { HeadlessEmulator } from '../../../daemon/headless-emulator'
-import { shouldForwardHeadlessTerminalQueryReply } from '../../headless-terminal-query-reply-policy'
-import { isNativeWindowsConptyPty } from '../../terminal-model-query-authority'
-import { getTerminalViewAttributes } from '../../terminal-view-attribute-store'
-import { PtyShellOwnershipMirror } from '../../pty-shell-ownership-mirror'
-import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal-mode-reset-profiles'
+import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
+import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
+import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
+import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
+import { getTerminalViewAttributes } from '../view/terminal-view-attribute-store'
+import { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
+import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { release } from 'node:os'
-import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../../../../shared/pty-owner-backend'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { windowsPtyForOwnerBackend } from '../../../../shared/xterm-conpty-options'
+import {
+  windowsPtyForOwnerMachine,
+  type XtermConptyOptions
+} from '../../../../shared/xterm-conpty-options'
+import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 
 export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
-  /** SSH and paired-runtime panes run on their host's PTY; every PTY this Windows process owns is ConPTY. */
-  private ownerBackendForHeadlessPty(ptyId: string): PtyOwnerBackend {
+  /** SSH and paired-runtime panes run on their host's PTY, so the ConPTY model follows that machine. */
+  private windowsPtyForHeadlessPty(ptyId: string): XtermConptyOptions | undefined {
     // Why the id too: main's copy starts on the first byte, before a restored relay PTY has a record.
-    if (
-      this.ptysById.get(ptyId)?.connectionId ||
-      parseAppSshPtyId(ptyId) !== null ||
-      isRemoteRuntimePtyId(ptyId)
-    ) {
-      return 'posix-pty'
+    const sshConnectionId =
+      this.ptysById.get(ptyId)?.connectionId || parseAppSshPtyId(ptyId)?.connectionId
+    if (sshConnectionId) {
+      return windowsPtyForOwnerMachine(getRegisteredSshState(sshConnectionId)?.remotePlatform)
     }
-    return resolvePtyOwnerBackend({ platform: process.platform, shellPath: undefined })
+    // Paired-server panes never stream into this process's runtime.
+    if (isRemoteRuntimePtyId(ptyId)) {
+      return undefined
+    }
+    return windowsPtyForOwnerMachine(process.platform, release())
   }
 
   /** Headless and phone replies share the per-agent reply policy desktop applies in its renderer. */
@@ -48,7 +53,7 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
       wslDistro: this.ptysById.get(ptyId)?.connectionId
         ? undefined
         : (this.wslDistroByPtyId.get(ptyId) ?? this.ptysById.get(ptyId)?.wslDistro ?? undefined),
-      windowsPty: windowsPtyForOwnerBackend(this.ownerBackendForHeadlessPty(ptyId), release()),
+      windowsPty: this.windowsPtyForHeadlessPty(ptyId),
       // Use provider input for query replies to retain shell-ready/SSH routing without interactive echo metering.
       onQueryReply: (reply) => {
         // Queued links can outlive disposal; only the current state may reply to a reused PTY id.
@@ -214,6 +219,13 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
         // Best-effort mirror tracking; live PTY streaming must continue even
         // if xterm rejects a raced resize during teardown.
       })
+  }
+
+  /** A resize the PTY took before this mirror existed: the TUI repaints for it, so unlike a reflow it leaves the grid readable. */
+  resizeHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
+    if (cols > 0 && rows > 0) {
+      this.resizeHeadlessTerminal(ptyId, cols, rows)
+    }
   }
 
   /** Reflow to provider-proven size after early live bytes used default geometry; preserve renderer restore baselines because no pane was measured. */

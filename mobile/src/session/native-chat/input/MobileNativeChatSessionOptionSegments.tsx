@@ -1,8 +1,6 @@
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { MobileSegmentedControl } from '../../../components/MobileSegmentedControl'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { SectionHeader } from '../../../components/list/ListGroup'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   sessionOptionDispatchUnconfirmed,
@@ -12,20 +10,16 @@ import {
 import {
   nativeChatSessionChoiceShortLabel,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { SessionOptionCaption } from './MobileNativeChatSessionOptionRows'
-
-// Five fit across a phone's sheet; more read better as a list on their own page.
-const MAX_SEGMENTS = 5
 
 export function showsSessionOptionAsSegments(descriptor: SessionOptionDescriptor): boolean {
   return (
     descriptor.category === 'thought_level' &&
     descriptor.kind.type === 'select' &&
     !descriptor.action &&
-    descriptor.kind.choices.length > 1 &&
-    descriptor.kind.choices.length <= MAX_SEGMENTS
+    descriptor.kind.choices.length > 1
   )
 }
 
@@ -38,15 +32,14 @@ export function SessionOptionSegments({
   disabled: boolean
   onSetOption: (value: SessionOptionValue) => void
 }): React.JSX.Element | null {
-  useMobileColorScheme()
   const t = useMobileTranslation()
   if (descriptor.kind.type !== 'select') {
     return null
   }
   const { choices, currentValue } = descriptor.kind
   return (
-    <View style={styles.block}>
-      <Text style={styles.label}>{nativeChatSessionOptionLabel(descriptor, say)}</Text>
+    <View>
+      <SectionHeader title={nativeChatSessionOptionLabel(descriptor, say)} />
       <MobileSegmentedControl
         segments={choices.map((choice) => ({
           value: choice.value,
@@ -55,7 +48,9 @@ export function SessionOptionSegments({
         // An unknown value marks nothing, rather than reading as a confirmed choice.
         selected={descriptor.valueSource === 'unknown' ? undefined : currentValue}
         onSelect={onSetOption}
-        fill
+        // Every level count keeps this one control; crowded labels scroll instead of truncating.
+        scrollWhenCrowded
+        onSheet
         disabled={disabled || !descriptor.settable}
       />
       {sessionOptionDispatchUnconfirmed(descriptor) ? (
@@ -66,15 +61,3 @@ export function SessionOptionSegments({
     </View>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  block: {
-    marginTop: spacing.md
-  },
-  label: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    paddingHorizontal: spacing.xs,
-    paddingBottom: 6
-  }
-}))

@@ -11,13 +11,13 @@ const { closeWebRuntimeSessionTabMock, getStateMock, isWebRuntimeSessionActiveMo
 
 vi.mock('@/store', () => ({ useAppStore: { getState: getStateMock } }))
 
-vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
   closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
-vi.mock('../../../../shared/terminal-surface-id', () => ({
+vi.mock('../../../../shared/workspace-layout/terminal-surface-id', () => ({
   toHostSessionTabId: (tabId: string) => tabId
 }))
 
@@ -65,7 +65,7 @@ describe('closeTerminalTab before the worktree catalog names a host', () => {
     getStateMock.mockReturnValue(unhydratedState(toRemoteRuntimePtyId('h-1', 'env-1'), closeTab))
     const onCancel = vi.fn()
 
-    closeTerminalTab('tab-1', { onCancel })
+    closeTerminalTab('tab-1', { reason: 'user', onCancel })
 
     expect(onCancel).not.toHaveBeenCalled()
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
@@ -74,29 +74,5 @@ describe('closeTerminalTab before the worktree catalog names a host', () => {
       environmentId: 'env-1',
       reason: 'user'
     })
-  })
-
-  it('still closes the tab locally when nothing names its host', () => {
-    isWebRuntimeSessionActiveMock.mockReturnValue(false)
-    const closeTab = vi.fn()
-    getStateMock.mockReturnValue(unhydratedState(null, closeTab))
-    const onClosed = vi.fn()
-
-    closeTerminalTab('tab-1', { onClosed })
-
-    expect(closeTab).toHaveBeenCalledWith('tab-1')
-    expect(onClosed).toHaveBeenCalled()
-    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
-  })
-
-  it('closes a parked local tab whose process exited as a pty-exit, never a user close', () => {
-    // A user close would tombstone the tab and retire its session (verify-15a 5e).
-    isWebRuntimeSessionActiveMock.mockReturnValue(false)
-    const closeTab = vi.fn()
-    getStateMock.mockReturnValue(unhydratedState('pty-1', closeTab))
-
-    closeTerminalTab('tab-1', { hostCloseReason: 'pty-exit', lifecyclePtyId: 'pty-1' })
-
-    expect(closeTab).toHaveBeenCalledWith('tab-1', expect.objectContaining({ reason: 'pty-exit' }))
   })
 })

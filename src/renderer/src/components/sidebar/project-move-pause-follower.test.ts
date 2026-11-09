@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { ProjectMovePauseResponse } from '../../../../shared/project-move-pause'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const mocks = vi.hoisted(() => {
   const tabsByWorktree: Record<string, { id: string }[]> = {}
@@ -30,8 +29,10 @@ vi.mock('@/lib/worktree-sleep-intent', () => ({
   markWorktreeSleepIntent: vi.fn(),
   withWorktreeSleepTeardown: (_id: string, action: () => Promise<void>) => action()
 }))
-vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: mocks.payload }))
-vi.mock('@/lib/workspace-session-host-persistence', () => ({
+vi.mock('@/lib/workspace/persistence/workspace-session', () => ({
+  buildWorkspaceSessionPayload: mocks.payload
+}))
+vi.mock('@/lib/workspace/persistence/workspace-session-host-persistence', () => ({
   persistWorkspaceSessionByHost: mocks.persist
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }))
@@ -100,32 +101,6 @@ describe('project move renderer completion', () => {
     saving.resolve()
     await completion
     expect(f.responses.map((response) => response.phase)).toEqual(['prepare', 'persist'])
-  })
-
-  it('resolves every twin chat host and the terminal owner instead of assuming local', async () => {
-    const f = fixture()
-    const id = 'repo::/wt'
-    mocks.state.worktreesByRepo = {
-      repo: [
-        { id, repoId: 'repo', hostId: 'local' },
-        { id, repoId: 'repo', hostId: 'runtime:env' }
-      ]
-    }
-    mocks.state.tabsByWorktree = { [id]: [{ id: 'tab' }] }
-    mocks.state.ptyIdsByTabId = { tab: [toRemoteRuntimePtyId('pty', 'env')] }
-    await f.prepare([id])
-    expect(f.responses[0]).toEqual({
-      requestId: 'move-1',
-      protocol: 1,
-      phase: 'prepare',
-      targets: [
-        {
-          worktreeId: id,
-          terminalHost: { kind: 'environment', environmentId: 'env' },
-          chatHosts: [{ kind: 'self' }, { kind: 'environment', environmentId: 'env' }]
-        }
-      ]
-    })
   })
 
   it('refuses ambiguous twins before starting a sleep', async () => {

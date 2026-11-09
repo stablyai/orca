@@ -11,6 +11,35 @@ private let networkBlockRules = """
   ]
   """
 
+/// Compiled once per launch and shared by every view, so later mounts load without waiting; main thread only.
+private enum NetworkBlockRuleList {
+  private static var compiled: WKContentRuleList?
+
+  /// Synchronous once compiled in this process; nil means isolation is unavailable.
+  static func load(_ completion: @escaping (WKContentRuleList?) -> Void) {
+    if let compiled {
+      completion(compiled)
+      return
+    }
+    // Optional chaining would skip completion when the store is absent, leaving loading forever; fail closed instead.
+    guard let store = WKContentRuleListStore.default() else {
+      completion(nil)
+      return
+    }
+    store.compileContentRuleList(
+      forIdentifier: networkBlockIdentifier,
+      encodedContentRuleList: networkBlockRules
+    ) { ruleList, _ in
+      DispatchQueue.main.async {
+        if let ruleList {
+          compiled = ruleList
+        }
+        completion(ruleList)
+      }
+    }
+  }
+}
+
 /// CSP fences fetch/XHR; document-start script blocks unobservable WebSocket and service-worker APIs.
 /// Match Android; both non-configurable and non-writable prevent page replacement.
 private let networkApiBlocker = """
@@ -155,11 +184,15 @@ internal final class MobileWebShellBridgeMessageTooLargeException: GenericExcept
   }
 }
 
-final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate {
+final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate,
+  UIGestureRecognizerDelegate {
   let onLoadState = EventDispatcher()
   let onBridgeMessage = EventDispatcher()
   let onExternalNavigation = EventDispatcher()
+  let onBackEdgeSwipe = EventDispatcher()
 
+  // The page's own Back: the stack's swipe is off while the page claims Back, and a strip overlay would eat taps.
+  private let backEdgePan = UIPanGestureRecognizer()
   private let schemeHandler = MobileWebShellSchemeHandler()
   private let bridgeReceiver = MobileWebShellBridgeReceiver()
   private let bridgeGate = MobileWebShellBridgeGate()
@@ -175,6 +208,19 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private var isolationReady = false
   private var isolationFailed = false
   private let loadState = MobileWebShellLoadStateMachine()
+  private var keyboardPreparationPending = false
+  private var windowObservers: [NSObjectProtocol] = []
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    loadWhenIsolated()
+  }
+
+  deinit {
+    for observer in windowObservers {
+      NotificationCenter.default.removeObserver(observer)
+    }
+  }
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -207,7 +253,49 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       webView.leadingAnchor.constraint(equalTo: leadingAnchor),
       webView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ])
+    for name in [
+      UIWindow.didBecomeKeyNotification, UIScene.didActivateNotification,
+      UIApplication.didBecomeActiveNotification,
+      UIResponder.keyboardDidHideNotification, UITextField.textDidEndEditingNotification,
+      UITextView.textDidEndEditingNotification
+    ] {
+      windowObservers.append(NotificationCenter.default.addObserver(
+        forName: name, object: nil, queue: .main
+      ) { [weak self] _ in
+        self?.loadWhenIsolated()
+      })
+    }
     installNetworkBlock(into: configuration.userContentController)
+    backEdgePan.isEnabled = false
+    backEdgePan.addTarget(self, action: #selector(handleBackEdgePan(_:)))
+    backEdgePan.delegate = self
+    addGestureRecognizer(backEdgePan)
+    webView.scrollView.panGestureRecognizer.require(toFail: backEdgePan)
+  }
+
+  func setBackEdgeSwipe(_ value: Bool) {
+    backEdgePan.isEnabled = value
+  }
+
+  /// Only touches that start at the shell's left edge; a landscape safe area insets it from the screen's.
+  func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    recognizer !== backEdgePan || touch.location(in: self).x <= 20
+  }
+
+  override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+    guard recognizer === backEdgePan else { return super.gestureRecognizerShouldBegin(recognizer) }
+    let velocity = backEdgePan.velocity(in: self)
+    return velocity.x > abs(velocity.y)
+  }
+
+  /// Commit like the stack's own swipe: past half the width, or a rightward flick.
+  @objc private func handleBackEdgePan(_ pan: UIPanGestureRecognizer) {
+    guard pan.state == .ended else { return }
+    let travel = pan.translation(in: self).x
+    let speed = pan.velocity(in: self).x
+    if speed > 300 || (speed > -300 && travel > bounds.width / 2) {
+      onBackEdgeSwipe()
+    }
   }
 
   func setGenerationDirectory(_ value: String) {
@@ -363,49 +451,71 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   private func installNetworkBlock(into controller: WKUserContentController) {
-    guard let store = WKContentRuleListStore.default() else {
-      // Optional chaining skips completion when the store is absent, leaving loading forever; fail closed instead.
-      isolationFailed = true
-      pendingDocumentUrl = nil
-      return
-    }
-    store.compileContentRuleList(
-      forIdentifier: networkBlockIdentifier,
-      encodedContentRuleList: networkBlockRules
-    ) { [weak self] ruleList, _ in
-      DispatchQueue.main.async {
-        guard let self else { return }
-        guard let ruleList else {
-          self.isolationFailed = true
-          self.pendingDocumentUrl = nil
-          // Rule compilation can finish after refusal; the state machine prevents a second terminal reason.
-          if self.appliedSessionId != nil {
-            self.failPropUpdate(.isolationUnavailable)
-          }
-          return
+    NetworkBlockRuleList.load { [weak self] ruleList in
+      guard let self else { return }
+      guard let ruleList else {
+        self.isolationFailed = true
+        self.pendingDocumentUrl = nil
+        // Rule compilation can finish after refusal; the state machine prevents a second terminal reason.
+        if self.appliedSessionId != nil {
+          self.failPropUpdate(.isolationUnavailable)
         }
-        controller.add(ruleList)
-        self.isolationReady = true
-        self.loadWhenIsolated()
+        return
       }
+      controller.add(ruleList)
+      self.isolationReady = true
+      self.loadWhenIsolated()
     }
   }
 
   private func loadWhenIsolated() {
-    guard isolationReady, let url = pendingDocumentUrl else { return }
-    pendingDocumentUrl = nil
-    // Only our own load raises this flag; every document ending clears it.
-    loadState.shellLoadStarted()
-    webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+    guard isolationReady, pendingDocumentUrl != nil, !keyboardPreparationPending,
+      let window, window.isKeyWindow,
+      window.windowScene?.activationState == .foregroundActive else { return }
+    keyboardPreparationPending = true
+    DispatchQueue.main.async { [weak self, weak window] in
+      guard let self else { return }
+      guard let window, self.window === window, window.isKeyWindow,
+        window.windowScene?.activationState == .foregroundActive else {
+        self.keyboardPreparationPending = false
+        self.loadWhenIsolated()
+        return
+      }
+      let delay: TimeInterval
+      switch MobileWebShellKeyboardWarmup.prepare(in: window) {
+      case .ready(let remainingDelay):
+        delay = remainingDelay
+      case .waitingForTextInput:
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+          guard let self else { return }
+          self.keyboardPreparationPending = false
+          self.loadWhenIsolated()
+        }
+        return
+      case .failed:
+        self.keyboardPreparationPending = false
+        self.failPropUpdate(.documentLoadFailed)
+        return
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak window] in
+        guard let self else { return }
+        self.keyboardPreparationPending = false
+        guard let window, self.window === window, window.isKeyWindow,
+          window.windowScene?.activationState == .foregroundActive else {
+          self.loadWhenIsolated()
+          return
+        }
+        guard self.isolationReady, let url = self.pendingDocumentUrl else { return }
+        self.pendingDocumentUrl = nil
+        self.loadState.shellLoadStarted()
+        self.webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+      }
+    }
   }
 
   private func emit(_ emission: MobileWebShellLoadEmission?) {
     guard let emission else { return }
-    var payload: [String: Any] = ["state": emission.state]
-    if let reason = emission.reason {
-      payload["reason"] = reason
-    }
-    onLoadState(payload)
+    onLoadState(emission.payload)
   }
 
   private func reportDocumentFailure() {
@@ -436,10 +546,11 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     if #available(iOS 14.5, *) {
       isDownload = navigationAction.shouldPerformDownload
     }
+    let isMainFrame = navigationAction.targetFrame?.isMainFrame == true
     // linkActivated gates only opener offers; gesture-free subframe top navigation must never authorize a load.
     let verdict = MobileWebShellNavigationPolicy.verdict(
       url: navigationAction.request.url?.absoluteString,
-      isMainFrame: navigationAction.targetFrame?.isMainFrame == true,
+      isMainFrame: isMainFrame,
       isDocumentUrl: isDocumentUrl(navigationAction.request.url),
       isShellLoad: loadState.isShellLoad,
       hasGesture: navigationAction.navigationType == .linkActivated,
@@ -448,7 +559,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     if case let .cancelAndOffer(url) = verdict {
       onExternalNavigation(["url": url])
     }
-    if verdict == .allow {
+    if verdict == .allow && isMainFrame {
       // Spend before handing back the decision so another main-frame action cannot reuse the allowance.
       loadState.shellLoadConsumed()
     }
@@ -460,8 +571,13 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     decidePolicyFor navigationResponse: WKNavigationResponse,
     decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
   ) {
-    let allowed = navigationResponse.isForMainFrame &&
-      navigationResponse.canShowMIMEType &&
+    // Only srcdoc subframes pass the action policy; refusing one must not fail the shell document.
+    guard navigationResponse.isForMainFrame else {
+      let url = navigationResponse.response.url?.absoluteString
+      decisionHandler(url == MobileWebShellNavigationPolicy.inlineDocumentUrl ? .allow : .cancel)
+      return
+    }
+    let allowed = navigationResponse.canShowMIMEType &&
       isDocumentUrl(navigationResponse.response.url)
     if !allowed {
       reportDocumentFailure()
@@ -487,6 +603,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
 
   /// history.replaceState changes the path before finish; finished() uses commit state instead of URL equality.
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    MobileWebShellWarmUp.release()
     emit(loadState.finished())
   }
 
@@ -495,17 +612,22 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     didFailProvisionalNavigation navigation: WKNavigation!,
     withError error: Error
   ) {
+    MobileWebShellWarmUp.release()
     reportNavigationFailure(error)
   }
 
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    MobileWebShellWarmUp.release()
     reportNavigationFailure(error)
   }
 
   /// Report renderer death; memory pressure/provider updates look alike, so the caller owns retry policy.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    MobileWebShellWarmUp.release()
     clearBridgeTarget()
-    emit(loadState.failed(.renderProcessGone))
+    // Jetsam takes WebContent while Orca is backgrounded; the report can arrive as the app resumes, before it is active.
+    let background = window == nil || UIApplication.shared.applicationState != .active
+    emit(loadState.failed(.renderProcessGone, background: background))
   }
 
   func webView(

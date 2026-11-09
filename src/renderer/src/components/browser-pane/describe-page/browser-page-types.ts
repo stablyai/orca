@@ -24,7 +24,12 @@ export type BrowserPageUrlSetter = (
   options?: { preserveLoadError?: boolean }
 ) => void
 
-export type BrowserChromeShortcutScope = 'focused' | 'inactive' | 'owned-target'
+/** 'owned-target' panes answer only chords from their own overlay; '-focused' marks the one in the focused split. */
+export type BrowserChromeShortcutScope =
+  | 'focused'
+  | 'inactive'
+  | 'owned-target'
+  | 'owned-target-focused'
 
 export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
@@ -71,6 +76,8 @@ export type BrowserPageGrabAnnotations = {
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
   grabToastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>
   dismissGrabToast: () => void
+  /** Copies a grab screenshot; `onSettled` runs only while that copy still owns the toast. */
+  copyGrabScreenshot: (dataUrl: string, onSettled: (copied: boolean) => void) => void
   handleGrabCopy: () => void
   handleGrabCopyScreenshot: () => void
   grabMenuActionTakenRef: MutableRefObject<boolean>

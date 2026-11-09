@@ -1,7 +1,7 @@
-import { resolveActiveTabOwnerWorktreeId } from '../slices/active-tab-owner-worktree'
-import { getTerminalTabOwnerWorktreeId } from '../slices/terminal-tab-owner-index'
+import { resolveActiveTabOwnerWorktreeId } from './active-tab-owner-worktree'
+import { getTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { ownsGlobalSelection } from '../global-selection-owner'
+import { ownsGlobalSelection } from '../workspaces/selection/global-selection-owner'
 
 export function createTerminalTabNavigationActions(
   set: TerminalStoreSet,

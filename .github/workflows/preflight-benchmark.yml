@@ -5,7 +5,7 @@ on:
     paths:
       - .github/workflows/preflight-benchmark.yml
       - config/scripts/benchmark-preflight-*.mjs
-      - config/scripts/preflight-benchmark-command.mjs
+      - config/scripts/preflight/benchmarks/preflight-benchmark-command.mjs
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,7 +19,8 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     # Native compiler peaks can exhaust the standard ARM runner before samples are saved.
     runs-on: blacksmith-8vcpu-ubuntu-2404-arm
-    timeout-minutes: 25
+    # The fifth typecheck project needs a 40-minute aggregate budget.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
         with:
@@ -33,7 +34,7 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
       - name: Compare native and Bun typechecking
-        run: node config/scripts/benchmark-preflight-compilers.mjs
+        run: node config/scripts/preflight/benchmarks/benchmark-preflight-compilers.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -57,7 +58,7 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
       - name: Compare anti-slop patch and script runtimes
-        run: node config/scripts/benchmark-preflight-static-analysis.mjs
+        run: node config/scripts/preflight/benchmarks/benchmark-preflight-static-analysis.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -82,7 +83,7 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
       - name: Compare compatibility-import scan and runtimes
-        run: node config/scripts/benchmark-preflight-compat-boundary.mjs
+        run: node config/scripts/preflight/benchmarks/benchmark-preflight-compat-boundary.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -106,7 +107,7 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
       - name: Compare localization extraction runtimes and complete catalogs
-        run: node config/scripts/benchmark-preflight-localization-extraction.mjs
+        run: node config/scripts/preflight/benchmarks/benchmark-preflight-localization-extraction.mjs
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -1,10 +1,10 @@
-import { useContext, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Folder, FolderTree, GitBranch, Monitor } from 'lucide-react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxRow'
-import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
-import { useSidebarHostScopeOptions } from '@/components/sidebar/use-sidebar-host-scope-options'
-import { translate } from '@/i18n/i18n'
+import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
+import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
+import { useTranslate } from '@/i18n/use-translate'
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
 import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
 import {
@@ -20,7 +20,7 @@ import {
   useWorkspaceWorktree
 } from './native-chat-resume-workspace-lookups'
 import { ResumeCandidateRow } from './NativeChatResumeOnRestartAgentRow'
-import { ResumeTreeCount, ResumeTreeRow } from './NativeChatResumeTreeRow'
+import { ResumeGroupNode as GroupNode } from './NativeChatResumeGroupNode'
 import {
   chatState,
   coveredKeys,
@@ -36,10 +36,8 @@ import {
   groupResumeWorkspacesByRepo,
   nestResumeWorkspaces,
   resolveResumeGroupHeader,
-  resumeSelectionState,
   resumeWorkspaceKind,
   resumeWorkspaceCandidates,
-  toggleResumeSelection,
   type ResumeCandidate,
   type ResumeWorkspaceGroup,
   type ResumeWorkspaceNode
@@ -48,52 +46,6 @@ import {
 export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
 
 /** Group by machine/project/workspace/chat, nesting child workspaces after parent chats. Show machine nodes for remote/multiple hosts; name unknown workspaces by their encoded folder. */
-
-function GroupNode({
-  nodeKey,
-  depth,
-  name,
-  checkboxLabel,
-  covered,
-  tree,
-  label,
-  children
-}: {
-  nodeKey: string
-  depth: number
-  name: string
-  checkboxLabel: string
-  /** Every selectable chat under this node. */
-  covered: readonly string[]
-  tree: TreeProps
-  label: React.ReactNode
-  children: React.ReactNode
-}): React.JSX.Element {
-  const selection = resumeSelectionState(covered, tree.selected)
-  const expanded = tree.isExpanded(nodeKey)
-  const selecting = useContext(ResumeTreeSelectingContext)
-  return (
-    <>
-      <ResumeTreeRow
-        depth={depth}
-        expanded={expanded}
-        onExpandedChange={(next) => tree.setExpanded(nodeKey, next)}
-        name={name}
-        checked={selection.checked}
-        disabled={tree.busy || selection.total === 0}
-        onCheckedChange={() => toggleResumeSelection(covered, selection, tree.onToggle)}
-        checkboxLabel={checkboxLabel}
-      >
-        {label}
-        {selecting && (
-          <ResumeTreeCount selectedCount={selection.selectedCount} total={selection.total} />
-        )}
-      </ResumeTreeRow>
-      {/* Collapsing unmounts the rows only; their selection lives with the dialog. */}
-      {expanded && children}
-    </>
-  )
-}
 
 function WorkspaceNode({
   node,
@@ -108,6 +60,7 @@ function WorkspaceNode({
   tree: TreeProps
   fallbackDisplays?: workspaceDisplay.WorkspaceFallbacks
 }): React.JSX.Element {
+  const t = useTranslate()
   const { group } = node
   const first = group.candidates[0]
   const worktree = useWorkspaceWorktree(group.workspaceId, first?.executionHostId)
@@ -122,7 +75,7 @@ function WorkspaceNode({
       nodeKey={`workspace:${hostId}:${group.workspaceId}`}
       depth={depth}
       name={controlName}
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectWorkspace',
         'Select all chats in {{value0}}',
         { value0: controlName }
@@ -194,6 +147,7 @@ function ProjectNode({
   depth: number
   tree: TreeProps
 }): React.JSX.Element {
+  const t = useTranslate()
   const repos = useAppStore((store) => store.repos)
   const projectGroups = useAppStore((store) => store.projectGroups)
   const header = resolveResumeGroupHeader(repoId, repos, projectGroups)
@@ -202,7 +156,7 @@ function ProjectNode({
       nodeKey={`project:${hostId}:${repoId}`}
       depth={depth}
       name={header.name}
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectProject',
         'Select all chats in {{value0}}',
         { value0: header.name }
@@ -303,13 +257,14 @@ function MachineNode({
   hostLabelById: ReadonlyMap<ExecutionHostId, string>
   tree: TreeProps
 }): React.JSX.Element {
+  const t = useTranslate()
   const name = getHostContextLabel(hostId, { hostLabelById })
   return (
     <GroupNode
       nodeKey={`machine:${hostId}`}
       depth={0}
       name={name}
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectMachine',
         'Select all chats on {{value0}}',
         { value0: name }
@@ -322,7 +277,7 @@ function MachineNode({
           <span className="min-w-0 truncate text-[13px] font-bold">{name}</span>
           {parseExecutionHostId(hostId)?.kind === 'ssh' && (
             <WorktreeHostContextBadge
-              label={translate('auto.components.NativeChatResumeOnRestartModal.sshHost', 'SSH')}
+              label={t('auto.components.NativeChatResumeOnRestartModal.sshHost', 'SSH')}
             />
           )}
         </>

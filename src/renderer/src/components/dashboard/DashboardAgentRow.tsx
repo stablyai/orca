@@ -9,7 +9,7 @@ import {
   type AgentDotState
 } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
@@ -18,15 +18,18 @@ import { programStatusAttentionLine } from '../../../../shared/program-status/pr
 import { agentRowToolInput, showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
-import { agentNoUpdateLabel, formatCompactDuration } from '../../../../shared/agent-row-decay-state'
+import {
+  agentNoUpdateLabel,
+  formatCompactDuration
+} from '../../../../shared/agent-status/presentation/agent-row-decay-state'
 import { agentRowDisplayDotState, agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
-} from '../../../../shared/agent-main-agent-verdict'
+} from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
 import {
@@ -34,14 +37,15 @@ import {
   agentChildRowNoUpdateLabel
 } from '@/components/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
-function formatTimeAgo(ts: number, now: number): string {
+function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return translate('auto.components.dashboard.DashboardAgentRow.justNow', 'just now')
+    return t('auto.components.dashboard.DashboardAgentRow.justNow', 'just now')
   }
-  return translate('auto.components.dashboard.DashboardAgentRow.timeAgo', '{{duration}} ago', {
+  return t('auto.components.dashboard.DashboardAgentRow.timeAgo', '{{duration}} ago', {
     duration: formatCompactDuration(delta)
   })
 }
@@ -66,6 +70,7 @@ function stateDotTooltipLabel(
 }
 
 type Props = {
+  showModel?: boolean
   agent: DashboardAgentRowData
   onDismiss: (paneKey: string) => void
   /** Navigate to this agent's tab; paneKey lets the caller mark-visit the exact clicked row. */
@@ -84,6 +89,8 @@ type Props = {
   // Why: inline-card orchestration rows can fold their child agents.
   childAgentCount?: number
   childAgentsExpanded?: boolean
+  // Shown beside the collapsed count so hidden child work stays visible.
+  collapsedChildAgentsState?: AgentDotState
   onToggleChildAgents?: () => void
   // Why: chevron indentation replaces fixed-offset lineage connector art.
   hideLineageConnectors?: boolean
@@ -95,6 +102,7 @@ type Props = {
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
   agent,
+  showModel = true,
   onDismiss,
   onActivate,
   now,
@@ -105,12 +113,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   isFocusedPane = false,
   childAgentCount,
   childAgentsExpanded = false,
+  collapsedChildAgentsState,
   onToggleChildAgents,
   hideLineageConnectors = false,
   sendTargetStatus,
   sendTargetDisabledReason,
   onSendTargetClick
 }: Props) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
@@ -165,7 +175,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
   // Show tool details only for working/approval waits; ended or monitoring turns have stale last-tool metadata.
-  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
+  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
@@ -175,7 +185,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     : ''
   // Why: a child row's message line is the model's, so a child that ended without an outcome says so.
   const lastAssistantMessage = agent.childRow
-    ? agentChildRowMessageLine(agent.childRow)
+    ? agentChildRowMessageLine(agent.childRow, t)
     : (agent.entry.lastAssistantMessage?.trim() ?? '')
   const isInterrupted = agentVerdictDisplayMark(agent.entry) === 'interrupted'
   const lineage = agent.lineage
@@ -184,7 +194,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const participatesInLineage = isLineageChild || lineageChildCount > 0
   const identityTitle =
     lineageChildCount > 0
-      ? translate(
+      ? t(
           'auto.components.dashboard.DashboardAgentRow.dispatchedAgents',
           '{{agentType}} - dispatched {{count}} agents',
           {
@@ -204,20 +214,20 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // Unverifiable rows expose elapsed silence in their timestamp slot; do not hide their only content in a tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
 
-  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
-  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
+  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now, t) : null
+  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now, t) : null
   const relativeTimestamp = noUpdateLabel ?? doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = noUpdateLabel ? [noUpdateLabel] : []
   if (startedTimeAgo !== null) {
     tsParts.push(
-      translate('auto.components.dashboard.DashboardAgentRow.startedAgo', 'started {{time}}', {
+      t('auto.components.dashboard.DashboardAgentRow.startedAgo', 'started {{time}}', {
         time: startedTimeAgo
       })
     )
   }
   if (doneTimeAgo !== null) {
     tsParts.push(
-      translate('auto.components.dashboard.DashboardAgentRow.doneAgo', 'done {{time}}', {
+      t('auto.components.dashboard.DashboardAgentRow.doneAgo', 'done {{time}}', {
         time: doneTimeAgo
       })
     )
@@ -246,10 +256,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       aria-current={view?.current ? 'true' : undefined}
       aria-description={
         opensClaudeParentConversation(agent)
-          ? translate(
-              'auto.lib.claudeAgentRowView.openParentConversation',
-              'Open parent conversation'
-            )
+          ? t('auto.lib.claudeAgentRowView.openParentConversation', 'Open parent conversation')
           : undefined
       }
       data-agent-send-target={sendTargetStatus}
@@ -324,7 +331,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         >
           {displayLabel}
         </span>
-        {model && (
+        {showModel && model && (
           <span
             className={cn(
               'max-w-24',
@@ -332,7 +339,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
                 ? 'min-w-0'
                 : 'shrink-0',
-              'truncate font-mono text-[10px] text-muted-foreground/70'
+              'truncate font-mono text-3xs text-muted-foreground/70'
             )}
             title={model}
           >
@@ -341,11 +348,11 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         )}
         {/* Why: "+N" badge shows the hidden child count when collapsed; redundant once children are expanded below. */}
         {hasChildDisclosure && !childAgentsExpanded && (
-          <span
-            className="shrink-0 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums"
-            aria-hidden
-          >
-            +{childAgentCount}
+          <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-normal leading-none text-muted-foreground/70 tabular-nums">
+            {collapsedChildAgentsState && (
+              <AgentStateDot state={collapsedChildAgentsState} size="sm" tooltipSide="right" />
+            )}
+            <span aria-hidden>+{childAgentCount}</span>
           </span>
         )}
         <DashboardAgentRowTrailingControls

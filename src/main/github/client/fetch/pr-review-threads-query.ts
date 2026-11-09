@@ -11,14 +11,22 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           startLine
           originalLine
           originalStartLine
+          diffSide
+          rootHunk: comments(first: 1) {
+            nodes {
+              diffHunk
+            }
+          }
           comments(first: 100) {
             nodes {
               id
               databaseId
               author { __typename login avatarUrl(size: 48) }
               body
+              bodyHTML
               createdAt
               url
+              viewerDidAuthor
               path
               reactionGroups {
                 content
@@ -37,8 +45,10 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           databaseId
           author { __typename login avatarUrl(size: 48) }
           body
+          bodyHTML
           createdAt
           url
+          viewerDidAuthor
           reactionGroups {
             content
             viewerHasReacted
@@ -54,6 +64,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           databaseId
           author { __typename login avatarUrl(size: 48) }
           body
+          bodyHTML
           createdAt
           submittedAt
           url

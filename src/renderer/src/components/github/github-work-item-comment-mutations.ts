@@ -1,10 +1,16 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { emitGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { GhAccountBinding } from '../../../../shared/github/account-binding'
+import { GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '@/web/web-runtime-request-registry'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { emitGitHubWorkItemDetailsCacheMutation } from '@/lib/work-items/github/github-work-item-details-cache-events'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 
 export function addIssueCommentForRepo(args: {
@@ -204,21 +210,41 @@ export function setPRFileViewedForRepo(args: {
   pullRequestId: string
   path: string
   viewed: boolean
+  expectedGhAccount?: GhAccountBinding | null
+  target?: RuntimeClientTarget
 }): Promise<boolean> {
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
-  if (runtimeHost) {
-    return callRuntimeRpc<boolean>(
-      { kind: 'environment', environmentId: runtimeHost.environmentId },
-      'github.setPRFileViewed',
-      {
-        repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
-        prRepo: args.prRepo ?? null,
-        pullRequestId: args.pullRequestId,
-        path: args.path,
-        viewed: args.viewed
-      },
-      { timeoutMs: 30_000 }
-    ).then((ok) => {
+  const target = runtimeHost
+    ? { kind: 'environment' as const, environmentId: runtimeHost.environmentId }
+    : (args.target ?? { kind: 'local' as const })
+  if (target.kind === 'environment') {
+    const generation = getRuntimeEnvironmentConnectionGeneration(target.environmentId)
+    const expectedGhAccount = args.expectedGhAccount
+    const params = {
+      repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
+      prRepo: args.prRepo ?? null,
+      pullRequestId: args.pullRequestId,
+      path: args.path,
+      viewed: args.viewed
+    }
+    return callRuntimeRpc<boolean>(target, 'github.setPRFileViewed', params, {
+      timeoutMs: 30_000,
+      ...(expectedGhAccount !== undefined
+        ? {
+            paramsForStatus: (status: RuntimeStatus | null) => ({
+              ...params,
+              ...(status?.capabilities?.includes(GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY)
+                ? { expectedGhAccount }
+                : {})
+            }),
+            beforeSend: () => {
+              if (getRuntimeEnvironmentConnectionGeneration(target.environmentId) !== generation) {
+                throw new Error(RUNTIME_CONNECTION_CHANGED_MESSAGE)
+              }
+            }
+          }
+        : {})
+    }).then((ok) => {
       if (ok) {
         notifyWorkItemDetailsMutation(
           {
@@ -242,6 +268,7 @@ export function setPRFileViewedForRepo(args: {
     prRepo: args.prRepo ?? null,
     pullRequestId: args.pullRequestId,
     path: args.path,
-    viewed: args.viewed
+    viewed: args.viewed,
+    ...(args.expectedGhAccount !== undefined ? { expectedGhAccount: args.expectedGhAccount } : {})
   })
 }

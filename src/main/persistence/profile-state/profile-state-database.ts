@@ -1,4 +1,5 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
+import { ensureProfileStateDocumentPartsTables } from './profile-state-document-parts'
 import { hasProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import Database, { isSqliteAvailable } from '../../sqlite/sync-database'
 import { migrateAutomationRunsStorage } from './profile-state-automation-runs-migration'
@@ -113,6 +114,8 @@ export function openProfileStateDatabase(
     // journal_mode can change the header even without row writes; validate everything first.
     migrateProfileStateSchema(probe, storedVersion, profileId)
     configureProfileStatePragmas(probe)
+    // Additive tables older v3 builds ignore (no schema bump); after busy_timeout is set.
+    ensureProfileStateDocumentPartsTables(probe)
     hardenSqliteDatabaseFiles(dbPath)
     transferred = true
     return { db: probe, readOnly: false, profileId }

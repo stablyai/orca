@@ -1,9 +1,15 @@
 import { BadgeCheck, Check } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { Badge } from '../../ui/badge'
 import { PluginCardArt, type PluginArtPalette } from './PluginCardArt'
 import type { PluginListEntry } from './plugin-list-entries'
 import { pluginArtShortcut, pluginArtTypes } from './PluginRowArt'
+import { servedPluginHostImages } from '../../../../../shared/plugins/images/plugin-image-url'
+import {
+  pluginInstallCountLabel,
+  usePluginInstallCount
+} from '../presentation/plugin-install-count'
 
 type PluginCardProps = {
   entry: PluginListEntry
@@ -34,7 +40,12 @@ export function PluginCard({
   onIntent,
   onIntentEnd
 }: PluginCardProps): React.JSX.Element {
-  const cover = entry.installed?.images?.cover ?? entry.listing?.images?.cover
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const installCount = usePluginInstallCount(entry)
+  const cover =
+    servedPluginHostImages(entry.installed?.images)?.cover ??
+    servedPluginHostImages(entry.listing?.images)?.cover
   return (
     <li
       data-plugin-key={entry.pluginKey}
@@ -67,7 +78,7 @@ export function PluginCard({
           // Why on the art: the first thing a scan of the grid hits, readable over any cover.
           <Badge variant="dot" data-plugin-installed-badge="" className="absolute top-2 left-2">
             <Check className="text-status-success" aria-hidden="true" />
-            {translate('auto.components.settings.PluginCardAction.installed', 'Installed')}
+            {t('auto.components.settings.PluginCardAction.installed', 'Installed')}
           </Badge>
         ) : null}
       </div>
@@ -88,14 +99,19 @@ export function PluginCard({
             <BadgeCheck
               className="plugin-security-chrome size-3.5 shrink-0 text-muted-foreground"
               role="img"
-              aria-label={translate(
-                'auto.components.pluginCatalog.PluginListRow.official',
-                'Official'
-              )}
+              aria-label={pluginOfficialLabel(t)}
             />
           ) : null}
         </div>
-        <p className="h-4 truncate text-xs text-muted-foreground">{entry.publisher}</p>
+        <p className="h-4 truncate text-xs text-muted-foreground">
+          {entry.publisher}
+          {installCount !== null ? (
+            <span data-plugin-install-count="">
+              {entry.publisher ? ' · ' : ''}
+              {pluginInstallCountLabel(installCount, t, intlLocale)}
+            </span>
+          ) : null}
+        </p>
         <p
           data-tone={notice?.tone}
           className="mt-0.5 line-clamp-2 h-9 text-xs leading-[18px] text-muted-foreground data-[tone=destructive]:text-destructive data-[tone=warning]:text-status-warning-text"

@@ -10,7 +10,7 @@ import {
   SheetTitle
 } from '@/components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { hasBoundedCommentBodyText } from '@/lib/comment-body-submit-state'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
@@ -24,7 +24,7 @@ import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 import type { GitLabPipelineActions } from './use-gitlab-pipeline-actions'
 import type { GitLabPrimaryActions } from './use-gitlab-primary-actions'
 import type { GitLabReviewActions } from './use-gitlab-review-actions'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   item: GitLabWorkItem | null
@@ -51,13 +51,16 @@ export function GitLabItemDialogView({
   handleRefresh,
   updateCommentDraft
 }: Props) {
+  const t = useTranslate()
   const { actionInFlight, commentDraft, commentSubmitting, details, error, loading } = state
   const Icon = item?.type === 'mr' ? GitMerge : CircleDot
   const prefix = item?.type === 'mr' ? '!' : '#'
   const isMR = item?.type === 'mr'
-  const canClose = isMR && item?.state === 'opened'
-  const canReopen = isMR && item?.state === 'closed'
-  const canMerge = isMR && item?.state === 'opened'
+  // Why: details belong to this item (reset on switch) and a reread after a write is newer than the list row.
+  const visibleState = details?.item.state ?? item?.state
+  const canClose = isMR && visibleState === 'opened'
+  const canReopen = isMR && visibleState === 'closed'
+  const canMerge = isMR && visibleState === 'opened'
   const visibleTitle = details?.item.title || item?.title || ''
   const visibleLabels = normalizeGitLabLabels(details?.item.labels ?? item?.labels ?? [])
   const canSubmitComment = hasBoundedCommentBodyText(commentDraft)
@@ -72,12 +75,10 @@ export function GitLabItemDialogView({
       >
         <VisuallyHidden.Root>
           <SheetTitle>
-            {item
-              ? visibleTitle
-              : translate('auto.components.GitLabItemDialog.3a051b8ade', 'Work item')}
+            {item ? visibleTitle : t('auto.components.GitLabItemDialog.3a051b8ade', 'Work item')}
           </SheetTitle>
           <SheetDescription>
-            {translate('auto.components.GitLabItemDialog.30c97083c2', 'GitLab work item detail')}
+            {t('auto.components.GitLabItemDialog.30c97083c2', 'GitLab work item detail')}
           </SheetDescription>
         </VisuallyHidden.Root>
 
@@ -92,11 +93,10 @@ export function GitLabItemDialogView({
                       {prefix}
                       {item.number}
                     </span>
-                    <StateBadge state={item.state} />
+                    <StateBadge state={visibleState ?? item.state} />
                     {item.author ? (
                       <span>
-                        {translate('auto.components.GitLabItemDialog.9bfb4a24d7', 'by')}{' '}
-                        {item.author}
+                        {t('auto.components.GitLabItemDialog.9bfb4a24d7', 'by')} {item.author}
                       </span>
                     ) : null}
                   </div>
@@ -120,7 +120,7 @@ export function GitLabItemDialogView({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={translate('auto.components.GitLabItemDialog.b3c156dd51', 'Refresh')}
+                    aria-label={t('auto.components.GitLabItemDialog.b3c156dd51', 'Refresh')}
                     disabled={loading}
                     onClick={handleRefresh}
                     className="size-7"
@@ -136,7 +136,7 @@ export function GitLabItemDialogView({
                       variant="ghost"
                       size="icon-sm"
                       className="size-7"
-                      aria-label={translate('auto.components.GitLabItemDialog.a199eb364b', 'Close')}
+                      aria-label={t('auto.components.GitLabItemDialog.a199eb364b', 'Close')}
                     >
                       <X className="size-3.5" />
                     </Button>
@@ -148,10 +148,10 @@ export function GitLabItemDialogView({
             <Tabs defaultValue="description" className="flex min-h-0 flex-1 flex-col">
               <TabsList className="mx-5 mt-3 self-start">
                 <TabsTrigger value="description">
-                  {translate('auto.components.GitLabItemDialog.908d8d2a73', 'Description')}
+                  {t('auto.components.GitLabItemDialog.908d8d2a73', 'Description')}
                 </TabsTrigger>
                 <TabsTrigger value="conversation">
-                  {translate('auto.components.GitLabItemDialog.c996e2962c', 'Conversation')}
+                  {t('auto.components.GitLabItemDialog.c996e2962c', 'Conversation')}
                   {details?.comments?.length ? (
                     <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
                       {details.comments.length}
@@ -160,7 +160,7 @@ export function GitLabItemDialogView({
                 </TabsTrigger>
                 {isMR ? (
                   <TabsTrigger value="files">
-                    {translate('auto.components.GitLabItemDialog.be3d291837', 'Files')}
+                    {t('auto.components.GitLabItemDialog.be3d291837', 'Files')}
                     {details?.files?.length ? (
                       <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
                         {details.files.length}
@@ -170,7 +170,7 @@ export function GitLabItemDialogView({
                 ) : null}
                 {isMR ? (
                   <TabsTrigger value="pipeline">
-                    {translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')}
+                    {t('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline')}
                     {details?.pipelineJobs?.length ? (
                       <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">
                         {details.pipelineJobs.length}
@@ -181,7 +181,8 @@ export function GitLabItemDialogView({
               </TabsList>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 scrollbar-sleek">
-                {error ? (
+                {/* Why: a failed reread keeps the loaded content; the error replaces nothing and the write owns its feedback. */}
+                {error && !details ? (
                   <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {error}
                   </div>
@@ -203,7 +204,7 @@ export function GitLabItemDialogView({
                 <ImeTextarea
                   value={commentDraft}
                   onChange={(event) => updateCommentDraft(event.target.value)}
-                  placeholder={translate(
+                  placeholder={t(
                     'auto.components.GitLabItemDialog.c08e1d5a57',
                     'Comment on {{value0}}{{value1}}…',
                     { value0: prefix, value1: item.number }
@@ -230,7 +231,7 @@ export function GitLabItemDialogView({
                   ) : (
                     <Send className="size-3.5" />
                   )}
-                  {translate('auto.components.GitLabItemDialog.84012fa8fb', 'Comment')}
+                  {t('auto.components.GitLabItemDialog.84012fa8fb', 'Comment')}
                 </Button>
               </div>
 
@@ -242,12 +243,12 @@ export function GitLabItemDialogView({
                   className="gap-1.5"
                 >
                   <ExternalLink className="size-3.5" />
-                  {translate('auto.components.GitLabItemDialog.f2e64d1c20', 'Open in GitLab')}
+                  {t('auto.components.GitLabItemDialog.f2e64d1c20', 'Open in GitLab')}
                 </Button>
                 <div className="flex items-center gap-2">
                   {onCreateWorkspace ? (
                     <Button variant="outline" size="sm" onClick={() => onCreateWorkspace(item)}>
-                      {translate('auto.components.GitLabItemDialog.131865e231', 'Create workspace')}
+                      {t('auto.components.GitLabItemDialog.131865e231', 'Create workspace')}
                     </Button>
                   ) : null}
                   {canMerge ? (
@@ -259,7 +260,7 @@ export function GitLabItemDialogView({
                       {actionInFlight === 'merge' ? (
                         <LoaderCircle className="size-3.5 animate-spin" />
                       ) : null}
-                      {translate('auto.components.GitLabItemDialog.16b3412570', 'Merge')}
+                      {t('auto.components.GitLabItemDialog.16b3412570', 'Merge')}
                     </Button>
                   ) : null}
                   {canClose ? (
@@ -272,7 +273,7 @@ export function GitLabItemDialogView({
                       {actionInFlight === 'close' ? (
                         <LoaderCircle className="size-3.5 animate-spin" />
                       ) : null}
-                      {translate('auto.components.GitLabItemDialog.a199eb364b', 'Close')}
+                      {t('auto.components.GitLabItemDialog.a199eb364b', 'Close')}
                     </Button>
                   ) : null}
                   {canReopen ? (
@@ -285,7 +286,7 @@ export function GitLabItemDialogView({
                       {actionInFlight === 'reopen' ? (
                         <LoaderCircle className="size-3.5 animate-spin" />
                       ) : null}
-                      {translate('auto.components.GitLabItemDialog.65e784c1f1', 'Reopen')}
+                      {t('auto.components.GitLabItemDialog.65e784c1f1', 'Reopen')}
                     </Button>
                   ) : null}
                 </div>

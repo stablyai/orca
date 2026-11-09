@@ -1,8 +1,8 @@
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { getFolderWorkspaceWorktreeHostId } from '../../../shared/folder-workspace-worktree'
+import { getFolderWorkspaceWorktreeHostId } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Repo } from '../../../shared/repo-types'
 import type { SidebarFeedDomains } from '../../../shared/sidebar-list/sidebar-feed-domains'
 import {

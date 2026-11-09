@@ -1,14 +1,15 @@
-import type { PendingSessionSelection } from '../../../session/pending-session-selection'
+import type * as UseMobileSessionTerminalCreateActionsModule from '../../../terminal/session/use-mobile-session-terminal-create-actions'
+import type { PendingSessionSelection } from '../../../session/tabs/pending-session-selection'
 import { hookMount } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type {
   MobileSessionTab,
-  MobileSessionTabType,
-  Terminal
-} from '../../../session/mobile-session-route-types'
-import type { TuiAgent } from '../../../../../src/shared/tui-agent'
+  MobileSessionTabType
+} from '../../../session/tabs/mobile-session-tabs'
+import type { Terminal } from '../../../terminal/session/mobile-terminal-model'
+import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 
 const PREVIOUS_HANDLE = 'terminal-0'
@@ -40,12 +41,10 @@ export function sessionTerminalCreateMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.create-terminal': ({ client, effect }) => {
-      const useCreateActions = modules.load<
-        typeof import('../../../session/use-mobile-session-terminal-create-actions')
-      >(
-        'mobile/src/session/use-mobile-session-terminal-create-actions.ts'
+      const useCreateActions = modules.load<typeof UseMobileSessionTerminalCreateActionsModule>(
+        'mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts'
       ).useMobileSessionTerminalCreateActions
-      modules.load('mobile/src/session/mobile-session-terminal-create-request.ts')
+      modules.load('mobile/src/terminal/session/mobile-session-terminal-create-request.ts')
 
       let terminals: Terminal[] = []
       let sessionTabs: MobileSessionTab[] = []
@@ -65,6 +64,7 @@ export function sessionTerminalCreateMountAdapters(
       const creatingTerminalRef: { current: string | null } = { current: null }
       const initializedHandlesRef = { current: new Set([PREVIOUS_HANDLE]) }
       const deviceTokenRef: { current: string | null } = { current: null }
+      const delayedActionTimers = new Set<ReturnType<typeof setTimeout>>()
 
       let actions: ReturnType<typeof useCreateActions> | undefined
       const hook = hookMount(() => {
@@ -81,8 +81,6 @@ export function sessionTerminalCreateMountAdapters(
             setSessionTabs: (update) => {
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
-            defaultTerminalHandlesToLiveInput: (handles: readonly string[]) =>
-              effect('default-live-input', { handles: [...handles] }),
             setActiveHandle: (update) => {
               activeHandle = typeof update === 'function' ? update(activeHandle) : update
             },
@@ -108,7 +106,7 @@ export function sessionTerminalCreateMountAdapters(
             pendingSelectionRef,
             scheduleDelayedAction: (fn: () => void, ms: number) => {
               effect('schedule-delayed-action', { delayMs: ms })
-              setTimeout(fn, ms)
+              delayedActionTimers.add(setTimeout(fn, ms))
             },
             showToast: (message: string, durationMs?: number) =>
               effect('toast', { message, durationMs: durationMs ?? null }),
@@ -183,7 +181,28 @@ export function sessionTerminalCreateMountAdapters(
           pendingSelection: pendingSelectionRef.current,
           initializedHandles: [...initializedHandlesRef.current].sort()
         }),
-        dispose: hook.unmount
+        dispose() {
+          const errors: unknown[] = []
+          try {
+            hook.unmount()
+          } catch (error) {
+            errors.push(error)
+          }
+          for (const timer of delayedActionTimers) {
+            try {
+              clearTimeout(timer)
+            } catch (error) {
+              errors.push(error)
+            }
+          }
+          delayedActionTimers.clear()
+          if (errors.length === 1) {
+            throw errors[0]
+          }
+          if (errors.length) {
+            throw new AggregateError(errors, 'Terminal fixture cleanup failed')
+          }
+        }
       }
     }
   }

@@ -1,5 +1,10 @@
 import type { AttemptObservationStorageRow } from './attempt-observation-store'
-import type { DispatchContextRow, RemoteDispatchAttachmentRow, RunRow, TaskRow } from '../types'
+import type {
+  DispatchContextRow,
+  RemoteDispatchAttachmentRow,
+  RunRow,
+  TaskRow
+} from './orchestration-records'
 
 // Explicit projections enable SyncDatabase caching; type exhaustiveness and schema tests prevent column drift.
 
@@ -62,7 +67,9 @@ export const DISPATCH_CONTEXT_COLUMNS = [
   'dispatched_at',
   'completed_at',
   'created_at',
-  'last_heartbeat_at'
+  'last_heartbeat_at',
+  'follow_up_of_dispatch_id',
+  'follow_up_mail_at'
 ] as const satisfies readonly (keyof DispatchContextRow)[]
 
 export const ATTEMPT_OBSERVATION_FACT_COLUMNS = [

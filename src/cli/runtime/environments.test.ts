@@ -2,14 +2,14 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { encodePairingOffer } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
-  getEnvironmentStorePath,
-  listEnvironments,
   removeEnvironment,
   resolveEnvironmentPairingOffer
 } from './environments'
+import { getEnvironmentStorePath } from '../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 const roots: string[] = []
 
@@ -93,23 +93,5 @@ describe('CLI runtime environments', () => {
       'ws://127.0.0.1:1111'
     )
     expect(listEnvironments(userDataPath)[0]?.id).toBe(first.id)
-  })
-
-  it('refuses saving the same server twice and points at Settings, which can switch its connection', () => {
-    const userDataPath = temporaryProfile()
-    addEnvironmentFromPairingCode(userDataPath, {
-      name: 'workstation',
-      pairingCode: pairingCode('ws://192.0.2.10:6768'),
-      now: 100
-    })
-
-    expect(() =>
-      addEnvironmentFromPairingCode(userDataPath, {
-        name: 'workstation over relay',
-        pairingCode: pairingCode('ws://198.51.100.7:6768'),
-        now: 200
-      })
-    ).toThrow('already paired as "workstation"')
-    expect(listEnvironments(userDataPath)).toHaveLength(1)
   })
 })

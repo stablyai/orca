@@ -1,3 +1,5 @@
+import { PLUGIN_WORKER_MAX_KEEP_WARM_DEFAULT } from '../../../shared/plugins/workers/plugin-host-protocol'
+
 export type PluginWorkerSlotLease = {
   release(): void
 }
@@ -23,6 +25,10 @@ export class PluginWorkerSlotPool {
     if (!Number.isInteger(capacity) || capacity <= 0) {
       throw new Error('plugin worker capacity must be a positive integer')
     }
+  }
+
+  get leasedCount(): number {
+    return this.leased
   }
 
   acquire(signal: AbortSignal): Promise<PluginWorkerSlotLease> {
@@ -97,5 +103,42 @@ export class PluginWorkerSlotPool {
       this.leased += 1
       waiter.resolve(this.createLease())
     }
+  }
+}
+
+/** The active-worker cap, plus a separate soft cap for resident workers (hooks, status bar items),
+ *  which never idle out and so would otherwise starve every other plugin of the shared one. Past
+ *  the soft cap a resident worker still starts (logged once), so admission never waits on a
+ *  worker that never stops. */
+export class PluginWorkerSlots {
+  private readonly active: PluginWorkerSlotPool
+  // Why unbounded: waiting here would hang refresh, disable and uninstall behind resident workers.
+  private readonly keepWarm = new PluginWorkerSlotPool(Number.MAX_SAFE_INTEGER)
+  private keepWarmCapLogged = false
+
+  constructor(
+    maxActive: number,
+    private readonly maxKeepWarm = PLUGIN_WORKER_MAX_KEEP_WARM_DEFAULT
+  ) {
+    this.active = new PluginWorkerSlotPool(maxActive)
+  }
+
+  for(spec: { keepWarm?: true }, log: (level: 'warn', line: string) => void): PluginWorkerSlotPool {
+    if (!spec.keepWarm) {
+      return this.active
+    }
+    if (this.keepWarm.leasedCount >= this.maxKeepWarm && !this.keepWarmCapLogged) {
+      this.keepWarmCapLogged = true
+      log(
+        'warn',
+        `more than ${this.maxKeepWarm} plugins with hooks or status bar items are running; each extra one adds a process`
+      )
+    }
+    return this.keepWarm
+  }
+
+  dispose(): void {
+    this.active.dispose()
+    this.keepWarm.dispose()
   }
 }

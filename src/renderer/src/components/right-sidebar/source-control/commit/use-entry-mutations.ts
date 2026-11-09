@@ -1,26 +1,29 @@
 import { useCallback, useRef } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
-import { editorFileHoldKey, pathMutationHoldKeys } from '@/components/editor/editor-autosave-holds'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
+import {
+  editorFileHoldKey,
+  pathMutationHoldKeys
+} from '@/components/editor/autosave/editor-autosave-holds'
 import {
   notifyEditorExternalFileChange,
   requestEditorFileSave,
   requestEditorSaveQuiesce
-} from '@/components/editor/editor-autosave'
-import { getConnectionId } from '@/lib/connection-context'
-import { basename, joinPath } from '@/lib/path'
+} from '@/components/editor/autosave/editor-autosave'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
+import { basename } from '@/lib/path'
 import { useAppStore } from '@/store'
-import { deleteRuntimePath } from '@/runtime/runtime-file-mutation-client'
 import {
   bulkDiscardRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
   discardRuntimeGitPath,
+  resolveRuntimeGitConflict,
   stageRuntimeGitPath,
   unstageRuntimeGitPath
-} from '@/runtime/runtime-git-working-tree-client'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-working-tree-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
@@ -38,6 +41,7 @@ export function useSourceControlEntryMutations({
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
   // Name the callback so Retry can reenter the same attempt.
+  const scope = useSourceControlScope()
   const runEntryMutation = useCallback(
     async function runEntryMutation(
       operation: 'stage' | 'unstage',
@@ -48,7 +52,7 @@ export function useSourceControlEntryMutations({
         return
       }
       try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, activeWorktreeId ?? null)
         await mutate(
           {
             // Route mutations through workspace ownership rather than focused runtime.
@@ -78,7 +82,7 @@ export function useSourceControlEntryMutations({
       // Refresh outside the mutation catch so its errors cannot be mislabeled as stage failures.
       await refreshActiveGitStatusAfterMutation()
     },
-    [activeRepoTarget, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
+    [activeRepoTarget, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation, scope]
   )
 
   const handleStage = useCallback(
@@ -120,36 +124,28 @@ export function useSourceControlEntryMutations({
         runtimeEnvironmentId:
           activeRepoTarget?.kind === 'environment' ? activeRepoTarget.environmentId : null
       }
-      const resolve: (context: RuntimeGitContext, filePath: string) => Promise<void> =
-        resolution !== 'keep_deletion'
-          ? async (context, filePath) => {
-              // Same view match as autosave holds: every workspace's view of this physical file, not another host's.
-              const current = useAppStore.getState()
-              const keys = pathMutationHoldKeys(current, editorTarget)
-              const dirtyFiles = current.openFiles.filter(
-                (file) => file.isDirty && keys.has(editorFileHoldKey(current, file))
-              )
-              // Stage what the user sees: an unsaved resolution must reach disk before git add reads it.
-              await Promise.all(
-                dirtyFiles.map((file) => requestEditorFileSave({ fileId: file.id }))
-              )
-              await stageRuntimeGitPath(context, filePath)
-            }
-          : async (context, filePath) => {
-              // Hold autosave so an open tab cannot recreate the file after it is removed.
-              const releaseAutoSave = await requestEditorSaveQuiesce(editorTarget)
-              try {
-                // Delete even if status said absent so a since-restored file is never staged; Git history keeps it.
-                await deleteRuntimePath(context, joinPath(worktreePath, filePath), false, {
-                  permanent: true
-                })
-                notifyEditorExternalFileChange(editorTarget)
-                // With the worktree file gone, git add stages the removal and resolves the conflict.
-                await stageRuntimeGitPath(context, filePath)
-              } finally {
-                releaseAutoSave()
-              }
-            }
+      const resolve = async (context: RuntimeGitContext, filePath: string): Promise<void> => {
+        if (resolution !== 'keep_deletion') {
+          // Same view match as autosave holds: every workspace's view of this physical file, not another host's.
+          const current = useAppStore.getState()
+          const keys = pathMutationHoldKeys(current, editorTarget)
+          const dirtyFiles = current.openFiles.filter(
+            (file) => file.isDirty && keys.has(editorFileHoldKey(current, file))
+          )
+          // Stage what the user sees: an unsaved resolution must reach disk before git add reads it.
+          await Promise.all(dirtyFiles.map((file) => requestEditorFileSave({ fileId: file.id })))
+          await resolveRuntimeGitConflict(context, filePath, resolution)
+          return
+        }
+        // Hold autosave so an open tab cannot recreate the file the host removes.
+        const releaseAutoSave = await requestEditorSaveQuiesce(editorTarget)
+        try {
+          await resolveRuntimeGitConflict(context, filePath, resolution)
+          notifyEditorExternalFileChange(editorTarget)
+        } finally {
+          releaseAutoSave()
+        }
+      }
       resolvingConflictKeysRef.current.add(resolvingKey)
       return runEntryMutation('stage', entry.path, resolve).finally(() => {
         resolvingConflictKeysRef.current.delete(resolvingKey)
@@ -175,7 +171,7 @@ export function useSourceControlEntryMutations({
       })
       // Release in finally so every workspace holds autosave until Git finishes.
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
         await discardRuntimeGitPath(
           {
             // Route discard through workspace ownership rather than focused runtime.
@@ -196,7 +192,7 @@ export function useSourceControlEntryMutations({
         releaseAutoSave()
       }
     },
-    [activeRepoTarget, activeWorktreeId, worktreePath]
+    [activeRepoTarget, activeWorktreeId, scope, worktreePath]
   )
 
   const discardMany = useCallback(
@@ -229,7 +225,7 @@ export function useSourceControlEntryMutations({
         throw failed.reason
       }
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
         await bulkDiscardRuntimeGitPaths(
           {
             // Route discard through workspace ownership rather than focused runtime.
@@ -254,7 +250,7 @@ export function useSourceControlEntryMutations({
         }
       }
     },
-    [activeRepoTarget, activeWorktreeId, worktreePath]
+    [activeRepoTarget, activeWorktreeId, scope, worktreePath]
   )
 
   return {

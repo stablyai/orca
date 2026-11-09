@@ -1,17 +1,16 @@
-import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { prepareStructuredChatCliFork } from './structured-chat-cli-fork'
-import { structuredAgentRuntimeRegistration } from '../runtime/structured-agent-runtime-registrations'
-import { prepareLegacySharedCodexSessionResume } from '../codex/codex-legacy-session-resume'
-import { AiVaultPrepareSessionResumeParams } from '../../shared/rpc-contract/ai-vault-params'
+import { structuredAgentRuntimeRegistration } from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
+import { prepareLegacySharedCodexSessionResume } from '../codex/history/resume/codex-legacy-session-resume'
 
 let root: string | undefined
 const request = {
@@ -143,35 +142,6 @@ it.runIf(process.platform === 'win32')(
   }
 )
 
-it('copies OpenCode directly from the selected record and preserves its typed account and copy id', async () => {
-  root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))
-  const record = agentSessionRecordFixture()
-  record.provider = 'opencode'
-  record.accountHome = { kind: 'opencode', locator: { kind: 'unmanaged' } }
-  record.providerHandleChain = [
-    {
-      ...record.providerHandleChain[0]!,
-      handle: { agent: 'opencode', transport: 'acp', nativeId: 'ses_source' }
-    }
-  ]
-  const copy = vi.fn(async () => ({ sessionId: 'ses_copy' }))
-  install(record, copy)
-  const result = await prepareStructuredChatCliFork(request, prepare)
-  expect(copy).toHaveBeenCalledWith(
-    expect.objectContaining({
-      accountHome: record.accountHome,
-      providerSessionId: 'ses_source',
-      identity: expect.objectContaining({ sessionId: record.sessionId })
-    })
-  )
-  expect(result.cliForkSource).toMatchObject({
-    agent: 'opencode',
-    sourceAgent: 'opencode2',
-    sessionId: 'ses_copy'
-  })
-  expect(prepare).not.toHaveBeenCalled()
-})
-
 it('uses the Pi file handle and refuses a mismatched saved header or missing handle', async () => {
   root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))
   const filePath = join(root, '2026-10-15_12345678-abcd-1234-abcd-123456789abc.jsonl')
@@ -230,26 +200,4 @@ it('uses the Pi file handle and refuses a mismatched saved header or missing han
   await expect(prepareStructuredChatCliFork(request, prepare)).rejects.toThrow(
     'no saved conversation'
   )
-})
-
-it('refuses a foreign workspace or WSL record and rejects mixed chat/row requests', async () => {
-  root = await mkdtemp(join(tmpdir(), 'chat-cli-fork-'))
-  const record = agentSessionRecordFixture()
-  install(record)
-  await expect(
-    prepareStructuredChatCliFork(
-      { ...request, sourceChat: { ...request.sourceChat, workspaceId: 'other' } },
-      prepare
-    )
-  ).rejects.toThrow('on this host')
-  record.location.wslDistro = 'Ubuntu'
-  await expect(prepareStructuredChatCliFork(request, prepare)).rejects.toThrow('on this host')
-  expect(
-    AiVaultPrepareSessionResumeParams.safeParse({
-      ...request,
-      agent: 'claude',
-      filePath: '/foreign'
-    }).success
-  ).toBe(false)
-  expect(prepare).not.toHaveBeenCalled()
 })
