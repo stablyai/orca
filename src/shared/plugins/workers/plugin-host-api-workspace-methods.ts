@@ -32,7 +32,11 @@ const workspaceListResult = z.object({
         path: z.string().max(ID_MAX),
         branch: z.string().max(512).nullable(),
         /** The execution host; null for this machine on hosts that do not record one. */
-        hostId: z.string().max(ID_MAX).nullable()
+        hostId: z.string().max(ID_MAX).nullable(),
+        /** Epoch milliseconds, or null when no creation time was recorded. */
+        createdAt: z.number().nullable(),
+        /** Epoch milliseconds, or null when no activity time was recorded. */
+        lastActivityAt: z.number().nullable()
       })
     )
     .max(PLUGIN_WORKSPACE_LIST_LIMIT),

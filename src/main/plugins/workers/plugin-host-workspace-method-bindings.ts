@@ -36,6 +36,8 @@ const worktreeListAnswer = z.object({
       path: z.string(),
       branch: z.string().optional(),
       hostId: z.string().optional(),
+      createdAt: z.number().optional(),
+      lastActivityAt: z.number().optional(),
       identity: z.object({ key: z.string() }).optional()
     })
   ),
@@ -51,7 +53,9 @@ const folderListAnswer = z.object({
       id: z.string(),
       name: z.string(),
       folderPath: z.string(),
-      executionHostId: z.string().nullable().optional()
+      executionHostId: z.string().nullable().optional(),
+      createdAt: z.number().optional(),
+      lastActivityAt: z.number().optional()
     })
   )
 })
@@ -128,7 +132,9 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
         name: worktree.displayName,
         path: worktree.path,
         branch: folder ? null : branchName(worktree.branch),
-        hostId: worktree.hostId ?? null
+        hostId: worktree.hostId ?? null,
+        createdAt: worktree.createdAt ?? null,
+        lastActivityAt: worktree.lastActivityAt ?? null
       }
     })
     // Project-group folders have no repo row; their key is what selectors take.
@@ -138,7 +144,9 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       name: folder.name,
       path: folder.folderPath,
       branch: null,
-      hostId: folder.executionHostId ?? null
+      hostId: folder.executionHostId ?? null,
+      createdAt: folder.createdAt ?? null,
+      lastActivityAt: folder.lastActivityAt ?? null
     }))
     const room = PLUGIN_WORKSPACE_LIST_LIMIT - worktreeRows.length
     return {
