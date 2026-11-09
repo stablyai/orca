@@ -5341,7 +5341,10 @@
           "69f5b5380d": "克隆...",
           "cloneOnHostDescription": "输入 Git URL，并选择要在 {{value0}} 上克隆到的位置。",
           "cloneParentFolder": "父文件夹",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "文件夹名称",
+          "cloneFolderTakenByRepo": "此文件夹中的“{{value0}}”已是另一个仓库，因此此克隆需要使用单独的文件夹。",
+          "cloneFolderNotEmpty": "此文件夹中已存在“{{value0}}”，因此此克隆需要使用单独的文件夹。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "关闭",

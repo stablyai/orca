@@ -5341,7 +5341,10 @@
           "69f5b5380d": "クローン作成中…",
           "cloneOnHostDescription": "Git URL を入力し、{{value0}} 上のクローン先を選択してください。",
           "cloneParentFolder": "親フォルダー",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "フォルダー名",
+          "cloneFolderTakenByRepo": "このフォルダー内の「{{value0}}」はすでに別のリポジトリのため、このクローンには専用のフォルダーが必要です。",
+          "cloneFolderNotEmpty": "このフォルダーには「{{value0}}」がすでに存在するため、このクローンには専用のフォルダーが必要です。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "閉じる",

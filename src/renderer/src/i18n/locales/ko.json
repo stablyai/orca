@@ -5341,7 +5341,10 @@
           "69f5b5380d": "복제 중...",
           "cloneOnHostDescription": "Git URL을 입력하고 {{value0}}에서 클론할 위치를 선택하세요.",
           "cloneParentFolder": "상위 폴더",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "폴더 이름",
+          "cloneFolderTakenByRepo": "이 폴더의 \"{{value0}}\"은(는) 이미 다른 저장소이므로 이 클론에는 별도의 폴더가 필요합니다.",
+          "cloneFolderNotEmpty": "이 폴더에 \"{{value0}}\"이(가) 이미 있으므로 이 클론에는 별도의 폴더가 필요합니다."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "닫기",
