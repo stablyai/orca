@@ -1,9 +1,9 @@
 import { isFetchBadPort } from '../../../../browser/browser-network-bad-ports'
-import {
-  parseBrowserNetworkExecutionHostKey,
-  type BrowserNetworkExecutionRoute,
-  type BrowserNetworkExecutionRouteResolver
-} from '../../../../browser/network/execution-routes/browser-network-execution-route'
+import { parseBrowserNetworkExecutionHostKey } from '../../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type {
+  BrowserNetworkExecutionRoute,
+  BrowserNetworkExecutionRouteResolver
+} from '../../../../browser/network/execution-routes/browser-network-execution-route-contract'
 import { resolveBrowserNetworkExecutionRoute } from '../../../../browser/network/execution-routes/browser-network-execution-route-dispatch'
 import type { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
 import { BrowserNetworkTunnelSession } from '../../../../browser/network/tunnels/browser-network-tunnel-session'

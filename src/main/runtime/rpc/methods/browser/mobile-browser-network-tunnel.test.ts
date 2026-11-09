@@ -9,8 +9,8 @@ import {
   encodeBrowserNetworkTunnelOpen,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../../shared/browser-network-tunnel-protocol'
-import { browserNetworkExecutionHostKey } from '../../../../browser/network/execution-routes/browser-network-execution-route'
+} from '../../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
+import { browserNetworkExecutionHostKey } from '../../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
 import { MOBILE_BROWSER_TUNNEL_METHODS } from './mobile-browser-network-tunnel'

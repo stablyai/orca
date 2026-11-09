@@ -2,7 +2,7 @@ import {
   decodeTerminalStreamFrame,
   type TerminalStreamFrame
 } from '../../../../shared/terminal/stream/terminal-stream-protocol'
-import { isBrowserNetworkTunnelFrameKind } from '../../../../shared/browser-network-tunnel-protocol'
+import { isBrowserNetworkTunnelFrameKind } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 
 type TerminalStreamHandler = (frame: TerminalStreamFrame) => void
 type RawMessageHandler = (bytes: Uint8Array<ArrayBufferLike>) => void

@@ -6,7 +6,7 @@ import {
 import {
   BrowserNetworkTunnelOpcode,
   encodeBrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 
 function tunnelPing(): Uint8Array {
