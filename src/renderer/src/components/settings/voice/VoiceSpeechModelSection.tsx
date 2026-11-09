@@ -29,7 +29,8 @@ type VoiceSpeechModelSectionProps = {
   catalog: SpeechModelManifest[]
   modelStates: SpeechModelState[]
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
-  onOpenOpenAiDialog: (modelId: string) => void
+  /** A cloud model that isn't set up yet: open its provider's setup. */
+  onOpenCloudSetup: (manifest: SpeechModelManifest) => void
   onRefreshModelStates: () => void
 }
 
@@ -38,7 +39,7 @@ export function VoiceSpeechModelSection({
   catalog,
   modelStates,
   onUpdateVoiceSettings,
-  onOpenOpenAiDialog,
+  onOpenCloudSetup,
   onRefreshModelStates
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
   const t = useTranslate()
@@ -83,7 +84,7 @@ export function VoiceSpeechModelSection({
           {catalog.map((manifest) => {
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
-            const isCloud = manifest.provider === 'openai'
+            const isCloud = manifest.provider !== 'local'
             const isRetired = !isOfferedSpeechModel(manifest)
             // Retired local models stay listed only while downloaded, so their files can be deleted.
             if (isRetired && (isCloud || !isReady)) {
@@ -105,7 +106,7 @@ export function VoiceSpeechModelSection({
                   } else if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
-                    onOpenOpenAiDialog(manifest.id)
+                    onOpenCloudSetup(manifest)
                   } else if (!isDownloading) {
                     // Keep the menu open so download progress remains visible.
                     event.preventDefault()

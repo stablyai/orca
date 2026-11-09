@@ -8,6 +8,7 @@ import { Separator } from '../../ui/separator'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
+import { OpenAiCompatibleProviderDialog } from './OpenAiCompatibleProviderDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
@@ -43,6 +44,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     null
   )
   const [pendingCloudModelId, setPendingCloudModelId] = useState<string | null>(null)
+  const [compatibleDialogOpen, setCompatibleDialogOpen] = useState(false)
   const mountedRef = useRef(true)
   // Merge async whole-object writes into committed current settings; render snapshots could undo toggles changed during IPC and disable the microphone picker.
   const voiceSettingsRef = useRef(voiceSettings)
@@ -146,10 +148,56 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     (settingsSearchQuery.trim() !== '' &&
       matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
 
+  const compatibleModel = catalog.find((m) => m.provider === 'openai-compatible')
+  const compatibleConfigured =
+    compatibleModel !== undefined &&
+    modelStates.some((s) => s.id === compatibleModel.id && s.status === 'ready')
+  const showCompatibleSettingsRow =
+    compatibleConfigured || selectedModel?.provider === 'openai-compatible'
+
   const openOpenAiDialog = (modelId: string | null = null): void => {
     setPendingCloudModelId(modelId)
     setOpenAiApiKeyDraft('')
     setOpenAiDialogOpen(true)
+  }
+
+  const openCompatibleDialog = (modelId: string | null): void => {
+    setPendingCloudModelId(modelId)
+    setCompatibleDialogOpen(true)
+  }
+
+  const openCloudSetup = (manifest: SpeechModelManifest): void => {
+    if (manifest.provider === 'openai-compatible') {
+      openCompatibleDialog(manifest.id)
+    } else {
+      openOpenAiDialog(manifest.id)
+    }
+  }
+
+  const handleCompatibleSaved = (): void => {
+    if (pendingCloudModelId) {
+      updateVoiceSettings({ sttModel: pendingCloudModelId })
+    }
+    setPendingCloudModelId(null)
+    refreshModelStates()
+  }
+
+  const removeCompatibleProvider = async (): Promise<void> => {
+    try {
+      await window.api.speech.clearOpenAiCompatibleProvider()
+      if (selectedModel?.provider === 'openai-compatible') {
+        updateVoiceSettings({ sttModel: '' })
+      }
+      refreshModelStates()
+    } catch (err) {
+      toast.error(
+        readIpcErrorMessage(err) ??
+          t(
+            'components.settings.voice.openAiCompatible.updateFailed',
+            'Could not update the provider'
+          )
+      )
+    }
   }
 
   const saveOpenAiApiKey = async (): Promise<void> => {
@@ -217,7 +265,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         catalog={catalog}
         modelStates={modelStates}
         onUpdateVoiceSettings={updateVoiceSettings}
-        onOpenOpenAiDialog={openOpenAiDialog}
+        onOpenCloudSetup={openCloudSetup}
         onRefreshModelStates={refreshModelStates}
       />
 
@@ -269,6 +317,25 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
           />
         </>
       )}
+
+      {showCompatibleSettingsRow && (
+        <>
+          <Separator />
+          <OpenAiTranscriptionSettingsRow
+            variant="compatible"
+            configured={compatibleConfigured}
+            disabled={false}
+            onConfigure={() => openCompatibleDialog(null)}
+            onClear={() => void removeCompatibleProvider()}
+          />
+        </>
+      )}
+
+      <OpenAiCompatibleProviderDialog
+        open={compatibleDialogOpen}
+        onOpenChange={setCompatibleDialogOpen}
+        onSaved={handleCompatibleSaved}
+      />
 
       <OpenAiTranscriptionKeyDialog
         open={openAiDialogOpen}

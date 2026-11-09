@@ -81,7 +81,7 @@ function useIsCloudModel(): boolean {
     }
     void catalogRequest.then((catalog) => {
       if (current) {
-        setCloud(catalog.some((model) => model.id === modelId && model.provider === 'openai'))
+        setCloud(catalog.some((model) => model.id === modelId && model.provider !== 'local'))
       }
     })
     return () => {
