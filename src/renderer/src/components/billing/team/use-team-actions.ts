@@ -23,6 +23,9 @@ function focusMembersHeading(): void {
   window.requestAnimationFrame(() => document.getElementById('team-members-title')?.focus())
 }
 
+/** Revoking waits this long so Undo can cancel it before auth (and the email) are touched. */
+const REVOKE_UNDO_MS = 5_000
+
 const memberKey = (member: OrcaOrgMember): string =>
   `member:${member.userId ?? member.email.toLowerCase()}`
 const inviteKey = (email: string): string => `invite:${email.toLowerCase()}`
@@ -50,6 +53,8 @@ export function useTeamActions({
     { id: number; apply: Overlay; settledAfterSeq: number | null }[]
   >([])
   const nextOverlayId = useRef(0)
+  /** Revokes waiting out their Undo window, by lowercased email → cancel. */
+  const pendingRevokes = useRef(new Map<string, () => void>())
   const [rowStates, setRowStates] = useState<Record<string, TeamRowState>>({})
 
   const setRow = useCallback((key: string, state: TeamRowState | null) => {
@@ -128,6 +133,17 @@ export function useTeamActions({
 
   const invite = async (emails: string[], role: OrcaOrgRole): Promise<InviteBatchOutcome> => {
     const now = Date.now()
+    // A revoke still in its Undo window is simply cancelled: the invite was never removed at
+    // auth, so re-inviting it would only produce an "already invited" error.
+    const restored = new Set<string>()
+    for (const email of emails) {
+      const cancelRevoke = pendingRevokes.current.get(email.toLowerCase())
+      if (cancelRevoke) {
+        cancelRevoke()
+        restored.add(email.toLowerCase())
+      }
+    }
+    emails = emails.filter((email) => !restored.has(email.toLowerCase()))
     const failed: InviteBatchOutcome['failed'] = []
     // Sequential: auth rate-limits member changes per actor, and order keeps errors readable.
     for (const email of emails) {
@@ -176,30 +192,61 @@ export function useTeamActions({
 
   const revoke = (email: string, role: OrcaOrgRole): void => {
     focusMembersHeading()
-    void optimistic(
-      inviteKey(email),
-      (roster) => ({
-        ...roster,
-        pendingInvites: roster.pendingInvites.filter(
-          (i) => i.email.toLowerCase() !== email.toLowerCase()
-        )
+    const key = inviteKey(email)
+    const id = ++nextOverlayId.current
+    const hide: Overlay = (roster) => ({
+      ...roster,
+      pendingInvites: roster.pendingInvites.filter(
+        (invite) => invite.email.toLowerCase() !== email.toLowerCase()
+      )
+    })
+    setOverlays((list) => [...list, { id, apply: hide, settledAfterSeq: null }])
+    // Sonner pauses its timer on hover and in background windows; ours doesn't. Once the revoke
+    // is sent the toast is dismissed, and a late Undo re-invites instead of pretending.
+    let sent = false
+    const cancel = (): void => {
+      window.clearTimeout(timer)
+      toast.dismiss(toastId)
+      pendingRevokes.current.delete(email.toLowerCase())
+      setOverlays((list) => list.filter((entry) => entry.id !== id))
+    }
+    const timer = window.setTimeout(() => {
+      sent = true
+      pendingRevokes.current.delete(email.toLowerCase())
+      toast.dismiss(toastId)
+      void settle(() => api.orgInviteRevoke({ orgId, email })).then((outcome) => {
+        if (outcome.status === 'ok') {
+          const settledAfterSeq = currentRosterReadSeq()
+          setOverlays((list) =>
+            list.map((entry) => (entry.id === id ? { ...entry, settledAfterSeq } : entry))
+          )
+          onChanged()
+        } else {
+          setOverlays((list) => list.filter((entry) => entry.id !== id))
+          setRow(key, { error: mutationFailureCopy(outcome, t) ?? undefined })
+        }
+      })
+    }, REVOKE_UNDO_MS)
+    // Inviting the same address again before the revoke goes out cancels it (see invite()).
+    pendingRevokes.current.set(email.toLowerCase(), cancel)
+    const toastId = toast.success(
+      t('auto.components.billing.team.revokedToast', 'Invite to {{value0}} revoked', {
+        value0: email
       }),
-      () => api.orgInviteRevoke({ orgId, email })
-    ).then((outcome) => {
-      if (outcome.status === 'ok') {
-        toast.success(
-          t('auto.components.billing.team.revokedToast', 'Invite to {{value0}} revoked', {
-            value0: email
-          }),
-          {
-            action: {
-              label: t('auto.components.billing.team.undo', 'Undo'),
-              onClick: () => void invite([email], role)
+      {
+        duration: REVOKE_UNDO_MS,
+        action: {
+          label: t('auto.components.billing.team.undo', 'Undo'),
+          onClick: () => {
+            if (sent) {
+              void invite([email], role)
+            } else {
+              cancel()
             }
           }
-        )
+        }
       }
-    })
+    )
   }
 
   const resend = (email: string, role: OrcaOrgRole): void => {

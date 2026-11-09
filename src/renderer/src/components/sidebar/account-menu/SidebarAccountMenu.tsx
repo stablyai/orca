@@ -17,6 +17,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useBillingSummary } from '../../billing/billing-summary-store'
+import { SidebarTeamSubmenu } from './SidebarTeamSubmenu'
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 import { getAccountMenuIdentity, type AccountMenuIdentity } from './account-menu-identity'
 import { selectVisibleAccountMenuItems, useRegisteredAccountMenuItems } from './account-menu-items'
@@ -69,21 +70,40 @@ export function SidebarAccountMenu(): React.JSX.Element {
   const identity = getAccountMenuIdentity(authStatus)
   const billingSummary = useBillingSummary()
   const orgName = authStatus?.state === 'connected' ? authStatus.cloud?.activeOrgName : undefined
-  // "Acme · Team": which team this account acts for, and its plan once billing has answered.
+  // "Acme · Team plan": which team this account acts for, and its plan once billing has answered.
   const orgLine = orgName
     ? billingSummary.planLabel
-      ? `${orgName} · ${billingSummary.planLabel}`
+      ? t(
+          'auto.components.sidebar.SidebarAccountMenu.teamPlanLine',
+          '{{value0}} · {{value1}} plan',
+          {
+            value0: orgName,
+            value1: billingSummary.planLabel
+          }
+        )
       : orgName
     : null
-  const extensionItems = selectVisibleAccountMenuItems(registeredItems, authStatus)
+  const visibleItems = selectVisibleAccountMenuItems(registeredItems, authStatus)
+  // Freeze the item list while the menu is open: a billing answer arriving mid-read must not
+  // swap rows under the pointer (e.g. Upgrade replacing Plan & billing).
+  const [frozenItems, setFrozenItems] = useState<typeof visibleItems | null>(null)
+  const extensionItems = menuOpen && frozenItems ? frozenItems : visibleItems
   const milestones =
     setupProgress.ready && setupProgress.coreDoneCount < setupProgress.coreTotal
       ? { done: setupProgress.coreDoneCount, total: setupProgress.coreTotal }
       : null
-  const accountLabel = t('auto.components.sidebar.SidebarAccountMenu.account', 'Account')
+  const needsReconnect = !identity.signedIn && identity.needsReconnect
+  const accountLabel = identity.signedIn
+    ? t('auto.components.sidebar.SidebarAccountMenu.accountNamed', 'Account: {{value0}}', {
+        value0: identity.name
+      })
+    : needsReconnect
+      ? t('auto.components.sidebar.SidebarAccountMenu.accountReconnect', 'Account: sign in again')
+      : t('auto.components.sidebar.SidebarAccountMenu.account', 'Account')
 
   const handleMenuOpenChange = (open: boolean): void => {
     setMenuOpen(open)
+    setFrozenItems(open ? visibleItems : null)
     if (open) {
       // Warm while users read the menu so feedback is loaded before selection.
       void loadSidebarFeedbackDialog().catch(() => {})
@@ -145,7 +165,16 @@ export function SidebarAccountMenu(): React.JSX.Element {
                 data-account-menu-trigger=""
                 className="text-muted-foreground"
               >
-                <AccountAvatar identity={identity} className="size-[18px] text-[10px]" />
+                <span className="relative flex">
+                  <AccountAvatar identity={identity} className="size-[18px] text-[10px]" />
+                  {needsReconnect ? (
+                    // Session expired: a small warning dot on the avatar until they sign in again.
+                    <span
+                      aria-hidden
+                      className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-status-warning ring-2 ring-worktree-sidebar"
+                    />
+                  ) : null}
+                </span>
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
@@ -190,6 +219,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
               <DropdownMenuSeparator />
             </>
           ) : null}
+          <SidebarTeamSubmenu authStatus={authStatus} />
           {extensionItems.length > 0 ? (
             <>
               {extensionItems.map((item) => {

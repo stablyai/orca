@@ -18,7 +18,19 @@ let lastReadAt = 0
 let inFlight: Promise<void> | null = null
 const MIN_REFRESH_MS = 60_000
 
+let lastStatus: OrcaBillingStatusResult | null = null
+
+/** The latest successful status for the current account, to seed views that open later. */
+export function getLastBillingStatus(): OrcaBillingStatusResult | null {
+  return lastStatus
+}
+
 export function recordBillingStatus(result: OrcaBillingStatusResult): void {
+  if (result.status === 'ok') {
+    lastStatus = result
+  } else if (result.status !== 'failed') {
+    lastStatus = null
+  }
   const next: BillingSummary =
     result.status === 'ok'
       ? {

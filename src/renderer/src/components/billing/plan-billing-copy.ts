@@ -15,34 +15,54 @@ export function denyReasonCopy(
     case 'no_subscription':
       return t('auto.components.billing.reasonNoPlan', 'Hosted sandboxes need a paid plan.')
     case 'subscription_inactive':
-      return t(
-        'auto.components.billing.reasonInactive',
-        'Your plan is not active. Choose a plan to start sandboxes.'
-      )
+      return canManage
+        ? t(
+            'auto.components.billing.reasonInactive',
+            'Your plan is not active. Choose a plan to start sandboxes.'
+          )
+        : t(
+            'auto.components.billing.reasonInactiveMember',
+            'Your team’s plan is not active. Ask an owner or admin to choose a plan.'
+          )
     case 'payment_grace_expired':
-      return t(
-        'auto.components.billing.reasonGraceExpired',
-        'Your payment is overdue, so sandboxes are suspended. Update your payment method to resume.'
-      )
+      return canManage
+        ? t(
+            'auto.components.billing.reasonGraceExpired2',
+            'Payment failed, so sandboxes are suspended. Update your payment method to resume.'
+          )
+        : t(
+            'auto.components.billing.reasonGraceExpiredMember',
+            'Payment failed, so sandboxes are suspended. Ask an owner or admin to update the payment method.'
+          )
     case 'payment_past_due':
-      return t(
-        'auto.components.billing.reasonPastDue',
-        'Your last payment failed. Update your payment method to start new sandboxes.'
-      )
+      return canManage
+        ? t(
+            'auto.components.billing.reasonPastDue',
+            'Your last payment failed. Update your payment method to start new sandboxes.'
+          )
+        : t(
+            'auto.components.billing.reasonPastDueMember',
+            'Your team’s last payment failed. Ask an owner or admin to update the payment method.'
+          )
     case 'included_hours_exhausted':
-      return t(
-        'auto.components.billing.reasonExhaustedOptIn',
-        'You have used all included hours this month. Turn on overage to keep starting sandboxes.'
-      )
+      return canManage
+        ? t(
+            'auto.components.billing.reasonExhausted3',
+            'Out of sandbox hours for this month. Turn on overage to keep starting sandboxes. Your files are safe.'
+          )
+        : t(
+            'auto.components.billing.reasonExhaustedMember2',
+            'Out of sandbox hours for this month. Ask an owner or admin to add hours. Your files are safe.'
+          )
     case 'overage_cap_reached':
       return canManage
         ? t(
-            'auto.components.billing.reasonCapAdmin',
-            'This month’s overage cap is spent. Raise the cap to keep starting sandboxes.'
+            'auto.components.billing.reasonCapAdmin2',
+            'Spend cap reached. Raise the monthly spend cap to keep starting sandboxes. Your files are safe.'
           )
         : t(
-            'auto.components.billing.reasonCapMember',
-            'This month’s overage cap is spent. Ask an owner or admin to raise it.'
+            'auto.components.billing.reasonCapMember2',
+            'Spend cap reached. Ask an owner or admin to add hours. Your files are safe.'
           )
   }
 }
@@ -68,8 +88,8 @@ export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): st
       return null
     case 'forbidden':
       return t(
-        'auto.components.billing.openForbidden',
-        'Only an org owner or admin can manage billing.'
+        'auto.components.billing.openForbidden2',
+        'Only an owner or admin can manage billing.'
       )
     case 'already-subscribed':
       return t(
@@ -82,7 +102,10 @@ export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): st
         'There is no billing account yet. Choose a plan first.'
       )
     case 'signed-out':
-      return t('auto.components.billing.openSignedOut', 'Sign in to Orca again to manage billing.')
+      return t(
+        'auto.components.billing.openSignedOut2',
+        'Sign in to Orca again to manage your team.'
+      )
     case 'unconfigured':
       return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
     case 'failed':
@@ -100,11 +123,14 @@ export function overageFailureCopy(result: OrcaBillingOverageResult, t: Translat
       return t('auto.components.billing.overageNoPlan', 'Overage needs an active plan.')
     case 'forbidden':
       return t(
-        'auto.components.billing.openForbidden',
-        'Only an org owner or admin can manage billing.'
+        'auto.components.billing.openForbidden2',
+        'Only an owner or admin can manage billing.'
       )
     case 'signed-out':
-      return t('auto.components.billing.openSignedOut', 'Sign in to Orca again to manage billing.')
+      return t(
+        'auto.components.billing.openSignedOut2',
+        'Sign in to Orca again to manage your team.'
+      )
     case 'unconfigured':
       return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
     case 'failed':

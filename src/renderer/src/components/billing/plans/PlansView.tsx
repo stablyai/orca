@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Cloud, KeyRound, Zap } from 'lucide-react'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -61,10 +61,10 @@ function ValueProps(): React.JSX.Element {
     },
     {
       icon: KeyRound,
-      title: t('auto.components.billing.plans.vpSecretsTitle', 'API keys stay out of the sandbox'),
+      title: t('auto.components.billing.plans.vpSecretsTitle3', 'API keys stay out of the sandbox'),
       body: t(
-        'auto.components.billing.plans.vpSecretsBody2',
-        'Agents and terminals get them as environment variables; they are never written to the sandbox’s disk.'
+        'auto.components.billing.plans.vpSecretsBody4',
+        'API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.'
       )
     }
   ]
@@ -117,8 +117,8 @@ function CurrentPlanStrip({
       <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground tabular-nums">
         <span>
           {t(
-            'auto.components.billing.hoursUsedMonth',
-            '{{value0}} of {{value1}} hours used this month',
+            'auto.components.billing.sandboxHoursUsedMonth',
+            '{{value0}} of {{value1}} sandbox hours used this month',
             {
               value0: formatHours(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
               value1: formatHours(entitlement.includedSeconds)
@@ -178,11 +178,15 @@ function PlansSkeleton(): React.JSX.Element {
     >
       <ValueProps />
       <div className="flex justify-center">
-        <Skeleton shape="circle" className="h-8 w-56" />
+        <Skeleton shape="circle" className="h-8 w-72" />
       </div>
       <div className="grid items-stretch gap-4 md:grid-cols-2">
         <SkeletonCard lines={5} />
         <SkeletonCard lines={4} />
+      </div>
+      <div className="mx-auto max-w-xl space-y-1.5">
+        <Skeleton className="mx-auto h-3 w-2/3" />
+        <Skeleton className="mx-auto h-3 w-5/6" />
       </div>
     </div>
   )
@@ -194,7 +198,7 @@ function PlansLoadError({ onRetry }: { onRetry: () => void }): React.JSX.Element
     <div className="space-y-6">
       <ValueProps />
       <InlineError
-        className="mx-auto max-w-md"
+        className="mx-auto my-16 max-w-md"
         title={t('auto.components.billing.plans.loadFailedTitle', 'Plans didn’t load')}
         detail={t(
           'auto.components.billing.plans.loadFailed',
@@ -212,12 +216,27 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
   const [interval, setInterval] = useState<OrcaBillingInterval>('month')
   const seats = clampSeats(props.seats, ORCA_BILLING_MAX_SEATS)
   const result = props.result
+  const ready = result?.status === 'ok'
+  // Once plans load (or after "Back to plans"), land on this state's primary action, but only if
+  // focus is still on the dialog or nowhere; never steal it from something the user picked.
+  useEffect(() => {
+    const active = document.activeElement
+    if (
+      ready &&
+      (!active || active === document.body || active.getAttribute('role') === 'dialog')
+    ) {
+      document.querySelector<HTMLElement>('[role="dialog"] [data-plans-primary]')?.focus()
+    }
+  }, [ready])
 
   if (result?.status === 'signed-out' || result?.status === 'unconfigured') {
     return (
       <p className="py-12 text-center text-sm text-muted-foreground">
         {result.status === 'signed-out'
-          ? t('auto.components.billing.openSignedOut', 'Sign in to Orca again to manage billing.')
+          ? t(
+              'auto.components.billing.openSignedOut2',
+              'Sign in to Orca again to manage your team.'
+            )
           : t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')}
       </p>
     )
@@ -284,7 +303,7 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
         </p>
         <p>
           {t(
-            'auto.components.billing.plans.footTerms2',
+            'auto.components.billing.plans.footTerms4',
             'Prices in USD, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.'
           )}
         </p>

@@ -45,7 +45,7 @@ function renderOpenMenu(): HTMLElement {
       <SidebarAccountMenu />
     </TooltipProvider>
   )
-  const trigger = screen.getByRole('button', { name: 'Account' })
+  const trigger = screen.getByRole('button', { name: /^Account/ })
   fireEvent.pointerDown(trigger, { button: 0, pointerType: 'mouse', ctrlKey: false })
   return trigger
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -141,9 +142,13 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
         {connected ? <CloudSecretsSection orgId={authStatus?.cloud?.activeOrgId ?? null} /> : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {t('auto.components.settings.orcaAccount.benefitsTitle', 'Included with your account')}
-          </p>
+          <SettingsGroupHeader
+            className="px-0"
+            title={t(
+              'auto.components.settings.orcaAccount.benefitsTitle',
+              'Included with your account'
+            )}
+          />
           <div className="space-y-5">
             <div className="grid gap-5 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border/60">
               <AccountBenefit

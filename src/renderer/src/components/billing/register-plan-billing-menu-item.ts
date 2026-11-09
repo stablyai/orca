@@ -1,4 +1,4 @@
-import { CreditCard, Sparkles, Users } from 'lucide-react'
+import { Cloud, CreditCard, Users } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { registerAccountMenuItem } from '../sidebar/account-menu/account-menu-items'
@@ -55,7 +55,7 @@ export function registerPlanBillingMenuItem(): () => void {
       disposeUpgrade = registerAccountMenuItem({
         id: UPGRADE_ITEM_ID,
         label: () => translate('auto.components.billing.upgrade.menuItem', 'Upgrade to Orca Cloud'),
-        icon: Sparkles,
+        icon: Cloud,
         order: 9,
         tone: 'accent',
         requiredCapability: BILLING_CAPABILITY,

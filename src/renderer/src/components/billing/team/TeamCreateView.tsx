@@ -72,7 +72,9 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
               aria-invalid={props.error ? true : undefined}
               aria-describedby={props.error ? `${id}-error` : undefined}
               onChange={(event) => setName(event.target.value)}
-              disabled={props.creating || props.unavailable}
+              readOnly={props.creating}
+              aria-disabled={props.creating || undefined}
+              disabled={props.unavailable}
             />
             <Button type="submit" disabled={!trimmed || props.creating || props.unavailable}>
               {props.creating ? <LoadingSpinner className="size-3.5" /> : null}

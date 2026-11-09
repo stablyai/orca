@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
-import { getBillingGeneration, recordBillingStatusIfCurrent } from './billing-summary-store'
+import {
+  getBillingGeneration,
+  getLastBillingStatus,
+  recordBillingStatusIfCurrent
+} from './billing-summary-store'
 
 type BillingStatusState = {
   loading: boolean
@@ -23,7 +27,10 @@ function readBillingStatus(): Promise<OrcaBillingStatusResult> {
 export function useOrcaBillingStatus(
   enabled: boolean
 ): BillingStatusState & { refresh: () => void } {
-  const [state, setState] = useState<BillingStatusState>({ loading: enabled, result: null })
+  const [state, setState] = useState<BillingStatusState>(() => ({
+    loading: enabled,
+    result: enabled ? getLastBillingStatus() : null
+  }))
   const [reloadKey, setReloadKey] = useState(0)
   const refresh = useCallback(() => setReloadKey((key) => key + 1), [])
 

@@ -22,7 +22,7 @@ export function PlansIntervalToggle({
           value0: String(savingsPercent)
         })
   return (
-    <div className="flex justify-center">
+    <div className="mx-auto flex w-72 justify-center">
       <SettingsSegmentedControl<OrcaBillingInterval>
         value={value}
         onChange={onChange}
