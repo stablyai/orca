@@ -39,7 +39,7 @@ export const dictationControlsCopy = {
       : translate('dictation.status.movedToComputer', 'Moved to the computer')
 }
 
-function spokenDuration(elapsedSeconds: number): string {
+export function dictationSpokenDuration(elapsedSeconds: number): string {
   const minutes = Math.floor(elapsedSeconds / 60)
   const count = elapsedSeconds % 60
   const seconds =
@@ -67,7 +67,7 @@ export function dictationMeterLabel(
   engine: MobileDictationEngineShown['kind'] | null,
   computer: string | null
 ): string {
-  const duration = spokenDuration(elapsedSeconds)
+  const duration = dictationSpokenDuration(elapsedSeconds)
   if (engine === 'phone') {
     return translate('dictation.controls.meterOnPhone', 'Recording, {{duration}}, on this phone', {
       duration

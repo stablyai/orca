@@ -18,6 +18,7 @@ import { failActiveMobileDictation, retryMobileDictationOnHost } from './mobile-
 import { mobileDictationFailureRetryable } from './mobile-dictation-failure'
 import { finishMobileDictation } from './mobile-dictation-finish'
 import type { MobileDictationEngine } from './mobile-dictation-device-engine'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   releaseMobileDictationEngine,
   startMobileDictation,
@@ -175,16 +176,27 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     await finishDictation(dictationSessionErrorMessage('no-speech'))
   }, [finishDictation])
 
-  const start = useCallback(async () => {
-    if ((!clientRef.current && !speechRef.current) || !enabledRef.current || activeIdRef.current) {
-      return
-    }
-    setError(null)
-    // A new dictation replaces a failed one's kept recording.
-    setKeptFailure(null)
-    recordingRef.current.clear()
-    await startMobileDictation(run, capture)
-  }, [capture, run, setKeptFailure])
+  const start = useCallback(
+    async (startClient?: RpcClient | null) => {
+      // The caller's client, set before the next render commits it: one hook serves whichever session starts.
+      if (startClient !== undefined) {
+        clientRef.current = startClient
+      }
+      if (
+        (!clientRef.current && !speechRef.current) ||
+        !enabledRef.current ||
+        activeIdRef.current
+      ) {
+        return
+      }
+      setError(null)
+      // A new dictation replaces a failed one's kept recording.
+      setKeptFailure(null)
+      recordingRef.current.clear()
+      await startMobileDictation(run, capture)
+    },
+    [capture, run, setKeptFailure]
+  )
 
   const retry = useCallback(async () => {
     const client = clientRef.current
