@@ -1,6 +1,13 @@
 import type { FederatedDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
+import { ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+
+// A finished remote worker its server still retains may send late mail or ask, until a follow-up takes it over.
+const TAKES_LATE_MAIL_SQL = `(wd.state IN ('succeeded', 'failed')
+  AND fd.protocol_version >= ${ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION}
+  AND wd.stage != 'released'
+  AND NOT EXISTS (SELECT 1 FROM dispatch_contexts f WHERE f.follow_up_of_dispatch_id = fd.dispatch_id))`
 
 export function getFederatedDispatch(
   this: OrchestrationDb,
@@ -27,17 +34,20 @@ export function listFederatedDispatchesByIds(
     .all(JSON.stringify([...dispatchIds])) as FederatedDispatchRow[]
 }
 
+/** The federated Dispatches whose relay runs: live workers, and finished ones still taking late mail. */
 export function listActiveFederatedDispatches(
   this: OrchestrationDb,
   runId?: string
 ): FederatedDispatchRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: selects whole federated_dispatches rows.
   return this.db
     .prepare(
       `SELECT fd.*
        FROM federated_dispatches fd
        INNER JOIN dispatch_contexts dc ON dc.id = fd.dispatch_id
        INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
-       WHERE wd.state IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
+       WHERE (wd.state IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
+           OR ${TAKES_LATE_MAIL_SQL})
          AND (? IS NULL OR dc.run_id = ?)
        ORDER BY fd.rowid`
     )
@@ -78,7 +88,20 @@ export function isFederatedDispatchRelayEligible(
              OR (
                fd.to_home_acknowledged_sequence < fd.to_home_imported_sequence
              )
+             OR ${TAKES_LATE_MAIL_SQL}
            )`
+      )
+      .get(dispatchId)
+  )
+}
+
+export function federatedDispatchTakesLateMail(this: OrchestrationDb, dispatchId: string): boolean {
+  return Boolean(
+    this.db
+      .prepare(
+        `SELECT 1 FROM federated_dispatches fd
+         INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
+         WHERE fd.dispatch_id = ? AND ${TAKES_LATE_MAIL_SQL}`
       )
       .get(dispatchId)
   )
@@ -131,6 +154,7 @@ export type FederatedDispatchStoreMethods = {
   listActiveFederatedDispatches: typeof listActiveFederatedDispatches
   findNextTerminalFederatedDispatchPendingAcknowledgment: typeof findNextTerminalFederatedDispatchPendingAcknowledgment
   isFederatedDispatchRelayEligible: typeof isFederatedDispatchRelayEligible
+  federatedDispatchTakesLateMail: typeof federatedDispatchTakesLateMail
   updateFederatedDispatchResources: typeof updateFederatedDispatchResources
   updateFederatedDispatchRuntimeEpoch: typeof updateFederatedDispatchRuntimeEpoch
 }
@@ -142,6 +166,7 @@ export function attachFederatedDispatchStore(ctor: { prototype: object }): void 
     listActiveFederatedDispatches,
     findNextTerminalFederatedDispatchPendingAcknowledgment,
     isFederatedDispatchRelayEligible,
+    federatedDispatchTakesLateMail,
     updateFederatedDispatchResources,
     updateFederatedDispatchRuntimeEpoch
   })

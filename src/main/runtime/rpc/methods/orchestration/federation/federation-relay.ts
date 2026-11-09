@@ -1,5 +1,12 @@
 import { federationRelayWireItem } from '../../../../orchestration/federation/relay/federation-relay-wire'
-import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import {
+  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
+  ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import {
+  remoteAttachmentRetainsWorker,
+  remoteAttachmentTakesLateMail
+} from '../../../../orchestration/db/federation/remote-attachment-late-mail'
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 import { importFederatedControlMessage } from '../../../../orchestration/federation/relay/federation-control-message'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -21,10 +28,19 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     permission: 'workspace',
     params: FederationPullParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
-      requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+      const attachment = requireHomeAttachment(
+        runtime,
+        params.dispatchId,
+        authenticatedCallerFingerprint
+      )
+      const db = runtime.getOrchestrationDb()
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
+        // Tells a home that keeps pulling a finished worker's late mail when it can stop.
+        ...(attachment.protocol_version >= ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION
+          ? { retainsWorker: remoteAttachmentRetainsWorker(db, attachment) }
+          : {}),
         items: (params.replayUnacknowledged
           ? runtime
               .getOrchestrationDb()
@@ -133,7 +149,10 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
           params.dispatchId,
           authenticatedCallerFingerprint
         )
-        if (currentAttachment.state !== 'ready') {
+        // A finished worker still waiting on its question takes the answer, as a finished local one does.
+        const answersFinishedWorker =
+          item.kind === 'reply' && remoteAttachmentTakesLateMail(db, currentAttachment)
+        if (currentAttachment.state !== 'ready' && !answersFinishedWorker) {
           throw new OrchestrationError(
             'dispatch_inactive',
             `Remote Dispatch ${params.dispatchId} is not active.`

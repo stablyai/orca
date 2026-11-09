@@ -241,7 +241,10 @@ export class RuntimeOrchestrationFederation {
       return 'ended'
     }
     return this.syncDispatch(dispatchId).then(
-      (): FederationRelayTickOutcome => 'synced',
+      (): FederationRelayTickOutcome =>
+        this.runtime.getOrchestrationDb().federatedDispatchTakesLateMail(dispatchId)
+          ? 'idle'
+          : 'synced',
       (): FederationRelayTickOutcome => {
         if (!this.isEnvironmentRemoved(dispatchId)) {
           return 'failed'

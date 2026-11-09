@@ -14,6 +14,7 @@ import { resolveOrchestrationParty } from '../../../../orchestration/addressing/
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
 import { finishedWorkerDispatch, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { findFinishedRemoteWorkerAttachment } from '../../../../orchestration/db/federation/remote-attachment-late-mail'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import {
   askedQuestionReceipt,
@@ -85,6 +86,26 @@ export const ORCHESTRATION_ASK_METHODS = [
           { run: undefined, dispatchId: undefined, dispatch: undefined },
           'question'
         )
+      const finishedRemote = askingDispatch
+        ? undefined
+        : findFinishedRemoteWorkerAttachment(
+            db,
+            paneKey,
+            runtime.getTerminalProcessIncarnation(from) ?? undefined
+          )
+      if (finishedRemote && paneKey) {
+        return askRemoteRunHome({
+          params: { ...params, timeoutMs },
+          runtime,
+          signal,
+          recordMutationReceipt,
+          from,
+          paneKey,
+          dispatchId: finishedRemote.dispatch_id,
+          taskId: finishedRemote.task_id,
+          workerState: finishedRemote.state
+        })
+      }
       if (!askingDispatch) {
         refuseFinishedRemoteWorker(db, paneKey, undefined)
         throw new OrchestrationError(

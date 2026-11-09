@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { WorkerStartInput } from '../worker/worker-start-schema'
 import type { WorkerStartMutation } from '../worker/worker-start-mutation'
+import type { WorkerFollowUp } from '../worker/worker-follow-up-placement'
 
 export type FederatedWorkerStartRequest = {
   params: WorkerStartInput
@@ -15,4 +16,6 @@ export type FederatedWorkerStartRequest = {
   orchestrationMutation?: WorkerStartMutation
   /** The coordinator's resolved session, when it is one; recorded as the Dispatch creator. */
   callerSession?: OrchestrationSessionCaller
+  /** A follow-up continuing a finished worker there; its send holds the durable request. */
+  followUp?: WorkerFollowUp
 }

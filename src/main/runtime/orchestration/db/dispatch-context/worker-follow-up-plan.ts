@@ -1,7 +1,18 @@
 import type { MessageType } from '../orchestration-records'
+import { ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 
 type Dispatch = { id: string; status: string; follow_up_of_dispatch_id: string | null }
 type Resource = { owner_dispatch_id: string; origin_dispatch_id: string }
+
+/** A worker on a paired server takes follow-ups only when its server could at start; local workers always can. */
+export function refusesWorkerFollowUp(
+  federatedProtocolVersion: number | null | undefined
+): boolean {
+  return (
+    federatedProtocolVersion != null &&
+    federatedProtocolVersion < ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION
+  )
+}
 
 export const FOLLOW_UP_MESSAGE_TYPES = ['status', 'dispatch', 'handoff'] as const
 
@@ -67,7 +78,7 @@ export function selectWorkerFollowUpPlan<D extends Dispatch, R extends Resource>
   addressed: D | undefined,
   lineage: () => { latest: D; resource: R | undefined } | undefined,
   type: MessageType,
-  federated: (id: string) => boolean,
+  refusesFollowUp: (id: string) => boolean,
   worker: (id: string) => boolean
 ):
   | { kind: 'steer'; dispatchId: string }
@@ -84,7 +95,7 @@ export function selectWorkerFollowUpPlan<D extends Dispatch, R extends Resource>
   }
   if (
     !FOLLOW_UP_MESSAGE_TYPES.some((followUpType) => followUpType === type) ||
-    federated(latest.id) ||
+    refusesFollowUp(latest.id) ||
     !worker(resource?.origin_dispatch_id ?? latest.id)
   ) {
     return latest.id === addressed?.id ? undefined : { kind: 'steer', dispatchId: latest.id }

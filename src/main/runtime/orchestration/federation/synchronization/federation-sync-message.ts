@@ -108,6 +108,8 @@ export function parseFederatedLifecycle(
 export const PulledRelayPage = z
   .object({
     runtimeEpoch: z.string().min(1),
+    /** Whether the server still holds the worker; absent from servers that keep no late mail. */
+    retainsWorker: z.boolean().optional(),
     items: z.array(
       z
         .object({

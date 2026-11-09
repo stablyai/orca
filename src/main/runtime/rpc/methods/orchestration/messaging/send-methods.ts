@@ -23,7 +23,7 @@ import {
 } from '../../../orchestration-mutation-receipt'
 import { replayMutationNudge } from './mutation-replay-nudge'
 import { handBackReplayTargets } from '../../../../orchestration/db/messages/helper-mailbox-hand-back'
-import { sendRemoteMessage } from './send-remote'
+import { sendFromRemoteWorker } from './send-remote'
 import { mayNameSession } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
@@ -31,7 +31,7 @@ import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
-import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
+import { finishedWorkerSend } from './finished-worker-mail'
 import {
   followThroughWorkerReport,
   passHeldWorkerMail,
@@ -105,23 +105,19 @@ export const ORCHESTRATION_SEND_METHODS = [
         attestedCaller?.processIncarnation ??
         runtime.getTerminalProcessIncarnation(from) ??
         undefined
-      const remoteAttachment = senderPaneKey
-        ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
-        : undefined
-      if (remoteAttachment && senderPaneKey) {
-        return sendRemoteMessage({
-          params,
-          runtime,
-          db,
-          from,
-          senderPaneKey,
-          remoteAttachment,
-          processIncarnation: processIncarnation(),
-          signal
-        })
+      // A worker this host runs for another computer reports to its Run home there.
+      const remoteSent = await sendFromRemoteWorker({
+        params,
+        runtime,
+        db,
+        from,
+        senderPaneKey,
+        processIncarnation,
+        signal
+      })
+      if (remoteSent) {
+        return remoteSent
       }
-
-      refuseFinishedRemoteWorker(db, senderPaneKey, params.to)
       const runGroup =
         params.to && isGroupAddress(params.to) && !params.to.toLowerCase().startsWith('@worktree:')
       // Run groups validate their own audience; message scope cannot select a parent Dispatch.
@@ -204,12 +200,8 @@ export const ORCHESTRATION_SEND_METHODS = [
         let addressedDispatchId = to.startsWith('dispatch:')
           ? to.slice('dispatch:'.length)
           : undefined
-        const federatedTarget =
-          addressedDispatchId && to === `dispatch:${addressedDispatchId}`
-            ? db.getFederatedDispatch(addressedDispatchId)
-            : undefined
-        // Federated targets perform their own liveness check before relaying.
-        if (addressedDispatchId && !federatedTarget) {
+        // A finished worker continues as a follow-up, on a paired server too when it can take one.
+        if (addressedDispatchId) {
           const plan = planWorkerFollowUp(db, addressedDispatchId, params.type ?? 'status')
           // Only a settled worker awaits; mail to a working one stays synchronous until it is inserted.
           const followUp =
@@ -238,6 +230,9 @@ export const ORCHESTRATION_SEND_METHODS = [
             addressedDispatchId = followUp.dispatchId
             to = `dispatch:${addressedDispatchId}`
           }
+        }
+        // Federated targets perform their own liveness check before relaying.
+        if (addressedDispatchId && !db.getFederatedDispatch(addressedDispatchId)) {
           assertDispatchMailboxDeliverable(runtime, db, addressedDispatchId)
           const runBound = resolveRunBoundDispatchRecipient(
             runtime,

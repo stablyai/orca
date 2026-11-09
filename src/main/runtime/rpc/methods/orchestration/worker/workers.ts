@@ -155,6 +155,7 @@ export async function startWorker(
       .join('\n\n')
     params = {
       ...params,
+      ...(placement.on ? { on: placement.on } : {}),
       worktree: `id:${placement.worktreeId}`,
       ...(placement.terminal ? { terminal: placement.terminal } : {}),
       ...(placement.agent ? { agent: placement.agent } : {}),
@@ -179,7 +180,8 @@ export async function startWorker(
       task: existingTask,
       taskDeps,
       orchestrationMutation,
-      callerSession: orchestrationCaller
+      callerSession: orchestrationCaller,
+      followUp
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
     return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
