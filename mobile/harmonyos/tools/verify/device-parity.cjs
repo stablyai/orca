@@ -694,6 +694,52 @@ test('a media picker returning after the page is paused cannot publish staged me
   await device.dispose()
 })
 
+test('a HEIF photo returned by the library is staged as JPEG for the attachment bridge', async () => {
+  const original = Buffer.from('0000001466747970686569630000000068656963', 'hex')
+  const device = deviceHarness({
+    photoAccessHelper: {
+      PhotoSelectOptions: class {},
+      PhotoViewMIMETypes: { IMAGE_TYPE: 'image' },
+      PreferredCompatibleMode: { COMPATIBLE: 2 },
+      PhotoViewPicker: class {
+        async select() {
+          return { photoUris: ['file://selected/photo.heic'] }
+        }
+      }
+    },
+    fs: {
+      OpenMode: { READ_ONLY: 0 },
+      open: async () => ({ fd: 1 }),
+      stat: async () => ({ size: original.length }),
+      read: async (_fd, buffer) => {
+        new Uint8Array(buffer).set(original)
+        return original.length
+      },
+      close: async () => {}
+    },
+    image: {
+      createImageSource: () => ({
+        getImageInfo: async () => ({ size: { width: 800, height: 560 } }),
+        release: async () => {}
+      }),
+      createImagePacker: () => ({
+        packToData: async () => Uint8Array.of(255, 216, 255, 217).buffer,
+        release: async () => {}
+      })
+    },
+    base64Encode: (value) => Buffer.from(value).toString('base64')
+  })
+  const { items } = await device.serve('native.media.pick', { source: 'library', multiple: false })
+  const [{ handle }] = items
+  assert.equal(items[0].mime, 'image/jpeg')
+  assert.equal((await device.serve('native.media.name', { handle })).name, 'photo.jpg')
+  assert.equal(
+    (await device.serve('native.media.read', { handle, offset: 0, length: 32 })).base64,
+    '/9j/2Q=='
+  )
+  await device.dispose()
+})
+
 test('external link handling refuses executable and file URLs and opens accepted browser URLs through the OS', async () => {
   const opened = []
   const device = deviceHarness({

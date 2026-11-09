@@ -15,6 +15,7 @@ import { NativePdfViewer } from './NativePdfViewer';
 
 const AUDIO_LIMIT = 160000;
 const MEDIA_LIMIT = 18 * 1024 * 1024;
+const PHOTO_PIXEL_LIMIT = 32 * 1024 * 1024;
 const READ_LIMIT = 384 * 1024;
 
 interface MediaRecord { bytes: Uint8Array; mime: string; name: string; }
@@ -286,6 +287,12 @@ export class NativeDevice {
             else if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) { mime = 'image/jpeg'; }
             else if (bytes.length >= 12 && bytes[0] === 82 && bytes[1] === 73 && bytes[8] === 87 && bytes[9] === 69) { mime = 'image/webp'; }
             else if (bytes.length >= 6 && bytes[0] === 71 && bytes[1] === 73 && bytes[2] === 70) { mime = 'image/gif'; }
+            else if (source === 'library') {
+              // The compatibility preference can still return an original HEIF photo.
+              bytes = await this.encodePickedPhoto(file.fd, generation);
+              mime = 'image/jpeg';
+              name = `${name.replace(/\.[^.]+$/, '').slice(0, 251) || 'attachment'}.jpg`;
+            }
             pending.push({ bytes: bytes, mime: mime, name: name });
           } finally { await fs.close(file); }
         }
@@ -299,5 +306,21 @@ export class NativeDevice {
       }
       let result: Record<string, Object> = { 'items': items }; return result;
     } finally { this.picking = false; }
+  }
+
+  private async encodePickedPhoto(fd: number, generation: number): Promise<Uint8Array> {
+    let photo = image.createImageSource(fd);
+    let packer: image.ImagePacker | undefined;
+    try {
+      let info = await photo.getImageInfo(); this.checkSelection(generation);
+      if (info.size.width * info.size.height > PHOTO_PIXEL_LIMIT) { throw new NativeMediaTooLargeError(); }
+      packer = image.createImagePacker();
+      let packed = await packer.packToData(photo, { format: 'image/jpeg', quality: 100, needsPackProperties: true });
+      this.checkSelection(generation);
+      if (packed.byteLength > MEDIA_LIMIT) { throw new NativeMediaTooLargeError(); }
+      return new Uint8Array(packed);
+    } finally {
+      try { await packer?.release(); } finally { await photo.release(); }
+    }
   }
 }
