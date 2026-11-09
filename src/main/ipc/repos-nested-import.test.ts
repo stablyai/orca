@@ -70,7 +70,16 @@ describe('projectGroups IPC validation', () => {
     mockWindow.webContents.send.mockReset()
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
-    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
+    registerRepoHandlers(
+      mockWindow as never,
+      mockStore as never,
+      {
+        repositoryForkBackfill: {
+          enqueue: vi.fn().mockResolvedValue(undefined),
+          resolve: vi.fn().mockResolvedValue(true)
+        }
+      } as never
+    )
   })
 
   const group = {
