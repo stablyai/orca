@@ -34,7 +34,6 @@ import {
   settleClaudeUnexpectedExit,
   type ClaudeExitLifecycle
 } from './claude-structured-session-exit-lifecycle'
-import type { AgentSessionBackgroundTaskState } from '../../../shared/agent-session/agent-session-background-task-wire'
 import { claudeChildWorkPublisher } from '../claude-child-work-evidence'
 import {
   deliverClaudeConnectionEvent,
@@ -187,12 +186,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       session: this.session(input.sessionId),
       timeoutMs: this.deps.requestTimeoutMs
     })
-  /** Test-only roster; production ownership and Stop routing use host child records. */
-  backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined => {
-    const session = this.sessions.get(sessionId)
-    const state = session?.backgroundTasks.state
-    return session && (state ? { ...state, supportsTaskStop: true } : null)
-  }
   backgroundTaskStops = (sessionId: string) =>
     this.sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
