@@ -5,7 +5,7 @@ import type * as GitRunner from '../../git/command-runner/wsl-aware-spawn'
 import {
   pathMatchesFileNameFilterTokens,
   splitFileNameFilterTokens
-} from '../../../shared/file-name-filter-tokens'
+} from '../../../shared/file-listing/file-name-filter-tokens'
 
 const { wslAwareSpawnMock } = vi.hoisted(() => ({
   wslAwareSpawnMock: vi.fn()

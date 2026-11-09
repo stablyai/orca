@@ -9,6 +9,7 @@ import {
 } from '@/components/settings/session-history/session-history-status-copy'
 import { useSessionSearchStatus } from '@/components/settings/session-history/use-session-search-status'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 
 export type SessionSearchTipStage = 'offer' | 'indexing' | 'ready'
@@ -26,6 +27,7 @@ export function useSessionSearchTipSetup({
 }: {
   dialogOpen: boolean
 }): SessionSearchTipSetup {
+  const t = useTranslate()
   const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
   const searchEnabled = useAppStore((s) => resolveAiVaultSearchSettings(s.settings).enabled)
   const [wasOpen, setWasOpen] = useState(dialogOpen)
@@ -79,7 +81,7 @@ export function useSessionSearchTipSetup({
         })
       } catch {
         toast.error(
-          translate(
+          t(
             'featureTips.sessionSearch.enableFailed',
             'Could not turn on session search. Try again.'
           )

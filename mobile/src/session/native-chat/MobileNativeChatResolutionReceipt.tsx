@@ -11,6 +11,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../components/inline-text-selection'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { MobileNativeChatAwaitingInputRow } from './transcript/MobileNativeChatAwaitingInputRow'
+import { MobileNativeChatQuestionText } from './MobileNativeChatQuestionText'
 import { scaledType } from './transcript/mobile-native-chat-message-styles'
 import { MobileNativeChatMessageTime } from './transcript/MobileNativeChatMessageTime'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -79,7 +80,14 @@ export function MobileNativeChatResolutionReceipt({
           <View
             key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
           >
-            {heading ? <Text style={text}>{heading}</Text> : null}
+            {heading ? (
+              <MobileNativeChatQuestionText
+                content={heading}
+                fontSize={typography.metaSize * fontScale}
+                tone="muted"
+                rangeSelectable
+              />
+            ) : null}
             <Text selectable={INLINE_TEXT_SELECTION} style={text} numberOfLines={3}>
               {answer.answer === '' ? copy.emptyAnswer : (answer.answer ?? copy.unavailable)}
             </Text>

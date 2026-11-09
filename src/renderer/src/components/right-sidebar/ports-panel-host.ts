@@ -1,6 +1,6 @@
 import { resolveOwner } from '@/lib/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import { hostRouteForAuthority, type HostRoute } from '@/runtime/runtime-client-target'
+import { hostRouteForAuthority, type HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   getOrcadSshDeployment,

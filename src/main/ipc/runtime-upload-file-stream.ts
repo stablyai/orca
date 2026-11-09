@@ -4,7 +4,7 @@ import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type {
   RuntimeUploadFileStreamRequest,
   StagedRuntimeUploadFileIdentity
-} from '../../shared/runtime-upload-staging-contract'
+} from '../../shared/file-import/runtime-upload-staging-contract'
 import { formatByteCeiling, REMOTE_IMPORT_MAX_FILE_BYTES } from './runtime-import-limits'
 import {
   isRuntimeEnvironmentManuallyDisconnected,

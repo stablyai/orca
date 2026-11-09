@@ -1,7 +1,7 @@
 import type { TaskPageComposerActionsModel } from './use-task-page-composer-actions'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { X, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -13,12 +13,13 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageSourceBar({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     openTaskPage,
     closeTaskPage,
@@ -62,13 +63,13 @@ export function TaskPageSourceBar({
               size="icon"
               className="size-7 rounded-full"
               onClick={closeTaskPage}
-              aria-label={translate('auto.components.TaskPage.1a06219d5c', 'Close tasks')}
+              aria-label={t('auto.components.TaskPage.1a06219d5c', 'Close tasks')}
             >
               <X className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.TaskPage.4826fd1ad8', 'Close · Esc')}
+            {t('auto.components.TaskPage.4826fd1ad8', 'Close · Esc')}
           </TooltipContent>
         </Tooltip>
         <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
@@ -99,7 +100,7 @@ export function TaskPageSourceBar({
                       defaultTaskSource: source.id
                     }).catch(() => {
                       toast.error(
-                        translate(
+                        t(
                           'auto.components.TaskPage.609532fae7',
                           'Failed to save default task source.'
                         )
@@ -161,14 +162,10 @@ export function TaskPageSourceBar({
                 disabled={!selectedLinearTeamForExternalLink}
                 aria-label={
                   selectedLinearTeamForExternalLink
-                    ? translate(
-                        'auto.components.TaskPage.246bd64aed',
-                        'Open {{value0}} in Linear',
-                        {
-                          value0: selectedLinearTeamForExternalLink.name
-                        }
-                      )
-                    : translate(
+                    ? t('auto.components.TaskPage.246bd64aed', 'Open {{value0}} in Linear', {
+                        value0: selectedLinearTeamForExternalLink.name
+                      })
+                    : t(
                         'auto.components.TaskPage.8029e2bd4d',
                         'Select one Linear team to open in Linear'
                       )
@@ -180,13 +177,10 @@ export function TaskPageSourceBar({
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
               {selectedLinearTeamForExternalLink
-                ? translate('auto.components.TaskPage.246bd64aed', 'Open {{value0}} in Linear', {
+                ? t('auto.components.TaskPage.246bd64aed', 'Open {{value0}} in Linear', {
                     value0: selectedLinearTeamForExternalLink.name
                   })
-                : translate(
-                    'auto.components.TaskPage.2af3ab5c58',
-                    'Select one team to open in Linear'
-                  )}
+                : t('auto.components.TaskPage.2af3ab5c58', 'Select one team to open in Linear')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -204,7 +198,7 @@ export function TaskPageSourceBar({
                 setJiraLoading(true)
                 void selectJiraSite(value).catch(() => {
                   toast.error(
-                    translate('auto.components.TaskPage.d09b7631b7', 'Failed to switch Jira site.')
+                    t('auto.components.TaskPage.d09b7631b7', 'Failed to switch Jira site.')
                   )
                 })
               }}
@@ -214,7 +208,7 @@ export function TaskPageSourceBar({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">
-                  {translate('auto.components.TaskPage.e592d99051', 'All Jira sites')}
+                  {t('auto.components.TaskPage.e592d99051', 'All Jira sites')}
                 </SelectItem>
                 {jiraSites.map((site) => (
                   <SelectItem key={site.id} value={site.id}>

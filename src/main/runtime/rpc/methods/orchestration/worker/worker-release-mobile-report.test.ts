@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
-import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
+import { registerBoundPty } from '../../../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 const h = createOrchestrationWorkerReleaseHarness()
 beforeEach(() => h.setup())

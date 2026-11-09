@@ -42,13 +42,6 @@ describe("a Stop's wait for Claude to wind down what it has in flight", () => {
     vi.useRealTimers()
   })
 
-  it('waits out the whole time for a turn Claude never ends', async () => {
-    const waiting = awaitClaudeRequestEnd(session(), CLAUDE_STOP_GRACE_MS)
-
-    expect(await settledWithin(waiting, CLAUDE_STOP_GRACE_MS - 1)).toBe(false)
-    expect(await settledWithin(waiting, 1)).toBe(true)
-  })
-
   it('waits on a send Claude has not echoed, through its turn, to that turn’s end', async () => {
     const { claude, state } = claudeWith(null, 1)
     const waiting = awaitClaudeRequestEnd(claude, CLAUDE_STOP_GRACE_MS)

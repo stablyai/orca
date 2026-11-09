@@ -1,14 +1,14 @@
 import {
   ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { z } from 'zod'
-import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/orchestration-peer-capability-cache'
+import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/federation/orchestration-peer-capability-cache'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import {
   releaseUnknownRecovery,
   type WorkerReleaseReceipt

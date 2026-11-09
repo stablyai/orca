@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   BrowserNavigationControlRow,
   type BrowserNavigationControls
@@ -85,6 +85,7 @@ export function BrowserChromeToolbar({
   reloadLabel,
   importControl,
   extensionActions,
+  passwordControl,
   elementTools,
   markup,
   shareControl,
@@ -106,6 +107,8 @@ export function BrowserChromeToolbar({
    * SSH pages). `compact` folds the pinned buttons, leaving the extensions menu.
    */
   extensionActions?: ((compact: boolean) => React.ReactNode) | null
+  /** Saved-password offer beside the address bar; never folded, it only shows after a login. */
+  passwordControl?: React.ReactNode
   elementTools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
@@ -119,6 +122,7 @@ export function BrowserChromeToolbar({
   /** Keeps the active contextual-tour control measurable while the remaining tools still fold. */
   pinnedStage?: BrowserChromeFoldStage
 }): React.JSX.Element {
+  const t = useTranslate()
   const closeTab = useFloatingSplitBrowserClose(
     closeTabOwner.worktreeId,
     closeTabOwner.browserPageId
@@ -148,7 +152,7 @@ export function BrowserChromeToolbar({
   if (elementTools && folded.has('grab')) {
     foldedTools.push({
       stage: 'grab',
-      label: translate('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element'),
+      label: t('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element'),
       icon: Crosshair,
       onSelect: () => elementTools.onStartIntent('copy'),
       disabled: elementTools.disabled,
@@ -159,10 +163,7 @@ export function BrowserChromeToolbar({
   if (elementTools && folded.has('annotate')) {
     foldedTools.push({
       stage: 'annotate',
-      label: translate(
-        'auto.components.browser.pane.BrowserPane.fc9be38f6f',
-        'Annotate page element'
-      ),
+      label: t('auto.components.browser.pane.BrowserPane.fc9be38f6f', 'Annotate page element'),
       icon: MessageSquarePlus,
       onSelect: () => elementTools.onStartIntent('annotate'),
       disabled: elementTools.disabled,
@@ -174,7 +175,7 @@ export function BrowserChromeToolbar({
   if (folded.has('draw')) {
     foldedTools.push({
       stage: 'draw',
-      label: translate('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot'),
+      label: t('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot'),
       icon: PenTool,
       onSelect: markup.onToggle,
       disabled: markup.disabled,
@@ -184,10 +185,7 @@ export function BrowserChromeToolbar({
   if (shareControl && folded.has('share')) {
     foldedTools.push({
       stage: 'share',
-      label: translate(
-        'auto.components.artifacts.ArtifactPublishButton.a4a49da6af',
-        'Share as artifact'
-      ),
+      label: t('auto.components.artifacts.ArtifactPublishButton.a4a49da6af', 'Share as artifact'),
       icon: Share2,
       onSelect: () => setSharePopoverOpen(true),
       deferUntilMenuClose: true
@@ -223,6 +221,7 @@ export function BrowserChromeToolbar({
       reloadLabel={reloadLabel}
       showTourAnchors={showTourAnchors}
     >
+      {passwordControl}
       {folded.has('import') ? null : importControl?.(folded.has('import-label'))}
 
       {elementTools ? (

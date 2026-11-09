@@ -39,9 +39,11 @@ import {
   readMobileNativeChatDraftEditGeneration,
   setMobileNativeChatDraftText
 } from './mobile-native-chat-draft-store'
+import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
 
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
 const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
+const NO_SEND_ERROR = (): void => {}
 
 export function useMobileNativeChatDrafts(args: {
   hostId: string
@@ -57,6 +59,8 @@ export function useMobileNativeChatDrafts(args: {
   transcriptLoading?: boolean
   // Only settled own-session history makes an empty list a real send boundary.
   transcriptSettled: boolean
+  connected?: boolean
+  onSendError?: (message: string) => void
 }): {
   // Subscribe where the text is drawn; a subscriber here redraws the session screen per keystroke.
   draftKey: string | null
@@ -79,7 +83,8 @@ export function useMobileNativeChatDrafts(args: {
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
-    onUnconfirmed: () => void
+    onUnconfirmed: () => void,
+    inFlightId?: string | null
   ) => void
 } {
   const {
@@ -92,7 +97,9 @@ export function useMobileNativeChatDrafts(args: {
     launchDraftCreatedAt,
     chatActive = true,
     transcriptLoading,
-    transcriptSettled
+    transcriptSettled,
+    connected = true,
+    onSendError = NO_SEND_ERROR
   } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
@@ -110,6 +117,10 @@ export function useMobileNativeChatDrafts(args: {
   const getComposerEditGeneration = useCallback(() => composerEditGenerationRef.current, [])
   const messagesRef = useRef(messages)
   messagesRef.current = messages
+
+  useEffect(() => {
+    void loadMobileNativeChatDrafts(hostId, worktreeId)
+  }, [hostId, worktreeId])
 
   const { readSeededLaunchDraft, readSeededLaunchDraftSeed } = useMobileNativeChatLaunchDraftSeed({
     draftKey,
@@ -212,7 +223,10 @@ export function useMobileNativeChatDrafts(args: {
   const { holdUnconfirmedSend } = useMobileNativeChatUnconfirmedSends({
     draftKey,
     pendingKey,
-    messages
+    messages,
+    connected,
+    transcriptReady: chatActive && transcriptSettled,
+    onSendError
   })
 
   const waitingForSession = draftKey

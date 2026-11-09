@@ -1,3 +1,5 @@
+import { sanitizeRendererSettingsUpdate } from './renderer-settings-update'
+import { confirmBrowserPasswordOwner } from '../browser-passwords/browser-password-reauth'
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
@@ -12,17 +14,18 @@ import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
-import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { applyAgentStatusHooksEnabled } from '../agent-hooks/installation/managed-agent-hook-controls'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
+import { recordManagedHookInstallFailure } from '../agent-hooks/installation/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
-import { applyBrowserSessionProxies } from '../browser/sessions/browser-session-proxy'
+import { applyBrowserSessionProxies } from '../browser/sessions/proxy/browser-session-proxy'
 import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
+import { registerCustomAppIconHandlers } from './custom-app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-themes/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../shared/terminal/appearance/terminal-line-height-settings'
@@ -47,21 +50,6 @@ import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtim
 const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
 const registryRoot = getRuntimeEnvironmentRegistryRoot
 
-type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
-  terminalScrollbackBytes?: unknown
-}
-
-function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<GlobalSettings> {
-  const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
-    args as LegacyTerminalScrollbackSettingsUpdate
-  void _legacyScrollbackBytes
-  // Plugin consent and enablement require main's reviewed-fingerprint handlers.
-  delete sanitizedArgs.pluginConsents
-  delete sanitizedArgs.disabledPlugins
-  delete sanitizedArgs.pluginExternalHostGrants
-  return sanitizedArgs
-}
-
 // Electron menus do not react to settings; rebuild appearance checkboxes after writes.
 const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
   'showTasksButton',
@@ -74,6 +62,7 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  registerCustomAppIconHandlers(store)
   ipcMain.handle(
     'agentAwake:getStatus',
     () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }
@@ -179,6 +168,15 @@ export function registerSettingsHandlers(
     }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
+    }
+    if (
+      sanitizedArgs.browserPasswordsFillRequiresReauth === false &&
+      (store.getSettings().browserPasswordsFillRequiresReauth !== true ||
+        !(await confirmBrowserPasswordOwner('turn off saved password fill authentication', {
+          always: true
+        })))
+    ) {
+      delete sanitizedArgs.browserPasswordsFillRequiresReauth
     }
     // No-op UI saves must not inflate settings_changed adoption telemetry.
     const before = store.getSettings()

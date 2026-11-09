@@ -1,4 +1,4 @@
-import type { DnrRule } from '../rule-types'
+import type { DnrRule } from '../rule-compilation/rule-types'
 
 /** chrome.declarativeNetRequest constants (declarative_net_request.webidl, Chromium 150). */
 export const DNR_API_CONSTANTS = {

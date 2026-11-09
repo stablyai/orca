@@ -56,27 +56,11 @@ export function useMobileTasksProjectDetailLoading<
   useLayoutEffect(() => {
     resetPrFiles()
   }, [projectRowItem, client, projectRowDetailRefreshSeq, resetPrFiles])
+  // Keyed on row id: field edits, merges and reconnects hand over a new object for the same row.
+  const projectRowId = projectRowItem?.id ?? null
   useEffect(() => {
-    if (!projectRowItem) {
-      setProjectRowDetail(null)
-      setProjectRowDetailLoading(false)
-      setProjectRowDetailError('')
-      setProjectTitleDraft('')
-      setProjectBodyDraft('')
-      setProjectCommentDraft('')
-      setProjectEditingCommentId(null)
-      setProjectEditingCommentDraft('')
-      setProjectReviewersDraft('')
-      setExpandedPrFilePath(null)
-      setPrFileCommentDrafts({})
-      setProjectFieldDrafts({})
-      return
-    }
-
-    const type = projectRowType(projectRowItem)
-    const slug = splitRepositorySlug(projectRowItem.content.repository)
-    setProjectTitleDraft(projectRowItem.content.title)
-    setProjectBodyDraft(projectRowItem.content.body ?? '')
+    setProjectTitleDraft(projectRowItem?.content.title ?? '')
+    setProjectBodyDraft(projectRowItem?.content.body ?? '')
     setProjectCommentDraft('')
     setProjectEditingCommentId(null)
     setProjectEditingCommentDraft('')
@@ -84,13 +68,27 @@ export function useMobileTasksProjectDetailLoading<
     setExpandedPrFilePath(null)
     setPrFileCommentDrafts({})
     setProjectFieldDrafts(
-      Object.fromEntries(
-        editableProjectFields(githubProjectTable).map((field) => [
-          field.id,
-          projectFieldDraftValue(projectRowItem, field)
-        ])
-      )
+      projectRowItem
+        ? Object.fromEntries(
+            editableProjectFields(githubProjectTable).map((field) => [
+              field.id,
+              projectFieldDraftValue(projectRowItem, field)
+            ])
+          )
+        : {}
     )
+  }, [projectRowId])
+
+  useEffect(() => {
+    if (!projectRowItem) {
+      setProjectRowDetail(null)
+      setProjectRowDetailLoading(false)
+      setProjectRowDetailError('')
+      return
+    }
+
+    const type = projectRowType(projectRowItem)
+    const slug = splitRepositorySlug(projectRowItem.content.repository)
     setProjectRowDetail(null)
     setProjectRowDetailError('')
 
@@ -153,14 +151,7 @@ export function useMobileTasksProjectDetailLoading<
     return () => {
       stale = true
     }
-  }, [
-    activeGitHubProjectHost,
-    client,
-    githubProjectTable,
-    projectRowDetailRefreshSeq,
-    projectRowItem,
-    tasksSupported
-  ])
+  }, [activeGitHubProjectHost, client, projectRowDetailRefreshSeq, projectRowItem, tasksSupported])
   return model
 }
 

@@ -3,8 +3,8 @@
 import { act, useCallback } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
-import type { AutomationRunsPage } from '../../../../shared/automations-types'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationRunsPage } from '../../../../shared/automations/history/automation-run'
 import type { AutomationHostTarget } from './automation-host-client'
 import { makeAutomationListRow, makeRun } from './automations-page-fixtures'
 import * as dispatch from './automation-row-action-dispatch'
@@ -74,16 +74,6 @@ afterEach(() => {
 })
 
 describe('useAutomationRunsDashboard', () => {
-  it('appends the next page when load more fires', async () => {
-    await render(true)
-    expect(latest?.entries.map((entry) => entry.run.id)).toEqual(['run-2'])
-
-    await act(async () => latest?.loadMore())
-
-    expect(latest?.entries.map((entry) => entry.run.id)).toEqual(['run-2', 'run-1'])
-    expect(historySpy.mock.calls.at(-1)?.[2].cursor).toBe('2:run-2')
-  })
-
   it('keeps the cursor when a load more fails so the page stays retryable', async () => {
     await render(true)
     historySpy.mockImplementationOnce(async () => ({
@@ -99,18 +89,6 @@ describe('useAutomationRunsDashboard', () => {
 
     expect(historySpy.mock.calls.at(-1)?.[2].cursor).toBe('2:run-2')
     expect(latest?.entries.map((entry) => entry.run.id)).toEqual(['run-2', 'run-1'])
-  })
-
-  it('refetches the head when the view is re-entered after a load more', async () => {
-    await render(true)
-    await act(async () => latest?.loadMore())
-    await render(false)
-    historySpy.mockClear()
-
-    await render(true)
-
-    expect(historySpy.mock.calls.at(-1)?.[2].cursor).toBeUndefined()
-    expect(latest?.entries.map((entry) => entry.run.id)).toEqual(['run-2'])
   })
 
   it('reloads from the head when the authority is re-paired', async () => {

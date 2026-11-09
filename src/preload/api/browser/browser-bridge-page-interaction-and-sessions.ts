@@ -162,6 +162,12 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:grabActionShortcut', listener)
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
   },
+  onGuestEscape: (callback: (args: { browserPageId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { browserPageId: string }) =>
+      callback(data)
+    ipcRenderer.on('browser:guestEscape', listener)
+    return () => ipcRenderer.removeListener('browser:guestEscape', listener)
+  },
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
   onSessionProfilesChanged: (callback: () => void): (() => void) => {
     const listener = (): void => callback()

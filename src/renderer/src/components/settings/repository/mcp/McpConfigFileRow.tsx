@@ -1,28 +1,29 @@
-import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp-config-inspection'
+import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 
 import { Button } from '../../../ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type McpConfigFileRowProps = {
   config: LoadedMcpConfigInspection
   onOpen: (config: LoadedMcpConfigInspection) => void
 }
 
-function statusLabel(config: LoadedMcpConfigInspection): string {
+function statusLabel(config: LoadedMcpConfigInspection, t: Translate = translate): string {
   if (config.readError) {
-    return translate('settings.mcp.unreadable', 'Unreadable')
+    return t('settings.mcp.unreadable', 'Unreadable')
   }
   if (config.status === 'missing') {
-    return translate('settings.mcp.notFound', 'Not found')
+    return t('settings.mcp.notFound', 'Not found')
   }
   if (config.status === 'invalid') {
-    return translate('settings.mcp.invalidJson', 'Invalid JSON')
+    return t('settings.mcp.invalidJson', 'Invalid JSON')
   }
   if (config.servers.length === 0) {
-    return translate('settings.mcp.noServers', 'No servers')
+    return t('settings.mcp.noServers', 'No servers')
   }
-  return translate('settings.mcp.serverCount', '{{count}} servers', {
+  return t('settings.mcp.serverCount', '{{count}} servers', {
     count: config.servers.length,
     defaultValue_one: '{{count}} server'
   })
@@ -38,19 +39,23 @@ function statusClassName(config: LoadedMcpConfigInspection): string {
   return 'border-border/60 bg-muted/60 text-muted-foreground'
 }
 
-function serverDetailLabel(server: LoadedMcpConfigInspection['servers'][number]): string {
+function serverDetailLabel(
+  server: LoadedMcpConfigInspection['servers'][number],
+  t: Translate = translate
+): string {
   if (server.transport === 'http') {
-    return server.url ?? translate('settings.mcp.httpServer', 'HTTP server')
+    return server.url ?? t('settings.mcp.httpServer', 'HTTP server')
   }
   if (server.transport === 'stdio') {
-    return server.command ?? translate('settings.mcp.stdioServer', 'stdio server')
+    return server.command ?? t('settings.mcp.stdioServer', 'stdio server')
   }
-  return server.issue ?? translate('settings.mcp.invalidServer', 'Invalid server')
+  return server.issue ?? t('settings.mcp.invalidServer', 'Invalid server')
 }
 
 export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): React.JSX.Element {
+  const t = useTranslate()
   return (
-    <div className="space-y-2 px-3 py-2.5">
+    <div data-settings-row="" className="space-y-2 py-3">
       <div className="flex items-center gap-2">
         {config.status === 'valid' && !config.readError ? (
           <CheckCircle2 className="size-3.5 shrink-0 text-muted-foreground" />
@@ -61,9 +66,9 @@ export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): Rea
           <div className="flex min-w-0 items-center gap-2">
             <p className="truncate text-sm font-medium">
               {config.candidate.relativePath === '.mcp.json'
-                ? translate('settings.mcp.workspace', 'Workspace')
+                ? t('settings.mcp.workspace', 'Workspace')
                 : config.candidate.relativePath === '.claude/mcp.json'
-                  ? translate('settings.mcp.claudeWorkspace', 'Claude workspace')
+                  ? t('settings.mcp.claudeWorkspace', 'Claude workspace')
                   : config.candidate.label}
             </p>
             <p className="truncate font-mono text-[11px] text-muted-foreground">
@@ -74,11 +79,11 @@ export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): Rea
         <span
           className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusClassName(config)}`}
         >
-          {statusLabel(config)}
+          {statusLabel(config, t)}
         </span>
         {config.exists ? (
           <Button variant="outline" size="xs" onClick={() => onOpen(config)}>
-            {translate('auto.components.settings.McpConfigFileRow.e720c139cd', 'Open')}
+            {t('auto.components.settings.McpConfigFileRow.e720c139cd', 'Open')}
           </Button>
         ) : null}
       </div>
@@ -102,11 +107,11 @@ export function McpConfigFileRow({ config, onOpen }: McpConfigFileRowProps): Rea
                   </span>
                 </div>
                 <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                  {serverDetailLabel(server)}
+                  {serverDetailLabel(server, t)}
                 </p>
                 {server.env && Object.keys(server.env).length > 0 ? (
                   <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                    {translate('auto.components.settings.McpConfigFileRow.b145eb6009', 'env:')}{' '}
+                    {t('auto.components.settings.McpConfigFileRow.b145eb6009', 'env:')}{' '}
                     {Object.entries(server.env)
                       .map(([key, value]) => `${key}=${value}`)
                       .join(', ')}

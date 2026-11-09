@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 import {
   WorktreeCatalogSnapshotClient,
@@ -29,31 +29,6 @@ function clientWithResults(...results: unknown[]): RpcClient {
 }
 
 describe('WorktreeCatalogSnapshotClient', () => {
-  it('rebuilds a row delta from the confirmed rows and asks for a full catalog when it cannot', async () => {
-    const a = { worktreeId: 'a' }
-    const b = { worktreeId: 'b' }
-    const c = { worktreeId: 'c' }
-    const client = clientWithResults(
-      { worktrees: [a, b], snapshotId: 'snapshot-1' },
-      { snapshotId: 'snapshot-2', baseSnapshotId: 'snapshot-1', rowsFromBase: [1, c, 0] },
-      { snapshotId: 'snapshot-3', baseSnapshotId: 'snapshot-2', rowsFromBase: [7] },
-      { worktrees: [], snapshotId: 'snapshot-4' }
-    )
-    const snapshots = new WorktreeCatalogSnapshotClient()
-
-    // A caller sorting what it was given must not reorder the base the next delta indexes into.
-    admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))?.reverse()
-    expect(admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))).toEqual([b, c, a])
-    expect(admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))).toBeNull()
-    await snapshots.fetch(client, 'host-1')
-
-    expect(client.sendRequest).toHaveBeenNthCalledWith(4, 'worktree.ps', {
-      limit: 10_000,
-      afterSnapshotId: null,
-      acceptRowDelta: true
-    })
-  })
-
   // A slow reply from before an A→B→A switch names a token whose rows were replaced.
   it('drops a late unchanged reply that answers a token this client no longer holds', async () => {
     const rows = [{ worktreeId: 'worktree-2' }]

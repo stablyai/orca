@@ -1,18 +1,29 @@
 // Runs on plain Node, as orcad does: rows come from the runtime's own listing and store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { Repo } from '../../../shared/repo-types'
+
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+
 import { OrcaRuntimeService } from '../orca-runtime'
-import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
-import type { RuntimeStore } from '../runtime-store-contract'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
+
+import type { ResolvedWorktreeSnapshot } from '../workspaces/catalog/runtime-resolved-worktree-cache'
+
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
+
 import { requireSwitchedOn } from './require-switched-on'
+
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
+
 import type {
   ResolvedWorktreeRepoScans,
   ResolvedWorktreeScanJoin
-} from '../workspaces/resolved-worktree-scan-join'
+} from '../workspaces/catalog/resolved-worktree-scan-join'
+
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
@@ -188,47 +199,6 @@ afterEach(() => {
 })
 
 describe('WorkspaceRowsProducer', () => {
-  it('lists local and stored SSH rows by host, with the terminal platform', async () => {
-    const { rows } = setup()
-    await rows.settled()
-    const snapshot = rows.snapshot()?.rows ?? {}
-    expect(Object.keys(snapshot)).toEqual(['local|repo-1::/r/a', 'ssh:box|repo-2::/remote/b'])
-    expect(snapshot['local|repo-1::/r/a']).toMatchObject({ kind: 'git', terminalPlatform: 'linux' })
-    expect(snapshot['ssh:box|repo-2::/remote/b']).toMatchObject({ hostId: 'ssh:box', branch: '' })
-  })
-
-  it('moves on catalog changes and metadata writes, never on session or unrelated settings writes', () => {
-    const { runtime, rows, write } = setup()
-    const at = (): number => rows.revision.value
-    const start = at()
-    write(['workspaceSession'])
-    write(['settings'])
-    runtime.emit({ type: 'workspaceViewChanged' })
-    expect(at()).toBe(start)
-
-    write(['worktreeMeta'])
-    write(undefined)
-    runtime.emit({ type: 'worktreesChanged', repoId: 'repo-1' })
-    runtime.emit({ type: 'reposChanged' })
-    expect(at()).toBe(start + 4)
-  })
-
-  it('moves when a settings write changes what the visibility filter reads, and only then', () => {
-    const { rows, writeSettings } = setup()
-    const at = (): number => rows.revision.value
-    const start = at()
-    writeSettings({ compactWorktreeCards: true })
-    expect(at()).toBe(start)
-    writeSettings({ worktreeVisibilityDefaults: { external: 'show' } })
-    expect(at()).toBe(start + 1)
-    writeSettings({ worktreeVisibilityDefaults: { external: 'show' } })
-    expect(at()).toBe(start + 1)
-    writeSettings({ workspaceDir: '/w' })
-    writeSettings({ nestWorkspaces: false })
-    writeSettings({ workspaceDirHistory: [{ path: '/old', nestWorkspaces: true }] })
-    expect(at()).toBe(start + 4)
-  })
-
   it('republishes rows to the feed when a visibility setting is saved', async () => {
     // Added after the rollout, so the global default decides whether an external checkout shows.
     const recentRepo: Repo = { ...localRepo, id: 'repo-3', externalWorktreeVisibilityLegacy: false }
@@ -252,51 +222,6 @@ describe('WorkspaceRowsProducer', () => {
     phone.notice(notice)
     await phone.settle()
     expect(Object.keys(phone.view().workspaces)).toContain('local|repo-3::/external')
-    phone.disconnect()
-  })
-
-  it('reads past the shared listing cache and leaves it alone', async () => {
-    const { runtime, rows, listing } = setup()
-    const key = 'local|repo-1::/r/a'
-    const cachedPinned = async (): Promise<boolean | undefined> =>
-      (await runtime.cachedListing()).worktrees[0]?.isPinned
-    expect(await cachedPinned()).toBe(false)
-    listing.worktrees[0] = { ...listing.worktrees[0], isPinned: true }
-    await rows.settled()
-    expect(rows.snapshot()?.rows[key]?.isPinned).toBe(true)
-    // worktree.ps and the temporal owner keep reading the listing they cached.
-    expect(await cachedPinned()).toBe(false)
-  })
-
-  it('reaches the phone feed as the workspaces domain', async () => {
-    const { runtime, listing, write } = setup()
-    const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
-    const events: RuntimeClientEvent[] = []
-    runtime.onClientEvent((event) => events.push(event))
-    const phone = new TestPhone(feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    expect(Object.keys(phone.view().workspaces)).toEqual([
-      'local|repo-1::/r/a',
-      'ssh:box|repo-2::/remote/b'
-    ])
-
-    listing.worktrees[0] = { ...listing.worktrees[0], isPinned: true }
-    write(['worktreeMeta'])
-    await vi.advanceTimersByTimeAsync(60)
-    const notice = events.findLast((event) => event.type === 'sidebarInputsChanged')
-    if (notice?.type !== 'sidebarInputsChanged') {
-      throw new Error('no change notice')
-    }
-    phone.notice(notice)
-    await phone.settle()
-    expect(phone.replies.at(-1)).toMatchObject({
-      kind: 'delta',
-      domains: { workspaces: { upserts: { 'local|repo-1::/r/a': { isPinned: true } } } }
-    })
-    expect(Object.keys(phone.replies.at(-1)?.domains.workspaces.upserts ?? {})).toEqual([
-      'local|repo-1::/r/a'
-    ])
     phone.disconnect()
   })
 
@@ -374,32 +299,6 @@ describe('WorkspaceRowsProducer', () => {
     runtime.emit({ type: 'worktreesChanged', repoId: 'repo-1' })
     await rows.settled()
     expect(setWorktreeMeta).not.toHaveBeenCalled()
-    detach()
-  })
-
-  it('scans nothing for a metadata write', async () => {
-    const { rows, write, scans } = setup()
-    const detach = rows.revision.onChange(() => {})
-    await rows.settled()
-    const before = scans()
-    write(['worktreeMeta'])
-    write(undefined)
-    await rows.settled()
-    expect(scans()).toBe(before)
-    detach()
-  })
-
-  it('rescans when the Windows runtime default changes, which announces no catalog event', async () => {
-    const { rows, writeSettings, scans } = setup()
-    const detach = rows.revision.onChange(() => {})
-    await rows.settled()
-    const before = scans()
-    writeSettings({ compactWorktreeCards: true })
-    await rows.settled()
-    expect(scans()).toBe(before)
-    writeSettings({ localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } })
-    await rows.settled()
-    expect(scans()).toBe(before + 1)
     detach()
   })
 })

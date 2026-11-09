@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { isTwinRepo, runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
-import { projectViewCacheKeyTarget } from '@/store/github/cache-identity'
+import { projectViewCacheKeyTarget } from '@/store/github/cache/cache-identity'
 import type { GitHubWorkItemProjectOrigin } from './github-work-item-identity'
 
 // Route Project edits to the row’s repository; callers throw on failed IPC results for optimistic rollback.

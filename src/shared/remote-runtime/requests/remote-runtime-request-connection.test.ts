@@ -1,3 +1,6 @@
+import { federationRelayPrefix } from '../../../main/runtime/orchestration/federation/relay/federation-relay-prefix'
+import * as memoryLimits from '../remote-runtime-memory-limits'
+import { sendRemoteRuntimeRequest } from '../remote-runtime-client'
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
@@ -58,6 +61,45 @@ afterEach(async () => {
 })
 
 describe('RemoteRuntimeRequestConnection', () => {
+  it('serializes a fitting 50-item relay page once with the exact socket envelope and maximal token', async () => {
+    const server = await createServer(undefined, 'x'.repeat(65536))
+    const serialize = vi.spyOn(memoryLimits, 'serializeRemoteRuntimeRpcRequest')
+    onTestFinished(() => serialize.mockRestore())
+    const items = Array.from({ length: 50 }, (_, i) => ({
+      dispatch_id: 'dispatch_remote',
+      direction: 'to_worker' as const,
+      sequence: i + 1,
+      message_id: `m${i}`,
+      kind: 'control_message',
+      payload: JSON.stringify({ body: 'x'.repeat(12 * 1024) })
+    }))
+    const params = { dispatchId: 'dispatch_remote', items }
+    let selectedThrough = 0
+    const response = await sendRemoteRuntimeRequest(
+      server.pairing,
+      'orchestration.federationImport',
+      params,
+      5000,
+      { orchestrationRequestId: 'before' },
+      undefined,
+      [],
+      federationRelayPrefix('dispatch_remote', items, (last) => {
+        selectedThrough = last
+      })
+    )
+    expect(response.ok).toBe(true)
+    expect(server.requests).toHaveLength(1)
+    expect(server.requests[0]).toMatchObject({
+      params,
+      orchestrationRequestId: 'relay_import_dispatch_remote_50'
+    })
+    expect(selectedThrough).toBe(50)
+    expect(Buffer.byteLength(JSON.stringify(server.requests[0]))).toBeLessThanOrEqual(
+      memoryLimits.REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES
+    )
+    expect(serialize).toHaveBeenCalledTimes(1)
+  })
+
   async function reuseWithCancellation(wait: 'admission' | 'preflight') {
     _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
     const exec = vi.spyOn(gitRunner, 'gitExecFileAsync')
@@ -175,7 +217,10 @@ describe('RemoteRuntimeRequestConnection', () => {
   })
 })
 
-async function createServer(reply?: () => Promise<unknown>): Promise<TestServer> {
+async function createServer(
+  reply?: () => Promise<unknown>,
+  deviceToken = 'device-token'
+): Promise<TestServer> {
   const serverKeyPair = generateKeyPair()
   const requests: unknown[] = []
   const auths: unknown[] = []
@@ -195,7 +240,12 @@ async function createServer(reply?: () => Promise<unknown>): Promise<TestServer>
       }
       const frame = data.toString()
       if (!sharedKey) {
-        const hello = JSON.parse(frame) as { type: string; publicKeyB64: string }
+        const hello: { type: string; publicKeyB64?: string } = JSON.parse(frame)
+        if (!hello.publicKeyB64) {
+          // Legacy-only host: refuses a v2 hello the way hosts before v2 do.
+          ws.close(4001, 'Invalid e2ee_hello')
+          return
+        }
         const clientPublicKey = publicKeyFromBase64(hello.publicKeyB64)
         sharedKey = deriveSharedKey(serverKeyPair.secretKey, clientPublicKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
@@ -211,7 +261,7 @@ async function createServer(reply?: () => Promise<unknown>): Promise<TestServer>
         auths.push(auth)
         expect(auth).toEqual({
           type: 'e2ee_auth',
-          deviceToken: 'device-token',
+          deviceToken,
           clientCapabilities: remoteRuntimeClientCapabilities()
         })
         authenticated = true
@@ -246,7 +296,7 @@ async function createServer(reply?: () => Promise<unknown>): Promise<TestServer>
     encodePairingOffer({
       v: 2,
       endpoint: `ws://127.0.0.1:${address.port}`,
-      deviceToken: 'device-token',
+      deviceToken,
       publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
     })
   )

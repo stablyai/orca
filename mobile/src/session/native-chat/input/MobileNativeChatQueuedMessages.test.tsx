@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import {
   mobileQueuedMessageCards,
@@ -5,11 +6,21 @@ import {
 } from '../../mobile-structured-queued-message-cards'
 
 import { createElement } from 'react'
+import type * as QueuedCardRowModule from '../../MobileQueuedMessageCardRow'
+import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
+import {
+  useMobileNativeChatLowerGeometry,
+  useMobileNativeChatLowerRegion
+} from '../mobile-native-chat-lower-region-context'
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
+import {
+  useMobileNativeChatComposerTray,
+  type MobileNativeChatComposerTray
+} from '../composer/use-mobile-native-chat-composer-tray'
 import { useMobileQueuedMessageComposerActions } from '../../use-mobile-queued-message-composer-actions'
 import type { MobileStructuredAgentMutate } from '../../use-mobile-structured-agent-mutation'
 import type {
@@ -17,7 +28,27 @@ import type {
   AgentSessionQueuedMessageMoveResult
 } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionMutationResult } from '../../mobile-structured-agent-session-rpc'
+import {
+  MobileAgentMessageContext,
+  MobileAgentMessageOpenContext,
+  createMobileAgentMessageSource
+} from '../transcript/mobile-agent-message-context'
+import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
+import { formatOrcaSessionAddress } from '../../../../../src/shared/orca-session-address'
+import { testOrcaSessionId } from '../../../../../src/shared/orca-session-address-test-fixture'
 
+const rowRenders = vi.hoisted(() => ({ count: 0 }))
+vi.mock('../../MobileQueuedMessageCardRow', async (importOriginal) => {
+  const original = await importOriginal<typeof QueuedCardRowModule>()
+  return {
+    MobileQueuedMessageCardRow: (
+      props: Parameters<typeof original.MobileQueuedMessageCardRow>[0]
+    ) => {
+      rowRenders.count++
+      return createElement(original.MobileQueuedMessageCardRow, props)
+    }
+  }
+})
 let fontScale = 1
 vi.mock('../../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
@@ -44,6 +75,7 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({
   Image: 'Image',
   AlertCircle: 'AlertCircle',
+  ArrowUpRight: 'ArrowUpRight',
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
@@ -58,6 +90,12 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('../../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
+vi.mock('./MobileNativeChatBackgroundTasks', () => ({
+  MobileNativeChatBackgroundTasks: 'BackgroundTasks'
+}))
+vi.mock('./MobileNativeChatDockedTaskList', () => ({
+  MobileNativeChatDockedTaskList: 'DockedTaskList'
+}))
 
 vi.mock('../../MobileQueuedMessageComposer', () => ({
   MobileQueuedMessageComposer: 'QueuedMessageComposer'
@@ -75,7 +113,6 @@ function card(
     hold: overrides.state === 'returned' ? 'returned' : 'turn',
     needsAttention: false,
     caption: null,
-    attribution: null,
     ...overrides
   }
 }
@@ -131,6 +168,142 @@ describe('MobileNativeChatQueuedMessages', () => {
       )
     })
     expect(sheet(mounted).props.visible).toBe(false)
+  })
+
+  it("names a queued message's sender as its chat is now titled, and opens that chat", async () => {
+    const coord = testOrcaSessionId('coord-chat')
+    const from: AgentMessageSource = {
+      kind: 'agent',
+      senders: [
+        {
+          party: {
+            address: formatOrcaSessionAddress(coord),
+            terminalHandle: null,
+            orcaSessionId: coord
+          },
+          name: 'Codex Chat',
+          relation: 'coordinator'
+        }
+      ],
+      orchestration: null
+    }
+    const source = createMobileAgentMessageSource()
+    source.update(
+      [
+        {
+          type: 'agent-session',
+          id: `agent-session:${coord}`,
+          sessionId: coord,
+          agent: 'codex',
+          title: 'Release coordinator',
+          isActive: false
+        }
+      ],
+      [],
+      0
+    )
+    const open = vi.fn()
+    const mounted = create(createElement('View'))
+    renderer = mounted
+    await act(async () => {
+      mounted.update(
+        createElement(
+          MobileAgentMessageOpenContext.Provider,
+          { value: open },
+          createElement(
+            MobileAgentMessageContext.Provider,
+            { value: source },
+            createElement(MobileNativeChatQueuedMessages, {
+              cards: [card({ messageId: 'q', from })]
+            })
+          )
+        )
+      )
+    })
+    const sender = mounted.root.find(
+      (node) =>
+        String(node.type) === 'Pressable' &&
+        node.findAll((child) => child.children.includes('Release coordinator')).length > 0
+    )
+    expect(sender.props.accessibilityRole).toBe('button')
+    await act(async () => sender.props.onPress())
+    expect(open).toHaveBeenCalledWith(from, from.senders[0])
+  })
+
+  it('the empty chord presses only the head card where its own button would, and offers it only while that press would act, across chat switches', async () => {
+    let tray!: MobileNativeChatComposerTray
+    function Tray(props: Parameters<typeof useMobileNativeChatComposerTray>[0]['queued']) {
+      tray = useMobileNativeChatComposerTray({
+        queued: props,
+        taskList: null,
+        backgroundTasks: null
+      })
+      return createElement('View', null, tray.content)
+    }
+    const settles: ((accepted: boolean) => void)[] = []
+    const onSend = vi.fn(() => new Promise<boolean>((resolve) => settles.push(resolve)))
+    const chatA = { sessionKey: 'a', cards: [card({ messageId: 'a1' }), card({ messageId: 'a2' })] }
+    const chatB = { sessionKey: 'b', cards: [card({ messageId: 'b1' })] }
+    const show = async (
+      chat: typeof chatA,
+      props: Partial<Parameters<typeof Tray>[0]> = {}
+    ): Promise<void> => {
+      await act(async () => {
+        renderer ??= create(createElement('View'))
+        renderer.update(createElement(Tray, { ...chat, agentWorking: true, onSend, ...props }))
+      })
+    }
+    const press = (alternateSteers = true) => {
+      let pressed = false
+      act(() => {
+        pressed = tray.steerHead!.run(alternateSteers)
+      })
+      return pressed
+    }
+
+    await show(chatA)
+    expect(tray.steerHead!.steers(true)).toBe(true)
+    expect(press()).toBe(true)
+    expect(onSend).toHaveBeenLastCalledWith('a1')
+    // On its way: neither offered nor admitted again, like a second tap.
+    expect(tray.steerHead!.steers(true)).toBe(false)
+    expect(press()).toBe(false)
+
+    // Another chat's head is its own; A settling later must not clear B's hold.
+    await show(chatB)
+    expect(tray.steerHead!.steers(true)).toBe(true)
+    expect(press()).toBe(true)
+    await act(async () => settles[0]!(true))
+    expect(tray.steerHead!.steers(true)).toBe(false)
+    expect(press()).toBe(false)
+    await act(async () => settles[1]!(true))
+    expect(tray.steerHead!.steers(true)).toBe(true)
+
+    // Back to A, whose list remounts: an action started there still holds until it settles.
+    await show(chatA)
+    expect(press()).toBe(true)
+    await show(chatB)
+    await show(chatA)
+    expect(tray.steerHead!.steers(true)).toBe(false)
+    expect(press()).toBe(false)
+    await act(async () => settles[2]!(true))
+    expect(tray.steerHead!.steers(true)).toBe(true)
+
+    // No turn running (the paused queue after Stop): the head card's own Send.
+    await show(chatA, { agentWorking: false })
+    expect(tray.steerHead!.steers(false)).toBe(true)
+    const refusals: [Partial<Parameters<typeof Tray>[0]>, boolean][] = [
+      [{}, false],
+      [{ steerHeld: true }, true],
+      [{ cards: [card({ messageId: 'a1', command: true }), card({ messageId: 'a2' })] }, true]
+    ]
+    for (const [props, alternateSteers] of refusals) {
+      await show(chatA, props)
+      expect(tray.steerHead!.steers(alternateSteers)).toBe(false)
+      const sends = onSend.mock.calls.length
+      expect(press(alternateSteers)).toBe(false)
+      expect(onSend).toHaveBeenCalledTimes(sends)
+    }
   })
 
   it('runs one action per card at a time, however fast its controls are tapped', async () => {
@@ -343,3 +516,100 @@ describe('MobileNativeChatQueuedMessages', () => {
     expect(mutate).toHaveBeenCalledTimes(2)
   })
 })
+
+for (const population of [10, 100]) {
+  it(`does no queue population work on geometry-only updates with ${population} cards`, async () => {
+    const root = document.createElement('div')
+    root.dataset.testid = 'native-chat-view'
+    const viewport = document.createElement('div')
+    const content = document.createElement('div')
+    root.append(viewport)
+    viewport.append(content)
+    document.body.append(root)
+    let height = 180
+    Object.defineProperties(viewport, {
+      clientHeight: { get: () => height },
+      clientWidth: { value: 300 },
+      scrollHeight: { value: 300 }
+    })
+    vi.spyOn(root, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 300, 500))
+    let visits = 0
+    let operationRenders = 0
+    let observedHeight = 0
+    function GeometryConsumer() {
+      observedHeight = useMobileNativeChatLowerGeometry().viewportHeight
+      return null
+    }
+    function OperationConsumer() {
+      useMobileNativeChatLowerRegion()
+      operationRenders++
+      return null
+    }
+    const cards = Array.from({ length: population }, (_, index) => {
+      const item = card({ messageId: `queued-${index}` })
+      Object.defineProperty(item, 'messageId', {
+        get: () => {
+          visits++
+          return `queued-${index}`
+        }
+      })
+      return item
+    })
+    let mounted: ReactTestRenderer | undefined
+    const paint = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    const render = (items: MobileQueuedMessageCard[]) => (
+      <MobileNativeChatLowerRegion>
+        <GeometryConsumer />
+        <OperationConsumer />
+        <MobileNativeChatQueuedMessages cards={items} />
+      </MobileNativeChatLowerRegion>
+    )
+    try {
+      await act(async () => {
+        mounted = create(render(cards), {
+          createNodeMock: (element) => {
+            const props = element.props
+            if (
+              typeof props === 'object' &&
+              props !== null &&
+              'testID' in props &&
+              props.testID === 'native-chat-lower-scroll'
+            ) {
+              return { getScrollableNode: () => viewport }
+            }
+            return element.type === 'ScrollView' ? { scrollToEnd: () => {} } : content
+          }
+        })
+      })
+      await act(paint)
+      await act(paint)
+      expect(observedHeight).toBe(180)
+      visits = 0
+      operationRenders = 0
+      rowRenders.count = 0
+      await act(async () => {
+        height = 120
+        window.dispatchEvent(new Event('resize'))
+        await paint()
+      })
+      expect(observedHeight).toBe(120)
+      expect.soft(operationRenders).toBe(0)
+      expect.soft(rowRenders.count).toBe(0)
+      expect.soft(visits).toBe(0)
+      await act(async () =>
+        mounted!.update(
+          render([...cards, card({ messageId: 'appended', text: 'A real new message' })])
+        )
+      )
+      expect(rowRenders.count).toBeGreaterThan(0)
+      expect(visits).toBeGreaterThan(0)
+      expect(
+        mounted!.root.findAllByProps({ children: 'A real new message' }).length
+      ).toBeGreaterThan(0)
+    } finally {
+      await act(async () => mounted?.unmount())
+      root.remove()
+      vi.restoreAllMocks()
+    }
+  })
+}

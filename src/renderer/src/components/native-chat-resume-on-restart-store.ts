@@ -22,11 +22,15 @@ export const {
 } = localNativeChatRestartStore
 
 export function useNativeChatRestartOffer(enabled: boolean, store = localNativeChatRestartStore) {
+  // Launch reads the resume preference once, so it waits until settings have loaded.
+  const settingsLoaded = useAppStore((state) => state.settings !== null)
   useEffect(() => {
-    if (enabled && store.target.kind === 'local') {
-      launch ??= loadLaunchOffer(store).finally(markNativeChatLaunchResumeDecided)
+    if (enabled && settingsLoaded && store.target.kind === 'local') {
+      if (launch == null) {
+        launch = loadLaunchOffer(store).finally(markNativeChatLaunchResumeDecided)
+      }
     }
-  }, [enabled, store])
+  }, [enabled, settingsLoaded, store])
   return useSyncExternalStore(
     store.subscribe,
     store.getNativeChatRestartOffer,

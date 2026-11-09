@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 // Require only unguarded consumer fields; unread host metadata must not become a compatibility gate.

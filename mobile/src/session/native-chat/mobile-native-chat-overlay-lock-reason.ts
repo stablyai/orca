@@ -1,4 +1,4 @@
-import type { ConnectionState } from '../../transport/types'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import {
   isMobileNativeChatAgentConfirmed,
   type MobileNativeChatTab
