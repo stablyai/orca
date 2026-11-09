@@ -8,16 +8,13 @@ import { lucideColorFilter } from '../settings/LucideColor';
 import { playHapticFeedback } from '../settings/HapticFeedback';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { refreshDesktopConnection } from '../transport/DesktopConnections';
-import { PairingConnection, PAIRING_CODE_REFUSED } from '../pairing/PairingConnection';
+import { exchangePairingTicket, PairingConnection, PAIRING_CODE_REFUSED } from '../pairing/PairingConnection';
 import { beginRelayPairing, finishRelayPairing, rememberRelayPairingMove, prepareRelayPairing, commitRelayPairing } from '../transport/RelayPairing';
-import { RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { parsePairingOffer, PairingOffer } from '../transport/E2eeV2Session';
 import { RelayMove } from '../transport/RelayProtocol';
 import { hostIdFor, hostRemovalTimestamp, hostPairingTimestamp, saveHost, clearHostPairingJournal, HostMeta, PairingJournal } from '../storage/HostStore';
 import { readHostMachineDescriptor } from '../storage/HostMachine';
-import { randomBytes, toHex } from '../transport/crypto/Bytes';
 
-const TICKET_EXCHANGE_CAPABILITY = 'pairing.ticket-exchange.v1';
 const CAMERA_PERMISSION = 'ohos.permission.CAMERA';
 const PAIR_TIMEOUT_MS = 25000;
 const PAIRED_HOLD_MS = 450;
@@ -291,54 +288,23 @@ struct PairScan {
       if (this.timedOut) { throw new Error('Pairing timed out'); }
       let client = connected.client;
       let hostName = endpoint;
-      let capabilities: string[] = [];
-      let status: ESObject = JSON.parse(connected.status.result);
-      if (status && typeof status['machineName'] === 'string' && status['machineName'].length > 0) {
-        hostName = status['machineName'];
-      }
-      if (status && Array.isArray(status['capabilities'])) {
-        capabilities = (status['capabilities'] as string[]).filter((value: string): boolean => typeof value === 'string');
-      }
+      let status = connected.status;
+      let reportedName = status?.['machineName'];
+      if (typeof reportedName === 'string' && reportedName.length > 0) { hostName = reportedName; }
       this.appendLog(`host: ${hostName}`);
 
       let meta: HostMeta = { id: hostId, name: hostName, endpoint: endpoint,
         publicKeyB64: offer.publicKeyB64, lastConnected: Date.now() };
       if (status) {
-        let descriptor = readHostMachineDescriptor(status as Record<string, Object>);
+        let descriptor = readHostMachineDescriptor(status);
         meta.hostPlatform = descriptor.hostPlatform; meta.hostMachine = descriptor.hostMachine;
       }
       let prepared = await prepareRelayPairing(context, journal, meta, client, isActive);
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
-      let token = offer.deviceToken;
-      let hasExchange = false;
-      for (let i = 0; i < capabilities.length; i++) {
-        if (capabilities[i] === TICKET_EXCHANGE_CAPABILITY) {
-          hasExchange = true;
-          break;
-        }
-      }
-      if (hasExchange) {
-        let newToken = toHex(randomBytes(24));
-        let params: Record<string, Object> = { 'deviceToken': newToken };
-        let reply: RpcResponse = await client.request('pairing.exchangeTicket', JSON.stringify(params));
-        if (this.disposed) { return; }
-        if (this.timedOut) { throw new Error('Pairing timed out'); }
-        let exchanged = false;
-        if (reply instanceof RpcSuccess) {
-          let result = JSON.parse(reply.result) as Record<string, Object>;
-          exchanged = result !== null && typeof result['deviceId'] === 'string' && (result['deviceId'] as string).length > 0;
-        }
-        if (exchanged) {
-          token = newToken;
-          this.appendLog('配对码已换成本机独有 token');
-        } else {
-          this.appendLog('换票被拒，保留扫码 token（上游同款回退行为）');
-        }
-      } else {
-        this.appendLog('桌面未广播换票 capability，保留扫码 token');
-      }
-
+      let token = await exchangePairingTicket(connected, offer.deviceToken, (line: string): void => {
+        if (!this.disposed) { this.appendLog(line); }
+      });
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }
       if (prepared) { await commitRelayPairing(context, meta, token, prepared, isActive); }

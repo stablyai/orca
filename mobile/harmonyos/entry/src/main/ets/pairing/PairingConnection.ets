@@ -2,13 +2,45 @@ import { PairingOffer } from '../transport/E2eeV2Session';
 import { PairingRelay, RelayConnectionOptions, RelayMove, relayConnectUrl } from '../transport/RelayProtocol';
 import { resolveRelayEndpoint } from '../transport/RelayRouting';
 import { SpikeRpcClient, RpcSuccess } from '../transport/SpikeRpcClient';
+import { randomBytes, toHex } from '../transport/crypto/Bytes';
 
 export const PAIRING_CODE_REFUSED = 'desktop rejected the pairing code';
 export const RELAY_PAIRING_CREDENTIAL_REJECTED = 'relay rejected the pairing credential';
+const TICKET_EXCHANGE_CAPABILITY = 'pairing.ticket-exchange.v1';
 
 export interface PairingConnectionResult {
   client: SpikeRpcClient;
-  status: RpcSuccess;
+  status: Record<string, Object> | null;
+}
+
+function readPairingResult(reply: RpcSuccess): Record<string, Object> | null {
+  try {
+    let result: Object | null = JSON.parse(reply.result) as Object | null;
+    return result !== null && typeof result === 'object' && !Array.isArray(result)
+      ? result as Record<string, Object> : null;
+  } catch (e) { return null; }
+}
+
+export async function exchangePairingTicket(connection: PairingConnectionResult, ticket: string,
+  log: (line: string) => void): Promise<string> {
+  let capabilities = connection.status?.['capabilities'];
+  if (!Array.isArray(capabilities) || !(capabilities as Object[]).every((value: Object): boolean => typeof value === 'string')
+    || !(capabilities as string[]).includes(TICKET_EXCHANGE_CAPABILITY)) { return ticket; }
+
+  let newToken = toHex(randomBytes(24));
+  let params: Record<string, string> = { 'deviceToken': newToken };
+  let result: Record<string, Object> | null = null;
+  try {
+    let reply = await connection.client.request('pairing.exchangeTicket', JSON.stringify(params));
+    if (reply instanceof RpcSuccess) { result = readPairingResult(reply); }
+  } catch (e) {}
+  let deviceId = result?.['deviceId'];
+  if (typeof deviceId === 'string' && deviceId.length > 0) {
+    log('配对码已换成本机独有 token');
+    return newToken;
+  }
+  log('换票未获确认，继续使用扫码凭证');
+  return ticket;
 }
 
 export class PairingConnection {
@@ -39,7 +71,8 @@ export class PairingConnection {
   private async probe(client: SpikeRpcClient, endpoint: string, offer: PairingOffer): Promise<PairingConnectionResult> {
     await client.connect(endpoint, offer.deviceToken, offer.publicKeyB64, 'v2');
     let reply = await client.request('status.get', null, 8000);
-    if (reply instanceof RpcSuccess) { return { client: client, status: reply }; }
+    // A successful reply proves the authenticated path even when its status fields are unreadable.
+    if (reply instanceof RpcSuccess) { return { client: client, status: readPairingResult(reply) }; }
     let refused = reply.errorCode === 'unauthorized' || client.authenticationRejected();
     throw new Error(refused ? PAIRING_CODE_REFUSED : 'Desktop status unavailable');
   }
