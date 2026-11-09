@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
@@ -590,8 +591,95 @@ def rendered_element_index(line, depth):
     return int(match.group(1)) if match else None
 
 
-def capture_png(rect):
-    if Gdk is None or GdkPixbuf is None or rect is None or os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+def wayland_capture_command():
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
+        return [shutil.which("hyprctl"), "-j", "clients"]
+    if os.environ.get("SWAYSOCK") and shutil.which("swaymsg"):
+        return [shutil.which("swaymsg"), "-t", "get_tree", "-r"]
+    return None
+
+
+def screenshot_failure(message):
+    return {"error": {"code": "screenshot_failed", "message": message}}
+
+
+def wayland_window_rect(app, window):
+    command = wayland_capture_command()
+    if command is None or app is None or window is None:
+        return None
+    try:
+        with tempfile.TemporaryFile() as output:
+            result = subprocess.run(command, stdout=output, stderr=subprocess.DEVNULL, timeout=2, check=False)
+            if result.returncode != 0 or output.tell() > 4_000_000:
+                return None
+            output.seek(0)
+            tree = json.load(output)
+        if isinstance(tree, list):
+            matches = [item for item in tree if item.get("pid") == pid_of(app)
+                       and item.get("title") == name_of(window) and item.get("mapped")
+                       and not item.get("hidden")]
+            rects = [item.get("at", []) + item.get("size", []) for item in matches]
+        else:
+            rects = []
+            pending = [tree]
+            while pending:
+                item = pending.pop()
+                pending.extend(item.get("nodes", []) + item.get("floating_nodes", []))
+                if item.get("pid") == pid_of(app) and item.get("name") == name_of(window):
+                    rect = item.get("rect", {})
+                    content = item.get("window_rect")
+                    if content:
+                        rect = {"x": rect["x"] + content["x"], "y": rect["y"] + content["y"],
+                                "width": content["width"], "height": content["height"]}
+                    rects.append([rect.get(key) for key in ("x", "y", "width", "height")])
+        if len(rects) != 1 or len(rects[0]) != 4:
+            return None
+        values = rects[0]
+        if any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in values):
+            return None
+        if values[2] <= 0 or values[3] <= 0:
+            return None
+        return Rect(*values)
+    except (OSError, subprocess.TimeoutExpired, ValueError, TypeError, AttributeError, KeyError):
+        return None
+
+
+def capture_wayland_png(app, window):
+    grim = shutil.which("grim")
+    if grim is None or GdkPixbuf is None:
+        return screenshot_failure("Wayland screenshots require grim and GdkPixbuf; install them or use --no-screenshot")
+    # AT-SPI often reports (0, 0) on Wayland, which would capture an unrelated desktop region.
+    rect = wayland_window_rect(app, window)
+    if rect is None:
+        return screenshot_failure("Wayland capture needs an unambiguous window on Hyprland (hyprctl) or Sway (swaymsg); no screenshot was taken")
+    x, y = math.floor(rect.x), math.floor(rect.y)
+    width, height = math.ceil(rect.x + rect.width) - x, math.ceil(rect.y + rect.height) - y
+    if width > 16384 or height > 16384 or width * height > 67_108_864:
+        return screenshot_failure("Wayland window exceeds the screenshot dimension limit")
+    try:
+        with tempfile.TemporaryFile() as output:
+            # Scale 1 keeps screenshot pixels aligned with window-local logical coordinates.
+            result = subprocess.run([grim, "-s", "1", "-g", f"{x},{y} {width}x{height}", "-t", "png", "-"],
+                                    stdout=output, stderr=subprocess.DEVNULL, timeout=5, check=False)
+            size = output.tell()
+            if result.returncode != 0 or not 0 < size <= 64_000_000:
+                return screenshot_failure("grim could not capture the window; check compositor screencopy support and screen-capture access")
+            output.seek(0)
+            loader = GdkPixbuf.PixbufLoader.new_with_type("png")
+            loader.write(output.read())
+            loader.close()
+            pixbuf = loader.get_pixbuf()
+            if pixbuf is None or pixbuf.get_width() != width or pixbuf.get_height() != height:
+                return screenshot_failure("grim returned an image with unexpected window dimensions")
+            return bounded_png_payload(pixbuf)
+    except Exception as error:
+        return screenshot_failure("Wayland screenshot failed: " + str(error)[:200])
+
+
+def capture_png(rect, app=None, window=None):
+    if os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+        return capture_wayland_png(app, window)
+    if Gdk is None or GdkPixbuf is None or rect is None:
         return None
     screen = Gdk.Screen.get_default()
     root = screen.get_root_window() if screen else None
@@ -734,7 +822,7 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
     selection = selected_text(window)
     app_info = app_json(app)
     window_title = name_of(window)
-    screenshot = capture_png(bounds) if include_screenshot else None
+    screenshot = capture_png(bounds, app, window) if include_screenshot else None
     geometry = GeometryReader()
     for item in records:
         node = geometry_nodes[id(item)]
@@ -780,7 +868,9 @@ def handshake_response():
     is_wayland = os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
     has_hotkey = shutil.which("xdotool") is not None and not is_wayland
     has_clipboard = any(shutil.which(command) for command in ("wl-copy", "xclip", "xsel"))
-    has_screenshot = Gdk is not None and GdkPixbuf is not None and not is_wayland
+    has_screenshot = GdkPixbuf is not None and (
+        bool(shutil.which("grim") and wayland_capture_command()) if is_wayland else Gdk is not None
+    )
     return {
         "platform": "linux",
         "provider": "orca-computer-use-linux",

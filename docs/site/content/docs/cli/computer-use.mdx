@@ -101,6 +101,17 @@ On Linux and Windows, action payloads also pass briefly through a local operatio
 
 `get-app-state` returns an accessibility tree and, by default, a screenshot. With `--json`, the image bytes are written to disk and the path is returned in `screenshot.path` rather than embedded in the response. Pass `--no-screenshot` when pixels aren't needed (faster, smaller payload). Pass `--restore-window` to bring a hidden or minimized window into view before capture.
 
+On Wayland, screenshots use `grim` on Hyprland or Sway. Install `grim` and GdkPixbuf,
+plus `hyprctl` (Hyprland) or `swaymsg` (Sway). The compositor must support grim's
+screencopy protocol. Orca matches the target window by process ID and title before
+capturing its region at logical scale; missing or ambiguous matches return a
+screenshot error while retaining the accessibility tree. Other Wayland compositors
+currently support accessibility-only inspection with `--no-screenshot`.
+
+Captures show the visible desktop region, so overlapping windows can obscure the
+target. Minimized and off-workspace windows may not be capturable. X11 continues
+to use GDK capture.
+
 ## Use it from an agent
 
 The shipped `orca-computer-use` skill packages the same command surface with safety guidance. Install it into the agent's skill directory:
