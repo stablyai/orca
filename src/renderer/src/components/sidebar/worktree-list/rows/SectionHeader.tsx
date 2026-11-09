@@ -3,7 +3,7 @@ import {
   getRootProjectHeaderOccurrenceKey
 } from '../drag/root-project-header-drop'
 import React from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Folder } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
@@ -302,7 +302,6 @@ export function renderWorktreeSectionHeaderRow(
             }
           }}
         >
-          {/* Stretch the title’s grab area to row height; action attributes exclude buttons while padding still arms drag. */}
           <div
             data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
             data-project-group-header-drag-handle={isDraggableProjectGroupHeader ? '' : undefined}
@@ -327,6 +326,8 @@ export function renderWorktreeSectionHeaderRow(
                   className="size-4"
                   iconClassName="size-3.5"
                 />
+              ) : sectionHeaderColor ? (
+                <Folder className="size-3" fill={sectionHeaderColor} stroke={sectionHeaderColor} />
               ) : (
                 <headerVisual.icon className="size-3" />
               )}

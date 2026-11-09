@@ -145,7 +145,7 @@ function clickCreate(row: GroupHeaderRow): void {
   fireEvent.click(view.getByRole('button', { name: /Create new worktree for/ }))
 }
 
-it('colors the section label only while name coloring is enabled', () => {
+it('fills colored section folders and colors the label only while name coloring is enabled', () => {
   const group = {
     ...createProjectGroup({ name: 'Projects', createdFrom: 'manual', tabOrder: 0 }),
     color: '#ef4444',
@@ -170,6 +170,10 @@ it('colors the section label only while name coloring is enabled', () => {
       measureVirtualRowElement: vi.fn()
     })
   const view = render(<TooltipProvider>{header()}</TooltipProvider>)
+  const folder = view.container.querySelector('svg.lucide-folder')
+  expect(folder?.getAttribute('fill')).toBe('#ef4444')
+  expect(folder?.getAttribute('stroke')).toBe('#ef4444')
+  expect(view.container.querySelector('svg.lucide-folder-tree')).toBeNull()
   expect(view.getByText('Projects').style.color).toBe('')
   group.colorName = true
   view.rerender(<TooltipProvider>{header()}</TooltipProvider>)
@@ -177,6 +181,12 @@ it('colors the section label only while name coloring is enabled', () => {
   group.colorName = false
   view.rerender(<TooltipProvider>{header()}</TooltipProvider>)
   expect(view.getByText('Projects').style.color).toBe('')
+  row.projectGroup = { ...group, color: null }
+  view.rerender(<TooltipProvider>{header()}</TooltipProvider>)
+  expect(view.container.querySelector('svg.lucide-folder')).toBeNull()
+  const folderTree = view.container.querySelector('svg.lucide-folder-tree')
+  expect(folderTree?.getAttribute('fill')).toBe('none')
+  expect(folderTree?.getAttribute('stroke')).toBe('currentColor')
 })
 
 it("opens Create on a same-id twin's own host in a view that shows only that host", () => {
