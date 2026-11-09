@@ -8,7 +8,7 @@ import {
   type CommitMessageAgentChoice,
   type CommitMessageModelCapability
 } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 
 export const EMPTY_COMMIT_MESSAGE_AI_SETTINGS: CommitMessageAiSettings = {
   enabled: false,

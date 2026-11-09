@@ -8,7 +8,7 @@ import {
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { hasHostSessionMirrorHydrated } from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
 import { hasHostMirrorHandleWaitExpired } from '../../host-mirror-handle-gap-wait'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '../../resolve-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '../../workspace/ownership/resolve-owner'
 import { warnAmbiguousOwnerOnce } from '../../ambiguous-owner-warning'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>

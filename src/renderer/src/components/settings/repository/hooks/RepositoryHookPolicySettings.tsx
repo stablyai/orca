@@ -9,7 +9,7 @@ import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { matchesSettingsSearch } from '../../search/settings-search'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { RepositoryHooksYamlStatus } from './RepositoryHooksYamlStatus'
 
 type PolicyOption<Policy> = { policy: Policy; label: string; description: string }
@@ -142,14 +142,14 @@ export function RepositorySetupPolicySetting({
             )}
           </h5>
         </div>
-        <SettingsSwitch
+        <Switch
           checked={setupAgentStartupPolicy === 'wait-for-setup'}
-          onChange={() =>
+          onCheckedChange={() =>
             onStartupPolicyChange(
               setupAgentStartupPolicy === 'wait-for-setup' ? 'start-immediately' : 'wait-for-setup'
             )
           }
-          ariaLabel={t(
+          aria-label={t(
             'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
             'Wait for setup to complete before starting agent'
           )}

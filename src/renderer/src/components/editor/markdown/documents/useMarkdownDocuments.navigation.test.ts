@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
-import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
+import type * as ConnectionOwnerResolution from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 import { useAppStore } from '@/store/index'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -26,8 +26,10 @@ const state = {
   openFile: vi.fn(),
   openMarkdownPreview: vi.fn()
 }
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => runtimeConnectionId }))
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => {
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdFromState: () => runtimeConnectionId
+}))
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionOwnerResolution>()
   return { ...actual, getConnectionIdFromState: () => runtimeConnectionId }
 })

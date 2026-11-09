@@ -23,7 +23,7 @@ import {
 import { assertRuntimeEnvironmentCapability } from '../../../../runtime/rpc/compatibility/runtime-capability-proof'
 import { runtimeTargetSupportsCapability } from '../../../../runtime/rpc/compatibility/runtime-target-capability'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import {
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,

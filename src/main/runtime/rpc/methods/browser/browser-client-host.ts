@@ -2,7 +2,7 @@ import '../../../../../shared/protocol-version'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
-} from '../../../../../shared/browser-runtime-capabilities'
+} from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { BrowserClientPageMetadataParams } from '../../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import {
   BROWSER_CLIENT_HOST_REQUEST_CAPABILITY,

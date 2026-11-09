@@ -18,7 +18,7 @@ import { AgentSessionContinuationDialog } from '@/components/agent-session-conti
 import {
   buildAgentSessionContinuationPrompt,
   type AgentSessionContinuationRequest
-} from '@/lib/agent-session-continuation'
+} from '@/lib/agent-session/context/agent-session-continuation'
 import { ClaudeSwitcherMenu } from '@/components/status-bar/ClaudeSwitcherMenu'
 import { ProviderAccountChatButton } from '@/components/status-bar/ProviderAccountChatButton'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'

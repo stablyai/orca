@@ -56,11 +56,7 @@ import { useNativeChatRewindHost } from '@/components/native-chat/messages/actio
 import { NativeChatRowActionsProvider } from '@/components/native-chat/messages/actions/NativeChatRowActionsProvider'
 import { useNativeChatPaneFork } from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import { NativeChatQueuedMessageList } from '@/components/native-chat/queue/NativeChatQueuedMessageList'
-import {
-  cancelStructuredPrompt,
-  nativeChatStructuredStopControls
-} from '@/components/native-chat/session/structured/writes/native-chat-structured-stop-controls'
-import { chatApprovalFromJournal } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { nativeChatStructuredStopControls } from '@/components/native-chat/session/structured/writes/native-chat-structured-stop-controls'
 import { useAppStore } from '@/store/index'
 import { NativeChatStructuredPrompts } from '@/components/native-chat/prompts/NativeChatStructuredAsyncQuestion'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'

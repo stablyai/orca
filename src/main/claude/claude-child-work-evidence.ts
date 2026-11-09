@@ -1,4 +1,9 @@
-import type { AgentChildWorkOutcome } from '../../shared/agent-status/child-work/agent-status-child-work'
+import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../shared/orca-cli-invocations'
+import type {
+  AgentChildWorkKind,
+  AgentChildWorkOperation,
+  AgentChildWorkOutcome
+} from '../../shared/agent-status/child-work/agent-status-child-work'
 import type {
   AgentChildWorkEvidence,
   AgentChildWorkLiveObservation
@@ -17,6 +22,62 @@ import {
   readClaudeMessageEnvelope,
   type ClaudeToolUse
 } from './structured/journal/claude-structured-item-translation'
+
+export type EndedClaudeTask = {
+  run: string | undefined
+  outcome: AgentChildWorkOutcome
+  task?: DecodedClaudeTask
+}
+
+export type DecodedClaudeTask = {
+  kind: AgentChildWorkKind
+  backgrounded: boolean
+  /** Monitors stay monitoring until the provider reports them running. */
+  running: boolean
+  name?: string
+  description?: string
+  toolUseId?: string
+  parentTaskId?: string
+  /** Runs `orca orchestration check --wait`: waiting on worker agents, so agent work. */
+  awaitsAgents?: true
+}
+
+export function claudeChildWorkObservation(
+  id: string,
+  task: DecodedClaudeTask,
+  facts: ClaudeTaskFacts,
+  observedAt: number,
+  waiting: boolean
+): AgentChildWorkLiveObservation {
+  const operation: AgentChildWorkOperation | undefined = facts.toolName
+    ? { toolName: facts.toolName, basis: 'reported', observedAt }
+    : task.awaitsAgents
+      ? {
+          toolName: 'Bash',
+          input: ORCA_ORCHESTRATION_WAIT_COMMAND,
+          basis: 'reported',
+          observedAt
+        }
+      : undefined
+  return {
+    handle: {
+      idKind: 'task_id',
+      id,
+      ...(task.toolUseId !== undefined ? { runId: task.toolUseId } : {})
+    },
+    ...(task.parentTaskId ? { ownerId: task.parentTaskId } : {}),
+    kind: task.kind,
+    residency: task.backgrounded ? 'background' : 'foreground',
+    state: waiting ? 'waiting' : task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
+    ...(task.name ? { name: task.name, agentType: task.name } : {}),
+    ...(task.description ? { description: task.description } : {}),
+    ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
+    ...(operation ? { operation } : {}),
+    ...(facts.lastMessage ? { lastMessage: facts.lastMessage } : {}),
+    // Only background tasks expose a stop target.
+    stoppable: task.backgrounded
+  }
+}
 
 export type ClaudeTaskFacts = {
   toolName?: string
@@ -58,6 +119,9 @@ export function withClaudeChildWorkOwners(
     return evidence
   }
   const owned = (child: AgentChildWorkLiveObservation): AgentChildWorkLiveObservation => {
+    if (child.ownerId !== undefined) {
+      return child
+    }
     const ownerId = child.handle.runId === undefined ? null : ownerOf(child.handle.runId)
     return ownerId !== null && ownerId !== child.handle.id ? { ...child, ownerId } : child
   }

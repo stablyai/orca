@@ -66,26 +66,34 @@ function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
 
-function readMarker(markerPath: string): HostInstanceMarker | null {
+/** `malformed` means a file exists but its contents could not be trusted. */
+function readMarkerFile(markerPath: string): {
+  marker: HostInstanceMarker | null
+  malformed: boolean
+} {
   let raw: string
   try {
     raw = readFileSync(markerPath, 'utf8')
   } catch (error) {
     if (isMissing(error)) {
-      return null
+      return { marker: null, malformed: false }
     }
     throw error
   }
   if (raw.length > MAX_HOST_INSTANCE_FILE_BYTES) {
-    return null
+    return { marker: null, malformed: true }
   }
   try {
     const parsed = HostInstanceMarkerSchema.safeParse(JSON.parse(raw))
-    return parsed.success ? parsed.data : null
+    return { marker: parsed.success ? parsed.data : null, malformed: !parsed.success }
   } catch {
     // Writes are atomic, so a bad file was edited by hand; re-record it rather than unpair.
-    return null
+    return { marker: null, malformed: true }
   }
+}
+
+function readMarker(markerPath: string): HostInstanceMarker | null {
+  return readMarkerFile(markerPath).marker
 }
 
 function markerFor(instanceId: string | undefined): HostInstanceMarker {
@@ -116,7 +124,7 @@ function discardStagedIdentity(userDataPath: string): void {
     try {
       rmSync(staged, { force: true })
     } catch {
-      // A leftover staged file is ignored until a later rotation overwrites it.
+      // A leftover staged file is retried on the next start and never published without `rotating`.
     }
   }
 }
@@ -256,7 +264,7 @@ export function ensureHostInstanceIdentity(
   write: HostIdentityWrite = writeDurableSecureJsonFile
 ): HostIdentityOutcome {
   const markerPath = join(userDataPath, HOST_INSTANCE_FILENAME)
-  const stored = readMarker(markerPath)
+  const { marker: stored, malformed } = readMarkerFile(markerPath)
   if (stored?.rotating) {
     publishStagedIdentity(
       userDataPath,
@@ -264,6 +272,12 @@ export function ensureHostInstanceIdentity(
       write
     )
     return { kind: 'rotated', reason: 'interrupted_rotation' }
+  }
+  // Without `rotating`, staged files are from a rotation that crashed before its marker; drop
+  // them so a secret key does not sit beside the live one until the next rotation. An unreadable
+  // marker may have said `rotating`, so its staged files are left for recovery by hand.
+  if (!malformed) {
+    discardStagedIdentity(userDataPath)
   }
   if (!instanceId || stored?.instanceId === instanceId) {
     return { kind: 'unchanged' }

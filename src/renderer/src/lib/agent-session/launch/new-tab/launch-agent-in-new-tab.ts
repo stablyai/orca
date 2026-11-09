@@ -10,7 +10,7 @@ import { invalidTerminalArgsMessage } from '../../../workspace/creation/work-ite
 import {
   agentLaunchCheckSettingsMessage,
   notifyAgentLaunchFailure
-} from '@/lib/agent-launch-failure'
+} from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import '@/lib/telemetry'

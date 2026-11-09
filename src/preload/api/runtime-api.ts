@@ -7,12 +7,13 @@ import type { ManagedOrcadPreloadApi } from './managed-orcad-api'
 import type { WslHostsPreloadApi } from './wsl-hosts-api'
 import type { RuntimeHostStatusSnapshot } from '../../shared/remote-runtime/host-status/runtime-host-status'
 import type {
-  RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
-  RuntimeSyncWindowGraphResult,
-  RuntimeTerminalDriverState
+  RuntimeSyncWindowGraphResult
 } from '../../shared/runtime-types'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type {
+  RuntimeStatus,
+  RuntimeTerminalDriverState
+} from '../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
@@ -56,7 +57,7 @@ export type RuntimeApi = {
     getBrowserDrivers: () => Promise<
       {
         browserPageId: string
-        driver: RuntimeBrowserDriverState
+        driver: RuntimeTerminalDriverState
       }[]
     >
     getBrowserRemoteViewerPages?: () => Promise<string[]>
@@ -78,7 +79,7 @@ export type RuntimeApi = {
       callback: (event: { tabId: string; text: string; createdAt: number }) => void
     ) => () => void
     onBrowserDriverChanged: (
-      callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
+      callback: (event: { browserPageId: string; driver: RuntimeTerminalDriverState }) => void
     ) => () => void
     // Older preloads lack this signal.
     onBrowserRemoteViewersChanged?: (

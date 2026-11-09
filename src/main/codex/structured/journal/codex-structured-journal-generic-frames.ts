@@ -28,9 +28,7 @@ import {
   isWordlessProviderFrame
 } from '../../../../shared/native-chat/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
-import { codexAuthenticationFailure } from '../session-lifecycle/codex-authentication-failure'
-import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { CodexUsageLimits } from '../catalog/codex-usage-limits'
+import { CodexTurnFailures } from './codex-turn-failures'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
 type TurnRows = { drawn: number; wordless: number }
@@ -74,7 +72,7 @@ export class CodexJournalGenericFrames {
   private bookkeepingBytes = 0
   private fallbackSequence = 0
   private cancelSuppressionFlush: (() => void) | null = null
-  private readonly usageLimits = new CodexUsageLimits()
+  private readonly failures: CodexTurnFailures
 
   constructor(
     private readonly deps: Pick<
@@ -85,6 +83,11 @@ export class CodexJournalGenericFrames {
     },
     private readonly activeTurn: (threadId: string) => string | null
   ) {
+    this.failures = new CodexTurnFailures({
+      account: deps.account,
+      activeTurn,
+      append: (threadId, payload, frame) => this.appendFrameRow(threadId, payload, frame)
+    })
     this.schedule = deps.schedule ?? defaultSchedule
     this.suppressionCoalesceMs = deps.coalesceMs ?? 60
   }
@@ -94,31 +97,26 @@ export class CodexJournalGenericFrames {
     payload: unknown,
     threadId: string
   ): CodexJournalTranslationAdmission {
-    if (this.usageLimits.observe(kind, payload)) {
+    if (this.failures.observe(kind, payload)) {
       return CODEX_JOURNAL_ADMITTED
     }
+    if (kind === 'notification:error' && !readCodexErrorWillRetry(payload)) {
+      return this.failures.appendTerminal(kind, payload, payload, threadId)
+    }
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
-    // Declined frames count as success; rejection would force-close the provider.
-    const ended = kind === 'notification:error' && !readCodexErrorWillRetry(payload)
-    const usageLimit = ended ? this.usageLimits.failure(payload) : null
-    const failure =
-      usageLimit ?? (ended ? codexAuthenticationFailure(payload, this.deps.account?.()) : null)
-    return translated
-      ? this.appendFrameRow(threadId, payload, {
-          ...translated,
-          body: failure
-            ? {
-                ...translated.body,
-                ...(usageLimit ? { tone: 'warning' } : {}),
-                ...agentSessionFailureWords(failure, {
-                  provider: 'codex',
-                  agentName: 'Codex',
-                  surface: 'row'
-                })
-              }
-            : translated.body
-        })
-      : CODEX_JOURNAL_ADMITTED
+    return translated ? this.appendFrameRow(threadId, payload, translated) : CODEX_JOURNAL_ADMITTED
+  }
+
+  appendCompletionFailure(
+    payload: unknown,
+    threadId: string,
+    onShown: (turnId: string) => void
+  ): CodexJournalTranslationAdmission {
+    return this.failures.appendCompletion(payload, threadId, onShown)
+  }
+
+  forgetTurnFailure(threadId: string, turnId: string): void {
+    this.failures.forget(threadId, turnId)
   }
 
   appendFrameRow(
@@ -159,7 +157,9 @@ export class CodexJournalGenericFrames {
     const identity = {
       provider: 'orca' as const,
       clientMessageId:
-        translated.body.failure?.kind === 'usageLimitReached' && frameTurnId
+        translated.body.failure &&
+        translated.body.failure.kind !== 'providerRetrying' &&
+        frameTurnId
           ? `terminal-failure:codex:${JSON.stringify([threadId, frameTurnId])}`
           : `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
     }
@@ -181,7 +181,11 @@ export class CodexJournalGenericFrames {
           : { ...rows, drawn: rows.drawn + 1 }
     )
     this.recordBucket(bucket)
-    return publish(this.deps.sink)
+    const publication = publish(this.deps.sink)
+    if (publication.accepted && translated.body.failure?.kind === 'providerRetrying') {
+      this.failures.observeRetry(payload, threadId)
+    }
+    return publication
   }
 
   suppress(threadId: string, turnId: string, count = 1): void {
@@ -243,6 +247,7 @@ export class CodexJournalGenericFrames {
 
   dispose(): void {
     this.cancelSuppressionFlush?.()
+    this.failures.dispose()
     this.genericRowsByTurn.clear()
     this.suppressedRowsByTurn.clear()
     this.bucketOrder.clear()

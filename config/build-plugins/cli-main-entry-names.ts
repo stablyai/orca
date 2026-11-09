@@ -12,6 +12,9 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'orcad/orcad-stale-lock-reclaim',
   'orcad/orcad-host-identity-reset',
   'plugins/plugin-authoring-checks',
+  // `orca vm env doctor` runs its checks in the CLI process.
+  'environment-doctor/environment-doctor',
+  'environment-doctor/environment-doctor-host',
   ...[
     'access',
     'active-location',

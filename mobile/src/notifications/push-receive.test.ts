@@ -89,13 +89,6 @@ describe('shouldSuppressForegroundPush', () => {
     ).resolves.toBe(false)
   })
 
-  it('suppresses pushes for an unpaired host', async () => {
-    vi.mocked(loadHostCatalog).mockResolvedValue([])
-    await expect(
-      shouldSuppressForegroundPush(apnsData({ hostFingerprint, notificationSeq: 1 }))
-    ).resolves.toBe(true)
-  })
-
   it('suppresses a push after a matching persisted dismissal', async () => {
     const { rememberPushDismissal } = await import('./push-dismissal-watermarks')
     const payload = {

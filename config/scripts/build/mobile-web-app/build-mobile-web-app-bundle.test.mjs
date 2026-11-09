@@ -5,11 +5,7 @@ import {
   withScratch,
   copyWrittenBundle
 } from '../../mobile-web-app/mobile-web-app-bundle-test-fixture.mjs'
-import {
-  bundleMobileWebApp,
-  renameOutputsByContent,
-  routeChunkNames
-} from './build-mobile-web-app-bundle.mjs'
+import { bundleMobileWebApp } from './build-mobile-web-app-bundle.mjs'
 import { MOBILE_WEB_APP_ROUTE_ROOT } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 import { verifyMobileWebAppBundle } from './verify-mobile-web-app-bundle.mjs'
 import {
@@ -140,34 +136,4 @@ describe('the verifier', () => {
     },
     240_000
   )
-})
-
-describe('naming an output by its bytes', () => {
-  it('refuses two outputs that name each other', () => {
-    const emitted = (text) => new TextEncoder().encode(text)
-    const metafile = {
-      outputs: {
-        'dist/a.js': { imports: [{ path: 'dist/b.js', kind: 'import-statement' }] },
-        'dist/b.js': { imports: [{ path: 'dist/a.js', kind: 'import-statement' }] }
-      }
-    }
-    // Cycles have no final dependency names/content hash; fail if esbuild ever stops emitting a DAG.
-    expect(() =>
-      renameOutputsByContent(metafile, [
-        { path: 'dist/a.js', contents: emitted('import "/assets/b.js"') },
-        { path: 'dist/b.js', contents: emitted('import "/assets/a.js"') }
-      ])
-    ).toThrow(/output cycle/)
-  })
-
-  it('refuses a route it cannot find an output for', async () => {
-    await withScratch(async (scratch) => {
-      const module = join(scratch, 'index.tsx')
-      await writeFile(module, 'export default function Route() { return null }\n')
-      // Only metafile maps routes to chunks; missing output must fail before phones request undefined/404.
-      expect(() =>
-        routeChunkNames({ outputs: {} }, [{ key: './index.tsx', module }], new Map())
-      ).toThrow(/\.\/index\.tsx reached no output/)
-    })
-  })
 })

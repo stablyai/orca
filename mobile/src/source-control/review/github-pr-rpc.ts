@@ -100,7 +100,9 @@ export async function fetchPRForBranch(
     branch: string
     linkedPRNumber?: number | null
     fallbackPRNumber?: number | null
+    acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
+    // An action's read: re-learn host status, and join no host lookup begun before it.
     refresh?: boolean
   }
 ): Promise<GitHubPrReadOutcome<PRInfo | null>> {
@@ -131,7 +133,9 @@ export async function fetchPRForBranch(
               branch: args.branch,
               linkedPRNumber: args.linkedPRNumber ?? null,
               fallbackPRNumber: args.fallbackPRNumber ?? null,
-              currentHeadOid: args.currentHeadOid ?? null
+              ...(args.acceptMergedFallbackPR ? { acceptMergedFallbackPR: true } : {}),
+              currentHeadOid: args.currentHeadOid ?? null,
+              ...(args.refresh ? { userRefresh: true } : {})
             }),
             contract.options
           )
@@ -222,7 +226,13 @@ export async function fetchWorkItemDetails(
 export function fetchPRChecks(
   client: RpcOperationSender,
   worktreeId: string,
-  args: { prNumber: number; headSha?: string | null; prRepo?: GitHubPrRepoSlug | null }
+  args: {
+    prNumber: number
+    headSha?: string | null
+    prRepo?: GitHubPrRepoSlug | null
+    // An action's read: past gh's response cache, joining no host read begun before it.
+    refresh?: boolean
+  }
 ): Promise<GitHubPrReadOutcome<PRCheckDetail[]>> {
   return settleGithubPrRead(githubPrChecksRead, () =>
     githubPrChecksRead.request(
@@ -230,7 +240,10 @@ export function fetchPRChecks(
       githubPrRequestParams(
         githubPrChecksRead.operation.method,
         worktreeId,
-        { prNumber: args.prNumber },
+        {
+          prNumber: args.prNumber,
+          ...(args.refresh ? { noCache: true, userRefresh: true } : {})
+        },
         { prRepo: args.prRepo, headSha: args.headSha }
       )
     )

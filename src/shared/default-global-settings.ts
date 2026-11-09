@@ -313,6 +313,7 @@ export function buildDefaultSettings(args: {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
-    voice: args.voice
+    voice: args.voice,
+    voiceDictationModeDefaultedToAuto: true
   }
 }

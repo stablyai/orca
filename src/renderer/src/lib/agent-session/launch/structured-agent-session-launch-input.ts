@@ -64,7 +64,7 @@ export function settleStructuredLaunchFirstMessageFromJournal(
     )
   }
   deleteStructuredAgentLaunchRecord(sessionId)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
 }
 
 /** The launch adopts an existing conversation, which may keep a model of its own. */

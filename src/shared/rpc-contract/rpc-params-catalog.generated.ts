@@ -221,6 +221,7 @@ import {
   TapParams,
   TypeParams
 } from './emulator-params'
+import { EnvironmentDoctorParams } from './environment-doctor-params'
 import {
   FileCommitUpload,
   FileCopy,
@@ -574,6 +575,7 @@ import {
   ProjectGroupScanNested,
   ProjectGroupSelector,
   ProjectGroupUpdate,
+  ProjectGroupUpdateMany,
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
@@ -615,7 +617,8 @@ import {
   DictationSetup,
   DictationStart,
   OpenAiSpeechKeySet,
-  SpeechModelAction
+  SpeechModelAction,
+  SpeechSetupRead
 } from './speech-params'
 import {
   RepoAddRemote,
@@ -736,6 +739,7 @@ import {
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
+  WorktreePreviewNestedRemoval,
   WorktreePsParams,
   WorktreeRemove,
   WorktreeResolveCallerParent,
@@ -1038,6 +1042,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.tap': TapParams,
   'emulator.type': TypeParams,
   'emulator.unregisterActive': EmulatorUnregisterActiveParams,
+  'environment.doctor': EnvironmentDoctorParams,
   'files.browseServerDir': ServerDirectoryBrowse,
   'files.commitUpload': FileCommitUpload,
   'files.copy': FileCopy,
@@ -1430,6 +1435,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectGroup.moveProject': ProjectGroupMoveProject,
   'projectGroup.scanNested': ProjectGroupScanNested,
   'projectGroup.update': ProjectGroupUpdate,
+  'projectGroup.updateMany': ProjectGroupUpdateMany,
   'projectHostSetup.clone': ProjectHostSetupClone,
   'projectHostSetup.create': ProjectHostSetupCreate,
   'projectHostSetup.delete': ProjectHostSetupDelete,
@@ -1441,6 +1447,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.add': RepoPath,
   'repo.addRemote': RepoAddRemote,
   'repo.baseRefDefault': RepoSelector,
+  'repo.checkCloneTarget': RepoClone,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,
@@ -1523,7 +1530,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'speech.dictation.start': DictationStart,
   'speech.models.delete': SpeechModelAction,
   'speech.models.download': SpeechModelAction,
-  'speech.models.list': null,
+  'speech.models.list': SpeechSetupRead,
   'speech.openAiKey.clear': null,
   'speech.openAiKey.set': OpenAiSpeechKeySet,
   'speech.openAiKey.status': null,
@@ -1615,6 +1622,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.listRetiredNames': WorktreeDetectedListParams,
   'worktree.persistSortOrder': WorktreeSortOrder,
   'worktree.prefetchCreateBase': WorktreePrefetchCreateBase,
+  'worktree.previewNestedRemoval': WorktreePreviewNestedRemoval,
   'worktree.ps': WorktreePsParams,
   'worktree.resolveCallerParent': WorktreeResolveCallerParent,
   'worktree.resolveMrBase': WorktreeResolveMrBase,

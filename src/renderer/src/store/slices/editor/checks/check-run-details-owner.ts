@@ -13,8 +13,8 @@ import { checkRunDetailsOwnerScope } from '../../../../../../shared/source-contr
 import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
-} from '@/lib/unified-tab-host-ownership'
-import { findIndexedReviewRepository } from '@/lib/repository-owner-index'
+} from '@/lib/workspace/ownership/unified-tab-host-ownership'
+import { findIndexedReviewRepository } from '@/lib/workspace/ownership/repository-owner-index'
 import {
   findIndexedDetectedWorktrees,
   findIndexedWorktrees as findIndexedWorktreeOwners
@@ -25,10 +25,10 @@ import {
   resolveWorktreeOperationRouteForHost,
   type WorktreeOperationOwnerRecord,
   type WorktreeOperationRoute
-} from '@/lib/worktree-operation-route'
-import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
+} from '@/lib/workspace/ownership/worktree-operation-route'
+import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
 import { onPairedWebClientHost } from '@/lib/paired-web-client-host'
-import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
+import { captureWorktreeOperationGenerationSnapshot } from '@/lib/workspace/ownership/worktree-operation-generation'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
   selectDetectedWorktreesByRepo,

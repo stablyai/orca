@@ -1,5 +1,5 @@
 import type { StructuredAgentResolutionOperation } from '../structured-agent-command-resolution'
-import { resolveHiddenProbeCwd } from '../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../lib/hidden-probe-cwd'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
