@@ -2159,10 +2159,11 @@
       "runtimePortForwards": {
         "desktopOnly": "Port forwarding needs the desktop app.",
         "forwardedAnnouncement": "Forwarded :{{value0}} to localhost:{{value1}}",
-        "busyInUse": "localhost:{{value0}} in use",
         "updateHost": "Update Orca on this host",
-        "listenFailedHere": "Could not listen on this computer",
-        "hostNotReachable": "Host not reachable"
+        "hostNotReachable": "Host not reachable",
+        "failedAnnouncement": "Couldn't forward :{{value0}}. {{value1}}",
+        "busyInUseHere": "localhost:{{value0}} in use on this computer",
+        "listenFailedRetry": "Couldn't listen on this computer. Retry or pick another port"
       }
     },
     "hooks": {
@@ -14064,7 +14065,6 @@
         },
         "ports": {
           "autoForward": "Auto-forward ports",
-          "autoForwardDescription": "Forward dev servers on remote hosts to localhost here.",
           "exclusive": "Same port number only",
           "exclusiveDescription": "If the port is taken here, skip it instead of remapping.",
           "range": "Auto-forward port range",
@@ -14081,7 +14081,9 @@
             "devServer": "dev server",
             "descriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
           },
-          "rangeInvalid": "\"{{value0}}\" isn't a usable port. Use a port from 1 to 65535, lowest first."
+          "rangeInvalid": "\"{{value0}}\" isn't a usable port. Use a port from 1 to 65535, lowest first.",
+          "needsAutoForward": "Turn on Auto-forward ports to change this.",
+          "autoForwardDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
         }
       },
       "right": {
@@ -14314,7 +14316,7 @@
             "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024.",
             "remoteEmpty": "No ports yet. Dev servers started here are forwarded to localhost.",
             "remoteEmptyOff": "No ports yet. Auto-forward is off.",
-            "portsSettingsLink": "Ports settings"
+            "turnOnInSettings": "Turn on in Ports settings"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",
@@ -15642,8 +15644,8 @@
             "ssh": "SSH access",
             "stopped": "stopped",
             "stopLabel": "Stop forwarding port {{value0}}",
-            "oneConnection": "1 connection",
-            "manyConnections": "{{value0}} connections"
+            "connectionCount_one": "{{count}} connection",
+            "connectionCount_other": "{{count}} connections"
           },
           "RuntimePortForward": {
             "pending": "Forwarding…",
@@ -15655,12 +15657,12 @@
             "stopForwarding": "Stop forwarding",
             "hostOfflineNote": "Host offline",
             "notAnswering": "Nothing answering on :{{value0}} yet",
-            "remappedInUse": "{{value0}} in use",
             "forwardedToLabel": "Port {{value0}} is forwarded to {{value1}}. Open in browser",
             "reconnect": "Reconnect",
             "actionLabel": "{{value0}} for port {{value1}}",
             "copyLocalUrl": "Copy local URL",
-            "stopAndSkip": "Stop and don't auto-forward :{{value0}}"
+            "stopAndSkip": "Stop and don't auto-forward :{{value0}}",
+            "remappedInUseHere": "({{value0}} in use here)"
           },
           "CloudShare": {
             "alreadyShared": "Already shared",
@@ -19989,8 +19991,8 @@
           "forwarded": "Forwarded :{{value0}} to localhost:{{value1}}",
           "remappedInUse": "{{value0}} · {{value1}} in use on this computer",
           "many": "{{value0}} ports forwarded",
-          "openPorts": "Open Ports",
-          "busyInUse": "localhost:{{value0}} in use on this computer"
+          "busyInUse": "localhost:{{value0}} in use on this computer",
+          "openPortsPanel": "Open ports"
         }
       }
     },

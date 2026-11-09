@@ -14,7 +14,8 @@ export type RuntimePortForwardRowState =
 
 const FOCUS =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring'
-const ACTION = 'h-5 px-1 text-xs font-normal text-foreground'
+const ACTION =
+  'h-5 px-1 text-2xs font-normal text-muted-foreground hover:text-foreground [&_svg]:size-3'
 
 /** The line under a remote port: where it lands on this computer, or a control to forward it. */
 export function RuntimePortForwardStatus({
@@ -46,11 +47,9 @@ export function RuntimePortForwardStatus({
           )
         : remapped
           ? t(
-              'auto.components.right.sidebar.RuntimePortForward.remappedInUse',
-              '{{value0}} in use',
-              {
-                value0: remotePort
-              }
+              'auto.components.right.sidebar.RuntimePortForward.remappedInUseHere',
+              '({{value0}} in use here)',
+              { value0: remotePort }
             )
           : null
     const localAddress = t(
@@ -95,11 +94,11 @@ export function RuntimePortForwardStatus({
         {note ? (
           <span
             className={cn(
-              'shrink-0 text-2xs',
+              'shrink-0 whitespace-nowrap text-2xs',
               unreachable ? 'text-status-warning-text' : 'text-muted-foreground'
             )}
           >
-            · {note}
+            {note}
           </span>
         ) : null}
         {offline && onReconnect ? (
