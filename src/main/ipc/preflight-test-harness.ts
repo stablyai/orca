@@ -17,6 +17,7 @@ export type PreflightMocks = {
   findCommandsOnLocalPathMock: Mock
   isCommandOnLocalPathMock: Mock
   listLocalCommandPathsMock: Mock
+  resolveCommandOnLocalPathMock?: Mock
   mergePersistedWindowsPathAsyncMock: Mock
   mergePersistedWindowsPathMock: Mock
 }
@@ -53,6 +54,7 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
     findCommandsOnLocalPathMock,
     isCommandOnLocalPathMock,
     listLocalCommandPathsMock,
+    resolveCommandOnLocalPathMock,
     mergePersistedWindowsPathAsyncMock,
     mergePersistedWindowsPathMock
   } = mocks
@@ -77,20 +79,27 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
   resolveCliCommandsMock.mockImplementation(
     (commands: string[]) => new Map(commands.map((command) => [command, command]))
   )
-  // Preserve existing lookup fixtures while production uses filesystem PATH resolution (#9297).
-  isCommandOnLocalPathMock.mockReset()
-  isCommandOnLocalPathMock.mockImplementation(async (command: string) => {
+  // Preserve existing where/which lookup fixtures while production uses filesystem PATH resolution (#9297).
+  const resolveViaFinder = async (command: string): Promise<string | null> => {
     const finder = process.platform === 'win32' ? 'where' : 'which'
     try {
       const { stdout } = await execFileAsyncMock(finder, [command])
-      return String(stdout)
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .some((line) => path.isAbsolute(line))
+      return (
+        String(stdout)
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .find((line) => path.isAbsolute(line)) ?? null
+      )
     } catch {
-      return false
+      return null
     }
-  })
+  }
+  isCommandOnLocalPathMock.mockReset()
+  isCommandOnLocalPathMock.mockImplementation(
+    async (command: string) => (await resolveViaFinder(command)) !== null
+  )
+  resolveCommandOnLocalPathMock?.mockReset()
+  resolveCommandOnLocalPathMock?.mockImplementation(resolveViaFinder)
   findCommandsOnLocalPathMock.mockReset()
   findCommandsOnLocalPathMock.mockImplementation(async (commands: readonly string[]) => {
     const matches = await Promise.all(

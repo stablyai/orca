@@ -4,6 +4,7 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  IBM_BOB_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
 import {
@@ -221,7 +222,8 @@ function hasPermissionTitleSegment(title: string): boolean {
       !titleHasAgentName(segment, 'antigravity') &&
       (containsLegacyAgentName(segment) ||
         DROID_AGENT_NAME_RE.test(segment) ||
-        HERMES_AGENT_NAME_RE.test(segment)) &&
+        HERMES_AGENT_NAME_RE.test(segment) ||
+        IBM_BOB_AGENT_NAME_RE.test(segment)) &&
       STRONG_PERMISSION_KEYWORDS_RE.test(segment)
   )
 }
@@ -287,9 +289,16 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   }
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
+  const hasIbmBobAgentName = IBM_BOB_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
   const hasLegacyAgentName = containsLegacyAgentName(title)
-  if (!hasLegacyAgentName && !hasDroidAgentName && !hasHermesAgentName && !hasAgyAgentName) {
+  if (
+    !hasLegacyAgentName &&
+    !hasDroidAgentName &&
+    !hasHermesAgentName &&
+    !hasIbmBobAgentName &&
+    !hasAgyAgentName
+  ) {
     return null
   }
   if (hasPermissionTitleSegment(title)) {

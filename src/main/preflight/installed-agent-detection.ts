@@ -18,6 +18,8 @@ import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tu
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
 import { extractExecutableToken } from '../../shared/managed-agent-command-token'
+import { excludeMisidentifiedAgents } from '../../shared/agent-launch/catalog/tui-agent-identity-exclusion'
+import { buildHostIdentityProbe } from './preflight-identity-probe'
 
 export type InstalledAgentDetectionOptions = {
   /** Agents disabled in Settings → Agents. Background callers skip probing them entirely. */
@@ -108,7 +110,16 @@ export async function detectInstalledAgents(
     ])
   ]
   const found = await detectAgentCommandsOnHost(probeCommands, { context })
-  const detected = resolveDetectedTuiAgentIds(commands, found, runtime)
+  // A found override names its binary deliberately; only bare PATH hits need an identity check.
+  const identityChecked = commands.filter(
+    (command) => !found.has(overrides.get(command.id)?.command ?? '')
+  )
+  const detected = await excludeMisidentifiedAgents(
+    identityChecked,
+    resolveDetectedTuiAgentIds(commands, found, runtime),
+    found,
+    buildHostIdentityProbe(context)
+  )
   for (const [id, probe] of overrides) {
     if (
       !detected.includes(id) &&

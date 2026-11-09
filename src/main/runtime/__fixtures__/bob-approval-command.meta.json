@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-12T18:12:40.985Z",
+  "platform": "darwin",
+  "command": ["bob", "chat", "--trust", "-w", "/tmp/bob-approval-ws"],
+  "cols": 120,
+  "rows": 40,
+  "note": "IBM Bob CLI 2.0.2 (commit a31a75e3); account: API key auth; launched as Orca does: bob chat --trust (no --auto-approve); macOS; main-agent execute_command approval modal owns the screen at capture end",
+  "exitCode": 0
+}

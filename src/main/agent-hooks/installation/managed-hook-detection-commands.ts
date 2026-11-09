@@ -5,6 +5,8 @@ import {
 } from '../../../shared/managed-agent-command-token'
 import { MANAGED_AGENT_HOOK_TARGETS } from '../../../shared/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
+import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
+import { serializeIdentityExclusion } from '../../../shared/agent-launch/catalog/tui-agent-identity-exclusion'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgentDetectionCommand } from '../../../shared/agent-launch/catalog/tui-agent-detection-commands'
 import { parseClaudeCliVersionOutput } from '../../claude/claude-hook-event-versions'
@@ -33,10 +35,14 @@ export function buildManagedHookDetectionCommands(
       if (override && isSafeOverrideExecutableToken(override)) {
         commands.add(override)
       }
+      // Why: SSH/WSL install allowlists come from this list, so the same-named-tool probe must ride it.
+      const exclusion = TUI_AGENT_CONFIG[target.tuiAgent]?.detectIdentityExclusion
+      const identity = exclusion ? { identityExclusion: serializeIdentityExclusion(exclusion) } : {}
       return [...commands].map((cmd) => ({
         id: target.tuiAgent,
         cmd,
-        ...(target.agent === 'claude' ? { reportVersion: true as const } : {})
+        ...(target.agent === 'claude' ? { reportVersion: true as const } : {}),
+        ...identity
       }))
     }
   )

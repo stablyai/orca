@@ -35,6 +35,7 @@ export type TuiAgent =
   | 'hermes' // Hermes Agent
   | 'openclaw'
   | 'copilot'
+  | 'bob'
   | 'grok'
   | 'devin'
   | 'ante' // Ante (Antigma Labs)

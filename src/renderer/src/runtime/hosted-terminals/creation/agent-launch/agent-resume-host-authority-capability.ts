@@ -1,6 +1,7 @@
 import type { ResumableTuiAgent } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
+  AGENT_SESSION_BOB_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_QODER_RESUME_RUNTIME_CAPABILITY,
@@ -48,7 +49,8 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   // Why: jcode resumed by id (--resume <id>) through the same host-authority session enum the generic probe covers.
   jcode: undefined,
   kiro: AGENT_SESSION_KIRO_RESUME_RUNTIME_CAPABILITY,
-  hermes: AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY
+  hermes: AGENT_SESSION_HERMES_RESUME_RUNTIME_CAPABILITY,
+  bob: AGENT_SESSION_BOB_RESUME_RUNTIME_CAPABILITY
 } satisfies Record<ResumableTuiAgent, RuntimeCapability | undefined>
 
 export function agentResumeHostAuthorityCapability(

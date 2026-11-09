@@ -5,11 +5,12 @@ import { isDshNonInteractiveCommand } from './dsh-launch-command'
 import { isMuseHeadlessOneShotCommand } from './muse-headless-command'
 import { isDsbHeadlessOneShotCommand } from './dsb-headless-command'
 import { isZCodeHeadlessOneShotCommand } from './zcode-headless-command'
+import { isBobHeadlessOneShotCommand } from './bob-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import type { TerminalAgent } from '../identity/terminal-agent'
 
-// Agent-specific one-shot forms cannot accept pane prompts; DSH server/JSON-RPC modes must be excluded too.
+// Agent-specific one-shot forms (including Bob's positional prompt) cannot accept pane prompts; DSH server/JSON-RPC modes must be excluded too.
 const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   Record<TerminalAgent, (tokens: readonly string[]) => boolean>
 > = {
@@ -23,7 +24,8 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,
   dsh: isDshNonInteractiveCommand,
-  dsb: isDsbHeadlessOneShotCommand
+  dsb: isDsbHeadlessOneShotCommand,
+  bob: isBobHeadlessOneShotCommand
 }
 
 export function isHeadlessOneShotAgentCommand(

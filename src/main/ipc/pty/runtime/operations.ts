@@ -55,6 +55,7 @@ export function writePtyFromRuntimeController(
   } catch {
     return options?.waitForSettlement ? writeRefused('provider_unavailable') : false
   }
+  deps.runtime?.notePtyInput(ptyId)
   if (options?.waitForSettlement) {
     // Refuse unsupported settlement before effects; fire-and-forget acceptance cannot clear durable mailbox reservations.
     if (!provider.writeWithSettlement) {

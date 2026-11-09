@@ -87,6 +87,9 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['kiro-cli', '--resume-id', id] : null
     case 'hermes':
       return providerSession.key === 'session_id' ? ['hermes', '--resume', id] : null
+    // Only `--resume`: the base launch command already carries `chat --trust`.
+    case 'bob':
+      return providerSession.key === 'session_id' ? ['bob', '--resume', id] : null
   }
 }
 

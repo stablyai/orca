@@ -4,6 +4,7 @@ import type {
   DraftPasteReadySignal,
   TuiAgentConfig
 } from './agent-launch/catalog/tui-agent-config-types'
+import { BOB_COMPOSER_PLACEHOLDER_RE } from './bob-tui-strings'
 import { createOpenCodeAgentRowScanner } from './opencode-agent-row-scanner'
 import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
 
@@ -109,6 +110,13 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     marker: COPILOT_COMPOSER_READY,
     // Keep the quiet fallback for a build or platform whose composer row differs.
     quietAnchor: DECSET_BRACKETED_PASTE
+  },
+  // Bob emits neither bracketed-paste nor alt-screen bytes before first input, so its localized composer prefix stands alone.
+  'bob-composer-prompt': {
+    markerAnchor: null,
+    markerAnchorEnd: null,
+    marker: BOB_COMPOSER_PLACEHOLDER_RE,
+    quietAnchor: null
   },
   'render-quiet-after-bracketed-paste': {
     markerAnchor: null,
@@ -227,7 +235,12 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       if (!sawQuietAnchor && quietAnchor !== null && combined.includes(quietAnchor)) {
         sawQuietAnchor = true
       }
-      if (signalMarker !== null && markerAnchor !== null) {
+      if (signalMarker !== null && markerAnchor === null) {
+        // Anchorless markers (Bob) match the rolling window so a prefix split across chunks resolves.
+        if (containsMarker(combined, signalMarker)) {
+          return { ready: true, armQuietTimer: false }
+        }
+      } else if (signalMarker !== null && markerAnchor !== null) {
         if (markerAnchorEnd !== null) {
           // Carry only split-anchor bytes so prior output cannot create a second enter/leave transition.
           const carriedLength = anchorCarry.length

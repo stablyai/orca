@@ -2,6 +2,7 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  IBM_BOB_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
 import { isCursorAgentTitle } from './agent-title-core'
@@ -30,7 +31,8 @@ const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
 const PATTERN_NAMES: readonly (readonly [RegExp, TerminalAgent])[] = [
   [AGY_AGENT_NAME_RE, 'antigravity'],
   [DROID_AGENT_NAME_RE, 'droid'],
-  [HERMES_AGENT_NAME_RE, 'hermes']
+  [HERMES_AGENT_NAME_RE, 'hermes'],
+  [IBM_BOB_AGENT_NAME_RE, 'bob']
 ]
 
 /** Catalog labels known to be emitted as terminal titles, not merely presented in Orca's UI. */
