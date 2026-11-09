@@ -21,7 +21,8 @@ const providerConfigSchema = z.looseObject({
 })
 const configDocSchema = z.looseObject({
   defaultModel: z.string().optional(),
-  provider: z.record(z.string(), providerConfigSchema).optional()
+  provider: z.record(z.string(), providerConfigSchema).optional(),
+  custom_provider: z.record(z.string(), providerConfigSchema).optional()
 })
 
 /** Session menus and config parsing share this id-based effort mapping. */
@@ -60,7 +61,15 @@ export function parseMcodeModelCatalog(content: string): AgentSessionModelOption
   const { defaultModel = '' } = parsed.data
   const models: AgentSessionModelOption[] = []
   const seen = new Set<string>()
-  for (const [providerId, provider] of Object.entries(parsed.data.provider ?? {})) {
+  // Custom providers keep their compound id (`custom_provider:<key>`), the same identity
+  // mcode's own config uses when naming them.
+  const providers = [
+    ...Object.entries(parsed.data.provider ?? {}),
+    ...Object.entries(parsed.data.custom_provider ?? {}).map(
+      ([key, provider]) => [`custom_provider:${key}`, provider] as const
+    )
+  ]
+  for (const [providerId, provider] of providers) {
     const order = provider.model_order ?? []
     const entries = Object.entries(provider.models ?? {}).sort(([a], [b]) => {
       const ia = order.indexOf(a)
@@ -71,7 +80,7 @@ export function parseMcodeModelCatalog(content: string): AgentSessionModelOption
       return ia !== -1 ? -1 : ib !== -1 ? 1 : 0
     })
     for (const [modelId, model] of entries) {
-      if (modelId === 'MiniMax-M3.1-Flash-Preview' || seen.has(modelId)) {
+      if (seen.has(modelId)) {
         continue
       }
       seen.add(modelId)

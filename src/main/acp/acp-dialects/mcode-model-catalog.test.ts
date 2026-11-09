@@ -52,6 +52,33 @@ describe('parseMcodeModelCatalog', () => {
         ],
         defaultEffort: 'on',
         declaredDefaultEffort: 'on'
+      },
+      {
+        id: 'm:minimax:MiniMax-M3.1-Flash-Preview:v:thinking',
+        label: 'MiniMax M3.1-Flash-Preview',
+        description: 'Fast and versatile frontier model with deep reasoning',
+        isDefault: false,
+        efforts: [
+          { value: 'low', label: 'Low' },
+          { value: 'medium', label: 'Medium' },
+          { value: 'high', label: 'High' },
+          { value: 'xhigh', label: 'Extra high' },
+          { value: 'max', label: 'Max' }
+        ],
+        defaultEffort: 'high',
+        declaredDefaultEffort: 'high'
+      },
+      {
+        id: 'm:custom_provider:minimax-legacy:MiniMax-M2.7:v:thinking',
+        label: 'MiniMax M2.7',
+        description: 'Capable model for everyday programming tasks',
+        isDefault: false,
+        efforts: [
+          { value: 'off', label: 'Off' },
+          { value: 'on', label: 'On' }
+        ],
+        defaultEffort: 'on',
+        declaredDefaultEffort: 'on'
       }
     ])
   })

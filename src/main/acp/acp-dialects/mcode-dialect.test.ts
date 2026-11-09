@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SessionConfigOption } from '../generated/acp-protocol.generated'
 import { normalizeMcodeConfigOptions } from './mcode-dialect'
 
+/** Returns the select option named `id`, failing the test when the normalizer dropped it. */
 function selectWith(options: SessionConfigOption[], id: string) {
   const found = options.find((option) => option.type === 'select' && option.id === id)
   if (found?.type !== 'select') {
@@ -27,7 +28,7 @@ const modelSelect = (currentValue: string): SessionConfigOption => ({
 })
 
 describe('normalizeMcodeConfigOptions', () => {
-  it('keeps thinking variants with canonical names and injects an on/off menu when absent', () => {
+  it('keeps every configured model with canonical names and injects an on/off menu when absent', () => {
     const normalized = normalizeMcodeConfigOptions([modelSelect('m:minimax:MiniMax-M3:v:')])
     const model = selectWith(normalized, 'model')
     expect(model.currentValue).toBe('m:minimax:MiniMax-M3:v:thinking')
@@ -41,6 +42,16 @@ describe('normalizeMcodeConfigOptions', () => {
         value: 'm:minimax:MiniMax-M3.1-Flash:v:thinking',
         name: 'MiniMax M3.1 Flash',
         description: 'Fast and versatile frontier model with deep reasoning'
+      },
+      {
+        value: 'm:minimax:MiniMax-M3.1-Flash-Preview:v:thinking',
+        name: 'MiniMax M3.1-Flash-Preview',
+        description: 'Fast and versatile frontier model with deep reasoning'
+      },
+      {
+        value: 'm:custom_provider:minimax-legacy:MiniMax-M2.7:v:thinking',
+        name: 'MiniMax M2.7',
+        description: 'Capable model for everyday programming tasks'
       }
     ])
     expect(normalized[1]).toEqual({

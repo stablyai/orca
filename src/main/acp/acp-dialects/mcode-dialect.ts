@@ -16,7 +16,11 @@ function resolveMcodeModelNameAndDescription(choice: SessionConfigSelectOption):
   name: string
   description?: string
 } {
-  const rawId = choice.value.replace(/^m:[^:]+:([^:]+)(?::v:.*)?$/, '$1')
+  const rawId =
+    choice.value
+      .replace(/:v:[^:]*$/, '')
+      .split(':')
+      .pop() ?? choice.value
   if (MCODE_MODEL_LABELS[rawId]) {
     return {
       name: MCODE_MODEL_LABELS[rawId],
@@ -46,13 +50,13 @@ export function normalizeMcodeConfigOptions(options: SessionConfigOption[]): Ses
   const normalized = options.map((option) => {
     if (option.type === 'select' && (option.category === 'model' || option.id === 'model')) {
       const choices = acpSelectChoices(option)
+      // Keep every configured model — dropping the running one would misreport the current
+      // selection — but collapse an off/thinking variant pair into its thinking row.
       const cleanChoices: SessionConfigSelectOption[] = choices
         .filter(
           (choice) =>
-            !choice.value.includes('MiniMax-M3.1-Flash-Preview') &&
-            !choice.value.includes('custom_provider') &&
-            (choice.value.endsWith(':thinking') ||
-              !choices.some((other) => other.value === `${choice.value}thinking`))
+            choice.value.endsWith(':thinking') ||
+            !choices.some((other) => other.value === `${choice.value}thinking`)
         )
         .map((choice) => {
           const { name, description } = resolveMcodeModelNameAndDescription(choice)

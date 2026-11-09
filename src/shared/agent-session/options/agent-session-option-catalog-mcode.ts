@@ -88,9 +88,10 @@ export const MCODE_ON_OFF_EFFORT: CatalogOption = {
   }
 }
 
-/** Maps an mcode session id (`m:provider:model:v:variant`) to its `-m provider/model#variant` form. */
+/** Maps an mcode session id (`m:<provider...>:<model>:v:<variant>`, where custom providers carry
+ *  their compound `custom_provider:<key>` identity) to its `-m provider/model#variant` form. */
 export function mcodeCliModelFromId(id: string): string {
-  const match = /^m:([^:]+):([^:]+):v:(.*)$/.exec(id)
+  const match = /^m:(.+):([^:]+):v:(.*)$/.exec(id)
   if (match) {
     const [, provider, model, variant] = match
     return variant ? `${provider}/${model}#${variant}` : `${provider}/${model}`
