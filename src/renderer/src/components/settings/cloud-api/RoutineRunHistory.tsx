@@ -32,7 +32,7 @@ type State =
 
 // One grid for every row so status, trigger, start, duration and links line up down the list.
 const ROW_GRID =
-  'grid grid-cols-[7.5rem_minmax(0,1fr)_6.5rem_4.5rem_auto] items-center gap-x-3 text-xs'
+  'grid grid-cols-[7.5rem_minmax(0,1fr)_6.5rem_4.5rem_8.5rem] items-center gap-x-3 text-xs'
 
 /**
  * Inline run history for one routine. Loads on mount and on `refreshKey` changes (keeping the
