@@ -8,6 +8,7 @@ import {
   XCircle
 } from 'lucide-react'
 import { isGitLabAllowedFailureJob } from '@/components/github/pr-check-presentation'
+import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import { CheckJobLogTail } from '@/components/right-sidebar/checks-panel/logs/check-job-log-tail'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
@@ -164,7 +165,7 @@ function JobCard({
     <div className="px-3 py-3">
       <div className="flex min-w-0 items-center gap-2">
         {isGitLabAllowedFailureJob(check, job) ? (
-          <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+          <AlertTriangle className={cn('size-4 shrink-0', CHECK_COLOR.gitlabAllowedFailure)} />
         ) : jobFailed ? (
           <XCircle className="size-4 shrink-0 text-destructive" />
         ) : (
