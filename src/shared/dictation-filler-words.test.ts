@@ -21,7 +21,9 @@ describe('removeFillerWords', () => {
     ['ru', 'Э, ну, давай так.', 'Ну, давай так.'],
     ['ja', 'えーと、明日の会議は、うーん、十時です。', '明日の会議は、十時です。'],
     ['ko', '음, 내일 회의는 흠, 열 시예요.', '내일 회의는 열 시예요.'],
-    ['zh', '嗯，我觉得，呃，这个可以。', '我觉得，这个可以。']
+    ['zh', '嗯，我觉得，呃，这个可以。', '我觉得，这个可以。'],
+    ['zh', '額，我覺得可以。', '我覺得可以。'],
+    ['en', 'UM I THINK WE SHOULD UH SHIP IT', 'I THINK WE SHOULD SHIP IT']
   ])('%s: %s', (language, text, expected) => {
     expect(removeFillerWords(text, [language])).toBe(expected)
   })
@@ -34,7 +36,8 @@ describe('removeFillerWords', () => {
     ['en', 'Open um.txt and set var_um to 3.'],
     ['ja', 'ええ、そうです。'],
     ['ko', '음이 너무 높아요.'],
-    ['zh', '金额不对，那个文件也要改。']
+    ['zh', '金额不对，那个文件也要改。'],
+    ['zh', '嗯。']
   ])('%s keeps words with meaning: %s', (language, text) => {
     expect(removeFillerWords(text, [language])).toBe(text)
   })

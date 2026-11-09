@@ -10,7 +10,8 @@ const FILLERS_BY_LANGUAGE: Record<string, string> = {
   ru: 'э+м*|х+м+|м{3,}',
   ja: 'え[ーえっ]*と|えー+|あのー+|うー+ん|んー+',
   ko: '으*음+|흠+',
-  zh: '嗯+|呃+|额+'
+  // 嗯 alone is also "yes", so only the one a pause follows goes.
+  zh: '嗯+(?=\\s*[，,、])|呃+|[额額]+'
 }
 FILLERS_BY_LANGUAGE.yue = FILLERS_BY_LANGUAGE.zh
 
@@ -27,7 +28,7 @@ const TRAILING_PAUSE = String.raw`(?:\s*(?:[,，、…]|\.{3}))?\s*`
 const SENTENCE_END_RE = /^[.!?。！？]+\s*/u
 // A comma left in front of a removed filler that ended the sentence or the text.
 const TRAILING_SOFT_PUNCTUATION_RE = /[\s,，、]+$/u
-const SENTENCE_START_RE = /(^|[.!?。！？])\s*$/u
+const SENTENCE_END_CHARS = '.!?。！？'
 const NON_LATIN_LETTER_RE = /(?=\p{L})\P{Script=Latin}/u
 
 function fillerPattern(languages: readonly string[] | undefined, text: string): RegExp | null {
@@ -41,7 +42,7 @@ function fillerPattern(languages: readonly string[] | undefined, text: string): 
   return new RegExp(STANDALONE(lists.join('|')) + TRAILING_PAUSE, 'giu')
 }
 
-// An all-caps "UM" or "HMM" is more likely a name or acronym than a sound.
+// In mixed-case text an all-caps "UM" or "HMM" is more likely a name or acronym than a sound.
 function isAllCaps(word: string): boolean {
   return word.length > 1 && word === word.toUpperCase() && word !== word.toLowerCase()
 }
@@ -63,6 +64,8 @@ export function removeFillerWords(text: string, languages: readonly string[] | u
   let out = ''
   let cursor = 0
   let capitalizeNext = false
+  // Some models write everything in capitals, where "UM" is still a sound.
+  const caseless = text === text.toUpperCase()
   const keep = (segment: string): void => {
     if (segment) {
       out += capitalizeNext ? capitalizeLowercaseWord(segment) : segment
@@ -71,12 +74,13 @@ export function removeFillerWords(text: string, languages: readonly string[] | u
   }
   for (const match of text.matchAll(pattern)) {
     const filler = match[1]
-    if (isAllCaps(filler)) {
+    if (!caseless && isAllCaps(filler)) {
       continue
     }
     keep(text.slice(cursor, match.index))
     cursor = match.index + match[0].length
-    const atSentenceStart = SENTENCE_START_RE.test(out)
+    const before = out.trimEnd()
+    const atSentenceStart = before === '' || SENTENCE_END_CHARS.includes(before.slice(-1))
     const sentenceEnd = SENTENCE_END_RE.exec(text.slice(cursor))
     // "we should, um." keeps its full stop; "Um." on its own goes entirely.
     if (sentenceEnd && atSentenceStart) {
