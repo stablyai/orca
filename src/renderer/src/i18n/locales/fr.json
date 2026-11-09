@@ -20844,6 +20844,22 @@
           "repoNameHint": "Utiliser le nom du dépôt comme indice",
           "repoNameHintDescription": "Aide à reconnaître le nom du dépôt.",
           "repoSaveFailed": "Impossible d’enregistrer les termes du dépôt. L’hôte de ce dépôt doit peut-être mettre Orca à jour."
+        },
+        "micTest": {
+          "test": "Tester",
+          "recording": "Enregistrement {{elapsed}} sur {{limit}}",
+          "stop": "Arrêter",
+          "hint": "Dites une phrase comme vous dictez d’habitude.",
+          "playing": "Lecture {{elapsed}}",
+          "skip": "Passer",
+          "levelGood": "Le niveau est bon",
+          "levelQuiet": "Très faible. Vérifiez le micro ou rapprochez-vous.",
+          "playAgain": "Réécouter",
+          "testAgain": "Tester à nouveau",
+          "listening": "{{model}} écoute aussi…",
+          "heardLabel": "{{model}} a entendu",
+          "heardNothing": "Aucun mot. Essayez de parler plus fort.",
+          "heardFailed": "{{model}} n’a pas pu transcrire l’enregistrement."
         }
       },
       "repositoryHooks": {

@@ -20020,6 +20020,22 @@
           "repoNameHint": "リポジトリ名をヒントとして使う",
           "repoNameHintDescription": "リポジトリ名を認識しやすくします。",
           "repoSaveFailed": "リポジトリの用語を保存できませんでした。このリポジトリのホストで Orca の更新が必要かもしれません。"
+        },
+        "micTest": {
+          "test": "テスト",
+          "recording": "録音中 {{elapsed}} / {{limit}}",
+          "stop": "停止",
+          "hint": "いつも音声入力するように一文話してください。",
+          "playing": "再生中 {{elapsed}}",
+          "skip": "スキップ",
+          "levelGood": "音量は良好です",
+          "levelQuiet": "音量がとても小さいです。マイクを確認するか、近づいてください。",
+          "playAgain": "もう一度再生",
+          "testAgain": "もう一度テスト",
+          "listening": "{{model}} も聞き取っています…",
+          "heardLabel": "{{model}} の認識結果",
+          "heardNothing": "言葉は認識されませんでした。もう少し大きな声で話してください。",
+          "heardFailed": "{{model}} は録音を文字起こしできませんでした。"
         }
       },
       "repositoryHooks": {

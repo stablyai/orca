@@ -21709,6 +21709,22 @@
           "repoNameHint": "Usar o nome do repositório como dica",
           "repoNameHintDescription": "Ajuda a reconhecer o nome do repositório.",
           "repoSaveFailed": "Não foi possível salvar os termos do repositório. O host deste repositório pode precisar de uma atualização do Orca."
+        },
+        "micTest": {
+          "test": "Testar",
+          "recording": "Gravando {{elapsed}} de {{limit}}",
+          "stop": "Parar",
+          "hint": "Diga uma frase como você costuma ditar.",
+          "playing": "Reproduzindo {{elapsed}}",
+          "skip": "Pular",
+          "levelGood": "O nível está bom",
+          "levelQuiet": "Muito baixo. Verifique o microfone ou chegue mais perto.",
+          "playAgain": "Tocar de novo",
+          "testAgain": "Testar de novo",
+          "listening": "{{model}} também está ouvindo…",
+          "heardLabel": "{{model}} ouviu",
+          "heardNothing": "Nenhuma palavra. Tente falar mais alto.",
+          "heardFailed": "{{model}} não conseguiu transcrever a gravação."
         }
       },
       "repositoryHooks": {
