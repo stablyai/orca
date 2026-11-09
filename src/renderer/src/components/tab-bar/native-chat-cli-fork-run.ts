@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -41,20 +42,52 @@ const subscribe = (listener: () => void) => {
   return () => listeners.delete(listener)
 }
 
-// Session-only: a CLI fork writes nothing until its first message, so until then its chat is the conversation.
+// Session-only, keyed by the fork's own conversation: until its first message the fork has no
+// transcript, so the chat it was forked from is still that conversation.
 const forkOrigins = new Map<string, { sessionId: string; workspaceId: string }>()
+const forkOriginKey = (workspaceId: string, providerSessionId: string) =>
+  `${workspaceId}\0${providerSessionId}`
+
+/** Binds the chat to the first conversation the fork's terminal tab reports, so a later one there is not mistaken for it. */
+function rememberForkOrigin(
+  terminalTabId: string,
+  origin: { sessionId: string; workspaceId: string }
+) {
+  const bind = (state: AppState): boolean => {
+    if (!state.unifiedTabsByWorktree[origin.workspaceId]?.some((tab) => tab.id === terminalTabId)) {
+      return true
+    }
+    const fork = Object.values(state.agentStatusByPaneKey).find(
+      (status) => status.tabId === terminalTabId && status.providerSession?.id
+    )?.providerSession?.id
+    if (fork) {
+      forkOrigins.set(forkOriginKey(origin.workspaceId, fork), origin)
+    }
+    return !!fork
+  }
+  if (bind(useAppStore.getState())) {
+    return
+  }
+  const stop = useAppStore.subscribe((state) => {
+    if (bind(state)) {
+      stop()
+    }
+  })
+}
 
 const quietOpenFeedback = { unavailable: () => {}, gone: () => {}, hostCannotOpen: () => {} }
 
-/** Opens the chat this client forked the terminal tab from with "Continue with Terminal Agent". */
+/** Opens the chat a still-unsaved "Continue with Terminal Agent" fork came from, if this client made it. */
 export async function reopenNativeChatCliForkOrigin(
-  terminal: { tabId: string; workspaceId: string; agent: string },
+  terminal: { workspaceId: string; providerSessionId: string; agent: string },
   target: RuntimeClientTarget
 ): Promise<boolean> {
-  const origin = forkOrigins.get(terminal.tabId)
-  if (origin?.workspaceId !== terminal.workspaceId) {
+  const key = forkOriginKey(terminal.workspaceId, terminal.providerSessionId)
+  const origin = forkOrigins.get(key)
+  if (!origin) {
     return false
   }
+  forkOrigins.delete(key)
   const opened = await openDesktopStructuredSession(
     { kind: 'history', structuredSession: origin, agent: terminal.agent },
     target,
@@ -173,7 +206,7 @@ export async function runNativeChatCliFork(args: {
       describeAiVaultCliForkFailure
     )
     if (terminalTabId) {
-      forkOrigins.set(terminalTabId, {
+      rememberForkOrigin(terminalTabId, {
         sessionId: subject.sessionId,
         workspaceId: subject.workspaceId
       })
