@@ -20,17 +20,23 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call,
-  supportsStructuredAgentSessionCreateMessage: async () => true,
-  supportsStructuredAgentSessionCreateOptionsMode: async () => true,
-  structuredAgentSessionHostSupports: async () => true,
-  structuredAgentSessionHostCapabilityState: async () => 'supported'
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
 }))
+
+vi.mock(
+  '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    supportsStructuredAgentSessionCreateMessage: async () => true,
+    supportsStructuredAgentSessionCreateOptionsMode: async () => true,
+    structuredAgentSessionHostSupports: async () => true,
+    structuredAgentSessionHostCapabilityState: async () => 'supported'
+  })
+)
 
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mocks.refresh

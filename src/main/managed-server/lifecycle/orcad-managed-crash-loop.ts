@@ -2,9 +2,12 @@
 import { OrcadUnexpectedExitSchema } from '../../../shared/orcad-unexpected-exit'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { OrcadHealth } from '../../orcad/orcad-health'
-import { isOrcadLaunchFailure, orcadLaunchFailureRanProcess } from '../../ssh/orcad-launch-failure'
-import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
-import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/ssh-remote-platform'
+import {
+  isOrcadLaunchFailure,
+  orcadLaunchFailureRanProcess
+} from '../activation/orcad-launch-failure'
+import { orcadSlotDir, type OrcadSlotOptions } from '../activation/orcad-recovery-slot'
+import { isWindowsRemoteHost, joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'

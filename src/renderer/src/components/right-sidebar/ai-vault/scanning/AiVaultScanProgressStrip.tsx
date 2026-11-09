@@ -5,7 +5,8 @@ import { Progress } from '@/components/ui/progress'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useNow } from '@/hooks/use-now'
 import { getIntlLocale, translate } from '@/i18n/i18n'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/utils'
 import type {
   AiVaultScanAgentProgress,
@@ -19,45 +20,45 @@ import { formatTimeAgo } from '../session-list/ai-vault-session-time'
 const EMPHASIS_TOKEN = '\u0000'
 type StripActivity = { progress: AiVaultScanProgress; active: boolean }
 
-function formatCount(value: number): string {
-  return value.toLocaleString(getIntlLocale())
+function formatCount(value: number, intlLocale: string = getIntlLocale()): string {
+  return value.toLocaleString(intlLocale)
 }
 
-function fileCountLabel(count: number): string {
-  const value0 = formatCount(count)
-  return translate(
-    'auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount',
-    '{{value0}} files',
-    { value0, count, defaultValue_one: '{{value0}} file' }
-  )
+function fileCountLabel(count: number, t: Translate = translate, intlLocale?: string): string {
+  const value0 = formatCount(count, intlLocale)
+  return t('auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount', '{{value0}} files', {
+    value0,
+    count,
+    defaultValue_one: '{{value0}} file'
+  })
 }
 
-function databaseCountLabel(count: number): string {
-  const value0 = formatCount(count)
-  return translate(
+function databaseCountLabel(count: number, t: Translate = translate, intlLocale?: string): string {
+  const value0 = formatCount(count, intlLocale)
+  return t(
     'auto.components.right.sidebar.AiVaultScanProgressStrip.databaseCount',
     '{{value0}} databases',
     { value0, count, defaultValue_one: '{{value0}} database' }
   )
 }
 
-function stripSentence(progress: AiVaultScanProgress): string {
+function stripSentence(progress: AiVaultScanProgress, t: Translate = translate): string {
   const value0 = EMPHASIS_TOKEN
   switch (progress.stage) {
     case 'finding':
-      return translate(
+      return t(
         'auto.components.right.sidebar.AiVaultScanProgressStrip.scanning',
         'Scanning {{value0}}',
         { value0 }
       )
     case 'reading':
-      return translate(
+      return t(
         'auto.components.right.sidebar.AiVaultScanProgressStrip.checking',
         'Checking {{value0}}',
         { value0 }
       )
     case 'finished':
-      return translate(
+      return t(
         'auto.components.right.sidebar.AiVaultScanProgressStrip.scanned',
         'Scanned {{value0}}',
         { value0 }
@@ -70,12 +71,18 @@ function foundCount(agent: AiVaultScanAgentProgress): number {
 }
 
 function StripText({ progress, active }: StripActivity): React.JSX.Element {
+  const intlLocale = useIntlLocale()
+  const t = useTranslate()
   const emphasis =
     active && progress.stage === 'reading'
-      ? `${formatCount(progress.read.done + (progress.read.skipped ?? 0))} / ${formatCount(progress.read.total)}`
-      : fileCountLabel(progress.agents.reduce((sum, agent) => sum + foundCount(agent), 0))
+      ? `${formatCount(progress.read.done + (progress.read.skipped ?? 0), intlLocale)} / ${formatCount(progress.read.total, intlLocale)}`
+      : fileCountLabel(
+          progress.agents.reduce((sum, agent) => sum + foundCount(agent), 0),
+          t,
+          intlLocale
+        )
   const sentence =
-    active || progress.stage === 'finished' ? stripSentence(progress) : EMPHASIS_TOKEN
+    active || progress.stage === 'finished' ? stripSentence(progress, t) : EMPHASIS_TOKEN
   const [before, after] = sentence.split(EMPHASIS_TOKEN)
   return (
     <span className="min-w-0 truncate">
@@ -99,12 +106,14 @@ function StripMark({ progress, active }: StripActivity): React.JSX.Element | nul
   return progress.stage === 'finished' ? <Check className="size-3 shrink-0" /> : null
 }
 
-function agentDetail(agent: AiVaultScanAgentProgress): string {
+function agentDetail(agent: AiVaultScanAgentProgress, t?: Translate, intlLocale?: string): string {
   if (agent.databases > 0) {
-    const databases = databaseCountLabel(agent.databases)
-    return agent.files > 0 ? `${fileCountLabel(agent.files)} · ${databases}` : databases
+    const databases = databaseCountLabel(agent.databases, t, intlLocale)
+    return agent.files > 0
+      ? `${fileCountLabel(agent.files, t, intlLocale)} · ${databases}`
+      : databases
   }
-  return fileCountLabel(agent.files)
+  return fileCountLabel(agent.files, t, intlLocale)
 }
 
 function AgentRow({
@@ -116,6 +125,8 @@ function AgentRow({
   agent: AiVaultScanAgentProgress
   current: boolean
 } & StripActivity): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const read = current && progress.stage !== 'finding' ? agent.read : undefined
   const settled = read ? read.done + (read.skipped ?? 0) : 0
   const hasWork = read !== undefined && read.total > 0
@@ -123,13 +134,13 @@ function AgentRow({
   const complete = showBar && settled === read.total
   const label = agentLabel(agent.agent)
   const checked = hasWork
-    ? translate(
+    ? t(
         'auto.components.right.sidebar.AiVaultScanProgressStrip.agentCheckedCount',
         '{{agent}}: {{settled}} of {{total}} history candidates checked',
         {
           agent: label,
-          settled: formatCount(settled),
-          total: formatCount(read.total),
+          settled: formatCount(settled, intlLocale),
+          total: formatCount(read.total, intlLocale),
           count: read.total,
           defaultValue_one: '{{agent}}: {{settled}} of {{total}} history candidate checked'
         }
@@ -144,7 +155,9 @@ function AgentRow({
           className="ml-auto shrink-0 text-2xs text-muted-foreground tabular-nums"
           aria-label={checked}
         >
-          {hasWork ? `${formatCount(settled)} / ${formatCount(read.total)}` : agentDetail(agent)}
+          {hasWork
+            ? `${formatCount(settled, intlLocale)} / ${formatCount(read.total, intlLocale)}`
+            : agentDetail(agent, t, intlLocale)}
         </span>
         <span className="flex size-3.5 shrink-0 items-center justify-center">
           {complete ? (
@@ -178,13 +191,14 @@ export function AiVaultScanProgressStrip({
   agents?: AiVaultScanAgentProgress[]
   active?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const finished = progress.stage === 'finished'
   const now = useNow(active ? 1_000 : 30_000, active || finished)
   const elapsedAt = active ? now : progress.settledAt
   const time =
     finished && progress.settledAt !== null
-      ? formatTimeAgo(progress.settledAt)
+      ? formatTimeAgo(progress.settledAt, t)
       : elapsedAt !== null
         ? formatElapsed(elapsedAt - progress.startedAt)
         : null

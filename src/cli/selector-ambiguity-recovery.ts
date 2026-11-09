@@ -14,8 +14,8 @@ const EXACT_FORMS = {
   },
   worktree: {
     forms:
-      'identity:<identity.key> (host-qualified), or id:<repo-id>::<absolute-path> when only one host has that checkout',
-    list: 'orca worktree list --json',
+      'identity:<identity.key> (host-qualified), id:<repo-id>::<absolute-path> when only one host has that checkout, or folder:<folder-id> for a folder workspace',
+    list: 'orca worktree ps --json',
     noun: 'workspace'
   }
 } as const

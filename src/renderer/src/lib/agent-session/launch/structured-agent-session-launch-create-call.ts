@@ -10,21 +10,22 @@ import type {
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
+  isAgentSessionForkSourceAdmissionRefusal,
   isDefinitiveAgentSessionCreateRefusal
 } from '../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import { readAgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import {
-  callStructuredAgentSession,
   supportsStructuredAgentSessionCreateOptionsMode,
   structuredAgentSessionHostSupports,
   supportsStructuredAgentSessionCreateMessage
-} from '@/runtime/structured-agent-session-client'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { withFrameDrawnChatTabPlacement } from '../../frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
-import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
+import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import {
   abandonStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent
@@ -36,6 +37,17 @@ import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError
 } from './structured-agent-session-launch-errors'
+
+import {
+  requireHostForkSupport,
+  inheritedForkCreateOptions,
+  refuseUnsentInheritedFork
+} from './structured-agent-session-launch-fork-support'
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  RuntimeRpcCallError
+} from '@/runtime/rpc/calls/runtime-rpc-result'
+export { STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL } from './structured-agent-session-launch-fork-support'
 
 type LaunchSeed = Readonly<Record<string, string>> | undefined
 const DEFINITIVE_CREATE_FAILURE_CODES = [
@@ -134,6 +146,15 @@ export async function launchStructuredAgentSession(
     }
     delete intent.createAfter
   }
+  let forkOptions: Awaited<ReturnType<typeof inheritedForkCreateOptions>>
+  if (intent.params.forkFrom) {
+    try {
+      forkOptions = await inheritedForkCreateOptions(intent)
+    } catch (error) {
+      refuseUnsentInheritedFork(intent, priorCreateOutcomeUnknown, error)
+    }
+  }
+  await requireHostForkSupport(intent)
   const hostSeed = await requireHostCreateSupport(intent)
   if (intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)
@@ -180,9 +201,17 @@ export async function launchStructuredAgentSession(
     result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
       intent.target,
       'agentSession.create',
-      params
+      params,
+      ...(forkOptions ? ([forkOptions] as const) : ([] as const))
     )
   } catch (error) {
+    if (
+      forkOptions?.expectedEnvironmentRuntimeId &&
+      (error instanceof RuntimeConnectionChangedBeforeSendError ||
+        (error instanceof RuntimeRpcCallError && error.code === 'runtime_environment_changed'))
+    ) {
+      refuseUnsentInheritedFork(intent, priorCreateOutcomeUnknown)
+    }
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)
     if (code) {
       abandonStructuredAgentSessionLaunchIntent(intent)
@@ -201,7 +230,8 @@ export async function launchStructuredAgentSession(
       !priorCreateOutcomeUnknown &&
       result.refusal.createAttemptRefusedBeforeCommit === true &&
       refusal !== undefined &&
-      isAgentSessionCreateAdmissionRefusal(refusal)
+      (isAgentSessionCreateAdmissionRefusal(refusal) ||
+        (!!intent.params.forkFrom && isAgentSessionForkSourceAdmissionRefusal(refusal)))
     // Attempt proof cannot settle an earlier create whose reply was lost.
     if (
       !attemptRefusedBeforeCommit &&

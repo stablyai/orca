@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { OrcadMigrationBlobDescriptor } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import { getOrcadMigrationReceivedBlobPath } from './orcad-migration-blob-staging'
-import { commitStagedOrcadMigrationCatalogDurably } from '../../runtime/orcad-migration-catalog-import'
+import { commitStagedOrcadMigrationCatalogDurably } from '../../runtime/hosts/migration/orcad-migration-catalog-import'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   DORMANT_LEAF_ID,

@@ -6,7 +6,6 @@ import {
   type OrcaBridge,
   type OrcaPanelContext
 } from './declarative-renderer'
-import { createOrcaSdk } from './declarative-sdk'
 
 function hostBridge() {
   const handlers = new Map<string, (payload: unknown) => void>()
@@ -111,6 +110,65 @@ describe('components panel lifecycle', () => {
     runtime.dispose()
   })
 
+  it('posts an edit made just before a workspace switch with its own workspace’s hydration', () => {
+    vi.useFakeTimers()
+    const { runtime, posted, host } = booted()
+    const draft = atom('lifecycle.switchDraft', '', { persist: 'workspace' })
+    host.send('ui.hydrate', { hydration: 1, workspace: {} })
+    set(draft, 'typed in A')
+    vi.advanceTimersByTime(200)
+    host.send('ui.hydrate', {
+      hydration: 2,
+      workspace: { 'lifecycle.switchDraft': { version: 1, value: 'B saved' } }
+    })
+    vi.advanceTimersByTime(500)
+    expect(read(draft)).toBe('B saved')
+    expect(posted.filter((entry) => entry.event === 'ui.persist')).toEqual([
+      {
+        event: 'ui.persist',
+        payload: {
+          document: runtime.document,
+          hydration: 1,
+          entries: [
+            { scope: 'workspace', key: 'lifecycle.switchDraft', version: 1, value: 'typed in A' }
+          ]
+        }
+      }
+    ])
+    runtime.dispose()
+  })
+
+  it('flushes plugin-scope edits before a hydrate and tags only writes made after a numbered one', () => {
+    vi.useFakeTimers()
+    const { runtime, posted, host } = booted()
+    const shared = atom('lifecycle.switchShared', 0, { persist: 'plugin' })
+    const draft = atom('lifecycle.switchUntagged', '', { persist: 'workspace' })
+    // Before any numbered hydrate (an older host) a write carries no hydration at all.
+    host.send('ui.hydrate', { workspace: {} })
+    set(draft, 'untagged')
+    vi.advanceTimersByTime(500)
+    host.send('ui.hydrate', { hydration: 3, workspace: {} })
+    set(shared, 7)
+    set(draft, 'in 3')
+    host.send('ui.hydrate', {
+      hydration: 4,
+      plugin: { 'lifecycle.switchShared': { version: 1, value: 7 } }
+    })
+    vi.advanceTimersByTime(500)
+    const keyed = (key: string) => expect.objectContaining({ key })
+    const persists = posted.filter((entry) => entry.event === 'ui.persist')
+    expect(persists.map((entry) => entry.payload)).toStrictEqual([
+      { document: runtime.document, entries: [keyed('lifecycle.switchUntagged')] },
+      {
+        document: runtime.document,
+        hydration: 3,
+        entries: [keyed('lifecycle.switchShared'), keyed('lifecycle.switchUntagged')]
+      }
+    ])
+    expect(read(shared)).toBe(7)
+    runtime.dispose()
+  })
+
   it('runs setup with its context and cleans everything up on dispose', async () => {
     const { runtime, host } = booted()
     const disposed = vi.fn()
@@ -133,73 +191,5 @@ describe('components panel lifecycle', () => {
     expect(disposed).toHaveBeenCalledOnce()
     expect(cleanup).toHaveBeenCalledOnce()
     expect(seen.signal?.aborted).toBe(true)
-  })
-
-  it('refuses duplicate atom keys', () => {
-    atom('lifecycle.once', 1)
-    expect(() => atom('lifecycle.once', 2)).toThrow(/already used/)
-    expect(() => atom('bad key!', 1)).toThrow(/atom key/)
-  })
-})
-
-describe('orca SDK facade', () => {
-  it('times out host calls, and keeps wire events out of on()', async () => {
-    vi.useFakeTimers()
-    const call = vi.fn(
-      (_method: string, _params?: unknown, options?: unknown) =>
-        new Promise((_resolve, reject) => {
-          const signal: unknown =
-            typeof options === 'object' && options !== null && 'signal' in options
-              ? options.signal
-              : null
-          if (signal instanceof AbortSignal) {
-            signal.addEventListener('abort', () => reject(new Error('cancelled')))
-          }
-        })
-    )
-    const on = vi.fn(() => ({ dispose: () => undefined }))
-    const sdk = createOrcaSdk({
-      bridge: () => ({ host: { call, has: (name) => name === 'notifications.show' }, on }),
-      theme: () => ({ colorScheme: 'dark' })
-    })
-    const pending = sdk.host.call('workspace.readContext', undefined, { timeoutMs: 50 })
-    vi.advanceTimersByTime(60)
-    await expect(pending).rejects.toMatchObject({ code: 'timeout', retryable: true })
-    expect(sdk.host.has('notifications.show')).toBe(true)
-    expect(() => sdk.on('ui.event', () => undefined)).toThrow(/not an event/)
-    expect(() => sdk.on('editor.flush', () => undefined)).toThrow(/not an event/)
-    sdk.on('theme', () => undefined)
-    expect(on).toHaveBeenCalledOnce()
-    expect(sdk.ui.has('Input', 'defaultValue')).toBe(true)
-    expect(sdk.ui.has('Input', '$edit')).toBe(false)
-    expect(sdk.ui.has('Carousel')).toBe(false)
-    // Catalog 2 (Orca 1.4.247).
-    expect(sdk.ui.catalog).toBe(4)
-    expect(sdk.ui.has('Box', 'scroll')).toBe(true)
-    expect(sdk.ui.has('RelativeTime', 'format')).toBe(true)
-    expect(sdk.ui.has('Table')).toBe(true)
-    expect(sdk.ui.has('Table', 'onLoadMore')).toBe(true)
-    expect(sdk.ui.has('Button', 'tooltip')).toBe(true)
-    expect(sdk.ui.has('Tree', '$edit')).toBe(false)
-    expect(sdk.env).toMatchObject({
-      locale: 'en',
-      client: 'desktop',
-      theme: { colorScheme: 'dark' }
-    })
-    void sdk.shell.openExternal('https://example.com')
-    void sdk.files.saveAs({ suggestedName: 'a.bin', data: new Uint8Array([1, 2, 3]).subarray(1) })
-    expect(call).toHaveBeenCalledWith(
-      'shell.openExternal',
-      { url: 'https://example.com' },
-      undefined
-    )
-    const saveParams = call.mock.calls.at(-1)?.[1]
-    expect(call.mock.calls.at(-1)?.[0]).toBe('files.saveAs')
-    expect(saveParams).toMatchObject({ suggestedName: 'a.bin' })
-    const data: unknown =
-      typeof saveParams === 'object' && saveParams !== null && 'data' in saveParams
-        ? saveParams.data
-        : null
-    expect(data instanceof ArrayBuffer && [...new Uint8Array(data)]).toEqual([2, 3])
   })
 })

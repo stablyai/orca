@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { CacheEntry } from '@/store/github/cache-model'
+import type { CacheEntry } from '@/store/github/cache/cache-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import {
-  reconcileTaskPagePagesAfterLandingRefresh,
-  reconcileTaskPagePagesWithWorkItemsCache
-} from './task-page-cache-selectors'
+import { reconcileTaskPagePagesWithWorkItemsCache } from './task-page-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {
   return { data, fetchedAt: 1 }
@@ -27,19 +24,5 @@ describe('task page cache selectors', () => {
 
     expect(nextPages[0]?.map((item) => item.repoHostId)).toEqual(['local', 'ssh:builder'])
     expect(nextPages[0]?.[1]).toBe(remote)
-  })
-
-  it('replaces GitHub landing refresh rows when membership changes', () => {
-    const first = workItem('issue-1', 'repo-1')
-    const second = workItem('issue-2', 'repo-1')
-    const third = workItem('issue-3', 'repo-1')
-    const older = workItem('issue-4', 'repo-1')
-
-    const nextPages = reconcileTaskPagePagesAfterLandingRefresh(
-      [[first, second], [older]],
-      [third, first]
-    )
-
-    expect(nextPages).toEqual([[third, first]])
   })
 })

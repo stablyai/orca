@@ -1,13 +1,13 @@
 import { OrcaRuntimeWithHasRecentTerminalOutputPath } from '../output/terminal-output-path'
-import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeFileCommandSurface } from '../../runtime-file-command-surface'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeFileCommandSurface } from '../../construction/runtime-file-command-surface'
 
 export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecentTerminalOutputPath {
   abstract getMobileDisplayMode(ptyId: string): 'auto' | 'desktop'
   protected abstract pickMostRecentActor(
     inner: Map<string, { clientId: string; lastActedAt: number }>
   ): { clientId: string; lastActedAt: number } | null
-  protected abstract setDriver(ptyId: string, next: DriverState): void
+  protected abstract setDriver(ptyId: string, next: RuntimeTerminalDriverState): void
   abstract applyRemoteDesktopLayout(ptyId: string): Promise<boolean>
   protected abstract getAutoRestoreFitMs(): number | null
 
@@ -153,5 +153,7 @@ export abstract class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWit
       const rows = override.previousRows ?? fallback.rows
       void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
     }
+    // Last: the device's streams and phone presence are released above.
+    this.reportFocusLostForDepartedDevice(clientId)
   }
 }

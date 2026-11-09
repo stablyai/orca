@@ -4,12 +4,12 @@ import {
   editorBufferIdOfView,
   editorBufferSiblingViewIds
 } from '@/store/slices/editor/buffers/editor-buffer-views'
-import type { WorktreePurgeTarget } from '@/store/slices/worktree-purge-target'
+import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
 import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/worktree-purge-closed-files'
 import { canAutoSaveOpenFile } from '../../autosave/editor-autosave'
 import { flushClosingEditorBuffers } from './editor-pending-flush'
 import { editorTabModelUri, isCodeViewTab } from '../queue/editor-save-disk-precondition'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 
 /** Prompt once per writable dirty record only when every view of it is closing. */
 export function lastViewUnsavedFiles(state: AppState, closedIds: ReadonlySet<string>): OpenFile[] {

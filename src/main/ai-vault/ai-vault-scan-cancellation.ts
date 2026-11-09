@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { AI_VAULT_SCAN_CANCELLED_MESSAGE } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 export function throwIfAiVaultScanCancelled(signal?: AbortSignal): void {
@@ -5,6 +6,16 @@ export function throwIfAiVaultScanCancelled(signal?: AbortSignal): void {
     return
   }
   throw createAiVaultScanCancelledError()
+}
+
+export function waitForAiVaultScan<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) {
+    return promise
+  }
+  return waitForPromiseWithSignal(promise, signal).catch((error: unknown) => {
+    throwIfAiVaultScanCancelled(signal)
+    throw error
+  })
 }
 
 // RPC cannot abort in-flight work; cancellation releases its waiter while the request settles separately.

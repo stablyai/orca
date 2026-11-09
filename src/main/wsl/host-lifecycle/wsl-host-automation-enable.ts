@@ -6,7 +6,7 @@ import {
 } from '../../../shared/remote-runtime/pairing/pairing'
 import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { sendSupportedMigrationRequest } from '../../ssh/orcad-migration-catalog-client'
+import { sendSupportedMigrationRequest } from '../../managed-server/migration/catalog/orcad-migration-request'
 import { getWslHostService } from './wsl-host-service-instance'
 import type { WslMoveMovedAutomation } from '../../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
 

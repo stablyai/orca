@@ -1,23 +1,22 @@
 import type { AppState } from '@/store/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../shared/execution-host/project-runtime-legacy-migration'
+import { getWorkspaceRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import {
-  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
-  getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
-} from '../../../shared/project-execution-runtime'
+} from '../../../shared/execution-host/project-execution-runtime'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { ResolvedAgentBackgroundTarget } from './agent-background-session-contract'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { projectMatchesRepo } from '../../../shared/project-repo-match'
-import { getIndexedRepoMap, getIndexedReposById } from '@/store/worktree-repo-index'
-import { defaultScopeHost } from './default-creation-host'
-import { getLocalProjectRuntimeWorkspace } from './local-project-runtime-workspace'
+import { getIndexedRepoMap, getIndexedReposById } from '@/store/repos/repository-catalog-index'
+import { defaultScopeHost } from '../runtime/hosts/selection/default-creation-host'
+import { getLocalProjectRuntimeWorkspace } from '../runtime/hosts/wsl/local-project-runtime-workspace'
 import { getActiveWorkspaceOwnerTarget } from './resolved-worktree-execution-host'
-import { getEnvironmentRuntimeContextKey } from './provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '../runtime/hosts/observations/provider-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
   getProjectRuntimePreflightContext,
@@ -56,7 +55,10 @@ export function getLocalProjectExecutionRuntimeContext(
   worktreeId?: string | null,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
   wslContext: LocalProjectRuntimeWslContext = {},
-  resolvedTarget?: ResolvedAgentBackgroundTarget
+  resolvedTarget?: {
+    worktree: Pick<Worktree, 'repoId' | 'projectId' | 'path' | 'hostId'>
+    repo: Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'>
+  }
 ): ProjectExecutionRuntimeResolution | undefined {
   if (appPlatform !== 'win32' || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return undefined

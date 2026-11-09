@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PreparedDroppedPaths } from '../../../../../../shared/native-file-drop-preparation'
+import type { PreparedDroppedPaths } from '../../../../../../shared/file-import/native-file-drop-preparation'
 import { useAppStore } from '@/store/index'
 import {
   seedRemoteDropWorkspaces,
@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   prepare: vi.fn(),
   toastError: vi.fn()
 }))
-vi.mock('@/runtime/runtime-file-import-client', () => ({
+vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))

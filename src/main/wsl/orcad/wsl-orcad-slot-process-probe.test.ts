@@ -14,7 +14,7 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', () => ({
 }))
 
 import { wslOrcadSlotProcessProbeCommand } from './wsl-orcad-slot-process-probe'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const host = getRemoteHostPlatform('linux-x64')
 

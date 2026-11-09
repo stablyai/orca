@@ -1,6 +1,6 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { CopyButton } from '@/components/right-sidebar/checks-panel/comments/comment-controls'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import { formatGitStatus } from './workspace-cleanup-candidate-row-data'
@@ -25,6 +25,7 @@ export function CandidateRowDetails({
   expanded,
   gitChecked
 }: CandidateRowDetailsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className={cn(
@@ -38,23 +39,20 @@ export function CandidateRowDetails({
       <div className="min-h-0 overflow-hidden">
         {/* One label column keeps every value on the same left edge. */}
         <dl className="grid select-text grid-cols-[max-content_minmax(0,1fr)] items-baseline gap-x-4 gap-y-1.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-xs">
-          <DetailRow
-            label={translate('components.workspace.cleanup.browse.pathLabel', 'Path')}
-            mono
-          >
+          <DetailRow label={t('components.workspace.cleanup.browse.pathLabel', 'Path')} mono>
             <span className="flex min-w-0 items-center gap-1">
               <span className="truncate" title={candidate.path}>
                 {candidate.path}
               </span>
               <CopyButton
                 text={candidate.path}
-                title={translate('components.workspace.cleanup.browse.copyPath', 'Copy path')}
+                title={t('components.workspace.cleanup.browse.copyPath', 'Copy path')}
               />
             </span>
           </DetailRow>
           {candidate.branch ? (
             <DetailRow
-              label={translate(
+              label={t(
                 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bef0adef9b',
                 'Branch'
               )}
@@ -63,29 +61,21 @@ export function CandidateRowDetails({
               {candidate.branch}
             </DetailRow>
           ) : null}
-          <DetailRow
-            label={translate('auto.components.workspace.cleanup.candidateRow.gitLabel', 'Git')}
-          >
+          <DetailRow label={t('auto.components.workspace.cleanup.candidateRow.gitLabel', 'Git')}>
             {gitChecked
-              ? formatGitDetail(candidate, branchSafetyDetails[0])
-              : translate('components.workspace.cleanup.browse.gitNotChecked', 'Not checked')}
+              ? formatGitDetail(candidate, branchSafetyDetails[0], t)
+              : t('components.workspace.cleanup.browse.gitNotChecked', 'Not checked')}
           </DetailRow>
           {contextDetails ? (
             <DetailRow
-              label={translate(
-                'auto.components.workspace.cleanup.candidateRow.contextLabel',
-                'Context'
-              )}
+              label={t('auto.components.workspace.cleanup.candidateRow.contextLabel', 'Context')}
             >
               {contextDetails}
             </DetailRow>
           ) : null}
           {flags.length > 0 ? (
             <DetailRow
-              label={translate(
-                'auto.components.workspace.cleanup.candidateRow.flagsLabel',
-                'Flags'
-              )}
+              label={t('auto.components.workspace.cleanup.candidateRow.flagsLabel', 'Flags')}
               wrap
             >
               {flags.join(' · ')}
@@ -122,12 +112,13 @@ function DetailRow({
 // "Unpushed commits" plus "Unpushed commits: 2" says the same thing twice; keep the count.
 function formatGitDetail(
   candidate: WorkspaceCleanupCandidate,
-  commits: string | undefined
+  commits: string | undefined,
+  t?: Translate
 ): string {
   if (!commits) {
-    return formatGitStatus(candidate)
+    return formatGitStatus(candidate, t)
   }
   return getWorkspaceCleanupGitState(candidate) === 'unpushed'
     ? commits
-    : `${formatGitStatus(candidate)} · ${commits}`
+    : `${formatGitStatus(candidate, t)} · ${commits}`
 }

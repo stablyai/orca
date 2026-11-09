@@ -20,7 +20,7 @@ import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
 import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
-import { respondAfterAgentToolPluginHooks } from '../agent-tool-plugin-hooks'
+import { respondAfterAgentToolPluginHooks } from '../tool-events/agent-tool-plugin-hooks'
 
 import type { HookServerStartOptions } from './server-types'
 
@@ -144,6 +144,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        if (source === 'muse' && !normalized.event) {
+          this.rearmIgnoredMuseHook(aliasedBody)
+        }
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
               source,

@@ -2,24 +2,26 @@ import React from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from './status-bar-usage-sections'
 
 export type UsageUnitLabelState = 'absent' | 'collapsed' | 'shown'
 
 export function usageChipShowsPercentage(
   p: ProviderRateLimits | null,
-  mode: StatusBarUsageMode
+  mode: StatusBarUsageMode,
+  t?: Translate
 ): boolean {
-  return getStatusBarUsageSections(p, mode).length > 0
+  return getStatusBarUsageSections(p, mode, t).length > 0
 }
 
 export function getUsageUnitLabelState(
   providers: readonly ProviderRateLimits[],
   collapsedProviders: readonly string[],
-  mode: StatusBarUsageMode
+  mode: StatusBarUsageMode,
+  t?: Translate
 ): UsageUnitLabelState {
-  const withPercentage = providers.filter((p) => usageChipShowsPercentage(p, mode))
+  const withPercentage = providers.filter((p) => usageChipShowsPercentage(p, mode, t))
   if (withPercentage.length === 0) {
     return 'absent'
   }
@@ -36,6 +38,7 @@ export function UsageUnitLabel({
   collapsed: boolean
   display: UsagePercentageDisplay
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span
       data-usage-unit
@@ -44,8 +47,8 @@ export function UsageUnitLabel({
       className="text-muted-foreground data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
     >
       {display === 'used'
-        ? translate('auto.components.status.bar.usageUnitLabel.used', 'Used')
-        : translate('auto.components.status.bar.usageUnitLabel.remaining', 'Remaining')}
+        ? t('auto.components.status.bar.usageUnitLabel.used', 'Used')
+        : t('auto.components.status.bar.usageUnitLabel.remaining', 'Remaining')}
     </span>
   )
 }

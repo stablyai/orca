@@ -18,7 +18,9 @@ export type ProfileStateWriterCommand =
       replacements: readonly ProfileStateDomainReplacement[]
       runPayloads: readonly string[]
     }
-  | { command: 'assert-revision' | 'close' }
+  | { command: 'assert-revision' }
+  /** Only a graceful shutdown refreshes the downgrade copy; maintenance and quarantine must not write. */
+  | { command: 'close'; refreshLegacyDocuments?: boolean }
   | { command: 'export-json' | 'export-latest'; targetPath: string }
 
 export type ProfileStateWriterRequest = ProfileStateWriterCommand & { id: number }
@@ -71,8 +73,12 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
     case 'write-state':
       return value.payload instanceof Uint8Array
     case 'assert-revision':
-    case 'close':
       return true
+    case 'close':
+      return (
+        value.refreshLegacyDocuments === undefined ||
+        typeof value.refreshLegacyDocuments === 'boolean'
+      )
     case 'export-json':
     case 'export-latest':
       return typeof value.targetPath === 'string' && value.targetPath.length > 0

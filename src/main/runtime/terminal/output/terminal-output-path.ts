@@ -1,5 +1,5 @@
 import type { ApplyLayoutResult, PtyLayoutTarget } from '../layout/terminal-layout-state'
-import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from './terminal-orchestration-authority'
 import { clampTerminalViewport } from '../../../../shared/terminal/viewport/terminal-viewport'
 
@@ -11,7 +11,7 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
   abstract mobileTookFloor(
     ptyId: string,
     clientId: string,
-    previousFloor?: DriverState,
+    previousFloor?: RuntimeTerminalDriverState,
     isCurrent?: () => boolean
   ): Promise<void>
   protected abstract resolveDesktopRestoreTarget(ptyId: string): { cols: number; rows: number }
@@ -153,7 +153,7 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
     return result
   }
 
-  getAllTerminalDrivers(): Map<string, DriverState> {
+  getAllTerminalDrivers(): Map<string, RuntimeTerminalDriverState> {
     return this.terminalDrivers.getAll()
   }
 

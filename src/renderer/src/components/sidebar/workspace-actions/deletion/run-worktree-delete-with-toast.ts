@@ -1,11 +1,11 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { translate } from '@/i18n/i18n'
 import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost
-} from '@/lib/worktree-operation-route'
+} from '@/lib/workspace/ownership/worktree-operation-route'
 import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
@@ -77,7 +77,7 @@ export function runWorktreeDeleteWithToast(
       worktreeId,
       executionHostId: target.executionHostId,
       worktreeName,
-      nestedRemovalTarget: route && !route.runtimeEnvironmentId ? target : undefined,
+      nestedRemovalTarget: route ? target : undefined,
       onNestedDeleted: () => options.onForceDeleted?.(target)
     })
   }

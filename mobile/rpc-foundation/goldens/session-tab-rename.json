@@ -4,41 +4,6 @@
   "family": "session.tab-close",
   "namedDeltas": [],
   "values": {
-    "056772c9ebd6": {
-      "name": "terminal.rename#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.rename"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1",
-            "title": "build"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "renamed": true
-          }
-        }
-      }
-    },
     "0923ddf47a9b": {
       "name": "fetch-terminals",
       "ordinal": 3,
@@ -68,6 +33,41 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}"
     },
+    "b6460631c63c": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "renamed": true
+          }
+        }
+      }
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -83,7 +83,7 @@
       {
         "id": "renamed",
         "observation": {
-          "sender": ["056772c9ebd6"],
+          "sender": ["b6460631c63c"],
           "payloads": ["7e43ade02444"],
           "settlements": {
             "rename": "eb79a9b3682a"

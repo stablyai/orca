@@ -1,16 +1,12 @@
 import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type {
-  MirroredAgentTab,
-  MirroredBrowserTab,
-  MirroredEditorTab,
-  TerminalSurface
-} from './state'
+import type { MirroredAgentTab, MirroredBrowserTab, MirroredEditorTab } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { clearHostSessionTabIdMappings, setHostSessionTabIdMapping } from './tracking-mappings'
-import { isWebSessionBrowserPlacementGroupReserved } from '../web-session-browser-placement'
-import { resolveWebSessionReorderedOrder } from '../web-session-reorder-intent'
+import { isWebSessionBrowserPlacementGroupReserved } from '../browser/placement/web-session-browser-placement'
+import { resolveWebSessionReorderedOrder } from './navigation/web-session-reorder-intent'
 import { mapHostRecentTabIds } from './tab-group-layout-tree'
 import { pushRecentTabId, sanitizeRecentTabIds } from './state-equality-core'
 
@@ -21,7 +17,7 @@ export function buildHostToLocalTabIdMap({
   editorTabs,
   agentTabs
 }: {
-  terminalSurfaces: readonly TerminalSurface[]
+  terminalSurfaces: readonly RuntimeMobileSessionTerminalClientTab[]
   terminalTabs: readonly TerminalTab[]
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
@@ -52,7 +48,7 @@ export function buildHostToLocalTabIdMap({
 export function updateHostSessionTabIdMappings(args: {
   environmentId: string
   worktreeId: string
-  terminalSurfaces: readonly TerminalSurface[]
+  terminalSurfaces: readonly RuntimeMobileSessionTerminalClientTab[]
   terminalTabs: readonly TerminalTab[]
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]

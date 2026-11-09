@@ -20,6 +20,18 @@ export const AGENT_STILL_WORKING = 'The agent is still working.'
 /** Whole translatable pieces; the host fills agent (name or theAgent) and command (conversation command name) in English. */
 export const AGENT_SESSION_FAILURE_COPY = {
   theAgent: 'The agent',
+  forkOriginalMissing:
+    '{{agent}} could not find this response in the original chat. Open it and fork from there.',
+  forkOriginalUnavailable:
+    '{{agent}} cannot fork this response in the original chat. Open it and fork from there.',
+  forkOriginalMissingNamed:
+    '{{agent}} could not find this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalUnavailableNamed:
+    '{{agent}} cannot fork this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalLatestOnly:
+    '{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.',
+  forkOriginalLatestOnlyNamed:
+    '{{agent}} can only fork the latest response in "{{detail}}". Open that chat and fork its latest response once it has finished.',
   unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
   savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
@@ -51,6 +63,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
   antigravityNotSignedIn:
     "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+  antigravitySystemNotSignedIn:
+    "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
   agentCommandNotSignedIn:
     'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
   interactiveAgentNotSignedIn:
@@ -102,6 +116,10 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeEffortInvalid:
     'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.',
   modelUnavailable: "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+  modelNotSelected:
+    '{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.',
+  modelUnavailableUpdate:
+    "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
   providerRejected: "{{agent}} didn't accept this message.",
   pluginInputRequired:
     '{{agent}} stopped because the "{{plugin}}" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.',
@@ -252,4 +270,33 @@ export const sayAgentSessionFailureEnglish: AgentSessionFailureSay = (id, values
     /\{\{(\w+)\}\}/g,
     (placeholder, name: string) => filled.get(name) ?? placeholder
   )
+}
+
+/** Translate authored original-chat refusals without changing other fork failures. */
+export function agentSessionForkSourceFailureWords(
+  message: string,
+  agent: string,
+  say: AgentSessionFailureSay
+): string | null {
+  for (const id of [
+    'forkOriginalMissing',
+    'forkOriginalUnavailable',
+    'forkOriginalMissingNamed',
+    'forkOriginalUnavailableNamed',
+    'forkOriginalLatestOnly',
+    'forkOriginalLatestOnlyNamed'
+  ] as const) {
+    const [prefix, suffix] = sayAgentSessionFailureEnglish(id, { agent }).split('{{detail}}')
+    if (
+      suffix === undefined
+        ? message === prefix
+        : message.startsWith(prefix) && message.endsWith(suffix)
+    ) {
+      return say(id, {
+        agent,
+        ...(suffix === undefined ? {} : { detail: message.slice(prefix.length, -suffix.length) })
+      })
+    }
+  }
+  return null
 }

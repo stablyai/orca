@@ -1,16 +1,17 @@
-import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace-copy-owner'
+import { NO_RESOURCE_EVIDENCE } from '@/lib/workspace/ownership/workspace-copy-owner'
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store/index'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-import { monacoTypographyOptions } from '@/lib/editor-typography'
+import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useContextualCopySetup } from '../../useContextualCopySetup'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
@@ -30,12 +31,15 @@ import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchange
 import { useDiffEditorRegistration } from '../review/diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from '../../monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
 import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { cn } from '@/lib/utils'
+import { wholeFileDiffTintClass } from './whole-file-diff-tint'
 
 export default function DiffViewer({
   modelKey,
@@ -60,6 +64,7 @@ export default function DiffViewer({
   largeDiffRenderLimit,
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
+  const t = useTranslate()
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
   const diffCollapseUnchangedRegions = useAppStore((s) => s.settings?.diffCollapseUnchangedRegions)
@@ -356,9 +361,11 @@ export default function DiffViewer({
       renderOverviewRuler: true,
       scrollbar: diffEditorScrollbarOptions,
       padding: { top: 0 },
-      find: monacoFindOptions
+      find: monacoFindOptions,
+      unicodeHighlight: buildEditorUnicodeHighlightOptions(language)
     }),
     [
+      language,
       editable,
       sideBySide,
       diffTypography,
@@ -375,18 +382,24 @@ export default function DiffViewer({
           <LargeDiffFallback
             filePath={relativePath}
             renderLimit={renderLimit}
-            action={getDiffViewerLargeDiffSaveAction({
-              editable,
-              modifiedContent,
-              onSave,
-              saveContentAvailable: largeDiffSaveContentAvailable
-            })}
+            action={getDiffViewerLargeDiffSaveAction(
+              {
+                editable,
+                modifiedContent,
+                onSave,
+                saveContentAvailable: largeDiffSaveContentAvailable
+              },
+              t
+            )}
           />
         ) : (
           <DiffEditor
             height="100%"
             // Why: the overview ruler column is unpainted; it shows this surface, not the app's.
-            className="code-editor-backdrop"
+            className={cn(
+              'code-editor-backdrop',
+              wholeFileDiffTintClass(originalContent, modifiedContent)
+            )}
             language={language}
             original={originalContent}
             modified={modifiedContent}

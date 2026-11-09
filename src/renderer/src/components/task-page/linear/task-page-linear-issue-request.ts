@@ -6,7 +6,7 @@ import {
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import type { LinearIssueListReadArgs } from '../../../store/slices/linear/linear-slice-contract'
 
 export function isLinearIssueSearchActive(immediateQuery: string, appliedQuery: string): boolean {

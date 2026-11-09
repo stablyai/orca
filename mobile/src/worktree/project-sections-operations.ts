@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../src/shared/mobile-project-sections-contract'
 import {
   ProjectGroupSchema,
@@ -6,10 +6,10 @@ import {
   type ServedProjectSections
 } from '../../../src/shared/project-section-catalog-schema'
 import { salvagingArray } from '../../../src/shared/zod-salvage'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
-import type { RpcResponse } from '../transport/types'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 export type { ServedProjectSections }
 

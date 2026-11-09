@@ -2,14 +2,16 @@ import React from 'react'
 import { AlertTriangle, ChevronDown, Loader2, Server, ServerOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { stopRepoHeaderMenuEvent } from './header-event-guards'
 import { getHostHeaderDetail } from './host-header-detail'
+import { getVmStateLabel, VmStateIcon } from '../../workspace-card/surface/WorktreeCardVmStateBadge'
 
 function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
-  const totalLabel = translate(
+  const t = useTranslate()
+  const totalLabel = t(
     'auto.components.sidebar.HostSectionHeader.workspaceCount',
     '{{count}} workspaces',
     { count, defaultValue_one: '{{count}} workspace' }
@@ -49,6 +51,41 @@ function HostHeaderHealthIcon({
   return null
 }
 
+/** A VM host's server glyph with its lifecycle as a corner badge, like an avatar's status dot. */
+function VmHostIcon({
+  state,
+  muted
+}: {
+  state: NonNullable<HostHeaderRow['vmState']>
+  muted: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  const label = getVmStateLabel(state, t)
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="relative inline-flex size-3.5 shrink-0"
+          data-host-header-vm-state={state}
+          aria-label={label}
+          role="img"
+        >
+          <Server
+            className={cn('size-3.5', muted ? 'text-muted-foreground/80' : 'text-muted-foreground')}
+          />
+          {/* The ring in the sidebar color cuts the badge out of the glyph so it reads at 8px. */}
+          <span className="absolute -right-1 -bottom-1 inline-flex size-2.5 items-center justify-center rounded-full bg-worktree-sidebar ring-1 ring-worktree-sidebar">
+            <VmStateIcon state={state} sizeClassName="size-2" />
+          </span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function HostSectionHeader({
   row,
   onToggle,
@@ -60,9 +97,12 @@ export function HostSectionHeader({
   onDragPointerDown?: (event: React.PointerEvent<HTMLElement>) => void
   dragging?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const isBlocked = row.health === 'blocked'
   const isDisconnected = row.health === 'disconnected'
-  const detail = getHostHeaderDetail(row)
+  // A suspended VM is asleep on purpose: muted like disconnected, but never an error.
+  const isSuspended = row.health === 'suspended'
+  const detail = getHostHeaderDetail(row, t)
   return (
     <div className="px-2 pt-1">
       {/* Why: outlined card + server glyph marks hosts as machines, not mere groups. */}
@@ -76,7 +116,7 @@ export function HostSectionHeader({
           onDragPointerDown && 'cursor-grab active:cursor-grabbing',
           isBlocked
             ? 'border-destructive/40 bg-destructive/10'
-            : isDisconnected
+            : isDisconnected || isSuspended
               ? 'border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35 text-muted-foreground'
               : 'border-worktree-sidebar-border bg-worktree-sidebar-accent/70',
           dragging && 'pointer-events-none opacity-0'
@@ -90,18 +130,20 @@ export function HostSectionHeader({
           }
         }}
       >
-        {isDisconnected ? (
+        {row.vmState ? (
+          <VmHostIcon state={row.vmState} muted={isSuspended} />
+        ) : isDisconnected ? (
           <ServerOff className="size-3.5 shrink-0 text-muted-foreground/80" />
         ) : (
           <Server className="size-3.5 shrink-0 text-muted-foreground" />
         )}
-        <HostHeaderHealthIcon health={row.health} />
+        {row.vmState ? null : <HostHeaderHealthIcon health={row.health} />}
         {/* Why: badge hugs the label (like repo headers) instead of floating by the hover controls. */}
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span
             className={cn(
               'min-w-0 truncate text-[12px] font-semibold leading-none',
-              isDisconnected ? 'text-muted-foreground' : 'text-foreground'
+              isDisconnected || isSuspended ? 'text-muted-foreground' : 'text-foreground'
             )}
           >
             {row.label}

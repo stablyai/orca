@@ -15,9 +15,9 @@ import {
   recheckSurfacesAfterAgentSkillInstall,
   syncSurfacesAfterAgentSkillRecheck
 } from '../../../hooks/agent-skill-recheck-surface-sync'
-import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
+import { isOrcaCliAvailableOnPath } from '@/lib/skills/installation/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function WslAgentSkillSetupPanel({
   title,
@@ -54,12 +54,12 @@ export function WslAgentSkillSetupPanel({
   onRecheck,
   freshnessSkillName
 }: WslAgentSkillSetupPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const resolvedInstallLabel =
-    installLabel ??
-    translate('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
+    installLabel ?? t('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
   const resolvedInstalledInstallLabel =
     installedInstallLabel ??
-    translate('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
+    t('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalSnapshot, setTerminalSnapshot] = useState<SkillTerminalSnapshot | null>(null)
   const [terminalAttempt, setTerminalAttempt] = useState(0)
@@ -186,13 +186,13 @@ export function WslAgentSkillSetupPanel({
     try {
       await window.api.ui.writeClipboardText(openTerminalCommand)
       toast.success(
-        translate('auto.components.settings.AgentSkillSetupPanel.copiedCommand', 'Copied command.')
+        t('auto.components.settings.AgentSkillSetupPanel.copiedCommand', 'Copied command.')
       )
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.settings.AgentSkillSetupPanel.failedToCopyCommand',
               'Failed to copy command.'
             )
@@ -216,7 +216,7 @@ export function WslAgentSkillSetupPanel({
             <Terminal className="size-3.5" />
           )}
           {terminalOpening
-            ? translate('auto.components.settings.AgentSkillSetupPanel.5f818f12ab', 'Preparing...')
+            ? t('auto.components.settings.AgentSkillSetupPanel.5f818f12ab', 'Preparing...')
             : installed
               ? resolvedInstalledInstallLabel
               : resolvedInstallLabel}
@@ -245,14 +245,14 @@ export function WslAgentSkillSetupPanel({
         >
           <RefreshCw className={cn('size-3.5', (loading || terminalOpening) && 'animate-spin')} />
           {setupCommandFailedCode !== null
-            ? translate('auto.components.settings.AgentSkillSetupPanel.retrySetup', 'Retry')
-            : translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
+            ? t('auto.components.settings.AgentSkillSetupPanel.retrySetup', 'Retry')
+            : t('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
       ) : null}
       {terminalOpening ? (
         <p className="basis-full text-[12px] leading-snug text-muted-foreground">
           {openingHint ??
-            translate(
+            t(
               'auto.components.settings.AgentSkillSetupPanel.4c05b9d7cb',
               'Preparing setup terminal.'
             )}
@@ -295,35 +295,23 @@ export function WslAgentSkillSetupPanel({
                 <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
                 {setupCommandFailedCode !== null ? (
                   <IntegrationStatusPill tone="attention">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.setupFailed',
-                      'Setup failed'
-                    )}
+                    {t('auto.components.settings.AgentSkillSetupPanel.setupFailed', 'Setup failed')}
                   </IntegrationStatusPill>
                 ) : loading && !installed ? (
                   <IntegrationStatusPill tone="neutral">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.68a468752e',
-                      'Checking...'
-                    )}
+                    {t('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')}
                   </IntegrationStatusPill>
                 ) : installed ? (
                   freshnessSkillName ? (
                     <SkillFreshnessStatusPill skillName={freshnessSkillName} />
                   ) : (
                     <IntegrationStatusPill tone="connected">
-                      {translate(
-                        'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
-                        'Installed'
-                      )}
+                      {t('auto.components.settings.AgentSkillSetupPanel.9fcebceb2a', 'Installed')}
                     </IntegrationStatusPill>
                   )
                 ) : (
                   <IntegrationStatusPill tone="attention">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.5289300939',
-                      'Not installed'
-                    )}
+                    {t('auto.components.settings.AgentSkillSetupPanel.5289300939', 'Not installed')}
                   </IntegrationStatusPill>
                 )}
               </div>
@@ -370,7 +358,7 @@ export function WslAgentSkillSetupPanel({
                   variant="ghost"
                   size="icon-sm"
                   className="shrink-0"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.settings.AgentSkillSetupPanel.copyCommandAria',
                     'Copy command'
                   )}
@@ -380,10 +368,7 @@ export function WslAgentSkillSetupPanel({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.settings.AgentSkillSetupPanel.ed197f59a2',
-                  'Copy command'
-                )}
+                {t('auto.components.settings.AgentSkillSetupPanel.ed197f59a2', 'Copy command')}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -393,7 +378,7 @@ export function WslAgentSkillSetupPanel({
             command={openTerminalCommand}
             prepareCommandForShell={terminalSnapshot.prepareCommandForShell}
             title={terminalTitle}
-            description={translate(
+            description={t(
               'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
               'Press Enter to run the command.'
             )}

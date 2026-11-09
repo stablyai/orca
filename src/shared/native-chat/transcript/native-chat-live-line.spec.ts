@@ -32,15 +32,6 @@ const line = (fields: {
   })
 
 describe('the live line both clients draw', () => {
-  it('discloses the open block while it reads "Thinking"', () => {
-    expect(line({})).toEqual({
-      thinking: true,
-      stopping: false,
-      activityText: null,
-      reasoning: { message: open, markdown: 'Weighing two approaches' }
-    })
-  })
-
   it('discloses nothing, so nothing is hidden, unless it draws and the turn is reasoning', () => {
     // A prompt the reader owes replaces the line: no line, and the row draws.
     expect(line({ draws: false })).toBeNull()

@@ -24,8 +24,8 @@ const DESCRIPTIONS: Record<string, () => string> = {
     ),
   'zipformer-streaming-en-20m': () =>
     translate(
-      'settings.voice.modelDescriptions.zipformerStreamingEn',
-      'English only. Lightweight 20M-param model, good balance of speed and size.'
+      'settings.voice.modelDescriptions.zipformerStreamingEnRetired',
+      'No longer offered: it drops the start of sentences. Delete it to free up space.'
     ),
   'zipformer-streaming-zh-14m': () =>
     translate(
@@ -52,15 +52,10 @@ const DESCRIPTIONS: Record<string, () => string> = {
       'settings.voice.modelDescriptions.senseVoice',
       'Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.'
     ),
-  'openai-gpt-4o-mini-transcribe': () =>
+  'openai-gpt-transcribe': () =>
     translate(
-      'settings.voice.modelDescriptions.gpt4oMiniTranscribe',
-      'Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.'
-    ),
-  'openai-gpt-4o-transcribe': () =>
-    translate(
-      'settings.voice.modelDescriptions.gpt4oTranscribe',
-      'Cloud transcription with higher accuracy. Requires an OpenAI API key.'
+      'settings.voice.modelDescriptions.gptTranscribe',
+      'Cloud transcription with high accuracy. Requires an OpenAI API key.'
     )
 }
 

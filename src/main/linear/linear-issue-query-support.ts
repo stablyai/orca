@@ -67,6 +67,14 @@ export function mapRawIssueForWorkspace(
       name: issue.team?.name ?? '',
       key: issue.team?.key ?? ''
     },
+    project: issue.project
+      ? {
+          id: issue.project.id,
+          name: issue.project.name,
+          url: issue.project.url ?? undefined,
+          color: issue.project.color ?? undefined
+        }
+      : undefined,
     labels: labelNodes.map((label) => label.name),
     // Full-replace writes need all label IDs, even when display nodes are paginated.
     labelIds: issue.labelIds ?? labelNodes.map((label) => label.id),

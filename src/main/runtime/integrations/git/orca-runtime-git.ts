@@ -9,9 +9,11 @@ export class RuntimeGitCommands {
   readonly getRuntimeGitStatus: RuntimeGitStatusCommands['getRuntimeGitStatus']
   readonly getRuntimeGitSubmoduleStatus: RuntimeGitStatusCommands['getRuntimeGitSubmoduleStatus']
   readonly checkRuntimeGitIgnoredPaths: RuntimeGitStatusCommands['checkRuntimeGitIgnoredPaths']
+  readonly getRuntimeGitRefs: RuntimeGitStatusCommands['getRuntimeGitRefs']
   readonly getRuntimeGitHistory: RuntimeGitStatusCommands['getRuntimeGitHistory']
   readonly getRuntimeGitConflictOperation: RuntimeGitStatusCommands['getRuntimeGitConflictOperation']
   readonly getRuntimeGitMutationInFlight: RuntimeGitStatusCommands['getRuntimeGitMutationInFlight']
+  readonly switchRuntimeGitBranch: RuntimeGitStatusCommands['switchRuntimeGitBranch']
   readonly checkoutRuntimeGitBranch: RuntimeGitStatusCommands['checkoutRuntimeGitBranch']
   readonly listRuntimeGitLocalBranches: RuntimeGitStatusCommands['listRuntimeGitLocalBranches']
   readonly getRuntimeGitDiff: RuntimeGitDiffCommands['getRuntimeGitDiff']
@@ -31,6 +33,11 @@ export class RuntimeGitCommands {
   readonly rebaseRuntimeGitFromBase: RuntimeGitSyncCommands['rebaseRuntimeGitFromBase']
   readonly pushRuntimeGit: RuntimeGitSyncCommands['pushRuntimeGit']
   readonly commitRuntimeGit: RuntimeGitSyncCommands['commitRuntimeGit']
+  readonly createRuntimeGitBranch: RuntimeGitSyncCommands['createRuntimeGitBranch']
+  readonly cherryPickRuntimeGit: RuntimeGitSyncCommands['cherryPickRuntimeGit']
+  readonly revertRuntimeGit: RuntimeGitSyncCommands['revertRuntimeGit']
+  readonly sequencerAbortRuntimeGit: RuntimeGitSyncCommands['sequencerAbortRuntimeGit']
+  readonly sequencerContinueRuntimeGit: RuntimeGitSyncCommands['sequencerContinueRuntimeGit']
   readonly completeRuntimeGitMerge: RuntimeGitSyncCommands['completeRuntimeGitMerge']
   readonly generateRuntimeCommitMessage: RuntimeGitGenerationCommands['generateRuntimeCommitMessage']
   readonly cancelRuntimeGenerateCommitMessage: RuntimeGitGenerationCommands['cancelRuntimeGenerateCommitMessage']
@@ -55,9 +62,11 @@ export class RuntimeGitCommands {
     this.getRuntimeGitStatus = status.getRuntimeGitStatus.bind(status)
     this.getRuntimeGitSubmoduleStatus = status.getRuntimeGitSubmoduleStatus.bind(status)
     this.checkRuntimeGitIgnoredPaths = status.checkRuntimeGitIgnoredPaths.bind(status)
+    this.getRuntimeGitRefs = status.getRuntimeGitRefs.bind(status)
     this.getRuntimeGitHistory = status.getRuntimeGitHistory.bind(status)
     this.getRuntimeGitConflictOperation = status.getRuntimeGitConflictOperation.bind(status)
     this.getRuntimeGitMutationInFlight = status.getRuntimeGitMutationInFlight.bind(status)
+    this.switchRuntimeGitBranch = status.switchRuntimeGitBranch.bind(status)
     this.checkoutRuntimeGitBranch = status.checkoutRuntimeGitBranch.bind(status)
     this.listRuntimeGitLocalBranches = status.listRuntimeGitLocalBranches.bind(status)
     this.getRuntimeGitDiff = diff.getRuntimeGitDiff.bind(diff)
@@ -77,6 +86,11 @@ export class RuntimeGitCommands {
     this.rebaseRuntimeGitFromBase = sync.rebaseRuntimeGitFromBase.bind(sync)
     this.pushRuntimeGit = sync.pushRuntimeGit.bind(sync)
     this.commitRuntimeGit = sync.commitRuntimeGit.bind(sync)
+    this.createRuntimeGitBranch = sync.createRuntimeGitBranch.bind(sync)
+    this.cherryPickRuntimeGit = sync.cherryPickRuntimeGit.bind(sync)
+    this.revertRuntimeGit = sync.revertRuntimeGit.bind(sync)
+    this.sequencerAbortRuntimeGit = sync.sequencerAbortRuntimeGit.bind(sync)
+    this.sequencerContinueRuntimeGit = sync.sequencerContinueRuntimeGit.bind(sync)
     this.completeRuntimeGitMerge = sync.completeRuntimeGitMerge.bind(sync)
     this.generateRuntimeCommitMessage = generation.generateRuntimeCommitMessage.bind(generation)
     this.cancelRuntimeGenerateCommitMessage =

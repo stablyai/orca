@@ -2,7 +2,7 @@ import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../shared
 import {
   getManagedOrcadSshTargetId,
   type ManagedOrcadEnvironmentSummary
-} from '../../../shared/managed-orcad-execution-host'
+} from '../../../shared/execution-host/managed-orcad-execution-host'
 
 /** The hidden SSH target of the recipe VM whose managed server is `hostId`, or null. */
 export function getRecipeVmSshTargetForHost(

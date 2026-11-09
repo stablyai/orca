@@ -23,7 +23,7 @@ import {
   loadLocalImageSrc
 } from '../../document-images/useLocalImageSrc'
 import { subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated } from '../../document-images/local-image-src-cache'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   createRawMarkdownHtmlBlock,
   createRawMarkdownHtmlInline,
@@ -48,6 +48,7 @@ import { RichMarkdownCodeBlockLowlight } from '../code-blocks/rich-markdown-lowl
 import { RichMarkdownTaskList } from '../lists/rich-markdown-task-list'
 import { createCachedLowlight } from '../code-blocks/rich-markdown-lowlight-cache'
 import { documentResourceAccess } from '@/lib/local-file-access'
+import { attachRichMarkdownImageErrorLink } from '../images/rich-markdown-image-error-link'
 import {
   readRichMarkdownImageRuntimeContext,
   resolveRichMarkdownImageUrl
@@ -63,11 +64,15 @@ const RichMarkdownCode = Code.extend({
 export function createRichMarkdownExtensions({
   codec,
   includePlaceholder = false,
+  allowBase64Images = true,
+  imageErrorLink = false,
   htmlSuperscriptLinks = false,
   htmlSuperscriptLinkContext
 }: {
   codec: RichMarkdownEditorCodec
   includePlaceholder?: boolean
+  allowBase64Images?: boolean
+  imageErrorLink?: boolean
   htmlSuperscriptLinks?: boolean
   htmlSuperscriptLinkContext?: RichMarkdownHtmlSuperscriptLinkContext
 }): AnyExtension[] {
@@ -151,6 +156,9 @@ export function createRichMarkdownExtensions({
           dom.appendChild(img)
 
           let currentSrc = node.attrs.src as string | undefined
+          const errorLink = imageErrorLink
+            ? attachRichMarkdownImageErrorLink(dom, img, () => currentSrc)
+            : undefined
           let currentContextVersion = getImageContextVersion(this.storage)
           let releaseImageLease: (() => void) | undefined
 
@@ -222,6 +230,7 @@ export function createRichMarkdownExtensions({
                 )
               )
               const newSrc = updatedNode.attrs.src as string | undefined
+              errorLink?.update(newSrc !== currentSrc)
               const nextContextVersion = getImageContextVersion(this.storage)
               if (newSrc !== currentSrc || nextContextVersion !== currentContextVersion) {
                 currentSrc = newSrc
@@ -241,7 +250,7 @@ export function createRichMarkdownExtensions({
         }
       }
     }).configure({
-      allowBase64: true,
+      allowBase64: allowBase64Images,
       // Markdown nests images in paragraphs; block image nodes would become schema-invalid and crash on the first edit.
       inline: true
     }),

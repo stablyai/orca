@@ -7,8 +7,8 @@ import { countWorkItems } from '../../src/main/github/client/list/count-work-ite
 import {
   createTestStore,
   mockApi
-} from '../../src/renderer/src/store/slices/github-slice-test-harness'
-import { answered } from '../../src/renderer/src/store/github/answered-request.test-fixture'
+} from '../../src/renderer/src/store/github/github-slice-test-harness'
+import { answered } from '../../src/renderer/src/store/github/requests/answered-request.test-fixture'
 
 const repos = Array.from({ length: 36 }, (_, index) => ({
   repoId: `repo-${index}`,

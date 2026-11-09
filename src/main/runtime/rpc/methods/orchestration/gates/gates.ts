@@ -1,8 +1,8 @@
 import { defineMethod } from '../../../core'
-import type { GateStatus } from '../../../../orchestration/db'
-import { Coordinator } from '../../../../orchestration/coordinator'
+import type { GateStatus } from '../../../../orchestration/db/orchestration-records'
+import { Coordinator } from '../../../../orchestration/coordinator/coordinator'
 import { resolveRunScope } from '../runs/run-scope'
-import { taskNotFoundError } from '../../../../orchestration/task-dispatch-refusal'
+import { taskNotFoundError } from '../../../../orchestration/coordinator/dispatch/task-dispatch-refusal'
 import {
   GateCreateParams,
   GateListParams,

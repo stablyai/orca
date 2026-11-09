@@ -2,14 +2,14 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type * as PluginPanels from '@/store/plugin-panels'
+import type * as PluginPanels from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { AI_VAULT_SCOPE_STEP_EVENT } from '@/components/right-sidebar/ai-vault/scope/ai-vault-scope-state'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 import { useGlobalKeybindings } from './use-global-keybindings'
 import { useAppChromeLayout } from './use-app-chrome-layout'
 import { useFloatingWorkspacePanel } from './use-floating-workspace-panel'
 
-vi.mock('@/store/plugin-panels', async (importOriginal) => ({
+vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', async (importOriginal) => ({
   ...(await importOriginal<typeof PluginPanels>()),
   usePluginCommands: () => []
 }))

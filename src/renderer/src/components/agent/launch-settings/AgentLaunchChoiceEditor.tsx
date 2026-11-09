@@ -5,14 +5,13 @@ import {
   type AgentChoicePatch
 } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { AgentDefaultArgsInput } from './AgentLaunchDefaultsEditor'
-import { AgentPermissionMenu, type AgentPermissionChoiceRow } from './AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from './AgentPermissionMenu'
+import type { AgentPermissionChoiceRow } from './agent-permission-choice-row'
 import { agentModelChoiceChips } from './agent-model-choice-chips'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
 import { reconcileAgentChoiceArgs } from '../../../../../shared/agent-launch/choices/agent-choice-reconciliation'
-
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentChoiceFields } from './AgentChoiceControls'
 
 export function AgentLaunchChoiceEditor({
@@ -34,6 +33,7 @@ export function AgentLaunchChoiceEditor({
   permissionControlRef?: Ref<HTMLDivElement>
   save: (patch: AgentChoicePatch | undefined, userArgs: string) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const menu = useRef({ open: false, committed: false })
   const editorRef = useRef<HTMLDivElement>(null)
   const [draft, setDraft] = useState<string | null>(null)
@@ -135,7 +135,7 @@ export function AgentLaunchChoiceEditor({
           choiceChips={chips}
           note={
             permission?.argsSetPermission
-              ? translate(
+              ? t(
                   'settings.agents.permissionArgsTerminalOnly',
                   'These arguments may control {{agent}}’s terminal permissions, so Orca adds no flag. Chats use the Permissions choice above.',
                   { agent: label }

@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AddRepoStepIndicatorProps = {
   step: AddRepoDialogStep
@@ -13,6 +13,7 @@ export function AddRepoStepIndicator({
   isAdding,
   onBack
 }: AddRepoStepIndicatorProps): React.JSX.Element | null {
+  const t = useTranslate()
   const showBack =
     step === 'clone' ||
     step === 'remote' ||
@@ -32,7 +33,7 @@ export function AddRepoStepIndicator({
         onClick={onBack}
       >
         <ArrowLeft className="size-3" />
-        {translate('auto.components.sidebar.AddRepoStepIndicator.3bb655c117', 'Back')}
+        {t('auto.components.sidebar.AddRepoStepIndicator.3bb655c117', 'Back')}
       </button>
     </div>
   )

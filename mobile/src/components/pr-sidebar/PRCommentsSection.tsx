@@ -3,14 +3,14 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
-import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
+import type { GitHubPrRepoSlug } from '../../source-control/review/github-pr-repo-slug'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { canAddRootComment } from '../../session/pr-comment-actions'
-import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
-import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
+import { canAddRootComment } from '../../source-control/review/pr-comment-actions'
+import { isPrSidebarDetailsPlaceholder } from '../../source-control/review/mobile-pr-sidebar-state'
+import type { MobilePrCommentActions } from '../../source-control/review/use-mobile-pr-comment-actions'
 import { PRSection } from './PRSection'
 import { MobileMarkdown } from '../MobileMarkdown'
 import { MOBILE_MARKDOWN_DOCUMENT_SCALE } from '../mobile-markdown-styles'
@@ -239,6 +239,7 @@ export function PRCommentsSection({
                   )}
                   submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
                   submitting={actions.isRootBusy}
+                  draftKey={actions.draftKey(null)}
                   onSubmit={actions.addRootComment}
                 />
               </View>
@@ -267,6 +268,7 @@ export function usePRCommentCardActions(
             isResolveBusy: actions.isResolveBusy,
             isEditBusy: actions.isEditBusy,
             isDeleteBusy: actions.isDeleteBusy,
+            draftKey: actions.draftKey,
             prRepo: prRepo ?? null
           }
         : undefined,

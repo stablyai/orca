@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
   buildAiVaultResumeStartupForWorktree
-} from '@/lib/ai-vault-resume-command'
+} from '@/lib/agent-session/resume/history/ai-vault-resume-command'
 import type {
   AiVaultResumeCommandSession,
   AiVaultResumeStartup
@@ -16,7 +16,7 @@ import {
   assertAiVaultCopiedSessionLaunchAllowed,
   buildAiVaultCopiedSessionStartupForWorktree,
   buildAiVaultForkStartupForWorktree
-} from '@/lib/ai-vault-session-fork-startup'
+} from '@/lib/agent-session/resume/history/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/launch-ai-vault-session-and-reveal'
 import { useAppStore } from '@/store/index'
 import type {
@@ -28,17 +28,17 @@ import {
   prepareAiVaultSessionForFork,
   prepareAiVaultSessionForResume,
   prepareAiVaultSessionForTerminalResume
-} from '@/lib/ai-vault-session-resume-preparation'
+} from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
 import { describeAiVaultCliForkFailure } from './ai-vault-session-cli-fork'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { adoptsCliConversations } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
 
