@@ -5,8 +5,9 @@ export const DICTATION_TEXT_BLOCK_SELECTOR =
 // Chinese and Japanese don't space words or after their full-width punctuation; Korean does, so Hangul spaces like Latin text.
 const UNSPACED_SCRIPT_CHAR_RE =
   /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3000-\u303f\u30fb\u30fc\uff00-\uff9f\uffe0-\uffef]$/u
-const NO_SPACE_BEFORE_CHAR_RE = /^[,.;:!?%。，、！？；：）)\]}”’»]$/u
-const NO_SPACE_AFTER_CHAR_RE = /^[([{（《「『“‘«„]$/u
+const NO_SPACE_BEFORE_CHAR_RE =
+  /^[,.;:!?%\u3002\uff0c\u3001\uff01\uff1f\uff1b\uff1a\uff09)\]}\u201d\u2019\u00bb]$/u
+const NO_SPACE_AFTER_CHAR_RE = /^[([{\uff08\u300a\u300c\u300e\u201c\u2018\u00ab\u201e]$/u
 const STRAIGHT_QUOTE_RE = /["'`]/
 // A straight quote opens after a space or the start, and closes before a space, punctuation or the end; anything else is an apostrophe.
 const opensQuote = (before: string): boolean => /(^|[\s([{])["'`]$/.test(before)
