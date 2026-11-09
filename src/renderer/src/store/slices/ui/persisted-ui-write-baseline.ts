@@ -15,6 +15,7 @@ export type PersistedUIWriteBaseline = {
   sortBy: PersistedUIState['sortBy']
   projectOrderBy: PersistedUIState['projectOrderBy']
   showSleepingWorkspaces: boolean
+  hideSleepingProjectKeys: string[]
   workspaceHostScope: PersistedUIState['workspaceHostScope']
   visibleWorkspaceHostIds: PersistedUIState['visibleWorkspaceHostIds']
   hideDefaultBranchWorkspace: boolean
@@ -46,6 +47,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   sortBy: true,
   projectOrderBy: true,
   showSleepingWorkspaces: true,
+  hideSleepingProjectKeys: true,
   workspaceHostScope: true,
   visibleWorkspaceHostIds: true,
   hideDefaultBranchWorkspace: true,
@@ -103,6 +105,9 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
   if (field === 'filterRepoIds') {
     return stringArrayEqual(a as readonly string[], b as readonly string[])
   }
+  if (field === 'hideSleepingProjectKeys') {
+    return stringArrayEqual(a as readonly string[], b as readonly string[])
+  }
   if (field === 'visibleWorkspaceHostIds') {
     return a === b || (Array.isArray(a) && Array.isArray(b) && stringArrayEqual(a, b))
   }
@@ -147,7 +152,7 @@ export function persistedUIWriteFieldsToWireUpdate(
     if (field === 'showSleepingWorkspaces') {
       // The mirror keeps the positive form; the durable file keeps the hide form.
       update.hideSleepingWorkspaces = fields.showSleepingWorkspaces !== true
-    } else if (field === 'filterRepoIds') {
+    } else if (field === 'filterRepoIds' || field === 'hideSleepingProjectKeys') {
       // Copy readonly store arrays at mutable main wire boundary; keep selector identity guarantees local.
       update.filterRepoIds = [...(fields.filterRepoIds ?? [])]
     } else {
@@ -163,7 +168,7 @@ export function persistedUIWriteFieldsToWireUpdate(
 
 type SameNameWriteField = Exclude<
   keyof PersistedUIWriteBaseline,
-  'showSleepingWorkspaces' | 'filterRepoIds'
+  'showSleepingWorkspaces' | 'filterRepoIds' | 'hideSleepingProjectKeys'
 >
 
 // Compile-check nonspecial mirror fields against wire names/types so renames or drift cannot silently break persistence.
