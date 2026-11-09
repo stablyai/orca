@@ -71,7 +71,7 @@ import { electronSpeechServiceFactories } from '../host/electron-speech-services
 import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
 import { setWorktreeWatcherRemoval } from '../workspaces/removal/worktree-watcher-removal'
 import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem/watchers/filesystem-watcher'
-import { setDefaultProxySessionResolver } from '../network/proxy-settings'
+import { setDefaultProxySessionResolver } from '../network/electron-default-proxy-session'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { applyMacPressAndHoldDefaultAtStartup } from '../window/desktop-integration/macos-press-and-hold-default'
 import { configureSessionParseCachePersistence } from '../ai-vault/parse-cache/session-parse-cache-persistence'

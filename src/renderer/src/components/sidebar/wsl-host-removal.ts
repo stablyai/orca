@@ -4,7 +4,7 @@ import type { WslHostServerStop } from '../../../../shared/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { runEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
-import { workspaceOwnerHostId } from '@/lib/workspace-row-owner-host'
+import { workspaceOwnerHostId } from '@/lib/workspace/ownership/workspace-row-owner-host'
 import { wslHostStopReasonMessage } from './wsl-host-failure-text'
 
 /** Stop terminals/server, remove records and refresh hosts; report anything still running that keeps the distro alive. */

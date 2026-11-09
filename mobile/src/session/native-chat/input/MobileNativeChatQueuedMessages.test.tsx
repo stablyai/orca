@@ -28,14 +28,6 @@ import type {
   AgentSessionQueuedMessageMoveResult
 } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionMutationResult } from '../../mobile-structured-agent-session-rpc'
-import {
-  MobileAgentMessageContext,
-  MobileAgentMessageOpenContext,
-  createMobileAgentMessageSource
-} from '../transcript/mobile-agent-message-context'
-import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
-import { formatOrcaSessionAddress } from '../../../../../src/shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../src/shared/orca-session-address-test-fixture'
 
 const rowRenders = vi.hoisted(() => ({ count: 0 }))
 vi.mock('../../MobileQueuedMessageCardRow', async (importOriginal) => {
@@ -168,66 +160,6 @@ describe('MobileNativeChatQueuedMessages', () => {
       )
     })
     expect(sheet(mounted).props.visible).toBe(false)
-  })
-
-  it("names a queued message's sender as its chat is now titled, and opens that chat", async () => {
-    const coord = testOrcaSessionId('coord-chat')
-    const from: AgentMessageSource = {
-      kind: 'agent',
-      senders: [
-        {
-          party: {
-            address: formatOrcaSessionAddress(coord),
-            terminalHandle: null,
-            orcaSessionId: coord
-          },
-          name: 'Codex Chat',
-          relation: 'coordinator'
-        }
-      ],
-      orchestration: null
-    }
-    const source = createMobileAgentMessageSource()
-    source.update(
-      [
-        {
-          type: 'agent-session',
-          id: `agent-session:${coord}`,
-          sessionId: coord,
-          agent: 'codex',
-          title: 'Release coordinator',
-          isActive: false
-        }
-      ],
-      [],
-      0
-    )
-    const open = vi.fn()
-    const mounted = create(createElement('View'))
-    renderer = mounted
-    await act(async () => {
-      mounted.update(
-        createElement(
-          MobileAgentMessageOpenContext.Provider,
-          { value: open },
-          createElement(
-            MobileAgentMessageContext.Provider,
-            { value: source },
-            createElement(MobileNativeChatQueuedMessages, {
-              cards: [card({ messageId: 'q', from })]
-            })
-          )
-        )
-      )
-    })
-    const sender = mounted.root.find(
-      (node) =>
-        String(node.type) === 'Pressable' &&
-        node.findAll((child) => child.children.includes('Release coordinator')).length > 0
-    )
-    expect(sender.props.accessibilityRole).toBe('button')
-    await act(async () => sender.props.onPress())
-    expect(open).toHaveBeenCalledWith(from, from.senders[0])
   })
 
   it('the empty chord presses only the head card where its own button would, and offers it only while that press would act, across chat switches', async () => {

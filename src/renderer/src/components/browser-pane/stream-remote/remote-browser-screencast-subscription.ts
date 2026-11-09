@@ -2,7 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envel
 import type {
   BrowserScreencastReadyResult,
   BrowserScreencastResult
-} from '../../../../../shared/runtime-types'
+} from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/runtime-rpc-feature-interaction-source'
 import { e2eConfig } from '@/lib/e2e-config'
 import { isRemoteBrowserPageMissingCode } from './remote-browser-stream-errors'

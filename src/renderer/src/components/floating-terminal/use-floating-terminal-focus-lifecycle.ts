@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { isFocusKeepingPress } from '@/lib/focus-keeping-press'
 import { clearFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
 import { isFloatingWorkspaceTerminalInputTarget } from '@/lib/floating-workspace-terminal-actions'
 import { reportFloatingFocus } from './floating-terminal-focus-reporting'
@@ -34,7 +35,12 @@ export function useFloatingTerminalFocusLifecycle({
     }
     const handleOutsidePointerDown = (event: PointerEvent): void => {
       const panel = panelRef.current
-      if (!panel || !(event.target instanceof Node) || panel.contains(event.target)) {
+      if (
+        !panel ||
+        !(event.target instanceof Node) ||
+        panel.contains(event.target) ||
+        isFocusKeepingPress(event.target)
+      ) {
         return
       }
       reportFloatingFocus(null, true)

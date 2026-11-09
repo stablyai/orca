@@ -1,5 +1,8 @@
 import { useMemo } from 'react'
-import { resolveOwner, runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import {
+  resolveOwner,
+  runtimeTargetForWorkspaceOwner
+} from '@/lib/workspace/ownership/resolve-owner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { useAppStore } from '@/store/index'

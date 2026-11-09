@@ -3,7 +3,7 @@ import type {
   BrowserTabInfo,
   BrowserTabListResult,
   BrowserTabSwitchResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 import type { CdpBridgeState } from './cdp-bridge-state'
 import type { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'

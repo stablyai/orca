@@ -87,7 +87,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })

@@ -1,3 +1,4 @@
+/** One per situation with its own honest next step; a new one needs copy before it compiles. */
 export const AGENT_SESSION_FAILURE_KINDS = [
   /** Only an observed exit: the provider stopped while starting. */
   'providerStartFailed',
@@ -27,8 +28,12 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerExited',
   'restartFailed',
   'providerRejected',
+  'providerUnavailable',
+  'providerSafetyStopped',
+  'providerResponseFailed',
   'pluginInputRequired',
   'modelUnavailable',
+  /** The agent had no model when the message reached it; why (selection, sign-in) is unknown. */
   'modelNotSelected',
   'claudeEffortInvalid',
   'attachmentInvalid',

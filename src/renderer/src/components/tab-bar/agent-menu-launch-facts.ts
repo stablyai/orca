@@ -6,7 +6,7 @@ import {
   resolveRepoExecutionHostTarget,
   resolveWorktreeResourceTarget,
   type ExecutionHostTarget
-} from '@/lib/execution-host-facts'
+} from '@/runtime/hosts/platform/execution-host-facts'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import {

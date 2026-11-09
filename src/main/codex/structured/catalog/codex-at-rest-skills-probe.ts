@@ -27,7 +27,7 @@ import {
 } from './codex-skill-list'
 import { createCodexSkillSourcesStamp } from './codex-skill-sources-stamp'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
-import { resolveHiddenProbeCwd } from '../../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../../lib/hidden-probe-cwd'
 import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps

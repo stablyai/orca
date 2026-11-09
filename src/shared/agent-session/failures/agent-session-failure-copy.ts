@@ -118,6 +118,13 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeEffortInvalid:
     'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.',
   modelUnavailable: "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+  selectedModel: 'the selected model',
+  providerUnavailable:
+    "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+  providerSafetyStopped:
+    '{{agent}} stopped this response after a safety check. Review your request and send again.',
+  providerResponseFailed:
+    "{{agent}} couldn't finish this response. Open Details for more information.",
   modelNotSelected:
     '{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.',
   modelUnavailableUpdate:

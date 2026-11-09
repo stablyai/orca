@@ -1,4 +1,4 @@
-import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator-tab-label'
+import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator/tabs/simulator-tab-label'
 import {
   simulatorPreviewStreamUrl,
   type EmulatorPaneSession,

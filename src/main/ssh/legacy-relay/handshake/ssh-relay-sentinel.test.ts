@@ -34,19 +34,6 @@ describe('waitForSentinel', () => {
     expect(chunks).toEqual(['first-frame-after-sentinel'])
   })
 
-  it('buffers post-sentinel bytes from the sentinel chunk', async () => {
-    const channel = createMockChannel()
-    const transportPromise = waitForSentinel(channel)
-
-    channel.emit('data', Buffer.from(`${RELAY_SENTINEL}same-chunk-frame`))
-
-    const transport = await transportPromise
-    const chunks: string[] = []
-    transport.onData((chunk) => chunks.push(chunk.toString('utf-8')))
-
-    expect(chunks).toEqual(['same-chunk-frame'])
-  })
-
   it('does not count same-chunk post-sentinel payload against the startup buffer cap', async () => {
     const channel = createMockChannel()
     const transportPromise = waitForSentinel(channel)

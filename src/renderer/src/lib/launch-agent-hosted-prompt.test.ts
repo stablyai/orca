@@ -38,7 +38,9 @@ vi.mock('@/runtime/agent-launch-settings/agent-launch-settings-transport', async
 vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation', () => ({
   createWebRuntimeSessionTerminalResult: mocks.create
 }))
-vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: mocks.paste }))
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
+  pasteDraftWhenAgentReady: mocks.paste
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()

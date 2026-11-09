@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
 import { useTranslate } from '@/i18n/use-translate'
-import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
+import { CHECK_COLOR, CHECK_ICON, checkPresentationKey } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { CheckRunTime } from './check-run-time'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
@@ -249,7 +249,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
 // The icon already shows the state, so its word lives in the icon's tooltip and accessible name, not beside it.
 function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element {
   const t = useTranslate()
-  const conclusion = getCheckConclusion(check)
+  const conclusion = checkPresentationKey(check)
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const label = getCheckStatusLabel(check, t)
   return (

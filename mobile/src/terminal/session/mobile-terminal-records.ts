@@ -1,4 +1,4 @@
-import type { RuntimeMobileTerminalTheme as MobileTerminalTheme } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { BrowserLoadError } from '../../../../src/shared/browser-workspace-types'
 import { browserLoadErrorsEqual } from '../../../../src/shared/browser-load-failure'
@@ -7,7 +7,7 @@ import { translate } from '../../i18n/mobile-i18n'
 export type TerminalRecord = {
   handle: string
   title: string
-  terminalTheme?: MobileTerminalTheme
+  terminalTheme?: RuntimeMobileTerminalTheme
   isActive: boolean
   /** From `terminal.list`; parked and proven-absent leaves report false. */
   connected?: boolean
@@ -30,7 +30,7 @@ export type MobileTerminalSessionTab = {
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
-  terminalTheme?: MobileTerminalTheme
+  terminalTheme?: RuntimeMobileTerminalTheme
   isActive: boolean
 }
 
@@ -82,8 +82,8 @@ type MobileSessionTabLike =
     }
 
 export function mobileTerminalThemesEqual(
-  left: MobileTerminalTheme | null | undefined,
-  right: MobileTerminalTheme | null | undefined
+  left: RuntimeMobileTerminalTheme | null | undefined,
+  right: RuntimeMobileTerminalTheme | null | undefined
 ): boolean {
   if (left === right) {
     return true

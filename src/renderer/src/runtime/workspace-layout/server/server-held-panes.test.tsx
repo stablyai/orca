@@ -4,7 +4,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import type * as FrameDrawnModule from '../../web-session-tabs-sync/frame-drawn-server-workspaces'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
@@ -52,7 +52,7 @@ const hoisted = vi.hoisted(
 
 vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

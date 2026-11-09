@@ -184,7 +184,10 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           // A server creates new-child as top-level plus this parent, so older servers parse it too.
           worktree: createsWorktree ? 'new-top-level' : worktree,
           ...(childParent && 'crossStoreParent' in childParent
-            ? { crossStoreParent: childParent.crossStoreParent }
+            ? {
+                crossStoreParent: childParent.crossStoreParent,
+                crossStoreParentInferredFrom: childParent.crossStoreParentInferredFrom
+              }
             : {}),
           name: params.name,
           repo: params.repo,

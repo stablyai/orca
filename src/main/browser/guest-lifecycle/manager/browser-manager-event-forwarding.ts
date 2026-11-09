@@ -1,7 +1,7 @@
 import type {
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
-} from '../../../../shared/browser-guest-events'
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { BrowserManagerBindings } from './browser-manager-bindings'
 
