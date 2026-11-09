@@ -5,6 +5,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { isStructuredAgentSessionCommandEntry } from '../../../../shared/agent-session/structured-agent-session-command-entry'
 import type { AgentSessionUsageLimit } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { restoreJournal } from '../../agent-session-journal/replay/journal-open'
@@ -58,7 +59,23 @@ function openerOf(
   return -1
 }
 
-/** The root turn just before the user row that opened `turnIndex`; null when another request intervenes. */
+/** Whether the turn at `index` was opened by a slash command, read from its opener just before it. */
+function isCommandTurnAt(items: readonly AgentJournalRenderItem[], index: number): boolean {
+  const userItemId = readAgentJournalTurn(items[index]!.body)?.userItemId
+  for (let before = index - 1; userItemId && before >= 0; before -= 1) {
+    const item = items[before]!
+    if (item.itemId === userItemId) {
+      return isStructuredAgentSessionCommandEntry(item.body)
+    }
+    if (isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)) {
+      break
+    }
+  }
+  return false
+}
+
+/** The request turn just before the user row that opened `turnIndex`, skipping slash-command turns
+ *  as the latest-turn read does; -1 when a person's request intervenes. */
 function previousTurnIndex(
   items: readonly AgentJournalRenderItem[],
   turnIndex: number,
@@ -66,10 +83,17 @@ function previousTurnIndex(
 ): number {
   for (let index = turnIndex - 1; index >= 0; index -= 1) {
     const item = items[index]!
-    if (!isRootAgentJournalItem(item) || openerKeys.has(item.itemId)) {
+    if (
+      !isRootAgentJournalItem(item) ||
+      openerKeys.has(item.itemId) ||
+      isStructuredAgentSessionCommandEntry(item.body)
+    ) {
       continue
     }
     if (readAgentJournalTurn(item.body)) {
+      if (isCommandTurnAt(items, index)) {
+        continue
+      }
       return index
     }
     if (item.body.kind === 'message' && item.body.role === 'user') {
