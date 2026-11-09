@@ -20,6 +20,8 @@ import {
 } from './hosted-workspace-service'
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
 import { setHostedSessionSync } from './hosted-session-sync'
+import { installCloudOfflineService, setCloudOfflineService } from './cloud-offline-service'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
 export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
@@ -61,6 +63,13 @@ export function installHostedSandbox(): void {
     stopSession: (environmentId) => registry.stopEnvironment(environmentId)
   })
   setHostedWorkspaceService(workspaces)
+  const offline = installCloudOfflineService({
+    userDataPath,
+    call: (environmentId, method, params, timeoutMs) =>
+      callRuntimeEnvironment(userDataPath, environmentId, method, params, timeoutMs),
+    windows: () => BrowserWindow.getAllWindows()
+  })
+  setCloudOfflineService(offline)
   // Records land after the step answers and wakes can come from any path, so reconcile on a slow beat too.
   let beat: ReturnType<typeof setTimeout> | null = null
   let beats = 0
@@ -95,6 +104,8 @@ export function installHostedSandbox(): void {
     registry.dispose()
     workspaces.dispose()
     setHostedWorkspaceService(null)
+    offline.dispose()
+    setCloudOfflineService(null)
   })
 }
 
