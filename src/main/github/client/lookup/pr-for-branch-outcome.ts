@@ -12,7 +12,7 @@ import { hostedReviewLocalGitOptionArgs, githubPRStackExecutionScope } from './.
 import type { GitHubPRBranchLookupOptions } from './pull-request-lookup-data'
 import { prRefreshUpstreamError } from './../gh-error-predicates'
 import { resolvePRForBranchOutcome } from './branch-lookup-resolution'
-import { readRecentOpenPROutcome, recordPRLastOutcome } from './pr-last-outcome'
+import { readRecentOpenPROutcome, recordPRLastOutcome, startPRLookup } from './pr-last-outcome'
 const reads: CoalescedProbes<PRRefreshOutcome> = new Map()
 
 export async function getPRForBranchOutcome(
@@ -81,7 +81,7 @@ export async function getPRForBranchOutcome(
         key,
         async () => {
           await acquire()
-          const startedAt = Date.now()
+          const start = startPRLookup()
           let outcome: PRRefreshOutcome
           try {
             outcome = await resolvePRForBranchOutcome({
@@ -102,7 +102,7 @@ export async function getPRForBranchOutcome(
           }
           const narrowed = options.checkPageLimit !== undefined || options.exactRepository
           recordPRLastOutcome(lastOutcomeKey, {
-            startedAt,
+            start,
             linkedPRNumber: linkedPRNumber ?? null,
             outcome: narrowed ? null : outcome
           })
