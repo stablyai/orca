@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { AvccFrameStreamCallbacks } from '../emulator/avcc-frame-stream'
 import type { MjpegFrameStreamCallbacks } from '../emulator/mjpeg-frame-stream'
 import type { ScrcpyVideoSubscriber } from '../emulator/scrcpy-video-registry'
 
@@ -10,7 +11,10 @@ const mocks = vi.hoisted(() => ({
   frameStarts: vi.fn(),
   frameStops: vi.fn(),
   videoStarts: vi.fn(),
-  videoStops: vi.fn()
+  videoStops: vi.fn(),
+  avccStarts: vi.fn<(url: string) => void>(),
+  avccStops: vi.fn(),
+  avccCallbacks: new Set<AvccFrameStreamCallbacks>()
 }))
 
 vi.mock('electron', () => ({
@@ -49,6 +53,22 @@ vi.mock('../emulator/scrcpy-video-registry', () => ({
     }
   }
 }))
+vi.mock('../emulator/avcc-frame-stream', () => ({
+  AvccFrameStream: class {
+    constructor(
+      private url: string,
+      private callbacks: AvccFrameStreamCallbacks
+    ) {}
+    start(): void {
+      mocks.avccStarts(this.url)
+      mocks.avccCallbacks.add(this.callbacks)
+    }
+    stop(): void {
+      mocks.avccStops()
+      mocks.avccCallbacks.delete(this.callbacks)
+    }
+  }
+}))
 vi.mock('../emulator/emulator-probe', () => ({ emulatorProbe: () => {} }))
 
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
@@ -61,6 +81,7 @@ class Owner extends EventEmitter {
 
 const owners: Owner[] = []
 const goneEvents = ['did-navigate', 'render-process-gone', 'destroyed'] as const
+const IOS_UDID = '5C1A9A5E-0000-4000-8000-000000000001'
 
 function owner(): Owner {
   const sender = new Owner()
@@ -100,7 +121,9 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.clearAllMocks()
   registerEmulatorFrameStreamHandlers()
-  registerEmulatorVideoStreamHandlers()
+  registerEmulatorVideoStreamHandlers((deviceId) =>
+    deviceId === IOS_UDID ? `http://127.0.0.1:3100/helper/${IOS_UDID}/stream.avcc` : null
+  )
 })
 
 afterEach(() => {
@@ -111,6 +134,7 @@ afterEach(() => {
   vi.useRealTimers()
   mocks.frameCallbacks.clear()
   mocks.videoSubscribers.clear()
+  mocks.avccCallbacks.clear()
 })
 
 it.each(goneEvents)('stops both live streams on %s and leaves no per-frame delivery', (event) => {
@@ -214,3 +238,56 @@ it.each([...goneEvents, 'explicit stop'] as const)(
     expect(sender.send).toHaveBeenCalledOnce()
   }
 )
+
+function startIosVideo(sender: Owner): void {
+  // A renderer-supplied URL must be ignored; main opens only the registered helper.
+  mocks.handlers.get('emulator:videoStreamStart')?.(
+    { sender },
+    {
+      deviceId: IOS_UDID,
+      streamId: 'ios-stream',
+      avccStreamUrl: 'http://169.254.169.254/stream.avcc'
+    }
+  )
+  vi.runOnlyPendingTimers()
+}
+
+it('streams a registered iOS device from its helper and releases it with the renderer', () => {
+  const sender = owner()
+  startIosVideo(sender)
+  expect(mocks.avccStarts).toHaveBeenCalledOnce()
+  expect(mocks.avccStarts).toHaveBeenCalledWith(
+    `http://127.0.0.1:3100/helper/${IOS_UDID}/stream.avcc`
+  )
+  expect(mocks.videoStarts).not.toHaveBeenCalled()
+
+  const [callbacks] = mocks.avccCallbacks
+  const bytes = new ArrayBuffer(4)
+  callbacks.onFrame({ config: true, keyFrame: false, bytes })
+  expect(sender.send).toHaveBeenCalledWith('emulator:videoStreamFrame', {
+    streamId: 'ios-stream',
+    deviceId: IOS_UDID,
+    config: true,
+    keyFrame: false,
+    bytes
+  })
+
+  sender.emit('render-process-gone')
+  expect(mocks.avccStops).toHaveBeenCalledOnce()
+  expect(mocks.avccCallbacks.size).toBe(0)
+})
+
+it('reports an iOS video failure on the stream error channel and releases the helper stream', () => {
+  const sender = owner()
+  startIosVideo(sender)
+  const [callbacks] = mocks.avccCallbacks
+  callbacks.onError('Simulator video stream returned HTTP 404.')
+  expect(sender.send).toHaveBeenCalledWith('emulator:frameStreamError', {
+    streamId: 'ios-stream',
+    message: 'Simulator video stream returned HTTP 404.'
+  })
+  expect(mocks.avccStops).toHaveBeenCalledOnce()
+  for (const event of goneEvents) {
+    expect(sender.listenerCount(event)).toBe(0)
+  }
+})
