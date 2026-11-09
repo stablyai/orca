@@ -27,9 +27,10 @@ export function stopSttDictation(
     return Promise.resolve()
   }
   if (session.phase === 'stopping') {
-    // A cancel after Finish still aborts the cloud upload whose text it would throw away.
+    // A cancel after Finish still drops the work whose text it would throw away.
     if (options.discard) {
       session.cloud?.cancel()
+      session.engine?.worker.postMessage({ type: 'discard', streamId: session.streamId })
     }
     return session.stopPromise ?? Promise.resolve()
   }

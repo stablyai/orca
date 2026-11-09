@@ -464,6 +464,21 @@ describe('SttService', () => {
     expect(worker!.messages.filter((message) => message.type === 'feed')).toHaveLength(0)
   })
 
+  it('ends a finishing dictation at once when it is canceled, without waiting for its decode', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+    const sink = vi.fn()
+    await service.startDictation('model-a', sink, undefined, 'desktop')
+    const worker = getLastWorker()!
+    worker.emitStoppedOnStop = false
+
+    const finishing = service.stopDictation('desktop')
+    await service.stopDictation('desktop', { discard: true })
+    await finishing
+
+    expect(worker.terminated).toBe(false)
+    expect(sink).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }))
+  })
+
   it('drops in-flight audio while stop is waiting for the worker', async () => {
     const service = new SttService(readyModels(), spawnMockWorker)
 
