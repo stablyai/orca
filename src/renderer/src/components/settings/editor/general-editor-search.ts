@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getVisibleEditorTypographySearchDescriptors } from './editor-typography-search'
+import { getEditorKeybindingsSearchEntry } from './EditorKeybindingsSetting'
 import { getFormatOnSaveSearchEntry } from './EditorFormatOnSaveSetting'
 import { getInsertFinalNewlineSearchEntry } from './EditorInsertFinalNewlineSetting'
 import { getEndOfLineSearchEntry } from './EditorEndOfLineSetting'
@@ -52,6 +53,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code')
     ]
   }),
+  generalSetting(GENERAL_SETTING_ANCHORS.editorKeybindings, getEditorKeybindingsSearchEntry()),
   generalSetting(GENERAL_SETTING_ANCHORS.collapseUnchanged, {
     title: translate(
       'auto.components.settings.general.search.aa367d753d',

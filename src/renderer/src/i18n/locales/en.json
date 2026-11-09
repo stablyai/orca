@@ -1852,6 +1852,13 @@
       "keywords": "formatter format on save prettier biome gofmt",
       "47b45a6179": "Format on save"
     },
+    "editorKeybindings": {
+      "title": "Editor keybindings",
+      "description": "Use Emacs keybindings in the code editor instead of standard editing.",
+      "keywords": "editor keybindings keymap emacs",
+      "default": "Default",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "description": "Add a line break when saving a non-empty code file that does not end with one. Off by default.",
       "keywordNewline": "newline",

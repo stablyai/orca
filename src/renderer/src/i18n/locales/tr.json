@@ -1093,6 +1093,13 @@
       "keywords": "biçimlendirici kaydederken biçimlendir prettier biome gofmt",
       "47b45a6179": "Kaydederken biçimlendir"
     },
+    "editorKeybindings": {
+      "title": "Düzenleyici Kısayolları",
+      "description": "Kod düzenleyicide standart düzenleme yerine Emacs kısayollarını kullan.",
+      "keywords": "düzenleyici kısayollar tuş eşlemesi emacs",
+      "default": "Varsayılan",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "description": "Boş olmayan bir kod dosyası kaydedilirken sonunda satır sonu yoksa ekleyin. Varsayılan olarak kapalıdır.",
       "keywordNewline": "yeni satır",

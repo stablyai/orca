@@ -1,4 +1,5 @@
 import { markdownParserAliases } from './config/build-plugins/markdown-parser-exports'
+import { monacoEditorEsmAlias, toAliasList } from './config/build-plugins/monaco-editor-esm-alias'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { defineConfig, type UserConfig } from 'electron-vite'
@@ -255,15 +256,18 @@ export const electronViteConfig: UserConfig = {
       ...DARK_BUILD_DEFINES
     },
     resolve: {
-      alias: {
-        ...markdownParserAliases,
-        // Pin the browser-safe UMD entry so an unpatched package.json cannot bundle lib/addon-ligatures.mjs (which imports node:diagnostics_channel).
-        '@xterm/addon-ligatures': resolve(
-          'node_modules/@xterm/addon-ligatures/lib/addon-ligatures.js'
-        ),
-        '@renderer': resolve('src/renderer/src'),
-        '@': resolve('src/renderer/src')
-      }
+      alias: toAliasList(
+        {
+          ...markdownParserAliases,
+          // Pin the browser-safe UMD entry so an unpatched package.json cannot bundle lib/addon-ligatures.mjs (which imports node:diagnostics_channel).
+          '@xterm/addon-ligatures': resolve(
+            'node_modules/@xterm/addon-ligatures/lib/addon-ligatures.js'
+          ),
+          '@renderer': resolve('src/renderer/src'),
+          '@': resolve('src/renderer/src')
+        },
+        monacoEditorEsmAlias
+      )
     },
     plugins: [
       react(reactPluginOptions()),

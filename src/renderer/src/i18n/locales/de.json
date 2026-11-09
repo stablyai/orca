@@ -1121,6 +1121,13 @@
       "keywords": "Formatierer Formatierung beim Speichern prettier biome gofmt",
       "47b45a6179": "Beim Speichern formatieren"
     },
+    "editorKeybindings": {
+      "title": "Editor-Tastenkürzel",
+      "description": "Emacs-Tastenkürzel im Code-Editor statt der Standardbearbeitung verwenden.",
+      "keywords": "Editor Tastenkürzel Keymap emacs",
+      "default": "Standard",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "description": "Beim Speichern einer nicht leeren Codedatei einen Zeilenumbruch hinzufügen, falls sie nicht damit endet. Standardmäßig deaktiviert.",
       "keywordNewline": "Zeilenumbruch",

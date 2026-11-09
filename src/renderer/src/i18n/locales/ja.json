@@ -846,6 +846,13 @@
       "keywords": "フォーマッター 保存時 フォーマット prettier biome gofmt",
       "47b45a6179": "保存時にフォーマット"
     },
+    "editorKeybindings": {
+      "title": "エディターのキーバインド",
+      "description": "コードエディターで標準の編集の代わりに Emacs キーバインドを使用します。",
+      "keywords": "エディター キーバインド キーマップ emacs",
+      "default": "デフォルト",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "description": "空でないコードファイルを保存する際、末尾に改行がなければ追加します。デフォルトではオフです。",
       "keywordNewline": "改行",

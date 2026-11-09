@@ -546,6 +546,13 @@
       "keywords": "formateador formatear al guardar prettier biome gofmt",
       "47b45a6179": "Formatear al guardar"
     },
+    "editorKeybindings": {
+      "title": "Atajos del editor",
+      "description": "Usa los atajos de Emacs en el editor de código en lugar de la edición estándar.",
+      "keywords": "editor atajos teclado keymap emacs",
+      "default": "Predeterminado",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "description": "Añade un salto de línea al guardar un archivo de código no vacío que no termine con uno. Desactivado de forma predeterminada.",
       "keywordNewline": "salto de línea",

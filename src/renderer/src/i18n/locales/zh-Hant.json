@@ -1064,6 +1064,13 @@
       "keywords": "格式化工具 儲存時格式化 prettier biome gofmt",
       "47b45a6179": "儲存時格式化"
     },
+    "editorKeybindings": {
+      "title": "編輯器按鍵繫結",
+      "description": "在程式碼編輯器中使用 Emacs 按鍵繫結，而不是標準編輯方式。",
+      "keywords": "編輯器 按鍵繫結 快捷鍵 emacs",
+      "default": "預設",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "description": "儲存非空的程式碼檔案時，若結尾沒有換行符號，則加入一個。預設為關閉。",
       "keywordNewline": "換行",
