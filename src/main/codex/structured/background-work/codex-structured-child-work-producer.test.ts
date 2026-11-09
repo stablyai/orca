@@ -248,7 +248,10 @@ describe('Codex structured child-work producer', () => {
     }
     send(turn('turn/completed', REVIEWER, 'r1'))
     send(turn('turn/started', REVIEWER, 'r2'))
-    expect(tracker.state?.tasks.map((task) => task.id)).toEqual([REVIEWER, 'second-helper'])
+    expect(tracker.state?.tasks?.map((task) => task.id)).toEqual([
+      'codex-agent:thread-reviewer',
+      'codex-agent:second-helper'
+    ])
   })
 
   it('delivers evidence only after the journal wrote and published the frame', async () => {
