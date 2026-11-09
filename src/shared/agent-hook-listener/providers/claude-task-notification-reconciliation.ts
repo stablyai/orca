@@ -1,8 +1,8 @@
 import type { ClaudeBackgroundAgentTask } from '../../claude-background-task-inventory'
-import {
-  readClaudeCurrentTaskNotifications,
-  readClaudeTaskTranscriptPosition,
-  type ClaudeTaskTranscriptObservation
+import type {
+  ClaudeCurrentTaskNotificationTranscriptRead,
+  ClaudeTaskTranscriptPosition,
+  ClaudeTaskTranscriptObservation
 } from '../../claude-task-notification-transcript'
 import { stopClaudeSubagent } from '../../claude-subagent-roster'
 import type { HookListenerState } from '../listener-state'
@@ -14,13 +14,9 @@ export function recordClaudeSubagentTranscriptObservation(
   state: HookListenerState,
   paneKey: string,
   agentId: string,
-  hookPayload: Record<string, unknown>
+  position: ClaudeTaskTranscriptPosition | undefined
 ): void {
   const observations = getOrCreateObservations(state, paneKey)
-  const position = readClaudeTaskTranscriptPosition(
-    readString(hookPayload, 'session_id'),
-    readString(hookPayload, 'transcript_path')
-  )
   if (position) {
     setObservation(state, paneKey, observations, agentId, 'agent', position)
   } else {
@@ -36,7 +32,7 @@ export function recordClaudeStopTranscriptObservations(
   runningNonAgentTaskIds: string[],
   hasUnidentifiedRunningNonAgentTask: boolean,
   inventoryComplete: boolean,
-  hookPayload: Record<string, unknown>
+  position: ClaudeTaskTranscriptPosition | undefined
 ): void {
   const observations = getOrCreateObservations(state, paneKey)
   if (inventoryComplete) {
@@ -45,10 +41,6 @@ export function recordClaudeStopTranscriptObservations(
   if (hasUnidentifiedRunningNonAgentTask) {
     state.claudeTaskNotificationState.unidentifiedRunningNonAgentTaskPaneKeys.add(paneKey)
   }
-  const position = readClaudeTaskTranscriptPosition(
-    readString(hookPayload, 'session_id'),
-    readString(hookPayload, 'transcript_path')
-  )
   const runningIds = new Set<string>()
   for (const task of tasks) {
     if (task.running) {
@@ -93,12 +85,13 @@ export function forgetClaudeTaskTranscriptObservation(
 export function reconcileClaudeIdlePromptTasks(
   state: HookListenerState,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  transcript: ClaudeCurrentTaskNotificationTranscriptRead | undefined
 ): boolean {
   const transcriptPath = readString(hookPayload, 'transcript_path')
   const sessionId = readString(hookPayload, 'session_id')
   const observations = state.claudeTaskNotificationState.observationsByPaneKey.get(paneKey)
-  if (!transcriptPath || !sessionId || !observations) {
+  if (!transcript?.available || !observations || !transcriptPath || !sessionId) {
     return false
   }
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
@@ -115,13 +108,6 @@ export function reconcileClaudeIdlePromptTasks(
     ([, observation]) =>
       observation.transcriptPath === transcriptPath && observation.sessionId === sessionId
   )
-  if (candidates.length === 0) {
-    return false
-  }
-  const transcript = readClaudeCurrentTaskNotifications(sessionId, transcriptPath, candidates)
-  if (!transcript.available) {
-    return false
-  }
   const matching = candidates.filter(
     ([, observation]) => observation.fileIdentity === transcript.fileIdentity
   )
@@ -181,6 +167,7 @@ export function hasClaudeIdlePromptTaskObservation(
   ) {
     return false
   }
+
   for (const observation of observations.values()) {
     if (observation.transcriptPath === transcriptPath && observation.sessionId === sessionId) {
       return true
@@ -207,7 +194,7 @@ function setObservation(
   observations: Map<string, ClaudeTaskTranscriptObservation>,
   taskId: string,
   kind: ClaudeTaskTranscriptObservation['kind'],
-  position: ReturnType<typeof readClaudeTaskTranscriptPosition>
+  position: ClaudeTaskTranscriptPosition | undefined
 ): void {
   if (
     position &&

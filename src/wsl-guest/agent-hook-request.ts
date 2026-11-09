@@ -107,7 +107,7 @@ export async function handleRelayHookRequest(
       return
     }
     let admittedOpenCodeTuiOwner = false
-    const event = options.providerNormalization.normalize(
+    const event = await options.providerNormalization.normalizeAsync(
       options.state,
       source,
       hookBody,

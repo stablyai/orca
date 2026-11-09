@@ -23,7 +23,7 @@ describe('Claude task notification transcript evidence', () => {
     rmSync(directory, { recursive: true, force: true })
   })
 
-  it('accepts only current-session provider-authored terminal task notifications', () => {
+  it('accepts only current-session provider-authored terminal task notifications', async () => {
     writeFileSync(
       transcriptPath,
       [
@@ -32,38 +32,38 @@ describe('Claude task notification transcript evidence', () => {
         record('task-1', 'completed', { origin: { kind: 'user' } })
       ].join('')
     )
-    const position = readClaudeTaskTranscriptPosition(SESSION_ID, transcriptPath)!
+    const position = (await readClaudeTaskTranscriptPosition(SESSION_ID, transcriptPath))!
     appendFileSync(transcriptPath, record('task-1', 'completed'))
 
-    expect(readClaudeTerminalTaskNotifications(position, position.byteOffset)).toEqual({
+    expect(await readClaudeTerminalTaskNotifications(position, position.byteOffset)).toEqual({
       available: true,
       notifications: [{ taskId: 'task-1', byteOffset: position.byteOffset }]
     })
   })
 
-  it('does not let a notification from before a resumed task end that incarnation', () => {
+  it('does not let a notification from before a resumed task end that incarnation', async () => {
     writeFileSync(transcriptPath, record('task-1', 'completed'))
-    const resumedPosition = readClaudeTaskTranscriptPosition(SESSION_ID, transcriptPath)!
+    const resumedPosition = (await readClaudeTaskTranscriptPosition(SESSION_ID, transcriptPath))!
 
     expect(
-      readClaudeTerminalTaskNotifications(resumedPosition, resumedPosition.byteOffset)
+      await readClaudeTerminalTaskNotifications(resumedPosition, resumedPosition.byteOffset)
     ).toEqual({ available: true, notifications: [] })
 
     appendFileSync(transcriptPath, record('task-1', 'completed'))
     expect(
-      readClaudeTerminalTaskNotifications(resumedPosition, resumedPosition.byteOffset)
+      await readClaudeTerminalTaskNotifications(resumedPosition, resumedPosition.byteOffset)
     ).toMatchObject({
       available: true,
       notifications: [{ taskId: 'task-1' }]
     })
   })
 
-  it('does not accept terminal evidence outside the bounded scan window', () => {
-    const position = readClaudeTaskTranscriptPosition(SESSION_ID, transcriptPath)!
+  it('does not accept terminal evidence outside the bounded scan window', async () => {
+    const position = (await readClaudeTaskTranscriptPosition(SESSION_ID, transcriptPath))!
     appendFileSync(transcriptPath, record('task-1', 'completed'))
     appendFileSync(transcriptPath, `${'x'.repeat(4 * 1024 * 1024)}\n`)
 
-    expect(readClaudeTerminalTaskNotifications(position, position.byteOffset)).toEqual({
+    expect(await readClaudeTerminalTaskNotifications(position, position.byteOffset)).toEqual({
       available: true,
       notifications: []
     })

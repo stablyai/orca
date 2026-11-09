@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
+import { open, type FileHandle } from 'node:fs/promises'
 import {
   CLAUDE_TASK_NOTIFICATION_MARKER,
   readClaudeTaskNotification
@@ -43,17 +43,22 @@ export type ClaudeCurrentTaskNotificationTranscriptRead =
     }
   | { available: false }
 
-export function readClaudeTaskTranscriptPosition(
+export type ClaudeTaskNotificationTranscriptEvidence = {
+  position?: ClaudeTaskTranscriptPosition
+  current?: ClaudeCurrentTaskNotificationTranscriptRead
+}
+
+export async function readClaudeTaskTranscriptPosition(
   sessionId: string | undefined,
   transcriptPath: string | undefined
-): ClaudeTaskTranscriptPosition | undefined {
+): Promise<ClaudeTaskTranscriptPosition | undefined> {
   if (!sessionId || !transcriptPath) {
     return undefined
   }
-  let descriptor: number | undefined
+  let file: FileHandle | undefined
   try {
-    descriptor = openSync(transcriptPath, 'r')
-    const stats = fstatSync(descriptor)
+    file = await open(transcriptPath, 'r')
+    const stats = await file.stat()
     if (!stats.isFile()) {
       return undefined
     }
@@ -66,48 +71,43 @@ export function readClaudeTaskTranscriptPosition(
   } catch {
     return undefined
   } finally {
-    if (descriptor !== undefined) {
-      closeSync(descriptor)
+    if (file) {
+      await file.close()
     }
   }
 }
 
-export function readClaudeTerminalTaskNotifications(
+export async function readClaudeTerminalTaskNotifications(
   position: ClaudeTaskTranscriptPosition,
   minimumByteOffset: number
-): ClaudeTaskNotificationTranscriptRead {
-  let descriptor: number | undefined
+): Promise<ClaudeTaskNotificationTranscriptRead> {
+  let file: FileHandle | undefined
   try {
-    descriptor = openSync(position.transcriptPath, 'r')
-    const stats = fstatSync(descriptor)
+    file = await open(position.transcriptPath, 'r')
+    const stats = await file.stat()
     const fileIdentity = `${stats.dev}:${stats.ino}`
     if (!stats.isFile() || fileIdentity !== position.fileIdentity) {
       return { available: false }
     }
-    return readNotificationsFromDescriptor(
-      descriptor,
-      stats.size,
-      position.sessionId,
-      minimumByteOffset
-    )
+    return await readNotificationsFromFile(file, stats.size, position.sessionId, minimumByteOffset)
   } catch {
     return { available: false }
   } finally {
-    if (descriptor !== undefined) {
-      closeSync(descriptor)
+    if (file) {
+      await file.close()
     }
   }
 }
 
-export function readClaudeCurrentTaskNotifications(
+export async function readClaudeCurrentTaskNotifications(
   sessionId: string,
   transcriptPath: string,
   observations: readonly [string, ClaudeTaskTranscriptObservation][]
-): ClaudeCurrentTaskNotificationTranscriptRead {
-  let descriptor: number | undefined
+): Promise<ClaudeCurrentTaskNotificationTranscriptRead> {
+  let file: FileHandle | undefined
   try {
-    descriptor = openSync(transcriptPath, 'r')
-    const stats = fstatSync(descriptor)
+    file = await open(transcriptPath, 'r')
+    const stats = await file.stat()
     if (!stats.isFile()) {
       return { available: false }
     }
@@ -122,28 +122,23 @@ export function readClaudeCurrentTaskNotifications(
       return { available: true, fileIdentity, notifications: [] }
     }
     const minimumByteOffset = Math.min(...matching.map(([, observation]) => observation.byteOffset))
-    const read = readNotificationsFromDescriptor(
-      descriptor,
-      stats.size,
-      sessionId,
-      minimumByteOffset
-    )
+    const read = await readNotificationsFromFile(file, stats.size, sessionId, minimumByteOffset)
     return read.available ? { ...read, fileIdentity } : read
   } catch {
     return { available: false }
   } finally {
-    if (descriptor !== undefined) {
-      closeSync(descriptor)
+    if (file) {
+      await file.close()
     }
   }
 }
 
-function readNotificationsFromDescriptor(
-  descriptor: number,
+async function readNotificationsFromFile(
+  file: FileHandle,
   fileSize: number,
   sessionId: string,
   minimumByteOffset: number
-): ClaudeTaskNotificationTranscriptRead {
+): Promise<ClaudeTaskNotificationTranscriptRead> {
   const startByteOffset = Math.max(
     minimumByteOffset,
     fileSize - CLAUDE_TASK_NOTIFICATION_SCAN_LIMIT_BYTES
@@ -155,7 +150,12 @@ function readNotificationsFromDescriptor(
   const bytes = Buffer.alloc(length)
   let filled = 0
   while (filled < length) {
-    const count = readSync(descriptor, bytes, filled, length - filled, startByteOffset + filled)
+    const { bytesRead: count } = await file.read(
+      bytes,
+      filled,
+      length - filled,
+      startByteOffset + filled
+    )
     if (count === 0) {
       return { available: false }
     }
@@ -165,7 +165,7 @@ function readNotificationsFromDescriptor(
   let lineStart = 0
   if (startByteOffset > 0) {
     const previousByte = Buffer.alloc(1)
-    const previousCount = readSync(descriptor, previousByte, 0, 1, startByteOffset - 1)
+    const { bytesRead: previousCount } = await file.read(previousByte, 0, 1, startByteOffset - 1)
     if (previousCount !== 1) {
       return { available: false }
     }

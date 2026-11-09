@@ -20,6 +20,7 @@ import {
 } from '../shared/agent-hook-listener/transcript-poll-policy'
 import { AgentTranscriptPollScheduler } from '../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import { ClaudeOwedNotificationExpiryTimers } from '../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
+import { readClaudeTaskNotificationEvidenceFromBody } from '../shared/agent-hook-listener/providers/claude-task-notification-evidence-reader'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -219,7 +220,19 @@ export class AgentHookResultRetryScheduler {
         void discovery
           .then(() => {
             if (this.host.isListening()) {
-              this.applyAssistantMessageRetry(source, body, original, env, version, 1, true)
+              void this.applyAssistantMessageRetry(
+                source,
+                body,
+                original,
+                env,
+                version,
+                1,
+                true
+              ).catch((err) => {
+                process.stderr.write(
+                  `[relay-hook-server] assistant message retry failed: ${err instanceof Error ? err.message : String(err)}\n`
+                )
+              })
             }
           })
           .catch((err) => {
@@ -231,22 +244,20 @@ export class AgentHookResultRetryScheduler {
       }
     }
     const timer = setTimeout(() => {
-      try {
-        this.assistantMessageRetryTimers.delete(original.paneKey)
-        this.applyAssistantMessageRetry(
-          source,
-          body,
-          original,
-          env,
-          version,
-          attempt + 1,
-          discoveryReady
-        )
-      } catch (err) {
+      this.assistantMessageRetryTimers.delete(original.paneKey)
+      void this.applyAssistantMessageRetry(
+        source,
+        body,
+        original,
+        env,
+        version,
+        attempt + 1,
+        discoveryReady
+      ).catch((err) => {
         process.stderr.write(
           `[relay-hook-server] assistant message retry failed: ${err instanceof Error ? err.message : String(err)}\n`
         )
-      }
+      })
     }, ASSISTANT_MESSAGE_RETRY_MS)
     this.assistantMessageRetryTimers.set(original.paneKey, timer)
     if (typeof timer.unref === 'function') {
@@ -254,7 +265,7 @@ export class AgentHookResultRetryScheduler {
     }
   }
 
-  private applyAssistantMessageRetry(
+  private async applyAssistantMessageRetry(
     source: AgentHookSource,
     body: unknown,
     original: AgentHookEventPayload,
@@ -262,7 +273,7 @@ export class AgentHookResultRetryScheduler {
     version: string | undefined,
     nextAttempt: number,
     requireExactOriginal: boolean
-  ): void {
+  ): Promise<void> {
     const current = this.host.state.lastStatusByPaneKey.get(original.paneKey)
     if (
       !current ||
@@ -273,7 +284,13 @@ export class AgentHookResultRetryScheduler {
     ) {
       return
     }
-    const event = normalizeHookPayload(this.host.state, source, body, this.host.env)
+    const transcriptEvidence =
+      source === 'claude'
+        ? await readClaudeTaskNotificationEvidenceFromBody(this.host.state, body)
+        : undefined
+    const event = normalizeHookPayload(this.host.state, source, body, this.host.env, {
+      claudeTaskTranscriptEvidence: transcriptEvidence
+    })
     if (!event?.payload.lastAssistantMessage) {
       this.scheduleAssistantMessageRetry(
         source,

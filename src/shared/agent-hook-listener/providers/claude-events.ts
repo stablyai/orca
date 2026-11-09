@@ -8,7 +8,6 @@ import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inv
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
-  isClaudeChildTurnEndEvent,
   reapUnconfirmedRestoredClaudeSubagents,
   upsertWorkingClaudeSubagent
 } from '../../claude-subagent-roster'
@@ -18,7 +17,7 @@ import { shouldIgnoreCompactContinuationUserPromptSubmit } from '../prompt-field
 import { readString } from '../tool-input-preview'
 import {
   buildClaudeCachedLeadStatusPayload,
-  normalizeClaudeSubagentLifecycleEvent
+  normalizeClaudeLifecycleEventIfNeeded
 } from './claude-lifecycle-events'
 import {
   getOrCreateClaudeSubagentRoster,
@@ -35,13 +34,14 @@ import { claudeWaitRequest, settleClaudeToolBatch } from './claude-tool-request-
 import { trackClaudeTaskNotificationDelivery } from './claude-task-notification-delivery'
 import { clearClaudeTaskNotificationPane } from '../claude-task-notification-state'
 import {
-  recordClaudeStopTaskInventory,
+  recordClaudeStopTaskInventory as recordStopTaskInventory,
   readClaudeTurnBoundaryEvidence,
   resolveClaudeReportedStateName,
   resolveClaudeTaskWakeupTurn,
   updateClaudeBackgroundStatus
 } from './claude-task-notification-status'
 import { recordClaudeTeammateSpawn } from './claude-teammate-spawn'
+import type { ClaudeTaskNotificationTranscriptEvidence } from '../../claude-task-notification-transcript'
 
 const CLAUDE_HOOK_AGENT_ID_PREFIX = 'hook-agent-'
 
@@ -50,15 +50,19 @@ export function normalizeClaudeEvent(
   eventName: unknown,
   promptText: string,
   paneKey: string,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  transcriptEvidence?: ClaudeTaskNotificationTranscriptEvidence
 ): ParsedAgentStatusPayload | null {
   const eventAgentId = readString(hookPayload, 'agent_id')
-  if (
-    eventName === 'SubagentStart' ||
-    eventName === 'TeammateIdle' ||
-    isClaudeChildTurnEndEvent(eventName, eventAgentId)
-  ) {
-    return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
+  const lifecycleEvent = normalizeClaudeLifecycleEventIfNeeded(
+    state,
+    eventName,
+    paneKey,
+    hookPayload,
+    transcriptEvidence?.position
+  )
+  if (lifecycleEvent !== undefined) {
+    return lifecycleEvent
   }
   voidClaimsOfReplacedClaudeSession(state, eventName, eventAgentId, paneKey, hookPayload)
   if (eventName === 'SessionStart') {
@@ -92,7 +96,8 @@ export function normalizeClaudeEvent(
     paneKey,
     eventName,
     eventAgentId,
-    hookPayload
+    hookPayload,
+    transcriptEvidence
   )
   // Plain Stop has unknown outcome. Carry inferred cancellation; is_interrupt remains a secondary source for supporting builds.
   const outcome = !isTurnBoundary
@@ -232,13 +237,8 @@ export function normalizeClaudeEvent(
     })
   }
 
-  recordClaudeStopTaskInventory(
-    state,
-    paneKey,
-    backgroundTasks,
-    hookPayload,
-    isTurnBoundary && eventAgentId === undefined
-  )
+  const isLeadTurnBoundary = isTurnBoundary && eventAgentId === undefined
+  recordStopTaskInventory(state, paneKey, backgroundTasks, isLeadTurnBoundary, transcriptEvidence)
   // Preserve the original lead stash through multiple child waits.
   const stateBeforeWait =
     // Without a lead record there is no turn to resume; an answered dialog must not invent work.

@@ -9,6 +9,7 @@ import {
   reconcileClaudeIdlePromptTasks,
   recordClaudeStopTranscriptObservations
 } from './claude-task-notification-reconciliation'
+import type { ClaudeTaskNotificationTranscriptEvidence } from '../../claude-task-notification-transcript'
 
 type ClaudeBackgroundTaskInventory = ReturnType<typeof readClaudeBackgroundAgentTasks>
 
@@ -17,14 +18,15 @@ export function readClaudeTurnBoundaryEvidence(
   paneKey: string,
   eventName: unknown,
   eventAgentId: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  transcriptEvidence: ClaudeTaskNotificationTranscriptEvidence | undefined
 ): { isTurnBoundary: boolean; reconciledIdlePrompt: boolean } {
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
   const reconciledIdlePrompt =
     eventName === 'Notification' &&
     eventAgentId === undefined &&
     hookPayload['notification_type'] === 'idle_prompt'
-      ? reconcileClaudeIdlePromptTasks(state, paneKey, hookPayload)
+      ? reconcileClaudeIdlePromptTasks(state, paneKey, hookPayload, transcriptEvidence?.current)
       : false
   return { isTurnBoundary, reconciledIdlePrompt }
 }
@@ -33,8 +35,8 @@ export function recordClaudeStopTaskInventory(
   state: HookListenerState,
   paneKey: string,
   inventory: ClaudeBackgroundTaskInventory,
-  hookPayload: Record<string, unknown>,
-  isLeadTurnBoundary: boolean
+  isLeadTurnBoundary: boolean,
+  transcriptEvidence: ClaudeTaskNotificationTranscriptEvidence | undefined
 ): void {
   if (!isLeadTurnBoundary || !inventory.present) {
     return
@@ -53,7 +55,7 @@ export function recordClaudeStopTaskInventory(
     inventory.runningNonAgentTaskIds,
     inventory.hasUnidentifiedRunningNonAgentTask,
     !inventory.truncated,
-    hookPayload
+    transcriptEvidence?.position
   )
 }
 
