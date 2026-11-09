@@ -19,9 +19,9 @@ import {
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
 import { syncSystemCodexRulesIntoManagedHome } from './codex-managed-home-rules'
+import { matchesManagedCodexHomePath } from './codex-managed-home-path-matcher'
 import { observe, observeResolvedPathEntry } from '../codex-path-observation'
 import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
@@ -108,11 +108,11 @@ export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string
 /** WSL may omit ORCA_CODEX_HOME, so inherited account homes also need an on-disk ownership check. */
 function getCodexGlobalInstructionsHomePath(systemHomePath: string, targetHome: string): string {
   const configuredHome = resolve(resolveAbsoluteDirOverride(process.env.CODEX_HOME, systemHomePath))
-  const configuredKey = normalizeRuntimePathForComparison(configuredHome)
-  const managedHomes = [targetHome, process.env.ORCA_CODEX_HOME?.trim()]
   if (
-    managedHomes.some(
-      (home) => home && normalizeRuntimePathForComparison(resolve(home)) === configuredKey
+    matchesManagedCodexHomePath(
+      configuredHome,
+      targetHome,
+      join(getOrcaUserDataPath(), 'codex-accounts')
     )
   ) {
     return systemHomePath
