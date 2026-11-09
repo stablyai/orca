@@ -1,7 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { translate } from '../i18n/mobile-i18n'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export type MobileDictationStatusFlags = Pick<
   UseMobileDictationResult,
@@ -18,16 +17,11 @@ export function mobileDictationStatusTitle(dictation: MobileDictationStatusFlags
         : null
 }
 
-// Mic labels change silently; one live region tells screen readers for every mic, like desktop's indicator.
-export function MobileDictationStatusAnnouncement({
-  dictation
-}: {
-  dictation: MobileDictationStatusFlags
-}): React.JSX.Element {
-  useMobileTranslation()
+// The live region for announcements the shell could not speak itself (TalkBack reads it; older shells fall back to it).
+export function MobileDictationStatusAnnouncement({ text }: { text: string }): React.JSX.Element {
   return (
     <View style={styles.hidden} pointerEvents="none" accessibilityLiveRegion="polite">
-      <Text>{mobileDictationStatusTitle(dictation) ?? ''}</Text>
+      <Text>{text}</Text>
     </View>
   )
 }

@@ -1380,7 +1380,16 @@
     },
     "announce": {
       "typedInto": "Saisi dans {{target}}",
-      "insertedIn": "Inséré dans {{target}}"
+      "insertedIn": "Inséré dans {{target}}",
+      "listeningOnPhone": "Écoute. Transcription sur ce téléphone.",
+      "listeningOn": "Écoute. Transcription sur {{computer}}.",
+      "listeningOnComputer": "Écoute. Transcription sur l’ordinateur.",
+      "finishing": "Finalisation.",
+      "inserted": "Inséré.",
+      "cancelled": "Dictée annulée.",
+      "movedTo": "Ce téléphone a arrêté de transcrire. Suite sur {{computer}}.",
+      "movedToComputer": "Ce téléphone a arrêté de transcrire. Suite sur l’ordinateur.",
+      "stoppedKept": "Dictée arrêtée. {{reason}}. Votre enregistrement est conservé."
     },
     "pill": {
       "open": "Ouvrir",

@@ -1,3 +1,4 @@
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { AlertTriangle, X } from 'lucide-react-native'
 import { SessionDockColumn } from './SessionDockColumn'
@@ -12,6 +13,7 @@ import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 import { MobileDictationStatusAnnouncement } from '../dictation/MobileDictationStatusAnnouncement'
 import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
 import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
+import { useMobileDictationAnnouncements } from '../dictation/use-mobile-dictation-announcements'
 
 export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
@@ -30,7 +32,18 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     cancelDictation,
     handleSessionContentRowLayout
   } = controller
-  const dictationLive = useMobileDictationLive(dictation, cancelDictation, hostId)
+  // ✕ tells the announcer the next idle is a cancel, so a cancel while finishing isn't read as "Inserted."
+  const noteCancelRef = useRef(() => {})
+  const cancelAndNote = useCallback(() => {
+    noteCancelRef.current()
+    cancelDictation()
+  }, [cancelDictation])
+  const dictationLive = useMobileDictationLive(dictation, cancelAndNote, hostId)
+  const announcements = useMobileDictationAnnouncements(dictation, dictationLive.computerName)
+  const { noteCancel } = announcements
+  useLayoutEffect(() => {
+    noteCancelRef.current = noteCancel
+  }, [noteCancel])
   return (
     <View style={styles.sessionContentRow} onLayout={handleSessionContentRowLayout}>
       <View style={styles.sessionContentMain}>
@@ -56,7 +69,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
           {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
           <MobileSessionCommandDock controller={controller} />
         </MobileDictationLiveContext.Provider>
-        <MobileDictationStatusAnnouncement dictation={dictation} />
+        <MobileDictationStatusAnnouncement text={announcements.liveText} />
       </View>
       {canDockPanel && activePanel !== null && (
         <SessionDockColumn
