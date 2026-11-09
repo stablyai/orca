@@ -157,16 +157,8 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     expect(readFileSync(join(targetAccount, 'AGENTS.md'), 'utf-8')).toBe('global instructions\n')
   })
 
-  it('rejects inherited managed homes without ORCA_CODEX_HOME', () => {
-    const sourceAccount = join(
-      fakeHomeDir,
-      '.local',
-      'share',
-      'orca',
-      'codex-accounts',
-      'account-a',
-      'home'
-    )
+  it('rejects relocated managed homes using their ownership marker', () => {
+    const sourceAccount = join(userDataDir, 'relocated-account-a')
     const targetAccount = join(userDataDir, 'codex-accounts', 'account-b', 'home')
     mkdirSync(sourceAccount, { recursive: true })
     writeFileSync(join(sourceAccount, '.orca-managed-home'), 'account-a\n')
