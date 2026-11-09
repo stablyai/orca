@@ -4,9 +4,9 @@ import type {} from '../../../../tests/e2e/helpers/runtime-types'
 import { randomUUID } from 'node:crypto'
 import type { Page } from '@stablyai/playwright-test'
 import { operationId, type Arm } from './native-chat-4a-arm'
-import { rpc } from './native-chat-4a-probes'
+import { rpc, visibleChatState } from './native-chat-4a-probes'
 
-type HistoryItem = { id: string; body?: { kind?: string; role?: string; state?: string } }
+type HistoryItem = { itemId: string; body?: { kind?: string; role?: string; state?: string } }
 export type HistoryPage = {
   epoch: string
   fence?: number
@@ -155,7 +155,7 @@ export async function userItemIds(page: Page, sessionId: string, limit = 200): P
     ids.unshift(
       ...read.page.items
         .filter((item) => item.body?.kind === 'message' && item.body.role === 'user')
-        .map((item) => item.id)
+        .map((item) => item.itemId)
     )
     if (!read.page.hasOlder || ids.length >= limit) {
       return ids.slice(-limit)
@@ -212,17 +212,26 @@ export async function waitForWorking(
   working: boolean,
   timeoutMs = 120_000
 ): Promise<number> {
-  const handle = await page.waitForFunction(
-    (working) => {
-      const root = [...document.querySelectorAll('[data-native-chat-root="true"]')].find(
-        (candidate) => candidate.checkVisibility()
+  const handle = await page
+    .waitForFunction(
+      (working) => {
+        const root = [...document.querySelectorAll('[data-native-chat-root="true"]')].find(
+          (candidate) => candidate.checkVisibility()
+        )
+        return root?.getAttribute('data-native-chat-working') === String(working)
+          ? performance.now()
+          : false
+      },
+      working,
+      { timeout: timeoutMs, polling: 16 }
+    )
+    .catch(async (error: unknown) => {
+      throw new Error(
+        `working=${working} not shown in ${timeoutMs} ms (${await visibleChatState(page)})`,
+        {
+          cause: error
+        }
       )
-      return root?.getAttribute('data-native-chat-working') === String(working)
-        ? performance.now()
-        : false
-    },
-    working,
-    { timeout: timeoutMs, polling: 16 }
-  )
+    })
   return (await handle.jsonValue()) as number
 }
