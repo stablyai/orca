@@ -81,7 +81,7 @@ export async function withAgentApiKeyRuntimeEnv(
     if (!isTuiAgent(params.launchAgent) || params.command === undefined) {
       return params
     }
-    const keys = resolveAgentApiKeyLaunchEnv(params.launchAgent, hostId)
+    const keys = await resolveAgentApiKeyLaunchEnv(params.launchAgent, hostId)
     if (Object.keys(keys).length === 0) {
       return params
     }
@@ -94,7 +94,7 @@ export async function withAgentApiKeyRuntimeEnv(
   if (!hostBuiltLaunch || !isTuiAgent(params.agent)) {
     return params
   }
-  const keys = resolveAgentApiKeyLaunchEnv(params.agent, hostId)
+  const keys = await resolveAgentApiKeyLaunchEnv(params.agent, hostId)
   if (Object.keys(keys).length === 0) {
     return params
   }

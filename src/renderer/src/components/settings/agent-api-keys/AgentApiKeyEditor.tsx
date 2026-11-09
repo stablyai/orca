@@ -10,6 +10,9 @@ import {
   type AgentApiKeySummary
 } from '../../../../../shared/agent-api-keys/agent-api-key-catalog'
 import { useTranslate } from '@/i18n/use-translate'
+import { HostListOverflowNote } from '../../host-picker/HostListOverflowNote'
+import { HostListSearchField } from '../../host-picker/HostListSearchField'
+import { useBoundedHostRows } from '../../host-picker/use-bounded-host-rows'
 import { Button } from '../../ui/button'
 import { Checkbox } from '../../ui/checkbox'
 import { Input } from '../../ui/input'
@@ -61,6 +64,8 @@ export function AgentApiKeyEditor({
     () => new Set(initial?.hostScope.kind === 'hosts' ? initial.hostScope.hostIds : [])
   )
   const [error, setError] = useState<string | null>(null)
+  // Pin checked hosts so they stay visible to uncheck when the list is capped.
+  const hostRows = useBoundedHostRows(hosts, selected)
   const [saving, setSaving] = useState(false)
 
   const envName = variable === OTHER_VARIABLE ? customName.trim().toUpperCase() : variable
@@ -123,29 +128,21 @@ export function AgentApiKeyEditor({
     >
       <div className="grid gap-3 sm:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
         <div className="space-y-1.5">
-          <Label htmlFor={`${formId}-variable`} className="text-xs text-muted-foreground">
+          <Label htmlFor={`${formId}-variable`} variant="settings">
             {t('auto.components.settings.agentApiKeys.editor.variable', 'Variable')}
           </Label>
           {presets.length > 0 ? (
             <Select value={variable} onValueChange={setVariable} disabled={initial !== undefined}>
-              <SelectTrigger
-                id={`${formId}-variable`}
-                size="sm"
-                className="w-full font-mono text-xs"
-              >
+              <SelectTrigger id={`${formId}-variable`} size="sm" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {presets.map((entry) => (
-                  <SelectItem
-                    key={entry.envName}
-                    value={entry.envName}
-                    className="font-mono text-xs"
-                  >
+                  <SelectItem key={entry.envName} value={entry.envName}>
                     {entry.envName}
                   </SelectItem>
                 ))}
-                <SelectItem value={OTHER_VARIABLE} className="text-xs">
+                <SelectItem value={OTHER_VARIABLE}>
                   {t(
                     'auto.components.settings.agentApiKeys.editor.otherVariable',
                     'Other variable…'
@@ -165,7 +162,10 @@ export function AgentApiKeyEditor({
               disabled={initial !== undefined}
               value={customName}
               onChange={(event) => setCustomName(event.target.value)}
-              placeholder="MY_PROVIDER_API_KEY"
+              placeholder={t(
+                'auto.components.settings.agentApiKeys.editor.customPlaceholder',
+                'MY_PROVIDER_API_KEY'
+              )}
               spellCheck={false}
               autoComplete="off"
               className="h-8"
@@ -173,7 +173,7 @@ export function AgentApiKeyEditor({
           ) : null}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${formId}-value`} className="text-xs text-muted-foreground">
+          <Label htmlFor={`${formId}-value`} variant="settings">
             {preset?.label ?? t('auto.components.settings.agentApiKeys.editor.value', 'Key')}
           </Label>
           <Input
@@ -208,7 +208,6 @@ export function AgentApiKeyEditor({
           value={scope}
           onValueChange={(next) => setScope(next === 'hosts' ? 'hosts' : 'all')}
           aria-labelledby={`${formId}-where`}
-          className="flex flex-wrap gap-x-5 gap-y-2"
         >
           <label className="flex cursor-pointer items-center gap-2 text-xs">
             <RadioGroupItem value="all" />
@@ -220,23 +219,29 @@ export function AgentApiKeyEditor({
           </label>
         </RadioGroup>
         {scope === 'hosts' ? (
-          <div
-            role="group"
-            aria-labelledby={`${formId}-where`}
-            className="grid gap-1.5 pl-6 sm:grid-cols-2"
-          >
-            {hosts.map((choice) => (
-              <label
-                key={choice.id}
-                className="flex min-w-0 cursor-pointer items-center gap-2 text-xs"
-              >
-                <Checkbox
-                  checked={selected.has(choice.id)}
-                  onCheckedChange={(checked) => toggleHost(choice, checked === true)}
-                />
-                <span className="truncate">{choice.label}</span>
-              </label>
-            ))}
+          <div className="space-y-1.5 pl-6">
+            {hostRows.searchable ? (
+              <HostListSearchField value={hostRows.query} onChange={hostRows.setQuery} />
+            ) : null}
+            <div
+              role="group"
+              aria-labelledby={`${formId}-where`}
+              className="grid gap-1.5 sm:grid-cols-2"
+            >
+              {hostRows.shown.map((choice) => (
+                <label
+                  key={choice.id}
+                  className="flex min-w-0 cursor-pointer items-center gap-2 text-xs"
+                >
+                  <Checkbox
+                    checked={selected.has(choice.id)}
+                    onCheckedChange={(checked) => toggleHost(choice, checked === true)}
+                  />
+                  <span className="truncate">{choice.label}</span>
+                </label>
+              ))}
+            </div>
+            <HostListOverflowNote hiddenCount={hostRows.hiddenCount} />
           </div>
         ) : null}
       </div>

@@ -175,12 +175,16 @@ export function isAgentApiKeyHostScope(value: unknown): value is AgentApiKeyHost
   if (typeof value !== 'object' || value === null) {
     return false
   }
-  const scope = value as { kind?: unknown; hostIds?: unknown }
-  if (scope.kind === 'all') {
+  if (!('kind' in value)) {
+    return false
+  }
+  if (value.kind === 'all') {
     return true
   }
+  const scope = value
   return (
     scope.kind === 'hosts' &&
+    'hostIds' in scope &&
     Array.isArray(scope.hostIds) &&
     scope.hostIds.length > 0 &&
     scope.hostIds.length <= 256 &&

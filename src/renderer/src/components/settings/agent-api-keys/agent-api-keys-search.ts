@@ -13,11 +13,7 @@ export const getAgentApiKeysSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.agentApiKeys.search.apiKey', 'api key'),
       ...translateSearchKeyword('auto.components.settings.agentApiKeys.search.secret', 'secret'),
       ...translateSearchKeyword('auto.components.settings.agentApiKeys.search.env', 'environment'),
-      'ANTHROPIC_API_KEY',
-      'OPENAI_API_KEY',
-      'GEMINI_API_KEY',
-      'CURSOR_API_KEY',
-      'bedrock'
+      ...translateSearchKeyword('auto.components.settings.agentApiKeys.search.bedrock', 'bedrock')
     ]
   }
 ])

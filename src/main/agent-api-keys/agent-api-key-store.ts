@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import { getSecretStore } from '../../shared/secret-store'
 import { isUnreadableError, writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
@@ -35,12 +35,18 @@ export class AgentApiKeyError extends Error {
   }
 }
 
-function isStoredKey(value: unknown): value is StoredAgentApiKey {
-  if (typeof value !== 'object' || value === null) {
+function isStoredKey(key: unknown): key is StoredAgentApiKey {
+  if (typeof key !== 'object' || key === null) {
     return false
   }
-  const key = value as Partial<StoredAgentApiKey>
   return (
+    'id' in key &&
+    'agent' in key &&
+    'envName' in key &&
+    'hostScope' in key &&
+    'hint' in key &&
+    'updatedAt' in key &&
+    'ciphertext' in key &&
     typeof key.id === 'string' &&
     isAgentApiKeyAgent(key.agent) &&
     typeof key.envName === 'string' &&
@@ -64,27 +70,32 @@ export class AgentApiKeyStore {
   constructor(private readonly filePath: string) {}
 
   /** Null means unreadable, never empty: a denied, corrupt or newer-format file must not be overwritten. */
-  private read(): AgentApiKeyFile | null {
+  private async read(): Promise<AgentApiKeyFile | null> {
     if (this.cached) {
       return this.cached
     }
     const empty: AgentApiKeyFile = { version: 1, format: 'electron-safe-storage-v1', keys: [] }
     try {
-      if (!existsSync(this.filePath)) {
-        return (this.cached = empty)
-      }
-      if (statSync(this.filePath).size > MAX_FILE_BYTES) {
+      if ((await stat(this.filePath)).size > MAX_FILE_BYTES) {
         return null
       }
-      const parsed = JSON.parse(readFileSync(this.filePath, 'utf8')) as Partial<AgentApiKeyFile>
+      const parsed: unknown = JSON.parse(await readFile(this.filePath, 'utf8'))
       if (
-        parsed?.version === 1 &&
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'version' in parsed &&
+        'format' in parsed &&
+        'keys' in parsed &&
+        parsed.version === 1 &&
         parsed.format === 'electron-safe-storage-v1' &&
         Array.isArray(parsed.keys)
       ) {
         return (this.cached = { ...empty, keys: parsed.keys.filter(isStoredKey) })
       }
     } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return (this.cached = empty)
+      }
       if (!isUnreadableError(error)) {
         console.warn('[agent-api-keys] Saved keys file is unreadable; leaving it untouched')
       }
@@ -112,11 +123,11 @@ export class AgentApiKeyStore {
     return gap ? { available: false, reason: gap } : { available: true }
   }
 
-  list(): AgentApiKeySummary[] {
-    return (this.read()?.keys ?? []).map(summaryOf)
+  async list(): Promise<AgentApiKeySummary[]> {
+    return ((await this.read())?.keys ?? []).map(summaryOf)
   }
 
-  save(request: AgentApiKeySaveRequest, now = Date.now()): AgentApiKeySummary {
+  async save(request: AgentApiKeySaveRequest, now = Date.now()): Promise<AgentApiKeySummary> {
     if (!isAgentApiKeyAgent(request.agent)) {
       throw new AgentApiKeyError('Choose an agent for this key.')
     }
@@ -139,7 +150,7 @@ export class AgentApiKeyStore {
     if (!protection.available) {
       throw new AgentApiKeyError(protection.reason)
     }
-    const file = this.read()
+    const file = await this.read()
     if (!file) {
       throw new AgentApiKeyError(UNREADABLE_ERROR)
     }
@@ -182,8 +193,8 @@ export class AgentApiKeyStore {
     return summaryOf(next)
   }
 
-  remove(id: string): void {
-    const file = this.read()
+  async remove(id: string): Promise<void> {
+    const file = await this.read()
     if (!file) {
       throw new AgentApiKeyError(UNREADABLE_ERROR)
     }
@@ -194,8 +205,8 @@ export class AgentApiKeyStore {
   }
 
   /** The env one launch of `agent` on `hostId` gets. Keys that fail to unseal are skipped, never sent half-read. */
-  launchEnv(agent: TuiAgent, hostId: ExecutionHostId): Record<string, string> {
-    const keys = this.read()?.keys ?? []
+  async launchEnv(agent: TuiAgent, hostId: ExecutionHostId): Promise<Record<string, string>> {
+    const keys = (await this.read())?.keys ?? []
     if (keys.length === 0) {
       return {}
     }

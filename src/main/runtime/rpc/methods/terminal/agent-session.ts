@@ -40,9 +40,9 @@ function withKeyEnvFolded<
   if (!params.keyEnv) {
     return params
   }
-  const { keyEnv, ...rest } = params
-  const accountEnv = withAgentKeyLaunchEnv(rest.accountEnv, keyEnv)
-  return { ...rest, ...(accountEnv ? { accountEnv } : {}) } as T
+  const accountEnv = withAgentKeyLaunchEnv(params.accountEnv, params.keyEnv)
+  const folded: T = { ...params, keyEnv: undefined, ...(accountEnv ? { accountEnv } : {}) }
+  return folded
 }
 
 function assertOperationTimestampWithinFutureSkew(clientOperationId: string): void {

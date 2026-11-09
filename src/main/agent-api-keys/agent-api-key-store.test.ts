@@ -41,7 +41,7 @@ afterEach(async () => {
 describe('AgentApiKeyStore', () => {
   it('keeps values sealed on disk and out of every summary', async () => {
     const keys = store()
-    keys.save({
+    await keys.save({
       agent: 'claude',
       envName: 'ANTHROPIC_API_KEY',
       value: ANTHROPIC,
@@ -50,15 +50,15 @@ describe('AgentApiKeyStore', () => {
 
     const disk = await readFile(join(root, 'agent-api-keys.json'), 'utf8')
     expect(disk).not.toContain(ANTHROPIC)
-    expect(JSON.stringify(keys.list())).not.toContain(ANTHROPIC)
-    expect(keys.list()).toEqual([
+    expect(JSON.stringify(await keys.list())).not.toContain(ANTHROPIC)
+    expect(await keys.list()).toEqual([
       expect.objectContaining({ agent: 'claude', envName: 'ANTHROPIC_API_KEY', hint: '0001' })
     ])
   })
 
-  it('gives a launch only its agent’s keys for that host, preferring a host-specific key', () => {
+  it('gives a launch only its agent’s keys for that host, preferring a host-specific key', async () => {
     const keys = store()
-    keys.save(
+    await keys.save(
       {
         agent: 'claude',
         envName: 'ANTHROPIC_API_KEY',
@@ -67,7 +67,7 @@ describe('AgentApiKeyStore', () => {
       },
       1
     )
-    keys.save(
+    await keys.save(
       {
         agent: 'claude',
         envName: 'ANTHROPIC_API_KEY',
@@ -76,7 +76,7 @@ describe('AgentApiKeyStore', () => {
       },
       2
     )
-    keys.save(
+    await keys.save(
       {
         agent: 'claude',
         envName: 'AWS_BEARER_TOKEN_BEDROCK',
@@ -86,74 +86,80 @@ describe('AgentApiKeyStore', () => {
       3
     )
 
-    expect(keys.launchEnv('claude', 'local')).toEqual({ ANTHROPIC_API_KEY: ANTHROPIC })
-    expect(keys.launchEnv('claude-agent-teams', 'ssh:devbox')).toEqual({
+    expect(await keys.launchEnv('claude', 'local')).toEqual({ ANTHROPIC_API_KEY: ANTHROPIC })
+    expect(await keys.launchEnv('claude-agent-teams', 'ssh:devbox')).toEqual({
       ANTHROPIC_API_KEY: 'sk-ant-api03-devbox-only-value-0003'
     })
-    expect(keys.launchEnv('claude', 'runtime:gpu')).toEqual({
+    expect(await keys.launchEnv('claude', 'runtime:gpu')).toEqual({
       ANTHROPIC_API_KEY: ANTHROPIC,
       AWS_BEARER_TOKEN_BEDROCK: BEDROCK
     })
-    expect(keys.launchEnv('codex', 'local')).toEqual({})
+    expect(await keys.launchEnv('codex', 'local')).toEqual({})
   })
 
-  it('refuses subscription sign-in tokens and launch-steering variables', () => {
+  it('refuses subscription sign-in tokens and launch-steering variables', async () => {
     const keys = store()
-    const save = (envName: string, value: string) => () =>
+    const save = (envName: string, value: string) =>
       keys.save({ agent: 'claude', envName, value, hostScope: { kind: 'all' } })
 
-    expect(save('ANTHROPIC_API_KEY', 'sk-ant-oat01-subscription-token')).toThrow(/subscription/)
-    expect(save('CLAUDE_CODE_OAUTH_TOKEN', 'anything-at-all')).toThrow(/subscription/)
-    expect(save('OPENAI_API_KEY', 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl')).toThrow(
+    await expect(save('ANTHROPIC_API_KEY', 'sk-ant-oat01-subscription-token')).rejects.toThrow(
       /subscription/
     )
-    expect(save('NODE_OPTIONS', '--require /tmp/x.js')).toThrow(/controls how the agent starts/)
-    expect(save('ORCA_PANE_KEY', 'x')).toThrow(/controls how the agent starts/)
-    expect(keys.list()).toEqual([])
+    await expect(save('CLAUDE_CODE_OAUTH_TOKEN', 'anything-at-all')).rejects.toThrow(/subscription/)
+    await expect(
+      save('OPENAI_API_KEY', 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2lnbmF0dXJl')
+    ).rejects.toThrow(/subscription/)
+    await expect(save('NODE_OPTIONS', '--require /tmp/x.js')).rejects.toThrow(
+      /controls how the agent starts/
+    )
+    await expect(save('ORCA_PANE_KEY', 'x')).rejects.toThrow(/controls how the agent starts/)
+    expect(await keys.list()).toEqual([])
   })
 
-  it('refuses to save when the keychain cannot really seal', () => {
+  it('refuses to save when the keychain cannot really seal', async () => {
     gap = 'Secrets are obfuscated with a built-in key.'
-    expect(() =>
+    await expect(
       store().save({
         agent: 'codex',
         envName: 'OPENAI_API_KEY',
         value: 'sk-proj-x1',
         hostScope: { kind: 'all' }
       })
-    ).toThrow(/obfuscated/)
+    ).rejects.toThrow(/obfuscated/)
   })
 
-  it('edits scope without resending the value, and removes', () => {
+  it('edits scope without resending the value, and removes', async () => {
     const keys = store()
-    const saved = keys.save({
+    const saved = await keys.save({
       agent: 'gemini',
       envName: 'GEMINI_API_KEY',
       value: 'AIza-gemini-value-0004',
       hostScope: { kind: 'all' }
     })
-    keys.save({
+    await keys.save({
       id: saved.id,
       agent: 'gemini',
       envName: 'GEMINI_API_KEY',
       hostScope: { kind: 'hosts', hostIds: ['local'] }
     })
-    expect(keys.launchEnv('gemini', 'ssh:devbox')).toEqual({})
-    expect(keys.launchEnv('gemini', 'local')).toEqual({ GEMINI_API_KEY: 'AIza-gemini-value-0004' })
+    expect(await keys.launchEnv('gemini', 'ssh:devbox')).toEqual({})
+    expect(await keys.launchEnv('gemini', 'local')).toEqual({
+      GEMINI_API_KEY: 'AIza-gemini-value-0004'
+    })
 
-    keys.remove(saved.id)
-    expect(keys.launchEnv('gemini', 'local')).toEqual({})
+    await keys.remove(saved.id)
+    expect(await keys.launchEnv('gemini', 'local')).toEqual({})
   })
 
-  it('redacts a handed-out value from diagnostics', () => {
+  it('redacts a handed-out value from diagnostics', async () => {
     const keys = store()
-    keys.save({
+    await keys.save({
       agent: 'cursor',
       envName: 'CURSOR_API_KEY',
       value: 'key_cursor_value_0005',
       hostScope: { kind: 'all' }
     })
-    keys.launchEnv('cursor', 'local')
+    await keys.launchEnv('cursor', 'local')
     expect(redactString('spawn failed with key_cursor_value_0005 attached')).not.toContain(
       'key_cursor_value_0005'
     )
@@ -163,14 +169,14 @@ describe('AgentApiKeyStore', () => {
     const path = join(root, 'agent-api-keys.json')
     const newer = JSON.stringify({ version: 2, keys: [{ id: 'future' }] })
     await writeFile(path, newer)
-    expect(() =>
+    await expect(
       store().save({
         agent: 'codex',
         envName: 'OPENAI_API_KEY',
         value: 'sk-proj-x1',
         hostScope: { kind: 'all' }
       })
-    ).toThrow(/could not be read/)
+    ).rejects.toThrow(/could not be read/)
     expect(await readFile(path, 'utf8')).toBe(newer)
   })
 })

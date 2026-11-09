@@ -146,7 +146,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const env =
     input.preAdoptedStablePane || input.launchCommand === undefined
       ? openCodeLaunch.env
-      : withAgentApiKeyLaunchEnv(
+      : await withAgentApiKeyLaunchEnv(
           openCodeLaunch.env,
           launchAgent,
           getConnectionExecutionHostId(connectionId)

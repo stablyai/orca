@@ -5,7 +5,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 export type AgentApiKeyLaunchEnvResolver = (
   agent: TuiAgent,
   hostId: ExecutionHostId
-) => Record<string, string>
+) => Promise<Record<string, string>>
 
 let installed: AgentApiKeyLaunchEnvResolver | null = null
 
@@ -15,15 +15,15 @@ export function installAgentApiKeyLaunchEnvResolver(
   installed = resolver
 }
 
-export function resolveAgentApiKeyLaunchEnv(
+export async function resolveAgentApiKeyLaunchEnv(
   agent: TuiAgent | undefined,
   hostId: ExecutionHostId
-): Record<string, string> {
+): Promise<Record<string, string>> {
   if (!agent || !installed) {
     return {}
   }
   try {
-    return installed(agent, hostId)
+    return await installed(agent, hostId)
   } catch {
     // A vault fault must not fail the launch; the agent falls back to its own sign-in.
     console.warn('[agent-api-keys] Could not read stored keys; launching without them')
@@ -32,11 +32,11 @@ export function resolveAgentApiKeyLaunchEnv(
 }
 
 /** `env` with the stored keys for this agent process; the caller's own env (an agent command override's VAR=…) still wins. */
-export function withAgentApiKeyLaunchEnv(
+export async function withAgentApiKeyLaunchEnv(
   env: Record<string, string> | undefined,
   agent: TuiAgent | undefined,
   hostId: ExecutionHostId
-): Record<string, string> | undefined {
-  const keys = resolveAgentApiKeyLaunchEnv(agent, hostId)
+): Promise<Record<string, string> | undefined> {
+  const keys = await resolveAgentApiKeyLaunchEnv(agent, hostId)
   return Object.keys(keys).length === 0 ? env : { ...keys, ...env }
 }

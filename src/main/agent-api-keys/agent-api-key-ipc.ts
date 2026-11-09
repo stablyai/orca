@@ -10,19 +10,22 @@ import { installAgentApiKeyLaunchEnvResolver } from './agent-api-key-launch-env'
 
 const CHANNELS = ['agentApiKeys:list', 'agentApiKeys:save', 'agentApiKeys:remove'] as const
 
-function stateOf(store: AgentApiKeyStore): AgentApiKeysState {
-  return { keys: store.list(), protection: store.protection() }
+async function stateOf(store: AgentApiKeyStore): Promise<AgentApiKeysState> {
+  return { keys: await store.list(), protection: store.protection() }
 }
 
-function mutate(store: AgentApiKeyStore, run: () => void): AgentApiKeysMutationResult {
+async function mutate(
+  store: AgentApiKeyStore,
+  run: () => Promise<unknown>
+): Promise<AgentApiKeysMutationResult> {
   try {
-    run()
-    return { ok: true, state: stateOf(store) }
+    await run()
+    return { ok: true, state: await stateOf(store) }
   } catch (error) {
     // Only our own messages reach the renderer: anything else could quote a value.
     const message =
       error instanceof AgentApiKeyError ? error.message : 'Orca could not save the key.'
-    return { ok: false, error: message, state: stateOf(store) }
+    return { ok: false, error: message, state: await stateOf(store) }
   }
 }
 
@@ -35,14 +38,12 @@ export function registerAgentApiKeyHandlers(userDataPath: string): AgentApiKeySt
   }
   ipcMain.handle('agentApiKeys:list', () => stateOf(store))
   ipcMain.handle('agentApiKeys:save', (_event, request: AgentApiKeySaveRequest) =>
-    mutate(store, () => {
-      store.save(request)
-    })
+    mutate(store, () => store.save(request))
   )
   ipcMain.handle('agentApiKeys:remove', (_event, id: unknown) =>
-    mutate(store, () => {
+    mutate(store, async () => {
       if (typeof id === 'string') {
-        store.remove(id)
+        await store.remove(id)
       }
     })
   )

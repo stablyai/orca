@@ -265,7 +265,7 @@ export function AgentApiKeysPane({
       {otherAgents.length > 0 ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild disabled={!canEdit}>
-            <Button variant="outline" size="sm" className="text-xs">
+            <Button variant="outline" size="sm">
               <Plus />
               {t(
                 'auto.components.settings.agentApiKeys.anotherAgent',
@@ -278,7 +278,6 @@ export function AgentApiKeysPane({
             {otherAgents.map((agent) => (
               <DropdownMenuItem
                 key={agent}
-                className="text-xs"
                 onSelect={() => {
                   setExtraAgents((current) => [...current, agent])
                   setEditing({ agent, keyId: null })

@@ -13883,7 +13883,8 @@
             "someHosts": "Only these hosts",
             "cancel": "Cancel",
             "update": "Save",
-            "add": "Add key"
+            "add": "Add key",
+            "customPlaceholder": "MY_PROVIDER_API_KEY"
           },
           "scope": {
             "all": "Every host",
@@ -13903,7 +13904,8 @@
             "description": "Give agents an API key on every host or only some, without signing in on each machine.",
             "apiKey": "api key",
             "secret": "secret",
-            "env": "environment"
+            "env": "environment",
+            "bedrock": "bedrock"
           },
           "title": "Agent API Keys",
           "description": "Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine."

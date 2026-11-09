@@ -22,7 +22,7 @@ function call(method: string, params: unknown, capabilities: string[] = []) {
 }
 
 beforeEach(() => {
-  installAgentApiKeyLaunchEnvResolver((agent, hostId) =>
+  installAgentApiKeyLaunchEnvResolver(async (agent, hostId) =>
     agent === 'claude' && hostId === 'runtime:env-1' ? KEY : {}
   )
 })
