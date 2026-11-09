@@ -100,6 +100,7 @@ const schemas: Record<string, object> = {
       id: { type: 'string' },
       name: { type: 'string' },
       projectId: { type: 'string' },
+      repo: { type: ['object', 'null'], properties: { url: { type: 'string' }, ref: { type: ['string', 'null'] } } },
       enabled: { type: 'boolean' },
       trigger: {
         oneOf: [
@@ -114,14 +115,28 @@ const schemas: Record<string, object> = {
               baseBranches: { type: 'array', items: { type: 'string' } }
             }
           },
-          { type: 'object', properties: { kind: { const: 'webhook' }, url: { type: 'string', description: 'Secret URL; POST to it to start a run' } } }
+          {
+            type: 'object',
+            properties: {
+              kind: { const: 'webhook' },
+              urlHint: { type: ['string', 'null'], description: 'Last 4 characters of the secret URL (`…a1b2`). The URL itself is only returned when created or rotated.' }
+            }
+          }
         ]
       },
       agent: { type: 'string', enum: ['claude', 'codex'] },
       prompt: { type: 'string' },
       postResults: { type: 'string', enum: ['none', 'comment', 'pr'] },
+      machineSize: { type: 'string', enum: ['standard', 'large'] },
+      maxRuntimeMinutes: { type: 'integer', minimum: 5, maximum: 120 },
       nextRunAt: { type: ['integer', 'null'] },
-      lastRun: { oneOf: [{ type: 'null' }, ref('RoutineRun')] }
+      lastRun: {
+        type: ['object', 'null'],
+        properties: { id: { type: 'string' }, status: { type: 'string' }, finishedAt: { type: ['integer', 'null'] } }
+      },
+      createdBy: { type: 'string', description: 'Runs execute as this user (their personal and the org secrets).' },
+      createdAt: { type: 'integer' },
+      updatedAt: { type: 'integer' }
     }
   },
   RoutineRun: {
@@ -130,13 +145,16 @@ const schemas: Record<string, object> = {
       id: { type: 'string' },
       routineId: { type: 'string' },
       trigger: { type: 'string', enum: ['schedule', 'github', 'webhook', 'manual'] },
+      triggerDetail: { type: ['object', 'null'], description: 'What fired it: scheduled slot, GitHub event and target, webhook payload' },
       status: { type: 'string', enum: ['queued', 'starting', 'running', 'posting', 'succeeded', 'failed', 'cancelled', 'timed_out'] },
       workspaceId: { type: ['string', 'null'] },
       result: { type: ['object', 'null'], properties: { summary: { type: 'string' }, prUrl: { type: 'string' }, commentUrl: { type: 'string' } } },
       error: { type: ['string', 'null'] },
       createdAt: { type: 'integer' },
       startedAt: { type: ['integer', 'null'] },
-      finishedAt: { type: ['integer', 'null'] }
+      finishedAt: { type: ['integer', 'null'] },
+      durationMs: { type: ['integer', 'null'] },
+      logTail: { type: ['string', 'null'], description: 'Single-run view only: short, redacted tail of the runner log' }
     }
   },
   AuditEntry: {
@@ -158,14 +176,32 @@ const one = (key: string, item: string) => obj({ [key]: ref(item) })
 const ROUTINE_BODY = obj(
   {
     name: { type: 'string' },
-    projectId: { type: 'string' },
-    trigger: (schemas.Routine as { properties: { trigger: object } }).properties.trigger,
+    projectId: { type: 'string', description: 'One of projectId or repo' },
+    repo: { type: 'object', description: 'Reuses (or creates) the project for this repo', properties: { url: { type: 'string' }, ref: { type: 'string' } } },
+    trigger: {
+      oneOf: [
+        obj({ kind: { const: 'schedule' }, cron: { type: 'string', description: 'Five-field cron; at most every 15 minutes', examples: ['0 9 * * 1-5'] }, timezone: { type: 'string', examples: ['America/New_York'] } }, ['kind', 'cron', 'timezone']),
+        obj(
+          {
+            kind: { const: 'github' },
+            events: { type: 'array', items: { type: 'string', enum: ['pull_request.opened', 'pull_request.labeled', 'pull_request.synchronize', 'issues.opened', 'issues.labeled', 'issue_comment.created'] } },
+            labels: { type: 'array', items: { type: 'string' } },
+            authors: { type: 'array', items: { type: 'string' } },
+            baseBranches: { type: 'array', items: { type: 'string' } }
+          },
+          ['kind', 'events']
+        ),
+        obj({ kind: { const: 'webhook' } }, ['kind'])
+      ]
+    },
     agent: { type: 'string', enum: ['claude', 'codex'] },
-    prompt: { type: 'string' },
+    prompt: { type: 'string', maxLength: 20000 },
     postResults: { type: 'string', enum: ['none', 'comment', 'pr'] },
-    enabled: { type: 'boolean' }
+    enabled: { type: 'boolean', default: true },
+    machineSize: { type: 'string', enum: ['standard', 'large'] },
+    maxRuntimeMinutes: { type: 'integer', minimum: 5, maximum: 120, default: 30 }
   },
-  ['name', 'projectId', 'trigger', 'prompt']
+  ['name', 'trigger', 'agent', 'prompt', 'postResults']
 )
 
 export const OPERATIONS: Record<string, Record<string, Op>> = {
@@ -329,11 +365,11 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
   },
   '/v1/routines': {
     get: { tags: ['Routines'], scope: 'routines:read', summary: 'List routines', responses: { 200: { description: 'Routines', schema: list('routines', 'Routine') } } },
-    post: { tags: ['Routines'], scope: 'routines:write', summary: 'Create a routine', description: 'Webhook routines return their secret URL once, in this response.', body: ROUTINE_BODY, responses: { 201: { description: 'Created', schema: one('routine', 'Routine') } } }
+    post: { tags: ['Routines'], scope: 'routines:write', summary: 'Create a routine', description: 'Webhook routines return their secret URL (`webhookUrl`) once, in this response.', body: ROUTINE_BODY, responses: { 201: { description: 'Created', schema: obj({ routine: ref('Routine'), webhookUrl: { type: 'string' } }) } } }
   },
   '/v1/routines/{id}': {
     get: { tags: ['Routines'], scope: 'routines:read', summary: 'Get a routine', params: [idParam('id', 'Routine id')], responses: { 200: { description: 'Routine', schema: one('routine', 'Routine') } } },
-    patch: { tags: ['Routines'], scope: 'routines:write', summary: 'Update a routine', params: [idParam('id', 'Routine id')], body: ROUTINE_BODY, responses: { 200: { description: 'Routine', schema: one('routine', 'Routine') } } },
+    patch: { tags: ['Routines'], scope: 'routines:write', summary: 'Update a routine', description: 'Any subset of the create body. Members edit their own routines; owners/admins edit all.', params: [idParam('id', 'Routine id')], body: ROUTINE_BODY, responses: { 200: { description: 'Routine', schema: one('routine', 'Routine') } } },
     delete: { tags: ['Routines'], scope: 'routines:write', summary: 'Delete a routine', params: [idParam('id', 'Routine id')], responses: { 200: 'Deleted' } }
   },
   '/v1/routines/{id}/run': {
@@ -343,7 +379,30 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
     post: { tags: ['Routines'], scope: 'routines:write', summary: 'Rotate the secret webhook URL', description: 'The old URL stops working immediately.', params: [idParam('id', 'Routine id')], responses: { 200: { description: 'New URL', schema: obj({ url: { type: 'string' } }) } } }
   },
   '/v1/routines/{id}/runs': {
-    get: { tags: ['Routines'], scope: 'routines:read', summary: 'Run history', params: [idParam('id', 'Routine id')], responses: { 200: { description: 'Runs, newest first', schema: list('runs', 'RoutineRun') } } }
+    get: {
+      tags: ['Routines'],
+      scope: 'routines:read',
+      summary: 'Run history',
+      params: [
+        idParam('id', 'Routine id'),
+        { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 100 } },
+        { name: 'before', in: 'query', description: 'Cursor: `nextBefore` from the previous page', schema: { type: 'integer' } }
+      ],
+      responses: { 200: { description: 'Runs, newest first', schema: obj({ runs: { type: 'array', items: ref('RoutineRun') }, nextBefore: { type: ['integer', 'null'] } }) } }
+    }
+  },
+  '/v1/routines/{id}/runs/{runId}': {
+    get: { tags: ['Routines'], scope: 'routines:read', summary: 'One run, with a redacted log tail', params: [idParam('id', 'Routine id'), idParam('runId', 'Run id')], responses: { 200: { description: 'Run', schema: one('run', 'RoutineRun') } } }
+  },
+  '/v1/hooks/{token}': {
+    post: {
+      tags: ['Routines'],
+      summary: 'Trigger a webhook routine',
+      description:
+        'No Authorization header: the secret URL is the credential. Optional JSON body (up to 16 KB) reaches the agent as untrusted context. Optional `Idempotency-Key` header dedupes retries. 10 runs a minute per routine.\n\nFrom GitHub Actions:\n\n```yaml\n- run: curl -fsS -X POST -H \'content-type: application/json\' -d \'{"sha":"${{ github.sha }}"}\' "$ORCA_ROUTINE_URL"\n  env:\n    ORCA_ROUTINE_URL: ${{ secrets.ORCA_ROUTINE_URL }}\n```',
+      params: [idParam('token', 'The secret part of the webhook URL')],
+      responses: { 202: { description: 'Queued', schema: obj({ runId: { type: 'string' } }) }, 413: 'Body over 16 KB' }
+    }
   }
 }
 

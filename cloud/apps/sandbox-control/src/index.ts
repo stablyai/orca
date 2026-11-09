@@ -34,6 +34,9 @@ import { revokeWorkspaceTokens } from './api/keys'
 import { provisionWorkspaceToken } from './api/settings'
 import { docsPage, openApiDocument } from './api/openapi'
 import { handleDeviceSessionsRoute } from './device-sessions'
+import { createRoutinesApi } from './routines/api'
+import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
+import { tickRoutines } from './routines/runs'
 import { advanceGoldenImages, currentGoldenSnapshotId } from './golden-images'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
@@ -103,6 +106,8 @@ const CentsPerHourSchema = z
 const FEATURES_HEADER = 'x-orca-sandbox-features'
 /** A pasted .env file: up to 100 values. */
 const MAX_BATCH_JSON_BYTES = 160 * 1024
+// Public API bodies: routine prompts are up to 20k characters (POST/PATCH /v1/routines).
+const MAX_API_JSON_BYTES = 96 * 1024
 
 export type Deps = {
   provider?: SandboxProviderApi
@@ -301,6 +306,26 @@ function githubManifestCallback(env: Env, url: URL): Response {
   )
 }
 
+/**
+ * Operator: point the GitHub App's webhook at this Worker with GITHUB_WEBHOOK_SECRET. GitHub's API
+ * can set the URL and secret; activating the hook and choosing events stays in the app settings UI.
+ */
+async function configureAppWebhook(env: Env, deps: Deps, body: unknown): Promise<Response> {
+  const minter = deps.github ?? githubMinter(env)
+  const target = (body as { url?: unknown } | null)?.url
+  if (!minter?.appRequest || !env.GITHUB_WEBHOOK_SECRET) {
+    return fail('not_configured', 503)
+  }
+  if (typeof target !== 'string' || !/^https:\/\/[^\s]+\/v1\/github\/webhook$/.test(target)) {
+    return fail('invalid_request', 400)
+  }
+  const patched = await minter.appRequest('PATCH', '/app/hook/config', { url: target, content_type: 'json', insecure_ssl: '0', secret: env.GITHUB_WEBHOOK_SECRET })
+  const config = (await patched.json().catch(() => null)) as { url?: string; content_type?: string } | null
+  const app = (await (await minter.appRequest('GET', '/app')).json().catch(() => null)) as { events?: string[]; permissions?: Record<string, string> } | null
+  console.log(JSON.stringify({ event: 'github_app_webhook_configured', status: patched.status }))
+  return json({ status: patched.status, url: config?.url ?? null, contentType: config?.content_type ?? null, events: app?.events ?? null, permissions: app?.permissions ?? null })
+}
+
 function devCredentials(env: Env): CredentialBroker {
   const value = env.EGRESS_DEV_STATIC_AUTHORIZATION
   if (!value || env.SANDBOX_ENV === 'prod') {
@@ -338,13 +363,18 @@ async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<un
 }
 
 async function apiContext(env: Env, deps: Deps, request: Request, life?: Promise<ApiContext['life']>): Promise<ApiContext> {
+  const resolved = await (life ?? lifecycleDeps(env, deps))
+  const routines = createRoutinesApi({
+    publicUrl: publicOrigin(env, new URL(request.url))!,
+    deps: () => (resolved ? { life: resolved, githubFetch: deps.githubFetch } : null)
+  })
   return {
     db: env.SANDBOX_DB,
     now: deps.now ?? Date.now,
-    life: await (life ?? lifecycleDeps(env, deps)),
+    life: resolved,
     waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
-    readJson: () => readJson(request),
-    extensions: [oauthApprovalsApi, oauthGrantsApi,...(deps.apiExtensions ?? [])]
+    readJson: () => readJson(request, MAX_API_JSON_BYTES),
+    extensions: [oauthApprovalsApi, oauthGrantsApi, routines, ...(deps.apiExtensions ?? [])]
   }
 }
 
@@ -490,6 +520,9 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         keysForIssuer: deps.egressKeysForIssuer
       })
     }
+    if (isRoutineHookPath(url.pathname)) {
+      return await handleRoutineHook(request, url, { db: env.SANDBOX_DB, now: deps.now ?? Date.now, githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET })
+    }
     if (url.pathname === '/v1/github/manifest-callback') {
       return githubManifestCallback(env, url)
     }
@@ -506,6 +539,13 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       const life = await lifecycleDeps(env, deps)
       if (!life) {
         return fail('not_configured', 503)
+      }
+      if (url.pathname === '/v1/internal/routines/tick' && request.method === 'POST') {
+        // Preview versions get no cron: drive the routine scheduler from here.
+        return json({ tick: await tickRoutines({ life, githubFetch: deps.githubFetch }) })
+      }
+      if (url.pathname === '/v1/internal/github/app-webhook' && request.method === 'POST') {
+        return await configureAppWebhook(env, deps, await readJson(request))
       }
       return (
         (await handleOperator(request, url.pathname, {
@@ -657,7 +697,9 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     if (!id) {
       if (request.method === 'GET') {
         // Routine runs and other machine-made workspaces stay out of the desktop's list.
-        const rows = (await listAccountSandboxes(env.SANDBOX_DB, caller.accountId)).filter((row) => (row as { hidden?: number }).hidden !== 1)
+        const rows = (await listAccountSandboxes(env.SANDBOX_DB, caller.accountId)).filter(
+          (row) => (row as { hidden?: number }).hidden !== 1 && !row.workspace_id.startsWith('routine-')
+        )
         return json({ sandboxes: rows.map(view) })
       }
       if (request.method !== 'POST') {
@@ -800,7 +842,21 @@ export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return handleRequest(request, env, { waitUntil: (work) => ctx.waitUntil(work.catch(() => undefined)) })
   },
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Every minute: routines (schedule slots, run polling). Every fifth minute: everything else.
+    ctx.waitUntil(
+      lifecycleDeps(env, {}).then(async (life) => {
+        if (life) {
+          const tick = await tickRoutines({ life }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+          if (Object.values(tick).some((value) => value !== 0)) {
+            console.log(JSON.stringify({ event: 'routines_tick', ...tick }))
+          }
+        }
+      })
+    )
+    if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) {
+      return
+    }
     ctx.waitUntil(
       lifecycleDeps(env, {}).then(async (life) => {
         if (life) {
