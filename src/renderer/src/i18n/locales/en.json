@@ -24575,6 +24575,24 @@
     "signOutOf": "Sign out of {{agent}}…",
     "signOutTitle": "Sign out of {{agent}} on {{host}}?",
     "signOutBody": "Runs {{agent}}’s own sign-out on {{host}}. The next {{agent}} you start there asks you to sign in. Agents already running there aren’t stopped, and saved accounts stay listed.",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "otherAccount": "Not your usual account.",
+    "otherAccountDetail": "This computer uses {{email}} for {{agent}}.",
+    "switchAccount": "Switch account",
+    "switchAccountDetail": "Switch accounts in your browser, then start {{agent}} there again to sign in.",
+    "otherAccountToast": "{{agent}} on {{host}} is signed in as {{email}}"
+  },
+  "vmBuildAgentSignIn": {
+    "optional": "optional",
+    "idleDetail": "Or sign in when you first start one.",
+    "signInBoth": "Sign in {{first}} + {{second}}",
+    "signInOne": "Sign in {{agent}}",
+    "next": "{{agent}} next",
+    "waiting": "{{agent}}: finish in your browser",
+    "signed": "{{agent}}: signed in",
+    "continueBelow": "{{agent}}: continue below",
+    "starting": "{{agent}}: starting sign-in…",
+    "title": "Agent sign-in",
+    "otherAccount": "{{agent}} signed in as {{email}}."
   }
 }

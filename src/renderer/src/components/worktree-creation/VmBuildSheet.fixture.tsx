@@ -2,6 +2,8 @@ import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { VmBuildSheet } from './VmBuildSheet'
+import { VmBuildAgentSignInRowView, type VmBuildAgentSignInRowModel } from './VmBuildAgentSignInRow'
+import type { AgentSignInGate } from '@/lib/agent-sign-in/agent-sign-in-gate'
 
 const LOG = [
   'Creating sandbox from snapshot snap_7f2c…',
@@ -29,7 +31,11 @@ function entry(patch: Partial<PendingWorktreeCreation>): PendingWorktreeCreation
   }
 }
 
-function frame(value: PendingWorktreeCreation, error: string | null = null) {
+function frame(
+  value: PendingWorktreeCreation,
+  error: string | null = null,
+  agentSignInRow?: React.ReactNode
+) {
   return defineFixture({
     width: 760,
     render: () => (
@@ -43,11 +49,97 @@ function frame(value: PendingWorktreeCreation, error: string | null = null) {
           onRetry={() => {}}
           onDismiss={() => {}}
           onEditRecipe={() => {}}
+          agentSignInRow={agentSignInRow}
         />
       </div>
     )
   })
 }
+
+const noop = (): void => {}
+
+function signInRow(model: VmBuildAgentSignInRowModel): React.ReactNode {
+  return (
+    <VmBuildAgentSignInRowView
+      model={model}
+      gateKey="fixture"
+      actions={{ signIn: noop, cancel: noop, switchAccount: noop }}
+    />
+  )
+}
+
+function vmGate(agent: AgentSignInGate['agent'], view: AgentSignInGate['view']): AgentSignInGate {
+  return {
+    key: 'fixture',
+    environmentId: 'env-vm',
+    hostLabel: 'fix-login',
+    agent,
+    prompt: null,
+    codeOnly: false,
+    view
+  }
+}
+
+const checkingVm = entry({
+  environmentCheck: { status: 'running' },
+  provisioningLog: ['Cloning repository…', 'Starting orca serve on :7420', 'Paired.'].join('\n')
+})
+
+export const signInIdle = frame(
+  checkingVm,
+  null,
+  signInRow({ kind: 'idle', agents: ['claude', 'codex'] })
+)
+
+export const signInWaiting = frame(
+  checkingVm,
+  null,
+  signInRow({
+    kind: 'busy',
+    agent: 'claude',
+    next: ['codex'],
+    gate: vmGate('claude', { step: 'waiting', url: 'https://claude.ai/oauth/authorize' })
+  })
+)
+
+export const signInDeviceCode = frame(
+  checkingVm,
+  null,
+  signInRow({
+    kind: 'busy',
+    agent: 'codex',
+    next: [],
+    gate: vmGate('codex', {
+      step: 'device',
+      url: 'https://auth.openai.com/codex/device',
+      userCode: 'K7PQ-2HXM'
+    })
+  })
+)
+
+export const signInDone = frame(
+  checkingVm,
+  null,
+  signInRow({
+    kind: 'done',
+    agents: [
+      { agent: 'claude', email: 'nw@stably.ai' },
+      { agent: 'codex', email: 'nw@stably.ai' }
+    ]
+  })
+)
+
+export const signInOtherAccount = frame(
+  checkingVm,
+  null,
+  signInRow({
+    kind: 'done',
+    agents: [
+      { agent: 'claude', email: 'nw@stably.ai' },
+      { agent: 'codex', email: 'nw@personal.dev', expectedEmail: 'nw@stably.ai' }
+    ]
+  })
+)
 
 export const provisioning = frame(
   entry({ provisioningLog: LOG.split('\n').slice(0, 2).join('\n') })

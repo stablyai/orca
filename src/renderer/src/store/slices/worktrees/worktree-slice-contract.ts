@@ -180,6 +180,7 @@ export type WorktreeSlice = {
       chatSessionOptions?: Readonly<Record<string, string>>
       provisioningLog?: string
       environmentCheck?: PendingWorktreeCreation['environmentCheck']
+      vmEnvironmentId?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
       worktreeId?: string
       heldChatMessage?: string
