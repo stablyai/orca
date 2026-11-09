@@ -13,7 +13,10 @@ import {
 } from '../skills/cloud/skill-cloud-grant-installation'
 import { SkillRemoteInstallCancellation } from '../skills/runtime-transfer/skill-remote-install-cancellation'
 import { classifySkillCloudInstallTarget } from '../skills/cloud/skill-cloud-install-target'
-import { assertSkillCloudGrantVersion } from '../skills/cloud/skill-cloud-grant-version'
+import {
+  assertSkillCloudGrantVersion,
+  createReviewedShareGrant
+} from '../skills/cloud/skill-cloud-grant-version'
 import { SkillSharePreparationService } from '../skills/sharing/skill-share-preparation'
 import {
   supportsSkillRuntimeBundleInstall,
@@ -49,7 +52,9 @@ function registerSharingHandlers(runtime: OrcaRuntimeService, discover: SkillSha
     {
       findOwnedPackageId: (name, request) => runtime.findOwnedSkillPackageId(name, request),
       publishVersion: (request) => runtime.publishSkillPackageVersion(request),
-      createShare: (packageId, request) => runtime.createSkillPackageShare(packageId, request)
+      shareTarget: (packageId, request) => runtime.skillShareTarget(packageId, request),
+      shareVersion: (version, target, request) =>
+        runtime.shareSkillVersion(version, target, request)
     },
     { installStateDirectory: join(app.getPath('userData'), 'skill-installs') }
   )
@@ -154,7 +159,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
     const installTarget = await classifySkillCloudInstallTarget(runtime, input)
-    const grant = await runtime.createSkillDownloadGrant(input.shareId, {
+    const grant = await createReviewedShareGrant(runtime, input.shareId, {
       versionId: input.versionId,
       installTarget
     })
@@ -179,7 +184,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
     const installTarget = await classifySkillCloudInstallTarget(runtime, input)
-    const grant = await runtime.createSkillDownloadGrant(input.shareId, {
+    const grant = await createReviewedShareGrant(runtime, input.shareId, {
       versionId: input.versionId,
       installTarget
     })

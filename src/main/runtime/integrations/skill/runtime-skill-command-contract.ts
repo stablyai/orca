@@ -23,7 +23,6 @@ import type {
   SkillCloudOptions,
   SkillCloudPackageDetails,
   SkillCloudPublishRequest,
-  SkillCloudPublishResult,
   SkillCloudVersion
 } from '../../../../shared/skill-cloud-contract'
 import type { SkillCloudService } from '../../../skills/cloud/skill-cloud-package-service'
@@ -51,9 +50,6 @@ export type RuntimeSkillCommandSurface = {
     discoveredSkills: readonly DiscoveredSkill[],
     signal?: AbortSignal
   ): Promise<AgentSkillShareOperation>
-  publishSkillPackage(
-    request: SkillCloudPublishRequest
-  ): Promise<SkillCloudOperation<SkillCloudPublishResult>>
   publishSkillPackageVersion(
     request: SkillCloudPublishRequest
   ): Promise<SkillCloudOperation<SkillCloudVersion>>
@@ -61,10 +57,8 @@ export type RuntimeSkillCommandSurface = {
     name: string,
     options: SkillCloudOptions
   ): ReturnType<SkillCloudService['findOwnedPackageId']>
-  createSkillPackageShare(
-    packageId: string,
-    request: SkillCloudOptions & { pinnedVersionId?: string; idempotencyKey?: string }
-  ): ReturnType<SkillCloudService['createShare']>
+  skillShareTarget: SkillCloudService['shareTarget']
+  shareSkillVersion: SkillCloudService['shareVersion']
   resolveSkillShare(
     shareId: string,
     options: SkillCloudOptions

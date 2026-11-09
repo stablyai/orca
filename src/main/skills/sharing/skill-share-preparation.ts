@@ -2,13 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
+  SKILL_SHARE_LINK_CHANGED_ERROR,
   SKILL_SHARE_NAME_TAKEN_ERROR,
   type SkillSharePreview,
   type SkillShareProgress,
   type SkillSharePublishInput,
   type SkillSharePublishOperation
 } from '../../../shared/skill-sharing-contract'
-import type { SkillCloudVersion } from '../../../shared/skill-cloud-contract'
+import {
+  SKILL_SHARE_VERSION_CHANGED_CODE,
+  type SkillCloudShareTarget,
+  type SkillCloudVersion
+} from '../../../shared/skill-cloud-contract'
 import {
   createSkillBundleArchive,
   type CreatedSkillBundle
@@ -25,6 +30,8 @@ type Preparation = {
   expiresAt: number
   controller: AbortController | null
   publishedVersion: SkillCloudVersion | null
+  /** Null until known; publish looks it up when preparing could not (e.g. signed out). */
+  shareTarget: SkillCloudShareTarget | null
 }
 
 function shareIdempotencyKey(preparationId: string): string {
@@ -60,7 +67,8 @@ function preview(id: string, value: Preparation): SkillSharePreview {
     compressedBytes: value.created.compressedBytes,
     scriptPaths: files.filter((file) => file.path.startsWith('scripts/')).map((file) => file.path),
     executablePaths: files.filter((file) => file.executable).map((file) => file.path),
-    expiresAt: new Date(value.expiresAt).toISOString()
+    expiresAt: new Date(value.expiresAt).toISOString(),
+    ...(value.shareTarget?.kind === 'update' ? { sharedLinkUrl: value.shareTarget.share.url } : {})
   }
 }
 
@@ -73,7 +81,7 @@ export class SkillSharePreparationService {
     private readonly root: string,
     private readonly cloud: Pick<
       SkillCloudService,
-      'createShare' | 'findOwnedPackageId' | 'publishVersion'
+      'findOwnedPackageId' | 'publishVersion' | 'shareTarget' | 'shareVersion'
     >,
     private readonly options: {
       initializeRoot?: () => Promise<void>
@@ -133,19 +141,21 @@ export class SkillSharePreparationService {
         })
       )
       const bundleName = input.bundleName ?? 'shared-skill'
+      const packageId = input.packageId ?? (await this.packageIdForName(bundleName))
       const created = await createSkillBundleArchive({
         sources,
         bundleName,
         description: input.description,
         archivePath: join(directory, 'package.tar.gz'),
-        packageId: input.packageId ?? (await this.packageIdForName(bundleName)),
+        packageId,
         versionId: randomUUID()
       })
       const value: Preparation = {
         created,
         expiresAt: Date.now() + PREPARATION_TTL_MS,
         controller: null,
-        publishedVersion: null
+        publishedVersion: null,
+        shareTarget: await this.knownShareTarget(packageId)
       }
       this.preparations.set(preparationId, value)
       return preview(preparationId, value)
@@ -197,10 +207,30 @@ export class SkillSharePreparationService {
         bytesSent: preparation.created.compressedBytes,
         totalBytes: preparation.created.compressedBytes
       })
-      const shared = await this.cloud.createShare(version.packageId, {
-        idempotencyKey: shareIdempotencyKey(input.preparationId),
-        signal: controller.signal
-      })
+      if (!preparation.shareTarget) {
+        const target = await this.cloud.shareTarget(version.packageId, {
+          signal: controller.signal
+        })
+        if (target.status !== 'ok') {
+          return target
+        }
+        preparation.shareTarget = target.value
+      }
+      const shareTarget = preparation.shareTarget
+      const shared = await this.cloud
+        .shareVersion(version, shareTarget, {
+          idempotencyKey: shareIdempotencyKey(input.preparationId),
+          signal: controller.signal
+        })
+        .catch((error: unknown) => {
+          // Why: the user was shown this link; a stopped or moved link must not become a new one.
+          throw shareTarget.kind === 'update' &&
+            error instanceof SkillCloudRequestError &&
+            (error.code === SKILL_SHARE_VERSION_CHANGED_CODE ||
+              error.code === 'skill_share_not_found')
+            ? new Error(SKILL_SHARE_LINK_CHANGED_ERROR, { cause: error })
+            : error
+        })
       if (shared.status !== 'ok') {
         return shared
       }
@@ -214,6 +244,16 @@ export class SkillSharePreparationService {
       if (current) {
         current.controller = null
       }
+    }
+  }
+
+  // Preview works signed out, so an unknown target is settled at publish.
+  private async knownShareTarget(packageId: string): Promise<SkillCloudShareTarget | null> {
+    try {
+      const target = await this.cloud.shareTarget(packageId, {})
+      return target.status === 'ok' ? target.value : null
+    } catch {
+      return null
     }
   }
 

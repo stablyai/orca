@@ -19,6 +19,8 @@ import type {
 
 // Why: a plain message survives Electron IPC, which drops error classes and fields.
 export const SKILL_SHARE_NAME_TAKEN_ERROR = 'skill-share-name-taken'
+/** The link shown as "Update link" was stopped or moved elsewhere before this publish. */
+export const SKILL_SHARE_LINK_CHANGED_ERROR = 'skill-share-link-changed'
 
 export type SkillSharePreview = {
   preparationId: string
@@ -45,6 +47,8 @@ export type SkillSharePreview = {
   scriptPaths: string[]
   executablePaths: string[]
   expiresAt: string
+  /** The package's existing link; publishing moves it to this version. */
+  sharedLinkUrl?: string
 }
 
 export type SkillSharePublishInput = {
@@ -93,11 +97,16 @@ export type SkillPackageVersionInstallInput = Omit<SkillShareInstallInput, 'shar
   versionId: string
 }
 
-export type SkillShareInstallOperation =
+export type SkillPackageVersionInstallOperation =
   | { status: 'ok'; value: SkillInstallResult }
   | { status: 'unconfigured'; message: string }
   | { status: 'reconnect-required' }
   | { status: 'unsupported'; message: string }
+
+/** A link can move to a newer version than the one reviewed; a package version cannot. */
+export type SkillShareInstallOperation =
+  | SkillPackageVersionInstallOperation
+  | { status: 'version-changed' }
 
 export type SkillBundleShareInstallInput = {
   shareId: string
@@ -122,11 +131,15 @@ export type SkillBundlePackageVersionInstallInput = Omit<
   versionId: string
 }
 
-export type SkillBundleShareInstallOperation =
+export type SkillBundlePackageVersionInstallOperation =
   | { status: 'ok'; value: SkillBundleInstallResult }
   | { status: 'unconfigured'; message: string }
   | { status: 'reconnect-required' }
   | { status: 'unsupported'; message: string }
+
+export type SkillBundleShareInstallOperation =
+  | SkillBundlePackageVersionInstallOperation
+  | { status: 'version-changed' }
 
 export type SkillBundleInstallPreviewInput = {
   environmentId?: string

@@ -18,7 +18,8 @@ import type { SkillInstallProviderId } from '../../../../shared/skill-install-pr
 import {
   SkillInstallOutcome,
   SkillInstallReview,
-  SkillShareLinkInputForm
+  SkillShareLinkInputForm,
+  SkillShareUpdatedNotice
 } from './SkillInstallReviewContent'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { useSkillInstallProgress } from './skill-install-progress-state'
@@ -65,6 +66,7 @@ export function SkillInstallDialog({
   const autoResolved = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<SkillInstallResult | null>(null)
+  const [versionChanged, setVersionChanged] = useState(false)
   const [destinationPreview, setDestinationPreview] = useState<SkillInstallPreview | null>(null)
   const installProgress = useSkillInstallProgress()
   const detectedAgents = useSkillInstallDetectedAgents({
@@ -115,6 +117,9 @@ export function SkillInstallDialog({
         )
         return
       }
+      // Only a successful re-resolve leaves the updated state; a failure keeps it, so the stale review never returns.
+      setVersionChanged(false)
+      setDestinationPreview(null)
       setPreview({ shareId, version: operation.value.version })
     } catch (cause) {
       console.warn('[skills] share resolution failed:', cause)
@@ -208,6 +213,10 @@ export function SkillInstallDialog({
         providers: [...providers],
         ...(discardLocal ? { conflictResolution: 'replace-and-discard-local' } : {})
       })
+      if (operation.status === 'version-changed') {
+        setVersionChanged(true)
+        return
+      }
       if (operation.status === 'unsupported') {
         setError(operation.message)
         return
@@ -261,6 +270,7 @@ export function SkillInstallDialog({
 
   const close = (): void => {
     setPreview(null)
+    setVersionChanged(false)
     setDestinationPreview(null)
     setError(null)
     setLink('')
@@ -300,12 +310,15 @@ export function SkillInstallDialog({
             onLinkChange={setLink}
             onSubmit={() => void inspect()}
           />
+        ) : versionChanged ? (
+          <SkillShareUpdatedNotice name={preview.version.name} />
         ) : bundleVersion ? (
           <SkillBundleInstallFlow
             shareId={preview.shareId}
             version={bundleVersion}
             onClose={close}
             onBusyChange={setBundleBusy}
+            onVersionChanged={() => setVersionChanged(true)}
           />
         ) : result && result.status !== 'conflict' ? (
           <SkillInstallOutcome result={result} />
@@ -351,7 +364,7 @@ export function SkillInstallDialog({
           </SkillInstallReview>
         )}
 
-        {!bundleVersion && error ? (
+        {(!bundleVersion || versionChanged) && error ? (
           <p className="text-xs text-destructive" role="alert">
             {error}
           </p>
@@ -371,10 +384,12 @@ export function SkillInstallDialog({
           result={result}
           scope={scope}
           workspace={workspace}
+          versionChanged={versionChanged}
           onCancelInstall={() => void cancelInstall()}
           onClose={close}
           onInspect={() => void inspect()}
           onInstall={(discardLocal) => void install(discardLocal)}
+          onReviewAgain={() => preview && void resolveLink(preview.shareId)}
         />
       </DialogContent>
     </Dialog>

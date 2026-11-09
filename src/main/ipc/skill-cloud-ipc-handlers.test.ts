@@ -56,6 +56,7 @@ vi.mock('./runtime-environments/runtime-environment-transport-routing', () => ({
 
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 import { SkillSharePreparationService } from '../skills/sharing/skill-share-preparation'
+import { SkillCloudRequestError } from '../skills/cloud/skill-cloud-request-error'
 
 describe('skill cloud IPC', () => {
   beforeEach(() => {
@@ -102,6 +103,30 @@ describe('skill cloud IPC', () => {
       )
     ).rejects.toThrow('skill-package-version-mismatch')
     expect(installSkillCloudGrantMock).not.toHaveBeenCalled()
+  })
+
+  it('asks for review again when the link moved past the reviewed version', async () => {
+    createDownloadGrantMock.mockRejectedValue(
+      new SkillCloudRequestError(409, 'share_version_changed', 'changed')
+    )
+    registerSkillCloudIpcHandlers(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: share installs call only createSkillDownloadGrant before the 409.
+      { createSkillDownloadGrant: createDownloadGrantMock } as never,
+      vi.fn()
+    )
+
+    await expect(
+      handlers.get('skills:installBundleShare')!(
+        { sender: mainRenderer },
+        {
+          shareId: 'share-1',
+          versionId: 'version-reviewed',
+          operationId: 'operation-1',
+          selectedSkillIds: ['skill-1'],
+          destination: { scope: 'global' }
+        }
+      )
+    ).resolves.toEqual({ status: 'version-changed' })
   })
 
   const preparationId = 'cf38dbdc-bff0-4e87-a7ea-ef81b7edaa1a'

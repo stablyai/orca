@@ -1,4 +1,4 @@
-import { Download, Loader2, ShieldCheck } from 'lucide-react'
+import { Download, Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import type { SkillInstallResult } from '../../../../shared/skill-install-contract'
@@ -14,10 +14,12 @@ type SkillInstallDialogFooterProps = {
   result: SkillInstallResult | null
   scope: 'global' | 'workspace'
   workspace: string
+  versionChanged: boolean
   onCancelInstall: () => void
   onClose: () => void
   onInspect: () => void
   onInstall: (discardLocal?: boolean) => void
+  onReviewAgain: () => void
 }
 
 export function SkillInstallDialogFooter({
@@ -30,12 +32,27 @@ export function SkillInstallDialogFooter({
   result,
   scope,
   workspace,
+  versionChanged,
   onCancelInstall,
   onClose,
   onInspect,
-  onInstall
+  onInstall,
+  onReviewAgain
 }: SkillInstallDialogFooterProps): React.JSX.Element | null {
   const t = useTranslate()
+  if (versionChanged) {
+    return (
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
+          {t('auto.components.skills.SkillInstallDialog.d198ec91e5', 'Close')}
+        </Button>
+        <Button type="button" disabled={busy} onClick={onReviewAgain}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+          {t('auto.components.skills.install.reviewAgain', 'Review again')}
+        </Button>
+      </DialogFooter>
+    )
+  }
   if (hasBundleVersion) {
     return null
   }

@@ -19,17 +19,21 @@ export type OwnedSkillShares = {
   shares: SkillCloudOwnedShare[]
   loading: boolean
   error: string | null
-  busyShareId: string | null
+  /** Package whose links are being stopped; one stop runs at a time, so every row waits for it. */
+  busyPackageId: string | null
   refresh: () => void
   revoke: (share: SkillCloudOwnedShare) => Promise<void>
+  /** Stops several links of one package, then names any that are still live. */
+  revokeMany: (shares: SkillCloudOwnedShare[]) => Promise<void>
 }
 
 export function useOwnedSkillShares(): OwnedSkillShares {
   const [shares, setShares] = useState<SkillCloudOwnedShare[]>([])
   const [loading, setLoading] = useState(true)
-  const [busyShareId, setBusyShareId] = useState<string | null>(null)
+  const [busyPackageId, setBusyPackageId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const generation = useRef(0)
+  const revoking = useRef(false)
 
   const load = useCallback(async (): Promise<void> => {
     const current = ++generation.current
@@ -63,35 +67,61 @@ export function useOwnedSkillShares(): OwnedSkillShares {
     }
   }, [load])
 
-  const revoke = useCallback(async (share: SkillCloudOwnedShare): Promise<void> => {
-    setBusyShareId(share.id)
+  const revokeMany = useCallback(async (targets: SkillCloudOwnedShare[]): Promise<void> => {
+    // Why: one shared busy state and error; overlapping stops would clear or overwrite each other's.
+    if (revoking.current) {
+      return
+    }
+    revoking.current = true
+    setBusyPackageId(targets[0]?.packageId ?? null)
     setError(null)
-    try {
-      const operation = await window.api.skills.revokeShare(share.id)
-      if (operation.status !== 'ok') {
-        setError(inventoryError(operation.status))
-        return
-      }
-      setShares((current) => current.filter((candidate) => candidate.id !== share.id))
-      toast.success(translate('auto.components.settings.shareSkills.linkRevoked', 'Link revoked'))
-    } catch {
-      setError(
-        translate(
+    const stopped = new Set<string>()
+    let failure: string | null = null
+    for (const share of targets) {
+      try {
+        const operation = await window.api.skills.revokeShare(share.id)
+        if (operation.status !== 'ok') {
+          failure = inventoryError(operation.status)
+          break
+        }
+        stopped.add(share.id)
+      } catch {
+        failure ??= translate(
           'auto.components.settings.shareSkills.revokeFailed',
           'Orca could not revoke this link.'
         )
-      )
-    } finally {
-      setBusyShareId(null)
+      }
     }
+    // Why: removing rows mid-sequence would change the row's identity and re-enable its stops.
+    setShares((current) => current.filter((candidate) => !stopped.has(candidate.id)))
+    setBusyPackageId(null)
+    revoking.current = false
+    const live = targets.filter((share) => !stopped.has(share.id))
+    if (live.length === 0) {
+      toast.success(translate('auto.components.settings.shareSkills.linkRevoked', 'Link revoked'))
+      return
+    }
+    const stillLive = translate(
+      'auto.components.settings.shareSkills.stillLive',
+      'Still live: {{links}}',
+      {
+        links: live.map((share) => share.url).join(', ')
+      }
+    )
+    setError(failure ? `${failure} ${stillLive}` : stillLive)
   }, [])
+  const revoke = useCallback(
+    (share: SkillCloudOwnedShare): Promise<void> => revokeMany([share]),
+    [revokeMany]
+  )
 
   return {
     shares,
     loading,
     error,
-    busyShareId,
+    busyPackageId,
     refresh: () => void load(),
-    revoke
+    revoke,
+    revokeMany
   }
 }

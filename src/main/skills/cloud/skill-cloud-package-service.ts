@@ -7,18 +7,17 @@ import type {
   SkillCloudOptions,
   SkillCloudPackageDetails,
   SkillCloudPublishRequest,
-  SkillCloudPublishResult,
   SkillCloudShare,
+  SkillCloudShareTarget,
   SkillCloudVersion
 } from '../../../shared/skill-cloud-contract'
 import { resolveArtifactCloudApiUrl } from '../../artifacts/artifact-cloud-config'
 import { runSkillCloudOperation } from './skill-cloud-auth'
 import { uploadSkillPackageToSignedPolicy } from './skill-cloud-direct-upload'
-import { skillCloudRequest } from './skill-cloud-request'
+import { skillCloudPathId as id, skillCloudRequest } from './skill-cloud-request'
 import { SkillCloudRequestError } from './skill-cloud-request-error'
+import { requestCanonicalSkillShare, requestSkillShareTarget } from './skill-cloud-share-links'
 import { startSkillPhaseOperation } from '../observability/skill-operation-observability'
-
-const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 
 function publishUploadIdempotencyKey(request: SkillCloudPublishRequest): string {
   return (
@@ -27,28 +26,8 @@ function publishUploadIdempotencyKey(request: SkillCloudPublishRequest): string 
   )
 }
 
-function id(value: string): string {
-  if (!ID_PATTERN.test(value)) {
-    throw new Error('skill-cloud-id-invalid')
-  }
-  return encodeURIComponent(value)
-}
-
 export class SkillCloudService {
   constructor(private readonly userDataPath: string) {}
-
-  async publish(
-    request: SkillCloudPublishRequest
-  ): Promise<SkillCloudOperation<SkillCloudPublishResult>> {
-    const version = await this.publishVersion(request)
-    if (version.status !== 'ok') {
-      return version
-    }
-    const share = await this.createShare(version.value.packageId, request)
-    return share.status === 'ok'
-      ? { status: 'ok', value: { version: version.value, share: share.value } }
-      : share
-  }
 
   publishVersion(
     request: SkillCloudPublishRequest
@@ -169,6 +148,36 @@ export class SkillCloudService {
       })
       return shared.share
     })
+  }
+
+  /** Checked once per publish: only a cloud advertising canonical links keeps one link per package. */
+  shareTarget(
+    packageId: string,
+    options: SkillCloudOptions & { signal?: AbortSignal }
+  ): Promise<SkillCloudOperation<SkillCloudShareTarget>> {
+    return this.withAuth(options, (authToken, apiUrl) =>
+      requestSkillShareTarget({ apiUrl, authToken, packageId, signal: options.signal })
+    )
+  }
+
+  shareVersion(
+    version: Pick<SkillCloudVersion, 'packageId' | 'versionId'>,
+    target: SkillCloudShareTarget,
+    request: SkillCloudOptions & { idempotencyKey?: string; signal?: AbortSignal }
+  ): Promise<SkillCloudOperation<SkillCloudShare>> {
+    if (target.kind === 'legacy') {
+      return this.createShare(version.packageId, request)
+    }
+    return this.withAuth(request, (authToken, apiUrl) =>
+      requestCanonicalSkillShare({
+        apiUrl,
+        authToken,
+        version,
+        target,
+        idempotencyKey: request.idempotencyKey ?? randomUUID(),
+        signal: request.signal
+      })
+    )
   }
 
   resolveShare(

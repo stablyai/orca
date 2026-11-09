@@ -16,6 +16,7 @@ import type { SkillCloudOwnedShare } from '../../../../shared/skill-cloud-contra
 import { skillCountLabel } from './skill-display-labels'
 import { isSkillBundleVersion } from './skill-share-version-summary'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { SkillSharedOlderLinks } from './SkillSharedOlderLinks'
 
 const CREATED_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
@@ -65,15 +66,24 @@ function useShareContents(share: SkillCloudOwnedShare): {
   return { names, failed, load }
 }
 
+const NO_SHARES: SkillCloudOwnedShare[] = []
+
 export function SkillSharedLinkRow({
   share,
+  olderShares = NO_SHARES,
   busy,
+  stopsDisabled = false,
   onRevoke,
+  onRevokeLinks,
   onDeleted
 }: {
   share: SkillCloudOwnedShare
+  olderShares?: SkillCloudOwnedShare[]
   busy: boolean
+  /** Another link's stop is running; stops wait for it. */
+  stopsDisabled?: boolean
   onRevoke: () => void
+  onRevokeLinks?: (links: SkillCloudOwnedShare[]) => void
   onDeleted: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -120,6 +130,15 @@ export function SkillSharedLinkRow({
                 {share.url}
               </span>
             </span>
+            {olderShares.length > 0 ? (
+              <span className="shrink-0 text-[11px] text-muted-foreground">
+                {t(
+                  'auto.components.skills.SkillSharedLinkRow.olderLinks',
+                  '+{{count}} older links',
+                  { count: olderShares.length, defaultValue_one: '+{{count}} older link' }
+                )}
+              </span>
+            ) : null}
             <span className="shrink-0 text-[11px] text-muted-foreground">
               {createdLabel(share.createdAt, t, intlLocale)}
             </span>
@@ -150,12 +169,12 @@ export function SkillSharedLinkRow({
               className="shrink-0"
               // The icon unmounts on confirmation; explicitly transfer keyboard focus to its replacement.
               autoFocus
-              disabled={busy || deleting}
+              disabled={busy || stopsDisabled || deleting}
               onClick={() => (confirming === 'revoke' ? onRevoke() : void deletePackage())}
             >
               {busy || deleting ? <Loader2 className="animate-spin" /> : null}
               {confirming === 'revoke'
-                ? t('auto.components.settings.shareSkills.confirmUnshare', 'Confirm unshare')
+                ? t('auto.components.settings.shareSkills.confirmStop', 'Confirm stop')
                 : t('auto.components.skills.SkillSharedLinkRow.confirmDelete', 'Confirm delete')}
             </Button>
           ) : (
@@ -167,15 +186,18 @@ export function SkillSharedLinkRow({
                     size="icon-sm"
                     variant="ghost"
                     className="shrink-0 text-muted-foreground hover:text-destructive"
-                    disabled={busy}
+                    disabled={busy || stopsDisabled}
                     onClick={() => setConfirming('revoke')}
-                    aria-label={t('auto.components.settings.shareSkills.unshare', 'Unshare')}
+                    aria-label={t(
+                      'auto.components.settings.shareSkills.stopSharing',
+                      'Stop sharing'
+                    )}
                   >
                     <Link2Off />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  {t('auto.components.settings.shareSkills.unshare', 'Unshare')}
+                  {t('auto.components.settings.shareSkills.stopSharing', 'Stop sharing')}
                 </TooltipContent>
               </Tooltip>
               <DropdownMenu>
@@ -185,7 +207,7 @@ export function SkillSharedLinkRow({
                     size="icon-sm"
                     variant="ghost"
                     className="shrink-0"
-                    disabled={busy}
+                    disabled={busy || stopsDisabled}
                     aria-label={t(
                       'auto.components.skills.SkillSharedLinkRow.moreActions',
                       'More actions for {{name}}',
@@ -236,6 +258,15 @@ export function SkillSharedLinkRow({
               {t('auto.components.skills.SkillSharedLinkRow.loading', 'Loading contents…')}
             </p>
           )}
+          {olderShares.length > 0 && onRevokeLinks ? (
+            <SkillSharedOlderLinks
+              share={share}
+              olderShares={olderShares}
+              busy={busy}
+              disabled={busy || stopsDisabled}
+              onRevokeLinks={onRevokeLinks}
+            />
+          ) : null}
         </CollapsibleContent>
       </Collapsible>
     </li>

@@ -16,6 +16,18 @@ import { skillInstallResultLabel } from './skill-install-result-label'
 import type { ResolvedSkillShare } from './skill-share-version-summary'
 import { useTranslate } from '@/i18n/use-translate'
 
+/** The link moved to a newer version than the one reviewed; the footer offers review again. */
+export function SkillShareUpdatedNotice({ name }: { name: string }): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <p className="py-2 text-sm" role="status">
+      {t('auto.components.skills.install.shareUpdated', '{{name}} was updated. Review it again.', {
+        name
+      })}
+    </p>
+  )
+}
+
 /** Submit stays in the footer; Enter in this field still submits its form. */
 export function SkillShareLinkInputForm({
   link,

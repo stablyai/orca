@@ -5736,7 +5736,9 @@
           "30985d4fc0": "Cancel",
           "3af85f6add": "Done",
           "publishBundle": "Publish bundle",
-          "cancelRequestFailed": "Orca could not send the cancellation request. The upload may still finish."
+          "cancelRequestFailed": "Orca could not send the cancellation request. The upload may still finish.",
+          "linkChanged": "This link was stopped or changed elsewhere. Close and share again.",
+          "updateLink": "Update link"
         },
         "SkillCard": {
           "d25a1b8ae6": "Share skill",
@@ -5974,7 +5976,9 @@
           "agentCount_other": "{{count}} agents",
           "namesAndMore": "{{names}} +{{count}} more",
           "runnableWarningOfSelected_other": "{{affectedCount}} of {{count}} selected skills include scripts or binary files: {{affected}}.",
-          "runnableWarningOfSelected_one": "{{affectedCount}} of {{count}} selected skill include scripts or binary files: {{affected}}."
+          "runnableWarningOfSelected_one": "{{affectedCount}} of {{count}} selected skill include scripts or binary files: {{affected}}.",
+          "reviewAgain": "Review again",
+          "shareUpdated": "{{name}} was updated. Review it again."
         },
         "filter": {
           "allAgents": "All agents",
@@ -6000,7 +6004,9 @@
           "deleted": "Deleted from the Cloud",
           "confirmDelete": "Confirm delete",
           "moreActions": "More actions for {{name}}",
-          "deletePackage": "Delete from the Cloud"
+          "deletePackage": "Delete from the Cloud",
+          "olderLinks_one": "+{{count}} older link",
+          "olderLinks_other": "+{{count}} older links"
         },
         "SkillSharedLinksView": {
           "loading": "Loading shared links…",
@@ -6111,6 +6117,11 @@
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
           "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
           "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+        },
+        "SkillSharedOlderLinks": {
+          "title": "Older links",
+          "confirmStopAll": "Confirm stop all",
+          "stopAll": "Stop all links"
         }
       },
       "sidebar": {
@@ -12731,11 +12742,8 @@
           "linkRevoked": "Link revoked",
           "revokeFailed": "Orca could not revoke this link.",
           "activeLinks": "Active shared links",
-          "activeLinksDescription": "Only people with a link can open it. Unshare a link to block future inspection and installs.",
           "noActiveLinks": "No active links. Publish a skill bundle from Skills to create one.",
           "copyLink": "Copy link",
-          "confirmUnshare": "Confirm unshare",
-          "unshare": "Unshare",
           "showButton": "Show Skills button",
           "showButtonDescription": "Show the Skills shortcut in the sidebar.",
           "manageInSkills": "Manage in Skills",
@@ -12744,7 +12752,11 @@
           "keywordBundle": "bundle",
           "keywordLink": "link",
           "keywordUnlisted": "unlisted",
-          "keywordRevoke": "revoke"
+          "keywordRevoke": "revoke",
+          "activeLinksStopDescription": "Only people with a link can open it. Stop sharing a link to block future inspection and installs.",
+          "confirmStop": "Confirm stop",
+          "stopSharing": "Stop sharing",
+          "stillLive": "Still live: {{links}}"
         },
         "bitbucket": {
           "credentials": {
