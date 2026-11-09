@@ -275,17 +275,17 @@ export function revokeGrantsForDeviceSession(deps: LifecycleDeps, deviceSessionI
  * The creator's desktop pairs with the create's own offer; record that device (its id is in the
  * offer, not secret) so reassigning the workspace or removing the member revokes it like any grant.
  */
-export async function recordOwnerDevice(db: D1Database, row: SandboxRow, pairingCode: string, now: number): Promise<void> {
+export async function recordOwnerDevice(db: D1Database, row: SandboxRow, pairingCode: string, now: number): Promise<boolean> {
   const deviceId = pairedDeviceIdOf(pairingCode)
   if (!deviceId) {
-    return
+    return false
   }
   const existing = await db
     .prepare('SELECT id FROM workspace_grants WHERE sandbox_id = ? AND orcad_device_id = ?')
     .bind(row.id, deviceId)
     .first<{ id: string }>()
   if (existing) {
-    return
+    return false
   }
   await db
     .prepare(
@@ -294,6 +294,14 @@ export async function recordOwnerDevice(db: D1Database, row: SandboxRow, pairing
     )
     .bind(randomGrantId(), row.id, row.account_id, row.user_id, deviceId, now)
     .run()
+  return true
+}
+
+/** Records the owner's device and, when it is new, lets the VM map it to the owner (git as the sender). */
+export async function recordOwnerDeviceAndSync(deps: LifecycleDeps, row: SandboxRow, pairingCode: string): Promise<void> {
+  if ((await recordOwnerDevice(deps.db, row, pairingCode, deps.now())) && row.status === 'running' && row.session_id) {
+    await syncMemberGit(deps, row, row.session_id)
+  }
 }
 
 export function pairedDeviceIdOf(pairingCode: string): string | null {

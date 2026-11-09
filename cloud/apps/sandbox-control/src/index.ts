@@ -115,7 +115,7 @@ import {
   GrantRequestSchema,
   issueGrant,
   listGrants,
-  recordOwnerDevice,
+  recordOwnerDeviceAndSync,
   revokeForAccessChange,
   revokeGrantsForDeviceSession,
   revokeGrantsForMember,
@@ -1011,7 +1011,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return fail('invalid_request', 400)
       }
       const ready = await createSandbox(life, caller, body.data)
-      await recordOwnerDevice(life.db, ready.row, ready.connection.pairingCode, life.now())
+      await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
       return readyResponse(ready)
     }
     const row = await getSandbox(env.SANDBOX_DB, id)
@@ -1044,12 +1044,12 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return json({ sandbox: view(await suspendSandbox(life, row)) })
       case 'POST resume': {
         const ready = await resumeSandbox(life, row)
-        await recordOwnerDevice(life.db, ready.row, ready.connection.pairingCode, life.now())
+        await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return readyResponse(ready)
       }
       case 'POST rollover': {
         const ready = await rolloverSandbox(life, row)
-        await recordOwnerDevice(life.db, ready.row, ready.connection.pairingCode, life.now())
+        await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return readyResponse(ready)
       }
       case 'POST wake':
@@ -1058,7 +1058,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         // User-triggered and unbounded otherwise: shares the per-account start rate limit.
         await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
         const ready = await restartSandbox(life, row)
-        await recordOwnerDevice(life.db, ready.row, ready.connection.pairingCode, life.now())
+        await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
         return json(readyView(ready.row, ready.connection))
       }
       case 'GET status':
