@@ -29,6 +29,15 @@ async function getDataPath(): Promise<string> {
   )
 }
 
+/** Status names the file that holds the setting. SQLite wins once it exists. */
+async function reportedSettingsPath(): Promise<string> {
+  const location = (await getProfileStateLocation()) ?? legacyProfileStateLocation()
+  const { classifyProfileStateStorage } =
+    await import('../../main/persistence/profile-state/database/profile-state-storage-classification.js')
+  const storage = classifyProfileStateStorage(location.dataFile, location.databaseFile)
+  return storage === 'sqlite-only' || storage === 'both' ? location.databaseFile : location.dataFile
+}
+
 async function getProfileStateLocation(): Promise<ProfileStateOfflineLocation | undefined> {
   const { getActiveProfileStateLocation } = await import('../profile-state-location.js')
   return getActiveProfileStateLocation()
@@ -199,14 +208,15 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
       // Best effort: old or unavailable runtimes must not block Codex launch.
     }
   },
-  'agent hooks status': async ({ json, flags }) => {
+  'agent hooks status': async ({ client, json, flags }) => {
     rejectRemoteHookSelection(flags)
     const { getManagedAgentHookStatuses } =
       await import('../../main/agent-hooks/installation/managed-agent-hook-controls.js')
+    const admission = await client.getOfflineRuntimeAdmission()
     const result: AgentHookCommandResult = {
       enabled: (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
-      settingsPath: await getDataPath(),
-      appliedBy: 'offline',
+      settingsPath: await reportedSettingsPath(),
+      appliedBy: admission.reachable ? 'runtime' : 'offline',
       statuses: getManagedAgentHookStatuses()
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)

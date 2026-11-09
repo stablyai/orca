@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -216,4 +216,49 @@ describe('agent hooks CLI handler', () => {
       readBack.db.close()
     }
   })
+
+  it.each([
+    ['offline', false, 'offline'],
+    ['connected', true, 'runtime']
+  ] as const)(
+    'reports %s hook status against the sqlite file that holds the setting',
+    async (_label, reachable, appliedBy) => {
+      const profileId = 'sqlite-status'
+      writeActiveProfileIndex(userDataPath, profileId)
+      const databaseFile = getOrcaProfileStateDatabaseFile(profileId, userDataPath)
+      const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
+      mkdirSync(join(userDataPath, 'profiles', profileId), { recursive: true })
+      const raw = JSON.stringify({ settings: { agentStatusHooksEnabled: true } })
+      const opened = openProfileStateDatabase(databaseFile, profileId)
+      try {
+        importProfileStateJson(opened.db, raw)
+      } finally {
+        opened.db.close()
+      }
+      getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+      if (reachable) {
+        getCliStatusMock.mockResolvedValueOnce({
+          id: 'test-status',
+          ok: true,
+          result: {
+            app: { running: true, pid: 42 },
+            runtime: { state: 'ready', reachable: true, runtimeId: 'runtime-1' },
+            graph: { state: 'ready' }
+          },
+          _meta: { runtimeId: 'test' }
+        })
+      }
+
+      await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+
+      const payload = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0])) as {
+        result: { enabled: boolean; appliedBy: string; settingsPath: string }
+      }
+      expect(process.exitCode).not.toBe(1)
+      expect(existsSync(dataFile)).toBe(false)
+      expect(payload.result.enabled).toBe(true)
+      expect(payload.result.appliedBy).toBe(appliedBy)
+      expect(payload.result.settingsPath).toBe(databaseFile)
+    }
+  )
 })
