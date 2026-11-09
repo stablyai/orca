@@ -111,7 +111,15 @@ export function useFloatingTerminalCreateActions({
           suppressActiveRuntimeFallback: true
         })
       } catch (error) {
-        toast.error(extractIpcErrorMessage(error, 'Failed to create untitled markdown file.'))
+        toast.error(
+          extractIpcErrorMessage(
+            error,
+            translate(
+              'components.toastFallbacks.markdownCreateFailed',
+              'Failed to create untitled markdown file.'
+            )
+          )
+        )
       }
     })()
   }, [activeGroup, markdownCwd, openFile])
@@ -127,7 +135,15 @@ export function useFloatingTerminalCreateActions({
           targetGroupId: activeGroup?.id
         })
       } catch (error) {
-        toast.error(extractIpcErrorMessage(error, 'Failed to open markdown file.'))
+        toast.error(
+          extractIpcErrorMessage(
+            error,
+            translate(
+              'components.toastFallbacks.markdownOpenFailed',
+              'Failed to open markdown file.'
+            )
+          )
+        )
       }
     })()
   }, [activeGroup, openFile])

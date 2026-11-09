@@ -20,6 +20,7 @@ import {
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
+import { translateExecutionHostLabel } from '../sidebar/execution-host-label'
 import {
   DetailHeader,
   MetadataActionIcon
@@ -51,7 +52,7 @@ export function ActivityThreadHoverCardSummary({
   const executionHostId = getWorktreeExecutionHostId(worktree, repo ?? undefined)
   const parsedHost = parseExecutionHostId(executionHostId)
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const hostDisplayLabel = useMemo(() => {
+  const customHostDisplayLabel = useMemo(() => {
     const override = hostLabelOverrides.get(executionHostId)
     if (override) {
       return override
@@ -68,8 +69,10 @@ export function ActivityThreadHoverCardSummary({
         return target
       }
     }
-    return getExecutionHostLabel(executionHostId)
+    return null
   }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
+  const hostDisplayLabel =
+    customHostDisplayLabel ?? translateExecutionHostLabel(getExecutionHostLabel(executionHostId))
   const branchIdentityDisplay = useMemo(() => getWorktreeGitIdentityDisplay(worktree), [worktree])
   const { taskTitle, needsAttention } = activityThreadRowCopy(thread, t)
   const workspaceTitle = getActivityThreadWorkspaceTitle(worktree)

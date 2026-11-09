@@ -10,6 +10,8 @@ import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
+import { translateDefaultWorkflowStateLabel } from '@/components/sidebar/workspace-board-status-label'
 import {
   LINEAR_EDIT_MENU_ITEM_CLASS,
   LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
@@ -79,7 +81,9 @@ export function renderLinearIssuePropertiesLayout(
                   className="inline-block size-2.5 shrink-0 rounded-full"
                   style={getLinearStateMarkerStyle(localState.color)}
                 />
-                <span className="min-w-0 flex-1 truncate">{localState.name}</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {translateDefaultWorkflowStateLabel(localState.name)}
+                </span>
                 <LinearEditChipAdornment loading={states.loading} pending={statePending} />
               </button>
             </PopoverTrigger>
@@ -112,7 +116,7 @@ export function renderLinearIssuePropertiesLayout(
                         className="inline-block size-2 rounded-full"
                         style={{ backgroundColor: s.color }}
                       />
-                      {s.name}
+                      {translateDefaultWorkflowStateLabel(s.name)}
                     </button>
                   ))}
                 </div>
@@ -175,9 +179,7 @@ export function renderLinearIssuePropertiesLayout(
                   <UserRound className={propertyIconClass} />
                 )}
                 <span className="min-w-0 flex-1 truncate">
-                  {localAssignee
-                    ? localAssignee.displayName
-                    : t('auto.components.LinearItemDrawer.866316f22c', 'Unassigned')}
+                  {localAssignee ? localAssignee.displayName : translateUnassignedLabel()}
                 </span>
                 <LinearEditChipAdornment loading={members.loading} pending={assigneePending} />
               </button>
@@ -192,7 +194,7 @@ export function renderLinearIssuePropertiesLayout(
                   onClick={() => handleAssigneeChange('__unassign__')}
                   className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, !localAssignee && 'bg-accent/50')}
                 >
-                  {t('auto.components.LinearItemDrawer.866316f22c', 'Unassigned')}
+                  {translateUnassignedLabel()}
                 </button>
                 {members.error ? (
                   <div className="px-2 py-3 text-center text-[12px] text-destructive">

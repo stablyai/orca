@@ -9,6 +9,7 @@ import {
   getExecutionHostLabel,
   parseExecutionHostId
 } from '../../../../../../shared/execution-host'
+import { translateExecutionHostLabel } from '../../../sidebar/execution-host-label'
 import type { useAiVaultPanelSearch } from './use-ai-vault-search'
 
 // Keep reasons short to match adjacent host labels; null means the host answered.
@@ -53,7 +54,9 @@ function describeSkippedHosts(
       return []
     }
     const reason = hostSkipReason(entry.outcome, t)
-    const label = getExecutionHostLabel(parseExecutionHostId(entry.executionHostId)?.id ?? null)
+    const label = translateExecutionHostLabel(
+      getExecutionHostLabel(parseExecutionHostId(entry.executionHostId)?.id ?? null)
+    )
     return reason ? [`${label} (${reason})`] : []
   })
   return skipped.length > 0

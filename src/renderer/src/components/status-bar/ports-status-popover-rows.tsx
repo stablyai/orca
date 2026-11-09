@@ -6,13 +6,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import {
   canStopWorkspacePort,
-  getPortOpenBrowserTooltipLabel,
   goToWorkspacePortOwner,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
-  refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser
+  refreshWorkspacePortScanAfterStop
 } from '@/lib/workspace-ports/workspace-port-actions'
+import {
+  getPortOpenBrowserTooltipLabel,
+  resolvePortOpenInOrcaBrowser
+} from '@/lib/workspace-ports/workspace-port-browser-open'
 import type { WorkspacePortGroup } from '@/lib/workspace-ports/workspace-port-groups'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'

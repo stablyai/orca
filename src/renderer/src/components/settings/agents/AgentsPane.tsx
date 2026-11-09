@@ -4,7 +4,7 @@ import {
   getClaudeSubagentNavigationDescription
 } from './behavior/claude-subagent-navigation-copy'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import { translateLocalExecutionHostLabel } from '../../sidebar/execution-host-label'
 import { AgentAwakeSetting } from './behavior/AgentAwakeSetting'
 import { AgentCacheTimerSection } from './behavior/AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './runtime/AgentRuntimeSetting'
@@ -69,7 +69,7 @@ export function AgentsPane({
           hostScope={hostScope}
         />
       </SettingsGroup>
-      <SettingsGroup title={getLocalExecutionHostLabel()}>
+      <SettingsGroup title={translateLocalExecutionHostLabel()}>
         <AgentRuntimeSetting
           settings={settings}
           updateSettings={updateSettings}

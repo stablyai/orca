@@ -18,6 +18,7 @@ import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import {
   dedupeReadySetupRows,
   type SelectedProjectHostSetup
@@ -195,10 +196,15 @@ function buildNeedsSetupOptions({
         kind: 'needs-setup' as const,
         projectId,
         hostId: host.id,
-        label: host.label || getExecutionHostLabel(host.id),
+        label: translateExecutionHostLabel(host.label || getExecutionHostLabel(host.id)),
         detail:
           unavailableDetail ??
-          (pendingSetup ? getPendingSetupDetail(pendingSetup) : 'Project location not set'),
+          (pendingSetup
+            ? getPendingSetupDetail(pendingSetup)
+            : translate(
+                'auto.lib.projectHostSetupOptions.locationNotSet',
+                'Project location not set'
+              )),
         isAvailable,
         attention: host.health === 'error',
         canSetLocation: canSetProjectLocation(projectId, isAvailable, pendingSetup),

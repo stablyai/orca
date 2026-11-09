@@ -14,6 +14,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
 import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
 import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
+import { translateExecutionHostLabel } from '../sidebar/execution-host-label'
 import {
   expandEquivalentExecutionHostIds,
   pickerExecutionHosts
@@ -149,7 +150,7 @@ export function buildPaletteFilterModel({
   const hosts = hostRows.map((host) =>
     toFilterOption({
       id: host.id,
-      label: host.label,
+      label: translateExecutionHostLabel(host.label),
       detail: host.detail,
       count: [host.id, ...(host.aliasHostIds ?? [])].reduce(
         (count, hostId) => count + (worktreeCountByHostId.get(hostId) ?? 0),

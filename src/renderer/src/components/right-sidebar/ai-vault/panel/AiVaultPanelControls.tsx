@@ -39,6 +39,7 @@ import {
   type AiVaultSessionGroup
 } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateExecutionHostLabel } from '../../../sidebar/execution-host-label'
 import type { AiVaultHostScopeOption } from '../scope/ai-vault-host-scope'
 import { AiVaultSessionLimitMenu } from '../session-list/AiVaultSessionLimitMenu'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
@@ -173,7 +174,9 @@ export function VaultHostScopeMenu({
 }): React.JSX.Element {
   const t = useTranslate()
   const selectedOption = hostOptions.find((option) => option.id === executionHostScope)
-  const label = selectedOption?.label ?? getExecutionHostLabel(executionHostScope)
+  const label = translateExecutionHostLabel(
+    selectedOption?.label ?? getExecutionHostLabel(executionHostScope)
+  )
 
   return (
     <DropdownMenu
@@ -210,7 +213,7 @@ export function VaultHostScopeMenu({
         >
           {hostOptions.map((option) => (
             <DropdownMenuRadioItem key={option.id} value={option.id}>
-              {option.label}
+              {translateExecutionHostLabel(option.label)}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

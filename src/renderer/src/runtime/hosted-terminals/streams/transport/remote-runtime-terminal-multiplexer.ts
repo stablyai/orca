@@ -14,6 +14,7 @@ import type {
 } from '../remote-terminal-stream-contracts'
 import type { RemoteRuntimeMultiplexedTerminalState } from '../remote-terminal-stream-state'
 import { createRemoteTerminalStreamWatchdog } from '../recovery/remote-terminal-stream-watchdog'
+import { translate } from '@/i18n/i18n'
 
 export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinaryController {
   async subscribeTerminal(args: {
@@ -133,7 +134,10 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
         if (this.isRegisteredStream(state)) {
           // Why after: a failed write closes the transport, whose message the pending snapshot must carry.
           this.sendFrame(streamId, TerminalStreamOpcode.Unsubscribe)
-          disposeRemoteTerminalStreamState(state, 'Remote terminal stream closed.')
+          disposeRemoteTerminalStreamState(
+            state,
+            translate('auto.runtime.remoteTerminal.streamClosed', 'Remote terminal stream closed.')
+          )
           this.streams.delete(streamId)
           this.closeIfIdle()
         }

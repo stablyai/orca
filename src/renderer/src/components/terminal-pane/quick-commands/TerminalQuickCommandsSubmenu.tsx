@@ -13,6 +13,7 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { isTerminalAgentQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import {
   getHostedTerminalQuickCommandKey,
   shouldShowTerminalQuickCommandHostOwnership,
@@ -42,9 +43,9 @@ export function TerminalQuickCommandsSubmenu({
   onRun
 }: TerminalQuickCommandsSubmenuProps): React.JSX.Element {
   const t = useTranslate()
-  const nonEmptyHosts = hosts.filter(
-    (host) => host.repoCommands.length > 0 || host.globalCommands.length > 0
-  )
+  const nonEmptyHosts = hosts
+    .filter((host) => host.repoCommands.length > 0 || host.globalCommands.length > 0)
+    .map((host) => ({ ...host, label: translateExecutionHostLabel(host.label) }))
   const showHostOwnership = shouldShowTerminalQuickCommandHostOwnership(hosts)
   const singleHost = hosts[0]
   const renderCommand = (hostId: ExecutionHostId, command: TerminalQuickCommand) => (
@@ -146,7 +147,7 @@ export function TerminalQuickCommandsSubmenu({
                 : t(
                     'auto.components.terminal.pane.TerminalContextMenu.15dd899676',
                     'Add to {{value0}}…',
-                    { value0: host.label }
+                    { value0: translateExecutionHostLabel(host.label) }
                   )}
             </DropdownMenuItem>
           ))
