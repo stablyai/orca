@@ -2189,6 +2189,11 @@
         "leftovers": "Some changes did not apply cleanly; they were saved to {{dir}}.",
         "summary": "Branch {{branch}} with your uncommitted changes and agent chats ({{count}}). The cloud workspace is unchanged.",
         "failed": "Could not move the workspace"
+      },
+      "orcaCloud": {
+        "workspaceActions": {
+          "unavailable": "Orca Cloud is unavailable."
+        }
       }
     },
     "hooks": {
@@ -14420,7 +14425,11 @@
             "rotateConfirm": "The current URL stops working. Rotate?",
             "rotateAction": "Rotate URL",
             "rotate": "Rotate URL…",
-            "rotateSaveFirst": "Save or discard your changes before rotating the URL."
+            "rotateSaveFirst": "Save or discard your changes before rotating the URL.",
+            "repoUrlPlaceholder": "https://github.com/acme/api",
+            "labelsPlaceholder": "orca, needs-review",
+            "authorsPlaceholder": "octocat, dependabot[bot]",
+            "branchesPlaceholder": "main"
           },
           "trigger": {
             "schedule": "Schedule",
@@ -14473,7 +14482,9 @@
           "keywordGithub": "github",
           "keywordCloud": "cloud",
           "sectionTitle": "Routines",
-          "sectionDescription": "Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook."
+          "sectionDescription": "Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook.",
+          "agentCodex": "Codex",
+          "agentClaude": "Claude Code"
         }
       },
       "right": {

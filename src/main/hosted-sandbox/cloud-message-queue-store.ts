@@ -1,6 +1,7 @@
 // Queued prompts on disk: sealed with the OS keychain; without one they live in memory only.
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { z } from 'zod'
 import type { CloudQueuedPrompt } from '../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { OfflineCacheCodec } from './cloud-offline-cache'
@@ -13,38 +14,103 @@ export type StoredPrompt = CloudQueuedPrompt & {
   nextAttemptAt: number
 }
 
-export function readSealedPrompts(path: string, codec: OfflineCacheCodec | null): StoredPrompt[] {
+// The sealed file is ours, but only its shape is checked here; a prompt that does not match is dropped.
+const StoredPromptSchema = z.looseObject({
+  id: z.string(),
+  clientOperationId: z.string(),
+  workspaceId: z.string(),
+  sessionId: z.string(),
+  text: z.string(),
+  state: z.enum(['queued', 'sending', 'delivered', 'failed', 'unconfirmed']),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  failures: z.number(),
+  nextAttemptAt: z.number(),
+  error: z.string().optional()
+})
+const SealedQueueSchema = z.object({ version: z.literal(2), prompts: z.array(z.unknown()) })
+
+export async function readSealedPrompts(
+  path: string,
+  codec: OfflineCacheCodec | null
+): Promise<StoredPrompt[]> {
   if (!codec) {
     return []
   }
   try {
-    const parsed = JSON.parse(codec.decrypt(readFileSync(path))) as {
-      version: 2
-      prompts: StoredPrompt[]
+    const parsed = SealedQueueSchema.safeParse(JSON.parse(codec.decrypt(await readFile(path))))
+    if (!parsed.success) {
+      return []
     }
-    return parsed.version === 2 && Array.isArray(parsed.prompts) ? parsed.prompts : []
+    return parsed.data.prompts.flatMap((raw) => {
+      const prompt = StoredPromptSchema.safeParse(raw)
+      return prompt.success ? [prompt.data] : []
+    })
   } catch {
     return []
   }
 }
 
-export function writeSealedPrompts(
+export async function writeSealedPrompts(
   path: string,
   codec: OfflineCacheCodec | null,
   prompts: readonly StoredPrompt[]
-): void {
+): Promise<void> {
   if (!codec) {
     return
   }
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  const sealed = codec.encrypt(JSON.stringify({ version: 2, prompts }))
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   const temp = `${path}.${process.pid}.tmp`
-  writeFileSync(temp, codec.encrypt(JSON.stringify({ version: 2, prompts })), { mode: 0o600 })
-  renameSync(temp, path)
+  await writeFile(temp, sealed, { mode: 0o600 })
+  await rename(temp, path)
 }
 
 /** The first build kept the queue as plaintext JSON beside the sealed file; it is never read. */
-export function removeLegacyPlaintextQueue(path: string): void {
-  rmSync(join(dirname(path), 'orca-cloud-queued-prompts.json'), { force: true })
+export function removeLegacyPlaintextQueue(path: string): Promise<void> {
+  return rm(join(dirname(path), 'orca-cloud-queued-prompts.json'), { force: true })
+}
+
+/** The sealed queue file: read once, then every write and removal in call order. */
+export function createSealedPromptDisk(
+  path: string,
+  codec: OfflineCacheCodec | null,
+  log: (line: string) => void
+) {
+  const load = (async () => {
+    await removeLegacyPlaintextQueue(path).catch(() => undefined)
+    return readSealedPrompts(path, codec)
+  })()
+  // Nothing is written before the sealed file has been read.
+  let tail: Promise<unknown> = load
+  function serial(task: () => Promise<void>): Promise<void> {
+    const run = tail.then(task)
+    tail = run.catch((error: unknown) =>
+      log(`[orca-cloud] queued prompts write failed: ${String(error)}`)
+    )
+    return run
+  }
+  return {
+    load,
+    write: (prompts: readonly StoredPrompt[]) =>
+      serial(() => writeSealedPrompts(path, codec, prompts)),
+    remove: () =>
+      serial(async () => {
+        await removeLegacyPlaintextQueue(path)
+        await rm(path, { force: true })
+      }),
+    flushed: () => serial(async () => {})
+  }
+}
+
+export function earliestOwedAttempt(prompts: readonly StoredPrompt[]): number | null {
+  let earliest: number | null = null
+  for (const prompt of prompts) {
+    if (prompt.state === 'queued' || prompt.state === 'sending') {
+      earliest = earliest === null ? prompt.nextAttemptAt : Math.min(earliest, prompt.nextAttemptAt)
+    }
+  }
+  return earliest
 }
 
 /** Refusals that mean "not now", not "never": the same operation is sent again. */
@@ -87,10 +153,23 @@ export async function currentFence(
       ? { refused: code }
       : null
   }
-  const result = response.result as { ok: boolean; page?: { fence?: number }; fence?: number }
+  const parsed = FenceResultSchema.safeParse(response.result)
+  const result = parsed.success ? parsed.data : { ok: false }
   const fence = result.page?.fence ?? (result.ok ? undefined : result.fence)
   return typeof fence === 'number' ? fence : null
 }
+
+const FenceResultSchema = z.looseObject({
+  ok: z.boolean(),
+  page: z.looseObject({ fence: z.number().optional() }).optional(),
+  fence: z.number().optional()
+})
+
+/** `agentSession.send` answer: delivered, or refused with a code. */
+export const SendResultSchema = z.looseObject({
+  ok: z.boolean(),
+  refusal: z.looseObject({ code: z.string().optional(), message: z.string().optional() }).optional()
+})
 
 export type WorkspaceAvailability =
   | { kind: 'up'; environmentId: string }
@@ -133,4 +212,8 @@ export type CloudMessageQueue = {
   failPending(workspaceId: string, reason: string): void
   /** Sign-out / profile switch: forget everything. */
   clear(): void
+  /** Resolves once every disk write requested so far has finished (shutdown, tests). */
+  flushed(): Promise<void>
+  /** Earliest background attempt still owed (ms epoch), or null when nothing is pending. */
+  nextAttemptAt(): number | null
 }

@@ -3,28 +3,21 @@
 // servers; Orca keeps them on the VM (end-to-end encrypted), so the only copy outside the VM is
 // this one, on the user's own disk, sealed with the OS keychain. Without a keychain nothing is kept.
 // Bounded per workspace, in total, and in memory; one file per environment.
-import { createHash } from 'node:crypto'
-import {
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
+  decode,
   DEFAULT_OFFLINE_CACHE_LIMITS,
+  DISABLED_OFFLINE_CACHE,
+  EnvironmentFileSchema,
+  fileName,
   OFFLINE_READ_METHODS,
   removeLegacyPlaintextFiles,
   stableKey,
   type CloudOfflineCache,
   type EnvironmentFile,
   type OfflineCacheCodec,
-  type OfflineCacheEntry,
-  type OfflineCacheLimits,
-  type StoredEntry
+  type OfflineCacheLimits
 } from './cloud-offline-cache-types'
 
 export {
@@ -37,90 +30,98 @@ export {
   type OfflineCacheLimits
 } from './cloud-offline-cache-types'
 
-function fileName(environmentId: string): string {
-  return `${createHash('sha256').update(environmentId).digest('hex').slice(0, 32)}.bin`
-}
-
-function decode(entry: StoredEntry): OfflineCacheEntry {
-  const { resultJson, ...rest } = entry
-  return { ...rest, result: JSON.parse(resultJson) as unknown }
-}
-
-const DISABLED: CloudOfflineCache = {
-  record: () => {},
-  lookup: () => null,
-  entries: () => [],
-  forget: () => {},
-  prune: () => {},
-  clear: () => {},
-  flush: () => {}
-}
-
 export function createCloudOfflineCache(options: {
   root: string
   /** Null: the OS cannot seal files, so nothing is cached. */
   codec: OfflineCacheCodec | null
   limits?: Partial<OfflineCacheLimits>
   now?: () => number
-  /** Write delay; 0 writes synchronously (tests). */
+  /** Write delay; 0 writes as soon as a record lands (tests). */
   flushDelayMs?: number
 }): CloudOfflineCache {
-  const codec = options.codec
+  // All file work runs one task at a time, in call order, off the main thread's sync fs path.
+  let io: Promise<unknown> = Promise.resolve()
+  function serial<T>(task: () => Promise<T>): Promise<T> {
+    const run = io.then(task, task)
+    io = run.catch(() => undefined)
+    return run
+  }
   // Plaintext v1 files from the first build are never read; remove them whatever the codec.
-  removeLegacyPlaintextFiles(options.root)
+  const legacyRemoved = serial(() => removeLegacyPlaintextFiles(options.root))
+  const codec = options.codec
   if (!codec) {
-    return DISABLED
+    return { ...DISABLED_OFFLINE_CACHE, flush: () => legacyRemoved }
   }
   const limits = { ...DEFAULT_OFFLINE_CACHE_LIMITS, ...options.limits }
   const now = options.now ?? Date.now
   const flushDelayMs = options.flushDelayMs ?? 1_000
   // Map insertion order is the LRU order: a touched environment is re-inserted at the end.
   const loaded = new Map<string, EnvironmentFile>()
+  const loading = new Map<string, Promise<EnvironmentFile>>()
   const dirty = new Set<string>()
+  // Bumped by forget/prune/clear so a read that started before them is not cached afterwards.
+  let generation = 0
   let timer: ReturnType<typeof setTimeout> | null = null
 
   const pathOf = (environmentId: string) => join(options.root, fileName(environmentId))
 
-  function write(environmentId: string): void {
-    const file = loaded.get(environmentId)
-    if (!file) {
-      return
-    }
-    mkdirSync(options.root, { recursive: true, mode: 0o700 })
-    const target = pathOf(environmentId)
-    const temp = `${target}.${process.pid}.tmp`
-    writeFileSync(temp, codec!.encrypt(JSON.stringify(file)), { mode: 0o600 })
-    renameSync(temp, target)
+  function write(file: EnvironmentFile): Promise<void> {
+    const serialized = codec!.encrypt(JSON.stringify(file))
+    return serial(async () => {
+      await mkdir(options.root, { recursive: true, mode: 0o700 })
+      const target = pathOf(file.environmentId)
+      const temp = `${target}.${process.pid}.tmp`
+      await writeFile(temp, serialized, { mode: 0o600 })
+      await rename(temp, target)
+    })
   }
 
-  function load(environmentId: string): EnvironmentFile {
-    const hit = loaded.get(environmentId)
-    if (hit) {
-      loaded.delete(environmentId)
-      loaded.set(environmentId, hit)
-      return hit
-    }
-    let file: EnvironmentFile = { version: 2, environmentId, updatedAt: 0, entries: {} }
+  async function readFromDisk(environmentId: string): Promise<EnvironmentFile> {
     try {
-      const parsed = JSON.parse(
-        codec!.decrypt(readFileSync(pathOf(environmentId)))
-      ) as EnvironmentFile
-      if (parsed.version === 2 && parsed.environmentId === environmentId && parsed.entries) {
-        file = parsed
+      const parsed = EnvironmentFileSchema.safeParse(
+        JSON.parse(codec!.decrypt(await readFile(pathOf(environmentId))))
+      )
+      if (parsed.success && parsed.data.environmentId === environmentId) {
+        return parsed.data
       }
     } catch {
       // Missing, unreadable or sealed by another keychain: start empty. A cache is never a source of truth.
     }
-    loaded.set(environmentId, file)
-    while (loaded.size > limits.maxLoadedEnvironments) {
-      const oldest = loaded.keys().next().value!
-      if (dirty.has(oldest)) {
-        write(oldest)
-        dirty.delete(oldest)
-      }
-      loaded.delete(oldest)
+    return { version: 2, environmentId, updatedAt: 0, entries: {} }
+  }
+
+  function load(environmentId: string): Promise<EnvironmentFile> {
+    const hit = loaded.get(environmentId)
+    if (hit) {
+      loaded.delete(environmentId)
+      loaded.set(environmentId, hit)
+      return Promise.resolve(hit)
     }
-    return file
+    const pending = loading.get(environmentId)
+    if (pending) {
+      return pending
+    }
+    const startedAt = generation
+    const reading = serial(() => readFromDisk(environmentId)).then((file) => {
+      loading.delete(environmentId)
+      const raced = loaded.get(environmentId)
+      if (raced || startedAt !== generation) {
+        return raced ?? file
+      }
+      loaded.set(environmentId, file)
+      while (loaded.size > limits.maxLoadedEnvironments) {
+        const oldest = loaded.keys().next().value!
+        const evicted = loaded.get(oldest)
+        if (evicted && dirty.has(oldest)) {
+          dirty.delete(oldest)
+          void write(evicted).catch(logWriteFailure)
+        }
+        loaded.delete(oldest)
+      }
+      return file
+    })
+    loading.set(environmentId, reading)
+    return reading
   }
 
   function evictWithin(file: EnvironmentFile): void {
@@ -138,15 +139,16 @@ export function createCloudOfflineCache(options: {
   }
 
   /** Whole environments go least-recently-written first once the total passes its bound. */
-  function evictTotal(): void {
+  async function evictTotal(): Promise<void> {
     let files: { name: string; size: number; mtime: number }[]
     try {
-      files = readdirSync(options.root)
-        .filter((name) => name.endsWith('.bin'))
-        .map((name) => {
-          const stat = statSync(join(options.root, name))
-          return { name, size: stat.size, mtime: stat.mtimeMs }
+      const names = (await readdir(options.root)).filter((name) => name.endsWith('.bin'))
+      files = await Promise.all(
+        names.map(async (name) => {
+          const info = await stat(join(options.root, name))
+          return { name, size: info.size, mtime: info.mtimeMs }
         })
+      )
     } catch {
       return
     }
@@ -155,7 +157,7 @@ export function createCloudOfflineCache(options: {
       if (total <= limits.maxTotalBytes) {
         break
       }
-      rmSync(join(options.root, file.name), { force: true })
+      await rm(join(options.root, file.name), { force: true })
       for (const environmentId of loaded.keys()) {
         if (fileName(environmentId) === file.name) {
           loaded.delete(environmentId)
@@ -165,30 +167,33 @@ export function createCloudOfflineCache(options: {
     }
   }
 
-  function flush(): void {
+  function logWriteFailure(error: unknown): void {
+    console.error(`[orca-cloud] offline cache write failed: ${String(error)}`)
+  }
+
+  // Records apply after their environment loads; flush waits for those still landing.
+  const applying = new Set<Promise<void>>()
+
+  async function flush(): Promise<void> {
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
-    for (const environmentId of dirty) {
-      try {
-        write(environmentId)
-      } catch (error) {
-        console.error(`[orca-cloud] offline cache write failed: ${String(error)}`)
-      }
-    }
+    await Promise.all(applying)
+    const files = [...dirty].flatMap((environmentId) => loaded.get(environmentId) ?? [])
     dirty.clear()
-    evictTotal()
+    await Promise.all(files.map((file) => write(file).catch(logWriteFailure)))
+    await serial(evictTotal)
   }
 
   function markDirty(environmentId: string): void {
     dirty.add(environmentId)
     if (flushDelayMs === 0) {
-      flush()
+      void flush()
       return
     }
     if (!timer) {
-      timer = setTimeout(flush, flushDelayMs)
+      timer = setTimeout(() => void flush(), flushDelayMs)
       timer.unref?.()
     }
   }
@@ -198,81 +203,86 @@ export function createCloudOfflineCache(options: {
       if (!OFFLINE_READ_METHODS.has(method)) {
         return
       }
-      const file = load(environmentId)
-      const key = stableKey(method, params)
-      const existing = file.entries[key]
       const at = now()
-      if (existing && at - existing.at < limits.minRecordIntervalMs) {
-        return
-      }
-      const resultJson = JSON.stringify(response.result ?? null)
-      const bytes = resultJson.length + key.length
-      if (bytes > limits.maxEntryBytes) {
-        // Too big to keep; don't serve an older, smaller answer as if it were current either.
-        if (existing) {
-          delete file.entries[key]
-          markDirty(environmentId)
+      const applied = load(environmentId).then((file) => {
+        const key = stableKey(method, params)
+        const existing = file.entries[key]
+        if (existing && at - existing.at < limits.minRecordIntervalMs) {
+          return
         }
-        return
-      }
-      file.entries[key] = {
-        method,
-        params: params ?? null,
-        resultJson,
-        runtimeId: response._meta.runtimeId,
-        at,
-        bytes
-      }
-      file.updatedAt = at
-      evictWithin(file)
-      markDirty(environmentId)
+        const resultJson = JSON.stringify(response.result ?? null)
+        const bytes = resultJson.length + key.length
+        if (bytes > limits.maxEntryBytes) {
+          // Too big to keep; don't serve an older, smaller answer as if it were current either.
+          if (existing) {
+            delete file.entries[key]
+            markDirty(environmentId)
+          }
+          return
+        }
+        file.entries[key] = {
+          method,
+          params: params ?? null,
+          resultJson,
+          runtimeId: response._meta.runtimeId,
+          at,
+          bytes
+        }
+        file.updatedAt = at
+        evictWithin(file)
+        markDirty(environmentId)
+      })
+      applying.add(applied)
+      void applied.finally(() => applying.delete(applied))
     },
-    lookup(environmentId, method, params) {
+    async lookup(environmentId, method, params) {
       if (!OFFLINE_READ_METHODS.has(method)) {
         return null
       }
-      const entry = load(environmentId).entries[stableKey(method, params)]
+      await Promise.all(applying)
+      const entry = (await load(environmentId)).entries[stableKey(method, params)]
       return entry ? decode(entry) : null
     },
-    entries(environmentId, method) {
-      return Object.values(load(environmentId).entries)
+    async entries(environmentId, method) {
+      await Promise.all(applying)
+      return Object.values((await load(environmentId)).entries)
         .filter((entry) => method === undefined || entry.method === method)
         .sort((a, b) => b.at - a.at)
         .map(decode)
     },
     forget(environmentId) {
+      generation++
       loaded.delete(environmentId)
       dirty.delete(environmentId)
-      rmSync(pathOf(environmentId), { force: true })
+      return serial(() => rm(pathOf(environmentId), { force: true }))
     },
     prune(keep) {
-      const keepFiles = new Set([...keep].map(fileName))
-      let names: string[] = []
-      try {
-        names = readdirSync(options.root)
-      } catch {
-        return
-      }
-      for (const name of names) {
-        if (!keepFiles.has(name)) {
-          rmSync(join(options.root, name), { force: true })
-        }
-      }
+      generation++
       for (const environmentId of loaded.keys()) {
         if (!keep.has(environmentId)) {
           loaded.delete(environmentId)
           dirty.delete(environmentId)
         }
       }
+      const keepFiles = new Set([...keep].map(fileName))
+      return serial(async () => {
+        const names = await readdir(options.root).catch(() => [])
+        for (const name of names) {
+          if (!keepFiles.has(name)) {
+            await rm(join(options.root, name), { force: true })
+          }
+        }
+      })
     },
     clear() {
       if (timer) {
         clearTimeout(timer)
         timer = null
       }
+      generation++
       loaded.clear()
       dirty.clear()
-      rmSync(options.root, { recursive: true, force: true })
+      return serial(() => rm(options.root, { recursive: true, force: true }))
     },
     flush
   }

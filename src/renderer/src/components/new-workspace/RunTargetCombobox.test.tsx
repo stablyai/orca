@@ -193,15 +193,16 @@ describe('RunTargetCombobox', () => {
   function deferBilling(): (value: unknown) => void {
     let answer!: (value: unknown) => void
     const previous = window.api
-    window.api = {
+    // jsdom's window is the global object, so this stubs window.api for this test only.
+    vi.stubGlobal('api', {
       ...previous,
       orcaProfiles: {
         ...previous?.orcaProfiles,
         billingStatus: vi.fn(() => new Promise((resolve) => (answer = resolve)))
       }
-    } as never
+    })
     onTestFinished(() => {
-      window.api = previous
+      vi.unstubAllGlobals()
     })
     return (value) => answer(value)
   }

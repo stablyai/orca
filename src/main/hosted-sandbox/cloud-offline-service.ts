@@ -26,9 +26,15 @@ import {
   type CloudOfflineCache,
   type OfflineCacheCodec
 } from './cloud-offline-cache'
+import { createOwedWorkBeat } from './cloud-offline-beat'
 import { setCloudOfflineReset } from './cloud-offline-reset'
 import { safeStorageCodec, setCloudOfflineObserver } from './cloud-offline-seam'
-import { archiveCheckoutsFromCache, buildOfflineSnapshot } from './cloud-offline-snapshot'
+import {
+  archiveCheckoutsFromCache,
+  buildOfflineSnapshot,
+  stringParam,
+  terminalHandlesOf
+} from './cloud-offline-snapshot'
 import { getHostedWorkspaceService, setArchiveCheckoutsProvider } from './hosted-workspace-service'
 
 type CloudRuntimeInfo = {
@@ -40,6 +46,9 @@ type CloudRuntimeInfo = {
 
 const CAPTURE_BUDGET_MS = 8_000
 const MAX_CAPTURED_TERMINALS = 12
+/** Background delivery cadence while prompts are owed; doubles while nothing moves. */
+const BEAT_MS = 30_000
+const MAX_BEAT_BACKOFF_STEPS = 4
 
 export type CloudOfflineService = {
   cache: CloudOfflineCache
@@ -155,9 +164,8 @@ export function installCloudOfflineService(deps: {
     // Chats the window has read stay current: refresh their tail pages.
     const sessions = [
       ...new Set(
-        cache
-          .entries(env, 'agentSession.history')
-          .map((entry) => (entry.params as { sessionId?: string } | null)?.sessionId)
+        (await cache.entries(env, 'agentSession.history'))
+          .map((entry) => stringParam(entry.params, 'sessionId'))
           .filter((id): id is string => typeof id === 'string')
       )
     ].slice(0, 20)
@@ -174,15 +182,11 @@ export function installCloudOfflineService(deps: {
         )
       )
     ])
-    const terminals = (
-      (list as { terminals?: { handle: string }[] } | null)?.terminals ?? []
-    ).slice(0, MAX_CAPTURED_TERMINALS)
+    const handles = terminalHandlesOf(list).slice(0, MAX_CAPTURED_TERMINALS)
     await Promise.all(
-      terminals.map((terminal) =>
-        readInto(env, 'terminal.read', { terminal: terminal.handle, limit: 400 }, deadline)
-      )
+      handles.map((terminal) => readInto(env, 'terminal.read', { terminal, limit: 400 }, deadline))
     )
-    cache.flush()
+    await cache.flush()
   }
 
   async function locate(workspaceId: string): Promise<WorkspaceAvailability> {
@@ -218,23 +222,43 @@ export function installCloudOfflineService(deps: {
       return opening === 'up'
     },
     call: deps.call,
-    onChange: (workspaceId) => broadcast(CH.queuedPromptsChanged, { workspaceId }),
+    onChange: (workspaceId) => {
+      broadcast(CH.queuedPromptsChanged, { workspaceId })
+      beat.poke()
+    },
     log
   })
 
+  // Background: deliver to VMs already up (never wakes) and drop removed workspaces, only while
+  // prompts are owed. A live answer from a workspace (it is up) delivers its prompts at once.
+  const beat = createOwedWorkBeat({
+    nextDueAt: () => queue.nextAttemptAt(),
+    pass: async () => {
+      invalidate()
+      await queue.drive()
+      void cache.prune(new Set(runtimes().byEnvironment.keys()))
+    },
+    baseMs: BEAT_MS,
+    maxBackoffSteps: MAX_BEAT_BACKOFF_STEPS
+  })
+
   setCloudOfflineObserver((environmentId, method, params, response) => {
-    if (response.ok && runtimes().byEnvironment.has(environmentId)) {
+    const info = runtimes().byEnvironment.get(environmentId)
+    if (response.ok && info) {
       cache.record(environmentId, method, params, response)
+      if (queue.nextAttemptAt() !== null) {
+        void queue.drive(info.workspaceId)
+      }
     }
   })
   setCloudOfflineReset(() => {
-    cache.clear()
+    void cache.clear()
     queue.clear()
   })
   setArchiveCheckoutsProvider(async (workspaceId) => {
     const info = runtimes().byWorkspace.get(workspaceId)
     return info
-      ? archiveCheckoutsFromCache(
+      ? await archiveCheckoutsFromCache(
           cache,
           info.environmentId,
           info.projectRoot ?? '/vercel/sandbox/project'
@@ -247,11 +271,11 @@ export function installCloudOfflineService(deps: {
   }
   ipcMain.handle(
     CH.getSnapshot,
-    (_event, args: { workspaceId: string }): CloudOfflineSnapshot | null => {
+    async (_event, args: { workspaceId: string }): Promise<CloudOfflineSnapshot | null> => {
       invalidate()
       const info = runtimes().byWorkspace.get(args.workspaceId)
       return info
-        ? buildOfflineSnapshot(cache, info.environmentId, args.workspaceId, info.asleep)
+        ? await buildOfflineSnapshot(cache, info.environmentId, args.workspaceId, info.asleep)
         : null
     }
   )
@@ -273,14 +297,8 @@ export function installCloudOfflineService(deps: {
     queue.edit(args.id, args.text)
   )
 
-  // Background: deliver to VMs that are already up (never wakes), and drop removed workspaces.
-  const beat = setInterval(() => {
-    invalidate()
-    void queue.drive()
-    cache.prune(new Set(runtimes().byEnvironment.keys()))
-  }, 30_000)
-  beat.unref?.()
-  const startup = setTimeout(() => void queue.drive(), 5_000)
+  // Startup: deliver what survived a restart (never wakes), and drop removed workspaces.
+  const startup = setTimeout(() => void beat.runNow(), 5_000)
   startup.unref?.()
 
   return {
@@ -288,9 +306,10 @@ export function installCloudOfflineService(deps: {
     queue,
     capture,
     dispose() {
-      clearInterval(beat)
+      beat.dispose()
       clearTimeout(startup)
-      cache.flush()
+      void cache.flush()
+      void queue.flushed()
       setCloudOfflineObserver(null)
       setCloudOfflineReset(null)
       setArchiveCheckoutsProvider(null)

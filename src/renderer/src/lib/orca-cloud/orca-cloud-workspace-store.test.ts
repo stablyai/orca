@@ -42,17 +42,13 @@ function stubApi(overrides: Partial<OrcaCloudWorkspaceApi> = {}): OrcaCloudWorks
     onOom: vi.fn(() => () => {}),
     ...overrides
   }
-  ;(
-    globalThis as unknown as { window: { api: { orcaCloudWorkspace: OrcaCloudWorkspaceApi } } }
-  ).window = {
-    api: { orcaCloudWorkspace: bridge }
-  }
+  vi.stubGlobal('window', { api: { orcaCloudWorkspace: bridge } })
   return bridge
 }
 
 beforeEach(() => seedCloudWorkspaceSnapshot({}))
 afterEach(() => {
-  delete (globalThis as { window?: unknown }).window
+  vi.unstubAllGlobals()
 })
 
 describe('orca cloud workspace store', () => {

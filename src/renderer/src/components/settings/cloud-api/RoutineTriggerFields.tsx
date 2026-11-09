@@ -33,9 +33,9 @@ import {
 } from './cloud-api-format'
 import { FormField } from './cloud-api-parts'
 import {
+  isRoutineSchedulePreset,
   routineDraftCron,
   type RoutineDraft,
-  type RoutineSchedulePreset,
   type RoutineTriggerKind
 } from './routine-draft'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
@@ -75,8 +75,10 @@ export function RoutineScheduleFields({
         >
           <Select
             value={draft.schedulePreset}
-            onValueChange={(value) => {
-              const preset = value as RoutineSchedulePreset
+            onValueChange={(preset) => {
+              if (!isRoutineSchedulePreset(preset)) {
+                return
+              }
               update({
                 schedulePreset: preset,
                 // Seed custom cron from the preset so switching never starts from a blank field.
@@ -288,7 +290,10 @@ export function RoutineGithubFields({
         <Input
           id={`${ids}-labels`}
           value={draft.labels}
-          placeholder="orca, needs-review"
+          placeholder={t(
+            'auto.components.settings.cloudRoutines.editor.labelsPlaceholder',
+            'orca, needs-review'
+          )}
           onChange={(event) => update({ labels: event.target.value })}
         />
       </FormField>
@@ -304,7 +309,10 @@ export function RoutineGithubFields({
           <Input
             id={`${ids}-authors`}
             value={draft.authors}
-            placeholder="octocat, dependabot[bot]"
+            placeholder={t(
+              'auto.components.settings.cloudRoutines.editor.authorsPlaceholder',
+              'octocat, dependabot[bot]'
+            )}
             onChange={(event) => update({ authors: event.target.value })}
           />
         </FormField>
@@ -319,7 +327,10 @@ export function RoutineGithubFields({
           <Input
             id={`${ids}-branches`}
             value={draft.baseBranches}
-            placeholder="main"
+            placeholder={t(
+              'auto.components.settings.cloudRoutines.editor.branchesPlaceholder',
+              'main'
+            )}
             onChange={(event) => update({ baseBranches: event.target.value })}
           />
         </FormField>

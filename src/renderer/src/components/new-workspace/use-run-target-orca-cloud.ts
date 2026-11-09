@@ -70,12 +70,13 @@ export function useRunTargetOrcaCloud({
   const [pending, setPending] = useState(false)
   const pickToken = useRef(0)
   const openRef = useRef(open)
+  // Closing (another pick, Escape, outside click) abandons a held pick; counted, not reset, so the
+  // waiting pick can tell even if the picker reopened before billing answered.
+  const closings = useRef(0)
   useEffect(() => {
     openRef.current = open
     if (!open) {
-      // Closing (another pick, Escape, outside click) abandons a held pick.
-      pickToken.current += 1
-      setPending(false)
+      closings.current += 1
     }
   }, [open])
   useEffect(
@@ -106,16 +107,20 @@ export function useRunTargetOrcaCloud({
         return
       }
       const token = ++pickToken.current
+      const closingsAtPick = closings.current
       setPending(true)
       void waitForOrcaCloudAccess(PICK_WAIT_MS).then((resolved) => {
-        if (token !== pickToken.current || !openRef.current) {
+        if (token !== pickToken.current) {
           return
         }
         setPending(false)
-        pickFor(resolved, recipe)
+        if (closingsAtPick === closings.current && openRef.current) {
+          pickFor(resolved, recipe)
+        }
       })
     },
     [access, pickFor]
   )
-  return { access, pending, runBlockedAction, select }
+  // A closed picker shows no busy row even while an abandoned wait is still settling.
+  return { access, pending: pending && open, runBlockedAction, select }
 }

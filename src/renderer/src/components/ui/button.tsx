@@ -19,6 +19,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: `bg-primary text-primary-foreground hover:bg-primary/90 ${pressClasses} ${disabledSolidClasses}`,
+        // Primary that stays focusable while unavailable (aria-disabled): reads muted like disabled.
+        'default-held': `bg-primary text-primary-foreground hover:bg-primary/90 ${pressClasses} ${disabledSolidClasses} aria-disabled:cursor-default aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:hover:bg-muted`,
         destructive: `bg-destructive text-white hover:bg-destructive/90 ${pressClasses} dark:bg-destructive/60 dark:disabled:bg-muted ${disabledSolidClasses}`,
         outline: `${outlineButtonClasses} ${pressClasses}`,
         'orchestration-tab': `${outlineButtonClasses} border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating dark:border-(--crew-border) dark:bg-(--crew-surface) dark:hover:bg-accent dark:hover:text-accent-foreground`,

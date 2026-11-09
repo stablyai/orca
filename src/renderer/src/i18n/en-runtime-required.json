@@ -1418,14 +1418,18 @@
   },
   "cloudSecrets": {
     "paste": {
+      "blocked": "{{count}} need a fix and will be skipped",
       "blocked_one": "{{count}} needs a fix and will be skipped",
       "blocked_other": "{{count}} need a fix and will be skipped",
+      "duplicates": "{{count}} duplicates ignored",
       "duplicates_one": "{{count}} duplicate ignored",
       "duplicates_other": "{{count}} duplicates ignored",
+      "save": "Save {{count}} secrets",
       "save_one": "Save {{count}} secret",
       "save_other": "Save {{count}} secrets"
     },
     "value": {
+      "lines": "Multi-line value · {{count}} lines",
       "lines_one": "Multi-line value · {{count}} line",
       "lines_other": "Multi-line value · {{count}} lines"
     }

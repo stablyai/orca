@@ -18,16 +18,12 @@ import {
 import type { OfflineCacheCodec } from './cloud-offline-cache'
 
 const SESSION = '0f8e7c1a-2b3d-4e5f-8a9b-0c1d2e3f4a5b'
+/** Fixed test epoch: operation ids and the host's admission window both read this clock. */
+const T0 = 1_800_000_000_000
 
 const codec: OfflineCacheCodec = {
   encrypt: (plain) => Buffer.from(Buffer.from(plain, 'utf8').map((b) => b ^ 0x5a)),
   decrypt: (sealed) => Buffer.from(sealed.map((b) => b ^ 0x5a)).toString('utf8')
-}
-
-type Envelope = {
-  clientOperationId: string
-  expectedRuntimeFence: number
-  payloadFingerprint: string
 }
 
 /**
@@ -59,7 +55,7 @@ function realishHost(clock: () => number) {
       }
     }
     const parsed = SendParams.parse(params)
-    const envelope = parsed.envelope as Envelope
+    const envelope = parsed.envelope
     const decision = evaluateAgentSessionOperation({
       rows,
       callerKey: 'desktop',
@@ -78,9 +74,10 @@ function realishHost(clock: () => number) {
     }
     if (decision.decision === 'admit') {
       rows.set(agentSessionOperationKey('desktop', envelope.clientOperationId), decision.row)
+      const block = parsed.body.blocks[0]
       effects.push({
-        text: (parsed.body.blocks[0] as { text: string }).text,
-        fence: envelope.expectedRuntimeFence
+        text: block?.type === 'text' ? block.text : '',
+        fence: envelope.expectedRuntimeFence ?? 0
       })
     }
     if (loseNextReply) {
@@ -113,7 +110,7 @@ function setup(
     clock?: { now: number }
   } = {}
 ) {
-  const clock = opts.clock ?? { now: Date.now() }
+  const clock = opts.clock ?? { now: T0 }
   const path = opts.path ?? join(mkdtempSync(join(tmpdir(), 'orca-q-')), 'q.bin')
   const host = opts.host ?? realishHost(() => clock.now)
   let asleep = true
@@ -132,14 +129,11 @@ function setup(
     call: host.call,
     log: () => {}
   })
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
-  return { queue, host, wake, path, clock, settle, sleep: () => (asleep = true) }
+  return { queue, host, wake, path, clock, sleep: () => (asleep = true) }
 }
 
 async function until(check: () => boolean) {
-  for (let i = 0; i < 100 && !check(); i++) {
-    await new Promise((resolve) => setTimeout(resolve, 1))
-  }
+  await vi.waitFor(() => expect(check()).toBe(true))
 }
 
 describe('cloud message queue', () => {
@@ -155,15 +149,18 @@ describe('cloud message queue', () => {
   })
 
   it('re-mints a never-sent id before it ages out of the host admission window', async () => {
-    const clock = { now: Date.now() }
+    const clock = { now: T0 }
     const host = realishHost(() => clock.now)
-    const place = { current: { kind: 'asleep', environmentId: 'env' } as WorkspaceAvailability }
+    const place: { current: WorkspaceAvailability } = {
+      current: { kind: 'asleep', environmentId: 'env' }
+    }
     const parked = setup({ clock, host, place: () => place.current })
     parked.wake.mockResolvedValueOnce(false)
     await parked.queue.enqueue({ workspaceId: 'w', sessionId: SESSION, text: 'a day later' })
     // The wake failed: the prompt waits, queued, for the VM to be up.
     await until(() => parked.wake.mock.calls.length === 1)
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    // Joins the in-flight pass (never wakes on its own).
+    await parked.queue.drive('w')
     expect(parked.queue.list('w')[0]!.state).toBe('queued')
     clock.now += AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + 60_000
     place.current = { kind: 'up', environmentId: 'env' }
@@ -177,9 +174,10 @@ describe('cloud message queue', () => {
     first.wake.mockResolvedValueOnce(false)
     await first.queue.enqueue({ workspaceId: 'w', sessionId: SESSION, text: 'after restart' })
     await until(() => first.wake.mock.calls.length === 1)
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    await first.queue.drive('w')
+    await first.queue.flushed()
     expect(readFileSync(first.path).toString('utf8')).not.toContain('after restart')
-    const host = realishHost(() => Date.now())
+    const host = realishHost(() => first.clock.now)
     let up = false
     const second = setup({
       path: first.path,
@@ -187,6 +185,7 @@ describe('cloud message queue', () => {
       place: () =>
         up ? { kind: 'up', environmentId: 'env' } : { kind: 'asleep', environmentId: 'env' }
     })
+    await second.queue.flushed()
     expect(second.queue.list('w').map((p) => p.state)).toEqual(['queued'])
     await second.queue.drive()
     expect(second.wake).not.toHaveBeenCalled()
@@ -198,7 +197,7 @@ describe('cloud message queue', () => {
   })
 
   it('is at most once when the reply is lost: the retry reuses the id and the host replays', async () => {
-    const clock = { now: Date.now() }
+    const clock = { now: T0 }
     const host = realishHost(() => clock.now)
     const { queue, path } = setup({
       clock,
@@ -208,6 +207,7 @@ describe('cloud message queue', () => {
     host.loseNextReply()
     await queue.enqueue({ workspaceId: 'w', sessionId: SESSION, text: 'once' })
     await until(() => queue.list('w')[0]!.state === 'sending')
+    await queue.flushed()
     clock.now += 60 * 60_000
     const restarted = setup({
       path,
@@ -222,7 +222,7 @@ describe('cloud message queue', () => {
   })
 
   it('never wakes from the background, and stops after its failure budget', async () => {
-    const clock = { now: Date.now() }
+    const clock = { now: T0 }
     const host = realishHost(() => clock.now)
     host.setHistoryFails(true)
     const { queue, wake } = setup({
@@ -241,7 +241,7 @@ describe('cloud message queue', () => {
   })
 
   it('backs off between background attempts', async () => {
-    const clock = { now: Date.now() }
+    const clock = { now: T0 }
     const host = realishHost(() => clock.now)
     host.setHistoryFails(true)
     const { queue } = setup({ clock, host, place: () => ({ kind: 'up', environmentId: 'env' }) })
@@ -280,7 +280,7 @@ describe('cloud message queue', () => {
   })
 
   it('does not send a prompt cancelled or edited while its fence was being read', async () => {
-    const clock = { now: Date.now() }
+    const clock = { now: T0 }
     const host = realishHost(() => clock.now)
     let release: () => void = () => {}
     const gate = new Promise<void>((resolve) => (release = resolve))
@@ -304,7 +304,6 @@ describe('cloud message queue', () => {
     expect(queue.cancel(a.id)).toBe(true)
     release()
     await queue.drive('w')
-    await new Promise((resolve) => setTimeout(resolve, 5))
     expect(host.effects).toHaveLength(0)
   })
 
@@ -359,7 +358,7 @@ describe('cloud message queue', () => {
   })
 
   it('does not resurrect a prompt a Sleep failed while its fence was being read', async () => {
-    const clock = { now: Date.now() }
+    const clock = { now: T0 }
     const host = realishHost(() => clock.now)
     let release: () => void = () => {}
     const gate = new Promise<void>((resolve) => (release = resolve))
@@ -382,13 +381,14 @@ describe('cloud message queue', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     queue.failPending('w', 'The workspace was put to sleep before this was sent.')
     release()
-    await new Promise((resolve) => setTimeout(resolve, 5))
+    // Joins the pass that was waiting on the fence.
+    await queue.drive('w')
     expect(host.effects).toHaveLength(0)
     expect(queue.list('w')[0]!.state).toBe('failed')
   })
 
   it('ends a sent-but-unconfirmed prompt as unconfirmed, not failed, at its budget', async () => {
-    const clock = { now: Date.now() }
+    const clock = { now: T0 }
     const host = realishHost(() => clock.now)
     const lossy: CloudMessageQueueDeps['call'] = async (env, method, params, t) => {
       const answer = await host.call(env, method, params, t)
@@ -430,9 +430,11 @@ describe('cloud message queue', () => {
       },
       log: () => {}
     })
+    await queue.flushed()
     expect(existsSync(legacy)).toBe(false)
     writeFileSync(legacy, 'again')
     queue.clear()
+    await queue.flushed()
     expect(existsSync(legacy)).toBe(false)
   })
 })

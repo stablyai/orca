@@ -13,6 +13,7 @@ import { cloudApiErrorCopy, routineRunTriggerLabel } from './cloud-api-copy'
 import { formatAbsoluteTime, formatRelativeFromNow, formatRunDuration } from './cloud-api-format'
 import { CloudApiErrorNotice, RoutineRunStatusPill } from './cloud-api-parts'
 import { isActiveRunStatus } from './routine-run-status'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 
 export type LoadRoutineRuns = (
   routineId: string,
@@ -122,11 +123,18 @@ export function RoutineRunHistory({
       return
     }
     // In-flight runs: refetch every few seconds and tick the elapsed clock every second.
-    const poll = setInterval(() => void load(), POLL_MS)
-    const tick = setInterval(() => setNow(Date.now()), 1000)
+    // Both pause while the window is hidden; showing it again refetches and catches the clock up.
+    const stopPoll = installWindowVisibilityInterval({
+      run: () => void load(),
+      intervalMs: POLL_MS
+    })
+    const stopTick = installWindowVisibilityInterval({
+      run: () => setNow(Date.now()),
+      intervalMs: 1000
+    })
     return () => {
-      clearInterval(poll)
-      clearInterval(tick)
+      stopPoll()
+      stopTick()
     }
   }, [active, fixedNow, load])
 

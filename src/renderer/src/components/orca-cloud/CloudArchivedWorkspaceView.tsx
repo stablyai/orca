@@ -220,8 +220,8 @@ export function CloudArchivedWorkspaceView({
           action={
             <Button
               size="sm"
-              aria-disabled={unarchiving}
-              className={cn(unarchiving && 'opacity-60')}
+              variant="default-held"
+              aria-disabled={unarchiving || undefined}
               onClick={() => {
                 if (!unarchiving) {
                   onUnarchive()

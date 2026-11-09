@@ -23,6 +23,7 @@ import { formatCountdown, scopesForPreset } from './cloud-api-format'
 import { CloudApiErrorNotice } from './cloud-api-parts'
 import { OneTimeSecret, OneTimeSecretDoneButton } from './OneTimeSecret'
 import { ScopeSummary } from './ScopeSummary'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 
 /** "Approve an app": a one-time code an MCP client's consent page accepts instead of an API key. */
 export function ApproveAppDialog({
@@ -54,8 +55,8 @@ export function ApproveAppDialog({
     if (!approval || nowForFixture !== undefined) {
       return
     }
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
+    // Countdown clock; paused while the window is hidden and caught up when it shows again.
+    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1000 })
   }, [approval, nowForFixture])
 
   const remaining = approval ? approval.expiresAt - now : 0

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const toasts = vi.hoisted(() => ({
   showOrcaCloudCleanupStartedToast: vi.fn(),
   showOrcaCloudCleanupDoneToast: vi.fn(),
-  showOrcaCloudCleanupFailedToast: vi.fn()
+  showOrcaCloudCleanupFailedToast: vi.fn<(creationId: string, tryAgain: () => void) => void>()
 }))
 vi.mock('@/lib/orca-cloud-session-toasts', () => toasts)
 
@@ -124,8 +124,9 @@ describe('Orca Cloud cancel cleanup', () => {
       canceledAt: 1000
     })
     await flush()
-    const tryAgain = toasts.showOrcaCloudCleanupFailedToast.mock.calls[0]?.[1] as () => void
-    tryAgain()
+    const tryAgain = toasts.showOrcaCloudCleanupFailedToast.mock.calls[0]?.[1]
+    expect(tryAgain).toBeTypeOf('function')
+    tryAgain?.()
     await flush()
     expect(cleanupCalls).toEqual(['mine'])
     expect(toasts.showOrcaCloudCleanupStartedToast).toHaveBeenCalledTimes(2)

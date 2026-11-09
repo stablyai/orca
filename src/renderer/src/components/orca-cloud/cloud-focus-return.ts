@@ -6,7 +6,7 @@
 export function returnFocusToWorkspace(
   activeTabId: string | null | undefined,
   focusTab: (tabId: string) => void,
-  doc: Pick<Document, 'activeElement' | 'body'> = document
+  doc: { activeElement: object | null; body: object | null } = document
 ): boolean {
   if (doc.activeElement && doc.activeElement !== doc.body) {
     return false

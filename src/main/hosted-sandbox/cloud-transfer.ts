@@ -33,7 +33,7 @@ import {
   packInCloud,
   pickCloudWorktree,
   type Prepared,
-  type WorktreeRow
+  WorktreeListingSchema
 } from './cloud-transfer-steps'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import { findCloudRuntime } from './hosted-workspace-service'
@@ -112,7 +112,7 @@ export function installCloudTransferHandlers(deps: {
       let selector: string | null = null
       try {
         step('packing')
-        const listing = (await call('worktree.list', {})) as { worktrees?: WorktreeRow[] }
+        const listing = WorktreeListingSchema.parse(await call('worktree.list', {}))
         const connection = runtime.recipeResult
           ? getEphemeralVmRecipeResultConnection(runtime.recipeResult)
           : null

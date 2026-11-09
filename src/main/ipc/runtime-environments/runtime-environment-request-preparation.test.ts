@@ -2,8 +2,28 @@
 // opening request is held to its caller's pairing as of before that wake, then to the pairing the
 // wake made; any other change still refuses it.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
-const BEFORE = { id: 'env-vm', pairingRevision: 1, runtimeId: 'before', createdAt: 0 }
+const BEFORE: KnownRuntimeEnvironment = {
+  id: 'env-vm',
+  name: 'VM',
+  pairingRevision: 1,
+  runtimeId: 'before',
+  createdAt: 0,
+  updatedAt: 0,
+  lastUsedAt: null,
+  endpoints: [
+    {
+      id: 'ep',
+      kind: 'websocket',
+      label: 'VM',
+      endpoint: 'ws://vm.test',
+      deviceToken: 'token',
+      publicKeyB64: 'key'
+    }
+  ],
+  preferredEndpointId: 'ep'
+}
 const AFTER_WAKE = { id: 'env-vm', pairingRevision: 2, runtimeId: 'after', createdAt: 0 }
 
 type Prepared = {
@@ -73,7 +93,7 @@ describe('a fenced request that waited through a wake already in flight', () => 
       undefined,
       { pairingRevision, runtimeId: 'before' },
       undefined,
-      { before: BEFORE as never, wokenPairingRevision }
+      { before: BEFORE, wokenPairingRevision }
     )
 
   it('passes the pre-wake fence and then expects the pairing that wake made', async () => {
