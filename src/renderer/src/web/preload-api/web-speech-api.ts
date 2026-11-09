@@ -16,10 +16,9 @@ import { createNonSecureContextUuid } from '../../../../shared/non-secure-contex
 import { errorMessage } from '../../../../shared/error-message'
 import { callRuntimeResult } from './web-runtime-calls'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { pairedDictationFinishTimeoutMs } from '../../../../shared/dictation-finish-deadlines'
 
 const MAX_CHUNK_SAMPLES = MAX_DICTATION_AUDIO_CHUNK_BYTES / PCM_BYTES_PER_SAMPLE
-// Matches the phone: a long recording can take a while to transcribe on the host.
-const FINISH_TIMEOUT_MS = 75_000
 // A slow link can leave a backlog of chunks behind Stop; past this, keep the text so far instead.
 const STOP_DRAIN_TIMEOUT_MS = 10_000
 
@@ -28,6 +27,7 @@ type HostDictation = {
   dictationId: string
   seq: number
   sampleRate: number
+  sentAudioSeconds: number
   pending: Float32Array[]
   sending: Promise<void> | null
   failed: boolean
@@ -116,12 +116,14 @@ export function createWebSpeechApi(): Pick<
   const sendPendingAudio = async (dictation: HostDictation): Promise<void> => {
     while (dictation.pending.length > 0 && !dictation.failed) {
       try {
+        const audio = takePendingAudio(dictation)
+        dictation.sentAudioSeconds += audio.length / dictation.sampleRate
         const reply = await callRuntimeResult<{
           text?: string
           audioLimitReached?: boolean
         }>('speech.dictation.chunk', {
           dictationId: dictation.dictationId,
-          audioBase64: encodePcm16Base64(takePendingAudio(dictation)),
+          audioBase64: encodePcm16Base64(audio),
           sampleRate: dictation.sampleRate,
           seq: dictation.seq++
         })
@@ -153,6 +155,7 @@ export function createWebSpeechApi(): Pick<
         dictationId: `web-${createNonSecureContextUuid()}`,
         seq: 0,
         sampleRate: 0,
+        sentAudioSeconds: 0,
         pending: [],
         sending: null,
         failed: false,
@@ -216,7 +219,7 @@ export function createWebSpeechApi(): Pick<
         const { text } = await callRuntimeResult<{ text: string }>(
           'speech.dictation.finish',
           { dictationId: dictation.dictationId },
-          FINISH_TIMEOUT_MS
+          pairedDictationFinishTimeoutMs(dictation.sentAudioSeconds)
         )
         if (text) {
           emit(finalListeners, { sessionId, text })

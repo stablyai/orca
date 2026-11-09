@@ -36,8 +36,6 @@ export type UseMobileDictationResult = {
   meter: MobileDictationMeter
 }
 
-export const DICTATION_FINISH_TIMEOUT_MS = 75_000
-
 // An interrupted user tap needs a renderable error; only explicit user cancellation may end silently.
 export const MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE =
   'Voice dictation stopped because this session is no longer accepting input. Try again.'
