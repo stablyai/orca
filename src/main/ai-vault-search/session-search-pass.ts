@@ -37,8 +37,10 @@ export type SessionSearchPassArgs = {
   recentPerAgent: number
   /** Roots with transcripts on the previous pass; undefined before any observation. */
   previousRootsWithFiles?: ReadonlySet<string>
-  /** The deadline stops transcript reads; discovery and retirement still finish. */
-  overdue?: () => boolean
+  /** Purge retention before discovery; defaults to `full`. */
+  purge?: boolean
+  /** Arms the read deadline once discovery ends, so slow discovery cannot spend the read budget. */
+  startReadDeadline?: () => () => boolean
   /** Cache directory reads across discovery-health and retirement checks for this pass. */
   listings: SessionSearchDirectoryReader
   signal?: AbortSignal
@@ -61,7 +63,7 @@ export async function runSessionSearchPass(
 ): Promise<SessionSearchPassResult> {
   const { store, signal } = args
   await store.prepare?.()
-  if (args.full) {
+  if (args.purge ?? args.full) {
     // Apply narrowed retention before the new instance’s first discovery.
     await store.purgeOlderThan(store.retentionCutoff, signal)
   }
@@ -80,7 +82,7 @@ export async function runSessionSearchPass(
       const read = await runSessionSearchIndexPass(store, swept.candidates, {
         signal,
         rows,
-        overdue: args.overdue
+        overdue: args.startReadDeadline?.()
       })
       outOfTime = read.outOfTime
       left = read.left

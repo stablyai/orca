@@ -67,8 +67,10 @@ export type AiVaultSessionSources = {
 const cachedLists = new SessionListScopeCache()
 let scanCoordinator = new AiVaultScanCoordinator()
 let sources: AiVaultSessionSources = {}
-// Reject cache writes from scans that began before invalidation, or late results can resurrect deleted sessions.
-let cacheGeneration = 0
+// Fence cache writes from scans started before invalidation or a completed refresh.
+let cacheWriteGeneration = 0
+// Refresh fences cache writes; only invalidation splits aggregate requests already in flight.
+let invalidationGeneration = 0
 
 export function configureAiVaultSessionSources(next: AiVaultSessionSources): void {
   sources = next
@@ -140,21 +142,19 @@ export async function listAiVaultSessions(
   }
   // A full list for the same paths holds every row a scope-only one would, so All -> Project needs no rescan.
   const fullKey = args?.scopeOnly ? aiVaultLocalScanScopeKey({ ...args, scopeOnly: false }) : key
-  const cachedList = cachedLists.get(key, now) ?? cachedLists.get(fullKey, now)
-  if (
-    args?.force !== true &&
-    (cachedList?.key === key || cachedList?.key === fullKey) &&
-    cachedList.expiresAt > now &&
-    aiVaultCachedDepthServes(cachedList.depth, depth, args?.scopePaths)
-  ) {
+  const cachedList = [cachedLists.get(key, now), cachedLists.get(fullKey, now)]
+    .filter((entry) => entry !== undefined)
+    .filter((entry) => aiVaultCachedDepthServes(entry.depth, depth, args?.scopePaths))
+    .sort((a, b) => b.revision - a.revision)[0]
+  if (args?.force !== true && cachedList) {
     return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
   }
   // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
-  const startGeneration = cacheGeneration
+  const startGeneration = cacheWriteGeneration
   let progress: LocalAiVaultScanProgressHandle | null = null
   return scanCoordinator.run({
     // Isolate invalidated scans without changing the key used by progress readers.
-    key: JSON.stringify({ scanKey, generation: startGeneration }),
+    key: JSON.stringify({ scanKey, generation: invalidationGeneration }),
     force: args?.force,
     signal: options.signal,
     onCreate: (scanId) => {
@@ -188,10 +188,10 @@ export async function listAiVaultSessions(
         wslConfirmed
       )
       // Return pre-invalidation results to their caller, but never repopulate the cache with them.
-      if (!scanSignal.aborted && startGeneration === cacheGeneration) {
+      if (!scanSignal.aborted && startGeneration === cacheWriteGeneration) {
         if (args?.force === true) {
           // A fresh host scan invalidates other scopes and fences older in-flight cache writes.
-          cacheGeneration++
+          cacheWriteGeneration++
           cachedLists.clear()
         }
         const current = cachedLists.get(key, Date.now())
@@ -245,12 +245,13 @@ export async function getAiVaultWslHomeDirs(): Promise<string[]> {
 }
 
 export function aiVaultSessionListCacheGeneration(): number {
-  return cacheGeneration
+  return invalidationGeneration
 }
 
 // Invalidate cached results and disarm in-flight cache writes after deletion.
 export function invalidateAiVaultSessionListCache(): void {
-  cacheGeneration++
+  invalidationGeneration++
+  cacheWriteGeneration++
   cachedLists.clear()
   // A deleted WSL session must not come back as a carried-over row.
   resetAiVaultWslSessionCarryover()

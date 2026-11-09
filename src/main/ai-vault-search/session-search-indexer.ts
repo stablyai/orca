@@ -60,6 +60,8 @@ export class SessionSearchIndexer {
   private lastCounts: SessionSearchStateCounts | null = null
   private cyclesSinceSweep = 0
   private sweepNext = false
+  /** The queued sweep only resumes a deferred backlog, so retention needs no new purge. */
+  private resumingBacklog = false
   private started = false
   private closed = false
 
@@ -91,6 +93,7 @@ export class SessionSearchIndexer {
     // Claim ownership before async initialization so another indexer cannot race the writer open.
     this.store = new SessionSearchWorkerStore(options.databasePath, onError, () => {
       this.sweepNext = true
+      this.resumingBacklog = false
     })
     liveIndexerPaths.add(this.ownershipPath)
     this.store.setRetentionCutoffMs(this.cutoffMs())
@@ -115,7 +118,10 @@ export class SessionSearchIndexer {
     if (!this.started) {
       throw new Error('SessionSearchIndexer.reconcile: start() first')
     }
-    this.sweepNext ||= options.full === true
+    if (options.full === true) {
+      this.sweepNext = true
+      this.resumingBacklog = false
+    }
     return this.tick()
   }
 
@@ -215,10 +221,11 @@ export class SessionSearchIndexer {
   private async pass(signal: AbortSignal): Promise<void> {
     // Refresh the cutoff each pass so purged transcripts cannot immediately be re-indexed.
     this.store.setRetentionCutoffMs(this.cutoffMs())
-    const startedAt = this.clock.now()
     const full = this.sweepNext
-    // Consume the flag before awaiting so requests arriving during this pass survive.
+    const purge = full && !this.resumingBacklog
+    // Consume the flags before awaiting so requests arriving during this pass survive.
     this.sweepNext = false
+    this.resumingBacklog = false
     try {
       if (full && this.options.resolveRoots) {
         const roots = await this.options.resolveRoots(signal)
@@ -231,24 +238,31 @@ export class SessionSearchIndexer {
         store: this.store,
         roots: this.roots,
         full,
+        purge,
         recentPerAgent: this.recentPerAgent,
         previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,
-        overdue: () => this.clock.now() - startedAt >= this.passDeadlineMs,
+        startReadDeadline: () => {
+          const readsStartedAt = this.clock.now()
+          return () => this.clock.now() - readsStartedAt >= this.passDeadlineMs
+        },
         listings: new SessionSearchDirectoryListings(),
         signal
       })
       if (!result.completed) {
         // Preserve previous health findings and retry the sweep after an incomplete pass.
-        this.sweepNext ||= full
+        this.retrySweep(full, purge)
         return
       }
       this.degradedRoots = result.degradedRoots
       this.previousRootsWithFiles = result.rootsWithFiles
       this.lastReconcileAt = this.clock.now()
       this.left = result.left
-      // Repeat full discovery while backlogged so reads outside the recency window can progress.
-      this.sweepNext ||= result.outOfTime
       if (full) {
+        // Repeat discovery while a sweep's backlog remains; recent cycles revisit their own deferred reads.
+        if (result.outOfTime && !this.sweepNext) {
+          this.sweepNext = true
+          this.resumingBacklog = true
+        }
         // Deferred reads prevent a sweep from establishing that the index is current.
         if (!result.outOfTime) {
           this.lastSweepCompletedAt = this.lastReconcileAt
@@ -262,9 +276,17 @@ export class SessionSearchIndexer {
       }
     } catch (error) {
       // Retry a failed sweep rather than waiting for the periodic cadence.
-      this.sweepNext ||= full
+      this.retrySweep(full, purge)
       throw error
     }
+  }
+
+  private retrySweep(full: boolean, purged: boolean): void {
+    if (!full || this.sweepNext) {
+      return
+    }
+    this.sweepNext = true
+    this.resumingBacklog = !purged
   }
 
   private cutoffMs(): number | null {

@@ -1,4 +1,5 @@
 import { BoundedMap } from '../../shared/bounded-map'
+import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultSessionDepth } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 
@@ -10,17 +11,20 @@ type CachedSessionList = {
 }
 
 const MAX_SCOPE_CACHE_BYTES = 32 * 1024 * 1024
+type StoredSessionList = CachedSessionList & { revision: number }
 
 export class SessionListScopeCache {
   // Preserve the existing one-result cache even when an unlimited scan exceeds the archive budget.
-  private latest: CachedSessionList | null = null
-  private readonly previous = new BoundedMap<string, CachedSessionList>({
+  private latest: StoredSessionList | null = null
+  private revision = 0
+  private expiryTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly previous = new BoundedMap<string, StoredSessionList>({
     maxEntries: 7,
     maxBytes: MAX_SCOPE_CACHE_BYTES,
     sizeOf: (entry) => estimateEntryBytes(entry)
   })
 
-  get(key: string, now: number): CachedSessionList | undefined {
+  get(key: string, now: number): StoredSessionList | undefined {
     this.prune(now)
     return this.latest?.key === key ? this.latest : this.previous.get(key)
   }
@@ -32,12 +36,40 @@ export class SessionListScopeCache {
     if (old && old.key !== entry.key) {
       this.previous.set(old.key, old)
     }
-    this.latest = entry
+    this.latest = { ...entry, revision: ++this.revision }
+    this.scheduleExpiry()
   }
 
   clear(): void {
+    if (this.expiryTimer !== null) {
+      clearTimeout(this.expiryTimer)
+      this.expiryTimer = null
+    }
     this.latest = null
     this.previous.clear()
+  }
+
+  private scheduleExpiry(): void {
+    if (this.expiryTimer !== null) {
+      clearTimeout(this.expiryTimer)
+      this.expiryTimer = null
+    }
+    let earliest = this.latest?.expiresAt ?? Infinity
+    for (const entry of this.previous.values()) {
+      earliest = Math.min(earliest, entry.expiresAt)
+    }
+    if (earliest === Infinity) {
+      return
+    }
+    this.expiryTimer = setTimeout(
+      () => {
+        this.expiryTimer = null
+        this.prune(Date.now())
+        this.scheduleExpiry()
+      },
+      Math.min(MAX_TIMER_DELAY_MS, Math.max(0, earliest - Date.now()))
+    )
+    this.expiryTimer.unref?.()
   }
 
   private prune(now: number): void {

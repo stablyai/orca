@@ -488,6 +488,41 @@ it('stops the opening sweep at its deadline and drains the rest over the passes 
   expect(indexer?.status().lastSweepCompletedAt).not.toBeNull()
 })
 
+it('does not charge slow discovery against the read budget', async () => {
+  for (const session of [SESSION_ID, OTHER_SESSION_ID]) {
+    await writeClaudeTranscript(transcriptPath(session), [`changed session ${session}`], session)
+  }
+  await newIndexer({
+    passDeadlineMs: 5_000,
+    resolveRoots: async () => {
+      clock.advance(10_000)
+      return harness.roots
+    }
+  }).start()
+
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 2, filesDue: 0, phase: 'current' })
+})
+
+it('leaves deferred recent reads to the next cycle instead of forcing a full sweep', async () => {
+  let sweeps = 0
+  await startAfterASweep({
+    ...readsPerPass(1),
+    resolveRoots: async () => {
+      sweeps += 1
+      return harness.roots
+    }
+  })
+  for (const session of [SESSION_ID, OTHER_SESSION_ID]) {
+    await writeClaudeTranscript(transcriptPath(session), [`recent session ${session}`], session)
+  }
+
+  await nextCycle()
+  expect(sessionsMatching('recent')).toHaveLength(1)
+  await nextCycle()
+  expect(sessionsMatching('recent')).toHaveLength(2)
+  expect(sweeps).toBe(1)
+})
+
 it.skipIf(!CAN_DENY_READ)('retires a deleted file behind a block of unreadable rows', async () => {
   // Keep the root nonempty so empty-root grace cannot mask retirement behavior.
   await writeClaudeTranscript(transcriptPath(), ['a live conversation'], SESSION_ID)
