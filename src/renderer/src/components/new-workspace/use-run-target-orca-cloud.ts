@@ -28,7 +28,8 @@ export function getRunTargetOrcaCloudOffer({
       return override ?? { state: 'signed-out' }
     case 'needs-capability':
       return override ?? { state: 'no-plan', lapsed: false }
-    default:
+    case 'offered':
+    case 'unavailable':
       return null
   }
 }

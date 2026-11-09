@@ -92,11 +92,6 @@
         "resumingCount_one": "Resuming {{count}} chat",
         "resumingCount_other": "Resuming {{count}} chats"
       },
-      "NewWorkspaceComposerCard": {
-        "addRemoteOrcaServer": "Add Remote Orca Server",
-        "ephemeralVm": "Per-Workspace Environment",
-        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe"
-      },
       "PullRequestPage": {
         "filesViewed_one": "{{viewed}} / {{count}} file viewed",
         "filesViewed_other": "{{viewed}} / {{count}} files viewed"
@@ -346,13 +341,6 @@
           "selector": {
             "teamCount_one": "{{count}} team",
             "teamCount_other": "{{count}} teams"
-          }
-        }
-      },
-      "new": {
-        "workspace": {
-          "RunTargetCombobox": {
-            "orcaCloudPaymentIssue": "Payment issue"
           }
         }
       },
@@ -877,9 +865,6 @@
           "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
           "moreChildren_one": "+{{count}} more",
           "moreChildren_other": "+{{count}} more"
-        },
-        "FolderWorkspaceComposerDialog": {
-          "title": "Create Folder Workspace"
         },
         "HostRemoveDialog": {
           "alsoRemoveWorkspaces_one": "Also remove this workspace from Orca",

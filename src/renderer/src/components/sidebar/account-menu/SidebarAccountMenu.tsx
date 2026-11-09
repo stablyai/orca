@@ -16,6 +16,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
+import { useBillingSummary } from '../../billing/billing-summary-store'
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 import { getAccountMenuIdentity, type AccountMenuIdentity } from './account-menu-identity'
 import { selectVisibleAccountMenuItems, useRegisteredAccountMenuItems } from './account-menu-items'
@@ -66,6 +67,14 @@ export function SidebarAccountMenu(): React.JSX.Element {
   const mountedRef = useMountedRef()
 
   const identity = getAccountMenuIdentity(authStatus)
+  const billingSummary = useBillingSummary()
+  const orgName = authStatus?.state === 'connected' ? authStatus.cloud?.activeOrgName : undefined
+  // "Acme · Team": which team this account acts for, and its plan once billing has answered.
+  const orgLine = orgName
+    ? billingSummary.planLabel
+      ? `${orgName} · ${billingSummary.planLabel}`
+      : orgName
+    : null
   const extensionItems = selectVisibleAccountMenuItems(registeredItems, authStatus)
   const milestones =
     setupProgress.ready && setupProgress.coreDoneCount < setupProgress.coreTotal
@@ -158,6 +167,9 @@ export function SidebarAccountMenu(): React.JSX.Element {
                           {identity.email}
                         </span>
                       ) : null}
+                      {orgLine ? (
+                        <span className="truncate text-xs text-muted-foreground">{orgLine}</span>
+                      ) : null}
                     </>
                   ) : (
                     <>
@@ -186,9 +198,14 @@ export function SidebarAccountMenu(): React.JSX.Element {
                   <DropdownMenuItem
                     key={item.id}
                     data-account-menu-item={item.id}
+                    data-tone={item.tone}
                     onSelect={item.onSelect}
                   >
-                    {Icon ? <Icon className="size-3.5" /> : null}
+                    {Icon ? (
+                      <Icon
+                        className={cn('size-3.5', item.tone === 'accent' && 'text-foreground')}
+                      />
+                    ) : null}
                     {item.label()}
                   </DropdownMenuItem>
                 )

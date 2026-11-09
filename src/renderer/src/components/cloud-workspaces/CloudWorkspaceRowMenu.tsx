@@ -139,10 +139,7 @@ export function CloudWorkspaceRowMenu({
                 <FolderInput />
                 {t('auto.components.cloudWorkspaces.moveToSection', 'Move to section')}
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent
-                className="w-48"
-                collisionPadding={SUBMENU_COLLISION_PADDING}
-              >
+              <DropdownMenuSubContent className="w-48" collisionPadding={SUBMENU_COLLISION_PADDING}>
                 <DropdownMenuRadioGroup
                   value={w.section ?? NO_SECTION}
                   onValueChange={(value) => {

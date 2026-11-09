@@ -1,10 +1,14 @@
 // Window side of Orca Cloud's session lifecycle: cap warnings and idle sleep requests from main.
+import { createElement } from 'react'
 import { toast } from 'sonner'
+import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
+import { installOrcaCloudWorkspaceStore } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 
 export function installOrcaCloudSessionEvents(): () => void {
   const api = window.api?.ephemeralVm
@@ -34,14 +38,22 @@ export function installOrcaCloudSessionEvents(): () => void {
       }
     )
   })
-  const disposeIdle = api.onCloudIdleSleepRequested(({ workspaceId }) => {
-    if (workspaceId && findWorktreeById(useAppStore.getState(), workspaceId)) {
-      void runSleepWorktree(workspaceId)
+  const disposeIdle = api.onCloudIdleSleepRequested(({ workspaceId, idleMs }) => {
+    const worktree = workspaceId ? findWorktreeById(useAppStore.getState(), workspaceId) : null
+    if (!workspaceId || !worktree) {
+      return
     }
+    void runSleepWorktree(workspaceId).then((results) => {
+      if (results.some((result) => result.workspaceId === workspaceId && result.completed)) {
+        showIdleSleepNotice(workspaceId, worktree.displayName, idleMs ?? null)
+      }
+    })
   })
+  const disposeStore = installOrcaCloudWorkspaceStore()
   return () => {
     disposeWarning()
     disposeIdle()
+    disposeStore()
   }
 }
 
@@ -53,4 +65,41 @@ export function showOrcaCloudPlanUpsell(message: string): void {
       onClick: () => openPlansPage('sandbox')
     }
   })
+}
+
+/** "<name> slept after 20 minutes idle · Wake": the quiet receipt for an automatic sleep. */
+export function showIdleSleepNotice(
+  workspaceId: string,
+  name: string,
+  idleMs: number | null
+): void {
+  const minutes = idleMs ? Math.max(1, Math.round(idleMs / 60_000)) : null
+  toast(
+    minutes
+      ? translate(
+          'orcaCloudWorkspace.idleSleptMinutes',
+          '{{name}} slept after {{count}} minutes idle',
+          {
+            name,
+            count: minutes
+          }
+        )
+      : translate('orcaCloudWorkspace.idleSleptNoTime', '{{name}} went to sleep while idle', {
+          name
+        }),
+    {
+      id: `orca-cloud-idle-sleep:${workspaceId}`,
+      // The same hollow "asleep" dot the sidebar shows for this workspace.
+      icon: createElement(CloudStateDot, { state: 'sleeping', size: 'md' }),
+      duration: 8_000,
+      description: translate(
+        'orcaCloudWorkspace.idleSleptDetail',
+        'Files and chats are saved. It uses no sandbox hours until you open it.'
+      ),
+      action: {
+        label: translate('orcaCloudWorkspace.wake', 'Wake'),
+        onClick: () => void activateWorktreeFromSidebar(workspaceId)
+      }
+    }
+  )
 }

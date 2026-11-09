@@ -48,7 +48,9 @@ export function NewSectionDialog({
     <Dialog open onOpenChange={(next) => !next && onCancel()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>{t('auto.components.cloudWorkspaces.newSection', 'New section')}</DialogTitle>
+          <DialogTitle>
+            {t('auto.components.cloudWorkspaces.newSection', 'New section')}
+          </DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(event) => {
@@ -63,7 +65,10 @@ export function NewSectionDialog({
             autoFocus
             value={sectionName}
             maxLength={64}
-            placeholder={t('auto.components.cloudWorkspaces.sectionNamePlaceholder', 'e.g. Payments')}
+            placeholder={t(
+              'auto.components.cloudWorkspaces.sectionNamePlaceholder',
+              'e.g. Payments'
+            )}
             aria-label={t('auto.components.cloudWorkspaces.sectionName', 'Section name')}
             onChange={(e) => setSectionName(e.target.value)}
           />

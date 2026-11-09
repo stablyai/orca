@@ -79,10 +79,7 @@ export function PresenceStack({
           {/* Viewing is the avatar alone; typing rings it and adds a pulsing dot. Neither reuses
               the workspace status colors, so presence never reads as "running" or "failed". */}
           {shown.map((p) => (
-            <span
-              key={p.userId}
-              className="relative rounded-full ring-2 ring-background"
-            >
+            <span key={p.userId} className="relative rounded-full ring-2 ring-background">
               <MemberAvatar userId={p.userId} directory={directory} selfId={selfId} size="sm" />
               {p.state === 'typing' && (
                 <span className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full bg-primary ring-2 ring-background motion-safe:animate-pulse" />

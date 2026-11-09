@@ -22,6 +22,7 @@ import {
 import { shouldBeginWorktreeRename } from '../controller/worktree-card-model'
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
+import { CloudWorkspaceMarkSlot } from '@/components/orca-cloud/CloudWorkspaceMarkSlot'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import { cardElement } from './card-template-compiler'
 
@@ -96,9 +97,23 @@ export const CARD_IDENTITY_PARTS = {
   ),
   SshControl: part(['iconOnly'], (props, _children, card) => sshControl(props, card)),
   RuntimeHostMark: part([], (_props, _children, card) => (
-    <WorktreeCardRuntimeHostMark
-      disconnected={card.isRuntimeDisconnected}
-      hostLabel={card.runtimeHostLabel}
+    <CloudWorkspaceMarkSlot
+      workspaceId={card.worktree.id}
+      onPointerDown={card.stopQuickActionPointerPropagation}
+      fallback={
+        <WorktreeCardRuntimeHostMark
+          disconnected={card.isRuntimeDisconnected}
+          hostLabel={card.runtimeHostLabel}
+        />
+      }
+    />
+  )),
+  // Cloud workspaces of local projects: the live cloud mark (renders nothing for other workspaces).
+  CloudMark: part([], (_props, _children, card) => (
+    <CloudWorkspaceMarkSlot
+      workspaceId={card.worktree.id}
+      onPointerDown={card.stopQuickActionPointerPropagation}
+      fallback={null}
     />
   )),
   RenameError: part([], (_props, _children, card) => (

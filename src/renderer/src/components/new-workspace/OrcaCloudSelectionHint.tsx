@@ -46,7 +46,8 @@ export function OrcaCloudSelectionHint({
           'auto.components.new.workspace.RunTargetCombobox.orcaCloudPaymentFailed',
           'Payment failed'
         )
-      default:
+      case 'signed-out':
+      case 'unknown':
         return null
     }
   })()

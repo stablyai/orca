@@ -96,17 +96,6 @@ export const paymentFailed = defineFixture({
   )
 })
 
-export const checkoutOpened = defineFixture({
-  width,
-  render: () => (
-    <Page
-      busy
-      notice="Continue in your browser. This updates when you come back."
-      result={{ status: 'ok', entitlement: noPlan }}
-    />
-  )
-})
-
 export const loading = defineFixture({
   width,
   render: () => <Page result={null} />

@@ -73,7 +73,7 @@ describe('seats follow membership', () => {
     })
     await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 9 }, headers: { authorization: `Bearer ${owner}` } })
     expect(seen).toEqual(['o1'])
-    expect(h.stripe.calls.find((call) => call.path === '/v1/checkout/sessions')?.form.get('line_items[0][quantity]')).toBe('1')
+    expect(h.stripe.calls.find((call) => call.method === 'POST' && call.path === '/v1/checkout/sessions')?.form.get('line_items[0][quantity]')).toBe('1')
   })
 
   it('fails closed when auth is configured but cannot answer', async () => {

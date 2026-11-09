@@ -109,7 +109,9 @@ export async function attemptStructuredAgentSessionSend(args: {
   // Shared cloud workspaces: the agent learns which teammate sent this message. Applied before
   // the size check so the sender line counts toward the limit the host enforces.
   let body =
-    target.kind === 'environment' ? withCloudSenderBody(target.environmentId, entry.body) : entry.body
+    target.kind === 'environment'
+      ? withCloudSenderBody(target.environmentId, entry.body)
+      : entry.body
   // Measured as the host measures it, so a message it would refuse comes back saying why.
   if (structuredAgentSessionBlocksTooLarge(body.blocks)) {
     return { kind: 'not-sent', parts: [...AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS] }

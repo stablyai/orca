@@ -37,7 +37,6 @@ import {
   type EphemeralVmRecipeCatalogEntry
 } from './ephemeral-vm-recipe-context'
 import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handlers'
-import { installCloudSsh } from '../cloud-ssh/cloud-ssh-main'
 import type { PluginService } from '../plugins/plugin-service'
 import { installHostedSandbox, withProviderRecipes } from '../hosted-sandbox/hosted-sandbox-install'
 import { resolveProvisionedRootSource } from '../ephemeral-vm/provisioned-root-source'
@@ -84,7 +83,6 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
   ipcMain.removeHandler('ephemeralVm:provision')
   ipcMain.removeHandler('ephemeralVm:cancelProvision')
   registerEphemeralVmRuntimeHandlers(store)
-  installCloudSsh(store)
   reconcileInterruptedEphemeralVmProvisionsOnStartup(app.getPath('userData'))
 
   ipcMain.handle('ephemeralVm:listRecipes', async (_event, args: { repoId: string }) => {

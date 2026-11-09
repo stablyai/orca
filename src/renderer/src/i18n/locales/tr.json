@@ -2525,10 +2525,8 @@
         "destroyDisabled": "yok etme devre dışı",
         "destroyConfigured": "yok etme yapılandırıldı",
         "noDestroyConfigured": "yok etme yok",
-        "ephemeralVm": "Çalışma Alanı Başına Ortam",
         "chooseRunTarget": "Hedef seçin",
         "noRunTargets": "Bu proje için hazır çalıştırma hedefi yok.",
-        "perWorkspaceEnvHint": "Bir tarifle isteğe bağlı bir ortam sağlayın",
         "branchName": "Branch adı",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "Bağlantı zaman aşımına uğradı. Arka planda hâlâ bağlanıyor olabilir.",
@@ -2540,7 +2538,6 @@
         "addHost": "Sunucu ekle",
         "addSshHost": "SSH sunucusu ekle",
         "addSshHostHint": "SSH üzerinden mevcut bir makineyi kullanın",
-        "addRemoteOrcaServer": "Uzak Orca Sunucusu Ekle",
         "addRemoteOrcaServerHint": "Başka bir Orca çalışma zamanını eşleştirin",
         "hostConnectionFailed": "Bağlantı başarısız oldu",
         "connect": "Bağlan",
@@ -6896,7 +6893,6 @@
           "modalInstallDescription": "Ajanlarınız için Linear becerisini yükleyin."
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "Klasör Çalışma Alanı Oluştur",
           "create": "Çalışma alanı oluştur"
         },
         "WorkspaceKanbanDrawer": {

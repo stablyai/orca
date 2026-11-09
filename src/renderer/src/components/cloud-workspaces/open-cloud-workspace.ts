@@ -8,10 +8,7 @@ import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
-import {
-  RuntimeRpcCallError,
-  unwrapRuntimeRpcResult
-} from '@/runtime/rpc/calls/runtime-rpc-result'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { cloudWorkspaceLink } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import {
@@ -118,7 +115,9 @@ async function forgetPairing(
       .catch(() => undefined)
   }
   if (binding.grantId) {
-    await window.api.cloudWorkspaces.revokeGrant(workspaceId, binding.grantId).catch(() => undefined)
+    await window.api.cloudWorkspaces
+      .revokeGrant(workspaceId, binding.grantId)
+      .catch(() => undefined)
   }
 }
 
@@ -209,7 +208,10 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
     console.warn('[cloud-workspaces] open failed', error)
     return {
       ok: false,
-      message: translate('auto.components.cloudWorkspaces.openFailed', 'Could not open the workspace.')
+      message: translate(
+        'auto.components.cloudWorkspaces.openFailed',
+        'Could not open the workspace.'
+      )
     }
   }
 }
@@ -233,9 +235,7 @@ export async function copyCloudWorkspaceLink(id: string, chatId?: string | null)
     await navigator.clipboard.writeText(cloudWorkspaceLink(id, chatId))
   } catch (error) {
     console.warn('[cloud-workspaces] copy link failed', error)
-    toast.error(
-      translate('auto.components.cloudWorkspaces.copyFailed', 'Could not copy the link.')
-    )
+    toast.error(translate('auto.components.cloudWorkspaces.copyFailed', 'Could not copy the link.'))
     return
   }
   toast.success(

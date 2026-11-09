@@ -1,3 +1,4 @@
+import { resetCloudOfflineData } from '../hosted-sandbox/cloud-offline-reset'
 import {
   copyFileSync,
   existsSync,
@@ -281,6 +282,10 @@ export function setActiveOrcaProfile(
   userDataPath = getProfileUserDataPath()
 ): OrcaProfileListState {
   const index = loadOrCreateProfileIndex(userDataPath)
+  if (index.activeProfileId !== profileId) {
+    // Another person's profile must not see this one's cached cloud transcripts or queued prompts.
+    resetCloudOfflineData()
+  }
   const now = Date.now()
   let found = false
   const profiles = index.profiles.map((profile) => {

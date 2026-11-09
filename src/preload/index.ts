@@ -62,6 +62,7 @@ import { emulatorApi } from './api/emulator-bridge'
 import { hooksApi } from './api/hooks-bridge'
 import { ephemeralVmApi } from './api/ephemeral-vm-bridge'
 import { orcaCloudWorkspaceApi } from './api/orca-cloud-workspace-bridge'
+import { orcaCloudOfflineApi } from './api/orca-cloud-offline-bridge'
 import { cloudSharesApi } from './api/cloud-shares-bridge'
 import { cacheApi } from './api/cache-bridge'
 import { sessionApi } from './api/session-bridge'
@@ -172,6 +173,7 @@ const api = {
   hooks: hooksApi,
   ephemeralVm: ephemeralVmApi,
   orcaCloudWorkspace: orcaCloudWorkspaceApi,
+  orcaCloudOffline: orcaCloudOfflineApi,
   cloudShares: cloudSharesApi,
   cache: cacheApi,
   session: sessionApi,

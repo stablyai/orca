@@ -14,8 +14,6 @@ export type RuntimePortForwardRowState =
 
 const FOCUS =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring'
-const ACTION =
-  'h-5 px-1 text-2xs font-normal text-muted-foreground hover:text-foreground [&_svg]:size-3'
 
 /** The line under a remote port: where it lands on this computer, or a control to forward it. */
 export function RuntimePortForwardStatus({
@@ -102,7 +100,7 @@ export function RuntimePortForwardStatus({
           </span>
         ) : null}
         {offline && onReconnect ? (
-          <Button type="button" variant="ghost" size="xs" className={ACTION} onClick={onReconnect}>
+          <Button type="button" variant="quiet" size="statusAction" onClick={onReconnect}>
             {t('auto.components.right.sidebar.RuntimePortForward.reconnect', 'Reconnect')}
           </Button>
         ) : null}
@@ -148,9 +146,9 @@ export function RuntimePortForwardStatus({
       ) : null}
       <Button
         type="button"
-        variant="ghost"
-        size="xs"
-        className={cn(ACTION, '-mx-1')}
+        variant="quiet"
+        size="statusAction"
+        className="-mx-1"
         onClick={onForward}
         aria-label={t(
           'auto.components.right.sidebar.RuntimePortForward.actionLabel',

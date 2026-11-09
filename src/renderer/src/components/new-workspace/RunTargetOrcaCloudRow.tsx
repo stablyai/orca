@@ -154,7 +154,7 @@ export function RunTargetOrcaCloudRow({
       label={recipe?.name ?? ORCA_CLOUD_LABEL}
       labelBadge={
         access.state === 'no-plan' ? (
-          <Badge variant="outline" className="px-1.5 py-0 text-2xs text-muted-foreground">
+          <Badge variant="tag">
             {t('auto.components.new.workspace.RunTargetCombobox.orcaCloudTeamBadge', 'Team')}
           </Badge>
         ) : undefined

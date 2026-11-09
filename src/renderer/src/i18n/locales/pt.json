@@ -12369,7 +12369,6 @@
           "savedInProjectSettings": "Salvo nas <settings>configurações deste projeto</settings>"
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "Criar Espaço de Trabalho de Pasta",
           "create": "Criar espaço de trabalho"
         },
         "AddRepoStartSteps": {
@@ -17804,10 +17803,8 @@
         "destroyDisabled": "destruição desativada",
         "destroyConfigured": "destruição configurada",
         "noDestroyConfigured": "sem destruição",
-        "ephemeralVm": "Ambiente por Espaço de Trabalho",
         "chooseRunTarget": "Escolher destino",
         "noRunTargets": "Nenhum destino de execução está pronto para este projeto.",
-        "perWorkspaceEnvHint": "Provisione um ambiente sob demanda a partir de uma receita",
         "branchName": "Nome da branch",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "A conexão excedeu o tempo limite. Ela pode ainda estar conectando em segundo plano.",
@@ -17819,7 +17816,6 @@
         "addHost": "Adicionar host",
         "addSshHost": "Adicionar host SSH",
         "addSshHostHint": "Use uma máquina existente via SSH",
-        "addRemoteOrcaServer": "Adicionar Servidor Orca Remoto",
         "addRemoteOrcaServerHint": "Pareie outro runtime do Orca",
         "hostConnectionFailed": "Falha na conexão",
         "connect": "Conectar",

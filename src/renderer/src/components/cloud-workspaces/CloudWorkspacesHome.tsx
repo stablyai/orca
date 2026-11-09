@@ -76,8 +76,7 @@ export function CloudWorkspacesHome({
 
   // Relative "last active" times tick while the window is visible; hidden windows skip the work.
   useEffect(
-    () =>
-      installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 30_000 }),
+    () => installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 30_000 }),
     []
   )
 

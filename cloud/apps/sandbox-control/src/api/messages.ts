@@ -2,6 +2,7 @@
 // (waking it if it sleeps). A crash between the two leaves a queued row the cron retries.
 import { LifecycleError, resumeSandbox, type LifecycleDeps } from '../lifecycle'
 import { getSandbox } from '../store'
+import { withSenderEnvelope, parseSenderEnvelope } from '../../../../../src/shared/cloud-workspaces/sender-envelope'
 import { randomId } from './keys'
 import { launchAgent, sendToSession, VmAgentError, type AgentId } from './vm-agent'
 import type { WorkspaceRow } from './workspaces'
@@ -123,12 +124,18 @@ export async function deliverMessage(life: LifecycleDeps, message: MessageRow): 
       row = (await resumeSandbox(life, row)).row
     }
     const sessionId = row.session_id!
+    // A teammate's message names its sender (W4: agents address them and commit as them via
+    // `orca-git-as`); nobody can type a leading envelope to impersonate someone else.
+    const text =
+      message.sent_by === row.user_id
+        ? parseSenderEnvelope(message.body).body
+        : withSenderEnvelope(message.body, { userId: message.sent_by, name: message.sent_by })
     let handle: string
     if (message.session_handle) {
-      await sendToSession(life.provider, sessionId, message.session_handle, message.body)
+      await sendToSession(life.provider, sessionId, message.session_handle, text)
       handle = message.session_handle
     } else {
-      handle = await launchAgent(life.provider, sessionId, message.agent, message.body)
+      handle = await launchAgent(life.provider, sessionId, message.agent, text)
     }
     await settle(life.db, message.id, attempt, { status: 'delivered', result_handle: handle, error: null }, life.now())
   } catch (error) {

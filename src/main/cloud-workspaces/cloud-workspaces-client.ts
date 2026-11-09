@@ -114,7 +114,11 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
       }
       const qs = params.toString()
       return (
-        await call('GET', `/v1/team/workspaces${qs ? `?${qs}` : ''}`, CloudWorkspaceListResponseSchema)
+        await call(
+          'GET',
+          `/v1/team/workspaces${qs ? `?${qs}` : ''}`,
+          CloudWorkspaceListResponseSchema
+        )
       ).workspaces
     },
     async get(id: string) {

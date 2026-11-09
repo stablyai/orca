@@ -94,7 +94,9 @@ async function resolveFront(): Promise<Front> {
 
 /** Targets whose own surface answers the chord: a browser guest/overlay, or a list row. */
 function shortcutOwnedElsewhere(target: Element | null): boolean {
-  return Boolean(target?.closest('webview, [data-browser-overlay-tab-id], [data-cloud-workspace-row]'))
+  return Boolean(
+    target?.closest('webview, [data-browser-overlay-tab-id], [data-cloud-workspace-row]')
+  )
 }
 
 export function installCloudWorkspaceLinks(): () => void {

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { BillingCaller } from './auth'
 import type { Env } from './env'
 import { BILLING_INTERVALS, PLAN_IDS, priceForPlan, type BillingInterval, type PlanId } from './plans'
-import type { StripeClient } from './stripe'
+import { StripeError, type StripeClient } from './stripe'
 import { currentSubscription, customerFor, ensureAccount, linkCustomer } from './store'
 import { orgIdOf, type MembershipSource } from './membership'
 
@@ -63,6 +63,21 @@ export async function createCheckout(
   const live = orgId ? await membership(orgId) : null
   const seats = Math.max(1, live ?? request.seats)
   const customer = await ensureCustomer(env, stripe, caller, now)
+  // One live Checkout per account: a reopened or retried checkout expires the earlier page, so
+  // two browser tabs can never both be paid into two subscriptions. A session that can no longer
+  // be expired is completing right now; treat the account as subscribed.
+  const open = await stripe.listOpenCheckoutSessions(customer)
+  for (const session of open.data) {
+    try {
+      await stripe.expireCheckoutSession(session.id)
+    } catch (error) {
+      // Only "no longer open" means it's completing; outages stay errors (503, try again).
+      if (error instanceof StripeError && error.status === 400) {
+        return { ok: false, status: 409, error: 'already_subscribed' }
+      }
+      throw error
+    }
+  }
   const metadata = { account_id: caller.accountId, plan: request.plan, interval: request.interval }
   const session = await stripe.createCheckoutSession(
     {

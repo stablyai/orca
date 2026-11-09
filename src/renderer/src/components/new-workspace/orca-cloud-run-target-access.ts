@@ -46,7 +46,8 @@ export function toOrcaCloudRunTargetAccess(
       return { state: 'payment-issue', canManageBilling }
     case 'subscription_inactive':
       return { state: 'no-plan', lapsed: true }
-    default:
+    case 'no_subscription':
+    case null:
       return { state: 'no-plan', lapsed: false }
   }
 }
@@ -64,7 +65,8 @@ export function orcaCloudBlockedAction(access: OrcaCloudRunTargetAccess): (() =>
     case 'out-of-hours':
     case 'payment-issue':
       return openPlanBillingSettings
-    default:
+    case 'entitled':
+    case 'unknown':
       return null
   }
 }

@@ -9,11 +9,24 @@ function cleanEnvString(value: string | undefined, fallback: string): string {
   return trimmed || fallback
 }
 
+// Dev-only org list: the seeded orgs plus any created (and minus any left) this run.
+const createdDevOrganizations: OrcaCloudOrgSummary[] = []
+const leftDevOrganizationIds = new Set<string>()
+
+export function addDevOrganization(org: OrcaCloudOrgSummary): void {
+  createdDevOrganizations.push(org)
+}
+
+export function removeDevOrganization(orgId: string): void {
+  leftDevOrganizationIds.add(orgId)
+}
+
 function defaultDevOrganizations(): OrcaCloudOrgSummary[] {
   return [
     { orgId: 'dev-personal', name: 'Personal', role: 'Owner' },
-    { orgId: 'dev-acme', name: 'Acme Dev', role: 'Admin' }
-  ]
+    { orgId: 'dev-acme', name: 'Acme Dev', role: 'Admin' },
+    ...createdDevOrganizations
+  ].filter((org) => !leftDevOrganizationIds.has(org.orgId))
 }
 
 function devCapabilities(): OrcaCloudCapabilities {

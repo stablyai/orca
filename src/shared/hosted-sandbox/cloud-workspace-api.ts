@@ -73,3 +73,6 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   wakeProgress: 'orcaCloudWorkspace:wakeProgress',
   oom: 'orcaCloudWorkspace:oom'
 } as const
+
+/** Thrown by the desktop wake path for an archived Orca Cloud workspace: only Unarchive wakes it. */
+export const CLOUD_WORKSPACE_ARCHIVED_ERROR = 'orca_cloud_workspace_archived'

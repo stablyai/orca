@@ -12,6 +12,8 @@ export type AccountMenuItem = {
   order?: number
   /** Hide the item unless the signed-in account reports this capability flag as true. */
   requiredCapability?: string
+  /** 'accent' marks a call to action (e.g. upgrade); default rows stay neutral. */
+  tone?: 'accent'
   onSelect: () => void
 }
 

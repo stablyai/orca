@@ -268,7 +268,12 @@ export default function Landing(): React.JSX.Element {
         )}
       >
         <div className="w-full max-w-lg px-6">
-          <div className={cn('flex flex-col items-center', cloudListPresent ? 'gap-3 py-4' : 'gap-4 py-8')}>
+          <div
+            className={cn(
+              'flex flex-col items-center',
+              cloudListPresent ? 'gap-3 py-4' : 'gap-4 py-8'
+            )}
+          >
             <LandingBrand compact={cloudListPresent} />
 
             {preflightIssues.length > 0 && (

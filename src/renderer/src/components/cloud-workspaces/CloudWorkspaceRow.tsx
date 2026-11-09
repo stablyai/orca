@@ -188,11 +188,7 @@ export function CloudWorkspaceRow({
       <PresenceStack presence={w.presence} directory={directory} selfId={selfId} />
       <Tooltip>
         <TooltipTrigger asChild>
-          <span
-            className="w-14 text-right text-xs tabular-nums text-muted-foreground"
-          >
-            {cost}
-          </span>
+          <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">{cost}</span>
         </TooltipTrigger>
         <TooltipContent side="top">
           <div className="font-medium">{t('auto.components.cloudWorkspaces.cost', 'Cost')}</div>
@@ -221,7 +217,8 @@ export function CloudWorkspaceRow({
         <span
           className={cn(
             'text-xs tabular-nums text-muted-foreground transition-opacity motion-reduce:transition-none',
-            canOpen && (revealOpen ? 'opacity-0' : 'group-focus-within:opacity-0 group-hover:opacity-0')
+            canOpen &&
+              (revealOpen ? 'opacity-0' : 'group-focus-within:opacity-0 group-hover:opacity-0')
           )}
         >
           {lastActive}

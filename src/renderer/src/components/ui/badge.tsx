@@ -22,6 +22,8 @@ const badgeVariants = cva(
         hostContext:
           'h-4 rounded border-border bg-[var(--host-badge,var(--accent))] px-1.5 text-[10px] leading-none text-[var(--host-badge-foreground,var(--muted-foreground))] dark:border-border/50 dark:bg-[var(--host-badge,color-mix(in_oklab,var(--accent)_80%,transparent))]',
         /** A task label inside a dense reference row's metadata line. */
+        // Quiet outline tag beside a row label (e.g. a plan requirement).
+        tag: 'border-border px-1.5 py-0 text-2xs text-muted-foreground',
         referenceLabel: 'h-3.5 border-border px-1 py-0 text-3xs font-normal text-muted-foreground',
         /** An uppercase kind label set before a banner title; takes its color from the parent. */
         paneLabel:

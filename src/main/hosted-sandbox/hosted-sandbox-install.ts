@@ -26,6 +26,13 @@ import { createHostedSessionRegistry, type HostedSessionRegistry } from './hoste
 import { registerCloudShareHandlers } from './hosted-sandbox-share-ipc'
 import { setHostedSessionSync } from './hosted-session-sync'
 import { installCloudTransferHandlers } from './cloud-transfer'
+import { installCloudOfflineService, setCloudOfflineService } from './cloud-offline-service'
+import {
+  findCloudRuntime,
+  isArchivedOnControlPlane,
+  setCloudArchiveCheck
+} from './hosted-workspace-runtime'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
 export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
@@ -79,6 +86,20 @@ export function installHostedSandbox(): void {
     userDataPath,
     windows: () => BrowserWindow.getAllWindows()
   })
+  setCloudArchiveCheck((workspaceId) => isArchivedOnControlPlane(userDataPath, client, workspaceId))
+  const offline = installCloudOfflineService({
+    userDataPath,
+    call: (environmentId, method, params, timeoutMs) =>
+      callRuntimeEnvironment(userDataPath, environmentId, method, params, timeoutMs),
+    windows: () => BrowserWindow.getAllWindows(),
+    isArchived: async (workspaceId) => {
+      const found = findCloudRuntime(userDataPath, workspaceId)
+      return found
+        ? (await client.workspaceStatus(found.sandboxId)).status.state === 'archived'
+        : false
+    }
+  })
+  setCloudOfflineService(offline)
   // Records land after the step answers and wakes can come from any path, so reconcile on a slow beat too.
   let beat: ReturnType<typeof setTimeout> | null = null
   let beats = 0
@@ -116,6 +137,9 @@ export function installHostedSandbox(): void {
     workspaces.dispose()
     disposeTransfer()
     setHostedWorkspaceService(null)
+    setCloudArchiveCheck(null)
+    offline.dispose()
+    setCloudOfflineService(null)
   })
 }
 

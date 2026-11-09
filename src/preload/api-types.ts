@@ -30,6 +30,7 @@ import type { EmulatorApi } from './api/emulator-api'
 import type { EphemeralVmApi } from './api/ephemeral-vm-api'
 import type { OrcaCloudWorkspaceApi } from '../shared/hosted-sandbox/cloud-workspace-api'
 import type { OrcaCloudTransferApi } from '../shared/hosted-sandbox/cloud-transfer-api'
+import type { CloudWorkspaceOfflineApi } from '../shared/hosted-sandbox/cloud-workspace-offline-api'
 import type { CloudSharesApi } from './api/cloud-shares-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem-api'
 import type { GitInspectionApi } from './api/git-inspection-api'
@@ -141,6 +142,8 @@ export type PreloadApi = {
   ephemeralVm: EphemeralVmApi
   /** Orca Cloud workspace lifecycle (status panel, Restart, archive); absent in builds without Orca Cloud. */
   orcaCloudWorkspace: OrcaCloudWorkspaceApi & OrcaCloudTransferApi
+  /** Orca Cloud: browse a sleeping workspace from the client cache; prompts queued to wake it. */
+  orcaCloudOffline: CloudWorkspaceOfflineApi
   cloudShares: CloudSharesApi
   cache: WorkspaceSessionApi['cache']
   session: WorkspaceSessionApi['session']
