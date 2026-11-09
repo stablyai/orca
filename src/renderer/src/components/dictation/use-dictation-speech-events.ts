@@ -13,17 +13,28 @@ type DictationSpeechEventHandlers = {
 }
 
 export function useDictationSpeechEvents(handlers: DictationSpeechEventHandlers): void {
-  const transcriptRef = useRef<{ sessionId: string; transcript: DictationTranscript } | null>(null)
+  const liveRef = useRef<{
+    sessionId: string
+    transcript: DictationTranscript
+    speechPending: boolean
+  } | null>(null)
   const isCurrent = useEffectEvent((sessionId: string) => sessionId === handlers.currentSessionId())
-  const onText = useEffectEvent(
-    (sessionId: string, event: { type: 'partial' | 'final'; text: string }) => {
-      if (transcriptRef.current?.sessionId !== sessionId) {
-        transcriptRef.current = { sessionId, transcript: new DictationTranscript() }
+  const onLiveEvent = useEffectEvent(
+    (
+      sessionId: string,
+      event: { type: 'partial' | 'final'; text: string } | { type: 'pending'; pending: boolean }
+    ) => {
+      if (liveRef.current?.sessionId !== sessionId) {
+        liveRef.current = { sessionId, transcript: new DictationTranscript(), speechPending: false }
       }
-      const { transcript } = transcriptRef.current
-      transcript.accept(event)
-      const { committed, tentative } = transcript.snapshot()
-      handlers.onLiveText({ committed, tentative })
+      const live = liveRef.current
+      if (event.type === 'pending') {
+        live.speechPending = event.pending
+      } else {
+        live.transcript.accept(event)
+      }
+      const { committed, tentative } = live.transcript.snapshot()
+      handlers.onLiveText({ committed, tentative, speechPending: live.speechPending })
     }
   )
   const onFinal = useEffectEvent(handlers.onFinal)
@@ -34,13 +45,18 @@ export function useDictationSpeechEvents(handlers: DictationSpeechEventHandlers)
     const cleanups = [
       window.api.speech.onPartialTranscript((data) => {
         if (isCurrent(data.sessionId)) {
-          onText(data.sessionId, { type: 'partial', text: data.text })
+          onLiveEvent(data.sessionId, { type: 'partial', text: data.text })
         }
       }),
       window.api.speech.onFinalTranscript((data) => {
         if (data.text && isCurrent(data.sessionId)) {
-          onText(data.sessionId, { type: 'final', text: data.text })
+          onLiveEvent(data.sessionId, { type: 'final', text: data.text })
           onFinal(data.text)
+        }
+      }),
+      window.api.speech.onSpeechPending((data) => {
+        if (isCurrent(data.sessionId)) {
+          onLiveEvent(data.sessionId, { type: 'pending', pending: data.pending })
         }
       }),
       window.api.speech.onStopped((data) => onStopped(data.sessionId)),

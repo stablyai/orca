@@ -20556,6 +20556,24 @@
         "imported_other": "{{domains}} 用に Cookie を {{count}} 個インポートしました。使用するにはページを再読み込みしてください。",
         "failed": "Cookie をインポートできませんでした: {{reason}}"
       }
+    },
+    "passwords": {
+      "savePrompt": {
+        "open": "パスワード保存の確認",
+        "updateTitle": "パスワードを更新しますか？",
+        "saveTitle": "パスワードを保存しますか？",
+        "username": "ユーザー名",
+        "password": "パスワード",
+        "never": "このサイトでは保存しない",
+        "notNow": "今はしない",
+        "update": "更新",
+        "save": "保存"
+      },
+      "fill": {
+        "noUsername": "（ユーザー名なし）",
+        "title": "保存済みのログイン情報",
+        "otherLogins": "このサイトの他のログイン情報"
+      }
     }
   },
   "runtimeRpc": {

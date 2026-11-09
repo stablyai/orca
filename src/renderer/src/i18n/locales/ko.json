@@ -20556,6 +20556,24 @@
         "imported_other": "{{domains}}의 쿠키 {{count}}개를 가져왔습니다. 사용하려면 페이지를 새로고침하세요.",
         "failed": "쿠키를 가져오지 못했습니다: {{reason}}"
       }
+    },
+    "passwords": {
+      "savePrompt": {
+        "open": "비밀번호 저장 안내",
+        "updateTitle": "비밀번호를 업데이트할까요?",
+        "saveTitle": "비밀번호를 저장할까요?",
+        "username": "사용자 이름",
+        "password": "비밀번호",
+        "never": "이 사이트에서는 저장 안 함",
+        "notNow": "나중에",
+        "update": "업데이트",
+        "save": "저장"
+      },
+      "fill": {
+        "noUsername": "(사용자 이름 없음)",
+        "title": "저장된 로그인 정보",
+        "otherLogins": "이 사이트의 다른 로그인 정보"
+      }
     }
   },
   "runtimeRpc": {

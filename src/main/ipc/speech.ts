@@ -204,6 +204,9 @@ export function registerSpeechHandlers(store: Store): void {
               case 'final':
                 window.webContents.send('speech:final', { text: msg.text ?? '', sessionId })
                 break
+              case 'speech-pending':
+                window.webContents.send('speech:pending', { pending: msg.pending, sessionId })
+                break
               case 'stopped':
                 cleanupSessionListener()
                 window.webContents.send('speech:stopped', { sessionId })

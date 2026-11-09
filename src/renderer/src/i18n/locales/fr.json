@@ -260,6 +260,24 @@
         "imported_many": "{{count}} cookies importés pour {{domains}}. Rechargez la page pour les utiliser.",
         "failed": "Impossible d'importer les cookies : {{reason}}"
       }
+    },
+    "passwords": {
+      "savePrompt": {
+        "open": "Proposition d’enregistrer le mot de passe",
+        "updateTitle": "Mettre à jour le mot de passe ?",
+        "saveTitle": "Enregistrer le mot de passe ?",
+        "username": "Nom d’utilisateur",
+        "password": "Mot de passe",
+        "never": "Jamais pour ce site",
+        "notNow": "Pas maintenant",
+        "update": "Mettre à jour",
+        "save": "Enregistrer"
+      },
+      "fill": {
+        "noUsername": "(sans nom d’utilisateur)",
+        "title": "Identifiants enregistrés",
+        "otherLogins": "Autres identifiants sur ce site"
+      }
     }
   },
   "githubChecks": {
