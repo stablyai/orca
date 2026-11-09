@@ -5,6 +5,7 @@ import {
   type NativeChatUsageLimitCut
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionAccountHomePath,
@@ -50,7 +51,14 @@ type Hold = {
   heldUntil?: number
   unknownReset?: boolean
   refreshedFor?: number
+  /** When a due send of this held reset first found no reading to wait for. */
+  bootstrapSince?: { reset: number; at: number }
 }
+
+type AttributionHost = Pick<
+  StructuredAgentSessionHostDeps,
+  'launchAccountHome' | 'usageLimitAutoContinue'
+> & { store: Pick<AgentSessionRecordStore, 'getRecord'> }
 
 const GRACE_MS = 15_000
 /** How long a due send waits for a fresh reading before it goes on the reset it has. */
@@ -60,12 +68,15 @@ const READING_WAIT_MS = 120_000
 export class UsageLimitAccountHolds {
   private readonly holds = new Map<string, Hold>()
   private readonly scopes = new Map<string, UsageLimitAccountScope | undefined>()
-  /** Shared by every chat of a pass: work scales with accounts, not chats. */
+  /** The account scope token each chat was attributed under. */
+  private readonly tokens = new Map<string, string | undefined>()
+  /** Shared by every chat of a pass and keyed by scope token: work scales with accounts and their
+   *  changes, not chats. */
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
   private readings = new Map<string, Promise<UsageLimitAccountScope | undefined>>()
 
   get size(): number {
-    return this.holds.size + this.scopes.size
+    return this.holds.size + this.scopes.size + this.tokens.size
   }
 
   /** Launch homes and readings resolve again, once each, from here on. */
@@ -75,28 +86,25 @@ export class UsageLimitAccountHolds {
   }
 
   /** Re-attributed each pass: the account a chat continues on follows the host's selection. */
-  async attribute(
-    id: string,
-    host: Pick<StructuredAgentSessionHostDeps, 'launchAccountHome' | 'usageLimitAutoContinue'> & {
-      store: Pick<AgentSessionRecordStore, 'getRecord'>
-    }
-  ): Promise<void> {
+  async attribute(id: string, host: AttributionHost): Promise<void> {
     const record = host.store.getRecord(id)
     const read = host.usageLimitAutoContinue?.accountUsage
+    const token = record ? liveToken(host, record.provider) : undefined
     let scope: UsageLimitAccountScope | undefined
     try {
       // WSL readings never reach this host, so a WSL launch keeps the cut's own reset.
       if (record && read && record.location.wslDistro === null) {
         // Off WSL a launch home follows only the provider's selection, never the chat.
-        let launch = this.launchHomes.get(record.provider)
+        const target = JSON.stringify([token, record.provider])
+        let launch = this.launchHomes.get(target)
         if (!launch) {
           launch = (async () => (await host.launchAccountHome?.(record)) ?? null)()
-          this.launchHomes.set(record.provider, launch)
+          this.launchHomes.set(target, launch)
         }
         const home = (await launch) ?? record.accountHome
         const path = agentSessionAccountHomePath(home)
         if (home && path) {
-          const key = JSON.stringify([record.provider, path])
+          const key = JSON.stringify([token, record.provider, path])
           let reading = this.readings.get(key)
           if (!reading) {
             reading = read(record.provider, home)
@@ -109,16 +117,22 @@ export class UsageLimitAccountHolds {
       // No attributable account this pass: the cut's own reset and any hold already seen decide.
     }
     this.scopes.set(id, scope)
+    this.tokens.set(id, token)
   }
 
-  /** Names the scope and account a send was checked against. */
-  attributionKey(id: string): string | undefined {
-    const scope = this.scopes.get(id)
-    return scope && JSON.stringify([scope.scope, scope.account?.key ?? null])
+  /** The chat's account scope token now; it moves with the selection and the reading. */
+  liveToken(id: string, host: AttributionHost): string | undefined {
+    const record = host.store.getRecord(id)
+    return record ? liveToken(host, record.provider) : undefined
+  }
+
+  /** Whether the chat's attribution was made under the token that holds now. */
+  attributedUnderLiveToken(id: string, host: AttributionHost): boolean {
+    return this.tokens.has(id) && this.tokens.get(id) === this.liveToken(id, host)
   }
 
   retain(shown: ReadonlySet<string>): void {
-    for (const cache of [this.holds, this.scopes]) {
+    for (const cache of [this.holds, this.scopes, this.tokens]) {
       for (const id of cache.keys()) {
         if (!shown.has(id)) {
           cache.delete(id)
@@ -127,14 +141,10 @@ export class UsageLimitAccountHolds {
     }
   }
 
-  forget(id: string): void {
-    this.holds.delete(id)
-    this.scopes.delete(id)
-  }
-
   clear(): void {
     this.holds.clear()
     this.scopes.clear()
+    this.tokens.clear()
     this.beginPass()
   }
 
@@ -166,7 +176,8 @@ export class UsageLimitAccountHolds {
       reading.usageMetadata?.source !== 'live-session' &&
       reading.updatedAt >= since
     if (account && reading && fresh(cut.resetsAt)) {
-      const spentUntil = rateLimitSpentUntil(reading)
+      // A window that began after the cut's reset is later spending, not what stopped this cut.
+      const spentUntil = rateLimitSpentUntil(reading, cut.resetsAt)
       if (spentUntil === null) {
         hold.unknownReset = true
       } else if (spentUntil !== undefined) {
@@ -180,13 +191,21 @@ export class UsageLimitAccountHolds {
       }
     }
     const resetsAt = Math.max(cut.resetsAt, hold.heldUntil ?? cut.resetsAt)
+    let waitFrom = resetsAt + GRACE_MS
+    if (!account && scope?.bootstrap && now >= waitFrom) {
+      // A first reading is asked for only once a pass sees the send due, however late that is.
+      if (hold.bootstrapSince?.reset !== resetsAt) {
+        hold.bootstrapSince = { reset: resetsAt, at: now }
+      }
+      waitFrom = Math.max(waitFrom, hold.bootstrapSince.at)
+    }
     return {
       resetsAt,
       unknownReset: hold.unknownReset === true,
       awaitingReading:
         (account ? !fresh(resetsAt) : scope?.bootstrap !== undefined) &&
-        now >= resetsAt + GRACE_MS &&
-        now < resetsAt + GRACE_MS + READING_WAIT_MS
+        now >= waitFrom &&
+        now < waitFrom + READING_WAIT_MS
     }
   }
 
@@ -223,4 +242,12 @@ export class UsageLimitAccountHolds {
     }
     return !hold.awaitingReading
   }
+}
+
+/** Changes whenever the provider's selected account or its reading's home and provenance change. */
+function liveToken(
+  host: AttributionHost,
+  provider: AgentSessionRecord['provider']
+): string | undefined {
+  return host.usageLimitAutoContinue?.accountScopeToken?.(provider)
 }

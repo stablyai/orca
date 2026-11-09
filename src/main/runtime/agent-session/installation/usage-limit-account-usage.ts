@@ -2,7 +2,6 @@ import { agentSessionAccountHomePath } from '../../../../shared/agent-session/li
 import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { BoundedMap } from '../../../../shared/bounded-map'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
@@ -43,23 +42,50 @@ function readingIdentity(
 }
 
 /** One comparable spelling per folder: `~`, dot segments and symlinks (`/var` → `/private/var`)
- *  name the same home. Comparison only; credential reads keep the raw spelling. */
-function canonicalHomes(): (raw: string) => Promise<string> {
-  const resolved = new BoundedMap<string, string>({ maxEntries: 64 })
-  return async (raw) => {
-    const known = resolved.get(raw)
-    if (known !== undefined) {
-      return known
-    }
-    const expanded = /^~(?=$|[\\/])/.test(raw) ? join(homedir(), raw.slice(1)) : raw
-    const absolute = resolve(expanded)
-    // A missing folder stays uncached so it is followed once it exists.
-    const real = await realpath(absolute).catch(() => null)
-    const canonical = normalizeRuntimePathForComparison(real ?? absolute)
-    if (real !== null) {
-      resolved.set(raw, canonical)
-    }
-    return canonical
+ *  name the same home. Comparison only; credential reads keep the raw spelling. Read afresh on
+ *  each call, which the sweep makes once per account per pass, so a retargeted link is followed. */
+async function canonicalHome(raw: string): Promise<string> {
+  const expanded = /^~(?=$|[\\/])/.test(raw) ? join(homedir(), raw.slice(1)) : raw
+  const absolute = resolve(expanded)
+  return normalizeRuntimePathForComparison((await realpath(absolute).catch(() => null)) ?? absolute)
+}
+
+type SelectionSettings = Partial<
+  Pick<
+    GlobalSettings,
+    | 'activeClaudeManagedAccountId'
+    | 'activeClaudeManagedAccountIdsByRuntime'
+    | 'activeCodexManagedAccountId'
+    | 'activeCodexManagedAccountIdsByRuntime'
+    | 'agentDefaultEnv'
+  >
+>
+
+/** Cheap and synchronous: moves whenever the provider's selected account, its launch env, or the
+ *  home and provenance of its reading move, so an unchanged token needs no new attribution. */
+export function usageLimitAccountScopeToken(deps: {
+  rateLimits: () => RateLimitService | null
+  settings: () => SelectionSettings
+}): (provider: string) => string {
+  return (provider) => {
+    const settings = deps.settings()
+    const selection =
+      provider === 'claude'
+        ? [settings.activeClaudeManagedAccountId, settings.activeClaudeManagedAccountIdsByRuntime]
+        : provider === 'codex'
+          ? [settings.activeCodexManagedAccountId, settings.activeCodexManagedAccountIdsByRuntime]
+          : []
+    const reading =
+      provider === 'claude' || provider === 'codex'
+        ? deps.rateLimits()?.usageReadingAccount(provider)
+        : null
+    const env = settings.agentDefaultEnv?.[provider as keyof typeof settings.agentDefaultEnv]
+    return JSON.stringify([
+      selection,
+      env ?? null,
+      reading?.home ?? null,
+      reading?.provenance ?? null
+    ])
   }
 }
 
@@ -70,14 +96,13 @@ export function usageLimitAccountUsage(deps: {
   settings: () => Partial<Pick<GlobalSettings, 'claudeManagedAccounts' | 'codexManagedAccounts'>>
   claudeLaunchEnvironment: () => Promise<Record<string, string | undefined>>
 }): AccountUsageReader {
-  const canonical = canonicalHomes()
   return async (provider, accountHome) => {
     const path = agentSessionAccountHomePath(accountHome)
     const service = deps.rateLimits()
     if ((provider !== 'claude' && provider !== 'codex') || !path || !service) {
       return undefined
     }
-    const home = await canonical(path)
+    const home = await canonicalHome(path)
     if (provider === 'claude') {
       const env = await deps.claudeLaunchEnvironment()
       if (CLAUDE_NON_SUBSCRIPTION_ENV.some((name) => env[name]?.trim())) {
@@ -90,7 +115,7 @@ export function usageLimitAccountUsage(deps: {
       // No reading has said where it was taken yet (a headless start polls nothing on its own).
       return { scope, bootstrap: () => service.requestUsageReading(provider) }
     }
-    if ((await canonical(reading.home)) !== home) {
+    if ((await canonicalHome(reading.home)) !== home) {
       return { scope }
     }
     const identity = readingIdentity(provider, reading, deps.settings())

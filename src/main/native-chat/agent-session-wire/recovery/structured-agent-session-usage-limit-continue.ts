@@ -89,9 +89,9 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.holds.clear()
   }
 
+  /** An opened chat reads its cut from the loaded journal; its hold stays until it is hidden. */
   forget = (id: string): void => {
     this.cold.forget(id)
-    this.holds.forget(id)
   }
 
   /** Drops what the sweep keeps for chats no longer shown. */
@@ -212,10 +212,6 @@ export class StructuredAgentSessionUsageLimitContinue {
       for (const next of due) {
         await this.send(next.id, next.cut)
       }
-      this.cold.publishContinueAt(
-        visible,
-        (id, cut) => this.holds.verdict(id, cut, this.deps.now()).resetsAt
-      )
     } catch (error) {
       this.deps.host.logger.warn('usage-limit continue sweep failed', {
         scope: 'usage-limit-continue',
@@ -241,18 +237,20 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   private async send(id: string, cut: Cut): Promise<void> {
-    // Earlier sends of this pass take time: the account is resolved again right before this one.
-    this.holds.beginPass()
-    await this.holds.attribute(id, this.deps.host)
+    // Earlier sends take time; a moved account resolves again, once per new token for every chat.
+    if (!this.holds.attributedUnderLiveToken(id, this.deps.host)) {
+      await this.holds.attribute(id, this.deps.host)
+    }
     const record = this.deps.host.store.getRecord(id)
     if (!record) {
       return
     }
+    // The reading is live: one that arrived during earlier sends holds this one.
     if (!this.holds.ready(id, cut, this.deps.now())) {
       this.deps.publish(id)
       return
     }
-    const attributed = this.holds.attributionKey(id)
+    const attributed = this.holds.liveToken(id, this.deps.host)
     const at = this.deps.now()
     const attempt: Attempt = {
       identity: identity(cut),
@@ -284,7 +282,7 @@ export class StructuredAgentSessionUsageLimitContinue {
             !current ||
             identity(current) !== identity(cut) ||
             !this.eligible(id, current) ||
-            this.holds.attributionKey(id) !== attributed ||
+            this.holds.liveToken(id, this.deps.host) !== attributed ||
             !this.holds.ready(id, current, this.deps.now())
           ) {
             throw new RestartContinuationSupersededError()

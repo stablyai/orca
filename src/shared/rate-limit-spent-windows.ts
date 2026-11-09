@@ -11,8 +11,12 @@ function overageCarriesTurns(extra: ExtraUsageBalance | null | undefined): boole
 }
 
 /** When the account's spent windows all reset: undefined when none blocks every model, null when
- *  one does but its reset is unknown. Model-only windows (Fable, buckets) never block all turns. */
-export function rateLimitSpentUntil(limits: ProviderRateLimits): number | null | undefined {
+ *  one does but its reset is unknown. Model-only windows (Fable, buckets) never block all turns.
+ *  With `coveringAt`, only a window that had already begun by then counts. */
+export function rateLimitSpentUntil(
+  limits: ProviderRateLimits,
+  coveringAt = Number.POSITIVE_INFINITY
+): number | null | undefined {
   if (overageCarriesTurns(limits.extraUsage)) {
     return undefined
   }
@@ -23,6 +27,9 @@ export function rateLimitSpentUntil(limits: ProviderRateLimits): number | null |
     }
     if (window.resetsAt === null || !Number.isFinite(window.resetsAt)) {
       return null
+    }
+    if (window.resetsAt - window.windowMinutes * 60_000 > coveringAt) {
+      continue
     }
     until = Math.max(until ?? window.resetsAt, window.resetsAt)
   }

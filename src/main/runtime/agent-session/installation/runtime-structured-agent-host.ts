@@ -22,7 +22,7 @@ import {
   hostShellEnvironment,
   structuredAgentBaseEnvironment
 } from '../environment/structured-agent-shell-environment'
-import { usageLimitAccountUsage } from './usage-limit-account-usage'
+import { usageLimitAccountScopeToken, usageLimitAccountUsage } from './usage-limit-account-usage'
 
 export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
@@ -78,6 +78,10 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
         this.requireStore().getSettings().nativeChatAutoContinueAfterUsageLimit === true,
       subscribe: (changed) => this.requireStore().onSettingsChanged?.(changed) ?? (() => {}),
       isWorkspaceAsleep: (workspaceId) => this.isWorktreeTerminalSleepHeld(workspaceId),
+      accountScopeToken: usageLimitAccountScopeToken({
+        rateLimits: () => this.accounts.usageRateLimits(),
+        settings: () => this.requireStore().getSettings()
+      }),
       accountUsage: usageLimitAccountUsage({
         rateLimits: () => this.accounts.usageRateLimits(),
         settings: () => this.requireStore().getSettings(),

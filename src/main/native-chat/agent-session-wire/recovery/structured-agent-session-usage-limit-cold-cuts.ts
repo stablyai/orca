@@ -7,7 +7,6 @@ type Deps = {
   /** Reads an unopened chat's saved cut; history-sized, so the sweep budgets it. */
   readSavedCut: (id: string) => HostUsageLimitCut | null
   readLoadedCut: (id: string) => HostUsageLimitCut | null
-  publish: (id: string) => void
 }
 
 /** The cuts of chats that aren't loaded, read from history a few per pass. */
@@ -15,14 +14,12 @@ export class UsageLimitColdCuts {
   private readonly cuts = new Map<string, HostUsageLimitCut | null>()
   /** Pass of each chat's last failed history read; failed reads wait behind unread chats. */
   private readonly failures = new Map<string, number>()
-  /** The continue time each cold chat last published; loaded chats publish every pass. */
-  private readonly continueAt = new Map<string, number>()
   private passes = 0
 
   constructor(private readonly deps: Deps) {}
 
   get size(): number {
-    return this.cuts.size + this.failures.size + this.continueAt.size
+    return this.cuts.size + this.failures.size
   }
 
   has(id: string): boolean {
@@ -62,28 +59,8 @@ export class UsageLimitColdCuts {
     }
   }
 
-  /** A held cold chat's continue time reaches clients only when it moves. */
-  publishContinueAt(
-    visible: readonly string[],
-    continueAt: (id: string, cut: HostUsageLimitCut & { resetsAt: number }) => number
-  ): void {
-    for (const id of visible) {
-      const cut = this.deps.sessions.has(id) ? null : this.cuts.get(id)
-      if (cut?.resetsAt === undefined) {
-        this.continueAt.delete(id)
-        continue
-      }
-      const at = continueAt(id, { ...cut, resetsAt: cut.resetsAt })
-      const previous = this.continueAt.get(id) ?? cut.resetsAt
-      this.continueAt.set(id, at)
-      if (at !== previous) {
-        this.deps.publish(id)
-      }
-    }
-  }
-
   retain(shown: ReadonlySet<string>): void {
-    for (const cache of [this.cuts, this.failures, this.continueAt]) {
+    for (const cache of [this.cuts, this.failures]) {
       for (const id of cache.keys()) {
         if (!shown.has(id)) {
           cache.delete(id)
@@ -95,12 +72,10 @@ export class UsageLimitColdCuts {
   forget(id: string): void {
     this.cuts.delete(id)
     this.failures.delete(id)
-    this.continueAt.delete(id)
   }
 
   clear(): void {
     this.cuts.clear()
     this.failures.clear()
-    this.continueAt.clear()
   }
 }
