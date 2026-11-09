@@ -22,6 +22,7 @@ import {
   removePanesAttention
 } from '../workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
+import { replaceRecordEntries } from '../../keyed-record-transitions'
 
 export function createAgentStatusAuthorityActions(
   runtime: AgentStatusRuntime
@@ -190,6 +191,7 @@ export function createAgentStatusAuthorityActions(
       set((s, changedPaneKeys) => {
         changedPaneKeys.add(from)
         changedPaneKeys.add(to)
+        const sleepingSession = s.sleepingAgentSessionsByPaneKey[from]
         return {
           agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
             ...entry,
@@ -221,12 +223,13 @@ export function createAgentStatusAuthorityActions(
               tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
             })
           ),
-          sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
-            s.sleepingAgentSessionsByPaneKey,
-            from,
-            to,
-            (record) => ({ ...record, paneKey: to, tabId: targetTabId })
-          ),
+          sleepingAgentSessionsByPaneKey:
+            sleepingSession === undefined
+              ? s.sleepingAgentSessionsByPaneKey
+              : replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
+                  [from, null],
+                  [to, { ...sleepingSession, paneKey: to, tabId: targetTabId }]
+                ]),
           agentLaunchConfigByPaneKey: movePaneKeyedRecord(
             s.agentLaunchConfigByPaneKey,
             from,
