@@ -124,8 +124,9 @@ export class KeyedJsonRowCache {
 
   /**
    * One read-only snapshot: another connection's write lock cannot block it. After a crash
-   * mid-save, SQLite needs a writable connection to roll back or recover; that one retry
-   * replays at most the unfinished transaction, and only the next startup pays it.
+   * mid-save, SQLite needs a writable connection to roll back a hot journal or rebuild the WAL
+   * index. That retry runs synchronously and its cost scales with the leftover journal or WAL,
+   * not with a fixed bound; it only happens on the first load after such a crash.
    */
   private readSnapshot(
     busyTimeoutMs: number,
