@@ -29,7 +29,6 @@ export type SpeechModelErrorRate = {
 export type SpeechModelManifest = {
   id: string
   label: string
-  description: string
   type: SpeechModelType
   provider: SpeechModelProvider
   /** The text pipeline's hint: one language, a bilingual pair such as 'zh-en', or 'multilingual'. */
