@@ -150,6 +150,18 @@ Compiled per sandbox by `compileNetworkPolicy()`:
 - Per-account authorization on every route (row `account_id` must equal the caller's); ids are random.
 - Strict zod bodies, 16 KiB limit, no redirects on provider calls, provider error bodies dropped.
 
+## Built (mock-tested) and next wiring
+
+- (b) `src/main/environment-providers/*`, `src/main/hosted-sandbox/*` — driver, client, contract kit, recipe adapter.
+- (c) `cloud/apps/sandbox-control` — Worker, D1 schema, Vercel REST client, entitlements/usage, egress proxy, cron.
+- (d) `cloud/apps/sandbox-control/image` — golden image builder + VM entry points.
+- (e) `hosted-session-lease-policy.ts` / `-scheduler.ts` / `hosted-agent-auto-resume.ts` — lease renew, T−60/T−15
+  warnings, idle suspend, opportunistic + forced rollover, then `restartResumable` → `restartContinue` for offers
+  recorded since the drain (older offers stay with the user). The cron only force-stops 5 min after the deadline.
+- Next: a built-in "Orca Cloud" recipe source whose create/resume/suspend/destroy call the driver through the
+  recipe adapter; start one scheduler per ready hosted runtime (stop on suspend/destroy); an orcad RPC exposing
+  the idle-probe verdict + last PTY input for `readActivity`; header warning + mobile push for `warn`.
+
 ## What needs live access (not done)
 
 Vercel Pro team id + project id + a Sandbox-scoped token (as Worker secrets), wrangler auth for a dev D1, a

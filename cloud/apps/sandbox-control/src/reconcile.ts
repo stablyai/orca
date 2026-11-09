@@ -13,6 +13,8 @@ import { listByStatus, transition, type SandboxRow } from './store'
 import { flushUsage, queueUsage } from './usage'
 
 const STUCK_MS = 15 * 60_000
+/** The desktop rolls over at the deadline; the cron steps in only if it did not (provider cap is +10 min). */
+const FORCED_STOP_GRACE_MS = 5 * 60_000
 
 export type ReconcileSummary = Record<
   'settled' | 'suspendedForDeadline' | 'suspendedForBilling' | 'leaseLapsed' | 'released' | 'repaired',
@@ -55,8 +57,8 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
 
 async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: ReconcileSummary): Promise<void> {
   const now = deps.now()
-  if (row.session_deadline_at !== null && now >= row.session_deadline_at) {
-    // The desktop should have rolled over; stop before the provider's hard cap kills it undrained.
+  if (row.session_deadline_at !== null && now >= row.session_deadline_at + FORCED_STOP_GRACE_MS) {
+    // No desktop rolled it over; stop before the provider's hard cap kills it undrained.
     await suspendSandbox(deps, row)
     summary.suspendedForDeadline++
     return
