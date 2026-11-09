@@ -4,6 +4,10 @@ import { buildWorktreeLineageRanges } from '../../../../shared/sidebar-list/work
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -172,4 +176,35 @@ it('updates hidden subtree attention after status changes, acknowledgement, and 
   vi.setSystemTime(20_000_000)
   useAppStore.setState({ agentStatusEpoch: 5 })
   expect(selectCollapsedLineageSlot(useAppStore.getState(), source)).toBeNull()
+})
+
+it('refreshes unstamped structured agent summaries when workspace ownership changes', () => {
+  const tab = makeUnifiedTab({
+    id: 'legacy-native',
+    entityId: 'session',
+    worktreeId: 'child',
+    groupId: 'group',
+    contentType: 'agent-session',
+    agentSessionAgent: 'claude'
+  })
+  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const remoteIdentity = composeWorktreeHostIdentity('runtime:box', 'child')
+  useAppStore.setState({
+    repos: [{ ...TEST_REPO, executionHostId: 'local' }],
+    worktreesByRepo: { repo1: [makeWorktree({ id: 'child', repoId: 'repo1' })] },
+    unifiedTabsByWorktree: { child: [tab] },
+    runtimeEnvironments: [publicRuntimeEnvironment({ id: 'box' })],
+    agentStatusByPaneKey: { [paneKey]: entry('legacy-native', { paneKey, state: 'blocked' }) }
+  })
+  expect(selectCollapsedLineageSlot(useAppStore.getState(), [identity])).toEqual({
+    kind: 'needs',
+    count: 1
+  })
+  expect(selectCollapsedLineageSlot(useAppStore.getState(), [remoteIdentity])).toBeNull()
+  useAppStore.setState({ repos: [{ ...TEST_REPO, executionHostId: 'runtime:box' }] })
+  expect(selectCollapsedLineageSlot(useAppStore.getState(), [identity])).toBeNull()
+  expect(selectCollapsedLineageSlot(useAppStore.getState(), [remoteIdentity])).toEqual({
+    kind: 'needs',
+    count: 1
+  })
 })

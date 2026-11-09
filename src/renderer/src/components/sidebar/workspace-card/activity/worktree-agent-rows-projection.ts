@@ -72,7 +72,8 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       runtimeAgentOrchestrationByPaneKey,
       paneForegroundAgentByPaneKey,
       selectFreshness(state),
-      representedTabs
+      representedTabs,
+      ...(hostId ? structuredAgentSessionOwnerInputs(state) : [])
     ]
     if (inputs.every((value, index) => Object.is(value, previous[index]))) {
       return result
@@ -114,7 +115,6 @@ export function worktreeAgentStructureInputs(state: AppState): readonly unknown[
     state.unifiedTabsByWorktree,
     state.migrationUnsupportedByPtyId,
     state.retainedAgentsByPaneKey,
-    state.runtimePaneTitlesByTabId,
     state.ptyIdsByTabId,
     state.terminalLayoutsByTabId,
     state.runtimeAgentOrchestrationByPaneKey,
@@ -127,6 +127,7 @@ export function worktreeAgentStructureInputs(state: AppState): readonly unknown[
 export function worktreeAgentProjectionInputs(state: AppState): readonly unknown[] {
   return [
     ...worktreeAgentStructureInputs(state),
+    state.runtimePaneTitlesByTabId,
     state.agentStatusByPaneKey,
     state.agentStatusEpoch,
     state.acknowledgedAgentsByPaneKey

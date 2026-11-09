@@ -16,6 +16,7 @@ import { selectAgentRowsUnread } from '@/components/sidebar/workspace-card/activ
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '../tabs/tab-group.test-fixture'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() }
@@ -154,5 +155,39 @@ describe('explicit workspace and agent reads', () => {
     expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([false, false, true])
     store.getState().setWorkspaceUnreadByUser(WS_A, false, 'runtime:box')
     expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([false, false, false])
+  })
+
+  it('reads an unstamped structured agent on its workspace runtime', () => {
+    const { store } = createAttentionStore({ windowOnScreen: false })
+    const native = makeUnifiedTab({
+      id: 'legacy-native',
+      entityId: 'session',
+      worktreeId: WS_A,
+      groupId: 'group',
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude'
+    })
+    const paneKey = structuredAgentSessionPaneKey(native.id, native.entityId)
+    store.setState({
+      runtimeEnvironments: [publicRuntimeEnvironment({ id: 'box' })],
+      repos: store.getState().repos.map((repo) => ({ ...repo, executionHostId: 'runtime:box' })),
+      unifiedTabsByWorktree: { [WS_A]: [native] },
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          worktreeId: WS_A,
+          agentType: 'claude',
+          state: 'done',
+          prompt: '',
+          updatedAt: 900,
+          stateStartedAt: 900,
+          stateHistory: []
+        }
+      }
+    })
+    store.getState().setWorkspaceUnreadByUser(WS_A, false, 'local')
+    expect(selectAgentRowsUnread(store.getState(), [{ paneKey }])).toEqual([true])
+    store.getState().setWorkspaceUnreadByUser(WS_A, false, 'runtime:box')
+    expect(selectAgentRowsUnread(store.getState(), [{ paneKey }])).toEqual([false])
   })
 })

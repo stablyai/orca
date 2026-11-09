@@ -14,6 +14,7 @@ export type SlotSnapshot = {
   structure: readonly unknown[]
   live: AppState['agentStatusByPaneKey']
   acknowledgements: AppState['acknowledgedAgentsByPaneKey']
+  titles: AppState['runtimePaneTitlesByTabId']
   epoch: number
   at: number
 }
@@ -26,6 +27,7 @@ export function slotSnapshot(state: AppState): SlotSnapshot {
       structure: worktreeAgentStructureInputs(state),
       live: state.agentStatusByPaneKey,
       acknowledgements: state.acknowledgedAgentsByPaneKey,
+      titles: state.runtimePaneTitlesByTabId,
       epoch: state.agentStatusEpoch,
       at: current?.epoch === state.agentStatusEpoch ? current.at : Date.now()
     }
@@ -47,6 +49,16 @@ export function changedSlotWorkspaces(
   if (after.structure.every((value, index) => value === before.structure[index])) {
     result = new Set<string>()
     const tabOwners = getTabIdToWorktreeId(state.tabsByWorktree)
+    if (before.titles !== after.titles) {
+      for (const tabId of new Set([...Object.keys(before.titles), ...Object.keys(after.titles)])) {
+        if (before.titles[tabId] !== after.titles[tabId]) {
+          const owner = tabOwners.get(tabId)
+          if (owner) {
+            result.add(owner)
+          }
+        }
+      }
+    }
     const includePane = (paneKey: string): void => {
       const parsed = parsePaneKey(paneKey)
       const tabOwner = parsed && tabOwners.get(parsed.tabId)
