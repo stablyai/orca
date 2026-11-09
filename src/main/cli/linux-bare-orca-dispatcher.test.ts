@@ -164,6 +164,50 @@ describe('installLinuxBareOrcaDispatcher', () => {
     expect(await readFile(dispatcherPath, 'utf8')).toBe(edited)
   })
 
+  it('leaves a legacy wrapper whose APPIMAGE path was edited', async () => {
+    const { homePath, resourcesPath } = await makeFixture()
+    const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+    const edited = buildLegacyAppImageCliWrapper(join(homePath, 'moved', 'Orca.AppImage'))
+    await mkdir(dirname(dispatcherPath), { recursive: true })
+    await writeFile(dispatcherPath, edited, { encoding: 'utf8', mode: 0o755 })
+
+    const result = await installLinuxBareOrcaDispatcher({
+      resourcesPath,
+      homePath,
+      appImagePath: join(homePath, 'Orca.AppImage')
+    })
+
+    expect(result.state).toBe('skipped-foreign')
+    expect(result.target).toBeNull()
+    expect(await readFile(dispatcherPath, 'utf8')).toBe(edited)
+  })
+
+  it('still replaces the legacy wrapper that points at the running AppImage', async () => {
+    const { homePath, resourcesPath } = await makeFixture()
+    const dispatcherPath = join(homePath, '.local', 'bin', 'orca')
+    const appImagePath = join(homePath, 'Orca.AppImage')
+    await mkdir(dirname(dispatcherPath), { recursive: true })
+    await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
+    await writeFile(dispatcherPath, buildLegacyAppImageCliWrapper(appImagePath), {
+      encoding: 'utf8',
+      mode: 0o755
+    })
+
+    const result = await installLinuxBareOrcaDispatcher({
+      resourcesPath,
+      homePath,
+      appImagePath,
+      appImageCacheRootPath: join(homePath, 'cache'),
+      appImageExtractRunner: async (_path, cwd) => {
+        await writePayload(cwd)
+      }
+    })
+
+    expect(result.state).toBe('installed')
+    expect(await readFile(dispatcherPath, 'utf8')).toContain('# orca-serve-bare-orca-dispatcher')
+    expect(await readFile(dispatcherPath, 'utf8')).not.toContain('APPIMAGE=')
+  })
+
   it('preserves a foreign dispatcher created while AppImage extraction is in flight', async () => {
     const { homePath, resourcesPath } = await makeFixture()
     const appImagePath = join(homePath, 'Orca.AppImage')
