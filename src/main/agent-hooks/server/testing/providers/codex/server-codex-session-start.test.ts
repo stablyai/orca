@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../../../../../wsl-guest/agent-hook-server'
 import { buildCachedPaneReplayEnvelope } from '../../../../../../wsl-guest/agent-hook-cached-pane-status'
 import type { AgentHookEventPayload } from '../../../../../../shared/agent-hook-listener/listener-event'
+import type { AgentHookRelayEnvelope } from '../../../../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { AgentHookServer } from '../../../agent-hook-server'
 import { selectFreshExplicitAgentStatus } from '../../../../../runtime/workspaces/process-listing/runtime-hook-agent-row-selection'
 import { buildBody, postHookEvent, PANE } from '../../server.test-fixtures'
@@ -177,31 +178,126 @@ it.each(['previous', 'incoming'] as const)(
   (missing) => {
     const desktop = new AgentHookServer()
     const previous = previousRoot(1)
-    desktop.ingestRemote(
-      {
-        ...previous,
-        providerSession: missing === 'previous' ? undefined : previous.providerSession,
-        payload: { ...previous.payload, mainAgent: { state: 'working', stateStartedAt: 1000 } }
-      },
-      'wsl:Ubuntu'
-    )
-    desktop.ingestRemote(
-      {
-        ...previous,
-        toolAgentId: undefined,
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_000)
+    try {
+      desktop.ingestRemote(
+        {
+          ...previous,
+          hookEventName: 'UserPromptSubmit',
+          toolAgentId: undefined,
+          hasExplicitPrompt: true,
+          providerSession: missing === 'previous' ? undefined : previous.providerSession,
+          payload: { ...previous.payload, mainAgent: { state: 'working', stateStartedAt: 1000 } }
+        },
+        'wsl:Ubuntu'
+      )
+      expect(desktop.getStatusSnapshot()[0].turnStartedAt).toBe(1_000)
+      vi.setSystemTime(3_000)
+      desktop.ingestRemote(
+        {
+          ...previous,
+          toolAgentId: undefined,
+          hookEventName: 'SessionStart',
+          providerSession:
+            missing === 'incoming' ? undefined : { key: 'session_id', id: 'new-root' },
+          payload: { agentType: 'codex', state: 'working', prompt: '' }
+        },
+        'wsl:Ubuntu'
+      )
+      expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        prompt: 'old task',
+        model: 'old-model',
+        mainAgent: { state: 'working', stateStartedAt: 1000 },
+        subagents: [{ id: 'old-0', state: 'working' }],
+        turnStartedAt: 1_000
+      })
+    } finally {
+      desktop.stop()
+      vi.useRealTimers()
+    }
+  }
+)
+
+it.each(['live', 'cached', 'old-relay'] as const)(
+  'drops a completed foreign root’s host facts on %s startup',
+  (route) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const desktop = new AgentHookServer()
+    const root: AgentHookEventPayload = {
+      paneKey: PANE,
+      connectionId: null,
+      source: 'codex',
+      hookEventName: 'UserPromptSubmit',
+      hasExplicitPrompt: true,
+      providerSession: { key: 'session_id', id: 'root-a' },
+      payload: {
+        agentType: 'codex',
+        state: 'working',
+        prompt: 'first',
+        mainAgent: { state: 'working', stateStartedAt: 1_000 }
+      }
+    }
+    try {
+      vi.setSystemTime(1_000)
+      desktop.ingestRemote(root, 'ssh-clock')
+      expect(desktop.getStatusSnapshot()[0].turnStartedAt).toBe(1_000)
+      vi.setSystemTime(2_000)
+      desktop.ingestRemote(
+        {
+          ...root,
+          hookEventName: 'Stop',
+          hasExplicitPrompt: false,
+          turnEndedAt: 2_000,
+          turnEndDisposition: 'identified',
+          payload: {
+            agentType: 'codex',
+            state: 'done',
+            prompt: 'first',
+            mainAgent: { state: 'done', stateStartedAt: 2_000 }
+          }
+        },
+        'ssh-clock'
+      )
+      expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+        turnStartedAt: 1_000,
+        turnEndedAt: 2_000,
+        stateStartedAt: 2_000
+      })
+      vi.setSystemTime(3_000)
+      const startup: AgentHookEventPayload = {
+        ...root,
+        source: route === 'old-relay' ? undefined : 'codex',
         hookEventName: 'SessionStart',
-        providerSession: missing === 'incoming' ? undefined : { key: 'session_id', id: 'new-root' },
-        payload: { agentType: 'codex', state: 'working', prompt: '' }
-      },
-      'wsl:Ubuntu'
-    )
-    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
-      state: 'working',
-      prompt: 'old task',
-      model: 'old-model',
-      mainAgent: { state: 'working', stateStartedAt: 1000 },
-      subagents: [{ id: 'old-0', state: 'working' }]
-    })
+        hasExplicitPrompt: false,
+        providerSession: { key: 'session_id', id: 'root-b' },
+        payload: {
+          agentType: 'codex',
+          state: 'done',
+          prompt: '',
+          sessionBoundary: true,
+          mainAgent: { state: 'done', stateStartedAt: 2_000 }
+        }
+      }
+      desktop.ingestRemote(
+        route === 'cached'
+          ? buildCachedPaneReplayEnvelope({ event: startup, meta: { source: 'codex' } })
+          : startup,
+        'ssh-clock'
+      )
+      expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        providerSession: { id: 'root-b' },
+        stateStartedAt: 3_000
+      })
+      expect(desktop.getStatusSnapshot()[0].turnStartedAt).toBeUndefined()
+      expect(desktop.getStatusSnapshot()[0].turnEndedAt).toBeUndefined()
+      expect(desktop.getStatusSnapshot()[0].turnEndDisposition).toBeUndefined()
+    } finally {
+      desktop.stop()
+      vi.useRealTimers()
+    }
   }
 )
 
@@ -212,13 +308,15 @@ it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
     vi.setSystemTime(1_000)
     const directory = mkdtempSync(join(tmpdir(), 'codex-session-start-'))
     const desktop = new AgentHookServer()
+    let forwarded: AgentHookRelayEnvelope | undefined
     const relay =
       route === 'local'
         ? undefined
         : new RelayAgentHookServer({
             endpointDir: directory,
-            forward: (event) =>
-              desktop.ingestRemote(
+            forward: (event) => {
+              forwarded = event
+              return desktop.ingestRemote(
                 route.startsWith('old-') && event.hookEventName === 'SessionStart'
                   ? {
                       ...event,
@@ -235,6 +333,7 @@ it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
                   : event,
                 'ssh-connection'
               )
+            }
           })
     await desktop.start({ env: 'production' })
     await relay?.start()
@@ -264,6 +363,7 @@ it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
       expect(desktop.getStatusSnapshot()[0].turnStartedAt).toBeUndefined()
       expect(desktop.getStatusSnapshot()[0].turnEndedAt).toBeUndefined()
       await post({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'review' })
+      expect(desktop.getStatusSnapshot()[0].turnStartedAt).toBe(1_000)
       await post({ hook_event_name: 'SubagentStart', agent_id: 'child-session' })
       vi.setSystemTime(2_000)
       await post({ hook_event_name: 'SessionStart', source: 'compact' })
@@ -303,6 +403,7 @@ it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
       await post({ hook_event_name: 'SessionStart', source: 'compact' })
       expect(desktop.getStatusSnapshot()[0]).toMatchObject({
         state: 'waiting',
+        turnStartedAt: route === 'local' ? 2_500 : 1_000,
         prompt: 'review',
         toolName: 'request_user_input',
         mainAgent: { state: 'waiting', stateStartedAt: 3_000 },
@@ -335,9 +436,25 @@ it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
         expect(desktop.getStatusSnapshot()[0]).toMatchObject({
           state: 'done',
           sessionBoundary: true,
+          turnStartedAt: 6_000,
           mainAgent: { state: 'done', stateStartedAt: 6_000, outcome: 'cancellation' }
         })
-        await post({ hook_event_name: 'UserPromptSubmit', prompt: 'old session work' })
+        await post({
+          hook_event_name: 'UserPromptSubmit',
+          turn_id: 'turn-3',
+          prompt: 'old session work'
+        })
+        expect(desktop.getStatusSnapshot()[0].turnStartedAt).toBe(8_000)
+        vi.setSystemTime(9_000)
+        await post({ hook_event_name: 'Stop', last_assistant_message: 'old reply' })
+        expect(desktop.getStatusSnapshot()[0].turnEndedAt).toBe(9_000)
+        if (route === 'relay') {
+          expect(forwarded).toMatchObject({ turnEndedAt: 9_000, turnEndDisposition: 'identified' })
+        }
+        if (route === 'local') {
+          expect(desktop.getAcceptedReply(PANE, 9_000)).toBe('old reply')
+        }
+        vi.setSystemTime(route === 'local' ? 9_000 : 10_000)
         await post({
           hook_event_name: 'SessionStart',
           source: 'startup',
@@ -350,10 +467,27 @@ it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
           mainAgent: { state: 'done' },
           providerSession: { id: 'replacement-session' }
         })
+        if (route === 'relay') {
+          expect(forwarded).toMatchObject({
+            hookEventName: 'SessionStart',
+            providerSession: { id: 'replacement-session' }
+          })
+          expect(forwarded?.turnEndedAt).toBeUndefined()
+          expect(forwarded?.turnEndDisposition).toBeUndefined()
+        }
+        expect(desktop.getStatusSnapshot()[0].turnStartedAt).toBeUndefined()
+        expect(desktop.getStatusSnapshot()[0].turnEndedAt).toBeUndefined()
+        expect(desktop.getStatusSnapshot()[0].turnEndDisposition).toBeUndefined()
+        expect(desktop.getStatusSnapshot()[0].stateStartedAt).toBe(
+          route === 'local' ? 9_000 : 10_000
+        )
+        expect(desktop.getAcceptedReply(PANE, 9_000)).toBeUndefined()
+        vi.setSystemTime(11_000)
         await post({
           hook_event_name: 'UserPromptSubmit',
           session_id: 'replacement-session',
-          prompt: 'replacement task'
+          prompt: 'replacement task',
+          turnStartedAt: 11_000
         })
         expect(desktop.getStatusSnapshot()[0]).toMatchObject({
           state: 'working',

@@ -2,7 +2,10 @@ import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
 } from '../../agent-status/contracts/agent-status-types'
-import { sameAgentStatusTerminalOwner } from '../../agent-status/identity/agent-status-terminal-owner'
+import {
+  sameAgentStatusSessionOwner,
+  sameAgentStatusTerminalOwner
+} from '../../agent-status/identity/agent-status-terminal-owner'
 import type { AgentLeadStatusResolution } from '../../agent-status/lifecycle/agent-lead-status-fold'
 import { codexRosterToSnapshots, type CodexSubagentRoster } from '../../codex-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
@@ -15,6 +18,20 @@ import {
   setCodexMainAgentTurnState,
   type CodexRemoteRosterAuthority
 } from './codex-state'
+
+/** Only a definite root replacement excludes an execution host's previous turn facts. */
+export function previousCodexTurnContext<T extends AgentHookEventPayload>(
+  previous: T | undefined,
+  event: AgentHookEventPayload
+): T | undefined {
+  return event.payload.agentType === 'codex' &&
+    event.hookEventName === 'SessionStart' &&
+    event.toolAgentId === undefined &&
+    event.providerSessionOnly !== true &&
+    (previous?.payload.agentType !== 'codex' || !sameAgentStatusSessionOwner(previous, event))
+    ? undefined
+    : previous
+}
 
 function clearCodexSessionState(state: HookListenerState, paneKey: string): void {
   state.codexSubagentRosterByPaneKey.delete(paneKey)
@@ -130,8 +147,8 @@ export function reconcileCodexStatusEvent(
     }
     if (
       replayedStart ||
-      !sameOwner ||
-      (previous.providerSession?.id && sessionId && previous.providerSession.id !== sessionId)
+      previous?.payload.agentType !== 'codex' ||
+      !sameAgentStatusSessionOwner(previous, event)
     ) {
       clearCodexSessionState(state, event.paneKey)
       context = undefined
