@@ -63,6 +63,14 @@ const models = [
       export { resolveHostEndpointEdit } from './mobile/src/transport/hosts/host-endpoint-edit'
       export { isTailscaleEndpoint } from './src/shared/remote-runtime/remote-runtime-tailscale-hint'
       export { installRuntime } from 'orca-diagnostic-runtime'
+      import { classifyConnection, verdictDisplayLabel } from './mobile/src/transport/connection/connection-health'
+      import { withTranslation } from 'orca-diagnostic-translation'
+      export function describeDesktopConnection(args, translator) {
+        return withTranslation(translator, () => {
+          const verdict = classifyConnection(args)
+          return { kind: verdict.kind, label: verdictDisplayLabel(verdict), detail: verdict.detail }
+        })
+      }
     `
   }
 ]
@@ -70,8 +78,15 @@ const manifestPath = join(project, 'tools/vendor/manifest.json')
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const runtime = 'orca-diagnostic-runtime'
 const translation = 'orca-diagnostic-translation'
+const selectedModel = process.argv[4]
+if (selectedModel && !models.some((model) => model.file === selectedModel)) {
+  throw new Error(`Unknown native model: ${selectedModel}`)
+}
 
 for (const model of models) {
+  if (selectedModel && model.file !== selectedModel) {
+    continue
+  }
   const source = `orca-${model.file}-entry.ts`
   const output = `entry/src/main/ets/vendor/${model.file}.js`
   const result = await build({
@@ -89,13 +104,28 @@ for (const model of models) {
       {
         name: 'native-catalog-localization',
         setup(builder) {
+          builder.onResolve({ filter: /^orca-diagnostic-translation$/ }, () => ({
+            path: translation,
+            namespace: 'orca'
+          }))
           builder.onResolve({ filter: /\/i18n\/mobile-i18n$/ }, ({ path }) =>
             model.file === 'connection-diagnostics'
               ? { path: translation, namespace: 'orca' }
               : { path, external: true, sideEffects: false }
           )
           builder.onLoad({ filter: /^orca-diagnostic-translation$/, namespace: 'orca' }, () => ({
-            contents: 'export function translate(_key, fallback) { return fallback }'
+            contents: `
+              let translator
+              export function withTranslation(next, describe) {
+                const previous = translator
+                translator = next
+                try { return describe() } finally { translator = previous }
+              }
+              export function translate(key, fallback, values) {
+                const text = translator?.(key, fallback) ?? fallback
+                return values ? text.replace(/{{(\\w+)}}/g, (token, name) => values[name] ?? token) : text
+              }
+            `
           }))
         }
       },

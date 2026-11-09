@@ -21,7 +21,7 @@ import { AgentActivityWrites } from '../home/AgentActivityWrites';
 import { AgentActions } from '../home/AgentActions';
 import { AgentsTab } from '../home/AgentsTab';
 import { DesktopActions } from '../home/DesktopActions';
-import { endpointLabel } from '../diagnostics/ConnectionDiagnostics';
+import { describeDesktopConnection, DesktopConnectionVerdict, endpointLabel } from '../diagnostics/ConnectionDiagnostics';
 import { appendLog, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
 import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, readHomeUsage, readHomeAutomations,
   readHomeAutomationRuns, homeAutomationToggleParams } from '../home/HomeAccountUsage';
@@ -48,6 +48,11 @@ interface HomePalette {
   statusGreen: string;
   statusAmber: string;
   statusRed: string;
+}
+
+interface DesktopRowPresentation {
+  host: HostMeta;
+  verdict: DesktopConnectionVerdict;
 }
 
 const PALETTE_DARK: HomePalette = {
@@ -1035,7 +1040,7 @@ struct Home {
   }
 
   @Builder
-  desktopRow(host: HostMeta) {
+  desktopRow($$: DesktopRowPresentation) {
     Row() {
       // 机器磁贴（上游 tile 30x30 圆角 10 + 角落连接点）
       Stack({ alignContent: Alignment.Center }) {
@@ -1044,11 +1049,11 @@ struct Home {
           .height(30)
           .borderRadius(10)
           .backgroundColor(this.pal().bgRaised)
-        Image(this.desktopIcon(host)).supportSvg2(true)
+        Image(this.desktopIcon($$.host)).supportSvg2(true)
           .width(17).height(17)
           .colorFilter(lucideColorFilter(this.pal().textPrimary))
         Circle({ width: 14, height: 14 })
-          .fill(this.desktopDotColor(host.id))
+          .fill(this.desktopDotColor($$.host.id, $$.verdict.kind))
           .stroke(this.pal().bgPanel)
           .strokeWidth(2)
           .position({ x: 21, y: 21 })
@@ -1058,37 +1063,41 @@ struct Home {
       .margin({ top: 9, right: 11 })
 
       Column() {
-        Text(host.name)
+        Text($$.host.name)
           .fontFamily('Geist').fontSize(16 * this.fontScale)
           .fontColor(this.pal().textPrimary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')
-        Row() {
-          Text(uiText(this.hostStatusLine(host), this.uiLocale))
-            .fontFamily('Geist').fontSize(14)
-            .fontColor(this.hostPhases[host.id] === 'auth-failed' ? this.pal().statusRed : this.pal().textMuted)
-            .maxLines(1)
-          if (this.desktopMachineLine(host)) {
-            Text(` · ${this.desktopMachineLine(host)}`).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary)
-              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+        Text() {
+          Span(this.hostStatusLine($$.host, $$.verdict))
+            .fontColor($$.verdict.kind === 'normal' ? this.pal().textMuted : this.desktopDotColor($$.host.id, $$.verdict.kind))
+          if (this.desktopMachineLine($$.host)) {
+            Span(` · ${this.desktopMachineLine($$.host)}`).fontColor(this.pal().textSecondary)
           }
         }
+        .fontFamily('Geist').fontSize(14).lineHeight(18)
+        .maxLines(this.online[$$.host.id] === true ? 1 : 2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%')
         .margin({ top: 1 })
+        if ($$.verdict.kind === 'unreachable' && !$$.host.relay) {
+          this.desktopStatusDetail(uiText('components.hostCard.sameNetworkOnlyHint', this.uiLocale))
+        }
+        if ($$.verdict.detail) { this.desktopStatusDetail($$.verdict.detail); }
       }
       .alignItems(HorizontalAlign.Start)
       .padding({ top: 9, bottom: 9 })
       .layoutWeight(1)
 
       Row({ space: 6 }) {
-        if ((this.needsYouByDesktop[host.id] ?? 0) > 0) {
-          Text(String(this.needsYouByDesktop[host.id])).fontFamily('Geist').fontSize(12).fontWeight(FontWeight.Bold)
+        if ((this.needsYouByDesktop[$$.host.id] ?? 0) > 0) {
+          Text(String(this.needsYouByDesktop[$$.host.id])).fontFamily('Geist').fontSize(12).fontWeight(FontWeight.Bold)
             .fontColor(Color.Black).backgroundColor(this.pal().statusAmber).borderRadius(10)
             .constraintSize({ minWidth: 20 }).height(20).padding({ left: 6, right: 6 }).textAlign(TextAlign.Center)
-            .accessibilityText(uiText(this.needsYouByDesktop[host.id] === 1
+            .accessibilityText(uiText(this.needsYouByDesktop[$$.host.id] === 1
               ? '{{count}} 个需要处理（单数）' : '{{count}} 个需要处理', this.uiLocale)
-              .replace('{{count}}', String(this.needsYouByDesktop[host.id])))
+              .replace('{{count}}', String(this.needsYouByDesktop[$$.host.id])))
         }
         Image($r('app.media.lucide_chevron_right')).supportSvg2(true)
           .width(16).height(16)
@@ -1101,12 +1110,34 @@ struct Home {
     .padding({ left: 16 })
     .alignItems(VerticalAlign.Top)
     .onClick(() => {
-      this.openHostDetail(host.id);
+      this.openHostDetail($$.host.id);
     })
     .gesture(LongPressGesture().onAction(() => {
       playHapticFeedback('mediumImpact').catch(() => {});
-      this.openDesktopActions(host);
+      this.openDesktopActions($$.host);
     }))
+  }
+
+  @Builder
+  private desktopStatusDetail(detail: string) {
+    Text(detail).fontFamily('Geist').fontSize(14).lineHeight(18).fontColor(this.pal().textMuted)
+      .maxLines(3).textOverflow({ overflow: TextOverflow.Ellipsis }).margin({ top: 2 })
+  }
+
+  private desktopVerdict(host: HostMeta): DesktopConnectionVerdict {
+    let phase = this.hostPhases[host.id];
+    let connection = this.runtimes.get(host.id)?.lease.connection;
+    if (connection?.isCredentialMissing()) {
+      return { kind: 'auth-failed', label: uiText('components.hostCard.pairingInvalid', this.uiLocale),
+        detail: uiText('components.hostCard.repairHint', this.uiLocale) };
+    }
+    return describeDesktopConnection({
+      state: phase === 'idle' || phase === 'stopped' || !phase ? 'disconnected' : phase,
+      endpoint: host.endpoint, hostName: host.name,
+      lastConnectedAt: connection?.getConnectedAt() ?? (host.lastConnected || null),
+      reconnectAttempts: connection?.getReconnectAttempt() ?? 0, pendingPath: connection?.getPendingPath(),
+      nowMs: Math.max(this.homeNow, Date.now())
+    }, this.uiLocale);
   }
 
   private desktopMachine(host: HostMeta): HostMachineDescriptor {
@@ -1125,10 +1156,10 @@ struct Home {
     return $r('app.media.lucide_monitor');
   }
 
-  private desktopDotColor(hostId: string): string {
+  private desktopDotColor(hostId: string, kind: string): string {
     if (this.online[hostId] === true) { return this.pal().statusGreen; }
-    if (this.hostPhases[hostId] === 'auth-failed') { return this.pal().statusRed; }
-    return this.desktopIsLive(hostId) ? this.pal().statusAmber : this.pal().textMuted;
+    if (kind === 'auth-failed' || kind === 'unreachable') { return this.pal().statusRed; }
+    return kind === 'warning' || this.desktopIsLive(hostId) ? this.pal().statusAmber : this.pal().textMuted;
   }
 
   @Builder
@@ -1141,15 +1172,10 @@ struct Home {
   }
 
   /** 连接行的状态文案：已连接 → worktree 概要（上游 homeHostWorktreeSummary）。 */
-  hostStatusLine(host: HostMeta): string {
-    if (this.online[host.id] !== true) {
-      let phase = this.hostPhases[host.id];
-      if (phase === 'auth-failed') { return '配对无效'; }
-      if (phase === 'reconnecting') { return '正在重连'; }
-      return phase === 'connecting' ? '正在连接' : '已断开';
-    }
+  hostStatusLine(host: HostMeta, verdict: DesktopConnectionVerdict): string {
+    if (this.online[host.id] !== true) { return verdict.label; }
     let summary = this.summaries[host.id];
-    return summary !== undefined && summary.length > 0 ? summary : '已连接';
+    return summary !== undefined && summary.length > 0 ? uiText(summary, this.uiLocale) : verdict.label;
   }
 
   @Builder
@@ -1196,7 +1222,7 @@ struct Home {
                   if (index > 0) {
                     this.hairline(57)
                   }
-                  this.desktopRow(host)
+                  this.desktopRow({ host: host, verdict: this.desktopVerdict(host) })
                 }
                 .width('100%')
               }, (host: HostMeta): string => `${host.id}:${host.name}:${host.endpoint}`)

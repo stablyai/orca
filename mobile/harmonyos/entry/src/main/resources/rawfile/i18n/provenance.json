@@ -62,5 +62,21 @@
       "mobile/src/i18n/locales/zh-Hant.json": "a3f1cce0ac2fa363f7384879bedc36e5dd7f3ca7f71fa391d993e39d0f03d8ef",
       "mobile/src/i18n/locales/zh.json": "4bc8e7b032e0d1b4c749d1f6586a869b863e8a78535b9031ddd21d436ddf8b5a"
     }
+  },
+  "desktopConnectionHealthSources": {
+    "revision": "353f4c5e281734a3cea1306d76f471f0523143ab",
+    "catalogs": {
+      "mobile/src/i18n/locales/de.json": "cac2d593e98a8bdd556894c5370cf250cdc2304f8670beeb309ab3be2d707c3c",
+      "mobile/src/i18n/locales/en.json": "bc3afe9644f45564ea32d896011490847bd1dac1217b5a8bd6090a7f76d286f9",
+      "mobile/src/i18n/locales/es.json": "5c973c6110ab3b536a37d8600d8efdd9002837c0f95efc4f57399486b8853be1",
+      "mobile/src/i18n/locales/fr.json": "1bd9fd87ceeaeaadfb8f445ba12272b3ddfa0e981670e5645cc03c2f6c553a81",
+      "mobile/src/i18n/locales/ja.json": "305548784ecfe890d08c15638251803817daaefad0163403a47de76ba26188a5",
+      "mobile/src/i18n/locales/ko.json": "c0866a3eee315e3f6e80c54f65aee885d9886f5598d36b89501b80e0fe6c0643",
+      "mobile/src/i18n/locales/pt.json": "71879cabf236340e9e2d9906f52eeb938888a33b7a946a9e4b2c161a08221150",
+      "mobile/src/i18n/locales/ru.json": "241ffe7dface715e274d8a5aa50fcf64d64254e65b77a63fa2eb0d9c9afeb9c1",
+      "mobile/src/i18n/locales/tr.json": "d9ec2bb2b93424361e55ae972aa0fced2cbbc0136ed6750f7f022a41e936030a",
+      "mobile/src/i18n/locales/zh-Hant.json": "a3f1cce0ac2fa363f7384879bedc36e5dd7f3ca7f71fa391d993e39d0f03d8ef",
+      "mobile/src/i18n/locales/zh.json": "4bc8e7b032e0d1b4c749d1f6586a869b863e8a78535b9031ddd21d436ddf8b5a"
+    }
   }
 }

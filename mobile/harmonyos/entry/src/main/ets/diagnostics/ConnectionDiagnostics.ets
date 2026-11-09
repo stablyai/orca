@@ -5,6 +5,7 @@ import { deviceInfo } from '@kit.BasicServicesKit';
 import upstream from '../vendor/connection-diagnostics.js';
 import { utf8Encode } from '../transport/crypto/Bytes';
 import type { ConnectionLogEntry } from './ConnectionLogStore';
+import { uiText } from '../settings/NativeUi';
 
 const model: ESObject = upstream;
 model.installRuntime((value: string): url.URL => new url.URL(value), utf8Encode);
@@ -21,6 +22,29 @@ export interface ConnectionDiagnosis {
   likelyCause: string;
   nextStep: string;
   reportability: string;
+}
+
+export interface DesktopConnectionEvidence {
+  state: string;
+  endpoint: string;
+  hostName: string;
+  lastConnectedAt: number | null;
+  reconnectAttempts: number;
+  pendingPath?: string;
+  nowMs: number;
+}
+
+export interface DesktopConnectionVerdict {
+  kind: string;
+  label: string;
+  detail?: string;
+}
+
+export function describeDesktopConnection(evidence: DesktopConnectionEvidence, locale: string): DesktopConnectionVerdict {
+  return model.describeDesktopConnection(evidence, (key: string, fallback: string): string => {
+    let label = uiText(key, locale);
+    return label === key ? fallback : label;
+  }) as DesktopConnectionVerdict;
 }
 
 export interface ConnectionReport {

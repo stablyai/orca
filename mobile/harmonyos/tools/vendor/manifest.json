@@ -20,7 +20,7 @@
     "tools/vendor/tweetnacl/LICENSE": "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd",
     "tools/vendor/tweetnacl/nacl-fast.min.js": "3ec535c004aeeb225785d8e93fb33bf99f52e399bd7dfc01969b5629baea5131",
     "entry/src/main/ets/vendor/agent-list.js": "85d63d7df4a1c5abe2235614014615cfe0e2becbab3fbdf227fb0cb24a961de3",
-    "entry/src/main/ets/vendor/connection-diagnostics.js": "178a047ae96377fe16f7b1ace1b6d3c13eba81487954cd0440175939fc2d4ab1",
+    "entry/src/main/ets/vendor/connection-diagnostics.js": "de9012a37fe02e61d4c8522318965ba0ee6c74c94923dc9d32e0948cf17e652b",
     "entry/src/main/ets/vendor/terminal-rail.js": "172f7f933854c677cdcdc2fd00c373a79b07973ba51777c10d205d5c4160e5b7",
     "entry/src/main/ets/vendor/bundle-compat.js": "7ad72dd427a2f052a164eccc08e587b02a27413be1a404084a9357a3987d4162",
     "entry/src/main/ets/vendor/host-machine.js": "f79bd3087ce9537ac4ffa7d3dab1d46ea0fe9d0bffe139cf89d7ae6b19b7b4eb"
@@ -49,7 +49,7 @@
     ]
   },
   "orcaConnectionDiagnostics": {
-    "revision": "cba8f0efcc3588a4f6606d9834555a8b3860a39c",
+    "revision": "353f4c5e281734a3cea1306d76f471f0523143ab",
     "esbuild": "0.28.2",
     "sources": [
       "mobile/src/diagnostics/connection-diagnostics-analysis.ts",
@@ -57,6 +57,7 @@
       "mobile/src/diagnostics/connection-diagnostics-submission.ts",
       "mobile/src/diagnostics/connection-log-redaction.ts",
       "mobile/src/diagnostics/host-reachability.ts",
+      "mobile/src/transport/connection/connection-health.ts",
       "mobile/src/transport/hosts/host-app-version.ts",
       "mobile/src/transport/hosts/host-endpoint-copy.ts",
       "mobile/src/transport/hosts/host-endpoint-edit.ts",

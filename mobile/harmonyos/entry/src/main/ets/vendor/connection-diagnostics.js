@@ -21,6 +21,7 @@ var orca_connection_diagnostics_entry_exports = {};
 __export(orca_connection_diagnostics_entry_exports, {
   boundConnectionDiagnosticsReport: () => boundConnectionDiagnosticsReport,
   buildConnectionDiagnosticsReport: () => buildConnectionDiagnosticsReport,
+  describeDesktopConnection: () => describeDesktopConnection,
   diagnoseConnection: () => diagnoseConnection,
   displayHostEndpoint: () => displayHostEndpoint,
   formatConnectionLogHistory: () => formatConnectionLogHistory,
@@ -536,8 +537,19 @@ function utf8Bytes(value) {
 }
 
 // orca:orca-diagnostic-translation
-function translate(_key, fallback) {
-  return fallback;
+var translator;
+function withTranslation(next, describe) {
+  const previous = translator;
+  translator = next;
+  try {
+    return describe();
+  } finally {
+    translator = previous;
+  }
+}
+function translate(key, fallback, values) {
+  const text = translator?.(key, fallback) ?? fallback;
+  return values ? text.replace(/{{(\w+)}}/g, (token, name) => values[name] ?? token) : text;
 }
 
 // mobile/src/transport/hosts/host-endpoint-copy.ts
@@ -856,4 +868,161 @@ function sameEndpointAuthority(left, right) {
 function endpointRouteSuffix(endpoint) {
   const match = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]*(.*)$/.exec(endpoint);
   return match?.[1] ?? "";
+}
+
+// mobile/src/transport/connection/connection-health.ts
+var WARNING_ATTEMPTS = 3;
+var UNREACHABLE_ATTEMPTS = 12;
+var STALE_SINCE_LAST_CONNECT_MS = 6e4;
+function relayHostCopy() {
+  return {
+    "signed-out": {
+      kind: "unreachable",
+      label: (host) => translate("connection.connectionHealth.signInRequired", "Sign-in required on {{host}}", {
+        host
+      }),
+      detail: translate(
+        "connection.connectionHealth.signInDetail",
+        "Sign in to Orca on your desktop to reconnect"
+      )
+    },
+    "host-offline": {
+      kind: "unreachable",
+      label: (host) => translate("connection.connectionHealth.hostOffline", "{{host}} is offline", { host }),
+      detail: translate(
+        "connection.connectionHealth.hostOfflineDetail",
+        "Check it's awake, Orca is running, and you're signed in"
+      )
+    },
+    // Re-pairing repairs refused credentials even when direct rotation is unavailable.
+    "credential-refused": {
+      kind: "unreachable",
+      label: (host) => translate(
+        "connection.connectionHealth.relayAccessExpired",
+        "Relay access expired for {{host}}",
+        {
+          host
+        }
+      ),
+      detail: translate("connection.connectionHealth.rePairDetail", "Re-pair with your desktop")
+    },
+    // Cell reachability failure says nothing about desktop health, so keep it amber.
+    unreachable: {
+      kind: "warning",
+      label: () => translate("connection.connectionHealth.relayUnreachable", "Can't reach Relay"),
+      detail: translate("connection.connectionHealth.checkConnection", "Check your connection")
+    }
+  };
+}
+function classifyConnection(args) {
+  const { state, reconnectAttempts, lastConnectedAt } = args;
+  const now = args.nowMs ?? Date.now();
+  const hint = isTailscaleEndpoint(args.endpoint) ? translate("connection.connectionHealth.tailscaleHint", "check Tailscale") : void 0;
+  const host = args.hostName?.trim() || translate("connection.connectionHealth.hostFallback", "Host");
+  const staleReason = lastConnectedAt == null ? "never-connected" : "stale";
+  if (state === "auth-failed" || args.pairingRejected && state !== "connected") {
+    return {
+      kind: "auth-failed",
+      label: translate(
+        "connection.connectionHealth.pairingInvalid",
+        "Pairing invalid \u2014 re-pair with your desktop"
+      )
+    };
+  }
+  if (state === "connected") {
+    return {
+      kind: "normal",
+      label: translate("connection.connectionHealth.connected", "Connected")
+    };
+  }
+  const reachability = args.relayHostReachability ?? "connecting";
+  if (reachability !== "connecting") {
+    const copy = relayHostCopy()[reachability];
+    return copy.kind === "warning" ? { kind: "warning", label: copy.label(host), detail: copy.detail } : { kind: "unreachable", label: copy.label(host), reason: staleReason, detail: copy.detail };
+  }
+  if (args.pendingPath === "relay" && (state !== "disconnected" || reconnectAttempts > 0)) {
+    if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
+      if (lastConnectedAt == null) {
+        return {
+          kind: "unreachable",
+          label: translate(
+            "connection.connectionHealth.relayConnectFailed",
+            "Can't connect via Relay"
+          ),
+          reason: "never-connected"
+        };
+      }
+      if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
+        return {
+          kind: "unreachable",
+          label: translate(
+            "connection.connectionHealth.relayConnectFailed",
+            "Can't connect via Relay"
+          ),
+          reason: "stale"
+        };
+      }
+    }
+    return {
+      kind: "normal",
+      label: translate("connection.connectionHealth.connectingViaRelay", "Connecting via Relay\u2026"),
+      dialing: true
+    };
+  }
+  if (state === "disconnected") {
+    return {
+      kind: "normal",
+      label: translate("connection.connectionHealth.disconnected", "Disconnected")
+    };
+  }
+  if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
+    if (lastConnectedAt == null) {
+      return {
+        kind: "unreachable",
+        label: translate("connection.connectionHealth.desktopUnreachable", "Can't reach desktop"),
+        reason: "never-connected",
+        hint
+      };
+    }
+    if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
+      return {
+        kind: "unreachable",
+        label: translate("connection.connectionHealth.desktopUnreachable", "Can't reach desktop"),
+        reason: "stale",
+        hint
+      };
+    }
+  }
+  if (reconnectAttempts >= WARNING_ATTEMPTS) {
+    return {
+      kind: "warning",
+      label: translate("connection.connectionHealth.connectFailed", "Can't connect"),
+      hint
+    };
+  }
+  return {
+    kind: "normal",
+    label: state === "reconnecting" ? translate("connection.connectionHealth.reconnecting", "Reconnecting\u2026") : translate("connection.connectionHealth.connecting", "Connecting\u2026"),
+    dialing: true
+  };
+}
+function isConnectionOutage(verdict) {
+  return verdict.kind === "warning" || verdict.kind === "unreachable";
+}
+function verdictDisplayLabel(verdict) {
+  if (isConnectionOutage(verdict) && verdict.hint) {
+    return translate("connection.connectionHealth.labelWithHint", "{{label}} \u2014 {{hint}}", {
+      label: verdict.label,
+      hint: verdict.hint
+    });
+  }
+  return verdict.label;
+}
+
+// orca-connection-diagnostics-entry.ts
+function describeDesktopConnection(args, translator2) {
+  return withTranslation(translator2, () => {
+    const verdict = classifyConnection(args);
+    return { kind: verdict.kind, label: verdictDisplayLabel(verdict), detail: verdict.detail };
+  });
 }

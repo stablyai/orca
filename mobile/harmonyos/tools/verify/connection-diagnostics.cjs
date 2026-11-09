@@ -6,14 +6,43 @@ const upstream = require('../../entry/src/main/ets/vendor/connection-diagnostics
 const options = {
   upstream,
   url: { URL },
-  utf8Encode: (text) => new TextEncoder().encode(text)
+  utf8Encode: (text) => new TextEncoder().encode(text),
+  uiText: (key) => key
 }
-const { redactDiagnosticText, connectionReport, reportableIncident, resolveDesktopEndpoint } =
-  loadArkts(
-    'diagnostics/ConnectionDiagnostics.ets',
-    ['redactDiagnosticText', 'connectionReport', 'reportableIncident', 'resolveDesktopEndpoint'],
-    options
-  )
+const {
+  redactDiagnosticText,
+  connectionReport,
+  reportableIncident,
+  resolveDesktopEndpoint,
+  describeDesktopConnection
+} = loadArkts(
+  'diagnostics/ConnectionDiagnostics.ets',
+  [
+    'redactDiagnosticText',
+    'connectionReport',
+    'reportableIncident',
+    'resolveDesktopEndpoint',
+    'describeDesktopConnection'
+  ],
+  options
+)
+
+test('desktop outage severity survives redials and clears on authenticated reconnect', () => {
+  const evidence = {
+    endpoint: 'ws://test.invalid:18797',
+    hostName: 'Test desktop',
+    state: 'reconnecting',
+    lastConnectedAt: 1000,
+    nowMs: 62_000
+  }
+  const describe = (state, reconnectAttempts) =>
+    describeDesktopConnection({ ...evidence, state, reconnectAttempts }, 'en').kind
+  assert.equal(describe('reconnecting', 1), 'normal')
+  assert.equal(describe('reconnecting', 3), 'warning')
+  assert.equal(describe('connecting', 12), 'unreachable')
+  assert.equal(describe('connected', 0), 'normal')
+  assert.equal(describe('auth-failed', 0), 'auth-failed')
+})
 
 test('desktop reports use the selected host history and exclude credentials and unscoped legacy events', async () => {
   let saved = JSON.stringify([{ ts: 1000, level: 'info', message: 'Legacy unscoped event' }])
