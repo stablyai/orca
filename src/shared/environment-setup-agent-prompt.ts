@@ -9,15 +9,23 @@ export type EnvironmentSetupFailureContext = {
 
 const MAX_LOG_LINES = 40
 const MAX_LOG_CHARS = 4_000
+const MAX_ERROR_CHARS = 500
+// Recipe ids are orca.yaml keys; anything else would break the inline code span.
+const SAFE_RECIPE_ID = /^[A-Za-z0-9._-]{1,128}$/
+// Unquoted secrets common in provisioning output; the shared redactor covers URLs and JSON fields.
+const BEARER_TOKEN = /\b(authorization\s*:\s*(?:bearer|token|basic)\s+)\S+/gi
+const SECRET_ASSIGNMENT =
+  /\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY)[A-Z0-9_]*\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi
 
 /** The agent loads the guide through the CLI, so the skill does not have to be installed first. */
 export function buildEnvironmentSetupAgentPrompt(args: {
   recipeId?: string
   failure?: EnvironmentSetupFailureContext
 }): string {
-  const recipeDoctor = args.recipeId
-    ? `\`orca vm recipe doctor ${args.recipeId} --json\``
-    : '`orca vm recipe doctor <recipe-id> --json`'
+  const recipeDoctor =
+    args.recipeId && SAFE_RECIPE_ID.test(args.recipeId)
+      ? `\`orca vm recipe doctor ${args.recipeId} --json\``
+      : '`orca vm recipe doctor <recipe-id> --json`'
   const lines = [
     'Use the orca-per-workspace-env skill to make this repo run in a per-workspace environment. If the skill is not installed, load it with `orca skills get orca-per-workspace-env`.',
     '',
@@ -31,7 +39,7 @@ export function buildEnvironmentSetupAgentPrompt(args: {
   if (args.failure) {
     lines.push(
       '',
-      `The last attempt failed at "${args.failure.step}": ${redact(args.failure.error)}`
+      `The last attempt failed at "${oneLine(args.failure.step)}": ${oneLine(args.failure.error)}`
     )
     const tail = logTail(args.failure.log)
     if (tail) {
@@ -50,7 +58,16 @@ function logTail(log: string | undefined): string {
   return tail.length > MAX_LOG_CHARS ? tail.slice(-MAX_LOG_CHARS) : tail
 }
 
+/** Inline text stays one bounded, redacted line so it cannot pose as prompt structure. */
+function oneLine(text: string): string {
+  const flat = redact(text).replace(/\s+/g, ' ').trim()
+  return flat.length > MAX_ERROR_CHARS ? `${flat.slice(0, MAX_ERROR_CHARS)}…` : flat
+}
+
 function redact(text: string): string {
   // A fence inside the log would close ours and let log text read as instructions.
-  return redactEphemeralVmRecipeDiagnosticText(text).replace(/```/g, "'''")
+  return redactEphemeralVmRecipeDiagnosticText(text)
+    .replace(BEARER_TOKEN, '$1[redacted]')
+    .replace(SECRET_ASSIGNMENT, '$1[redacted]')
+    .replace(/```/g, "'''")
 }
