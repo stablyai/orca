@@ -93,18 +93,55 @@ describe('paired server contact loss', () => {
     expect(isRuntimeEnvironmentContactLost(ENV)).toBe(false)
   })
 
-  it('counts control-socket reconnects, but not a socket the user closed', () => {
-    for (const at of [0, RUNTIME_CONTACT_LOST_AFTER_MS / 2, RUNTIME_CONTACT_LOST_AFTER_MS]) {
-      noteRuntimeEnvironmentSharedControlContact(ENV, { state: 'closed' }, START + at)
+  it('counts each control-socket reconnect once, but not a socket the user closed', () => {
+    const spread = [0, RUNTIME_CONTACT_LOST_AFTER_MS / 2, RUNTIME_CONTACT_LOST_AFTER_MS]
+    for (const at of spread) {
+      noteRuntimeEnvironmentSharedControlContact(
+        ENV,
+        { state: 'closed', reconnectAttempt: 0 },
+        START + at
+      )
     }
     expect(isRuntimeEnvironmentContactLost(ENV, START + RUNTIME_CONTACT_LOST_AFTER_MS)).toBe(false)
 
-    for (const at of [0, RUNTIME_CONTACT_LOST_AFTER_MS / 2, RUNTIME_CONTACT_LOST_AFTER_MS]) {
-      noteRuntimeEnvironmentSharedControlContact(ENV, { state: 'reconnecting' }, START + at)
+    // One reconnect attempt republished as its pending requests change is still one failure.
+    for (const at of spread) {
+      noteRuntimeEnvironmentSharedControlContact(
+        ENV,
+        { state: 'reconnecting', reconnectAttempt: 1 },
+        START + at
+      )
     }
+    expect(isRuntimeEnvironmentContactLost(ENV, START + RUNTIME_CONTACT_LOST_AFTER_MS)).toBe(false)
+
+    spread.forEach((at, index) =>
+      noteRuntimeEnvironmentSharedControlContact(
+        ENV,
+        { state: 'reconnecting', reconnectAttempt: index + 2 },
+        START + at
+      )
+    )
     expect(isRuntimeEnvironmentContactLost(ENV, START + RUNTIME_CONTACT_LOST_AFTER_MS)).toBe(true)
 
-    noteRuntimeEnvironmentSharedControlContact(ENV, { state: 'ready' })
+    noteRuntimeEnvironmentSharedControlContact(ENV, { state: 'ready', reconnectAttempt: 0 })
     expect(isRuntimeEnvironmentContactLost(ENV, START + RUNTIME_CONTACT_LOST_AFTER_MS)).toBe(false)
+  })
+
+  it('starts over after a quiet spell longer than any retry, such as the computer sleeping', () => {
+    // A drop as the computer went to sleep, then quick failures while its network comes back.
+    noteRuntimeEnvironmentSharedControlContact(
+      ENV,
+      { state: 'reconnecting', reconnectAttempt: 1 },
+      START
+    )
+    const woke = START + 8 * 60 * 60_000
+    for (const [index, at] of [0, 2_000, 4_000].entries()) {
+      noteRuntimeEnvironmentSharedControlContact(
+        ENV,
+        { state: 'reconnecting', reconnectAttempt: index + 2 },
+        woke + at
+      )
+    }
+    expect(isRuntimeEnvironmentContactLost(ENV, woke + 5_000)).toBe(false)
   })
 })

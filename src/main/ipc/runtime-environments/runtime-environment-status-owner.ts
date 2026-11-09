@@ -146,7 +146,8 @@ export function createRuntimeEnvironmentStatusOwner(
         noteRuntimeEnvironmentStatusContact(environment.id, response)
         return response
       } catch (error) {
-        if (!signal.aborted) {
+        // A malformed reply still came from the server; the owner blocks on it.
+        if (!signal.aborted && !(error instanceof TypeError || error instanceof SyntaxError)) {
           noteRuntimeEnvironmentStatusContact(environment.id, runtimeHostStatusError(error))
         }
         throw error

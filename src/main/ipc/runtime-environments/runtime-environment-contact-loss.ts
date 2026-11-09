@@ -11,6 +11,10 @@ import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../shared/r
  */
 export const RUNTIME_CONTACT_LOST_AFTER_MS = 3 * 60_000
 const MIN_FAILED_CONTACTS = 3
+/** Longest quiet spell between failures that still counts as one outage. Orca's slowest retry is
+ *  5 minutes apart; a longer gap means it was not trying (the computer slept), so the old
+ *  failures say nothing about now. */
+const MAX_FAILURE_GAP_MS = 6 * 60_000
 
 /** The dial failed or nothing answered: no evidence the server is there. */
 const UNREACHED_CODES: ReadonlySet<string> = new Set([
@@ -19,7 +23,13 @@ const UNREACHED_CODES: ReadonlySet<string> = new Set([
   'runtime_unavailable'
 ])
 
-type Outage = { since: number; failures: number }
+type Outage = {
+  since: number
+  lastFailureAt: number
+  failures: number
+  /** The control socket's last counted reconnect attempt, so one attempt counts once. */
+  reconnectAttempt?: number
+}
 
 /** Environment id → its current run of failed contacts. Only fed by dials Orca already makes. */
 const outages = new Map<string, Outage>()
@@ -28,12 +38,19 @@ function noteReached(environmentId: string): void {
   outages.delete(environmentId)
 }
 
-function noteUnreached(environmentId: string, now: number): void {
+function noteUnreached(environmentId: string, now: number, reconnectAttempt?: number): void {
   const outage = outages.get(environmentId)
-  if (outage) {
-    outage.failures += 1
-  } else {
-    outages.set(environmentId, { since: now, failures: 1 })
+  if (!outage || now - outage.lastFailureAt > MAX_FAILURE_GAP_MS) {
+    outages.set(environmentId, { since: now, lastFailureAt: now, failures: 1, reconnectAttempt })
+    return
+  }
+  if (reconnectAttempt !== undefined && reconnectAttempt === outage.reconnectAttempt) {
+    return
+  }
+  outage.failures += 1
+  outage.lastFailureAt = now
+  if (reconnectAttempt !== undefined) {
+    outage.reconnectAttempt = reconnectAttempt
   }
 }
 
@@ -51,16 +68,17 @@ export function noteRuntimeEnvironmentStatusContact(
   }
 }
 
-/** The shared control socket's state: ready is an answer, each reconnect is a failed contact. */
+/** The shared control socket's state: ready is an answer, each reconnect attempt is a failed
+ *  contact (other diagnostics changes while reconnecting are not new attempts). */
 export function noteRuntimeEnvironmentSharedControlContact(
   environmentId: string,
-  diagnostics: Pick<RemoteRuntimeSharedConnectionDiagnostics, 'state'>,
+  diagnostics: Pick<RemoteRuntimeSharedConnectionDiagnostics, 'state' | 'reconnectAttempt'>,
   now = Date.now()
 ): void {
   if (diagnostics.state === 'ready') {
     noteReached(environmentId)
   } else if (diagnostics.state === 'reconnecting') {
-    noteUnreached(environmentId, now)
+    noteUnreached(environmentId, now, diagnostics.reconnectAttempt)
   }
 }
 
@@ -71,7 +89,8 @@ export function isRuntimeEnvironmentContactLost(environmentId: string, now = Dat
   return (
     outage !== undefined &&
     outage.failures >= MIN_FAILED_CONTACTS &&
-    now - outage.since >= RUNTIME_CONTACT_LOST_AFTER_MS
+    now - outage.since >= RUNTIME_CONTACT_LOST_AFTER_MS &&
+    now - outage.lastFailureAt <= MAX_FAILURE_GAP_MS
   )
 }
 
