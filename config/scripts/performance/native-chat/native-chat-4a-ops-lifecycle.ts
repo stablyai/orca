@@ -1,5 +1,5 @@
 // 4a process-lifecycle rows: cold/warm open and rewind; first launch on the seeded profile lives in the conversion module.
-import { unconvertedOpenTarget } from './native-chat-4a-fixture'
+import { seededChats, unconvertedOpenTarget } from './native-chat-4a-fixture'
 import { markerSeenAt, rendererNow, rendererTime, rpc, watchMarkers } from './native-chat-4a-probes'
 import type { Sample } from './native-chat-4a-report'
 import {
@@ -59,7 +59,7 @@ export async function openRows(ctx: RunContext): Promise<void> {
   const large: Chat = { sessionId: largeSessionId, worktreeId: workspace.worktreeIds[0] }
   const small: Chat = { sessionId: fillerSessionIds[0]!, worktreeId: workspace.worktreeIds[1] }
   const marks = { large: await markTail(ctx, large), small: await markTail(ctx, small) }
-  const context = { largeItems: ctx.manifest.largeItems, chats: fillerSessionIds.length + 1 }
+  const context = { largeItems: ctx.manifest.largeItems, chats: seededChats(ctx.manifest).length }
   const ready = addRow(ctx, {
     family: 'open',
     operation: 'launch to session ready (metadata only)',
