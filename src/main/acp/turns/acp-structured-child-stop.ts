@@ -5,7 +5,7 @@ import {
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpChildStops, AcpDialect } from '../acp-dialects/acp-dialect'
-import { AcpAgentError } from '../transport/acp-errors'
+import { AcpAgentError, AcpRequestTimeoutError } from '../transport/acp-errors'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import type {
   AgentChildWorkStopAcknowledgement,
@@ -89,15 +89,17 @@ async function closeAcpChildSession(
   session: AcpStructuredSession,
   id: string
 ): Promise<ChildStopResult> {
+  // Closing a child that has not started running interrupts nothing, so Stop stays available.
+  const started = session.lane.translator.children.started(id)
   try {
     await session.connection.closeSession(id)
-    return { cancelled: true }
   } catch (error) {
-    if (error instanceof AcpAgentError) {
+    if (error instanceof AcpAgentError || error instanceof AcpRequestTimeoutError) {
       return { cancelled: false, stillRunning: true }
     }
     throw error
   }
+  return started ? { cancelled: true } : { cancelled: false, stillRunning: true }
 }
 
 /** A user's Stop also ends subagents that outlive the cancelled turn. */

@@ -155,8 +155,11 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     if (input.turnId !== undefined && liveTurnId !== null && input.turnId !== liveTurnId) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
-    // A user's Stop ends subagents too, even when the root turn ended just before it arrived.
-    closeAcpChildSessions(session)
+    // A chat Stop ends subagents too, even when the root turn ended just before it arrived;
+    // a permission card's Cancel stops only its own turn.
+    if (!input.prompt) {
+      closeAcpChildSessions(session)
+    }
     if (!stop.acpStopHasWork(session)) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }

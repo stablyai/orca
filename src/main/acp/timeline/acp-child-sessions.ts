@@ -30,6 +30,8 @@ export class AcpChildSessions {
   private readonly openText = new Map<string, ProviderTimelineTextItem>()
   /** Children that have not reported an ending, which a user's Stop also ends. */
   private readonly running = new Set<string>()
+  /** Live children whose execution has started, so closing their session interrupts it. */
+  private readonly executing = new Set<string>()
 
   constructor(
     private readonly rootSessionId: string,
@@ -40,6 +42,10 @@ export class AcpChildSessions {
 
   live(): readonly string[] {
     return [...this.running]
+  }
+
+  started(id: string): boolean {
+    return this.executing.has(id)
   }
 
   /** A child session's events, or undefined when the notification is the root's own. */
@@ -109,8 +115,13 @@ export class AcpChildSessions {
       if (child.state !== undefined || !known) {
         this.running.add(child.agentId)
       }
+      // A child seen mid-run (its start came before this process) is executing too.
+      if ((child.started || child.update) && this.running.has(child.agentId)) {
+        this.executing.add(child.agentId)
+      }
     } else {
       this.running.delete(child.agentId)
+      this.executing.delete(child.agentId)
       events.push(
         ...this.closeText(`${child.agentId}:assistant`),
         ...this.closeText(`${child.agentId}:reasoning`)

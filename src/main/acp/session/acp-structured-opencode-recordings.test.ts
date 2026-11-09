@@ -215,7 +215,46 @@ describe('OpenCode 2 recordings through the adapter', () => {
       fence: 1
     })
     await waitFor(async () => expect(await turns(rig)).toMatchObject([{ state: 'completed' }]))
+    // A permission card's Cancel stops only its own turn.
+    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1, prompt: { itemId: 'card' } })
+    expect(closed).toEqual([])
     await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
     await waitFor(() => expect(closed).toEqual([{ sessionId: 'child-1' }]))
+  })
+
+  it("a subagent's own Stop before it starts running stays available, and works once it runs", async () => {
+    const child = {
+      rootSessionId: PROVIDER_SESSION,
+      childSessionId: 'child-1',
+      parentSessionId: PROVIDER_SESSION,
+      depth: 1
+    }
+    let notify: (status: string) => void = () => {}
+    const rig = await openAcpAdapterRig({
+      spec: acpLaunchSpecFor('opencode2')!,
+      initialize: { agentCapabilities: { loadSession: true, sessionCapabilities: { close: {} } } },
+      script: (agent) => {
+        notify = (status) =>
+          agent.notify('opencode/session/child_update', { ...child, type: 'status', status })
+        agent.on('session/prompt', (frame) => {
+          notify('created')
+          agent.reply(frame, { stopReason: 'end_turn' })
+        })
+        agent.on('session/close', (frame) => agent.reply(frame, {}))
+      }
+    })
+    await rig.acquire()
+    await rig.adapter.dispatch({
+      sessionId: SESSION,
+      clientMessageId: 'send-1',
+      body: ask,
+      fence: 1
+    })
+    await waitFor(async () => expect(await turns(rig)).toMatchObject([{ state: 'completed' }]))
+    const stop = () =>
+      rig.adapter.stopBackgroundTasks!({ sessionId: SESSION, fence: 1, taskIds: ['child-1'] })
+    await expect(stop()).resolves.toEqual({ cancelled: false, stillRunning: true })
+    notify('running')
+    await waitFor(() => expect(stop()).resolves.toEqual({ cancelled: true }))
   })
 })
