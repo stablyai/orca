@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -141,6 +141,20 @@ describe('cloud offline cache', () => {
     cache.clear()
     expect(existsSync(root)).toBe(false)
     expect(cache.lookup('c', 'git.status', { worktree: 'c' })).toBeNull()
+  })
+})
+
+describe('legacy plaintext cache files', () => {
+  it('are removed whatever the codec', () => {
+    for (const sealing of [testCodec, null]) {
+      const root = mkdtempSync(join(tmpdir(), 'orca-offline-'))
+      writeFileSync(
+        join(root, 'abc.json'),
+        '{"version":1,"entries":{"k":{"result":"old plaintext"}}}'
+      )
+      createCloudOfflineCache({ root, codec: sealing, flushDelayMs: 0 })
+      expect(readdirSync(root)).toEqual([])
+    }
   })
 })
 

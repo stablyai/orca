@@ -14,7 +14,6 @@ import {
 } from '../../shared/hosted-sandbox/cloud-workspace-offline-api'
 import { RECIPE_VM_OPEN_HOLD_MS } from '../../shared/remote-runtime/recipe-vm-wake'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import { guardedSafeStorage } from '../host/safe-storage-availability'
 import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/runtime-environment-manual-disconnect'
 import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import {
@@ -24,11 +23,11 @@ import {
 } from './cloud-message-queue'
 import {
   createCloudOfflineCache,
-  OFFLINE_READ_METHODS,
   type CloudOfflineCache,
   type OfflineCacheCodec
 } from './cloud-offline-cache'
 import { setCloudOfflineReset } from './cloud-offline-reset'
+import { safeStorageCodec, setCloudOfflineObserver } from './cloud-offline-seam'
 import { archiveCheckoutsFromCache, buildOfflineSnapshot } from './cloud-offline-snapshot'
 import { getHostedWorkspaceService, setArchiveCheckoutsProvider } from './hosted-workspace-service'
 
@@ -41,21 +40,6 @@ type CloudRuntimeInfo = {
 
 const CAPTURE_BUDGET_MS = 8_000
 const MAX_CAPTURED_TERMINALS = 12
-
-/** The OS keychain seals the cache and queue; without it nothing reaches disk. */
-export function safeStorageCodec(): OfflineCacheCodec | null {
-  try {
-    if (!guardedSafeStorage.isEncryptionAvailable()) {
-      return null
-    }
-  } catch {
-    return null
-  }
-  return {
-    encrypt: (plain) => guardedSafeStorage.encryptString(plain),
-    decrypt: (sealed) => guardedSafeStorage.decryptString(sealed)
-  }
-}
 
 export type CloudOfflineService = {
   cache: CloudOfflineCache
@@ -71,33 +55,6 @@ type Call = (
   params: unknown,
   timeoutMs: number
 ) => Promise<RuntimeRpcResponse<unknown>>
-
-let observer:
-  | ((
-      environmentId: string,
-      method: string,
-      params: unknown,
-      response: RuntimeRpcResponse<unknown>
-    ) => void)
-  | null = null
-
-/** The window's call seam: keep allowlisted answers from Orca Cloud VMs. Never alters the answer. */
-export function observeCloudOfflineAnswer(
-  environmentId: string,
-  method: string,
-  params: unknown,
-  response: RuntimeRpcResponse<unknown>
-): RuntimeRpcResponse<unknown> {
-  if (observer && response.ok && OFFLINE_READ_METHODS.has(method)) {
-    try {
-      observer(environmentId, method, params, response)
-    } catch (error) {
-      // Caching is best effort; the window gets its answer either way.
-      console.error(`[orca-cloud] offline cache record failed: ${String(error)}`)
-    }
-  }
-  return response
-}
 
 export function installCloudOfflineService(deps: {
   userDataPath: string
@@ -265,11 +222,11 @@ export function installCloudOfflineService(deps: {
     log
   })
 
-  observer = (environmentId, method, params, response) => {
+  setCloudOfflineObserver((environmentId, method, params, response) => {
     if (response.ok && runtimes().byEnvironment.has(environmentId)) {
       cache.record(environmentId, method, params, response)
     }
-  }
+  })
   setCloudOfflineReset(() => {
     cache.clear()
     queue.clear()
@@ -334,7 +291,7 @@ export function installCloudOfflineService(deps: {
       clearInterval(beat)
       clearTimeout(startup)
       cache.flush()
-      observer = null
+      setCloudOfflineObserver(null)
       setCloudOfflineReset(null)
       setArchiveCheckoutsProvider(null)
       for (const channel of Object.values(CH)) {
@@ -344,25 +301,10 @@ export function installCloudOfflineService(deps: {
   }
 }
 
-let current: CloudOfflineService | null = null
-export function setCloudOfflineService(next: CloudOfflineService | null): void {
-  current = next
-}
-
-/** Before a Sleep: snapshot every Orca Cloud workspace among `workspaceIds` (no-op otherwise). */
-export async function captureCloudWorkspacesBeforeSleep(
-  workspaceIds: readonly string[]
-): Promise<void> {
-  const service = current
-  if (!service) {
-    return
-  }
-  await Promise.all(workspaceIds.map((id) => service.capture(id).catch(() => undefined)))
-}
-
-/** After a Sleep or archive: prompts still waiting fail rather than wake the VM later. */
-export function failQueuedCloudPrompts(workspaceIds: readonly string[], reason: string): void {
-  for (const id of workspaceIds) {
-    current?.queue.failPending(id, reason)
-  }
-}
+export {
+  captureCloudWorkspacesBeforeSleep,
+  failQueuedCloudPrompts,
+  observeCloudOfflineAnswer,
+  safeStorageCodec,
+  setCloudOfflineService
+} from './cloud-offline-seam'

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -356,5 +356,83 @@ describe('cloud message queue', () => {
     await sealed.queue.enqueue({ workspaceId: 'w', sessionId: SESSION, text: 'x' })
     sealed.queue.clear()
     expect(sealed.queue.list('w')).toEqual([])
+  })
+
+  it('does not resurrect a prompt a Sleep failed while its fence was being read', async () => {
+    const clock = { now: Date.now() }
+    const host = realishHost(() => clock.now)
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const gated: CloudMessageQueueDeps['call'] = async (env, method, params, t) => {
+      if (method === 'agentSession.history') {
+        await gate
+      }
+      return host.call(env, method, params, t)
+    }
+    const queue = createCloudMessageQueue({
+      path: join(mkdtempSync(join(tmpdir(), 'orca-q-')), 'q.bin'),
+      codec,
+      now: () => clock.now,
+      locate: async () => ({ kind: 'up', environmentId: 'env' }),
+      wake: async () => true,
+      call: gated,
+      log: () => {}
+    })
+    await queue.enqueue({ workspaceId: 'w', sessionId: SESSION, text: 'slept meanwhile' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    queue.failPending('w', 'The workspace was put to sleep before this was sent.')
+    release()
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(host.effects).toHaveLength(0)
+    expect(queue.list('w')[0]!.state).toBe('failed')
+  })
+
+  it('ends a sent-but-unconfirmed prompt as unconfirmed, not failed, at its budget', async () => {
+    const clock = { now: Date.now() }
+    const host = realishHost(() => clock.now)
+    const lossy: CloudMessageQueueDeps['call'] = async (env, method, params, t) => {
+      const answer = await host.call(env, method, params, t)
+      if (method === 'agentSession.send') {
+        throw new Error('reply lost')
+      }
+      return answer
+    }
+    const queue = createCloudMessageQueue({
+      path: join(mkdtempSync(join(tmpdir(), 'orca-q-')), 'q.bin'),
+      codec,
+      now: () => clock.now,
+      locate: async () => ({ kind: 'up', environmentId: 'env' }),
+      wake: async () => true,
+      call: lossy,
+      log: () => {}
+    })
+    await queue.enqueue({ workspaceId: 'w', sessionId: SESSION, text: 'maybe sent' })
+    for (let i = 0; i < MAX_FAILURES + 1; i++) {
+      clock.now += 60 * 60_000
+      await queue.drive()
+    }
+    expect(queue.list('w')[0]!.state).toBe('unconfirmed')
+    // The host saw it once; every retry replayed the same operation.
+    expect(host.effects).toHaveLength(1)
+  })
+
+  it('removes the old plaintext queue file at install and on clear, even without a keychain', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-q-'))
+    const legacy = join(dir, 'orca-cloud-queued-prompts.json')
+    writeFileSync(legacy, '{"version":1,"prompts":[{"text":"old plaintext"}]}')
+    const queue = createCloudMessageQueue({
+      path: join(dir, 'orca-cloud-queued-prompts.bin'),
+      codec: null,
+      locate: async () => ({ kind: 'gone' }),
+      wake: async () => false,
+      call: async () => {
+        throw new Error('no')
+      },
+      log: () => {}
+    })
+    expect(existsSync(legacy)).toBe(false)
+    writeFileSync(legacy, 'again')
+    queue.clear()
+    expect(existsSync(legacy)).toBe(false)
   })
 })

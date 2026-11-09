@@ -26,7 +26,8 @@ function QueuedPromptRow({
     queued: t('components.orcaCloud.offline.queued', 'Queued · sends when the workspace wakes'),
     sending: t('components.orcaCloud.offline.sending', 'Delivering…'),
     delivered: t('components.orcaCloud.offline.delivered', 'Delivered'),
-    failed: t('components.orcaCloud.offline.failed', 'Not delivered')
+    failed: t('components.orcaCloud.offline.failed', 'Not delivered'),
+    unconfirmed: t('components.orcaCloud.offline.unconfirmed', 'May have been delivered')
   }[prompt.state]
   return (
     <li
