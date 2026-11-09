@@ -22,10 +22,14 @@ import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
 function createPairedRuntimePortForwardConnector(
   getUserDataPath: () => string
 ): PortForwardTunnelConnector {
-  return createPortForwardConnector(async (environmentId) => {
+  return createPortForwardConnector(async (environmentId, { wake }) => {
     const userDataPath = getUserDataPath()
-    // Wake-first: a connection to a sleeping VM wakes it (held up to the open timeout) instead of failing.
-    await prepareRecipeVm(userDataPath, resolveEnvironment(userDataPath, environmentId), 'wake')
+    // User actions wake a sleeping VM (held up to the open timeout); a stray connection is refused.
+    await prepareRecipeVm(
+      userDataPath,
+      resolveEnvironment(userDataPath, environmentId),
+      wake ? 'wake' : 'none'
+    )
     await ensureOrcadManagedTunnel(userDataPath, environmentId)
     return getPreferredPairedRuntimeConnection(resolveEnvironment(userDataPath, environmentId))
   })

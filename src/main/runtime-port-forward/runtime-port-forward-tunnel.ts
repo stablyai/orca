@@ -26,15 +26,20 @@ export class PortForwardTunnelError extends Error {
 /** Opens one host session: a WebSocket subscription that multiplexes this client's forwarded connections. */
 export type PortForwardTunnelConnector = (
   environmentId: string,
-  onClosed: (error: Error) => void
+  onClosed: (error: Error) => void,
+  /** Wake a sleeping VM first: only for explicit user actions, never a stray connection (an open tab). */
+  options?: { wake: boolean }
 ) => Promise<{ client: BrowserNetworkTunnelClient; close: () => void }>
 
 /** Subscribes to the host's forward tunnel over whatever paired connection `resolveConnection` returns. */
 export function createPortForwardConnector(
-  resolveConnection: (environmentId: string) => Promise<PairedRuntimeConnection>
+  resolveConnection: (
+    environmentId: string,
+    options: { wake: boolean }
+  ) => Promise<PairedRuntimeConnection>
 ): PortForwardTunnelConnector {
-  return async (environmentId, onClosed) => {
-    const connection = await resolveConnection(environmentId)
+  return async (environmentId, onClosed, options = { wake: false }) => {
+    const connection = await resolveConnection(environmentId, options)
     const ready = Promise.withResolvers<BrowserNetworkTunnelClient>()
     let client: BrowserNetworkTunnelClient | null = null
     let subscription: RemoteRuntimeTransportSubscription | null = null
@@ -135,17 +140,20 @@ export class EnvironmentPortForwardTunnel {
     private readonly connector: PortForwardTunnelConnector
   ) {}
 
+  /** A local connection never wakes a sleeping VM; it fails until the user reconnects. */
   async open(remotePort: number): Promise<BrowserNetworkTunnelDuplex> {
-    const session = await this.session()
+    const session = await this.session(false)
     return session.client.open({ host: '127.0.0.1', port: remotePort })
   }
 
   /** Opens the host session without a connection, so failures surface when the forward is added. */
-  async warm(): Promise<void> {
-    await this.session()
+  async warm(wake: boolean): Promise<void> {
+    await this.session(wake)
   }
 
-  private async session(): Promise<{ client: BrowserNetworkTunnelClient; close: () => void }> {
+  private async session(
+    wake: boolean
+  ): Promise<{ client: BrowserNetworkTunnelClient; close: () => void }> {
     const existing = this.current
     if (existing) {
       const session = await existing.catch(() => null)
@@ -157,11 +165,15 @@ export class EnvironmentPortForwardTunnel {
         this.current = null
       }
     }
-    const attempt = this.connector(this.environmentId, () => {
-      if (this.current === attempt) {
-        this.current = null
-      }
-    })
+    const attempt = this.connector(
+      this.environmentId,
+      () => {
+        if (this.current === attempt) {
+          this.current = null
+        }
+      },
+      { wake }
+    )
     this.current = attempt
     attempt.catch(() => {
       if (this.current === attempt) {

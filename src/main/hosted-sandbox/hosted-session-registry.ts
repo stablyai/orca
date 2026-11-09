@@ -24,6 +24,10 @@ import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment
 import type { HostedActivitySample } from './hosted-session-lease-policy'
 import { HostedSessionLeaseScheduler } from './hosted-session-lease-scheduler'
 import { cloudSshActiveAt } from '../cloud-ssh/cloud-ssh-activity'
+import { getRuntimePortForwardManager } from '../runtime-port-forward/runtime-port-forward-manager'
+
+/** Matches the SSH and PTY quiet window. */
+const FORWARD_ACTIVE_FOR_MS = 2 * 60_000
 
 const WorkVerdict = z.object({
   verdict: z.enum(['idle', 'busy', 'unverifiable']),
@@ -79,6 +83,12 @@ export function createHostedSessionRegistry(deps: {
         const sshActiveAt = cloudSshActiveAt(runtimeEnvironmentId)
         if (sshActiveAt !== null) {
           return { verdict: 'busy', idleSince: null, lastPtyInputAt: sshActiveAt }
+        }
+        // Same for a dev server or remote desktop used through a port forward on this computer.
+        const forwardActiveAt =
+          getRuntimePortForwardManager()?.lastActivityAt(runtimeEnvironmentId) ?? null
+        if (forwardActiveAt !== null && Date.now() - forwardActiveAt <= FORWARD_ACTIVE_FOR_MS) {
+          return { verdict: 'busy', idleSince: null, lastPtyInputAt: forwardActiveAt }
         }
         const response = await callRuntimeEnvironment(
           deps.userDataPath,
