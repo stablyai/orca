@@ -23,7 +23,11 @@ import {
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
 import { setHostedSessionSync } from './hosted-session-sync'
 import { installCloudOfflineService, setCloudOfflineService } from './cloud-offline-service'
-import { findCloudRuntime } from './hosted-workspace-runtime'
+import {
+  findCloudRuntime,
+  isArchivedOnControlPlane,
+  setCloudArchiveCheck
+} from './hosted-workspace-runtime'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
@@ -66,6 +70,7 @@ export function installHostedSandbox(): void {
     stopSession: (environmentId) => registry.stopEnvironment(environmentId)
   })
   setHostedWorkspaceService(workspaces)
+  setCloudArchiveCheck((workspaceId) => isArchivedOnControlPlane(userDataPath, client, workspaceId))
   const offline = installCloudOfflineService({
     userDataPath,
     call: (environmentId, method, params, timeoutMs) =>
@@ -114,6 +119,7 @@ export function installHostedSandbox(): void {
     registry.dispose()
     workspaces.dispose()
     setHostedWorkspaceService(null)
+    setCloudArchiveCheck(null)
     offline.dispose()
     setCloudOfflineService(null)
   })

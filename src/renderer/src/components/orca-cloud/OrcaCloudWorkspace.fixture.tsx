@@ -297,8 +297,8 @@ function IdleToast(): React.JSX.Element {
   }, [])
   return (
     <>
-      <div className="h-[160px] bg-background" />
-      <Toaster position="bottom-right" toastOptions={{ className: 'font-sans text-sm' }} />
+      <div className="h-[200px] bg-background" />
+      <Toaster position="top-left" toastOptions={{ className: "font-sans text-sm" }} />
     </>
   )
 }

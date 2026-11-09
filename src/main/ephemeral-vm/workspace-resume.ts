@@ -10,7 +10,7 @@ import {
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { syncHostedSessions } from '../hosted-sandbox/hosted-session-sync'
-import { getHostedWorkspaceService } from '../hosted-sandbox/hosted-workspace-runtime'
+import { isCloudWorkspaceArchivedOnControlPlane } from '../hosted-sandbox/hosted-workspace-runtime'
 import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
@@ -68,7 +68,7 @@ export async function resumeEphemeralVmWorkspace(
   // stale window (or a cold start before its status loaded) can never wake it by opening it.
   if (
     runtime.recipe?.provider === 'orca-cloud' &&
-    (await getHostedWorkspaceService()?.isArchived(workspaceId))
+    (await isCloudWorkspaceArchivedOnControlPlane(workspaceId))
   ) {
     restoreAfterFailedRecovery()
     throw new Error(CLOUD_WORKSPACE_ARCHIVED_ERROR)

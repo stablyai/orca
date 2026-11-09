@@ -152,7 +152,7 @@ export function CloudWorkspaceStatusPanel({
   const detail = unavailable
     ? null
     : restarting
-      ? t('orcaCloudWorkspace.detail.restarting', 'Restarting… Orca resumes your agents after the restart.')
+      ? t('orcaCloudWorkspace.detail.restarting', 'Orca resumes your agents after the restart.')
       : cloudStateDetail(state, t)
   const showMeters = Boolean(metrics) && (state === 'running' || state === 'unresponsive')
 

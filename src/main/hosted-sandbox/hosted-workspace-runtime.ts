@@ -182,3 +182,13 @@ export async function isArchivedOnControlPlane(
     return false
   }
 }
+
+let archiveCheck: ((workspaceId: string) => Promise<boolean>) | null = null
+/** Installed with Orca Cloud; the wake path asks it before resuming a cloud workspace. */
+export function setCloudArchiveCheck(check: ((workspaceId: string) => Promise<boolean>) | null): void {
+  archiveCheck = check
+}
+/** False when Orca Cloud is off in this build. */
+export function isCloudWorkspaceArchivedOnControlPlane(workspaceId: string): Promise<boolean> {
+  return archiveCheck ? archiveCheck(workspaceId) : Promise.resolve(false)
+}

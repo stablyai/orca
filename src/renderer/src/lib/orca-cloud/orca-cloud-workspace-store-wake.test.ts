@@ -70,7 +70,7 @@ describe('wake state and archive guard', () => {
       async () => {
         inFlight++
         peak = Math.max(peak, inFlight)
-        await new Promise((resolve) => setTimeout(resolve, 5))
+        await new Promise((resolve) => setTimeout(resolve, 0))
         inFlight--
         return { ok: true, value: status('sleeping') }
       },
