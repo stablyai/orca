@@ -32,7 +32,7 @@ it('resolves a custom Claude command against the login shell PATH', async () => 
   }
 })
 
-it('names Orca as the Claude client unless the launch environment sets one', () => {
+it('isolates inherited Claude stamps before applying launch settings', () => {
   const sources = {
     command: 'claude',
     prefixArgs: [],

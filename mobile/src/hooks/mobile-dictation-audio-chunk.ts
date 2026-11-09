@@ -260,7 +260,7 @@ async function sendAudioChunk(
     dictationId,
     audioBase64: bytesToBase64(bytes),
     sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE,
-    seq: queue.pendingAudioBudget.nextSeq()
+    seq: queue.pendingAudioBudget.nextSeq(bytes.byteLength)
   }
   const hostDedupesResends = queue.pendingAudioBudget.hostDedupesResends
   try {
