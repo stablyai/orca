@@ -1380,6 +1380,32 @@
       "sessionLimit": "На этом компьютере диктует слишком много устройств. Повторите попытку, когда одно из них закончит.",
       "sessionLost": "Во время диктовки потеряно соединение с компьютером. Попробуйте ещё раз.",
       "updateFailed": "Не удалось обновить настройки диктовки"
+    },
+    "controls": {
+      "start": "Диктовать",
+      "starting": "Диктовка запускается",
+      "stop": "Остановить и вставить",
+      "finishing": "Диктовка завершается",
+      "cancel": "Отменить диктовку",
+      "meterOnPhone": "Запись, {{duration}}, на этом телефоне",
+      "meterOn": "Запись, {{duration}}, на {{computer}}",
+      "meterOnComputer": "Запись, {{duration}}, на компьютере",
+      "meter": "Запись, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} секунда",
+      "durationSeconds_other": "{{count}} секунды",
+      "durationSeconds_few": "{{count}} секунды",
+      "durationSeconds_many": "{{count}} секунд",
+      "durationMinutes_one": "{{count}} минута",
+      "durationMinutes_other": "{{count}} минуты",
+      "durationMinutes_few": "{{count}} минуты",
+      "durationMinutes_many": "{{count}} минут"
+    },
+    "status": {
+      "finishingOn": "Завершается на {{computer}}",
+      "finishingOnComputer": "Завершается на компьютере",
+      "movedTo": "Перешло на {{computer}}",
+      "movedToComputer": "Перешло на компьютер"
     }
   },
   "files": {
@@ -2538,11 +2564,7 @@
     "terminalInputActions": {
       "attachFileHint": "Нажмите и удерживайте, чтобы прикрепить файл вместо фото",
       "attachPhoto": "Прикрепить фото",
-      "sendingImage": "Отправка изображения",
-      "startDictation": "Начать диктовку",
-      "startingDictation": "Запуск диктовки",
-      "stopDictation": "Остановить диктовку",
-      "transcribingDictation": "Распознавание диктовки"
+      "sendingImage": "Отправка изображения"
     },
     "terminalLiveInputStatus": {
       "listening": "Прослушивание",
@@ -2551,8 +2573,6 @@
       "processing": "Обработка",
       "releaseMicHint": "Отпустите кнопку микрофона, чтобы остановить запись",
       "startingMic": "Включение микрофона",
-      "stopHint": "Нажмите на микрофон, чтобы остановить",
-      "transcribing": "Распознавание на компьютере",
       "uploadingImage": "Загрузка изображения на сервер",
       "uploadingImageTitle": "Загрузка изображения"
     },
