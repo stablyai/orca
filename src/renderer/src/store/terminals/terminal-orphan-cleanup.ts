@@ -99,7 +99,9 @@ export function buildOrphanTerminalCompanionCleanupPatch(
     | 'pendingStartupByTabId'
   >,
   worktreeId: string,
-  orphanTerminalIds: Set<string>
+  orphanTerminalIds: Set<string>,
+  // The full cleanup already filtered this bucket; reuse it instead of a second pass.
+  keptTabs?: AppState['tabsByWorktree'][string]
 ): OrphanTerminalCompanionCleanup {
   if (orphanTerminalIds.size === 0) {
     return {
@@ -117,9 +119,9 @@ export function buildOrphanTerminalCompanionCleanupPatch(
     }
   }
 
-  const firstKeptTab = (state.tabsByWorktree[worktreeId] ?? []).find(
-    (tab) => !orphanTerminalIds.has(tab.id)
-  )
+  const firstKeptTab = keptTabs
+    ? keptTabs[0]
+    : (state.tabsByWorktree[worktreeId] ?? []).find((tab) => !orphanTerminalIds.has(tab.id))
   const nextExpandedPaneByTabId = { ...state.expandedPaneByTabId }
   const nextCanExpandPaneByTabId = { ...state.canExpandPaneByTabId }
   const nextPendingInitialCwdByTabId = { ...state.pendingInitialCwdByTabId }
@@ -179,10 +181,9 @@ export function buildOrphanTerminalCleanupPatch(
   worktreeId: string,
   orphanTerminalIds: Set<string>
 ): Pick<AppState, keyof OrphanTerminalCleanupState> {
-  const companions = buildOrphanTerminalCompanionCleanupPatch(state, worktreeId, orphanTerminalIds)
   if (orphanTerminalIds.size === 0) {
     return {
-      ...companions,
+      ...buildOrphanTerminalCompanionCleanupPatch(state, worktreeId, orphanTerminalIds),
       tabsByWorktree: state.tabsByWorktree,
       ptyIdsByTabId: state.ptyIdsByTabId,
       runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
@@ -190,6 +191,15 @@ export function buildOrphanTerminalCleanupPatch(
       pendingStartupByTabId: state.pendingStartupByTabId
     }
   }
+  const keptTabs = (state.tabsByWorktree[worktreeId] ?? []).filter(
+    (tab) => !orphanTerminalIds.has(tab.id)
+  )
+  const companions = buildOrphanTerminalCompanionCleanupPatch(
+    state,
+    worktreeId,
+    orphanTerminalIds,
+    keptTabs
+  )
   const nextPtyIdsByTabId = { ...state.ptyIdsByTabId }
   const nextRuntimePaneTitlesByTabId = { ...state.runtimePaneTitlesByTabId }
   const nextTerminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
@@ -204,9 +214,7 @@ export function buildOrphanTerminalCleanupPatch(
     ...companions,
     tabsByWorktree: {
       ...state.tabsByWorktree,
-      [worktreeId]: (state.tabsByWorktree[worktreeId] ?? []).filter(
-        (tab) => !orphanTerminalIds.has(tab.id)
-      )
+      [worktreeId]: keptTabs
     },
     ptyIdsByTabId: nextPtyIdsByTabId,
     runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
