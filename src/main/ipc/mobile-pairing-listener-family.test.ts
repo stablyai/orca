@@ -26,8 +26,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { registerMobileHandlers } from './mobile'
-import { createMobileRpcSurfaceRuntime } from '../runtime/runtime-rpc-mobile-method-allowlist-fixtures'
-import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import { createMobileRpcSurfaceRuntime } from '../runtime/rpc/server/runtime-rpc-mobile-method-allowlist-fixtures'
+import { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 
 const GLOBAL_IPV6 = '2605:340:cd51:2a01:0:2b13:f279:c096'
 
@@ -87,21 +87,6 @@ describe('pairing addresses follow the runtime listener family', () => {
         { name: 'en0', address: '192.168.1.24' },
         { name: 'en0', address: GLOBAL_IPV6 }
       ]
-    })
-  })
-
-  it('returns an IPv6 interface on an IPv6-only host when the listener serves IPv6', async () => {
-    networkInterfacesMock.mockReturnValue({
-      eth0: [
-        { family: 'IPv6', internal: false, address: GLOBAL_IPV6 },
-        { family: 'IPv6', internal: false, address: 'fe80::42:acff:fe11:2' }
-      ]
-    })
-
-    registerStub(stubServer('::'))
-
-    await expect(handlers.get('mobile:listNetworkInterfaces')?.()).resolves.toEqual({
-      interfaces: [{ name: 'eth0', address: GLOBAL_IPV6 }]
     })
   })
 

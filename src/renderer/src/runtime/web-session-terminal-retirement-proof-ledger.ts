@@ -2,7 +2,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import {
   appendRetiredTerminalSurfaceProofs,
   dropRetirementProofsForLiveSurfaces
-} from '../../../shared/terminal-retirement-proof-ledger'
+} from '../../../shared/workspace-layout/terminal-retirement-proof-ledger'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { isRemovedSnapshot } from './web-session-terminal-orphan-recovery-surface-index'
 

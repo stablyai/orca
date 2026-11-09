@@ -24,6 +24,10 @@ export function gitExecFileSync(
   }
 ): string {
   const resolved = resolveCommand('git', args, options.cwd)
+  if (resolved.wsl) {
+    // Host Git only: a WSL path would make this a synchronous wsl.exe that can boot the distro.
+    throw new Error('Synchronous Git cannot run in a WSL folder. Use asynchronous Git for it.')
+  }
   const spawnStartedAt = performance.now()
   try {
     return execFileSync(resolved.binary, resolved.args, {

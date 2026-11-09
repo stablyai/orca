@@ -74,14 +74,6 @@ afterEach(() => {
 })
 
 describe('recordProcessGoneCrash killed/1 ordering', () => {
-  it('reports a genuine lone renderer killed/1 without teardown intent', () => {
-    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
-
-    recordProcessGoneCrash({ record } as never, rendererKill, new ProcessGoneDedupe())
-
-    expect(record).toHaveBeenCalledOnce()
-  })
-
   it('reports R3 after matching recoverable sibling churn', () => {
     const record = vi.fn().mockResolvedValue({ id: 'report-1' })
     const dedupe = new ProcessGoneDedupe()

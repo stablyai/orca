@@ -3,8 +3,8 @@ import {
   finalizingStructuredAgentSessionInput
 } from './structured-agent-session-handing-over'
 import { providerTimelineExecutionItems } from '../agent-session-timeline/provider-timeline-history'
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -12,7 +12,7 @@ import {
   type StructuredAgentSessionWatchedExit
 } from './structured-agent-session-stale-turn-verdict'
 import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 
 export type DeadGenerationJournal = UnopenedSendJournal & {
   appendPlannedLifecycleBatch: AgentSessionJournal['appendPlannedLifecycleBatch']
@@ -29,7 +29,9 @@ export function captureUnfinishedStructuredAgentSessionWork(
   journal: DeadGenerationJournal
 ): StructuredAgentSessionUnfinishedWork {
   return {
-    items: providerTimelineExecutionItems(journal.snapshot().items).filter(isUnfinishedItem),
+    items: providerTimelineExecutionItems(
+      (journal.statusRead?.() ?? journal.snapshot()).items
+    ).filter(isUnfinishedItem),
     hadUnsettledSubmissions: hasUnsettledSubmission(journal)
   }
 }
@@ -42,8 +44,11 @@ export function hasUnfinishedStructuredAgentSessionWork(
   return (
     work.hadUnsettledSubmissions ||
     work.items.length > 0 ||
-    watchedExitRevisions(providerTimelineExecutionItems(journal.snapshot().items), exit, journal)
-      .length > 0
+    watchedExitRevisions(
+      providerTimelineExecutionItems((journal.statusRead?.() ?? journal.snapshot()).items),
+      exit,
+      journal
+    ).length > 0
   )
 }
 
@@ -54,18 +59,25 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   exit?: StructuredAgentSessionWatchedExit,
   heldSends?: ReadonlySet<string>
 ): boolean {
-  const currentItemsSnapshot = providerTimelineExecutionItems(journal.snapshot().items)
+  const submission = journal.submission
+  const currentItemsSnapshot = providerTimelineExecutionItems(
+    (journal.statusRead?.() ?? journal.snapshot()).items
+  )
   if (
-    journal
-      .submissions?.()
-      .some(
-        (send) =>
-          heldSends?.has(send.clientMessageId) &&
-          !finalizingStructuredAgentSessionInput(journal, send.clientMessageId) &&
-          send.fence === exit?.ownerFence &&
-          !isQueuedAgentJournalSubmission(send) &&
-          (send.dispatchState === 'pending' || send.dispatchState === 'unknown')
-      ) ||
+    (submission
+      ? [...(heldSends ?? [])].flatMap((id) => {
+          const entry = submission(id)
+          return entry ? [entry] : []
+        })
+      : journal.submissions?.()
+    )?.some(
+      (send) =>
+        heldSends?.has(send.clientMessageId) &&
+        !finalizingStructuredAgentSessionInput(journal, send.clientMessageId) &&
+        send.fence === exit?.ownerFence &&
+        !isQueuedAgentJournalSubmission(send) &&
+        (send.dispatchState === 'pending' || send.dispatchState === 'unknown')
+    ) ||
     currentItemsSnapshot.some(isInProgressStructuredAgentSessionItem)
   ) {
     return true
@@ -121,7 +133,7 @@ function isCleanlySettled(item: AgentJournalRenderItem | undefined): boolean {
 }
 
 function hasUnsettledSubmission(journal: DeadGenerationJournal): boolean {
-  const submissions = journal.submissions?.()
+  const submissions = journal.inputOrder?.recoverableSubmissions() ?? journal.submissions?.()
   return submissions
     ? submissions.some(
         (submission) =>

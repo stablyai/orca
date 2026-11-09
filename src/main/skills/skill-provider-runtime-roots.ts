@@ -7,7 +7,7 @@ import {
   type DefaultHermesHomeInput,
   resolveDefaultHermesHome
 } from '../hermes/hermes-default-home'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 
 const PROVIDER_ROOT_MAX_LENGTH = 32_768

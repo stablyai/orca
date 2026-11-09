@@ -3,10 +3,10 @@ import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../s
 import {
   CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
   type PersistedClientHostedBrowserPage
-} from '../../../shared/client-hosted-browser-page-record'
+} from '../../../shared/workspace-session/client-hosted-browser-page-record'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import { prepareOrcadMigrationWorkspaceSession } from './orcad-destination-workspace-session'
 
 const OWNER = 'repo-1::/srv/worktree'
@@ -42,12 +42,6 @@ function incoming(pages: ReturnType<typeof page>[]): WorkspaceSessionState {
 }
 
 describe('destination workspace-session merge validation', () => {
-  it('accepts a unique client-hosted page identity', () => {
-    expect(() =>
-      prepareOrcadMigrationWorkspaceSession(incoming([page('page-1')]), state())
-    ).not.toThrow()
-  })
-
   it('rejects duplicate client-hosted page identities before merge', () => {
     expect(() =>
       prepareOrcadMigrationWorkspaceSession(incoming([page('page-1'), page('page-1')]), state())

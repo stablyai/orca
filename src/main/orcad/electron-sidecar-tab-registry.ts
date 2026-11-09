@@ -11,7 +11,8 @@ export const ElectronSidecarTabSchema = z
     browserPageId: z.string(),
     index: z.number().optional(),
     active: z.boolean().optional(),
-    certificateFailure: CertificateFailure
+    certificateFailure: CertificateFailure,
+    openerBrowserPageId: z.string().optional()
   })
   .passthrough()
 const ElectronSidecarResult = z
@@ -28,6 +29,8 @@ export type ElectronSidecarPage = {
   publicPageId: string
   sidecarPageId: string
   worktreeId?: string
+  /** Set on a popup window: the page that opened it, where the agent returns when it closes. */
+  openerPublicPageId?: string
 }
 
 export class ElectronSidecarTabRegistry {
@@ -42,11 +45,20 @@ export class ElectronSidecarTabRegistry {
   }
 
   register(sidecarPageId: string, requestedPageId: string | undefined, worktreeId?: string) {
-    const publicPageId = requestedPageId || sidecarPageId
-    const page = { publicPageId, sidecarPageId, worktreeId }
+    const page = this.track(sidecarPageId, requestedPageId || sidecarPageId, worktreeId)
+    this.setActive(page)
+    return page
+  }
+
+  private track(
+    sidecarPageId: string,
+    publicPageId: string,
+    worktreeId?: string,
+    openerPublicPageId?: string
+  ) {
+    const page = { publicPageId, sidecarPageId, worktreeId, openerPublicPageId }
     this.pagesByPublicId.set(publicPageId, page)
     this.pagesBySidecarId.set(sidecarPageId, page)
-    this.setActive(page)
     return page
   }
   find(publicPageId: string): ElectronSidecarPage | undefined {
@@ -74,9 +86,14 @@ export class ElectronSidecarTabRegistry {
   }
 
   pageAt(worktreeId: string | undefined, index: number): ElectronSidecarPage {
-    const page = [...this.pagesByPublicId.values()].filter(
+    const pages = [...this.pagesByPublicId.values()].filter(
       (candidate) => !worktreeId || candidate.worktreeId === worktreeId
-    )[index]
+    )
+    // Match the sidecar's listing, which puts popups after every tab.
+    const page = [
+      ...pages.filter((candidate) => !candidate.openerPublicPageId),
+      ...pages.filter((candidate) => candidate.openerPublicPageId)
+    ][index]
     if (!page) {
       throw new BrowserError('browser_tab_not_found', `Browser tab index ${index} was not found.`)
     }
@@ -96,9 +113,14 @@ export class ElectronSidecarTabRegistry {
     this.pagesBySidecarId.delete(page.sidecarPageId)
     const key = page.worktreeId ?? ''
     if (this.activePageIdByWorktree.get(key) === page.publicPageId) {
-      const replacement = [...this.pagesByPublicId.values()].find(
-        (candidate) => candidate.worktreeId === page.worktreeId
-      )
+      const opener = page.openerPublicPageId
+        ? this.pagesByPublicId.get(page.openerPublicPageId)
+        : undefined
+      const replacement =
+        opener ??
+        [...this.pagesByPublicId.values()].find(
+          (candidate) => candidate.worktreeId === page.worktreeId
+        )
       if (replacement) {
         this.activePageIdByWorktree.set(key, replacement.publicPageId)
       } else {
@@ -121,8 +143,7 @@ export class ElectronSidecarTabRegistry {
     return tabs
       .flatMap((tab) => {
         const page =
-          this.pagesBySidecarId.get(tab.browserPageId) ??
-          (worktreeId ? undefined : this.register(tab.browserPageId, undefined, undefined))
+          this.pagesBySidecarId.get(tab.browserPageId) ?? this.adoptListedPage(tab, worktreeId)
         if (!page || (worktreeId && page.worktreeId !== worktreeId)) {
           return []
         }
@@ -132,6 +153,25 @@ export class ElectronSidecarTabRegistry {
         return [this.rewriteTab(tab)]
       })
       .map((tab, index) => ({ ...tab, index }))
+  }
+
+  // A popup joins its opener's workspace without taking focus; other unknown pages need an unscoped listing.
+  private adoptListedPage(
+    tab: ElectronSidecarTab,
+    worktreeId: string | undefined
+  ): ElectronSidecarPage | undefined {
+    const opener = tab.openerBrowserPageId
+      ? this.pagesBySidecarId.get(tab.openerBrowserPageId)
+      : undefined
+    if (opener) {
+      return this.track(
+        tab.browserPageId,
+        tab.browserPageId,
+        opener.worktreeId,
+        opener.publicPageId
+      )
+    }
+    return worktreeId ? undefined : this.register(tab.browserPageId, undefined, undefined)
   }
 
   rewriteResult(result: unknown): unknown {
@@ -156,6 +196,9 @@ export class ElectronSidecarTabRegistry {
     return {
       ...tab,
       browserPageId: this.publicPageId(tab.browserPageId),
+      ...(tab.openerBrowserPageId
+        ? { openerBrowserPageId: this.publicPageId(tab.openerBrowserPageId) }
+        : {}),
       ...(tab.certificateFailure
         ? {
             certificateFailure: {

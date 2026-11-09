@@ -1,13 +1,10 @@
+import { resolveTerminalPaneOwnerContext } from '../terminal-pane-owner-context'
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
+import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { isLocalExecutionHost } from '../../../../../shared/execution-host'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
-import { isWebTerminalSurfaceTabId } from '../../../../../shared/terminal-surface-id'
 
 import { settleTerminalPaneRecovery } from '../terminal-pane-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -42,12 +39,22 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
   // Inject opaque ORCA_PANE_KEY matching tabId:leafId so global hooks can attribute callbacks without cwd lookup.
   session.state = useAppStore.getState()
   session.parsedWorkspaceKey = parseWorkspaceKey(session.deps.worktreeId)
-  session.folderWorkspace =
-    session.parsedWorkspaceKey?.type === 'folder'
-      ? session.state.folderWorkspaces.find(
-          (workspace) => workspace.id === session.parsedWorkspaceKey.folderWorkspaceId
-        )
+  session.restoredPtyIdForTransport =
+    session.deps.restoredLeafId && session.deps.restoredPtyIdByLeafId
+      ? (session.deps.restoredPtyIdByLeafId[session.deps.restoredLeafId] ?? null)
       : null
+  session.terminalWorktreeRoute = resolveTerminalWorktreeRoute(
+    session.state,
+    session.deps.worktreeId
+  )
+  session.ownerContext = resolveTerminalPaneOwnerContext(
+    session.state,
+    session.deps.worktreeId,
+    session.deps.tabId,
+    session.terminalWorktreeRoute,
+    session.restoredPtyIdForTransport
+  )
+  session.folderWorkspace = session.ownerContext.folderWorkspace
   session.workspaceEnv = { ORCA_WORKSPACE_ID: session.deps.worktreeId }
   if (session.folderWorkspace) {
     session.workspaceEnv.ORCA_PROJECT_GROUP_ID = session.folderWorkspace.projectGroupId
@@ -65,44 +72,26 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     ...session.paneIdentityEnv
   }
 
-  // Folder workspaces can inherit SSH targets from child repos; use the shared resolver.
-  session.worktree = getWorktreeMapFromState(session.state).get(session.deps.worktreeId)
-  session.worktreeConnectionId = getConnectionId(session.deps.worktreeId)
-  session.tab = (session.state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
-    (t) => t.id === session.deps.tabId
-  )
-  session.restoredPtyIdForTransport =
-    session.deps.restoredLeafId && session.deps.restoredPtyIdByLeafId
-      ? (session.deps.restoredPtyIdByLeafId[session.deps.restoredLeafId] ?? null)
-      : null
-  // Synthetic floating/setup IDs lack catalog rows; shared routing scopes their host and only rejects genuinely unresolved workspaces (#9994).
-  session.terminalWorktreeRoute = resolveTerminalWorktreeRoute(
-    session.state,
-    session.deps.worktreeId
-  )
+  session.worktree = session.ownerContext.worktree
+  session.worktreeConnectionId = session.ownerContext.connectionId
+  session.tab = session.ownerContext.tab
+  session.terminalWorktreeRoute = session.ownerContext.route
   session.explicitRuntimeEnvironmentId = session.terminalWorktreeRoute?.runtimeEnvironmentId ?? null
-  // Why: paired-web worktrees retain HUB execution identity; their runtime-scoped mirrored pane is the session-level transport owner.
-  session.mirroredRuntimeOwners = new Set(
-    isWebTerminalSurfaceTabId(session.deps.tabId)
-      ? [session.restoredPtyIdForTransport, session.tab?.ptyId]
-          .map((ptyId) => (ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null))
-          .filter((environmentId): environmentId is string => Boolean(environmentId))
-      : []
-  )
-  session.mirroredRuntimeEnvironmentId = session.mirroredRuntimeOwners.values().next().value ?? null
-  session.terminalOwnerUnresolved =
-    session.mirroredRuntimeOwners.size > 1 ||
-    (session.terminalWorktreeRoute === null && !session.mirroredRuntimeEnvironmentId)
-  session.runtimeEnvironmentId = session.explicitRuntimeEnvironmentId
-    ? session.explicitRuntimeEnvironmentId
-    : session.mirroredRuntimeEnvironmentId
-      ? session.mirroredRuntimeEnvironmentId
-      : null
-  // Synthetic IDs and local-stamped rows already resolve; only unnamed hosts await hydration, or remote cwd could fail open to local (#10151).
+  session.mirroredRuntimeOwners = session.ownerContext.runtimeOwners
+  session.mirroredRuntimeEnvironmentId = session.ownerContext.mirroredRuntimeEnvironmentId
+  session.terminalOwnerUnresolved = session.ownerContext.unresolved
+  session.runtimeEnvironmentId = session.ownerContext.runtimeEnvironmentId
+  // Why: host-agnostic synthetic ids (floating terminal, inline setup panels) have no repo
+  // row by design, and a worktree row stamped 'local' proves its host on its own — both are
+  // resolved-local, not pending hydration (#10151). Only when nothing names the host does
+  // `undefined` mean the repo hasn't merged yet; coalescing that to null would fail-open a
+  // remote cwd onto the local daemon (ENOENT on Docker SSH paths).
   session.hostAgnosticTerminalWorktree =
     session.deps.worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
     isEphemeralSetupTerminalWorktreeId(session.deps.worktreeId)
-  session.worktreeProvesLocalHost = isLocalExecutionHost(session.worktree?.hostId)
+  session.worktreeProvesLocalHost =
+    isLocalExecutionHost(session.worktree?.hostId) ||
+    (session.ownerContext.selectedHost?.kind === 'local' && !!session.worktree)
   session.connectionOwnerHydrating =
     !session.terminalOwnerUnresolved &&
     !session.hostAgnosticTerminalWorktree &&

@@ -4,9 +4,9 @@ import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   createShedSubagentsField
-} from '../shared/agent-hook-relay'
-import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
-import type { AgentSubagentSnapshot } from '../shared/agent-status-types'
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { AgentHookRelayEnvelope } from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { AgentSubagentSnapshot } from '../shared/agent-status/contracts/agent-status-subagent-snapshot'
 
 type BoundedClient = {
   frames: Buffer[]

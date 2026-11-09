@@ -1,15 +1,20 @@
 import { dirname, join } from 'node:path'
 import { sessionIdFromFileName } from '../../ai-vault/session-scanner-accumulator'
-import type { AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { readNodeFileWithinLimit } from '../../../shared/node-bounded-file-reader'
 import { asRecord, extractString, parseJsonObject } from '../../ai-vault/session-scanner-values'
-import { readOpenCodeTranscriptSignalViaWorker } from '../../ai-vault/session-scanner-opencode-sqlite-worker-spawn'
+import { readOpenCodeTranscriptSignalViaWorker } from '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { samePiDirectory } from '../../pi/rpc-launch-resolution'
 import { admitTranscriptPath } from '../transcript-path-admission'
 import { adoptedDirectoryProbes } from './adopted-directory-probe'
 
-export type AdoptedTranscriptSource = { providerSessionId: string; workspaceCwd: string }
+export type AdoptedTranscriptSource = {
+  providerSessionId: string
+  workspaceCwd: string
+  /** Host-selected account store, never supplied by a wire caller or persisted. */
+  conversationStore?: string
+}
 
 export async function assertAdoptedSourceIdentity(
   source: AdoptedTranscriptSource,

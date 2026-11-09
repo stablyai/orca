@@ -4,31 +4,9 @@
   "family": "session.startup",
   "namedDeltas": [],
   "values": {
-    "2bba58da0410": {
-      "name": "fetch-terminals",
-      "ordinal": 10,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
-    "4f4cd2a4f041": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 4,
-      "value": {}
-    },
-    "5c6699f9b431": {
-      "name": "ensure-session-tabs",
-      "ordinal": 7,
-      "value": {}
-    },
-    "6419a011f13b": {
-      "name": "clear-terminal-cache",
-      "ordinal": 1,
-      "value": {}
-    },
-    "7a83179a1016": {
+    "57e0a895cdde": {
       "name": "worktree.activate#1",
-      "ordinal": 6,
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -54,6 +32,23 @@
         "startedAt": 0
       }
     },
+    "5bd54a356841": {
+      "name": "fetch-terminals",
+      "ordinal": 8,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "6419a011f13b": {
+      "name": "clear-terminal-cache",
+      "ordinal": 1,
+      "value": {}
+    },
+    "817acfcc1646": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 12,
+      "value": {}
+    },
     "83ed906e3d41": {
       "actionSheetRequestSeq": 1,
       "activeHandle": {
@@ -69,41 +64,9 @@
       "initializedHandles": [],
       "terminalsLoaded": true
     },
-    "98858d185002": {
-      "name": "fetch-terminals",
-      "ordinal": 9,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
-    "99a213805fa0": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 5,
-      "value": {}
-    },
-    "a509dd4610b2": {
-      "name": "fetch-terminals",
-      "ordinal": 11,
-      "value": {
-        "allowEmptyLoaded": true
-      }
-    },
-    "aa6511b23729": {
-      "status": "fulfilled",
-      "startedAt": 1500,
-      "settledAt": 1500,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "aab012c297bd": {
-      "name": "diagnostics-reset-route",
-      "ordinal": 2,
-      "value": {}
-    },
-    "b65466e96997": {
+    "8c990409ac55": {
       "name": "worktree.activate#1",
-      "ordinal": 6,
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -135,6 +98,43 @@
         }
       }
     },
+    "8e2738e082f7": {
+      "name": "worktree.activate#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
+    },
+    "95c8385db422": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 4,
+      "value": {}
+    },
+    "98858d185002": {
+      "name": "fetch-terminals",
+      "ordinal": 9,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "aa6511b23729": {
+      "status": "fulfilled",
+      "startedAt": 1500,
+      "settledAt": 1500,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "aab012c297bd": {
+      "name": "diagnostics-reset-route",
+      "ordinal": 2,
+      "value": {}
+    },
+    "ba45b883b259": {
+      "name": "fetch-terminals",
+      "ordinal": 10,
+      "value": {
+        "allowEmptyLoaded": true
+      }
+    },
     "c7e9a0eef4ce": {
       "actionSheetRequestSeq": 2,
       "activeHandle": {
@@ -150,20 +150,10 @@
       "initializedHandles": [],
       "terminalsLoaded": true
     },
-    "d000b4c837b7": {
+    "e927128e41fc": {
       "name": "clear-pending-live-input-commit",
-      "ordinal": 13,
+      "ordinal": 3,
       "value": {}
-    },
-    "e35576a6b449": {
-      "name": "clear-pending-restorations",
-      "ordinal": 12,
-      "value": {}
-    },
-    "e8b978dbecff": {
-      "name": "worktree.activate#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -173,14 +163,14 @@
         "$rpc": "undefined"
       }
     },
-    "f880d7742773": {
-      "name": "reset-drafts",
-      "ordinal": 3,
+    "ed8838ca9a14": {
+      "name": "ensure-session-tabs",
+      "ordinal": 6,
       "value": {}
     },
-    "fde92e0a066b": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 14,
+    "ef975183a3b7": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 11,
       "value": {}
     }
   },
@@ -190,8 +180,8 @@
       {
         "id": "loading",
         "observation": {
-          "sender": ["7a83179a1016"],
-          "payloads": ["e8b978dbecff"],
+          "sender": ["57e0a895cdde"],
+          "payloads": ["8e2738e082f7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -199,19 +189,18 @@
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
-            "f880d7742773",
-            "4f4cd2a4f041",
-            "99a213805fa0",
-            "5c6699f9b431",
-            "98858d185002"
+            "e927128e41fc",
+            "95c8385db422",
+            "ed8838ca9a14",
+            "5bd54a356841"
           ]
         }
       },
       {
         "id": "refreshed",
         "observation": {
-          "sender": ["b65466e96997"],
-          "payloads": ["e8b978dbecff"],
+          "sender": ["8c990409ac55"],
+          "payloads": ["8e2738e082f7"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -219,21 +208,20 @@
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
-            "f880d7742773",
-            "4f4cd2a4f041",
-            "99a213805fa0",
-            "5c6699f9b431",
+            "e927128e41fc",
+            "95c8385db422",
+            "ed8838ca9a14",
+            "5bd54a356841",
             "98858d185002",
-            "2bba58da0410",
-            "a509dd4610b2"
+            "ba45b883b259"
           ]
         }
       },
       {
         "id": "unmounted",
         "observation": {
-          "sender": ["b65466e96997"],
-          "payloads": ["e8b978dbecff"],
+          "sender": ["8c990409ac55"],
+          "payloads": ["8e2738e082f7"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "unmount": "aa6511b23729"
@@ -242,16 +230,14 @@
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
-            "f880d7742773",
-            "4f4cd2a4f041",
-            "99a213805fa0",
-            "5c6699f9b431",
+            "e927128e41fc",
+            "95c8385db422",
+            "ed8838ca9a14",
+            "5bd54a356841",
             "98858d185002",
-            "2bba58da0410",
-            "a509dd4610b2",
-            "e35576a6b449",
-            "d000b4c837b7",
-            "fde92e0a066b"
+            "ba45b883b259",
+            "ef975183a3b7",
+            "817acfcc1646"
           ]
         }
       }

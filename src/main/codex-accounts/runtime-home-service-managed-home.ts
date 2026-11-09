@@ -5,14 +5,14 @@ import {
   syncSystemCodexResourcesIntoManagedHome,
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath
-} from '../codex/codex-home-paths'
-import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
-import { startCodexAccountSessionBridgeInBackground } from '../codex/codex-account-session-bridge'
+} from '../codex/configuration/homes/codex-home-paths'
+import { syncSystemConfigIntoManagedCodexHome } from '../codex/configuration/settings/codex-config-mirror'
+import { startCodexAccountSessionBridgeInBackground } from '../codex/history/bridges/codex-account-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import {
   resolveHostCodexSessionSourceHome,
   resolveWslCodexSessionSourceHome
-} from '../codex/codex-session-source-home'
+} from '../codex/history/rollouts/codex-session-source-home'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { normalizeCodexRuntimeSelection } from './runtime-selection'
@@ -20,14 +20,14 @@ import {
   resolveHostCodexManagedHomeVerdict,
   ManagedCodexHomeTemporarilyUnavailableError
 } from './host-codex-managed-home-ownership'
-import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
-import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfill'
+import { hasCustomCodexHomeOverrideForLaunch } from '../codex/configuration/homes/codex-real-home-path'
+import { resolveCodexSessionBackfillPaths } from '../codex/history/backfill/codex-session-backfill'
 import {
   hasCompletedCodexSessionBackfillMarker,
   markCodexSessionBackfillMarkerNeedsFullScan
-} from '../codex/codex-session-backfill-marker'
-import { getDefaultWslDistro } from '../wsl'
-import { startWslCodexSessionBridgeInBackground } from '../codex/wsl-codex-session-bridge'
+} from '../codex/history/backfill/codex-session-backfill-marker'
+import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
+import { startWslCodexSessionBridgeInBackground } from '../codex/history/bridges/wsl-codex-session-bridge'
 import type { CodexAccountSelectionTarget } from './runtime-selection'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import { CodexRuntimeHomeSync } from './runtime-home-service-sync'

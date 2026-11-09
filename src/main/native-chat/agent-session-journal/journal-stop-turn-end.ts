@@ -1,15 +1,12 @@
+import { getJournalInputOrder } from './journal-input-order-registry'
 // All turn-end writers apply this rule on the journal lane. Session-ending Stop bindings are memory-only
 // and disappear on relaunch; provider verdicts and ends observed before Stop retain their meaning.
 
-import {
-  agentJournalSubmissionKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
   AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalStopEvent } from './journal-row-schema'
 import type { JournalQueuePauseMarks, JournalStopSettle } from './queued-message-pause'
@@ -33,30 +30,20 @@ type TurnEndState = Pick<
   'items' | 'queuePauseMarks' | 'submissions' | 'aliases'
 >
 
-/** Find the opening send; this does not decide cancellation ownership. */
-function openingSubmission(
-  state: TurnEndState,
-  userItemId: string | undefined
-): AgentJournalSubmission | undefined {
-  if (userItemId === undefined) {
-    return undefined
-  }
-  const identity = parseAgentJournalItemKey(state.aliases.get(userItemId) ?? userItemId)
-  return identity?.provider === 'orca' && 'clientMessageId' in identity
-    ? state.submissions.get(identity.clientMessageId)
-    : undefined
-}
-
 /** Accepted openers may precede their turn row; steers/folds into running turns open none. */
-export function latestAcceptedSendUnopened(state: TurnEndState): boolean {
+export function latestAcceptedSendUnopened(state: JournalReducerState): boolean {
   let latest: { submission: AgentJournalSubmission; sequence: number } | undefined
-  for (const submission of state.submissions.values()) {
-    const item = state.items.get(agentJournalSubmissionKey(submission.clientMessageId))
+  const owner = getJournalInputOrder(state)!
+  for (const item of state.items.values()) {
+    const submission = owner.inputForItem(item.itemId)
     if (
-      submission.dispatchState === 'accepted' &&
-      item !== undefined &&
+      submission?.dispatchState === 'accepted' &&
       item.turnScope?.kind !== 'turn' &&
-      item.sequence >= (latest?.sequence ?? -1)
+      (!latest ||
+        item.sequence > latest.sequence ||
+        (item.sequence === latest.sequence &&
+          owner.inputOrdinal(submission.clientMessageId) >
+            owner.inputOrdinal(latest.submission.clientMessageId)))
     ) {
       latest = { submission, sequence: item.sequence }
     }
@@ -65,9 +52,8 @@ export function latestAcceptedSendUnopened(state: TurnEndState): boolean {
     return false
   }
   for (const item of state.items.values()) {
-    if (
-      openingSubmission(state, readAgentJournalTurn(item.body)?.userItemId) === latest.submission
-    ) {
+    const opener = readAgentJournalTurn(item.body)?.userItemId
+    if (opener && owner.inputForItem(state.aliases.get(opener) ?? opener) === latest.submission) {
       return false
     }
   }

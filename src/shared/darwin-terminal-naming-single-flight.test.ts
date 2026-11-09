@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { runProcess } = vi.hoisted(() => ({ runProcess: vi.fn() }))
+vi.mock('@orca/process-host', () => ({ runProcess }))
+
 import { captureDarwinProcessTable } from './darwin-process-table-capture'
 import {
   DARWIN_TERMINAL_NAMING_STALL_MS,
@@ -10,6 +14,7 @@ import { monotonicNow } from './deadline-settle-notifier'
 import { setLibprocAddonForTests, type LibprocProcessRow } from './libproc-addon'
 import { resetNativeReadsForTests } from './libproc-native-reads'
 import { runPsInProcess } from './libproc-process-table'
+import { resetPsFallbackForTests } from './libproc-ps-fallback'
 import { PS_ARGS } from './process-table-snapshot'
 
 const ROW: LibprocProcessRow = {
@@ -40,6 +45,8 @@ beforeEach(() => {
 })
 afterEach(() => {
   setLibprocAddonForTests(undefined)
+  resetPsFallbackForTests()
+  runProcess.mockReset()
   vi.useRealTimers()
 })
 
@@ -59,15 +66,19 @@ describe('terminal naming single flight', () => {
     holdNamingSlot()
     setLibprocAddonForTests({
       readProcessTable: async () => [ROW],
-      processCwd: () => null,
-      processPath: () => null
+      readProcessCwd: async () => null,
+      readProcessPath: async () => null
     })
     const args = ['-p', '4300', '-o', 'pid=,tty=']
 
+    const ps = { code: 0, signal: null, stdout: ' 4300 ttys004\n', stderr: '', timedOut: false }
+    runProcess.mockResolvedValue(ps)
+
     const waiting = runPsInProcess(args, { timeoutMs: 5_000 })
     await vi.advanceTimersByTimeAsync(DARWIN_TERMINAL_NAMING_STALL_MS)
-    expect(await waiting).toBeNull()
-    expect(await runPsInProcess(args, { timeoutMs: 5_000 })).toBeNull()
+    expect(await waiting).toEqual(ps)
+    expect(await runPsInProcess(args, { timeoutMs: 5_000 })).toEqual(ps)
+    expect(runProcess).toHaveBeenCalledWith(expect.objectContaining({ program: '/bin/ps', args }))
   })
 
   it('keeps one reaction on a stuck pass however many waiters time out', async () => {

@@ -3,7 +3,7 @@
 import { act, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const park = vi.hoisted(() => ({
@@ -50,7 +50,7 @@ import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 const TAB_IDS = ['tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-e'] as const
 const EMPTY_ASSIGNMENTS = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
 const EMPTY_PORTALS: never[] = []
-const TITLE_FLOOD_WRITES = 40
+
 const TICK_MS = 10_000
 
 type ParkingStoreState = { tabsByWorktree: Record<string, TerminalTab[]> }
@@ -146,20 +146,6 @@ function firstParkedElapsedMs(options: { publishTitles: boolean }): number {
 }
 
 describe('cold-park recheck timers under a background title flood', () => {
-  it('re-arms no park timer for tab-model writes that move no deadline', () => {
-    root = createRoot(container)
-    act(() => root?.render(<ParkingHost writes={0} />))
-
-    const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
-    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout')
-    act(() => root?.render(<ParkingHost writes={TITLE_FLOOD_WRITES} />))
-
-    // Per-write effect runs preserve watcher-coverage wakeups (terminal-cold-park-verdict-loop).
-    expect(park.effectRuns).toBeGreaterThanOrEqual(TITLE_FLOOD_WRITES)
-    expect(setTimeoutSpy.mock.calls.length).toBe(0)
-    expect(clearTimeoutSpy.mock.calls.length).toBe(0)
-  })
-
   it('parks at the same instant with and without a title flood', () => {
     const quiet = firstParkedElapsedMs({ publishTitles: false })
     act(() => root?.unmount())

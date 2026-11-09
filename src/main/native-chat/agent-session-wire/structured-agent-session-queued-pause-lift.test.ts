@@ -1,8 +1,22 @@
+import { structuredAgentSessionSeedCatalog } from '../../../shared/agent-session/options/structured-agent-session-seed-catalog'
+import {
+  applyStructuredAgentSessionOptions,
+  createStructuredAgentSessionOptionState
+} from '../../../shared/agent-session/options/structured-agent-session-options'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionShownSnapshot
+} from '../../../shared/agent-session/options/structured-agent-session-option-view'
+import { piOptionRefreshHost } from './structured-agent-session-option-refresh.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { JournalStopAcceptor } from '../agent-session-journal/journal-stop-acceptance'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
+import {
+  appendTestJournalQueueRow,
+  finishTestJournalHistoricalInputs,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD as THREAD,
@@ -19,7 +33,9 @@ import {
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { sameQueuePause } from './structured-agent-session-queued-publication'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
-
+import { createAgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
+import { AgentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
+import { agentModelCatalogFingerprintForRecord } from '../agent-model-catalog/agent-model-catalog-fingerprint'
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 let rig: QueuedMessageTestRig
@@ -68,6 +84,20 @@ async function stoppedDraft(): Promise<string> {
   return draftId
 }
 
+function expectOriginalRecovery(id: string): void {
+  const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+  const body = hostTestMessage('work on this')
+  expect(journal.submissionBody(id)).toEqual(body)
+  expect(journal.queuedMessages.get(`recovery:${id}`)).toBeNull()
+  expect(journal.itemBody(`orca:${id}`)).toEqual(body)
+  expect(journal.submissions().find((send) => send.clientMessageId === id)).toMatchObject({
+    dispatchState: 'unknown',
+    providerItemId: null,
+    options: {}
+  })
+  expect(rig.dispatch.mock.calls.filter(([send]) => send.clientMessageId === id)).toHaveLength(1)
+}
+
 function laneDrained(): Promise<void> {
   return rig.host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
 }
@@ -85,6 +115,204 @@ async function handedOverUserSend(text: string): Promise<string> {
 
 describe("a Stop's queue pause", () => {
   installRigLifecycleHooks()
+
+  it('replays a saved own-held copy, drains W1/W2 through normal Resume, and keeps its later refusal real', async () => {
+    await rig.dispose()
+    rig = await createQueuedMessageTestRig({ restartable: true, legacyInputs: true })
+    const originalId = await rig.workingSend()
+    const first = await queuedDraft('W1')
+    const second = await queuedDraft('W2')
+    await rig.stop()
+    await laneDrained()
+    const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const originalBody = journal.submissionBody(originalId)!
+    const original = structuredClone(journal.submission(originalId))
+    const originalReceipt = journal.receiptFor(originalId)
+    const savedId = `recovery:${originalId}`
+    const options = { model: 'gpt-5', effort: 'high' }
+    appendTestJournalQueueRow(openTestJournalHostDatabase(rig.root).db, journal, savedId, {
+      op: 'queued',
+      body: originalBody,
+      options,
+      recovers: originalId,
+      position: -1,
+      queuedAt: journal.cursor(),
+      returned: { reason: 'prior-build uncertainty', rejection: { kind: 'unconfirmed' } }
+    })
+    finishTestJournalHistoricalInputs(journal)
+    await journal.open()
+    expect(await rig.drafts()).toEqual([
+      { messageId: savedId, state: 'waiting', paused: true },
+      { messageId: first, state: 'waiting' },
+      { messageId: second, state: 'waiting' }
+    ])
+    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    await handedOver(first)
+    await rig.settleAccepted(await rig.handoffId(first), 'W1')
+    await handedOver(second)
+    await rig.settleAccepted(await rig.handoffId(second), 'W2')
+    expect(await rig.handoff(savedId)).toBeUndefined()
+    const reopened = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const copy = reopened.queuedMessages.get(savedId)!
+    expect(copy).toMatchObject({
+      body: originalBody,
+      options,
+      recovers: originalId,
+      state: 'waiting',
+      holdReason: 'delivery_unconfirmed'
+    })
+    expect(reopened.submissionBody(originalId)).toEqual(originalBody)
+    expect(reopened.submission(originalId)).toMatchObject({
+      options: original!.options,
+      payloadFingerprint: original!.payloadFingerprint
+    })
+    expect(reopened.receiptFor(originalId)).toEqual(originalReceipt)
+    const sendOperation = hostTestOperationId()
+    const sent = await rig.sendNow(savedId, sendOperation)
+    expect(sent).toMatchObject({ ok: true, value: { submission: { queuedMessageId: savedId } } })
+    await handedOver(savedId)
+    const attempt = await rig.handoffId(savedId)
+    expect((await rig.handoff(savedId))?.options).toEqual(options)
+    const suffix = await queuedDraft('after the independent choice')
+    await rig.settleRejected(attempt, 'turn/start refused')
+    await rig.settleAccepted(originalId, 'late-U')
+    await reopened.open()
+    const dispatches = rig.dispatch.mock.calls.length
+    expect(await rig.sendNow(savedId, sendOperation)).toMatchObject({ ok: true, replayed: true })
+    expect(rig.dispatch).toHaveBeenCalledTimes(dispatches)
+    expect(reopened.queuedMessages.get(savedId)).toMatchObject({
+      body: originalBody,
+      options,
+      recovers: originalId,
+      consumedAs: attempt,
+      state: 'returned'
+    })
+    await observationClock.observe(250)
+    expect(await rig.handoff(suffix)).toBeUndefined()
+    expect(await rig.queuePause()).toBeNull()
+    const page = await rig.host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
+    expect(page.page.nextQueuedMessageId).toBeNull()
+    expect(page.page.queuedMessages).toMatchObject([
+      { messageId: savedId, state: 'returned' },
+      { messageId: suffix, state: 'waiting' }
+    ])
+    expect(await rig.deleteQueued(savedId)).toMatchObject({ ok: true, value: { deleted: true } })
+    await handedOver(suffix)
+    await rig.settleAccepted(await rig.handoffId(suffix), 'suffix')
+  })
+
+  it('keeps accepted execution and fingerprint exact through catalog refresh, restart, later picks and replay', async () => {
+    const working = await rig.workingSend()
+    const record = rig.store.getRecord(HOST_TEST_SESSION)!
+    const catalogStore = new AgentModelCatalogStore()
+    const models = (efforts: string[]) => [
+      {
+        id: 'openai/model',
+        label: 'GPT-5',
+        isDefault: false,
+        efforts: efforts.map((value) => ({ value, label: value }))
+      }
+    ]
+    const catalog = createAgentModelCatalogService({
+      store: catalogStore,
+      getRecord: (id) => rig.store.getRecord(id) ?? undefined,
+      getConversation: (id) => rig.store.getConversation(id) ?? undefined,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => record.accountHome
+    })
+    await catalog.prepareSaved?.({
+      agent: record.provider,
+      sessionId: HOST_TEST_SESSION,
+      inSessionWorkspace: true
+    })
+    rig.host.deps.modelCatalog = catalog
+    rig.host.deps.adapter.readOptions = async () => ({ models: [], current: {} })
+    const key = agentModelCatalogFingerprintForRecord(record)
+    catalogStore.recordSuccess(
+      key,
+      record.provider,
+      {
+        models: models(['medium', 'high']),
+        origin: 'probe',
+        complete: true
+      },
+      'discovery'
+    )
+    const pi = piOptionRefreshHost()
+    const seed = structuredAgentSessionSeedCatalog('pi')
+    const view = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('pi', seed),
+      seed,
+      await pi.read()
+    )
+    expect(
+      structuredAgentSessionShownSnapshot(view).find(({ id }) => id === 'effort')?.kind.currentValue
+    ).toBe('xhigh')
+    const selection = structuredAgentSessionMessageSelection(view)
+    expect(selection).toEqual({ model: 'openai/model', effort: 'medium' })
+    const body = hostTestMessage('frozen medium')
+    const fields = {
+      body,
+      delivery: 'queue-if-active' as const,
+      selection
+    }
+    const params = {
+      ...fields,
+      envelope: rig.envelope(fields, 'agentSession.send', hostTestOperationId())
+    }
+    const queued = await rig.host.send(QUEUED_RIG_CALLER, params)
+    if (!queued.ok || !('queued' in queued.value)) {
+      throw new Error('expected queued receipt')
+    }
+    const id = queued.value.queued.messageId
+    const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    const frozen = { ...journal.queuedMessages.get(id) }
+    const refresh = vi.fn(async () => ({
+      models: models(['off', 'minimal', 'low', 'xhigh']),
+      origin: 'probe' as const,
+      complete: true
+    }))
+    await catalogStore.refresh(key, record.provider, refresh, () => true)
+    expect(refresh).toHaveBeenCalledTimes(1)
+    const refreshed = await rig.host.readOptions(HOST_TEST_SESSION)
+    expect(
+      refreshed.models
+        .find((row) => row.id === fields.selection.model)
+        ?.efforts.map((choice) => choice.value)
+    ).toEqual(['off', 'minimal', 'low', 'xhigh'])
+    expect(journal.queuedMessages.get(id)?.options).toEqual(fields.selection)
+    const pick = { key: 'effort', value: 'high' }
+    expect(
+      await rig.host.setOption(QUEUED_RIG_CALLER, {
+        ...pick,
+        envelope: rig.envelope(pick, 'agentSession.setOption', hostTestOperationId())
+      })
+    ).toMatchObject({ ok: true })
+    await rig.restartHostProcess()
+    rig.host.deps.modelCatalog = catalog
+    expect(await rig.host.send(QUEUED_RIG_CALLER, params)).toMatchObject({
+      ok: true,
+      replayed: true
+    })
+    await rig.settleAccepted(working, 'before-restart')
+    expect(await rig.sendNow(id)).toMatchObject({ ok: true })
+    await eventually(async () => {
+      const submitted = await rig.handoff(id)
+      expect(submitted?.options).toEqual(fields.selection)
+      const dispatched = rig.dispatch.mock.calls.find(
+        ([input]) => input.clientMessageId === submitted?.clientMessageId
+      )
+      expect(dispatched?.[0].executionOptions).toEqual(fields.selection)
+    })
+    const restored = rig.host
+      .collaboratorsForTests()
+      .sessions.get(HOST_TEST_SESSION)!
+      .journal.queuedMessages.get(id)
+    expect(restored?.fingerprint).toBe(frozen.fingerprint)
+    expect(restored?.options).toEqual(fields.selection)
+    catalog.stop()
+  })
 
   it('outlives a user send the provider accepts and then refuses; a later send that starts lifts it', async () => {
     const draftId = await stoppedDraft()
@@ -125,7 +353,7 @@ describe("a Stop's queue pause", () => {
   })
 
   it("a draft typed after the Stop waits with the rest: the pause is the queue's", async () => {
-    await rig.workingSend()
+    const working = await rig.workingSend()
     const olderId = await queuedDraft('paused by the stop')
     await rig.stop()
     await laneDrained()
@@ -134,6 +362,7 @@ describe("a Stop's queue pause", () => {
     const typedId = await queuedDraft('typed while that send waits')
     await rig.settleRejected(refused, 'turn/start refused')
     await expectPaused(olderId, typedId)
+    expectOriginalRecovery(working)
     expect(await rig.drafts()).toEqual([
       { messageId: olderId, state: 'waiting' },
       { messageId: typedId, state: 'waiting' }
@@ -232,12 +461,13 @@ describe('a card queued after a Stop is a new instruction', () => {
   installRigLifecycleHooks()
 
   it('a correction typed after a Stop over an empty queue goes straight to the next agent', async () => {
-    await rig.workingSend()
+    const working = await rig.workingSend()
     await rig.stop()
 
     const correction = await rig.send('typed right after the stop', 'queue-if-active').result
     expect(correction).toMatchObject({ ok: true, value: { submission: { fence: 2 } } })
     expect(await rig.drafts()).toEqual([])
+    expectOriginalRecovery(working)
     expect(await rig.queuePause()).toBeNull()
   })
 
@@ -438,8 +668,51 @@ describe('Resume', () => {
     expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: false } })
   })
 
+  it.each([1, 2])(
+    'normal Resume drains W1/W2 FIFO with %i uncertain originals and no synthetic queue work',
+    async (count) => {
+      const original = [await rig.workingSend()]
+      const first = await queuedDraft('W1')
+      const second = await queuedDraft('W2')
+      await rig.stop()
+      if (count === 2) {
+        original.push(await handedOverUserSend('second unknown input'))
+        await rig.stop()
+      }
+      await laneDrained()
+      await expectPaused(first, second)
+      const result = await rig.host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
+      expect(result).toMatchObject({
+        ok: true,
+        page: {
+          queuePause: { reason: 'stopped' },
+          queuedMessages: [
+            { messageId: first, state: 'waiting' },
+            { messageId: second, state: 'waiting' }
+          ]
+        }
+      })
+      expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+      await handedOver(first)
+      expect(await rig.handoff(second)).toBeUndefined()
+      await rig.settleAccepted(await rig.handoffId(first), 'first-accepted')
+      await handedOver(second)
+      expect(rig.dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([
+        ...original,
+        await rig.handoffId(first),
+        await rig.handoffId(second)
+      ])
+      const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+      for (const id of original) {
+        expect(journal.receiptFor(id)).toBeNull()
+        expect(journal.queuedMessages.get(`recovery:${id}`)).toBeNull()
+        expect(journal.submissionBody(id)).toBeDefined()
+      }
+    }
+  )
+
   it('is idempotent: a replay of the same Resume answers without lifting a later pause', async () => {
-    await rig.workingSend()
+    const working = await rig.workingSend()
     const draftId = await queuedDraft('paused twice')
     await rig.stop()
     const operationId = hostTestOperationId()
@@ -462,6 +735,7 @@ describe('Resume', () => {
     await observationClock.observe(250)
     expect(await rig.handoffId(draftId)).toBe(withdrawn)
     expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    expectOriginalRecovery(working)
   })
 
   it("of a Stop from before a restart, which no client offers there, also lifts the restart's pause", async () => {
@@ -520,6 +794,11 @@ describe('a failed Stop', () => {
     try {
       // Post-interrupt failure cannot undo the committed Stop receipt.
       expect(await rig.stop()).toMatchObject({ ok: true })
+      expect(failing).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ kind: 'status' }),
+        expect.anything()
+      )
     } finally {
       failing.mockRestore()
       warned.mockRestore()

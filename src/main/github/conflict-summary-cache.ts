@@ -1,5 +1,5 @@
 import type { PRConflictSummary } from '../../shared/github/pull-request-types'
-import { dedupeInFlightRun } from '../in-flight-run-dedupe'
+import { dedupeInFlightRun } from '../runtime/concurrency/in-flight-run-dedupe'
 
 // Throttle even manual refreshes to one base fetch per minute; GitHub recomputes mergeability asynchronously.
 export const CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS = 60_000

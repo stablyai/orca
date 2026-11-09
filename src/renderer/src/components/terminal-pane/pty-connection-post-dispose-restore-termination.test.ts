@@ -8,7 +8,11 @@ import {
   createManager
 } from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from './pty-connection-test-deps'
+import {
+  buildPaneConnectionDeps,
+  type PtyConnectionAgentTitleMocks,
+  bindPaneAgentTitleMocks
+} from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
@@ -86,6 +90,7 @@ describe('connectPanePty', () => {
   // Disposed restore tasks must not re-arm from finally: instant exits otherwise create an unbounded promise chain that exhausts the heap.
   it('stops re-arming the hidden output restore once the pane binding is disposed', async () => {
     const { connectPanePty } = await import('./pty-connection')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -125,7 +130,11 @@ describe('connectPanePty', () => {
     }
     const deps = buildPaneConnectionDeps(() => mockStoreState, { isVisibleRef })
 
-    const disposable = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    const disposable = connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      bindPaneAgentTitleMocks(deps as never, agentTitleMocks)
+    )
     await flushAsyncTicks(6)
 
     // Arm the restore: hidden bytes land while the pane is hidden, then it is revealed.

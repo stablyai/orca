@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { movePaneFirst, registerBoundPty } from '../bind-first-pane.test-fixture'
+import { movePaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,
@@ -7,8 +7,10 @@ import {
   createRuntime,
   createRuntimeWithSshLease,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { makePaneKey, OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+} from './orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { OrcaRuntimeService } from '../orca-runtime'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 
 describe('OrcaRuntimeService', () => {
@@ -177,7 +179,8 @@ describe('OrcaRuntimeService', () => {
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId: currentTabId,
       leafId: HEADLESS_LEAF_ID,
-      focus: false
+      focus: false,
+      reopensPane: true
     })
   })
 

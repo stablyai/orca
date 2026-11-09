@@ -207,6 +207,15 @@ export function configureLazyArabicShapingJoiner(
   }
 }
 
+function hasCodeUnitAtOrAbove(text: string, floor: number): boolean {
+  for (let index = 0; index < text.length; index++) {
+    if (text.charCodeAt(index) >= floor) {
+      return true
+    }
+  }
+  return false
+}
+
 const INDIC_TAIL = /[\u0900-\u0DFF\u200C\u200D]{1,8}$/
 
 // A trailing high surrogate, or the trailing Indic run that a following chunk may complete into a cluster.
@@ -225,6 +234,11 @@ export function ensureArabicShapingJoinerForText(
 ): void {
   const state = lazyArabicShapingJoinerByTerminal.get(terminal)
   if (!state || state.cleanup || state.registrationAttempted) {
+    return
+  }
+
+  // Below U+0590 a chunk has no RTL, Indic or surrogate units, so it can neither register nor leave a tail.
+  if (state.trailingChunkTail === '' && !hasCodeUnitAtOrAbove(text, RTL_SCAN_FLOOR)) {
     return
   }
 

@@ -43,6 +43,7 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
         settings: {
           uiLanguage: plugin,
           uiLanguagePortugueseMigrationApplied: marker,
+          nestedWorkerMaxDepth: 1,
           futureSetting: { retained: true }
         },
         pluginData: { untouched: true }
@@ -61,6 +62,7 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
       expect(Object.hasOwn(beforeLoad.settings, 'uiLanguagePortugueseMigrationApplied')).toBe(
         marker !== undefined
       )
+      expect(Object.hasOwn(beforeLoad.settings, 'nestedWorkerMaxDepthDefaultedToFour')).toBe(false)
       expect(beforeLoad.pluginData).toEqual(original.pluginData)
       authority.close()
       vi.useFakeTimers()
@@ -77,7 +79,8 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
         const persisted = JSON.parse(authority.readSerializedState() ?? 'null')
         expect(persisted.settings).toMatchObject({
           uiLanguage: marker === true ? plugin : 'pt',
-          uiLanguagePortugueseMigrationApplied: true
+          uiLanguagePortugueseMigrationApplied: true,
+          nestedWorkerMaxDepth: 4
         })
       } finally {
         await loaded.freezeWritesAsync()
@@ -96,6 +99,66 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
           uiLanguage: marker === true ? plugin : 'pt',
           uiLanguagePortugueseMigrationApplied: true
         })
+      } finally {
+        await reopened.freezeWritesAsync()
+      }
+    }
+  )
+
+  it.each([false, true])(
+    'keeps migration-sensitive absence through edit/import then flush/reopen (initialized=%s)',
+    async (initialized) => {
+      const location = createLocation()
+      const original = {
+        settings: {
+          agentPermissionDefault: 'own',
+          agentPermissionOverrides: {},
+          agentDefaultArgs: { claude: '--model opus --effort high --verbose' },
+          ...(initialized ? { agentLaunchChoices: {} } : {})
+        }
+      }
+      const authority = new ProfileStateSqliteAuthority(location.databaseFile, location.profileId)
+      if (backend === 'json') {
+        writeFileSync(location.dataFile, JSON.stringify(original))
+      } else {
+        authority.writeSerializedState(Buffer.from(JSON.stringify(original)))
+        authority.close()
+      }
+      updateAgentHookSettingsFromProfileState(location, false)
+      const before = JSON.parse(authority.readSerializedState() ?? 'null')
+      expect(Object.hasOwn(before.settings, 'agentLaunchChoices')).toBe(initialized)
+      authority.close()
+      vi.useFakeTimers()
+      const loaded = new Store({
+        dataFile: location.dataFile,
+        profileStateAuthority: new ProfileStateSqliteAuthority(
+          location.databaseFile,
+          location.profileId
+        )
+      })
+      try {
+        expect(loaded.getSettings().agentLaunchChoices).toEqual(
+          initialized ? {} : { claude: { model: 'opus', options: { effort: 'high' } } }
+        )
+        vi.advanceTimersByTime(5000)
+        await loaded.waitForPendingWrite()
+      } finally {
+        await loaded.freezeWritesAsync()
+        vi.useRealTimers()
+      }
+      const reopened = new Store({
+        dataFile: location.dataFile,
+        profileStateAuthority: new ProfileStateSqliteAuthority(
+          location.databaseFile,
+          location.profileId
+        )
+      })
+      try {
+        expect(reopened.getSettings().agentLaunchChoices).toEqual(
+          initialized ? {} : { claude: { model: 'opus', options: { effort: 'high' } } }
+        )
+        expect(reopened.getSettings().agentStatusHooksEnabled).toBe(false)
+        expect(reopened.getSettings().agentDefaultArgs?.claude).toContain('--verbose')
       } finally {
         await reopened.freezeWritesAsync()
       }

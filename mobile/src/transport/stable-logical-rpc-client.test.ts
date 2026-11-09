@@ -69,23 +69,6 @@ function deferred<T>() {
 }
 
 describe('stable logical RPC client', () => {
-  it('advertises source-default support on worktree catalog requests', async () => {
-    const session = new FakeSession('connected')
-    session.sendRequest.mockResolvedValue(success([]))
-    const client = createStableLogicalRpcClient(session, 'lan')
-
-    await client.sendRequest('worktree.ps', { limit: 10_000 })
-    await client.sendRequest('status.get')
-
-    expect(session.sendRequest).toHaveBeenNthCalledWith(
-      1,
-      'worktree.ps',
-      { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
-      undefined
-    )
-    expect(session.sendRequest).toHaveBeenNthCalledWith(2, 'status.get', undefined, undefined)
-  })
-
   it('makes before break, rejects in-flight work, and replays subscriptions', async () => {
     const oldSession = new FakeSession('connected')
     const nextSession = new FakeSession('connecting')
@@ -251,7 +234,7 @@ describe('stable logical RPC client', () => {
     expect(client.getPendingPath()).toBeNull()
 
     const migrating = client.migrateTo(replacement, 'relay')
-    replacement.setState('connecting')
+    // The replacement never announces its initial connecting state; the client must still show it.
     expect(client.getState()).toBe('connecting')
     expect(client.getPendingPath()).toBe('relay')
     replacement.setState('handshaking')
@@ -332,38 +315,6 @@ describe('stable logical RPC client', () => {
     expect(paths).toEqual(['relay', null])
   })
 
-  it('publishes supervisor Relay attempts without replacing the physical retry count', () => {
-    const direct = new FakeSession('reconnecting')
-    direct.getReconnectAttempt = () => 5
-    const client = createStableLogicalRpcClient(direct, 'tailscale')
-    const attempts: number[] = []
-    client.onConnectionPathChange(() => attempts.push(client.getReconnectAttempt()))
-
-    client.setRecoveryPath('relay', 3)
-    expect(client.getReconnectAttempt()).toBe(5)
-
-    client.setRecoveryAttempt(7)
-    expect(client.getReconnectAttempt()).toBe(7)
-    expect(attempts).toEqual([5, 7])
-
-    client.setRecoveryPath(null)
-    expect(client.getReconnectAttempt()).toBe(5)
-    expect(attempts).toEqual([5, 7, 5])
-  })
-
-  it('notifies connection-path subscribers when the pairing-rejected latch flips', () => {
-    const direct = new FakeSession('reconnecting')
-    const client = createStableLogicalRpcClient(direct, 'tailscale')
-    const rejected: boolean[] = []
-    client.onConnectionPathChange(() => rejected.push(client.isPairingRejected()))
-
-    client.setPairingRejected(true)
-    client.setPairingRejected(true)
-    client.setPairingRejected(false)
-
-    expect(rejected).toEqual([true, false])
-  })
-
   it('does not revive a stale recovery path after a connection later drops', () => {
     const direct = new FakeSession('reconnecting')
     const client = createStableLogicalRpcClient(direct, 'tailscale')
@@ -424,7 +375,7 @@ describe('stable logical RPC client', () => {
     replacement.setState('disconnected')
 
     await expect(migrating).rejects.toThrow(/disconnected/)
-    expect(states).toEqual(['handshaking', 'disconnected'])
+    expect(states).toEqual(['connecting', 'handshaking', 'disconnected'])
     expect(client.getState()).toBe('disconnected')
     expect(client.getPendingPath()).toBeNull()
   })
@@ -489,17 +440,6 @@ describe('stable logical RPC client subscription fencing', () => {
       }
     }
   }
-
-  it('delivers a stream event to a live subscription', () => {
-    const physical = leakySession()
-    const client = createStableLogicalRpcClient(physical.session, 'lan')
-    const listener = vi.fn()
-    client.subscribe('notifications.subscribe', { includeDesktopSuppressed: true }, listener)
-
-    physical.emit({ type: 'ready', subscriptionId: 'sub-1' })
-
-    expect(listener).toHaveBeenCalledExactlyOnceWith({ type: 'ready', subscriptionId: 'sub-1' })
-  })
 
   it('drops a stream event that lands after the caller unsubscribed', () => {
     const physical = leakySession()

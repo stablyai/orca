@@ -1,5 +1,5 @@
-import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
-import { RelayPhoneHelloSchema } from '../../../src/shared/mobile-relay-phone-protocol'
+import type { PairingRelay } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { RelayPhoneHelloSchema } from '../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
 import { latchHostToE2EEV2 } from './e2ee-v2-host-latch'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'

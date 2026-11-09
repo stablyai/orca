@@ -22,8 +22,6 @@ export function useMobileSourceControlActionSheet(
     rebaseBaseRef,
     upstreamKnown,
     busyAction,
-    openingPath,
-    openingBranchPath,
     runActionSheetCommit,
     runActionSheetCommitSequence,
     runActionSheetCommitSync,
@@ -44,8 +42,6 @@ export function useMobileSourceControlActionSheet(
           // Desktop rebases onto the effective base, not an upstream compare base.
           rebaseBaseRef,
           busyAction,
-          openingPath,
-          openingBranchPath,
           // Create intent may publish or push before review creation.
           prAvailable: upstreamKnown,
           prHint: upstreamKnown ? undefined : mobileCommitDropdownCopy(t).checkingBranchStatus,
@@ -87,8 +83,6 @@ export function useMobileSourceControlActionSheet(
       createPr,
       openBranchPicker,
       openHistory,
-      openingBranchPath,
-      openingPath,
       primaryActionArgs,
       rebaseBaseRef,
       review,

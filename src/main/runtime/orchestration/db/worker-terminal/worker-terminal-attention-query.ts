@@ -6,7 +6,7 @@ import {
 } from '../attempt-observation-store'
 import type { AttemptProjectedOutcome } from '../attempt-observation-types'
 import type { DispatchStatus, WorkerDispatchState } from '../../types'
-import type { TerminalExitCause } from '../../../../../shared/terminal-exit-cause'
+import type { TerminalExitCause } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { OrchestrationDb } from '../orchestration-db'
 import { ATTEMPT_OBSERVATION_FACT_COLUMN_LIST } from '../row-column-lists'
 
@@ -37,6 +37,7 @@ export function getWorkerAttentionFactsForDispatches(
     return new Map()
   }
   const serializedIds = JSON.stringify(ids)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this row cast is unchanged and matches every other row cast in db/; the gate flags it only because this diff adds a column inside its span.
   const rows = this.db
     .prepare(
       `SELECT d.id AS dispatch_id, d.task_id, d.status AS dispatch_status,

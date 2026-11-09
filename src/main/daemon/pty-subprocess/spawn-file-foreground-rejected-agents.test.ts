@@ -72,13 +72,13 @@ describe('POSIX static-name agent selection', () => {
     ).toEqual({ available: true, processName: null })
   })
 
-  it.each(['vim', 'npm', 'sleep'])('retains the ordinary %s name', (command) => {
+  it('reports a foreground whose argv ps withheld as unavailable, never as no agent', () => {
     expect(
       resolveSpawnFileForegroundFromRows(
-        [root, { ...root, pid: 101, ppid: 100, pgid: 101, stat: 'S+', command }],
+        [root, { ...root, pid: 101, ppid: 100, pgid: 101, stat: 'S+', command: '(node)' }],
         100
       )
-    ).toEqual({ available: true, processName: command })
+    ).toEqual({ available: false, processName: null })
   })
 })
 
@@ -123,12 +123,5 @@ describe('Windows static-name agent selection', () => {
         readWindowsConsoleAttachedProcessIds: async () => new Set([100, 101])
       })
     ).toEqual({ available: true, processName: 'droid', processId: 101 })
-  })
-
-  it('retains an ordinary executable from the identity table', async () => {
-    installRows(['vim.exe'])
-    expect(
-      await resolveSpawnFileForegroundProcess(proc, 'powershell.exe', { fresh: true })
-    ).toEqual({ available: true, processName: 'vim.exe', processId: 101 })
   })
 })

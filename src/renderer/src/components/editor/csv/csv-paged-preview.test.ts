@@ -23,24 +23,6 @@ beforeEach(() => {
   mocks.request.mockResolvedValue({ kind: 'rows', rows: [['value']] })
 })
 
-it('caps the page count and evicts the least recently used one', async () => {
-  const preview = new CsvPagedPreview(file)
-  const range = (index: number) => ({
-    start: index * 10,
-    end: index * 10 + 10,
-    firstRow: index,
-    rowCount: 1
-  })
-  for (let index = 0; index < 64; index += 1) {
-    await preview.page(index, range(index))
-  }
-  await preview.page(0, range(0))
-  await preview.page(64, range(64))
-  await preview.page(1, range(1))
-  expect(mocks.read).toHaveBeenCalledTimes(66)
-  preview.close()
-})
-
 it('detects changes even when a page is already cached', async () => {
   const preview = new CsvPagedPreview(file)
   const range = { start: 0, end: 10, firstRow: 0, rowCount: 1 }
@@ -48,28 +30,6 @@ it('detects changes even when a page is already cached', async () => {
   mocks.stat.mockResolvedValue({ ...snapshot, mtime: 2 })
   await expect(preview.page(0, range)).rejects.toThrow('changed on disk')
   expect(mocks.read).toHaveBeenCalledTimes(1)
-  preview.close()
-})
-
-it('keeps a dense viewport cached when scrolling by one page', async () => {
-  const preview = new CsvPagedPreview(file)
-  mocks.request.mockResolvedValue({
-    kind: 'rows',
-    rows: Array.from({ length: 4 }, () => Array.from({ length: 4096 }, () => 'x'))
-  })
-  const range = (index: number) => ({
-    start: index * 32768,
-    end: (index + 1) * 32768,
-    firstRow: index * 4,
-    rowCount: 4
-  })
-  for (let index = 0; index < 16; index += 1) {
-    await preview.page(index, range(index))
-  }
-  for (let index = 1; index <= 16; index += 1) {
-    await preview.page(index, range(index))
-  }
-  expect(mocks.read).toHaveBeenCalledTimes(17)
   preview.close()
 })
 

@@ -1,3 +1,6 @@
+import { codexLegacyMirrorRecords } from './agent-session-journal/codex-history-test-fixture'
+import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
+import { createNativeChatMerger, replaceList } from '../../shared/native-chat/native-chat-merge'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -138,6 +141,18 @@ describe('Codex transcript history modes', () => {
       {
         type: 'response_item',
         payload: {
+          type: 'reasoning',
+          id: 'reason',
+          summary: [{ type: 'summary_text', text: 'why' }]
+        }
+      },
+      completedItem(
+        { type: 'Reasoning', id: 'reason', summary_text: ['why'], raw_content: [] },
+        '2026-08-09T10:00:01.750Z'
+      ),
+      {
+        type: 'response_item',
+        payload: {
           type: 'message',
           role: 'assistant',
           content: [{ type: 'output_text', text: 'model copy' }]
@@ -179,6 +194,7 @@ describe('Codex transcript history modes', () => {
           timestamp: Date.parse('2026-08-09T10:00:01.500Z'),
           blocks: [{ type: 'text', text: 'Context compacted', presentation: 'compaction' }]
         },
+        { id: 'reason', role: 'reasoning', blocks: [{ type: 'text', text: 'why' }] },
         {
           id: 'assistant-1',
           role: 'assistant',
@@ -187,31 +203,24 @@ describe('Codex transcript history modes', () => {
       ]
     })
     expect(tail).toMatchObject({ messages: 'messages' in result ? result.messages : [] })
+    const snapshot = createNativeChatMerger()
+    replaceList(snapshot, 'messages' in result ? result.messages : [])
+    expect(snapshot.list.filter(({ role }) => role === 'reasoning')).toHaveLength(1)
+    const imported = await prepareLegacyTranscriptImport({
+      agent: 'codex',
+      sessionId: 'session-1',
+      options: { filePath }
+    })
+    expect(
+      imported.ok &&
+        imported.items
+          .filter(({ body }) => body.kind === 'message' && body.role === 'reasoning')
+          .map(({ body }) => body)
+    ).toEqual([{ kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text: 'why' }] }])
   })
 
   it('keeps legacy event messages without duplicating response copies', async () => {
-    const filePath = await writeCodexFixture([
-      {
-        type: 'response_item',
-        payload: {
-          type: 'message',
-          role: 'user',
-          content: [{ type: 'input_text', text: 'Prompt' }]
-        }
-      },
-      { type: 'event_msg', payload: { type: 'user_message', message: 'Prompt' } },
-      { type: 'compacted', payload: { message: 'summary', replacement_history: [] } },
-      { type: 'event_msg', payload: { type: 'context_compacted' } },
-      { type: 'event_msg', payload: { type: 'agent_message', message: 'Response' } },
-      {
-        type: 'response_item',
-        payload: {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'output_text', text: 'Response' }]
-        }
-      }
-    ])
+    const filePath = await writeCodexFixture(codexLegacyMirrorRecords())
 
     const result = await readNativeChatTranscript('codex', 'session-1', { filePath })
 

@@ -10,7 +10,7 @@ import {
   decodeTerminalStreamJson,
   encodeTerminalStreamJson,
   type TerminalStreamFrame
-} from '../../src/shared/terminal-stream-protocol'
+} from '../../src/shared/terminal/stream/terminal-stream-protocol'
 
 // Only older, unsequenced streams remount; sequenced input retains its journal and resends on the same stream.
 function withoutInputAck(frame: TerminalStreamFrame): TerminalStreamFrame {
@@ -225,7 +225,6 @@ function createManager() {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => panes),
     closePane: vi.fn(),
@@ -291,6 +290,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
     mockStoreState = {
       activeWorktreeId: 'wt-1',
       activeWorkspaceExecutionHostId: `runtime:${ENVIRONMENT_ID}`,
+      unifiedTabsByWorktree: {},
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: REMOTE_PTY_ID }] },
       ptyIdsByTabId: { 'tab-1': [REMOTE_PTY_ID] },
       terminalLayoutsByTabId: {

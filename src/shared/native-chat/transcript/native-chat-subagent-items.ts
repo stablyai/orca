@@ -10,7 +10,7 @@ import {
   type NativeChatSubagentBlock,
   type NativeChatSubagentEntry,
   type NativeChatSubagentGroupBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 
 /** Frozen fallback for older clients; Kicked off means no outcome recorded yet, never current liveness. */
 export function subagentFallbackText(block: NativeChatSubagentEntry): string {
@@ -146,12 +146,16 @@ function labelledEntries(blocks: readonly NativeChatSubagentBlock[]): NativeChat
     taken.add(block.label)
   }
   const claimed = new Set<string>()
+  // Both sets only grow, so a label's search resumes past its last ordinal instead of rescanning from 2.
+  const nextOrdinal = new Map<string, number>()
   return blocks.map((block) => {
     let label = block.label
     if (repeated.has(label) && claimed.has(label)) {
-      for (let ordinal = 2; taken.has(label) || claimed.has(label); ordinal++) {
+      let ordinal = nextOrdinal.get(block.label) ?? 2
+      for (; taken.has(label) || claimed.has(label); ordinal++) {
         label = `${block.label} ${ordinal}`
       }
+      nextOrdinal.set(block.label, ordinal)
     }
     claimed.add(label)
     const held = foldedEntries.get(block)

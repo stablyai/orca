@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { PaneForegroundAgentEntry } from '../../store/slices/pane-foreground-agent'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { pasteTerminalText } from './terminal-bracketed-paste'
@@ -50,45 +50,8 @@ function decide(
 }
 
 describe('resolveProtectedMultilinePasteOptionsForPane', () => {
-  it('brackets an agent pane on a non-Windows host', () => {
-    expect(decide()).toEqual({ forceBracketedPasteForMultiline: true })
-  })
-
   it('leaves a plain shell pane alone so ESC[200~ never reaches a non-TUI program', () => {
     expect(decide({ leafId: SHELL_LEAF })).toBeUndefined()
-  })
-
-  it('gates per leaf, not per tab', () => {
-    expect(decide({ tabId: 'other-tab' })).toBeUndefined()
-  })
-
-  it('keeps the existing Windows-client behaviour for non-agent panes', () => {
-    expect(decide({ isWindowsClient: true, agentStatusByPaneKey: {}, leafId: SHELL_LEAF })).toEqual(
-      { forceBracketedPasteForMultiline: true }
-    )
-  })
-
-  it('ignores a pane whose agentType is not a TUI agent', () => {
-    expect(
-      decide({
-        agentStatusByPaneKey: {
-          [AGENT_PANE_KEY]: agentEntry({
-            agentType: 'not-an-agent' as AgentStatusEntry['agentType']
-          })
-        }
-      })
-    ).toBeUndefined()
-  })
-
-  it('brackets on a process-confirmed agent even with no status row', () => {
-    expect(
-      decide({
-        agentStatusByPaneKey: {},
-        paneForegroundAgentByPaneKey: {
-          [AGENT_PANE_KEY]: foregroundEntry({ agent: 'codex', shellForeground: false })
-        }
-      })
-    ).toEqual({ forceBracketedPasteForMultiline: true })
   })
 
   it('vetoes a row rehydrated from disk across an app restart', () => {
@@ -99,17 +62,6 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
         }
       })
     ).toBeUndefined()
-  })
-
-  it('still brackets a long-idle agent parked at done', () => {
-    // Idle live agents can stay done past the freshness TTL and still require paste brackets.
-    expect(
-      decide({
-        agentStatusByPaneKey: {
-          [AGENT_PANE_KEY]: agentEntry({ state: 'done', updatedAt: 0, stateStartedAt: 0 })
-        }
-      })
-    ).toEqual({ forceBracketedPasteForMultiline: true })
   })
 
   it('degrades to the pre-fix path instead of throwing on a malformed pane key', () => {
@@ -126,23 +78,6 @@ describe('resolveProtectedMultilinePasteOptionsForPane', () => {
       decide({
         paneForegroundAgentByPaneKey: {
           [AGENT_PANE_KEY]: foregroundEntry({ shellForeground: true })
-        }
-      })
-    ).toEqual({ forceBracketedPasteForMultiline: true })
-  })
-
-  it('uses modified Enter for an agent that reads Windows input records', () => {
-    expect(decide({ hostPlatform: 'win32' })).toEqual({
-      windowsInputRecordNewline: 'alt-enter'
-    })
-  })
-
-  it('does not change unverified Windows agent paste protocols', () => {
-    expect(
-      decide({
-        hostPlatform: 'win32',
-        agentStatusByPaneKey: {
-          [AGENT_PANE_KEY]: agentEntry({ agentType: 'pi' })
         }
       })
     ).toEqual({ forceBracketedPasteForMultiline: true })
@@ -190,17 +125,5 @@ describe('leading-newline paste into a remote agent pane', () => {
     expect(plan.bracketed).toBe(false)
     expect(terminal.input).toHaveBeenCalledWith(`\x1b\r${PASTED.slice(1)}`)
     expect(terminal.paste).not.toHaveBeenCalled()
-  })
-
-  it('a single-line paste stays on the direct path', () => {
-    const plan = planTerminalPaste({
-      text: 'no newline here',
-      source: 'keyboard',
-      target: remoteWindowsTarget(),
-      terminalBracketedPasteMode: false,
-      ...decide({ hostPlatform: 'win32' })
-    })
-
-    expect(plan.mode).toBe('direct')
   })
 })

@@ -8,6 +8,8 @@ export type LocalFileAccess =
   | { kind: 'chat-image' }
   /** A document the user opened: renaming it to any path, or adding files in its own folder. */
   | { kind: 'document-folder'; documentPath: string }
+  /** A folder listed through a symlink inside a project that leads out of it; listing only. */
+  | { kind: 'project-folder-link' }
 
 /** Main's refusal of a request that resolves outside every root it may serve. */
 export const PATH_OUTSIDE_ALLOWED_DIRECTORIES =

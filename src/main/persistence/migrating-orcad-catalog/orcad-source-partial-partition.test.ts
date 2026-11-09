@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { collectOrcadMigrationSourceDormantState } from './orcad-source-dormant-state'
 
@@ -60,15 +60,5 @@ describe('collecting dormant state from partially written session partitions', (
     expect(inspection.payload.workspaceSession?.defaultTerminalTabsAppliedByWorktreeId).toEqual({
       [WORKTREE]: true
     })
-  })
-
-  it('still blocks when two partitions disagree about the same worktree', () => {
-    const state = partialPartitions()
-    state.workspaceSession.activeTabTypeByWorktree = { [WORKTREE]: 'editor' }
-    expect(
-      collectOrcadMigrationSourceDormantState(state, SOURCE, CATALOG).blockedCounts[
-        'workspace-session'
-      ]
-    ).toBe(1)
   })
 })

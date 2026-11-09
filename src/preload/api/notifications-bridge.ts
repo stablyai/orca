@@ -1,5 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type {
+  NotificationAttentionAcknowledgement,
+  NotificationDispatchRequest,
   NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationDispatchResult,
@@ -9,7 +11,7 @@ import type {
   NotificationSoundResult,
   StructuredNotificationRead
 } from '../../shared/notification-settings-types'
-import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { PreloadApi } from '../api-types'
 
 // Reuse sound data to avoid reading large files for every notification.
@@ -32,6 +34,11 @@ export const notificationsApi = {
     ipcRenderer.invoke('notifications:getDesktopAwayState'),
   dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
     ipcRenderer.invoke('notifications:dispatch', args),
+  acknowledgeAttention: (
+    acknowledgement: NotificationAttentionAcknowledgement,
+    executionHost?: NotificationDispatchRequest['executionHost']
+  ): Promise<NotificationDismissResult> =>
+    ipcRenderer.invoke('notifications:acknowledgeAttention', acknowledgement, executionHost),
   dismiss: (
     ids: string[],
     paneKeys?: string[],
@@ -42,8 +49,10 @@ export const notificationsApi = {
       : ipcRenderer.invoke('notifications:dismiss', ids, paneKeys, reads),
   settleStructuredPrompts: (
     scope: AgentSessionExecutionLocation,
-    sessionId: string
-  ): Promise<void> => ipcRenderer.invoke('notifications:settleStructuredPrompts', scope, sessionId),
+    sessionId: string,
+    executionHost?: NotificationDispatchRequest['executionHost']
+  ): Promise<void> =>
+    ipcRenderer.invoke('notifications:settleStructuredPrompts', scope, sessionId, executionHost),
   openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
   getPermissionStatus: (): Promise<NotificationPermissionStatusResult> =>
     ipcRenderer.invoke('notifications:getPermissionStatus'),

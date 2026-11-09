@@ -8,10 +8,16 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import {
   CandidateRow,
   isCurrent,
-  movedFromSource,
+  updateNeedsApproval,
   type UpdateCandidate
 } from '../review/PluginUpdateCandidate'
+import { PluginUpdateReview } from '../review/PluginUpdateReview'
 import type { PluginListEntry } from '../list/plugin-list-entries'
+
+/** Updates that change access or repository; they land only through their own review. */
+function needsOwnApproval(candidate: UpdateCandidate): boolean {
+  return candidate.preview !== null && updateNeedsApproval(candidate.preview)
+}
 
 /** The update's minimum Orca when this Orca can't run it; null when it can or either is unknown. */
 function requiredNewerOrca(
@@ -40,8 +46,9 @@ function failureMessage(failed: readonly string[], updatedCount: number): string
 }
 
 /**
- * One review for every pending update. Plugins whose access grows show only what's new;
- * the rest are one line. Any can be unticked; nothing installs until Update.
+ * One review for every pending update. Updates that ask for nothing new are one ticked line;
+ * any can be unticked and nothing installs until Update. An update that grows access or moved
+ * repository never joins that bulk Update: its Review opens its own before/after approval.
  * Why no reset effect: the parent mounts a fresh dialog per open (keyed), so state starts clean.
  */
 export function PluginUpdateAllDialog({
@@ -62,6 +69,7 @@ export function PluginUpdateAllDialog({
   const [updated, setUpdated] = useState<ReadonlySet<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  const [reviewKey, setReviewKey] = useState<string | null>(null)
   // Why frozen: each update reloads the list mid-run; the rows belong to the set the user opened.
   const [plugins] = useState(entries)
   const orcaVersionRef = useRef(orcaVersion)
@@ -94,16 +102,11 @@ export function PluginUpdateAllDialog({
     ).then((next) => {
       if (!stale) {
         setCandidates(next)
-        // Why unticked: a moved source is a different publisher's code until the user opts in.
-        setSkipped(
-          (current) =>
-            new Set([
-              ...current,
-              ...next
-                .filter(({ entry, preview }) => preview && movedFromSource(entry, preview) !== null)
-                .map(({ entry }) => entry.pluginKey)
-            ])
-        )
+        // Why straight to review: a lone update that needs approval has nothing else to show.
+        const [only] = next
+        if (next.length === 1 && only.preview && needsOwnApproval(only)) {
+          setReviewKey(only.entry.pluginKey)
+        }
       }
     })
     return () => {
@@ -118,8 +121,61 @@ export function PluginUpdateAllDialog({
     !candidate.needsOrca &&
     !updated.has(candidate.entry.pluginKey)
   const chosen = (candidates ?? []).filter(
-    (candidate) => installable(candidate) && !skipped.has(candidate.entry.pluginKey)
+    (candidate) =>
+      installable(candidate) &&
+      !needsOwnApproval(candidate) &&
+      !skipped.has(candidate.entry.pluginKey)
   )
+  const reviewing =
+    candidates?.find(
+      (candidate) => candidate.entry.pluginKey === reviewKey && installable(candidate)
+    ) ?? null
+  const leaveReview = (): void => {
+    setFailure(null)
+    if (plugins.length === 1) {
+      onClose()
+    } else {
+      setReviewKey(null)
+    }
+  }
+  /** Installs the reviewed release, then approves exactly the fingerprint this dialog showed. */
+  const approveReviewed = async ({ entry, preview }: UpdateCandidate): Promise<void> => {
+    if (!preview) {
+      return
+    }
+    setBusy(true)
+    setFailure(null)
+    let ok = false
+    try {
+      const result = await window.api.plugins.installMarketplacePlugin({
+        marketplaceSourceId: preview.marketplaceSourceId,
+        marketplaceCommit: preview.marketplaceCommit,
+        pluginKey: preview.pluginKey,
+        resolvedCommit: preview.resolvedCommit
+      })
+      ok = result.ok
+      // Why only on a match: other bytes than the reviewed ones wait for review on the page.
+      if (result.ok && result.consentFingerprint === preview.consentFingerprint) {
+        await window.api.plugins.consent({
+          pluginKey: preview.pluginKey,
+          reviewedFingerprint: preview.consentFingerprint,
+          decision: 'approve'
+        })
+      }
+    } catch (cause) {
+      console.warn('[plugins] reviewed update failed:', cause)
+    }
+    if (ok) {
+      setUpdated((current) => new Set([...current, entry.pluginKey]))
+      await onUpdated([entry.pluginKey])
+    }
+    setBusy(false)
+    if (ok) {
+      leaveReview()
+      return
+    }
+    setFailure(failureMessage([entry.name], updated.size))
+  }
   const update = async (): Promise<void> => {
     setBusy(true)
     setFailure(null)
@@ -164,20 +220,28 @@ export function PluginUpdateAllDialog({
       <DialogContent surface="security" scrollable aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>
-            {plugins.length === 1
+            {reviewing
               ? translate(
-                  'auto.components.settings.PluginUpdateAllDialog.updateOne',
-                  'Update 1 plugin'
+                  'auto.components.settings.PluginUpdateReview.title',
+                  'Review update to {{value0}}',
+                  { value0: reviewing.entry.name }
                 )
-              : translate(
-                  'auto.components.settings.PluginUpdateAllDialog.updateMany',
-                  'Update {{value0}} plugins',
-                  { value0: plugins.length }
-                )}
+              : plugins.length === 1
+                ? translate(
+                    'auto.components.settings.PluginUpdateAllDialog.updateOne',
+                    'Update 1 plugin'
+                  )
+                : translate(
+                    'auto.components.settings.PluginUpdateAllDialog.updateMany',
+                    'Update {{value0}} plugins',
+                    { value0: plugins.length }
+                  )}
           </DialogTitle>
         </DialogHeader>
         {candidates === null ? (
           <Loader2 className="mx-auto my-4 size-4 animate-spin text-muted-foreground" />
+        ) : reviewing?.preview ? (
+          <PluginUpdateReview entry={reviewing.entry} preview={reviewing.preview} />
         ) : (
           <ul className="divide-y divide-border">
             {candidates.map((candidate) => (
@@ -187,6 +251,14 @@ export function PluginUpdateAllDialog({
                 done={updated.has(candidate.entry.pluginKey)}
                 checked={installable(candidate) && !skipped.has(candidate.entry.pluginKey)}
                 disabled={!installable(candidate) || busy}
+                onReview={
+                  needsOwnApproval(candidate)
+                    ? () => {
+                        setFailure(null)
+                        setReviewKey(candidate.entry.pluginKey)
+                      }
+                    : undefined
+                }
                 onCheckedChange={(checked) =>
                   setSkipped((current) => {
                     const next = new Set(current)
@@ -207,19 +279,33 @@ export function PluginUpdateAllDialog({
             {failure}
           </p>
         ) : null}
-        <DialogFooter>
-          <Button variant="ghost" disabled={busy} onClick={onClose}>
-            {updated.size > 0
-              ? translate('auto.components.settings.PluginUpdateAllDialog.close', 'Close')
-              : translate('auto.components.settings.PluginUpdateAllDialog.cancel', 'Cancel')}
-          </Button>
-          <Button disabled={busy || chosen.length === 0} onClick={() => void update()}>
-            {busy ? <Loader2 className="animate-spin" /> : null}
-            {failure
-              ? translate('auto.components.settings.PluginUpdateAllDialog.retry', 'Try again')
-              : translate('auto.components.settings.PluginUpdateAllDialog.update', 'Update')}
-          </Button>
-        </DialogFooter>
+        {reviewing ? (
+          <DialogFooter>
+            <Button variant="ghost" disabled={busy} onClick={leaveReview}>
+              {plugins.length === 1
+                ? translate('auto.components.settings.PluginUpdateAllDialog.cancel', 'Cancel')
+                : translate('auto.components.settings.PluginUpdateReview.back', 'Back')}
+            </Button>
+            <Button disabled={busy} onClick={() => void approveReviewed(reviewing)}>
+              {busy ? <Loader2 className="animate-spin" /> : null}
+              {translate('auto.components.settings.PluginUpdateReview.approve', 'Approve & update')}
+            </Button>
+          </DialogFooter>
+        ) : (
+          <DialogFooter>
+            <Button variant="ghost" disabled={busy} onClick={onClose}>
+              {updated.size > 0
+                ? translate('auto.components.settings.PluginUpdateAllDialog.close', 'Close')
+                : translate('auto.components.settings.PluginUpdateAllDialog.cancel', 'Cancel')}
+            </Button>
+            <Button disabled={busy || chosen.length === 0} onClick={() => void update()}>
+              {busy ? <Loader2 className="animate-spin" /> : null}
+              {failure
+                ? translate('auto.components.settings.PluginUpdateAllDialog.retry', 'Try again')
+                : translate('auto.components.settings.PluginUpdateAllDialog.update', 'Update')}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   )

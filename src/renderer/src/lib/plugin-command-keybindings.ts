@@ -1,6 +1,7 @@
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import {
   getEffectiveKeybindingsForDefinition,
+  keybindingMatchesAction,
   keybindingMatchesInput,
   type KeybindingDefinition,
   type KeybindingMatchOptions,
@@ -9,6 +10,7 @@ import {
   type PluginKeybindingActionId
 } from '../../../shared/keybindings'
 import { fileSearchClaimsTextKey } from './file-search-shortcut-policy'
+import { NATIVE_CHAT_ROOT_SELECTOR } from './native-chat-paste-request'
 import {
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspaceTerminalInputTarget,
@@ -88,8 +90,14 @@ export function globalShortcutTargetYields(
   overrides: KeybindingOverrides | undefined,
   options: KeybindingMatchOptions
 ): boolean {
+  // The default rename chord has no text-editing meaning, and a chat's composer is that tab's own input.
+  const chatTabRename =
+    input.target instanceof Element &&
+    input.target.closest(NATIVE_CHAT_ROOT_SELECTOR) !== null &&
+    keybindingMatchesAction('tab.rename', input, platform, overrides, options) &&
+    keybindingMatchesAction('tab.rename', input, platform, undefined, options)
   return (
-    fileSearchClaimsTextKey(input) ||
+    (fileSearchClaimsTextKey(input) && !chatTabRename) ||
     isFloatingWorkspaceTerminalInputTarget(input.target) ||
     (isFloatingWorkspacePanelFocused() &&
       matchFloatingWorkspacePanelChord(input, platform, null, overrides, options) !== null)

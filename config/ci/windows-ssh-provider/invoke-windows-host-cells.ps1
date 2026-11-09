@@ -64,7 +64,7 @@ function Invoke-AppCell($Account,[string]$Descriptor,[string]$Log,[string]$Spec,
   Rename-Item -LiteralPath 'out\orcad-template' -NewName 'orcad-template.convert-hidden'
   try {
     if(-not $script:electronBuilt){
-      & node config/scripts/ensure-native-runtime.mjs --runtime=electron 2>&1 | Tee-Object -FilePath $Log | Out-Host
+      & node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron 2>&1 | Tee-Object -FilePath $Log | Out-Host
       if($global:LASTEXITCODE -ne 0){Write-Host 'Switching native modules to Electron failed';return $global:LASTEXITCODE}
       & pnpm exec electron-vite build --mode e2e 2>&1 | Tee-Object -FilePath $Log -Append | Out-Host
       if($global:LASTEXITCODE -ne 0){Write-Host 'The e2e app build failed';return $global:LASTEXITCODE}

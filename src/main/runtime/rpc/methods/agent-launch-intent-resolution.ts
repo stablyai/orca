@@ -1,15 +1,21 @@
 import { decideAgentLaunchIntentMode } from '../../../agent-launch/agent-launch-intent-mode'
 /** Resolve selectors and validate terminal reuse without creating a surface. */
 
-import type { AgentLaunchIntent, AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
+import type {
+  AgentLaunchIntent,
+  AgentLaunchTarget,
+  AgentLaunchModeReceipt
+} from '../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { assertTerminalLaunchAdmissible } from '../../../agent-launch/agent-launch-surface-factories'
 import type { AgentLaunchParams } from '../../../../shared/rpc-contract/agent-launch-params'
-import {
-  resolveAgentLaunchModeOnHost,
-  type AgentLaunchModeReceipt
-} from '../../../agent-launch/agent-launch-mode'
+import { resolveAgentLaunchModeOnHost } from '../../../agent-launch/agent-launch-mode'
+
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'
+
+type ResolvedAgentLaunchIntent = Omit<AgentLaunchIntent, 'sessionOptions'> & {
+  sessionOptions?: Readonly<NonNullable<AgentLaunchParams['sessionOptions']>>
+}
 
 /** Resolve the selector once to avoid id:id: prefixes below the executor.
  * Use launch scope: floating workspaces have no Git worktree record, and folder rows are synthetic. */
@@ -34,7 +40,7 @@ async function agentLaunchIntent(
   runtime: OrcaRuntimeService,
   /** The pane of a tab already shown for this launch; the spawn must land in it. */
   publishedPaneKey: string | undefined
-): Promise<AgentLaunchIntent> {
+): Promise<ResolvedAgentLaunchIntent> {
   const paneKey = publishedPaneKey ?? params.paneKey
   return {
     agent: params.agent,
@@ -82,7 +88,7 @@ export async function resolveUnlaunchedIntent(
   runtime: OrcaRuntimeService,
   early: EarlyAgentLaunchTab | null,
   modeOptions: { terminalOnly?: boolean; callerRendersStructured?: boolean } = {}
-): Promise<{ intent: AgentLaunchIntent; decidedMode: AgentLaunchModeReceipt }> {
+): Promise<{ intent: ResolvedAgentLaunchIntent; decidedMode: AgentLaunchModeReceipt }> {
   const intent = await agentLaunchIntent(params, runtime, early?.paneKey)
   await validateReusedTerminal(intent, runtime)
   const preflight = decideAgentLaunchIntentMode({ intent, runtime, ...modeOptions })

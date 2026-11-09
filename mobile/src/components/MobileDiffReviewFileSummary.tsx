@@ -1,126 +1,101 @@
-import { Pressable, Text, View } from 'react-native'
-import { ArrowDown, ArrowUp } from 'lucide-react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Check } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
-import { colors } from '../theme/mobile-theme'
+import { colors, pressedStyle, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
-import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
-import type { ReviewDiffState } from '../session/mobile-diff-review-screen-model'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
 type Props = {
-  currentIndex: number
-  diffState: ReviewDiffState
   fileNotes: DiffComment[]
-  filteredCount: number
   item: MobileDiffReviewQueueItem
   staleCommentIds: ReadonlySet<string>
   onEditNote: (comment: DiffComment) => void
-  onJumpHunk: (direction: 'next' | 'previous') => void
+  onToggleViewed: (item: MobileDiffReviewQueueItem) => void
+  /** GitHub threads on this file that can't sit under their lines until the branch matches the PR. */
+  hiddenThreadCount: number
 }
 
-function statusColor(status: MobileDiffReviewQueueItem['status']): string {
-  switch (status) {
-    case 'added':
-    case 'copied':
-      return colors.statusGreen
-    case 'deleted':
-      return colors.statusRed
-    case 'renamed':
-      return colors.accentBlue
-    case 'untracked':
-      return colors.statusAmber
-    case 'modified':
-    default:
-      return colors.textSecondary
-  }
+/** Uncommitted files are staged rather than viewed, and a past commit's files are read-only. */
+export function canMarkMobileDiffReviewItemViewed(item: MobileDiffReviewQueueItem): boolean {
+  return item.scope === 'staged' || item.scope === 'branch'
 }
 
-function fileScopeLabel(t: Translate, item: MobileDiffReviewQueueItem): string {
-  if (item.oldPath) {
-    const options = { oldPath: item.oldPath }
-    return item.scope === 'branch'
-      ? t('components.diffReviewFileSummary.branchFrom', 'Branch from {{oldPath}}', options)
-      : item.scope === 'staged'
-        ? t('components.diffReviewFileSummary.stagedFrom', 'Staged from {{oldPath}}', options)
-        : t('components.diffReviewFileSummary.unstagedFrom', 'Unstaged from {{oldPath}}', options)
+function areaPillLabel(t: Translate, item: MobileDiffReviewQueueItem): string | null {
+  if (item.area === 'untracked') {
+    return t('components.diffReviewFileSummary.untracked', 'Untracked')
   }
-  return item.scope === 'branch'
-    ? t('components.diffReviewFileSummary.branch', 'Branch')
-    : item.scope === 'staged'
-      ? t('components.diffReviewFileSummary.staged', 'Staged')
-      : t('components.diffReviewFileSummary.unstaged', 'Unstaged')
+  return item.scope === 'unstaged'
+    ? t('components.diffReviewFileSummary.notStaged', 'Not staged')
+    : null
 }
 
 export function MobileDiffReviewFileSummary({
-  currentIndex,
-  diffState,
   fileNotes,
-  filteredCount,
   item,
   staleCommentIds,
   onEditNote,
-  onJumpHunk
+  onToggleViewed,
+  hiddenThreadCount
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const count = item.noteCount
-  const hunkDisabled = diffState.kind !== 'ready' || diffState.hunks.length === 0
-  const badgeColor = statusColor(item.status)
+  const pill = areaPillLabel(t, item)
   return (
-    <View style={styles.fileHeader}>
-      <View style={styles.fileTitleRow}>
-        <View style={[styles.statusBadge, { borderColor: badgeColor }]}>
-          <Text style={[styles.statusBadgeText, { color: badgeColor }]}>
-            {STATUS_LABELS[item.status]}
-          </Text>
-        </View>
-        <View style={styles.fileTitleBlock}>
-          <Text style={styles.filePath} numberOfLines={1}>
-            {item.filePath}
-          </Text>
-          <Text style={styles.fileMeta} numberOfLines={1}>
-            {fileScopeLabel(t, item)}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.fileMetaRow}>
-        <Text style={styles.fileMeta}>
-          {currentIndex + 1}/{filteredCount}
+    <View style={styles.header}>
+      <View style={styles.row}>
+        <Text style={styles.path} numberOfLines={1}>
+          {item.filePath}
         </Text>
-        {item.isReviewed ? (
-          <Text style={styles.reviewedPill}>
-            {t('components.diffReviewFileSummary.reviewed', 'Reviewed')}
-          </Text>
-        ) : null}
+        <MobileDiffLineStats added={item.added} removed={item.removed} />
         {item.changedSinceReview ? (
-          <Text style={styles.stalePill}>
+          <Text style={styles.changedPill}>
             {t('components.diffReviewFileSummary.changed', 'Changed')}
           </Text>
         ) : null}
-        {item.noteCount > 0 ? (
-          <Text style={styles.fileMeta}>
-            {count === 1
-              ? t('components.diffReviewFileSummary.notes_one', '{{count}} note', { count })
-              : t('components.diffReviewFileSummary.notes_other', '{{count}} notes', { count })}
-          </Text>
-        ) : null}
-        {item.staleNoteCount > 0 ? (
-          <Text style={styles.staleText}>
-            {t('components.diffReviewFileSummary.staleCount', '{{count}} stale', {
-              count: item.staleNoteCount
-            })}
-          </Text>
+        {pill ? <Text style={styles.pill}>{pill}</Text> : null}
+        {canMarkMobileDiffReviewItemViewed(item) ? (
+          <ViewedCheckbox
+            viewed={item.isReviewed}
+            onPress={() => onToggleViewed(item)}
+            accessibilityLabel={t('components.diffReviewFileSummary.viewed', 'Viewed')}
+          />
         ) : null}
       </View>
+      {hiddenThreadCount > 0 ? (
+        <Text style={styles.meta} numberOfLines={2}>
+          {hiddenThreadCount === 1
+            ? t(
+                'components.diffReviewFileSummary.threadsWhenInSync_one',
+                'Its GitHub comment shows here once this branch matches the pull request.',
+                { count: hiddenThreadCount }
+              )
+            : t(
+                'components.diffReviewFileSummary.threadsWhenInSync_other',
+                'Its {{count}} GitHub comments show here once this branch matches the pull request.',
+                { count: hiddenThreadCount }
+              )}
+        </Text>
+      ) : null}
+      {item.oldPath ? (
+        <Text style={styles.meta} numberOfLines={1}>
+          {t('components.diffReviewFileSummary.renamedFrom', 'Renamed from {{oldPath}}', {
+            oldPath: item.oldPath
+          })}
+        </Text>
+      ) : null}
       {fileNotes.length > 0 ? (
-        <View style={styles.fileNotes}>
+        <View style={mobileDiffReviewStyles.fileNotes}>
           {fileNotes.map((note) => (
             <Pressable
               key={note.id}
-              style={({ pressed }) => [styles.fileNote, pressed && styles.fileNotePressed]}
+              style={({ pressed }) => [
+                mobileDiffReviewStyles.fileNote,
+                pressed && mobileDiffReviewStyles.fileNotePressed
+              ]}
               onPress={() => onEditNote(note)}
               accessibilityRole="button"
               accessibilityLabel={t(
@@ -128,11 +103,11 @@ export function MobileDiffReviewFileSummary({
                 'Edit file note'
               )}
             >
-              <Text style={styles.fileNoteText} numberOfLines={2}>
+              <Text style={mobileDiffReviewStyles.fileNoteText} numberOfLines={2}>
                 {note.body}
               </Text>
               {staleCommentIds.has(note.id) ? (
-                <Text style={styles.staleText}>
+                <Text style={mobileDiffReviewStyles.staleText}>
                   {t('components.diffReviewFileSummary.stale', 'Stale')}
                 </Text>
               ) : null}
@@ -140,32 +115,105 @@ export function MobileDiffReviewFileSummary({
           ))}
         </View>
       ) : null}
-      <View style={styles.hunkRow}>
-        <Pressable
-          style={({ pressed }) => [styles.hunkButton, pressed && styles.hunkButtonPressed]}
-          disabled={hunkDisabled}
-          onPress={() => onJumpHunk('previous')}
-          accessibilityRole="button"
-          accessibilityLabel={t('components.diffReviewFileSummary.previousHunk', 'Previous hunk')}
-        >
-          <ArrowUp size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.hunkButtonText}>
-            {t('components.diffReviewFileSummary.hunk', 'Hunk')}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.hunkButton, pressed && styles.hunkButtonPressed]}
-          disabled={hunkDisabled}
-          onPress={() => onJumpHunk('next')}
-          accessibilityRole="button"
-          accessibilityLabel={t('components.diffReviewFileSummary.nextHunk', 'Next hunk')}
-        >
-          <ArrowDown size={14} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.hunkButtonText}>
-            {t('components.diffReviewFileSummary.hunk', 'Hunk')}
-          </Text>
-        </Pressable>
-      </View>
     </View>
   )
 }
+
+export function MobileDiffLineStats({ added, removed }: { added?: number; removed?: number }) {
+  useMobileColorScheme()
+  return (
+    <>
+      {added ? <Text style={styles.added}>+{added}</Text> : null}
+      {removed ? <Text style={styles.removed}>−{removed}</Text> : null}
+    </>
+  )
+}
+
+export function ViewedCheckbox({
+  viewed,
+  onPress,
+  accessibilityLabel
+}: {
+  viewed: boolean
+  onPress: () => void
+  accessibilityLabel: string
+}) {
+  useMobileColorScheme()
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={spacing.md}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: viewed }}
+      accessibilityLabel={accessibilityLabel}
+      style={({ pressed }) => [styles.box, viewed && styles.boxChecked, pressed && pressedStyle]}
+    >
+      {viewed ? <Check size={14} color={colors.onAccent} strokeWidth={3} /> : null}
+    </Pressable>
+  )
+}
+
+const styles = themedStyleSheet(() => ({
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+    backgroundColor: colors.bgBase,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  path: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.textSecondary,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize
+  },
+  meta: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
+  },
+  added: {
+    color: colors.statusGreen,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize
+  },
+  removed: {
+    color: colors.statusRed,
+    fontFamily: typography.monoFamily,
+    fontSize: typography.metaSize
+  },
+  pill: {
+    overflow: 'hidden',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    color: colors.statusAmber,
+    backgroundColor: colors.translucentFill,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  changedPill: {
+    color: colors.statusAmber,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  box: {
+    width: 20,
+    height: 20,
+    borderRadius: radii.mark,
+    borderWidth: 1.5,
+    borderColor: colors.textMuted,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  boxChecked: {
+    backgroundColor: colors.accentBlue,
+    borderColor: colors.accentBlue
+  }
+}))

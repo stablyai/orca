@@ -82,6 +82,62 @@ export const cmdJPaletteFeatureTipAcknowledgedSchema = z
   })
   .strict()
 
+// Missing versions identify events emitted before the corner-card rollout.
+const chatUiLaunchTipExperimentVersionSchema = z
+  .enum(['corner-card-v2', 'corner-card-v3'])
+  .optional()
+const chatUiFeatureTipVariantSchema = z.enum(['chat_ui_off', 'chat_ui_on'])
+export const chatUiFeatureTipShownSchema = z
+  .object({
+    launch_tip_experiment_version: chatUiLaunchTipExperimentVersionSchema,
+    variant: chatUiFeatureTipVariantSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+export const chatUiFeatureTipActionSchema = z
+  .object({
+    launch_tip_experiment_version: chatUiLaunchTipExperimentVersionSchema,
+    variant: chatUiFeatureTipVariantSchema,
+    action: z.enum([
+      'use_chat_ui',
+      'stay_in_terminal',
+      'switch_to_terminal',
+      'open_settings',
+      'open_live_switching',
+      'live_switching_shown',
+      'dismissed'
+    ]),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+// Fires in both arms when the tip would open, so control has the same exposure moment as treatment.
+export const chatUiFeatureTipExposureSchema = z
+  .object({
+    launch_tip_experiment_version: chatUiLaunchTipExperimentVersionSchema,
+    variant: chatUiFeatureTipVariantSchema,
+    launch_tip_cohort: z.enum([
+      'control',
+      'treatment',
+      'treatment-live-switch',
+      'treatment-swapped-buttons',
+      'treatment-center',
+      'unassigned'
+    ]),
+    shown: z.boolean(),
+    targeting: z.enum(['all', 'eligible-harnesses', 'not-switched']).optional(),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+export const agentDefaultSurfaceChangedSchema = z
+  .object({
+    from_mode: nativeChatViewModeSchema,
+    to_mode: nativeChatViewModeSchema,
+    source: z.enum(['launch_card', 'settings']),
+    launch_tip_shown: z.boolean().optional(),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+
 export const featureWallOpenedSchema = z
   .object({
     source: featureWallOpenSourceSchema

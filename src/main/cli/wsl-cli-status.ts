@@ -1,6 +1,6 @@
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { getBridgePathFromCommandPath, getPosixDirname } from './wsl-cli-scripts'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 
 const WSL_COMMAND_NAME = 'orca-ide'
 
@@ -116,6 +116,24 @@ export function unsupportedWslCliStatus(
     currentTarget: null,
     unsupportedReason,
     detail
+  }
+}
+
+/** The distro was deleted (`wsl --unregister`), so nothing of Orca's is left in it. */
+export function deletedDistroWslCliStatus(distro: string): CliInstallStatus {
+  return {
+    platform: 'linux',
+    commandName: WSL_COMMAND_NAME,
+    commandPath: null,
+    pathDirectory: null,
+    pathConfigured: false,
+    launcherPath: null,
+    installMethod: null,
+    supported: false,
+    state: 'not_installed',
+    currentTarget: null,
+    unsupportedReason: null,
+    detail: `${distro} is no longer an installed WSL distro, so nothing is registered in it.`
   }
 }
 

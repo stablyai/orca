@@ -9,12 +9,14 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 
 export async function activateWorktreeFromSidebar(
   worktreeId: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  options?: { revealInSidebar?: boolean }
 ): Promise<void> {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, {
       navigationIntent: 'user-open',
+      ...options,
       ...(executionHostId ? { executionHostId } : {})
     })
     return

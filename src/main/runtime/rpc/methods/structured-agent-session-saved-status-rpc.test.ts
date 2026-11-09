@@ -10,7 +10,7 @@ import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-w
 import * as journalFactory from '../../../native-chat/agent-session-journal/journal-store-factory'
 import { RpcDispatcher } from '../dispatcher'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from './structured-agent-session-status-stream'
 
 afterEach(() => {

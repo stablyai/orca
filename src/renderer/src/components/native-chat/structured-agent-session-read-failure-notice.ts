@@ -3,9 +3,9 @@
 import {
   agentSessionReadHistoryRefusalParts,
   agentSessionWriteNotDoneParts
-} from '../../../../shared/agent-session-refusal-notice'
-import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
-import { isFinalAgentSessionReadRefusal } from '../../../../shared/structured-agent-session-read-refusal'
+} from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
+import type { AgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { isFinalAgentSessionReadRefusal } from '../../../../shared/agent-session/failures/structured-agent-session-read-refusal'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 
 export type StructuredAgentSessionReadFailureNotice = {

@@ -1,4 +1,4 @@
-import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/remotes/coalesced-probe'
 import type { ProjectRef } from './gl-utils'
 
 const projectRefInFlight: CoalescedProbes<ProjectRef | null> = new Map()

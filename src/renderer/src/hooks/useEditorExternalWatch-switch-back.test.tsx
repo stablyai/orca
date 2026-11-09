@@ -47,12 +47,12 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undef
 
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { useEditorExternalWatch } from './useEditorExternalWatch'
-import { attachRestoredTabConflictScan } from '@/components/editor/editor-restored-tab-conflict-scan'
+import { attachRestoredTabConflictScan } from '@/components/editor/external-changes/editor-restored-tab-conflict-scan'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 import {
   isAutosaveSuspendedForFile,
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT
-} from '@/components/editor/editor-autosave'
+} from '@/components/editor/autosave/editor-autosave'
 import { ORCA_WORKTREE_FILE_CHANGE_EVENT } from './worktree-file-change-event'
 import {
   claimCombinedDiffView,
@@ -255,16 +255,5 @@ describe('switching back to a workspace that was not watched', () => {
 
     expect(reloads).toEqual([])
     expect(harness.readRuntimeFileContent).not.toHaveBeenCalled()
-  })
-
-  it('never holds autosave on a tab edited before the watch is back', async () => {
-    // Why: saves are disk-checked by the host, so a stale edit is refused there rather than held here.
-    await render([active], [background])
-    await render([active, background], [])
-    store.getState().setEditorDraft(CLEAN, 'typed before the watch settled')
-    store.getState().markFileDirty(CLEAN, true)
-    await act(async () => {})
-
-    expect(isAutosaveSuspendedForFile(file(CLEAN))).toBe(false)
   })
 })

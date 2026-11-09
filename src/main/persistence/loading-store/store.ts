@@ -4,7 +4,7 @@ import {
   setMigrationUnsupportedPtyPersistenceListener
 } from '../../agent-hooks/migration-unsupported-pty-state'
 import { agentHookServer } from '../../agent-hooks/server'
-import { ActiveViewPreference } from '../../active-view-preference'
+import { ActiveViewPreference } from '../preferences/active-view-preference'
 import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
 import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'

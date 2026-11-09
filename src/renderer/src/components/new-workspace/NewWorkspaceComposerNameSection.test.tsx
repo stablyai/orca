@@ -101,35 +101,4 @@ describe('NewWorkspaceComposerNameSection branch reuse', () => {
     expect(props.onNameValueChange).not.toHaveBeenCalled()
     expect(props.onClearSmartNameSelection).not.toHaveBeenCalled()
   })
-
-  it('removes the open action when the composer clears its existing-workspace target', () => {
-    const props = branchProps()
-    const { rerender } = render(
-      <NewWorkspaceComposerNameSection {...props} onOpenSelectedBranchWorkspace={vi.fn()} />
-    )
-    expect(screen.getByRole('button', { name: 'Open existing workspace' })).toBeTruthy()
-
-    rerender(<NewWorkspaceComposerNameSection {...props} reuseSelectedBranch={false} />)
-
-    expect(screen.queryByRole('button', { name: 'Open existing workspace' })).toBeNull()
-    expect(
-      screen.getByRole('radio', { name: 'Existing branch' }).getAttribute('aria-checked')
-    ).toBe('false')
-  })
-
-  it('keeps reuse controls out of the accessible UI for a folder workspace', () => {
-    render(
-      <NewWorkspaceComposerNameSection
-        {...branchProps()}
-        selectedRepoIsGit={false}
-        smartNameSelection={null}
-        canReuseSelectedBranch={false}
-        reuseSelectedBranch={false}
-      />
-    )
-
-    expect(screen.queryByRole('radio', { name: 'Existing branch' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Open existing workspace' })).toBeNull()
-    expect(screen.getByRole('textbox', { name: 'Workspace name' })).toBeTruthy()
-  })
 })

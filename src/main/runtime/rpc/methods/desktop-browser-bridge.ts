@@ -1,5 +1,6 @@
 import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
+  DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultParams
@@ -41,6 +42,9 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
       const handle = getDesktopBrowserBridgeRegistry(runtime).attach({
         ...caller,
         acceptsCancel,
+        enforcesExpectUrl:
+          context.clientCapabilities?.includes(DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY) ??
+          false,
         emit
       })
       let release = (): void => {}

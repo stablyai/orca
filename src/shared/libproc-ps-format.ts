@@ -1,13 +1,13 @@
 import type { LibprocProcessRow } from './libproc-addon'
 
-const SIDL = 1
+export const SIDL = 1
 const SSTOP = 4
-const SZOMB = 5
+export const SZOMB = 5
 const P_CONTROLT = 0x2
 const P_PPWAIT = 0x10
 const P_SYSTEM = 0x200
 const P_TRACED = 0x800
-const P_WEXIT = 0x2000
+export const P_WEXIT = 0x2000
 export const NODEV = -1
 
 /** ps's state letters, except running vs sleeping: that needs another task's thread states (ps is setuid for it), so live processes read `S`. */

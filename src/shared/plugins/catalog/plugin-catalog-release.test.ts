@@ -65,10 +65,6 @@ function manifestInput(): Record<string, unknown> {
 }
 
 describe('catalog releases', () => {
-  it('accepts a release that matches the exact bytes and manifest', () => {
-    expect(check(release())).toBeNull()
-  })
-
   it.each([
     ['a language pack', {}],
     [

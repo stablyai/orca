@@ -3,12 +3,12 @@ import {
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
   providerDiagnostic,
   withProviderDiagnostic
-} from '../../../shared/agent-session-failure'
+} from '../../../shared/agent-session/failures/agent-session-failure'
 import {
   AgentSessionRefusalError,
   refuse,
   refuseUnclassified
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   AgentSessionAcquisitionExitProvenError,
   AgentSessionAcquisitionRefusal,
@@ -32,7 +32,7 @@ const ORCA_INTERNAL =
   /agent_session_|execution_owner|provider_[a-z_]+|[0-9a-f]{8}-[0-9a-f]{4}-|[/\\][\w.-]+[/\\]|Error:|ENOENT/
 
 describe('structuredAgentSessionStartFailure', () => {
-  it('names a provider request that ran out of time, through wrappers, unless the provider exited', () => {
+  it('names a provider request that ran out of time, through wrappers and an exit seen around it', () => {
     const timedOut = withProviderRequestTimeout(new Error('thread/start exceeded 30000ms'), {
       method: 'thread/start',
       timeoutMs: 30_000
@@ -56,7 +56,10 @@ describe('structuredAgentSessionStartFailure', () => {
     )
     expect(
       structuredAgentSessionStartFailure({ error: withObservedProviderExit(wrapped) }).rejection
-    ).toEqual({ kind: 'providerStartFailed' })
+    ).toEqual({
+      kind: 'startFailed',
+      requestTimeout: { method: 'thread/start', timeoutMs: 30_000 }
+    })
   })
   it('names a saved Arguments option in start and restart failures without exposing its value', () => {
     const error = new StructuredAgentArgumentsError(

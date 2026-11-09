@@ -1,4 +1,6 @@
 import type { JSONContent } from '@tiptap/react'
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentReferenceToken } from '../../../../shared/orchestration-agent-reference'
 import {
   imageReferenceToken,
   splitImageReferences
@@ -7,6 +9,24 @@ import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from './native-chat-pasted-text-referen
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
 export const FILE_REFERENCE_NODE = 'nativeChatFileReference'
+
+export function promptLeafString(
+  type: string | undefined,
+  attrs: Readonly<Record<string, unknown>> | undefined,
+  text?: string | null
+): string {
+  if (type === 'nativeChatAgentReference') {
+    return agentReferenceToken({
+      label: String(attrs?.label),
+      address: String(attrs?.address),
+      hostKey: String(attrs?.hostKey)
+    })
+  }
+  if (type === IMAGE_REFERENCE_NODE) {
+    return imageReferenceToken(String(attrs?.attachmentId))
+  }
+  return type === 'hardBreak' ? '\n' : (text ?? String(attrs?.token ?? ''))
+}
 
 /** All text-to-document paths must reconstruct image chips and pending-paste pills. */
 export function promptTextContent(text: string): JSONContent {
@@ -31,19 +51,73 @@ export function promptTextContent(text: string): JSONContent {
   }
 }
 
+export function seedPromptSkillReferences(
+  node: JSONContent,
+  skills: readonly AgentJournalSkillRef[] = [],
+  occurrences = new Map<string, number>()
+): JSONContent {
+  if ((node.type === 'text' && node.text) || skills.length === 0) {
+    return node
+  }
+  return {
+    ...node,
+    content: node.content?.flatMap((child) => {
+      if (child.type !== 'text' || !child.text) {
+        return [seedPromptSkillReferences(child, skills, occurrences)]
+      }
+      const pieces: JSONContent[] = []
+      const text = child.text
+      let start = 0
+      const names = [...new Set(skills.map(({ name }) => name))]
+        .sort((a, b) => b.length - a.length)
+        .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      const pattern = new RegExp(`[$/](?:${names.join('|')})(?![\\w:-])`, 'gu')
+      for (const match of text.matchAll(pattern)) {
+        if (match[0].startsWith('/') && match.index > 0 && !/\s/u.test(text[match.index - 1])) {
+          continue
+        }
+        const name = match[0].slice(1)
+        const matching = skills.filter((skill) => skill.name === name)
+        const occurrence = occurrences.get(name) ?? 0
+        const skill = matching[occurrence] ?? matching[0]
+        occurrences.set(name, occurrence + 1)
+        if (!skill) {
+          continue
+        }
+        if (match.index > start) {
+          pieces.push({ type: 'text', text: text.slice(start, match.index) })
+        }
+        pieces.push({ type: 'nativeChatSkill', attrs: { token: match[0], path: skill.path } })
+        start = match.index + match[0].length
+      }
+      if (start < text.length) {
+        pieces.push({ type: 'text', text: text.slice(start) })
+      }
+      return pieces
+    })
+  }
+}
+
+/** The document side of withoutImageReference: each chip goes with one space after it. */
 export function withoutImageReferenceNodes(
   document: JSONContent,
   attachmentId: string
 ): JSONContent {
+  const isChip = (node: JSONContent | undefined): boolean =>
+    node?.type === IMAGE_REFERENCE_NODE && node.attrs?.attachmentId === attachmentId
   return document.content
     ? {
         ...document,
-        content: document.content
-          .filter(
-            (node) =>
-              node.type !== IMAGE_REFERENCE_NODE || node.attrs?.attachmentId !== attachmentId
-          )
-          .map((node) => withoutImageReferenceNodes(node, attachmentId))
+        content: document.content.flatMap((node, index, nodes) => {
+          if (isChip(node)) {
+            return []
+          }
+          if (isChip(nodes[index - 1]) && node.type === 'text' && node.text?.startsWith(' ')) {
+            const text = node.text.slice(1)
+            return text ? [{ ...node, text }] : []
+          }
+          return [withoutImageReferenceNodes(node, attachmentId)]
+        })
       }
     : document
 }
@@ -107,12 +181,7 @@ export function slicePromptDocument(document: JSONContent, from: number, to: num
     const start = offset
     const content: JSONContent[] = []
     for (const node of block.content ?? []) {
-      const value =
-        node.type === IMAGE_REFERENCE_NODE
-          ? imageReferenceToken(String(node.attrs?.attachmentId))
-          : node.type === 'hardBreak'
-            ? '\n'
-            : (node.text ?? String(node.attrs?.token ?? ''))
+      const value = promptLeafString(node.type, node.attrs, node.text)
       const end = offset + value.length
       if (end > from && offset < to) {
         content.push(

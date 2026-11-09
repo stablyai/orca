@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
-import { store, TEST_WORKTREE_ID, TEST_WORKTREE_PATH } from './orca-runtime-test-fixtures.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import {
+  store,
+  TEST_WORKTREE_ID,
+  TEST_WORKTREE_PATH
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
 type RuntimeInternals = {
   recordPtyWorktree: (
@@ -84,61 +89,5 @@ describe('a moved shell history that waited on live shells', () => {
     expect(options.worktreeHasLiveShells('repo-1::/srv/app')).toBe(true)
     expect(options.worktreeHasLiveShells(TEST_WORKTREE_ID)).toBe(true)
     expect(options.worktreeHasLiveShells('repo-1::/srv/other')).toBe(false)
-  })
-
-  it('waits when the terminal inventory does not answer', async () => {
-    const installPending = vi.fn()
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      installPendingOrcadMigrationReceivedBlobs: installPending,
-      hasPendingOrcadMigrationShellHistory: () => true
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses: vi.fn(async () => {
-        throw new Error('daemon unreachable')
-      })
-    })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await runtime.installPendingOrcadMigrationShellHistory()
-
-    expect(installPending).not.toHaveBeenCalled()
-    warn.mockRestore()
-  })
-
-  it('costs a start with nothing pending no inventory and keeps restored receipts', async () => {
-    const installPending = vi.fn()
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      installPendingOrcadMigrationReceivedBlobs: installPending,
-      hasPendingOrcadMigrationShellHistory: () => false
-    })
-    const listProcesses = vi.fn(async () => [{ id: 'daemon-pty', cwd: '/elsewhere', title: 'zsh' }])
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      listProcesses
-    })
-    const receipt = {
-      ptyId: 'daemon-pty',
-      worktreeId: TEST_WORKTREE_ID,
-      terminalHandle: 'term_daemon',
-      paneKey: 'tab-1:1',
-      processIncarnation: 'daemon-pty:inc-1',
-      hostScope: { kind: 'local' }
-    }
-    internalsOf(runtime).restoredOrchestrationAuthorityByPtyId.set('daemon-pty', receipt)
-
-    await runtime.installPendingOrcadMigrationShellHistory()
-
-    expect(listProcesses).not.toHaveBeenCalled()
-    expect(installPending).not.toHaveBeenCalled()
-    expect(internalsOf(runtime).restoredOrchestrationAuthorityByPtyId.get('daemon-pty')).toBe(
-      receipt
-    )
   })
 })

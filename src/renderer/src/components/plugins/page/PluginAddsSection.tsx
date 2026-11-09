@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { isWorkspaceScopedPluginContext } from '../../../../../shared/plugins/contributions/plugin-command-contribution'
 import {
   Blocks,
@@ -7,6 +8,7 @@ import {
   Highlighter,
   Languages,
   Palette,
+  PanelBottom,
   PanelRight,
   PenTool,
   Server,
@@ -30,6 +32,7 @@ import { Button } from '../../ui/button'
 import { revealPluginIconTheme } from '../state/plugin-try-action'
 import { DetailRow, DetailSection } from './PluginDetailSections'
 import { PluginContributionActionCommand } from './PluginContributionActionCommand'
+import { PluginCommandReplacementRow } from './PluginCommandReplacementRow'
 import { PluginContributionEventRow, usePluginWorkerEvents } from './PluginContributionActionEvents'
 import { PluginContributionActionLanguage } from './PluginContributionActionLanguage'
 import { PluginContributionActionPanel } from './PluginContributionActionPanel'
@@ -103,13 +106,16 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   panels: <PanelRight />,
   customEditors: <PenTool />,
   vmRecipes: <Server />,
-  newFiles: <FilePlus />
+  newFiles: <FilePlus />,
+  statusBarItems: <PanelBottom />
 }
 
 type AddsCommand = {
   id: string
   title: string
   keybindings: readonly { key: string; when: string }[]
+  replaces?: string
+  replacedBy?: string
   /** Set once the plugin is on, so the row can run it exactly as the palette would. */
   live?: ActivePluginCommand
 }
@@ -249,6 +255,7 @@ function useContributionRowActions(
       case 'terminalThemes':
       case 'customEditors':
       case 'vmRecipes':
+      case 'statusBarItems':
         // Themes have "Use now" above the list; editors open from their new files; recipes have nothing to try here.
         return null
     }
@@ -288,6 +295,7 @@ export function PluginAddsSection({
   const previewCommands = preview?.manifest.contributes.commands.map((command) => ({
     id: command.id,
     title: command.title,
+    replaces: command.replaces,
     keybindings: preview.manifest.contributes.keybindings
       .filter((binding) => binding.command === command.id)
       .map((binding) => ({ key: binding.key, when: binding.when ?? 'global' }))
@@ -338,7 +346,12 @@ export function PluginAddsSection({
         />
       ))}
       {commands.map((command) => (
-        <CommandRow key={command.id} command={command} onOpenShortcuts={onOpenShortcuts} />
+        <Fragment key={command.id}>
+          <CommandRow command={command} onOpenShortcuts={onOpenShortcuts} />
+          {command.replaces ? (
+            <PluginCommandReplacementRow command={{ ...command, replaces: command.replaces }} />
+          ) : null}
+        </Fragment>
       ))}
       {events.map((event) => (
         <PluginContributionEventRow key={`event:${event}`} event={event} />

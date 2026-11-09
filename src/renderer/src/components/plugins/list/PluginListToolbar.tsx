@@ -6,12 +6,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import type { PluginListFilter } from './plugin-list-filter'
 import { PluginFilterPopover } from './PluginFilterPopover'
 
-/** Tools beside the search: Update all (on the Updates tab), filter, and refresh. */
+/** Tools beside the search: Update all (on the Updates filter), catalog filter, and refresh. */
 export function PluginListToolbar({
   updateCount,
   onUpdateAll,
   filter,
-  categories,
   sources,
   onFilterChange,
   refreshBusy,
@@ -21,7 +20,6 @@ export function PluginListToolbar({
   updateCount: number
   onUpdateAll: () => void
   filter: PluginListFilter
-  categories: readonly [string, number][]
   sources: readonly PluginMarketplaceHostSourceState[]
   onFilterChange: (filter: PluginListFilter) => void
   refreshBusy: boolean
@@ -38,12 +36,9 @@ export function PluginListToolbar({
           {translate('auto.components.settings.PluginManager.updateAll', 'Update all…')}
         </Button>
       ) : null}
-      <PluginFilterPopover
-        filter={filter}
-        categories={categories}
-        sources={sources}
-        onChange={onFilterChange}
-      />
+      {sources.length > 0 ? (
+        <PluginFilterPopover filter={filter} sources={sources} onChange={onFilterChange} />
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

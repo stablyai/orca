@@ -1,10 +1,10 @@
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { ORCAD_UPDATE_TERMINALS_RUNNING_CODE } from '../../../shared/orcad-managed-runtime'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment,
   type OrcadSshDeploymentLink
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { computeLocalOrcadBuildHash } from '../../ssh/orcad-local-build-hash'

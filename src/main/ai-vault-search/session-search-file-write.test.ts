@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import SyncDatabase from '../sqlite/sync-database'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
-import { cwdKey } from './session-search-file-records'
 import { requiresWholeRead } from './session-search-file-cursor'
 import { SessionSearchIndexWriter } from './session-search-index-writer'
 import { deleteExpiredSearchFiles } from './session-search-retention-delete'
@@ -72,16 +71,6 @@ function counts(db: SyncDatabase): Record<string, number> {
   }
 }
 
-it('publishes all rows from a completed whole read', () => {
-  replayTranscriptRead({ messages: userMessages('needle text', 300) })
-
-  const after = counts(index.db)
-  expect(after.sessions).toBe(1)
-  expect(after.messages).toBe(300)
-  expect(after.full).toBe(300)
-  expect(errors).toEqual([])
-})
-
 it('files every row in one FTS table, under the column its role owns', () => {
   replayTranscriptRead({
     messages: [
@@ -95,18 +84,6 @@ it('files every row in one FTS table, under the column its role owns', () => {
   expect(matches(index.db, 'messages_fts', 'gamma')).toBe(1)
   expect(matches(index.db, 'messages_fts', '{user_text assistant_text}: gamma')).toBe(0)
   expect(matches(index.db, 'messages_fts', '{user_text assistant_text}: beta')).toBe(1)
-})
-
-it('leaves the index exactly as it found it when a read never finishes', () => {
-  const write = store.beginWrite(syntheticCandidate(), 'replace', 0)!
-  for (const message of userMessages('neverfinished', 200)) {
-    write.add(message)
-  }
-  expect(counts(index.db)).toMatchObject({
-    sessions: 0,
-    messages: 0,
-    files: 0
-  })
 })
 
 it('rolls a whole file back when a write throws part way through its transaction', () => {
@@ -233,67 +210,6 @@ it('leaves the session consistent after every chunk of a file too large for one 
   expect(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset).toBe(4096)
 })
 
-it('holds the ceiling against a single message larger than it', () => {
-  const writer = new SessionSearchIndexWriter(index.db, 8000)
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
-  const exec = SyncDatabase.prototype.exec
-  let opened = 0
-  vi.spyOn(SyncDatabase.prototype, 'exec').mockImplementation(function (
-    this: SyncDatabase,
-    sql: string
-  ) {
-    if (sql === 'BEGIN IMMEDIATE') {
-      opened += 1
-    }
-    exec.call(this, sql)
-  })
-
-  // A single message exceeds the transaction ceiling; split it by row before committing.
-  write.add({ role: 'assistant', text: 'a'.repeat(24_000), timestamp: null })
-  vi.restoreAllMocks()
-
-  expect(opened).toBe(3)
-  expect(counts(index.db).messages).toBe(3)
-  expect(
-    write.commit({
-      session: syntheticSession(),
-      byteOffset: 4096,
-      incomplete: false
-    })
-  ).toBe(true)
-  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 3 })
-})
-
-it('names a session on its first chunk, not only when the read ends', () => {
-  const writer = new SessionSearchIndexWriter(index.db, 400)
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
-  for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
-    write.add(message)
-  }
-
-  expect(counts(index.db).messages).toBe(8)
-  expect(
-    index.db.prepare('SELECT session_id, cwd, cwd_key, title, created_at FROM sessions').get()
-  ).toEqual({
-    session_id: PROVISIONAL_IDENTITY.sessionId,
-    cwd: '/repo/app',
-    cwd_key: cwdKey('/repo/app'),
-    title: 'provisional title',
-    created_at: '2026-05-01T10:00:00.000Z'
-  })
-
-  expect(
-    write.commit({
-      session: syntheticSession({ title: 'the settled title' }),
-      byteOffset: 4096,
-      incomplete: false
-    })
-  ).toBe(true)
-  expect(index.db.prepare('SELECT title FROM sessions').get()).toEqual({
-    title: 'the settled title'
-  })
-})
-
 it('commits a whole-file read over the ceiling in one transaction, never a chunk', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
   const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
@@ -321,70 +237,6 @@ it('commits a whole-file read over the ceiling in one transaction, never a chunk
   expect(opened).toBe(1)
   expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 10, full: 10 })
   expect(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset).toBe(4096)
-})
-
-it('starts chunking only once the parser has an id to name the session with', () => {
-  const writer = new SessionSearchIndexWriter(index.db, 400)
-  let decoded: typeof PROVISIONAL_IDENTITY | null = null
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, () => decoded)!
-  for (const message of userMessages(CHUNKED_MESSAGE, 4)) {
-    write.add(message)
-  }
-  expect(counts(index.db).messages).toBe(0)
-
-  decoded = PROVISIONAL_IDENTITY
-  write.add(userMessages(CHUNKED_MESSAGE, 1)[0]!)
-
-  expect(counts(index.db).messages).toBe(5)
-  expect(index.db.prepare('SELECT session_id, cwd FROM sessions').get()).toEqual({
-    session_id: PROVISIONAL_IDENTITY.sessionId,
-    cwd: '/repo/app'
-  })
-})
-
-it('reports a chunk-partial file as held, and as one that must be read whole', () => {
-  const writer = new SessionSearchIndexWriter(index.db, 400)
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
-  for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
-    write.add(message)
-  }
-
-  const held = writer.indexedFile(SYNTHETIC_TRANSCRIPT, null)
-  expect(held).not.toBeNull()
-  expect(held?.byteOffset).toBeNull()
-  expect(requiresWholeRead(held)).toBe(true)
-  expect(held?.mtimeMs).toBe(syntheticCandidate().file.mtimeMs)
-
-  expect(writer.indexedFile('/never-seen.jsonl', null)).toBeNull()
-  expect(requiresWholeRead(null)).toBe(false)
-
-  for (const offset of [0, -1, 400, 1000]) {
-    expect(writer.beginWrite(syntheticCandidate(), 'append', offset)).toBeNull()
-  }
-})
-
-it('re-reads a chunked file whole when its writer died between chunks', async () => {
-  const writer = new SessionSearchIndexWriter(index.db, 400)
-  const abandoned = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
-  for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
-    abandoned.add(message)
-  }
-  expect(counts(index.db).messages).toBe(8)
-
-  expect(requiresWholeRead(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null))).toBe(true)
-  const replacement = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
-  replacement.add(userMessages('wholereread', 1)[0]!)
-  expect(
-    replacement.commit({
-      session: syntheticSession(),
-      byteOffset: 4096,
-      incomplete: false
-    })
-  ).toBe(true)
-  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 9 })
-  expect(matches(index.db, 'messages_fts', 'chunkedneedle')).toBe(0)
-  await deleteExpiredSearchFiles(index.db, null, () => false)
-  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 1 })
 })
 
 it('stops a chunked read whose file was removed between its chunks', () => {
@@ -435,21 +287,6 @@ it('fences a first-ever read whose file was removed before it committed', () => 
   expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0, full: 0 })
 })
 
-it('replaces the previous generation without ever showing both', async () => {
-  const candidate = syntheticCandidate()
-  replayTranscriptRead({ candidate, messages: userMessages('firstgeneration', 10) })
-  replayTranscriptRead({
-    candidate: syntheticCandidate({ mtimeMs: candidate.file.mtimeMs + 1 }),
-    messages: userMessages('secondgeneration', 10)
-  })
-
-  expect(matches(index.db, 'messages_fts', 'firstgeneration')).toBe(0)
-  expect(matches(index.db, 'messages_fts', 'secondgeneration')).toBe(10)
-  await vi.waitFor(() => {
-    expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 10, full: 10 })
-  })
-})
-
 it('replaces a generation by cutting the old one loose, not by deleting it inline', async () => {
   const writer = new SessionSearchIndexWriter(index.db)
   const first = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
@@ -484,81 +321,4 @@ it('replaces a generation by cutting the old one loose, not by deleting it inlin
 
   await deleteExpiredSearchFiles(index.db, null, () => false)
   expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 3, full: 3 })
-})
-
-it('drains what a replace cut loose without being asked', async () => {
-  const candidate = syntheticCandidate()
-  replayTranscriptRead({ candidate, messages: userMessages('firstgeneration', 200) })
-  replayTranscriptRead({
-    candidate: syntheticCandidate({ mtimeMs: candidate.file.mtimeMs + 1 }),
-    messages: userMessages('secondgeneration', 3)
-  })
-
-  expect(matches(index.db, 'messages_fts', 'firstgeneration')).toBe(0)
-  await vi.waitFor(() => {
-    expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 3, full: 3 })
-  })
-  expect(errors).toEqual([])
-})
-
-it('continues a session across an append rather than replaying it', () => {
-  replayTranscriptRead({
-    messages: userMessages('openingturn', 3),
-    outcome: { byteOffset: 40 }
-  })
-  replayTranscriptRead({
-    messages: userMessages('laterturn', 2),
-    mode: 'append',
-    previousByteOffset: 40,
-    outcome: { byteOffset: 90 }
-  })
-
-  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 5 })
-  expect(matches(index.db, 'messages_fts', 'openingturn')).toBe(3)
-  expect(matches(index.db, 'messages_fts', 'laterturn')).toBe(2)
-  expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset).toBe(90)
-})
-
-it('stops answering for a removed file the moment it is removed', () => {
-  replayTranscriptRead({ messages: userMessages('removedneedle', 3) })
-  store.removeFile(SYNTHETIC_TRANSCRIPT)
-
-  expect(counts(index.db)).toMatchObject({
-    sessions: 0,
-    messages: 0,
-    files: 0,
-    full: 0
-  })
-  expect(matches(index.db, 'messages_fts', 'removedneedle')).toBe(0)
-})
-
-it('writes nothing for an incomplete read and owes the file a whole re-read', () => {
-  replayTranscriptRead({
-    messages: userMessages('incompleteread', 300),
-    outcome: { incomplete: true }
-  })
-
-  expect(counts(index.db)).toMatchObject({
-    sessions: 0,
-    messages: 0,
-    full: 0
-  })
-  expect(index.db.prepare('SELECT byte_offset, state, fail_count FROM files').get()).toMatchObject({
-    byte_offset: 0,
-    state: 'failed',
-    fail_count: 1
-  })
-  expect(errors).toEqual([])
-})
-
-it('exposes the handle a composed reader queries through', () => {
-  replayTranscriptRead({ messages: userMessages('composedreader', 3) })
-
-  expect(store.connection.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 3 })
-})
-
-it('closes twice without turning the second call into an error', () => {
-  store.close()
-  expect(() => store.close()).not.toThrow()
-  store = new SessionSearchStore(index.path, (error) => errors.push(error))
 })

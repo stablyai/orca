@@ -32,10 +32,10 @@ const { SessionManager } = await import(
   source(process.argv[2], 'packages/coding-agent/src/session/session-manager.ts')
 )
 const { parseMessageGraphSessionFile } = await import(
-  source(orcaRoot, 'src/main/ai-vault/session-scanner-graph-parsers.ts')
+  source(orcaRoot, 'src/main/ai-vault/scanners/session-scanner-graph-parsers.ts')
 )
 const { createSessionParseStats, parseAgentSessionFileCached } = await import(
-  source(orcaRoot, 'src/main/ai-vault/session-scanner-parse-cache.ts')
+  source(orcaRoot, 'src/main/ai-vault/parse-cache/session-scanner-parse-cache.ts')
 )
 const stats = createSessionParseStats()
 const manager = SessionManager.create(scratch, join(scratch, 'sessions'))

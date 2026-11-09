@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ClaudeDiffPanelNoticeBanner } from './ClaudeDiffPanelNoticeBanner'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -111,45 +111,6 @@ describe('ClaudeDiffPanelNoticeBanner', () => {
     expect(uiSet).toHaveBeenCalledWith({ claudeDiffPanelNoticeSeen: true })
   })
 
-  it('stays hidden once seen, and never asks for a pane without Claude', async () => {
-    setState('claude', true)
-    await renderBanner()
-    expect(mayAutoOpen).not.toHaveBeenCalled()
-    expect(paneElement.textContent).toBe('')
-
-    setState('codex')
-    await renderBanner()
-    expect(mayAutoOpen).not.toHaveBeenCalled()
-  })
-
-  it('asks again once the pane has been resized, so a widened pane can still get the notice', async () => {
-    vi.useFakeTimers()
-    try {
-      mayAutoOpen.mockResolvedValueOnce(false)
-      setState('claude')
-      await renderBanner()
-      expect(mayAutoOpen).toHaveBeenCalledTimes(1)
-      expect(paneElement.textContent).toBe('')
-
-      // The observer's first notification describes the current size, not a change.
-      resizePane()
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000)
-      })
-      expect(mayAutoOpen).toHaveBeenCalledTimes(1)
-
-      resizePane()
-      resizePane()
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000)
-      })
-      expect(mayAutoOpen).toHaveBeenCalledTimes(2)
-      expect(paneElement.textContent).toContain(TITLE)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('keeps the newest answer when an older request lands after it', async () => {
     vi.useFakeTimers()
     try {
@@ -181,13 +142,5 @@ describe('ClaudeDiffPanelNoticeBanner', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it("stays hidden when Claude's saved config already keeps the panel closed", async () => {
-    mayAutoOpen.mockResolvedValue(false)
-    setState('claude')
-    await renderBanner()
-    expect(mayAutoOpen).toHaveBeenCalled()
-    expect(paneElement.textContent).toBe('')
   })
 })

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+
+import type { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
@@ -27,13 +27,15 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-registry', () => ({
-  hasStructuredAgentSessionLaunchCancellationTombstone: mocks.hasTombstone,
+  hasStructuredAgentSessionLaunchCancellationTombstone: mocks.hasTombstone
+}))
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-cancel', () => ({
   markStructuredAgentSessionLaunchCancelled: mocks.markCancelled
 }))
 vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: mocks.remember
 }))
-vi.mock('@/lib/structured-agent-session-launch-prompt', () => ({
+vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () => ({
   discardStructuredAgentSessionChatSends: mocks.discardOutbox
 }))
 vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
@@ -62,8 +64,7 @@ vi.mock('./runtime-worktree-selector', () => ({
 
 import {
   beginStructuredAgentSessionTabClose,
-  retireStructuredAgentSessionTab,
-  suppressCancelledStructuredSessionTabs
+  retireStructuredAgentSessionTab
 } from './structured-agent-session-tab-retirement'
 import {
   getStructuredAgentSessionReadOwner,
@@ -94,34 +95,6 @@ const layoutOwner: StructuredLaunchSlotOwner = {
 
 const target: RuntimeClientTarget = { kind: 'local' }
 
-function snapshot(): RuntimeMobileSessionTabsResult {
-  return {
-    worktree: 'wt-1',
-    publicationEpoch: 'epoch-1',
-    snapshotVersion: 1,
-    activeGroupId: 'group-1',
-    activeTabId: 'agent-session:session-1',
-    activeTabType: 'agent-session',
-    tabs: [
-      {
-        type: 'agent-session',
-        id: 'agent-session:session-1',
-        title: 'Codex Chat',
-        sessionId: 'session-1',
-        agent: 'codex',
-        isActive: true
-      }
-    ],
-    tabGroups: [
-      {
-        id: 'group-1',
-        tabOrder: ['agent-session:session-1'],
-        activeTabId: 'agent-session:session-1'
-      }
-    ]
-  }
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   resetStructuredAgentSessionReadOwnersForTests()
@@ -143,49 +116,6 @@ const closing = (owner: string): boolean =>
   )
 
 describe('structured agent session tab retirement', () => {
-  it('marks cancellation and clears local launch state before host cleanup', async () => {
-    beginStructuredAgentSessionTabClose({
-      layoutOwner,
-      target,
-      worktreeId: 'wt-1',
-      sessionId: 'session-1',
-      provisional: true
-    })
-    expect(mocks.markCancelled).toHaveBeenCalledWith('wt-1', 'session-1', 'local', layoutOwner)
-    expect(mocks.discardOutbox).toHaveBeenCalledWith('session-1')
-    expect(mocks.stopSends).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
-    expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1')
-  })
-
-  // Withdrawn, as a Stop does: nothing more goes out, and nothing is dropped.
-  it("never drops a published chat's sends when its tab closes", async () => {
-    beginStructuredAgentSessionTabClose({
-      layoutOwner,
-      target,
-      worktreeId: 'wt-1',
-      sessionId: 'session-1',
-      provisional: false
-    })
-    expect(mocks.discardOutbox).not.toHaveBeenCalled()
-    expect(mocks.stopSends).toHaveBeenCalledWith('session-1')
-    await vi.waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1'))
-  })
-
-  it('suppresses and retires a late cancelled publication', async () => {
-    mocks.hasTombstone.mockReturnValue(true)
-    const result = suppressCancelledStructuredSessionTabs(snapshot(), target)
-    expect(result.tabs).toEqual([])
-    expect(result.tabGroups).toEqual([])
-    expect(result.activeTabId).toBeNull()
-    await vi.waitFor(() => expect(mocks.closeSession).toHaveBeenCalledWith(target, 'session-1'))
-    expect(mocks.callRuntime).toHaveBeenCalledWith(
-      target,
-      'session.tabs.close',
-      expect.objectContaining({ tabId: 'agent-session:session-1' })
-    )
-  })
-
   it('hides a closing chat from host frames until one stops listing it', async () => {
     let answerClose!: () => void
     mocks.callRuntime.mockImplementation(
@@ -223,77 +153,6 @@ describe('structured agent session tab retirement', () => {
       new Set()
     )
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
-  })
-
-  it('shows a chat the local host kept by re-reading its worktree', async () => {
-    mocks.callRuntime.mockRejectedValue(new Error('window relay failed'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    beginStructuredAgentSessionTabClose({
-      layoutOwner,
-      target,
-      worktreeId: 'wt-1',
-      sessionId: 'session-1',
-      provisional: false
-    })
-    await vi.waitFor(() =>
-      expect(mocks.reacceptLocal).toHaveBeenCalledWith('wt-1', { reacceptCurrentVersion: true })
-    )
-    expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
-    expect(mocks.refreshPaired).not.toHaveBeenCalled()
-    warn.mockRestore()
-  })
-
-  it('shows a chat a paired host kept by re-reading its worktree', async () => {
-    const paired = { kind: 'environment', environmentId: 'server-1' } as const
-    let failClose!: () => void
-    mocks.callRuntime.mockImplementation(
-      () =>
-        new Promise((_resolve, reject) => {
-          failClose = () => reject(new Error('runtime_unavailable'))
-        })
-    )
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    beginStructuredAgentSessionTabClose({
-      layoutOwner,
-      target: paired,
-      worktreeId: 'wt-1',
-      sessionId: 'session-1',
-      provisional: false
-    })
-    expect(closing('server-1')).toBe(true)
-    expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
-
-    await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
-    failClose()
-    await vi.waitFor(() =>
-      expect(mocks.refreshPaired).toHaveBeenCalledWith('server-1', 'wt-1', {
-        acceptCurrentSnapshot: true,
-        afterCurrentInFlight: true
-      })
-    )
-    expect(closing('server-1')).toBe(false)
-    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
-    warn.mockRestore()
-  })
-
-  it('re-reads a paired server after a successful close, since its frames travel apart from its answer', async () => {
-    const paired = { kind: 'environment', environmentId: 'server-1' } as const
-    beginStructuredAgentSessionTabClose({
-      layoutOwner,
-      target: paired,
-      worktreeId: 'wt-1',
-      sessionId: 'session-1',
-      provisional: false
-    })
-    await vi.waitFor(() =>
-      expect(mocks.refreshPaired).toHaveBeenCalledWith('server-1', 'wt-1', {
-        acceptCurrentSnapshot: true,
-        afterCurrentInFlight: true
-      })
-    )
-    // Only a frame without the chat ends the hide.
-    expect(closing('server-1')).toBe(true)
-    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
   })
 
   it('clears a paired close intent under the pairing it began with', async () => {

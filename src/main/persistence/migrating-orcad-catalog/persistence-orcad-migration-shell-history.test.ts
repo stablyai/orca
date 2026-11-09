@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { encodeOrcadMigrationShellHistoryHeader } from './orcad-migration-shell-history-format'
 import { getOrcadMigrationCatalogState } from '../../runtime/orcad-migration-catalog-import'
-import { injectHistoryEnv, readHistoryMeta } from '../../terminal-history'
-import { getHistoryRoot } from '../../terminal-history-paths'
-import { hashWorktreeId } from '../../terminal-history-id'
+import { injectHistoryEnv, readHistoryMeta } from '../../pty/history/terminal-history'
+import { getHistoryRoot } from '../../pty/history/terminal-history-paths'
+import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 import { DORMANT_WORKTREE_ID, manifest } from './persistence-orcad-migration-catalog-fixture'
 import {
   BASH,

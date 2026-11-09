@@ -141,7 +141,6 @@ export function PRActionsPanel({
           ? translate('auto.components.GitHubItemDialog.9f88657c4e', 'Pull request closed')
           : translate('auto.components.GitHubItemDialog.bd3b4492a0', 'Pull request reopened')
       )
-      onMutated()
     } catch (err) {
       if (authority.revert()) {
         applyStatePatch(previousState)
@@ -162,6 +161,8 @@ export function PRActionsPanel({
       )
     } finally {
       setStatePending(false)
+      // Why: a failed response doesn't prove the host kept the old state; reread after the revert so the dialog shows what landed.
+      onMutated()
     }
   }
 
@@ -233,13 +234,14 @@ export function PRActionsPanel({
       }
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(translate('auto.components.GitHubItemDialog.dbe5e2448e', 'Pull request merged'))
-      onMutated()
     } catch {
       toast.error(
         translate('auto.components.GitHubItemDialog.aba792c8b3', 'Failed to merge pull request')
       )
     } finally {
       setMergePending(false)
+      // Why: a failed response doesn't prove the host kept the old state; reread on every attempted write.
+      onMutated()
     }
   }
 
@@ -306,7 +308,6 @@ export function PRActionsPanel({
           ? translate('auto.components.GitHubItemDialog.a35ea5a0f6', 'Auto-merge enabled')
           : translate('auto.components.GitHubItemDialog.4b390bd50d', 'Auto-merge disabled')
       )
-      onMutated()
     } catch {
       toast.error(
         enabled
@@ -315,6 +316,7 @@ export function PRActionsPanel({
       )
     } finally {
       setMergePending(false)
+      onMutated()
     }
   }
 

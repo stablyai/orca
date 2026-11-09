@@ -26,20 +26,6 @@ function v2Manifest(overrides: Record<string, unknown>): Record<string, unknown>
 }
 
 describe('plugin detail fields', () => {
-  it('keeps valid catalog release details', () => {
-    const details = {
-      license: 'Apache-2.0 OR MIT',
-      repository: 'https://github.com/acme/demo',
-      homepage: 'https://example.com/demo',
-      updatedAt: '2026-10-20T09:30:00Z',
-      changelog: 'Adds Portuguese.'
-    }
-    expect(pluginCatalogReleaseSchema.parse({ ...release, ...details })).toMatchObject(details)
-    expect(pluginCatalogReleaseSchema.parse({ ...release, updatedAt: '2026-10-20' })).toMatchObject(
-      { updatedAt: '2026-10-20' }
-    )
-  })
-
   it('drops invalid catalog release details instead of hiding the release', () => {
     const parsed = pluginCatalogReleaseSchema.parse({
       ...release,

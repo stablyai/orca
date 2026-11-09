@@ -39,7 +39,11 @@ describe('RpcDispatcher client-hosted browser automation', () => {
       ok: true,
       result: { source: 'client' }
     })
-    expect(route).toHaveBeenCalledWith('browser.click', { page: 'page-a', x: 10 })
+    expect(route).toHaveBeenCalledWith(
+      'browser.click',
+      { page: 'page-a', x: 10 },
+      { kind: 'local-cli' }
+    )
     expect(handler).not.toHaveBeenCalled()
   })
 

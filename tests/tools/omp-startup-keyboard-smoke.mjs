@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { PtyStartupIngress } from '../../src/shared/pty-startup-ingress.ts'
+import { PtyStartupIngress } from '../../src/shared/terminal/pty/ingress/pty-startup-ingress.ts'
 
 assert.ok(process.argv[2], 'Pass the read-only OMP checkout')
 const scratch = await mkdtemp(join(tmpdir(), 'orca-omp-keyboard-'))
