@@ -220,6 +220,7 @@ export async function uploadExternalPaths(
   return result
 }
 
+/** Upload client files into a structured chat's attachment store on its paired server. */
 export function uploadExternalPathsToAgentSessionAttachments(
   context: UploadContext,
   paths: readonly string[]

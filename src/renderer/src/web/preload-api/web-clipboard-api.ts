@@ -140,6 +140,7 @@ export async function writeWebClipboardImage(dataUrl: string): Promise<void> {
   ])
 }
 
+/** Save bytes in the paired server's temp folder, as a pasted image or, with `fileName`, under the file's own name. */
 export async function saveClipboardImageAsTempFileInRuntime(
   contentBase64: string,
   args?: {

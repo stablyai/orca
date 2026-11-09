@@ -51,6 +51,7 @@ export function reserveNativeChatAttachmentChips(
   })
 }
 
+/** Uploads client paths and reports where each one landed, or a notice when nothing can be sent. */
 type NativeChatAttachmentPathUpload = (
   paths: string[]
 ) => Promise<
@@ -100,6 +101,7 @@ export function attachNativeChatRuntimeTempPaths(args: {
   })
 }
 
+/** Upload reserved files, then settle each chip: images as images, other files as path references. */
 async function attachNativeChatUploadedPaths(args: {
   pending: NativeChatReservedAttachment[]
   upload: NativeChatAttachmentPathUpload

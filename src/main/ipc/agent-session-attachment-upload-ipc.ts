@@ -12,6 +12,7 @@ import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../shared/clipboard-image'
 import { saveClipboardImageBufferInRuntime } from '../window/clipboard-runtime-image-upload'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
+/** Handlers that copy client-local files to the paired server a chat runs on. */
 export function registerAgentSessionAttachmentUploadHandlers(): void {
   ipcMain.handle(
     'fs:uploadPathsToAgentSessionAttachments',
