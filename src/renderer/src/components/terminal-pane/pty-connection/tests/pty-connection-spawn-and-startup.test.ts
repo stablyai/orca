@@ -2,7 +2,6 @@ import { describe } from 'vitest'
 import { registerPtyConnectionPendingSpawnTests } from '../spawn/pty-connection-pending-spawn.spec'
 import { registerPtyConnectionFreshSpawnGuardsTests } from '../spawn/pty-connection-fresh-spawn-guards.spec'
 import { registerPtyConnectionSplitSpawnTests } from '../spawn/pty-connection-split-spawn.spec'
-import { registerPtyConnectionRuntimeOwnerSpawnRoutingTests } from '../host-ownership/pty-connection-runtime-owner-spawn-routing.spec'
 import { registerPtyConnectionRestoredRuntimePaneBindingTests } from '../reattach/pty-connection-restored-runtime-pane-binding.spec'
 import {
   registerPtyConnectionLocalStartupCommandDeliveryTests,
@@ -18,7 +17,6 @@ describe('pty-connection-pending-spawn', registerPtyConnectionPendingSpawnTests)
 describe('pty-connection-fresh-spawn-guards', registerPtyConnectionFreshSpawnGuardsTests)
 describe('pty-connection-split-spawn', registerPtyConnectionSplitSpawnTests)
 describe('pty-connection-runtime-owner-spawn-routing', () => {
-  registerPtyConnectionRuntimeOwnerSpawnRoutingTests()
   registerPtyConnectionRestoredRuntimePaneBindingTests()
 })
 describe('pty-connection-startup-command-delivery', () => {

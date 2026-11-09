@@ -239,9 +239,16 @@ export function NativeChatNoticeRow({
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
   // Reword only text fully described by its fact; other host text may carry command advice.
   const factSurface =
-    failure?.kind === 'notSignedIn' ||
-    failure?.kind === 'savedConversationMissing' ||
-    failure?.kind === 'pluginInputRequired'
+    failure &&
+    [
+      'notSignedIn',
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )

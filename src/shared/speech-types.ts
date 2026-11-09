@@ -15,13 +15,30 @@ export type SpeechModelDownloadFile = {
   sha256: string
 }
 
+/** One measured error rate: word error rate, or character error rate for Chinese, Japanese and Korean. */
+export type SpeechModelErrorRate = {
+  language: string
+  percent: number
+  metric: 'wer' | 'cer'
+  test: 'librispeech' | 'fleurs'
+  clips: number
+  /** YYYY-MM-DD of the benchmark run. */
+  measuredOn: string
+}
+
 export type SpeechModelManifest = {
   id: string
   label: string
-  description: string
   type: SpeechModelType
   provider: SpeechModelProvider
+  /** The text pipeline's hint: one language, a bilingual pair such as 'zh-en', or 'multilingual'. */
   language: string
+  /** Every language the model transcribes (ISO-639-1, plus 'yue' for Cantonese). */
+  languages: readonly string[]
+  /** Measured error rates; a supported language missing here has not been measured. */
+  errorRates?: readonly SpeechModelErrorRate[]
+  /** Licence of the downloaded weights; absent for cloud models. */
+  licence?: string
   sizeBytes?: number
   downloadFiles?: SpeechModelDownloadFile[]
   files?: string[]
@@ -63,6 +80,12 @@ export type SpeechModelState = {
 
 export type SpeechTranscriptEvent = {
   text: string
+  sessionId: string
+}
+
+/** Speech the engine has heard but not committed yet; only pause-cut on-device models send it. */
+export type SpeechPendingEvent = {
+  pending: boolean
   sessionId: string
 }
 
@@ -109,10 +132,13 @@ export type VoiceSettings = {
   speechGpu?: SpeechGpuMode
   /** Personal dictionary, used in every repo; each repo adds its own Repo.dictationTerms. */
   dictationTerms?: DictationTerm[]
+  /** Adds the current repo's name as a hint (DictationTerm.hint). Absent = on. */
+  dictationRepoNameHint?: boolean
 }
 
 /** Where a dictation goes: an engine in the desktop's own process takes repoTerms, a host resolves worktreeId itself. */
 export type DictationContext = {
   worktreeId?: string
   repoTerms?: DictationTerm[]
+  repoName?: string
 }

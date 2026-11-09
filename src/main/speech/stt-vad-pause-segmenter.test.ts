@@ -69,13 +69,17 @@ describe('VadPauseSegmenter', () => {
     ])
   })
 
-  it('holds a click shorter than 0.25 s of speech until real speech joins it', async () => {
+  it('holds a click shorter than 0.25 s of speech until real speech joins it, without opening a phrase', async () => {
     const segmenter = new VadPauseSegmenter(fakeVad(), RATE, FRAME)
     expect(await segmenter.push(audio([0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]))).toEqual([])
-    const ready = await segmenter.push(audio([0.8, 0.8, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]))
+    expect(segmenter.phraseOpen).toBe(false)
+    expect(await segmenter.push(audio([0.8, 0.8]))).toEqual([])
+    expect(segmenter.phraseOpen).toBe(true)
+    const ready = await segmenter.push(audio([0.2, 0.2, 0.2, 0.2, 0.2, 0.2]))
     expect(framesOf(ready)).toEqual([
       [0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.8, 0.8, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
     ])
+    expect(segmenter.phraseOpen).toBe(false)
   })
 
   it('returns nothing for a dictation that never had speech', async () => {

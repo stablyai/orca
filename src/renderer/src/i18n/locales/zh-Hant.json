@@ -216,6 +216,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "儲存密碼提示",
+        "updateTitle": "更新密碼？",
+        "saveTitle": "儲存密碼？",
+        "username": "使用者名稱",
+        "password": "密碼",
+        "never": "永不儲存此網站的密碼",
+        "notNow": "暫時不要",
+        "update": "更新",
+        "save": "儲存"
+      },
+      "fill": {
+        "noUsername": "（沒有使用者名稱）",
+        "title": "已儲存的登入資料",
+        "otherLogins": "此網站的其他登入資料"
+      }
+    },
     "loadFailure": {
       "connectionNotSecure": "連線不安全",
       "cantReachHost": "無法存取 {{value0}}",
@@ -901,19 +919,6 @@
         "invalid": "請輸入有效的代理 URL。",
         "unsupportedProtocol": "請使用 http、https、socks、socks4 或 socks5 代理 URL。",
         "missingHost": "代理 URL 必須包含主機。"
-      }
-    },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "為 25 種歐洲語言提供最高準確度。支援標點符號、大小寫及詞級時間戳記。",
-        "parakeetV2": "僅限英文。準確度與 v3 相近，速度更快。支援標點符號及大小寫。",
-        "zipformerStreamingEnRetired": "已不再提供：它會遺漏句子開頭。刪除它以釋放空間。",
-        "whisperTiny": "支援 90 多種語言。準確度低於 Parakeet，但語言涵蓋範圍最廣。",
-        "senseVoice": "支援中文、英文、日文、韓文及粵語，並自動偵測語言。",
-        "gptTranscribe": "準確度高的雲端轉錄。需要 OpenAI API 金鑰。",
-        "whisperLargeV3Turbo": "日語、韓語和中文準確度最高，支援 90 多種語言。速度比 Parakeet 慢。",
-        "retiredForEngine": "已不再提供：語音引擎已無法執行此模型。刪除它以釋放空間。",
-        "nemotron": "支援英語、西班牙語、德語等多種語言，可自動辨識語言。"
       }
     },
     "diagnostics": {
@@ -8749,7 +8754,6 @@
           "7807c11c4d": "一般",
           "6855b0f77d": "完成核心工作流程，讓 Orca 有效協助代理程式並行工作。",
           "6d119427ef": "入門清單",
-          "eb1176a14e": "使用裝置上模型進行本機語音到文字聽寫。",
           "5063bb47a5": "語音",
           "7118953f14": "使代理程式能夠控制您電腦上的任何應用程式。",
           "c9841721cb": "電腦控制",
@@ -9264,7 +9268,6 @@
         "VoicePane": {
           "6fa734ed95": "刪除 {{value0}}",
           "68de13f72c": "刪除模型失敗。",
-          "1ba81c0ff0": "推薦",
           "cfde55c7b0": "下載模型失敗。",
           "43fd4f454b": "語音模型",
           "ba4a900d1d": "聽寫模式",
@@ -9275,10 +9278,6 @@
           "506df81ba6": "OpenAI API 金鑰已儲存",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "正在解壓縮...",
-          "8f4d2a51d7": "離線",
-          "d504ab05f0": "串流",
-          "fbe5990716": "選擇模型",
-          "e24f7d43d2": "選擇語音模型。本機模型離線執行；雲端模型需要 API 金鑰。",
           "174da92062": "按住",
           "118b3c2dee": "切換",
           "ad5d036ecc": "無法請求麥克風權限。未啟用語音聽寫。",
@@ -9286,7 +9285,6 @@
           "1eac933202": "已開啟 macOS 的「隱私權與安全性」。授予存取權限後再次啟用聽寫。",
           "cd9fe37556": "已授予麥克風權限",
           "openAiKeyName": "您的 OpenAI 轉錄金鑰",
-          "dictationShortcutDescription": "按 {{shortcut}} 可將文字聽寫到目前取得焦點的任意窗格中。",
           "dictationModeAuto": "自動",
           "dictationModesWithAutoDescription": "自動：按住 {{shortcut}} 聽寫，放開即停止；輕按則開始或停止。按住：按住 {{shortcut}} 期間進行聽寫。切換：按一次 {{shortcut}} 開始，再按一次停止。",
           "speechGpuLabel": "使用 GPU",
@@ -11122,7 +11120,10 @@
               "modelMemoryKeyword": "記憶體",
               "fillerWordsTitle": "移除語氣詞",
               "fillerWordsDescription": "從聽寫文字中移除「嗯」「呃」之類的語氣詞。",
-              "fillerWordsKeyword": "語氣詞"
+              "fillerWordsKeyword": "語氣詞",
+              "vocabularyTitle": "詞彙",
+              "vocabularyDescription": "聽寫依你的寫法拼寫的名稱和程式碼術語，可用於個人或某個儲存庫。",
+              "vocabularyKeyword": "詞典"
             }
           }
         },
@@ -19011,6 +19012,10 @@
         "modelUnavailable": "{{agent}} 無法使用 {{detail}}。請選擇其他模型並重新傳送。",
         "modelUnavailableUpdate": "{{agent}} 無法使用 {{detail}}。請將 {{agent}} 更新到 {{minimumVersion}} 或更新版本，以便重新啟動後繼續使用；或選擇其他模型並重新傳送。",
         "modelNotSelected": "{{agent}} 沒有選擇模型。請檢查模型選擇和 {{agent}} 登入狀態，然後重新傳送。",
+        "providerUnavailable": "{{agent}} 因服務忙碌而無法回覆。請選擇其他模型，或稍候片刻後重新傳送。",
+        "providerSafetyStopped": "{{agent}} 在安全檢查後停止了此次回覆。請檢查您的請求後重新傳送。",
+        "providerResponseFailed": "{{agent}} 未能完成此回覆。開啟詳細資料以取得更多資訊。",
+        "selectedModel": "所選模型",
         "providerRejected": "{{agent}} 未接受此訊息。",
         "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
         "attachmentEmpty": "此訊息中的一張圖片為空，因此訊息未傳送。",
@@ -19470,6 +19475,8 @@
         "showAgent": "在對話中顯示 {{value0}}"
       },
       "jumpToLatest": "跳到最新訊息",
+      "newRowsAnnouncement": "你離開期間有新訊息",
+      "newRowsMarker": "新訊息",
       "find": {
         "label": "在聊天中查詢",
         "noResults": "沒有結果",
@@ -20321,6 +20328,9 @@
         "scrollToLatestOnSendTitle": "傳送時捲動到最新訊息",
         "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
         "scrollToLatestOnSendSearchPosition": "位置",
+        "markNewMessagesTitle": "返回聊天時標記新訊息",
+        "markNewMessagesCopy": "返回聊天時，在你離開期間收到的內容上方顯示「新訊息」分隔線；如果你之前在看最新訊息，會捲動到該處。",
+        "markNewMessagesSearchUnread": "未讀",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
         "inlineVisualsToggleLabel": "切換內嵌視覺化",
@@ -20366,6 +20376,85 @@
         "fillerWords": {
           "title": "移除語氣詞",
           "description": "依聽寫語言，從聽寫文字中移除「嗯」「呃」之類的語氣詞。"
+        },
+        "sectionDescription": "在任何面板中用說話取代打字。除非你選擇雲端模型，否則語音都在這台電腦上辨識。",
+        "input": {
+          "title": "輸入",
+          "shortcut": "快捷鍵",
+          "shortcutDescription": "在目前聚焦的面板中開始聽寫。",
+          "changeShortcut": "變更"
+        },
+        "language": {
+          "title": "語言"
+        },
+        "cleanup": {
+          "title": "清理"
+        },
+        "advanced": {
+          "title": "進階"
+        },
+        "setup": {
+          "downloadingDescription": "你可以離開此頁面。下載完成後即可使用聽寫。",
+          "title": "設定聽寫",
+          "pickModel": "在任何面板中用說話取代打字。先在下方下載一個語音模型；本機模型會把你的音訊留在這台電腦上。",
+          "microphoneMissingTitle": "{{microphone}} 未連接",
+          "microphoneMissingDescription": "在它重新連接前，聽寫會使用系統預設麥克風。",
+          "changeMicrophone": "更換麥克風",
+          "onTitle": "聽寫已開啟",
+          "onLocal": "在任何面板中按 {{shortcut}}。{{model}} 在這台電腦上執行。",
+          "onCloud": "在任何面板中按 {{shortcut}}。{{model}} 在雲端執行。",
+          "offTitle": "聽寫已關閉",
+          "offDescription": "開啟後，可在任何面板中按 {{shortcut}} 聽寫。",
+          "savedMicrophone": "你的麥克風"
+        },
+        "quality": {
+          "unsupported": "不支援你的語言",
+          "unmeasured": "未測量",
+          "poor": "差",
+          "fair": "普通",
+          "good": "良好",
+          "veryGood": "很好",
+          "excellent": "優秀",
+          "characterErrorRate": "字元錯誤率 {{percent}}%",
+          "wordErrorRate": "詞錯誤率 {{percent}}%",
+          "librispeech": "測試：LibriSpeech（朗讀語音），{{clips}} 段音訊，測於 {{date}}。",
+          "fleurs": "測試：FLEURS（朗讀語音），{{clips}} 段音訊，測於 {{date}}。",
+          "bench": "Orca 在 Apple 晶片 Mac 上的基準測試。",
+          "label": "品質：{{word}}"
+        },
+        "models": {
+          "retired": "已不再提供。刪除即可釋放空間。",
+          "sendsToOpenAi": "會把你的音訊傳送給 OpenAI。",
+          "delete": "刪除",
+          "cancelDownload": "取消下載",
+          "inUse": "使用中",
+          "use": "使用",
+          "setUpCloud": "設定",
+          "download": "下載",
+          "cloud": "雲端",
+          "description": "品質依{{language}}評定。將指標停在評分上可查看所用測試。",
+          "where": "模型執行位置",
+          "local": "這台電腦",
+          "cloudDescription": "雲端模型會把你的音訊傳送給服務商。本機模型會把音訊留在這台電腦上。",
+          "sendsToCompatible": "會把你的音訊傳送到你設定的服務。"
+        },
+        "vocabulary": {
+          "title": "詞彙",
+          "description": "依你的寫法拼寫的名稱和程式碼術語。如果模型總是聽錯，可以加上它聽成的說法。",
+          "repoScope": "僅在 {{repo}} 中聽寫時使用。",
+          "personalScope": "在所有儲存庫中使用。",
+          "scope": "術語範圍",
+          "personal": "個人 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "移除 {{term}}",
+          "term": "詞語或片語",
+          "heardAs": "聽成（選填）",
+          "heardAsLabel": "聽成",
+          "add": "新增",
+          "repoNameHint": "將儲存庫名稱用作提示",
+          "repoNameHintDescription": "幫助辨識儲存庫名稱。",
+          "repoSaveFailed": "無法儲存儲存庫的術語。執行此儲存庫的主機可能需要更新 Orca。"
         }
       },
       "repositoryHooks": {
