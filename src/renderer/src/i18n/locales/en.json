@@ -2105,7 +2105,9 @@
         "settingUpWorkspace": "Setting up your workspace…",
         "preparingWorkspace": "Preparing workspace…",
         "creatingWorktree": "Creating worktree…",
-        "fetchingBaseBranch": "Fetching base branch…"
+        "fetchingBaseBranch": "Fetching base branch…",
+        "checkingVmEnvironment": "Checking VM environment…",
+        "vmChecksFailed": "Environment checks failed"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -2142,6 +2144,11 @@
       "environmentSetupAgentLaunch": {
         "noAgent": "No enabled AI agent was detected for this workspace.",
         "noWorkspace": "Open a workspace for this project first, then try again."
+      },
+      "ephemeralVmEnvironmentCheck": {
+        "backgroundFailed": "Environment checks failed for a new VM workspace. Open it in the sidebar to continue.",
+        "openedDegraded": "Creating the workspace on a VM whose environment checks failed.",
+        "unreachable": "The environment checks could not finish: {{error}}"
       }
     },
     "hooks": {
@@ -3961,7 +3968,6 @@
             "a3346fc6ed": "Cancel worktree creation",
             "532aea14ce": "Cancel",
             "767951265d": "Something went wrong while creating the worktree.",
-            "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
             "vmProvisioningLogEmpty": "Waiting for recipe output…"
           },
@@ -3976,6 +3982,18 @@
             "create": "Create worktree",
             "setup": "Set up workspace",
             "startAgent": "Start {{agent}}"
+          },
+          "VmBuildSheet": {
+            "checks": "Check environment",
+            "checksFailed": "The VM is up, but its environment checks failed",
+            "create": "Create workspace",
+            "editRecipe": "Edit recipe",
+            "fixWithAgent": "Fix with agent",
+            "openAnyway": "Open anyway",
+            "openAnywayHint": "Open anyway keeps this VM and creates the workspace on it as is. Dismiss destroys the VM.",
+            "provision": "Provision VM",
+            "retryChecks": "Retry checks",
+            "title": "Building your VM"
           }
         }
       },

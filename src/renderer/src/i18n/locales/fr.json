@@ -3473,7 +3473,6 @@
             "a3346fc6ed": "Annuler la création du worktree",
             "532aea14ce": "Annuler",
             "767951265d": "Un problème est survenu lors de la création du worktree.",
-            "vmProvisioningTitle": "Provisionnement de la VM",
             "cancelProvisioning": "Annuler",
             "vmProvisioningLogEmpty": "En attente de la sortie de la recette…"
           }

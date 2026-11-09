@@ -3696,7 +3696,6 @@
             "a3346fc6ed": "Worktree oluşturmayı iptal et",
             "532aea14ce": "İptal",
             "767951265d": "Worktree oluşturulurken bir şeyler ters gitti.",
-            "vmProvisioningTitle": "VM Hazırlanıyor",
             "cancelProvisioning": "İptal",
             "vmProvisioningLogEmpty": "Kurulum çıktısı bekleniyor…"
           }
