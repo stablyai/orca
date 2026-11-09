@@ -57,7 +57,10 @@ const folderListAnswer = z.object({
     })
   )
 })
-const folderUpdateAnswer = z.object({ folderWorkspace: z.object({}).nullable() })
+const folderUpdateAnswer = z.object({
+  folderWorkspace: z.object({ name: z.string() }).nullable()
+})
+const worktreeSetAnswer = z.object({ worktree: z.object({ displayName: z.string() }) })
 const terminalCreateAnswer = z.object({ terminal: z.object({ handle: z.string() }) })
 const terminalReadAnswer = z.object({
   terminal: z.object({
@@ -167,23 +170,35 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
   'workspace.rename': bind(api['workspace.rename'], async ({ workspaceId, name }, ctx) => {
     const trimmed = name.trim()
     const scope = parseWorkspaceKey(workspaceId)
-    if (scope?.type === 'folder') {
-      // Twins on two hosts can share a folder id; refuse rather than rename both.
-      const answer = await effect(ctx, 'folderWorkspace.update', {
-        folderWorkspaceId: scope.folderWorkspaceId,
-        requireUniqueId: true,
-        updates: { name: trimmed }
-      })
-      if (!folderUpdateAnswer.parse(answer).folderWorkspace) {
-        throw new PluginHostCallError('action_failed', 'no folder workspace has this id')
-      }
-      return { name: trimmed }
+    // The same update as a rename in the sidebar: the name is pinned and a pending
+    // automatic (first agent message) rename is cancelled, so neither replaces it later.
+    const renamed =
+      scope?.type === 'folder'
+        ? folderUpdateAnswer.parse(
+            await effect(ctx, 'folderWorkspace.update', {
+              folderWorkspaceId: scope.folderWorkspaceId,
+              // Twins on two hosts can share a folder id; refuse rather than rename both.
+              requireUniqueId: true,
+              updates: {
+                name: trimmed,
+                pendingFirstAgentMessageRename: false,
+                firstAgentMessageRenameError: null
+              }
+            })
+          ).folderWorkspace?.name
+        : worktreeSetAnswer.parse(
+            await effect(ctx, 'worktree.set', {
+              worktree: workspaceSelector(workspaceId),
+              displayName: trimmed
+            })
+          ).worktree.displayName
+    if (renamed === undefined) {
+      throw new PluginHostCallError('action_failed', 'no workspace has this id')
     }
-    // The same update as a rename in the sidebar: the name is pinned, so a branch change keeps it.
-    await effect(ctx, 'worktree.set', {
-      worktree: workspaceSelector(workspaceId),
-      displayName: trimmed
-    })
+    // Orca keeps the old name while the workspace is moving to or from WSL.
+    if (renamed !== trimmed) {
+      throw new PluginHostCallError('conflict', 'the workspace cannot be renamed right now')
+    }
     return { name: trimmed }
   }),
   'terminal.create': bind(api['terminal.create'], async (params, ctx) => {

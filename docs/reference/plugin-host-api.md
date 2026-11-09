@@ -215,7 +215,7 @@ Publishes owned app/editor and terminal colors and selects them in the desktop. 
 Lists every workspace, Git worktrees and folders, on every host Orca reaches.
 
 ```ts
-(params?: {}) => { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project: string | null; path: string; branch: string | null; hostId: string | null }[]; truncated: boolean }
+(params?: {}) => { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; path: string; branch: string | null; hostId: string | null }[]; truncated: boolean }
 ```
 
 ### `workspace.open`

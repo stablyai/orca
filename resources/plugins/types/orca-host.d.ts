@@ -163,7 +163,7 @@ declare module 'orca/host' {
     /** Lists every workspace, Git worktrees and folders, on every host Orca reaches. Since host API 1.3. */
     "workspace.list": {
       params: Record<string, never> | undefined
-      result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project: string | null; path: string; branch: string | null; hostId: string | null }[]; truncated: boolean }
+      result: { workspaces: { id: string; kind: "worktree" | "folder"; name: string; project?: string | null; path: string; branch: string | null; hostId: string | null }[]; truncated: boolean }
       surfaces: "worker"
     }
     /** Shows a workspace in Orca, as clicking it in the sidebar does; a folder workspace needs the desktop app. Since host API 1.3. */

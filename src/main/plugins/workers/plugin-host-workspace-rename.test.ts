@@ -47,7 +47,7 @@ const call = (
 
 describe('workspace.rename', () => {
   it('renames a worktree as the sidebar does, with the name trimmed', async () => {
-    const rpc = vi.fn().mockResolvedValue({ worktree: {} })
+    const rpc = vi.fn().mockResolvedValue({ worktree: { displayName: 'Mac｜Login fix' } })
     const outcome = await call(
       'workspace.rename',
       { workspaceId: 'identity:abc', name: '  Mac｜Login fix ' },
@@ -65,12 +65,27 @@ describe('workspace.rename', () => {
   })
 
   it('renames a project folder through its folder workspace', async () => {
-    const rpc = vi.fn().mockResolvedValue({ folderWorkspace: {} })
+    const rpc = vi.fn().mockResolvedValue({ folderWorkspace: { name: 'Notes' } })
     await call('workspace.rename', { workspaceId: 'folder:f1', name: 'Notes' }, rpc)
     expect(rpc).toHaveBeenCalledWith(
       'folderWorkspace.update',
-      { folderWorkspaceId: 'f1', requireUniqueId: true, updates: { name: 'Notes' } },
+      {
+        folderWorkspaceId: 'f1',
+        requireUniqueId: true,
+        updates: {
+          name: 'Notes',
+          pendingFirstAgentMessageRename: false,
+          firstAgentMessageRenameError: null
+        }
+      },
       expect.anything()
+    )
+  })
+
+  it('reports a conflict when Orca keeps the old name, as during a WSL move', async () => {
+    const rpc = vi.fn().mockResolvedValue({ worktree: { displayName: 'old' } })
+    expect(await call('workspace.rename', { workspaceId: 'id-1', name: 'new' }, rpc)).toMatchObject(
+      { ok: false, code: 'conflict' }
     )
   })
 
@@ -84,9 +99,16 @@ describe('workspace.rename', () => {
   it('refuses blank, multi-line, bidi or invisible names and plugins without workspace:write', async () => {
     const rpc = vi.fn()
     const outcomes = await Promise.all(
-      ['   ', 'a\nb', 'x'.repeat(201), 'main\u202egnp', 'a\u200bb', 'a\u0085b'].map((name) =>
-        call('workspace.rename', { workspaceId: 'id-1', name }, rpc)
-      )
+      [
+        '   ',
+        'a\nb',
+        'x'.repeat(201),
+        'main\u202egnp',
+        'a\u200bb',
+        'a\u0085b',
+        '\u3164',
+        'a\ufe0fb'
+      ].map((name) => call('workspace.rename', { workspaceId: 'id-1', name }, rpc))
     )
     for (const outcome of outcomes) {
       expect(outcome).toMatchObject({ ok: false, code: 'invalid_params' })

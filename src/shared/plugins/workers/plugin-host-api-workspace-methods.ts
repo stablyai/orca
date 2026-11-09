@@ -28,8 +28,9 @@ const workspaceListResult = z.object({
         /** `folder`: a plain folder, with no Git branch. */
         kind: z.enum(['worktree', 'folder']),
         name: z.string().max(512),
-        /** The project (repository) it belongs to; null for a folder outside one. Host API 1.5+. */
-        project: z.string().max(512).nullable(),
+        /** Its project's (repository's) name, or null when it has none, as for project folders.
+         *  Absent before host API 1.5. */
+        project: z.string().max(512).nullable().optional(),
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
         path: z.string().max(ID_MAX),
         branch: z.string().max(512).nullable(),
@@ -46,15 +47,28 @@ const workspaceOpenParams = z.strictObject({ workspaceId })
 const workspaceOpenResult = z.object({ opened: z.literal(true) })
 
 export const PLUGIN_WORKSPACE_NAME_MAX = 200
-// Cc controls, line/paragraph separators, bidi controls, zero-width characters and the BOM.
+// Characters that are invisible or reorder text: controls, bidi controls, zero-width and
+// filler characters, variation selectors, tags and interlinear annotation marks.
 const HIDDEN_OR_CONTROL_RANGES: readonly (readonly [number, number])[] = [
   [0x00, 0x1f],
   [0x7f, 0x9f],
+  [0xad, 0xad],
+  [0x34f, 0x34f],
   [0x61c, 0x61c],
+  [0x115f, 0x1160],
+  [0x17b4, 0x17b5],
+  [0x180b, 0x180f],
   [0x200b, 0x200f],
   [0x2028, 0x202e],
-  [0x2060, 0x2069],
-  [0xfeff, 0xfeff]
+  [0x2060, 0x206f],
+  [0x2800, 0x2800],
+  [0x3164, 0x3164],
+  [0xfe00, 0xfe0f],
+  [0xfeff, 0xfeff],
+  [0xffa0, 0xffa0],
+  [0xfff0, 0xfffb],
+  [0x1d173, 0x1d17a],
+  [0xe0000, 0xe0fff]
 ]
 const isHiddenOrControl = (char: string): boolean => {
   const code = char.codePointAt(0) ?? 0
