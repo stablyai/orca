@@ -45,6 +45,7 @@ export type MobileDictationRun = {
   readonly sendHeldAudio: RefObject<() => void>
   readonly finish: RefObject<(emptyTranscriptMessage: string) => Promise<void>>
   readonly onTranscript: RefObject<(text: string) => void>
+  readonly onAudioLimitReached: RefObject<(() => void) | undefined>
   readonly keptTranscript: MobileDictationTranscriptSoFar
   readonly applyStatus: (next: DictationStatus) => void
   readonly showEngine: ShowMobileDictationEngine
