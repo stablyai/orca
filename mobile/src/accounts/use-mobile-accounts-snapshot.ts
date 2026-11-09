@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { hashKey, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AccountsSnapshotError, decodeAccountsSnapshot } from '../components/accounts-snapshot'
 import type { AccountsSnapshot } from '../components/AccountUsage'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { holdsRestoredHostQueryData } from '../query/host-query-persistence'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
@@ -81,9 +82,11 @@ export function useMobileAccountsSnapshot({
     })
   }, [acceptSnapshot, client, connState, refresh, rejectInvalidSnapshot])
 
-  // A stored snapshot, or one read before the latest connect, can't vouch for usage.
+  // A stored snapshot, or one read before the latest connect, can't vouch for usage. Stored data can postdate the
+  // connect: native Home writes it from its own stream.
   const live =
     data != null &&
+    !holdsRestoredHostQueryData(queryClient, hashKey(accountsSnapshotKey(hostId))) &&
     connState === 'connected' &&
     lastConnectedAt !== null &&
     dataUpdatedAt >= lastConnectedAt
