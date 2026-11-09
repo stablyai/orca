@@ -742,12 +742,12 @@ struct Home {
     this.openHostRoute(hostId, '');
   }
 
-  openHostRoute(hostId: string, suffix: string, params: Record<string, string> = {}): void {
-    this.openShellRoute({ hostId: hostId, pathname: `/h/${encodeURIComponent(hostId)}${suffix}`, params: params });
+  openHostRoute(hostId: string, suffix: string, params: Record<string, string> = {}, hostListFirst: boolean = false): void {
+    this.openShellRoute({ hostId: hostId, pathname: `/h/${encodeURIComponent(hostId)}${suffix}`, params: params }, hostListFirst);
   }
 
-  private openShellRoute(route: ShellRoute): void {
-    router.pushUrl({ url: 'pages/ShellScreen', params: shellRouterParams(route) }).catch(() => {});
+  private openShellRoute(route: ShellRoute, hostListFirst: boolean = false): void {
+    router.pushUrl({ url: 'pages/ShellScreen', params: shellRouterParams(route, hostListFirst) }).catch(() => {});
   }
 
   private openAgent(row: AgentListRow, withPane: boolean = true): void {
@@ -758,9 +758,9 @@ struct Home {
       return;
     }
     if (withPane && row.unread === true) { this.changeAgentActivity([row], true, false).catch(() => {}); }
-    let params: Record<string, string> = { 'executionHost': row.entry.executionHost };
+    let params: Record<string, string> = { 'executionHost': row.entry.executionHost, 'name': row.entry.workspaceName };
     if (withPane) { params['paneKey'] = String(row.entry.agent['paneKey']); }
-    this.openHostRoute(row.hostId, `/session/${encodeURIComponent(row.entry.worktreeId)}`, params);
+    this.openHostRoute(row.hostId, `/session/${encodeURIComponent(row.entry.worktreeId)}`, params, true);
   }
 
   private async writeAgentActivity(hostId: string, paneKeys: string[], read?: boolean): Promise<string> {

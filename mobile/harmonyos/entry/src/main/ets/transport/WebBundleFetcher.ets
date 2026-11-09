@@ -31,6 +31,7 @@ export interface BundleManifest {
   buildId: string;
   entrypoint: string;
   desktopVersion: string;
+  pageVersion: number;
   assets: BundleAsset[];
   routes: BundleRoute[];
   chunkBytes: number;
@@ -207,10 +208,12 @@ export class WebBundleFetcher {
     }
     let chunkBytesValue: Object = rec['chunkBytes'];
     let rangeBytesValue: Object = rec['rangeBytes'];
+    let pageVersionValue: Object = m['pageVersion'];
     let manifest: BundleManifest = {
       buildId: buildId,
       entrypoint: entrypoint,
       desktopVersion: desktopVersion,
+      pageVersion: typeof pageVersionValue === 'number' && Number.isSafeInteger(pageVersionValue) && pageVersionValue > 0 ? pageVersionValue : 0,
       assets: assets,
       routes: routes,
       chunkBytes: typeof chunkBytesValue === 'number' ? chunkBytesValue : 49152,

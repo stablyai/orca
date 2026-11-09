@@ -1,3 +1,5 @@
+import { desktopPath, shellRouterParams } from './ShellRoute';
+
 export interface LaunchRoute { page: string; params: Record<string, string>; }
 
 function readFields(query: string): Record<string, string> | null {
@@ -37,14 +39,15 @@ export function parseLaunchRoute(uri: string): LaunchRoute | null {
   if (fields === null) { return null; }
   let host = fields['hostId']; let worktree = fields['worktreeId'];
   if (!host || !/^[a-f0-9]{32}$/.test(host)) { return null; }
-  let params: Record<string, string> = { 'hostId': host, 'route': `/h/${host}` };
+  let pathname = desktopPath(host);
+  let params: Record<string, string> = {};
   if (worktree !== undefined) {
     if (!isRouteValue(worktree, 512)) { return null; }
-    params['route'] += `/session/${encodeURIComponent(worktree)}`;
+    pathname += `/session/${encodeURIComponent(worktree)}`;
     let pane = fields['paneKey'];
     if (pane !== undefined && isRouteValue(pane, 2048)) { params['paneKey'] = pane; }
     let executionHost = runtimeHost(fields['executionHost'] ?? '');
     if (executionHost !== null) { params['executionHost'] = executionHost; }
   }
-  return { page: 'pages/ShellScreen', params: params };
+  return { page: 'pages/ShellScreen', params: shellRouterParams({ hostId: host, pathname: pathname, params: params }, true) };
 }

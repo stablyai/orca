@@ -14,7 +14,7 @@ import { ShellDocument, ShellDocumentMount } from './ShellDocument';
 import { claimHomeDocument } from './HomeShellPrewarm';
 import { BridgeHost, BridgeNativePage } from './BridgeHost';
 import { HostMeta } from '../storage/HostStore';
-import { ShellRoute } from '../navigation/ShellRoute';
+import { desktopPath, isDesktopSession, sessionOpenParam, ShellRoute } from '../navigation/ShellRoute';
 
 export class ShellSurfaceBack {
   private handler: (() => boolean) | null = null;
@@ -30,9 +30,12 @@ export class ShellSurfaceBack {
 @Component
 export struct ShellSurface {
   @Prop request: ShellRoute = { hostId: '', pathname: '', params: {} };
+  @Prop sessionTarget: ShellRoute | null = null;
   @Prop @Watch('onVisibilityChanged') visible: boolean = true;
   asDrawer: boolean = false;
+  returnsToDesktop: boolean = false;
   back: ShellSurfaceBack = new ShellSurfaceBack();
+  onNativeSession: (route: ShellRoute) => void = (_route: ShellRoute): void => {};
   onOverlayClose: () => void = (): void => {};
   onOverlayNavigate: (route: ShellRoute) => void = (_route: ShellRoute): void => {};
   private unbindBack: (() => void) | null = null;
@@ -73,9 +76,12 @@ export struct ShellSurface {
   private viewportTop: number = 0;
   private viewportHeight: number = 0;
   private pendingDrawerRoute: ShellRoute | null = null;
+  private pendingSession: ShellRoute | null = null;
+  private opensSessionNatively: boolean = false;
   private foregroundListener: () => void = (): void => {
     this.foreground = true; this.publishKeyboardInset(); this.updateViewing();
     this.flushDrawerRoute();
+    this.openPendingNativeSession();
   };
   private generation: number = 0;
   private backgroundListener: () => void = (): void => {
@@ -97,6 +103,7 @@ export struct ShellSurface {
     this.hostId = this.request.hostId;
     this.routePathname = this.request.pathname;
     this.routeParams = this.request.params;
+    this.pendingSession = this.sessionTarget;
     this.pageVisible = this.visible;
     this.unbindBack = this.back.bind((): boolean => this.handleBack());
     (getContext(this) as common.UIAbilityContext).eventHub.on('orcaBackground', this.backgroundListener);
@@ -130,6 +137,7 @@ export struct ShellSurface {
   }
 
   private navigateBack(home: boolean = false): void {
+    if (this.disposed || !this.pageVisible || !this.foreground) { return; }
     if (this.asDrawer) { this.onOverlayClose(); }
     else if (home) { router.back({ url: 'pages/Home' }); }
     else { router.back(); }
@@ -139,9 +147,17 @@ export struct ShellSurface {
     this.pageVisible = this.visible;
     if (this.pageVisible) { this.publishKeyboardInset(); this.updateViewing(); this.flushDrawerRoute(); }
     else {
+      this.pendingSession = null;
       this.clearViewing();
       this.nativeDevice?.pause().catch(() => {});
     }
+  }
+
+  private openPendingNativeSession(): void {
+    let target = this.pendingSession;
+    if (!target || !this.opensSessionNatively || !this.painted || !this.pageVisible || !this.foreground || this.disposed) { return; }
+    this.pendingSession = null;
+    this.onNativeSession(target);
   }
 
   private openOverlayRoute(pathname: string, params: Record<string, string>): void {
@@ -224,6 +240,8 @@ export struct ShellSurface {
     if (this.disposed || generation !== this.generation || this.client !== client) { return; }
     if (this.startup.complete(this.startupGeneration)) {
       this.painted = true; this.publishPhase('已连接'); this.updateViewing();
+      if (this.opensSessionNatively) { this.openPendingNativeSession(); }
+      else { this.pendingSession = null; }
     }
   }
 
@@ -305,14 +323,23 @@ export struct ShellSurface {
       this.document = document;
       let storage = new PageStorageStore(getContext(this), meta.id);
       let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext, client); this.nativeDevice = nativeDevice;
-      let bridge = new BridgeHost(client, document.controller, manifest, meta, this.routePathname, path);
-      bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale); bridge.setRouteParams(this.routeParams);
+      let root = desktopPath(meta.id);
+      let shown: ShellRoute = { hostId: meta.id, pathname: this.routePathname, params: this.routeParams };
+      if (!this.pendingSession && this.request.pathname === root && isDesktopSession(shown)) { this.pendingSession = shown; }
+      let target = this.pendingSession;
+      let open = target && manifest.routes.some((route): boolean => route.pathname === '/h/[hostId]' && route.canOwnHostArea)
+        ? sessionOpenParam(target, manifest.pageVersion) : '';
+      this.opensSessionNatively = target !== null && open === '';
+      let params: Record<string, string> = open ? { 'open': open } : target ? {} : shown.params;
+      let bridge = new BridgeHost(client, document.controller, manifest, meta, target ? root : shown.pathname, path);
+      bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale); bridge.setRouteParams(params);
+      if (this.returnsToDesktop) { bridge.setDesktopListBack(); }
       bridge.setLivenessSink((): void => {
         if (this.pageVisible && this.foreground && this.bridge === bridge) { this.desktop?.connection.revive(); }
       });
       bridge.setLocationSink((pathname: string, params: Record<string, string>): void => this.recordResume(pathname, params));
       bridge.setNativeNavigation((page: BridgeNativePage, replace: boolean): void => {
-        if (this.disposed || !this.pageVisible || this.bridge !== bridge) { return; }
+        if (this.disposed || !this.pageVisible || !this.foreground || this.bridge !== bridge) { return; }
         let url = page === 'edit-host' ? 'pages/HostDetail' : 'pages/ConnectionLog';
         let params: Record<string, string> = { 'hostId': meta.id };
         let navigation = replace ? router.replaceUrl({ url: url, params: params }) : router.pushUrl({ url: url, params: params });

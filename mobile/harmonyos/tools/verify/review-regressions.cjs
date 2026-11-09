@@ -3,6 +3,12 @@ const { test } = require('node:test')
 const { runInNewContext } = require('node:vm')
 const zlib = require('node:zlib')
 const { loadArkts, util } = require('./arkts-source.cjs')
+const shellRoutes = loadArkts('navigation/ShellRoute.ets', [
+  'desktopPath',
+  'shellRouterParams',
+  'readShellRoute',
+  'sessionOpenParam'
+])
 const { createRpcPeer } = require('./fixtures/rpc-peer.cjs')
 
 const bytes = loadArkts(
@@ -274,7 +280,11 @@ test('the public microphone stop result contains the ring tail and overflow loss
 })
 
 test('encoded workspace deep links retain their workspace boundary', () => {
-  const { parseLaunchRoute } = loadArkts('navigation/LaunchRoute.ets', ['parseLaunchRoute'])
+  const { parseLaunchRoute } = loadArkts(
+    'navigation/LaunchRoute.ets',
+    ['parseLaunchRoute'],
+    shellRoutes
+  )
   const route = parseLaunchRoute(`orca://session?hostId=${hostId}&worktreeId=tree%2Fone`)
   assert.equal(route.params.route, `/h/${hostId}/session/tree%2Fone`)
   assert.equal(parseLaunchRoute('https://example.com'), null)
@@ -383,6 +393,31 @@ test('the workspace drawer opens the created session when an older page posts Ba
   notify({ name: 'navigate', href: target + query, replace: true })
   await Promise.resolve()
   assert.deepEqual(exits, ['closed', [target, 'QA Session + Tools', '1', 'runtime:ssh']])
+  bridge.dispose()
+})
+
+test('an opened session retains the desktop list across a bridge init and consumes its target once', () => {
+  const peer = createRpcPeer()
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes })
+  const host = `/h/${hostId}`
+  const session = `${host}/session/folder%3Aone`
+  const controller = createController()
+  const bridge = new BridgeHost(new peer.SpikeRpcClient(), controller, manifest, meta, host)
+  bridge.setRouteParams({ open: `${session}?paneKey=terminal%3A2` })
+  bridge.onPushChannelReady()
+  post(bridge, { type: 'ready' })
+  assert.equal(controller.replies.at(-1).route.params.open, `${session}?paneKey=terminal%3A2`)
+  post(bridge, { type: 'notify', name: 'location', href: session })
+  post(bridge, {
+    type: 'notify',
+    name: 'route-param-clear',
+    param: 'open',
+    value: `${session}?paneKey=terminal%3A2`
+  })
+  bridge.setUiLocale('zh')
+  assert.equal(controller.replies.at(-1).ownsHostArea, true)
+  assert.deepEqual(controller.replies.at(-1).route, { pathname: host, params: {} })
+  assert.equal(bridge.getRoute(), session)
   bridge.dispose()
 })
 

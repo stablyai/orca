@@ -162,6 +162,8 @@ export class BridgeHost {
   private sessionId: string;
   private routePathname: string;
   private routeParams: Record<string, string> = {};
+  private readonly entryPathname: string;
+  private requestedOpen: string = '';
   private binarySubscriptions: Set<string> = new Set();
   private seq: Map<string, number> = new Map();
   private streamIds: Map<number, string> = new Map();
@@ -189,6 +191,7 @@ export class BridgeHost {
   private nativeHandler: ((method: string, params: ESObject) => Promise<Object>) | null = null;
   private nativeMethods: string[] = [];
   private onBack: ((home: boolean) => void) | null = null;
+  private desktopListBack: boolean = false;
   private overlayNavigation: ((pathname: string, params: Record<string, string>) => void) | null = null;
   private overlayNavigated: boolean = false;
   private onPaint: (() => void) | null = null;
@@ -247,7 +250,9 @@ export class BridgeHost {
   setNativeNavigation(sink: (page: BridgeNativePage, replace: boolean) => void): void { this.nativeNavigation = sink; }
 
   setStorage(store: PageStorageStore): void { this.storageStore = store; this.pageStorage = store.entries(); }
-  setRouteParams(params: Record<string, string>): void { this.routeParams = params; }
+  setRouteParams(params: Record<string, string>): void {
+    this.routeParams = params; this.requestedOpen = params['open'] ?? '';
+  }
   setColorScheme(scheme: string): void {
     if (this.scheme === scheme) { return; }
     this.scheme = scheme; if (this.pushReady && !this.disposed) { this.sendInit(); }
@@ -256,6 +261,7 @@ export class BridgeHost {
     this.nativeMethods = methods; this.nativeHandler = handler;
   }
   setNavigation(back: (home: boolean) => void, paint: () => void): void { this.onBack = back; this.onPaint = paint; }
+  setDesktopListBack(): void { this.desktopListBack = true; }
   setOverlayNavigation(navigate: (pathname: string, params: Record<string, string>) => void): void {
     this.overlayNavigation = navigate;
   }
@@ -282,6 +288,7 @@ export class BridgeHost {
     this.manifest = manifest;
     this.meta = meta;
     this.routePathname = routePathname;
+    this.entryPathname = routePathname;
     this.sessionId = `sess-${meta.id}-${Date.now()}-${this.wirePrefix}`;
     this.connection = {
       state: 'connected', reconnectAttempt: 0, lastConnectedAt: Date.now(),
@@ -396,10 +403,10 @@ export class BridgeHost {
     return true;
   }
 
-  private ownsHostArea(): boolean {
+  private ownsHostArea(pathname: string = this.routePathname): boolean {
     for (let i = 0; i < this.manifest.routes.length; i++) {
       let route: BundleRoute = this.manifest.routes[i];
-      if (route.canOwnHostArea && this.routeMatches(route.pathname, this.routePathname)) {
+      if (route.canOwnHostArea && this.routeMatches(route.pathname, pathname)) {
         return true;
       }
     }
@@ -423,13 +430,13 @@ export class BridgeHost {
     return ['navigate', 'storage', 'rpcEnvelope', 'screencastBinary'].includes(grant);
   }
 
-  private routeGrants(): string[] {
+  private routeGrants(pathname: string = this.routePathname): string[] {
     let grants: string[] = ['rpcEnvelope'];
     let seen: Set<string> = new Set();
-    let hostArea = this.ownsHostArea();
+    let hostArea = this.ownsHostArea(pathname);
     for (let i = 0; i < this.manifest.routes.length; i++) {
       let route: BundleRoute = this.manifest.routes[i];
-      let include = hostArea ? true : this.routeMatches(route.pathname, this.routePathname);
+      let include = hostArea || this.routeMatches(route.pathname, pathname);
       if (!include) {
         continue;
       }
@@ -577,6 +584,7 @@ export class BridgeHost {
     }
     if (name === 'route-param-clear') {
       let param: string = msg['param']; let value: string = msg['value'];
+      if (param === 'open' && value === this.requestedOpen) { this.requestedOpen = ''; }
       if (['paneKey', 'open'].includes(param) && typeof value === 'string' && this.routeParams[param] === value) {
         let next: Record<string, string> = {};
         let keys = Object.keys(this.routeParams);
@@ -625,6 +633,10 @@ export class BridgeHost {
     }
     if (pathname !== hostPath && !pathname.startsWith(`${hostPath}/`)) { return; }
     if (!this.acceptsLocationPath(pathname)) { return; }
+    if (this.desktopListBack && pathname === hostPath) {
+      if (navigate) { this.onBack?.(false); }
+      return;
+    }
     if (this.overlayNavigation && pathname !== this.routePathname) {
       if (navigate && this.manifest.routes.some((route: BundleRoute): boolean => this.routeMatches(route.pathname, pathname))) {
         this.overlayNavigated = true;
@@ -1159,10 +1171,13 @@ export class BridgeHost {
   }
 
   private sendInit(): void {
-    let grants = this.routeGrants();
+    // A desktop document can show a session without changing its entry route.
+    let ownsHostArea = this.ownsHostArea(this.entryPathname);
+    let grants = this.routeGrants(ownsHostArea ? this.entryPathname : this.routePathname);
     let pageRoutes: string[] = [];
     for (let i = 0; i < this.manifest.routes.length; i++) {
       let pattern = this.manifest.routes[i].pathname;
+      if (this.desktopListBack && this.routeMatches(pattern, `/h/${this.meta.id}`)) { continue; }
       if (!this.overlayNavigation || this.routeMatches(pattern, this.routePathname)) { pageRoutes.push(pattern); }
     }
     let rpcGrants: BridgeRpcGrants = {
@@ -1173,10 +1188,9 @@ export class BridgeHost {
       rpc: rpcGrants,
       native: grants
     };
-    let route: BridgeRouteWire = {
-      pathname: this.routePathname,
-      params: this.routeParams
-    };
+    let hostParams: Record<string, string> = this.requestedOpen ? { 'open': this.requestedOpen } : {};
+    let route: BridgeRouteWire = { pathname: ownsHostArea ? this.entryPathname : this.routePathname,
+      params: ownsHostArea ? hostParams : this.routeParams };
     let hostValue: BridgeInitHostWire = {
       id: this.meta.id,
       name: this.meta.name,
@@ -1217,7 +1231,7 @@ export class BridgeHost {
       host: hostValue,
       storage: storage,
       storageOversize: oversize,
-      ownsHostArea: this.ownsHostArea(),
+      ownsHostArea: ownsHostArea,
       safeAreaInsets: this.safeAreaInsets,
       keyboardInset: this.keyboardInset,
       pageGeometry: this.pageGeometry,
