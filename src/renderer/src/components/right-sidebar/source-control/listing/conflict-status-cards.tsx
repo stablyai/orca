@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 
 export function ConflictSummaryCard({
+  children,
   conflictOperation,
   unresolvedCount,
   sourceControlAiActionsVisible,
@@ -15,6 +16,7 @@ export function ConflictSummaryCard({
   onResolveWithAI,
   onReview
 }: {
+  children?: React.ReactNode
   conflictOperation: GitConflictOperation
   unresolvedCount: number
   sourceControlAiActionsVisible: boolean
@@ -41,10 +43,12 @@ export function ConflictSummaryCard({
               'auto.components.right.sidebar.source.control.conflict.status.cards.6a8e9ad490',
               'Cherry-pick conflicts'
             )
-          : t(
-              'auto.components.right.sidebar.source.control.conflict.status.cards.bdf8772106',
-              'Conflicts'
-            )
+          : conflictOperation === 'revert'
+            ? t('gitGraph.revertConflicts', 'Revert conflicts')
+            : t(
+                'auto.components.right.sidebar.source.control.conflict.status.cards.bdf8772106',
+                'Conflicts'
+              )
 
   return (
     <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
@@ -105,6 +109,7 @@ export function ConflictSummaryCard({
               : t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
           </Button>
         ) : null}
+        {children}
       </div>
     </div>
   )
@@ -112,6 +117,7 @@ export function ConflictSummaryCard({
 
 // Paused rebase/merge/cherry-pick operations may need recovery even with no conflicted files.
 export function OperationBanner({
+  children,
   conflictOperation,
   isRecoveryBusy = false,
   isAbortingOperation = false,
@@ -121,6 +127,7 @@ export function OperationBanner({
   sourceControlAiActionsVisible = false,
   onResolveWithAI
 }: {
+  children?: React.ReactNode
   conflictOperation: GitConflictOperation
   isRecoveryBusy?: boolean
   isAbortingOperation?: boolean
@@ -147,10 +154,12 @@ export function OperationBanner({
               'auto.components.right.sidebar.source.control.conflict.status.cards.ffe53a1da6',
               'Cherry-pick in progress'
             )
-          : t(
-              'auto.components.right.sidebar.source.control.conflict.status.cards.35eb76d323',
-              'Operation in progress'
-            )
+          : conflictOperation === 'revert'
+            ? t('gitGraph.revertInProgress', 'Revert in progress')
+            : t(
+                'auto.components.right.sidebar.source.control.conflict.status.cards.35eb76d323',
+                'Operation in progress'
+              )
 
   const Icon = conflictOperation === 'rebase' ? GitPullRequestArrow : GitMerge
   const canCompleteMerge = conflictOperation === 'merge' && !!onCompleteMerge
@@ -210,6 +219,7 @@ export function OperationBanner({
               : t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
           </Button>
         ) : null}
+        {children}
       </div>
     </div>
   )

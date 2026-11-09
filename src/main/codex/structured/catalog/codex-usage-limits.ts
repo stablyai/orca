@@ -7,7 +7,7 @@ import {
   type AgentSessionUsageLimit,
   type AgentSessionUsageLimitWindow
 } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
-import type { CodexRateLimitWindowsSnapshot } from '../../../rate-limits/codex-rate-limit-window-classification'
+import type { CodexRateLimitWindowsSnapshot } from '../../../rate-limits/providers/codex/codex-rate-limit-window-classification'
 import {
   readCodexErrorAdditionalDetails,
   readCodexErrorInfo,

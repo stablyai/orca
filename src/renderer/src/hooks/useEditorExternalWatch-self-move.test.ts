@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as EditorAutosaveModule from '@/components/editor/autosave/editor-autosave'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 
 vi.mock('@/store', () => ({
   useAppStore: { getState: vi.fn() }
@@ -29,7 +29,7 @@ import {
   beginEditorPathMove,
   settleEditorPathMove
 } from '@/components/editor/editor-path-move-inflight'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
 
 const findTarget = (worktreePath: string, runtimeEnvironmentId: string | null = null) =>
   worktreePath === '/repo'

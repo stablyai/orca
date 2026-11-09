@@ -16,7 +16,7 @@ import {
   relaunchFailedStructuredAgentSessionForMessage,
   retryStructuredAgentSessionLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 
 export type StructuredAgentSessionLaunchView = {
   kind: 'new' | 'resume'

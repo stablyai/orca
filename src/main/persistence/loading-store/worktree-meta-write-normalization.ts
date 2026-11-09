@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
+import { normalizeStoredTaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-attachments/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'

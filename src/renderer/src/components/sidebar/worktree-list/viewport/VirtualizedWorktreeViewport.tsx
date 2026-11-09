@@ -405,7 +405,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           })}
           {virtualItems.map((vItem) => {
             const row = renderRows[vItem.index]
-            return row ? renderWorktreeVirtualRow(rowContext, row, vItem) : null
+            return row ? renderWorktreeVirtualRow(rowContext, row, vItem, t) : null
           })}
         </div>
       </div>

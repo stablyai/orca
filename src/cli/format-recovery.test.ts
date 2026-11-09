@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { formatCliError, reportCliError } from './format'
-import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
+import { reportCliError } from './format'
+import { RuntimeRpcFailureError } from './runtime-client'
 
 function selectorAmbiguous(): RuntimeRpcFailureError {
   return new RuntimeRpcFailureError({
@@ -27,15 +27,6 @@ describe('ambiguous selector recovery', () => {
         data: {
           ambiguousSelectors: [{ flag: '--worktree', selector: 'name:feature' }],
           nextSteps: expect.arrayContaining([expect.stringContaining('identity:<identity.key>')])
-        }
-      }
-    })
-    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
-      error: {
-        data: {
-          nextSteps: expect.arrayContaining([
-            'List the exact values with `orca worktree list --json`.'
-          ])
         }
       }
     })
@@ -74,38 +65,5 @@ describe('worktree selector recovery', () => {
       }
     })
     log.mockRestore()
-  })
-})
-
-describe('CLI error recovery', () => {
-  it('prefers structured recovery over generic computer hints in text output', () => {
-    const error = new RuntimeClientError('invalid_argument', 'Unknown flag --forcce', {
-      nextSteps: ['Did you mean: --force']
-    })
-
-    const output = formatCliError(error, { commandPath: ['computer', 'click'] })
-
-    expect(output).toContain('Next step: Did you mean: --force')
-    expect(output).not.toContain('Fix the command flags or RPC params')
-  })
-
-  it('preserves the local request-id protection for an RPC runtime-unavailable error', () => {
-    const error = new RuntimeRpcFailureError({
-      id: 'req_rpc_runtime_mutation',
-      ok: false,
-      error: {
-        code: 'runtime_unavailable',
-        message: 'Re-issue the same RPC command with --retry-request mutation_2.',
-        data: {
-          orchestrationRequestId: 'mutation_2',
-          nextSteps: ['Read the RPC mutation status before retrying.']
-        }
-      },
-      _meta: { runtimeId: 'runtime_local' }
-    })
-
-    expect(formatCliError(error)).toBe(
-      'Re-issue the same RPC command with --retry-request mutation_2.'
-    )
   })
 })

@@ -203,11 +203,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     surfaceReady: !composerShown || install.slot.kind === 'install'
   })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
-  const fork = useNativeChatPaneFork(props, controller, ownerWorktreeId)
+  const forks = useNativeChatPaneFork(props, controller, ownerWorktreeId)
   const transport = useNativeChatStructuredComposerTransport({
     props,
     controller,
-    fork,
+    forks,
     sendThroughLaunch: provisionalLaunch.sendThroughLaunch,
     starting: provisionalLaunch.starting,
     transportEnabled: provisionalLaunch.transportEnabled,
@@ -273,8 +273,13 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       <NativeChatCrewFrame
         panel={<NativeChatCrewPanel {...props} composerRef={composerRef} canMention={canMention} />}
       >
-        <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
-          {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
+        <NativeChatContextClearFade
+          // A read failure stays in view: no divider may come to end the fade.
+          clearing={controller.contextClear.clearing && viewState.kind !== 'error'}
+          overlay={
+            find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null
+          }
+        >
           {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
             historyPhase !== 'unread' && <NativeChatLoadingCue />
           ) : viewState.kind === 'error' ? (
@@ -286,7 +291,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           ) : viewState.kind === 'empty' ? (
             <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
           ) : (
-            <NativeChatRowActionsProvider pane={props} chat={controller} fork={fork}>
+            <NativeChatRowActionsProvider pane={props} chat={controller} forks={forks}>
               <NativeChatUsageLimitActionsProvider
                 recovery={controller}
                 pane={props}

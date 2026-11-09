@@ -1,7 +1,7 @@
 import React from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 
 type Props = {
@@ -17,9 +17,10 @@ export default function ProjectBoardCard({
   onOpenDialog,
   onDragStart
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const restricted = row.itemType === 'REDACTED'
   const title = restricted
-    ? translate('projectBoardCard.restrictedItem', 'Restricted item')
+    ? t('projectBoardCard.restrictedItem', 'Restricted item')
     : row.content.title
   const clickable = !restricted && row.itemType !== 'DRAFT_ISSUE'
   const Glyph =
@@ -38,7 +39,7 @@ export default function ProjectBoardCard({
       aria-label={
         row.content.number == null
           ? title
-          : translate('projectBoardCard.itemLabel', '{{number}} — {{title}}', {
+          : t('projectBoardCard.itemLabel', '{{number}} — {{title}}', {
               number: `#${row.content.number}`,
               title
             })

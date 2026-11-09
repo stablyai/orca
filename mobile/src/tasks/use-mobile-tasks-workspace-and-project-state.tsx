@@ -2,6 +2,7 @@ import { useRef, useCallback } from 'react'
 import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
 import type { RouteAndItemStateModel } from './use-mobile-tasks-route-and-item-state'
 import type { WorkspaceSshRecord } from './workspace-ssh-gate'
+import { useProjectRowCommentDraft, useTaskCommentDraft } from './task-draft-rows'
 import {
   type BaseRefSearchResult,
   type GitHubProjectPartialFailure,
@@ -86,7 +87,9 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [linearStates, setLinearStates] = useState<LinearState[]>([])
   const [linearStatesLoading, setLinearStatesLoading] = useState(false)
   const [linearStatesError, setLinearStatesError] = useState('')
-  const [linearCommentDraft, setLinearCommentDraft] = useState('')
+  const [linearCommentDraft, setLinearCommentDraft] = useTaskCommentDraft(
+    model.actionItem?.provider === 'linear' ? model.actionItem : null
+  )
   const [linearSubIssueTitle, setLinearSubIssueTitle] = useState('')
   const [taskStateHydrated, setTaskStateHydrated] = useState(false)
   const [runtimeTaskSettings, setRuntimeTaskSettings] = useState<RuntimeTaskSettings>({})
@@ -131,7 +134,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [projectRowDetailRefreshSeq, setProjectRowDetailRefreshSeq] = useState(0)
   const [projectTitleDraft, setProjectTitleDraft] = useState('')
   const [projectBodyDraft, setProjectBodyDraft] = useState('')
-  const [projectCommentDraft, setProjectCommentDraft] = useState('')
+  const [projectCommentDraft, setProjectCommentDraft] = useProjectRowCommentDraft(projectRowItem)
   const [projectEditingCommentId, setProjectEditingCommentId] = useState<string | null>(null)
   const [projectEditingCommentDraft, setProjectEditingCommentDraft] = useState('')
   const [projectReviewersDraft, setProjectReviewersDraft] = useState('')

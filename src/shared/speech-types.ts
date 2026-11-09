@@ -5,7 +5,7 @@ export type SpeechModelType =
   | 'senseVoice'
   | 'nemo-ctc'
   | 'openai'
-export type SpeechModelProvider = 'local' | 'openai'
+export type SpeechModelProvider = 'local' | 'openai' | 'openai-compatible'
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
 
@@ -34,6 +34,20 @@ export type SpeechModelManifest = {
   replacedBy?: string
   /** Codes the engine accepts (others crash or fail to load it); absent when it ignores the setting. */
   dictationLanguages?: readonly string[]
+}
+
+export type OpenAiCompatibleSpeechProvider = {
+  baseUrl: string
+  model: string
+  /** Empty for servers that take no key. */
+  apiKey: string
+}
+
+export type OpenAiCompatibleSpeechProviderSummary = Omit<
+  OpenAiCompatibleSpeechProvider,
+  'apiKey'
+> & {
+  hasApiKey: boolean
 }
 
 export type SpeechModelStatus = 'not-downloaded' | 'downloading' | 'extracting' | 'ready' | 'error'
@@ -66,14 +80,10 @@ export type SpeechErrorEvent = {
 
 export type DictationState = 'idle' | 'starting' | 'listening' | 'stopping' | 'error'
 
-export type UserModelConfig = {
-  id: string
-  type: SpeechModelType
-  dir: string
-  sampleRate?: number
-}
-
+// See dictation-shortcut-mode.ts for Auto.
 export type DictationMode = 'toggle' | 'hold'
+
+export type SpeechGpuMode = 'auto' | 'off'
 
 export type VoiceSettings = {
   enabled: boolean
@@ -82,8 +92,10 @@ export type VoiceSettings = {
   /** 'auto' or an ISO-639-1 code. Not `language`: its stored 'en' default never came from the user. */
   dictationLanguage: string
   dictationMode: DictationMode
+  dictationHoldToRecord: boolean
+  /** Drops "um", "uh" and their equivalents in the dictation language before text is inserted. */
+  removeFillerWords: boolean
   terminalConfirmBeforeInsert: boolean
-  userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean
   /** null = system default input device */
   microphoneDeviceId: string | null
@@ -91,4 +103,6 @@ export type VoiceSettings = {
   microphoneDeviceLabel: string | null
   /** Minutes an idle on-device model stays loaded; 0 unloads after each dictation, null never unloads. */
   unloadModelAfterMinutes: number | null
+  /** 'off' keeps on-device recognition on the CPU, for machines whose GPU driver hard-crashes. Absent = 'auto'. */
+  speechGpu?: SpeechGpuMode
 }

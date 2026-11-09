@@ -1,9 +1,9 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useMemo } from 'react'
 import type { AppState } from '@/store/types'
-import { selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
+import { selectStoppedWslDistro } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { selectWorkspaceRuntimeEnvironmentId } from '../../lib/workspace/ownership/workspace-runtime-environment'
-import { selectWslHostEnvironmentUnavailableReason } from '../../lib/wsl-host-availability'
+import { selectWslHostEnvironmentUnavailableReason } from '../../runtime/hosts/wsl/wsl-host-availability'
 
 export type StoppedWslHost = { environmentId: string; distro: string }
 

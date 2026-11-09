@@ -4,6 +4,7 @@ import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as I18n from '@/i18n/i18n'
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
+import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
 import { useAppStore } from '../../../store/index'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
@@ -98,6 +99,19 @@ describe('NativeChatSelectionQuote', () => {
 
     expect(appendText).toHaveBeenCalledWith('> Use the draft store.\n>\n> It already appends.\n\n')
     expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
+  })
+
+  it('closes the offer before the composer takes the quote and focus', () => {
+    let focusOwners: HTMLElement[] | undefined
+    appendText.mockImplementationOnce(() => {
+      focusOwners = getOverlayFocusOwners()
+    })
+    render(<Chat />)
+    releaseSelection(screen.getByTestId('first'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to chat' }))
+
+    expect(focusOwners).toEqual([])
   })
 
   it('takes a selection that runs on over text that cannot be selected', () => {

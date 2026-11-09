@@ -18,10 +18,10 @@ import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/st
 import {
   resetHostModelCatalogSnapshotsForTests,
   recordHostModelCatalogSnapshot
-} from '@/runtime/host-model-catalog-snapshots'
+} from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import type { AgentSessionModelCatalogResult } from '../../../../../../../shared/agent-session/agent-session-wire'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
-import { subscribeStructuredAgentSessionStatus } from '@/runtime/structured-agent-session-client'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { subscribeStructuredAgentSessionStatus } from '@/runtime/native-chat/requests/structured-agent-session-subscriptions'
 
 it.each([false, undefined])(
   'retires a draft observation before late discovery (next fact: %s)',

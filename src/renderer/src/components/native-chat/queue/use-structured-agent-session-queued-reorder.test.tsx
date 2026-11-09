@@ -5,11 +5,11 @@ import { toast } from 'sonner'
 import { useStructuredAgentSessionQueuedReorder } from './use-structured-agent-session-queued-reorder'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { useStructuredAgentSessionMutate } from '../session/structured/writes/use-structured-agent-session-mutate'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: vi.fn()
 }))
 afterEach(() => {

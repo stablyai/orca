@@ -7,7 +7,7 @@ import {
   noteUserWorkspaceSwitch,
   resetWorkspaceSwitchUserActsForTests,
   WORKSPACE_SWITCH_MOUNT_WINDOW_MS
-} from '@/lib/workspace-switch-user-act'
+} from '@/lib/workspace/activation/workspace-switch-user-act'
 
 afterEach(() => {
   cleanup()

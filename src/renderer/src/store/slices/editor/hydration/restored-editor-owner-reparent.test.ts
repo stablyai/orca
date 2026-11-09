@@ -11,8 +11,8 @@ import {
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from '@/hooks/editor-external-watch-event-reconciliation'
 import '@/hooks/editor-external-watch-targets'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import {
@@ -23,12 +23,12 @@ import '../../../../../../shared/layout-owner-switch'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

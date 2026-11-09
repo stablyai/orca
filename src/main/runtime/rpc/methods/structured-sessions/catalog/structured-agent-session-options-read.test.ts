@@ -1,16 +1,14 @@
-import { resolveHiddenProbeCwd } from '../../../../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../../../../lib/hidden-probe-cwd'
 import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import '../../../unused-default-rpc-methods.test-fixture'
+
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../../../ipc/desktop-renderer-runtime-capabilities'
 import { createAgentModelCatalogService } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-service'
-import {
-  AgentModelCatalogStore,
-  type AgentModelCatalogSuccess
-} from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { AgentModelCatalogStore } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { AgentModelCatalogSuccess } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import '../../../../../codex/structured/catalog/codex-model-catalog-probe'
 
 import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'

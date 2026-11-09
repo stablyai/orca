@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { BrowserTab } from '../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
@@ -134,7 +134,7 @@ function getActiveIdsForFloatingEntry(entry: TypeCyclableTab): {
 function getFloatingWorkspaceBrowserTab(
   store: FloatingWorkspaceTabSwitchStore,
   browserTabId: string
-): BrowserTab | null {
+): BrowserWorkspace | null {
   return (
     (store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).find(
       (tab) => tab.id === browserTabId

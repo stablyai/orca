@@ -3,8 +3,8 @@ import { cleanup } from '@testing-library/react'
 
 import type { CommandMenuRendererFixtureModule } from '../../../../../shared/agent-session/agent-session-command-menu.test-fixture-contract'
 
-import { OMP } from '../../../../acp/acp-command-discovery.test-fixture'
-import { acpStructuredAgentDefinition } from '../../../../acp/acp-structured-agent-definitions'
+import { OMP } from '../../../../acp/discovery/testing/acp-command-discovery.test-fixture'
+import { acpStructuredAgentDefinition } from '../../../../acp/session/acp-structured-agent-definitions'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../../claude/structured/claude-structured-agent-definition'
 import { StructuredAgentRegistry } from '../../providers/structured-agent-registry'
 import { StructuredAgentSessionAdapterRouter } from '../../providers/structured-agent-session-adapter-router'
@@ -43,10 +43,19 @@ import {
 import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const runtimeMocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: runtimeMocks.call,
-  subscribeStructuredAgentSession: runtimeMocks.subscribe
-}))
+vi.mock(
+  '../../../../../renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: runtimeMocks.call
+  })
+)
+
+vi.mock(
+  '../../../../../renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSession: runtimeMocks.subscribe
+  })
+)
 export const runtime: { call: Mock; subscribe: Mock } = runtimeMocks
 export const renderer = await vi.importActual<CommandMenuRendererFixtureModule>(
   '../../../../../renderer/src/components/native-chat/composer/pickers/agent-session-command-menu.test-fixture'
@@ -102,7 +111,7 @@ export function adapter(
 
 // Isolate discovery to test folders; a large real home otherwise outlasts the menu wait.
 export const discoverWithoutUserHome: ClaudeAtRestCommandsDeps['discover'] = async (args) => {
-  const { discoverSkills } = await import('../../../../skills/discovery')
+  const { discoverSkills } = await import('../../../../skills/discovery/skill-native-discovery')
   return discoverSkills({ ...args, homeDir: join(directory, 'home'), refresh: true })
 }
 

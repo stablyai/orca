@@ -1,6 +1,6 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/wsl-distro-stopped-hold'
-import { RuntimeLineageError } from '../lineage/runtime-worktree-lineage-resolution'
+import { RuntimeLineageError } from '../lineage/runtime-lineage-error'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree-first-surface'
@@ -18,7 +18,7 @@ import {
   mergeRuntimeFolderWorkspace
 } from '../catalog/runtime-folder-workspace'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 import type {
   WorktreeStartupDraftPaste,

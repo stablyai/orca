@@ -16,22 +16,23 @@ const SIGN_IN_VARIABLES = {
 
 export function authRequiredDetail(
   provider: SupportedHostedReviewCopyProvider,
-  copy: LocalizedHostedReviewCopy
+  copy: LocalizedHostedReviewCopy,
+  t: Translate = translate
 ): string {
   if (provider === 'bitbucket') {
-    return translate(
+    return t(
       'sourceControl.createReviewFailure.authRequiredBitbucket',
       'Bitbucket is not authenticated. Next step: connect Bitbucket in Settings > Integrations, or set ORCA_BITBUCKET_* in this environment.'
     )
   }
   if (provider === 'github' || provider === 'gitlab') {
-    return translate(
+    return t(
       'sourceControl.createReviewFailure.authRequiredCommand',
       '{{providerName}} is not authenticated. Next step: run {{command}} in this environment.',
       { providerName: copy.providerName, command: SIGN_IN_COMMANDS[provider] }
     )
   }
-  return translate(
+  return t(
     'sourceControl.createReviewFailure.authRequiredVariable',
     '{{providerName}} is not authenticated. Next step: set {{variable}} in this environment.',
     { providerName: copy.providerName, variable: SIGN_IN_VARIABLES[provider] }

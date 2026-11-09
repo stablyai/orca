@@ -22,8 +22,8 @@ import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import type { OrcadHostTransport } from './orcad-host-transport'
 
 export function orcadProfilePreflightCommand(
   host: RemoteHostPlatform,

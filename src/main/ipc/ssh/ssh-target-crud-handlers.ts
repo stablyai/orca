@@ -13,7 +13,7 @@ import {
 } from '../../ssh/config/ssh-config-host-picker'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 import { closeOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { rotateSshProviderAuthority } from '../../ssh/ssh-provider-authority'
+import { rotateSshProviderAuthority } from '../../ssh/connection/authority/ssh-provider-authority'
 import {
   getSshTargetRegistryStore,
   setSshTargetMutations
@@ -22,10 +22,10 @@ import {
   allowsDirectSshRelay,
   isManagedOrcadSshTarget,
   isRuntimeOwnedSshTarget
-} from '../../ssh/connection/ssh-connection-store'
+} from '../../ssh/targets/ssh-target-runtime-ownership'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
-import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-target-fingerprint'
+import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-access/runtime-ssh-target-fingerprint'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
 import { notifyReposChanged } from '../repos/repos-changed-notification'
 import {

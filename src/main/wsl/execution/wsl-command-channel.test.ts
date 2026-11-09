@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   killWslChannelsInCloseGrace,
   WSL_CHANNEL_CLOSE_GRACE_MS,
@@ -25,7 +25,7 @@ function fakeChild() {
     child.emit('exit', code, null)
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the channel reads only these members.
-  return { child: child as unknown as PipedChildProcess, fake: child, exit }
+  return { child: child as unknown as ChildProcessWithoutNullStreams, fake: child, exit }
 }
 
 beforeEach(() => {

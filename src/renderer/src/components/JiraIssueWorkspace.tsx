@@ -12,15 +12,16 @@ import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-ty
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { JiraIssueMetadataBar, JiraIssueWorkspaceHeader } from './jira-issue-workspace-chrome'
 import { JiraIssueCommentComposer, JiraIssueWorkspaceContent } from './jira-issue-workspace-content'
 import { useJiraIssueWorkspaceActions } from './jira-issue-workspace-actions'
 import { getJiraReadIdentity } from '@/store/slices/jira/jira-read-coordination'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { editedJiraIssueFields } from './jira-issue-workspace-hydration'
 import { enqueueJiraIssueMutation, jiraIssueRequestScope } from './jira-issue-mutation-queue'
@@ -40,6 +41,7 @@ export default function JiraIssueWorkspace({
   onClose,
   sourceContext
 }: JiraIssueWorkspaceProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const owner = useMemo(
     () => (sourceContext ? taskSourceRuntimeTarget(sourceContext) : defaultScopeHost(settings)),
@@ -193,13 +195,12 @@ export default function JiraIssueWorkspace({
       >
         <VisuallyHidden.Root asChild>
           <SheetTitle>
-            {displayed?.title ??
-              translate('auto.components.JiraIssueWorkspace.ef21405c6d', 'Jira issue')}
+            {displayed?.title ?? t('auto.components.JiraIssueWorkspace.ef21405c6d', 'Jira issue')}
           </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate(
+            {t(
               'auto.components.JiraIssueWorkspace.857bd2f88f',
               'Preview, edit, and start work from the selected issue.'
             )}

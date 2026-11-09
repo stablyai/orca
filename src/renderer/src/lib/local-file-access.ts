@@ -1,7 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { LocalFileAccess } from '../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { getConnectionIdForFile } from './connection-context'
+import { getConnectionIdForFile } from './workspace/ownership/connection-context'
 import { getRuntimeTargetForFileOwner } from './file-owner-runtime-target'
 import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
 

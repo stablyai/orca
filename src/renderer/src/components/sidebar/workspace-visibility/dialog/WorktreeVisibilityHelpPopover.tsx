@@ -17,6 +17,7 @@ export default function WorktreeVisibilityHelpPopover(): React.JSX.Element {
       className="inline-flex"
       onPointerEnter={() => setOpen(true)}
       onPointerLeave={() => setOpen(false)}
+      onContextMenu={() => setOpen(false)}
     >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>

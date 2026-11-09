@@ -1,4 +1,4 @@
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { GitHubWorkItemTargetContext } from '../load-item-details/github-work-item-target-context'
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { toast } from 'sonner'

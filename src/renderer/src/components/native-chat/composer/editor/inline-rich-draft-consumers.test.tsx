@@ -232,7 +232,7 @@ const leaseRpc = vi.hoisted(() =>
     })
   )
 )
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: leaseRpc
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))

@@ -3,9 +3,12 @@
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
-} from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
-import { hostStableKey, isSameAutomationOwner } from '../../../../shared/automation-owner-key'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
+import {
+  hostStableKey,
+  isSameAutomationOwner
+} from '../../../../shared/automations/ownership/automation-owner-key'
 import { getRepoSshConnectionId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type {

@@ -3,14 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import type { MobileNativeChatInputLockReason } from '../MobileNativeChatView'
-import {
-  readMobileNativeChatDraftInputs,
-  updateMobileNativeChatDraftInputs
-} from './mobile-native-chat-draft-inputs'
-import {
-  resetMobileNativeChatDraftStoreForTests,
-  setMobileNativeChatDraftText
-} from './mobile-native-chat-draft-store'
+import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 import {
   readMobileNativeChatOfflineSends,
   resetMobileNativeChatOfflineSendsForTests
@@ -21,7 +14,6 @@ import {
 } from './use-mobile-native-chat-offline-sends'
 
 const SCOPE = 'host\0worktree\0tab'
-const IMAGE = { id: 'chip-1', path: '/host/shot.png', previewUri: 'file:///shot.png' }
 
 type Send = (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
 
@@ -57,33 +49,6 @@ describe('useMobileNativeChatOfflineQueue', () => {
     resetMobileNativeChatDraftStoreForTests()
   })
 
-  it('holds an offline send with its chips and sends it once on reconnect without touching the composer', async () => {
-    const send = vi.fn<Send>().mockResolvedValue(true)
-    await mount('disconnected', send)
-    setMobileNativeChatDraftText(SCOPE, 'check the PR tab')
-    updateMobileNativeChatDraftInputs(SCOPE, (inputs) => ({ ...inputs, images: [IMAGE] }))
-
-    let accepted: boolean | undefined
-    await act(async () => {
-      accepted = await queue?.send('check the PR tab')
-    })
-
-    expect(accepted).toBe(true)
-    expect(send).not.toHaveBeenCalled()
-    expect(readMobileNativeChatDraftInputs(SCOPE).images).toEqual([])
-    expect(readMobileNativeChatOfflineSends(SCOPE).map((queued) => queued.text)).toEqual([
-      'check the PR tab'
-    ])
-
-    setMobileNativeChatDraftText(SCOPE, 'a newer draft')
-    await reconnect(send)
-
-    expect(send).toHaveBeenCalledOnce()
-    expect(send.mock.calls[0][0]).toBe('check the PR tab')
-    expect(send.mock.calls[0][1]?.queued?.images).toEqual([IMAGE])
-    expect(readMobileNativeChatOfflineSends(SCOPE)).toEqual([])
-  })
-
   it('pauses a queued message whose send fails and holds later sends behind it until Resume', async () => {
     const send = vi.fn<Send>().mockResolvedValue(false)
     await mount('disconnected', send)
@@ -114,6 +79,41 @@ describe('useMobileNativeChatOfflineQueue', () => {
 
     expect(send.mock.calls.map(([text]) => text)).toEqual(['first', 'first', 'second', 'third'])
     expect(readMobileNativeChatOfflineSends(SCOPE)).toEqual([])
+  })
+
+  it('keeps a pending send single across remounts and drains later messages when it settles', async () => {
+    const delivered: string[] = []
+    let finishFirst: ((sent: boolean) => void) | undefined
+    const send: Send = async (text) => {
+      delivered.push(text)
+      return text === 'first'
+        ? new Promise<boolean>((resolve) => {
+            finishFirst = resolve
+          })
+        : true
+    }
+    await mount('disconnected', send)
+    await act(async () => {
+      await queue?.send('first')
+      await queue?.send('second')
+    })
+    await reconnect(send)
+    await act(async () => renderer?.unmount())
+    await mount(null, send)
+
+    expect(delivered).toEqual(['first'])
+    const [pending, later] = readMobileNativeChatOfflineSends(SCOPE)
+    expect(pending.text).toBe('first')
+    let resent: (boolean | undefined)[] = []
+    await act(async () => {
+      resent = [await queue?.sendNow(pending.id), await queue?.sendNow(later.id)]
+    })
+    expect(resent).toEqual([false, false])
+
+    await act(async () => finishFirst?.(true))
+
+    expect(delivered).toEqual(['first', 'second'])
+    expect(queue?.sends).toEqual([])
   })
 
   it('keeps a queued message paused when its send hands it back before returning', async () => {

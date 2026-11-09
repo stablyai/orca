@@ -59,42 +59,43 @@ export function translateRemotePairingEndpointKind(
 
 export function translateRemotePairingFailureDescription(
   kind: RemotePairingFailureKind,
-  endpoint: string | null
+  endpoint: string | null,
+  t: Translate = translate
 ): string {
   switch (kind) {
     case 'host-identity-mismatch':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeHostAccessForm.identityMismatchHelp',
         'Orca reached {{endpoint}}, but that host does not match this link. Generate a new link on the other host.',
         { endpoint: endpoint ?? 'Orca' }
       )
     case 'access-link-invalid':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeHostAccessForm.invalidLinkHelp',
         'Generate a new access link on the other host and try again.'
       )
     case 'protocol-incompatible':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeHostAccessForm.incompatibleHelp',
         'Update Orca on this device and the other host, then try again.'
       )
     case 'connection-interrupted':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeHostAccessForm.interruptedHelp',
         'The connection stopped during verification. Check the network or SSH tunnel and try again.'
       )
     case 'environment-save-failed':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeHostAccessForm.saveFailedHelp',
         'The host was verified, but Orca could not save it. Check the name and local settings storage, then try again.'
       )
     case 'different-server':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeHostAccessForm.differentServerHelp',
         'This pairing link is for a different server. Create the link on the server you are re-pairing.'
       )
     case 'host-unreachable':
-      return translate(
+      return t(
         'auto.components.settings.RuntimeHostAccessForm.unavailableHelp',
         'Make sure Orca is running on the other host and that the network or SSH tunnel can reach {{endpoint}}.',
         { endpoint: endpoint ?? 'Orca' }

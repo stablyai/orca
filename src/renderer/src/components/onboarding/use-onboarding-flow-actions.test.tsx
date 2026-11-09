@@ -8,7 +8,7 @@ import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useCloseWith } from './use-onboarding-flow-persistence'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import { STEPS } from './use-onboarding-flow-types'
-import type { WorkspaceActivationOutcome } from '@/lib/worktree-activation-outcome'
+import type { WorkspaceActivationOutcome } from '@/lib/workspace/activation/worktree-activation-outcome'
 
 const {
   track,
@@ -54,7 +54,9 @@ vi.mock('@/components/agent-tab-launch-context', () => ({
   captureAgentTabLaunchContext: () => ({ groupId: 'group', focusIntent })
 }))
 vi.mock('@/lib/telemetry', () => ({ track }))
-vi.mock('@/lib/agent-detection-target-inventory', () => ({ loadDetectedAgentsForWorktree: detect }))
+vi.mock('@/lib/agent-session/launch/inventory/agent-detection-target-inventory', () => ({
+  loadDetectedAgentsForWorktree: detect
+}))
 vi.mock('@/lib/host-chat-program-acquisition', () => ({
   acquireAgentLaunchChoices: acquireChoices
 }))

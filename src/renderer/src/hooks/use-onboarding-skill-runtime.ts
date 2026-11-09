@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
-import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import {
+  chatProviderAgents,
+  useHostStructuredAgentsVersion
+} from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { recomputeOn } from '@/lib/recompute-on'
 import { getNativeChatAgentProfile } from '../../../shared/native-chat/native-chat-agent-profiles'
 import { isSkillInstallProviderId } from '../../../shared/skill-install-providers'
@@ -9,7 +12,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
 import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { useAppStore } from '@/store'
 import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'
 

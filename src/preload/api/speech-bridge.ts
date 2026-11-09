@@ -1,6 +1,8 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { ipcRenderer } from 'electron'
 import type {
+  OpenAiCompatibleSpeechProvider,
+  OpenAiCompatibleSpeechProviderSummary,
   SpeechAudioPortMessage,
   SpeechErrorEvent,
   SpeechLifecycleEvent,
@@ -24,6 +26,12 @@ export const speechApi = {
     ipcRenderer.invoke('speech:saveOpenAiApiKey', apiKey),
   clearOpenAiApiKey: (): Promise<{ configured: boolean }> =>
     ipcRenderer.invoke('speech:clearOpenAiApiKey'),
+  getOpenAiCompatibleProvider: (): Promise<OpenAiCompatibleSpeechProviderSummary | null> =>
+    ipcRenderer.invoke('speech:getOpenAiCompatibleProvider'),
+  saveOpenAiCompatibleProvider: (provider: OpenAiCompatibleSpeechProvider): Promise<void> =>
+    ipcRenderer.invoke('speech:saveOpenAiCompatibleProvider', provider),
+  clearOpenAiCompatibleProvider: (): Promise<void> =>
+    ipcRenderer.invoke('speech:clearOpenAiCompatibleProvider'),
   downloadModel: (modelId: string): Promise<void> =>
     ipcRenderer.invoke('speech:downloadModel', modelId),
   cancelDownload: (modelId: string): Promise<void> =>
@@ -83,6 +91,11 @@ export const speechApi = {
       port.close()
     }
     return ipcRenderer.invoke('speech:stopDictation', sessionId)
+  },
+  cancelDictation: (sessionId: string): Promise<void> => {
+    audioPorts.get(sessionId)?.close()
+    audioPorts.delete(sessionId)
+    return ipcRenderer.invoke('speech:cancelDictation', sessionId)
   },
 
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {

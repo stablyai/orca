@@ -11,7 +11,7 @@ import {
 import { hasRuntimeRpcErrorCode } from '../../../../../../shared/runtime-rpc-error-code'
 import { cacheStableSurfaceRecoveryFailure } from '../evidence/web-session-terminal-orphan-recovery-cache'
 import { runInTerminalRecoveryRpcLane } from '../scheduling/web-session-terminal-orphan-recovery-rpc-lane'
-import { toRuntimeWorktreeSelector } from '../../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../../rpc/targets/runtime-worktree-selector'
 import { getSessionTabsRuntimeIdFromResponse } from '../../../web-session-tabs-sync/publisher-identity-fences'
 import {
   hasTerminalHandleRetirementProof,

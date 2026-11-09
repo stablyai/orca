@@ -1,8 +1,8 @@
 import {
   buildSetupRunnerCommand as buildSharedSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
-} from '../../../shared/setup-runner-command'
-import type { SetupRunnerShell } from '../../../shared/setup-runner-command'
+} from '../../../shared/agent-launch/startup/setup-runner-command'
+import type { SetupRunnerShell } from '../../../shared/agent-launch/startup/setup-runner-command'
 
 export function buildSetupRunnerCommand(
   runnerScriptPath: string,

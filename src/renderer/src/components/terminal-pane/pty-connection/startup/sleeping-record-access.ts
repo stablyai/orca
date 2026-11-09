@@ -15,7 +15,7 @@ import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/
 import {
   beginAgentStartupDeliveryAttempt,
   releaseAgentStartupDeliveryAttempt
-} from '@/lib/agent-startup-delayed-delivery'
+} from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

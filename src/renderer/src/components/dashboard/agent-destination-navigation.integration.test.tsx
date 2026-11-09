@@ -13,7 +13,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 
-import type * as WebRuntimeSessionEnvironment from '@/runtime/web-runtime-session-environment'
+import type * as WebRuntimeSessionEnvironment from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
 import WorktreeCardAgents from '../sidebar/workspace-card/activity/WorktreeCardAgents'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -38,11 +38,14 @@ vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-inte
   requestNativeChatComposerFocus: effects.composerFocus
 }))
 vi.mock('../dashboard-popout/AgentTerminalPreview', () => ({ AgentTerminalPreview: () => null }))
-vi.mock('@/runtime/web-runtime-session-environment', async (importOriginal) => ({
-  ...(await importOriginal<typeof WebRuntimeSessionEnvironment>()),
-  captureRuntimeEnvironmentCall: (environmentId: string) => (args: unknown) =>
-    effects.environmentCall(environmentId, args)
-}))
+vi.mock(
+  '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WebRuntimeSessionEnvironment>()),
+    captureRuntimeEnvironmentCall: (environmentId: string) => (args: unknown) =>
+      effects.environmentCall(environmentId, args)
+  })
+)
 
 const initialState = useAppStore.getState()
 const LEAF = '11111111-1111-4111-8111-111111111111'

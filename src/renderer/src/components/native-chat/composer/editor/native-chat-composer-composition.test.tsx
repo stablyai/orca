@@ -133,26 +133,49 @@ describe('native chat composer composition ownership', () => {
     expect(promptValue(input)).toBe('가')
   })
 
-  it('swallows the Enter that confirms a Japanese candidate without eating the next one', () => {
+  it.each(['Enter', 'Unidentified'])(
+    'swallows the Enter that confirms a Japanese candidate without eating the next one (code %s)',
+    (code) => {
+      const onKeyDown = vi.fn()
+      render(<TestField {...fieldProps({ draft: '日本語', onKeyDown })} />)
+      const input = textarea()
+      fireEvent.compositionStart(input)
+
+      fireEvent.keyDown(input, { key: 'Process', code, keyCode: 229, isComposing: true })
+      endComposition(input, '日本語')
+      const redispatch = fireEvent.keyDown(input, {
+        key: 'Enter',
+        keyCode: 13,
+        isComposing: false
+      })
+
+      expect(redispatch).toBe(false)
+      expect(onKeyDown).not.toHaveBeenCalled()
+
+      fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
+      fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, isComposing: false })
+      expect(onKeyDown).toHaveBeenCalledOnce()
+    }
+  )
+
+  // Windows Hankaku/Zenkaku commits as Process/229 and may never send keyup (#39289).
+  it('sends the first Enter after Hankaku/Zenkaku commits Japanese text', () => {
     const onKeyDown = vi.fn()
-    render(<TestField {...fieldProps({ draft: '日本語', onKeyDown })} />)
+    render(<TestField {...fieldProps({ draft: 'にほんご', onKeyDown })} />)
     const input = textarea()
     fireEvent.compositionStart(input)
 
-    fireEvent.keyDown(input, { key: 'Process', keyCode: 229, isComposing: true })
-    endComposition(input, '日本語')
-    const redispatch = fireEvent.keyDown(input, {
-      key: 'Enter',
-      keyCode: 13,
-      isComposing: false
+    fireEvent.keyDown(input, {
+      key: 'Process',
+      code: 'Backquote',
+      keyCode: 229,
+      isComposing: true
     })
+    endComposition(input, 'にほんご')
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', keyCode: 13, isComposing: false })
 
-    expect(redispatch).toBe(false)
-    expect(onKeyDown).not.toHaveBeenCalled()
-
-    fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, isComposing: false })
-    expect(onKeyDown).toHaveBeenCalledOnce()
+    const enters = onKeyDown.mock.calls.filter(([event]) => event.key === 'Enter')
+    expect(enters).toHaveLength(1)
   })
 
   it('settles the browser value instead of an unrelated draft rerender on blur', () => {

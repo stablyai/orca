@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
@@ -14,7 +14,7 @@ import {
   filterGitHubPRReviewerCandidates,
   getGitHubPRReviewerQueryState
 } from '@/components/github/github-pr-reviewer-candidate-filter'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { createReviewerRequestActions } from './request-actions'
 import { ReviewerPicker } from './picker'
@@ -37,6 +37,7 @@ export function PRReviewersPanel({
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
   onMutated: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
   const [activeReviewerCursor, setActiveReviewerCursor] = useState({
@@ -265,7 +266,7 @@ export function PRReviewersPanel({
   return (
     <section>
       <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        <span>{translate('auto.components.PullRequestPage.00d3be6bcd', 'Reviewers')}</span>
+        <span>{t('auto.components.PullRequestPage.00d3be6bcd', 'Reviewers')}</span>
         <ReviewerPicker
           open={open}
           submitting={submitting}

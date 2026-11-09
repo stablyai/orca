@@ -7,7 +7,7 @@ import {
   flushBrowserPartitionCookies
 } from '../../browser/cookies/browser-partition-cookie-copy'
 import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/routing/partitions/browser-route-partition-binding-runtime'
-import { browserSessionRegistry } from '../../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { browserSessionsInitialized } from '../../browser/sessions/browser-session-startup'
 import {
   bindWslHostBrowserRoutePartition,

@@ -3,7 +3,6 @@ import { describeLoadError } from '../../components/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../../src/shared/native-chat/native-chat-noise'
-import { isPullRequestEventMessage } from '../../../../src/shared/native-chat/native-chat-pull-request-event'
 import { nativeChatStreamingMessage } from '../../../../src/shared/native-chat/native-chat-streaming'
 import { isWordlessProviderFrameMessage } from '../../../../src/shared/native-chat/native-chat-provider-frame-summary'
 import {
@@ -63,9 +62,11 @@ function mobileNativeChatEmptyStateCopy(
 
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
-  agent: string | null,
+  agent: string | null | undefined,
   error?: string,
-  sessionLive = false
+  sessionLive = false,
+  /** A sent /clear hid the old rows: a blank list until its divider lands, not new-chat copy. */
+  clearing = false
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent
     ? formatAgentTypeLabel(agent)
@@ -78,7 +79,7 @@ export function mobileNativeChatEmptyState(
     case 'awaiting-transcript':
       return mobileNativeChatEmptyStateCopy(sessionLive ? 'empty' : 'notFound', agentLabel)
     case 'ready':
-      return mobileNativeChatEmptyStateCopy('empty', agentLabel)
+      return clearing ? null : mobileNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {
       const copy = mobileNativeChatEmptyStateCopy('error', agentLabel)
       return error ? { ...copy, subtitle: describeLoadError(error, translate).message } : copy
@@ -105,13 +106,8 @@ export function foldMobileNativeChatMessages(
   )
 }
 
-/** CI result lines stay hidden until the phone reads the desktop's setting for them. */
 export function isMobileNativeChatSource(message: NativeChatMessage): boolean {
-  return (
-    isRootAgentJournalItem(message) &&
-    !isUndrawnProviderFrameMessage(message) &&
-    !isPullRequestEventMessage(message)
-  )
+  return isRootAgentJournalItem(message) && !isUndrawnProviderFrameMessage(message)
 }
 
 export function prepareMobileNativeChatMessages(

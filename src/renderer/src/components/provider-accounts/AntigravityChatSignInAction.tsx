@@ -1,24 +1,26 @@
 import { useId, useState } from 'react'
 import { AlertCircle, Check, Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { ManagedRuntimeLinkButton } from '../managed-runtime/ManagedRuntimeLinkButton'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import type { AntigravityChatAuthAction } from './AntigravityChatAuthForm'
-import type { AntigravityChatSignInControls } from './AntigravityChatSignInRow'
+import type { AntigravityChatSignInControls } from './use-antigravity-chat-sign-in'
 
 export function AntigravityChatSignInBadge({
   signIn
 }: {
   signIn: AntigravityChatSignInControls
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (signIn.signingIn) {
     return (
       <Badge variant="dot">
         <LoadingSpinner className="size-3 text-muted-foreground" />
-        {translate('accounts.antigravity.chatBadgeSigningIn', 'Signing in')}
+        {t('accounts.antigravity.chatBadgeSigningIn', 'Signing in')}
       </Badge>
     )
   }
@@ -26,7 +28,7 @@ export function AntigravityChatSignInBadge({
     return (
       <Badge variant="dot">
         <span aria-hidden className="size-1.5 rounded-full bg-status-success" />
-        {translate('accounts.antigravity.chatBadgeSignedIn', 'Signed in')}
+        {t('accounts.antigravity.chatBadgeSignedIn', 'Signed in')}
       </Badge>
     )
   }
@@ -34,7 +36,7 @@ export function AntigravityChatSignInBadge({
     return (
       <Badge variant="dot">
         <span aria-hidden className="size-1.5 rounded-full bg-muted-foreground/60" />
-        {translate('accounts.antigravity.chatBadgeSignedOut', 'Not signed in')}
+        {t('accounts.antigravity.chatBadgeSignedOut', 'Not signed in')}
       </Badge>
     )
   }
@@ -45,18 +47,22 @@ export function AntigravityChatSignInBadge({
 const changingAccount = (signIn: AntigravityChatSignInControls, auth: AntigravityChatAuthAction) =>
   signIn.auth === 'signedIn' && !auth.reauth
 
-function actionLabel(signIn: AntigravityChatSignInControls, auth: AntigravityChatAuthAction) {
+function actionLabel(
+  signIn: AntigravityChatSignInControls,
+  auth: AntigravityChatAuthAction,
+  t: Translate = translate
+) {
   if (changingAccount(signIn, auth)) {
-    return translate('accounts.antigravity.chatChangeAccount', 'Change account')
+    return t('accounts.antigravity.chatChangeAccount', 'Change account')
   }
   if (auth.method && !auth.recovering) {
-    return translate('accounts.antigravity.chatSignInWith', 'Sign in with {{method}}', {
+    return t('accounts.antigravity.chatSignInWith', 'Sign in with {{method}}', {
       method: auth.method
     })
   }
   return signIn.action === 'retry'
-    ? translate('accounts.antigravity.chatRetry', 'Retry sign-in')
-    : translate('accounts.antigravity.chatSignIn', 'Sign in')
+    ? t('accounts.antigravity.chatRetry', 'Retry sign-in')
+    : t('accounts.antigravity.chatSignIn', 'Sign in')
 }
 
 /** One status line and one full-size action; a running sign-in swaps in its own panel. */
@@ -69,6 +75,7 @@ export function AntigravityChatSignInAction({
   auth: AntigravityChatAuthAction
   size: 'default' | 'sm'
 }): React.JSX.Element {
+  const t = useTranslate()
   const alert = auth.alert ? (
     <span role="alert" className="flex items-center gap-1.5 text-destructive">
       <AlertCircle className="size-3.5 shrink-0" />
@@ -81,27 +88,23 @@ export function AntigravityChatSignInAction({
   const message =
     signIn.line ??
     (auth.incomplete
-      ? translate(
+      ? t(
           'accounts.antigravity.enterpriseFieldsNeeded',
           'Enter a Google Cloud project and location.'
         )
       : null) ??
     (auth.reauth && auth.method
-      ? translate(
-          'accounts.antigravity.chatSwitchMethod',
-          'Sign in again to switch to {{method}}.',
-          {
-            method: auth.method
-          }
-        )
+      ? t('accounts.antigravity.chatSwitchMethod', 'Sign in again to switch to {{method}}.', {
+          method: auth.method
+        })
       : null)
   const secondary = changingAccount(signIn, auth)
   // The badge is not announced, so the live region carries the settled result too.
   const settled =
     signIn.auth === 'signedIn'
-      ? translate('accounts.antigravity.chatBadgeSignedIn', 'Signed in')
+      ? t('accounts.antigravity.chatBadgeSignedIn', 'Signed in')
       : signIn.auth === 'signedOut'
-        ? translate('accounts.antigravity.chatBadgeSignedOut', 'Not signed in')
+        ? t('accounts.antigravity.chatBadgeSignedOut', 'Not signed in')
         : null
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
@@ -116,7 +119,7 @@ export function AntigravityChatSignInAction({
         }
         onClick={auth.start}
       >
-        {actionLabel(signIn, auth)}
+        {actionLabel(signIn, auth, t)}
       </Button>
     </div>
   )
@@ -130,6 +133,7 @@ function SignInFlowPanel({
   signIn: AntigravityChatSignInControls
   alert: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const [pasteOpen, setPasteOpen] = useState(false)
   const { copy, url } = signIn
   return (
@@ -147,7 +151,7 @@ function SignInFlowPanel({
             </Button>
           )}
           <Button size="sm" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
-            {translate('accounts.antigravity.chatCancel', 'Cancel')}
+            {t('accounts.antigravity.chatCancel', 'Cancel')}
           </Button>
         </div>
       </div>
@@ -158,7 +162,7 @@ function SignInFlowPanel({
         ) : (
           <p className="text-xs text-muted-foreground">
             <ManagedRuntimeLinkButton onClick={() => setPasteOpen(true)}>
-              {translate('accounts.antigravity.chatPasteOpen', "Browser page didn't load?")}
+              {t('accounts.antigravity.chatPasteOpen', "Browser page didn't load?")}
             </ManagedRuntimeLinkButton>
           </p>
         ))}
@@ -171,6 +175,7 @@ function PastedAddressForm(props: {
   pending: boolean
   send: (callbackUrl: string, refused: (message: string) => void) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [pasted, setPasted] = useState('')
   const [refusal, setRefusal] = useState<string | null>(null)
   const helpId = useId()
@@ -188,7 +193,7 @@ function PastedAddressForm(props: {
       }}
     >
       <p id={helpId} className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'accounts.antigravity.chatPasteHelp',
           "If the last page after signing in doesn't load, copy its full address from your browser and paste it here."
         )}
@@ -209,7 +214,7 @@ function PastedAddressForm(props: {
           }}
         />
         <Button type="submit" size="sm" variant="outline" disabled={props.pending || !callbackUrl}>
-          {translate('accounts.antigravity.chatContinue', 'Continue')}
+          {t('accounts.antigravity.chatContinue', 'Continue')}
         </Button>
       </div>
       {refusal !== null && (

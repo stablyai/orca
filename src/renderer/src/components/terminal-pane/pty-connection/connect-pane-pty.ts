@@ -19,7 +19,7 @@ import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-sch
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 
 import { shouldWritePtyOutputForeground } from './output/foreground-output-visibility'
 import { exposeE2eTerminalPtyOutputDebug } from './instrumentation/e2e-terminal-pty-harness'
@@ -152,7 +152,7 @@ export function connectPanePty(
     title: string | undefined,
     agentType: AgentType | undefined
   ): void => {
-    const titleAgentType = resolveCommittedTitleAgentType(title ?? '')
+    const titleAgentType = resolveExplicitTerminalTitleAgentType(title ?? '')
     session.suppressNativeWindowsIdleCodexFocusReports =
       agentType && agentType !== 'unknown' ? agentType === 'codex' : titleAgentType === 'codex'
   }

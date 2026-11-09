@@ -1,4 +1,10 @@
-import { ipcMain, BrowserWindow, systemPreferences, type MessagePortMain } from 'electron'
+import {
+  ipcMain,
+  BrowserWindow,
+  systemPreferences,
+  type IpcMainInvokeEvent,
+  type MessagePortMain
+} from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { join } from 'node:path'
 import { writeFile, unlink } from 'node:fs/promises'
@@ -11,7 +17,15 @@ import {
   getOpenAiSpeechApiKeyProtection,
   hasOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
-import { saveVerifiedOpenAiSpeechApiKey } from '../speech/openai-api-key-verification'
+import {
+  saveVerifiedOpenAiCompatibleSpeechProvider,
+  saveVerifiedOpenAiSpeechApiKey
+} from '../speech/openai-api-key-verification'
+import {
+  clearOpenAiCompatibleSpeechProvider,
+  summarizeOpenAiCompatibleSpeechProvider
+} from '../speech/openai-compatible-speech-provider-store'
+import type { OpenAiCompatibleSpeechProvider } from '../../shared/speech-types'
 import type { Store } from '../persistence/loading-store/store'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -35,6 +49,25 @@ export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
     clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
+  })
+
+  ipcMain.handle('speech:getOpenAiCompatibleProvider', () => {
+    try {
+      return summarizeOpenAiCompatibleSpeechProvider()
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle(
+    'speech:saveOpenAiCompatibleProvider',
+    async (_event, input: OpenAiCompatibleSpeechProvider) => {
+      await saveVerifiedOpenAiCompatibleSpeechProvider(input)
+    }
+  )
+
+  ipcMain.handle('speech:clearOpenAiCompatibleProvider', () => {
+    clearOpenAiCompatibleSpeechProvider()
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
@@ -221,7 +254,7 @@ export function registerSpeechHandlers(store: Store): void {
           },
           resolvedHotwordsPath,
           owner,
-          store.getSettings().voice?.dictationLanguage
+          store.getSettings().voice
         )
         // Coalesced starts install no sink; only an accepted start supersedes the close hook.
         if (sessionReady) {
@@ -260,12 +293,16 @@ export function registerSpeechHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('speech:stopDictation', async (_event, sessionId = 'desktop') => {
-    const owner = getDesktopOwner(_event.sender.id, sessionId)
-    const listener = dictationListeners.get(_event.sender.id)
-    await getSpeechSttService(store).stopDictation(owner)
-    if (listener?.owner === owner) {
-      listener.cleanup()
+  const handleStop =
+    (discard: boolean) =>
+    async (event: IpcMainInvokeEvent, sessionId = 'desktop'): Promise<void> => {
+      const owner = getDesktopOwner(event.sender.id, sessionId)
+      const listener = dictationListeners.get(event.sender.id)
+      await getSpeechSttService(store).stopDictation(owner, { discard })
+      if (listener?.owner === owner) {
+        listener.cleanup()
+      }
     }
-  })
+  ipcMain.handle('speech:stopDictation', handleStop(false))
+  ipcMain.handle('speech:cancelDictation', handleStop(true))
 }

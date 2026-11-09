@@ -29,8 +29,8 @@ function unwrapIpcErrorMessage(message: string, t: Translate = translate): strin
   }
 }
 
-export function compactIpcErrorMessage(message: string): string | undefined {
-  return unwrapIpcErrorMessage(message)?.split('\n')[0]?.trim() || undefined
+export function compactIpcErrorMessage(message: string, t?: Translate): string | undefined {
+  return unwrapIpcErrorMessage(message, t)?.split('\n')[0]?.trim() || undefined
 }
 export function readIpcErrorDetail(error: unknown): string | undefined {
   return error instanceof Error ? unwrapIpcErrorMessage(error.message) : undefined

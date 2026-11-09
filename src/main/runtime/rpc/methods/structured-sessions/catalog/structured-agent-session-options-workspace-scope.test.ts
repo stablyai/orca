@@ -1,4 +1,3 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 // At-rest repo config can determine model: clients accepting omission get repo defaults; others keep account model and the remaining catalog, never refusal.
 
 import { mkdir, writeFile } from 'node:fs/promises'

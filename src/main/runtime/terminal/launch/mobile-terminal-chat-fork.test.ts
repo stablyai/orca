@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import type { RuntimeNotifier } from '../../runtime-notifier-contract'
+import type { RuntimeNotifier } from '../../client/events/runtime-notifier-contract'
 import './mobile-terminal-chat-fork'
 import { prepareStructuredChatCliFork } from '../../../ai-vault/structured-chat-cli-fork'
 import '../../orchestration/orchestration-error'

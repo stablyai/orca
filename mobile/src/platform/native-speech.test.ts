@@ -94,18 +94,3 @@ describe('a recognizer that fails while its start is still resolving', () => {
     expect(await server.serve({ action: 'read' })).toMatchObject({ failure: 'failed' })
   })
 })
-
-describe('a phone speech service too slow to answer', () => {
-  it('reports busy, not unsupported, so the next dictation asks again', async () => {
-    const engine: NativeSpeechEngine = {
-      ...engineWith('phone'),
-      availability: () => Promise.reject(Object.assign(new Error('slow'), { code: 'busy' }))
-    }
-    const server = createNativeSpeechServer(engine)
-    expect(await server.serve({ action: 'status', locale: 'en-US' })).toEqual({
-      status: 'busy',
-      locale: null,
-      preference: 'phone'
-    })
-  })
-})

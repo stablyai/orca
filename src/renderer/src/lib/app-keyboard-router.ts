@@ -57,13 +57,22 @@ export function replayAppKeyDown(event: KeyboardEvent): void {
   dispatch('keydown', event)
 }
 
-export function addAppKeyListener(type: AppKeyEventType, listener: AppKeyListener): void {
+/** `first` runs the owner ahead of every other one, for a key that must win wherever focus is. */
+export function addAppKeyListener(
+  type: AppKeyEventType,
+  listener: AppKeyListener,
+  options: { first?: boolean } = {}
+): void {
   installAppKeyboardRouter(installedOn ?? window)
   const list = registrations[type]
   if (list.some((registration) => registration.active && registration.listener === listener)) {
     return
   }
-  list.push({ listener, active: true })
+  if (options.first) {
+    list.unshift({ listener, active: true })
+  } else {
+    list.push({ listener, active: true })
+  }
 }
 
 export function removeAppKeyListener(type: AppKeyEventType, listener: AppKeyListener): void {

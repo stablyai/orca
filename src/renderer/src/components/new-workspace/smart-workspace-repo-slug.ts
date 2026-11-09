@@ -8,7 +8,7 @@ import { githubRepoIdentityKey } from '../../../../shared/github/repository-iden
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type { RepoOption, RepoSlugTarget } from './smart-workspace-name-field-model'
 
 export function sameSlug(left: RepoSlug, right: RepoSlug): boolean {

@@ -1,6 +1,6 @@
 import { translate } from '../i18n/mobile-i18n'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 import { resolveCreateReviewSeedFromCommits } from '../../../src/shared/source-control/hosted-review/hosted-review-create-seed'
 import {
   normalizeCreateReviewBaseSearchResults,

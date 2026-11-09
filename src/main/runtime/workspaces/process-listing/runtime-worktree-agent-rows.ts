@@ -7,12 +7,19 @@ import type {
   RuntimeWorktreeAgentRow,
   RuntimeWorktreePsSummary
 } from '../../../../shared/runtime-worktree-contracts'
+import type {
+  AgentListPublication,
+  AgentListVerdict
+} from '../../../../shared/agent-status/presentation/agent-list-status'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
 import {
   resolveRuntimeWorktreeSidebarStatus,
   terminalTitleEvidenceMatchesSource
 } from './runtime-worktree-sidebar-status'
-import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
+import {
+  connectionEvidenceHostId,
+  type RuntimeWorktreePsSummaryLookup
+} from './runtime-worktree-summary-paths'
 import type { RuntimeTerminalTitleEvidence } from './runtime-worktree-ps-activity'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
@@ -22,23 +29,41 @@ type OrchestrationDisplay = {
   parentPaneKey?: string | null
 }
 
+const UNLISTED: AgentListVerdict = { listed: false }
+
+/** A pane the window gave no verdict is not in its list, unless it changed after the window last looked. */
+function agentListVerdict(
+  agentList: AgentListPublication,
+  source: RuntimeWorktreeAgentSource
+): AgentListVerdict | undefined {
+  return (
+    agentList.verdicts[source.paneKey] ??
+    (source.updatedAt > agentList.publishedAt ? undefined : UNLISTED)
+  )
+}
+
 export function attachRuntimeWorktreeAgentRows(args: {
   summaries: Map<string, RuntimeWorktreePsSummary>
   rowSources: ReadonlyMap<string, RuntimeWorktreeAgentSource>
-  terminalTitleEvidenceByWorktreeId: ReadonlyMap<string, readonly RuntimeTerminalTitleEvidence[]>
+  terminalTitleEvidenceByRow: ReadonlyMap<
+    RuntimeWorktreePsSummary,
+    readonly RuntimeTerminalTitleEvidence[]
+  >
   orchestrationByPaneKey: Record<string, OrchestrationDisplay> | null | undefined
   getSummary: RuntimeWorktreePsSummaryLookup
   conversationName?: (source: RuntimeWorktreeAgentSource) => string | null
+  /** The desktop window's Agents-list verdicts; null when no window has published them. */
+  agentList?: AgentListPublication | null
 }): void {
   const { rowSources } = args
   const now = Date.now()
-  const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
+  const rowsBySummary = new Map<RuntimeWorktreePsSummary, RuntimeWorktreeAgentRow[]>()
   for (const source of rowSources.values()) {
     const { worktreeId } = source
     if (!worktreeId) {
       continue
     }
-    const summary = args.getSummary(worktreeId)
+    const summary = args.getSummary(worktreeId, connectionEvidenceHostId(source.connectionId))
     if (!summary) {
       continue
     }
@@ -74,19 +99,19 @@ export function attachRuntimeWorktreeAgentRows(args: {
     if (source.children !== undefined || source.subagents !== undefined) {
       row.subagentObservation = isAgentStatusFresh(row, now) ? 'live' : 'unverifiable'
     }
-    const rows = rowsByWorktree.get(summary.worktreeId)
+    const activity = args.agentList && agentListVerdict(args.agentList, source)
+    if (activity) {
+      row.activity = activity
+    }
+    const rows = rowsBySummary.get(summary)
     if (rows) {
       rows.push(row)
     } else {
-      rowsByWorktree.set(summary.worktreeId, [row])
+      rowsBySummary.set(summary, [row])
     }
   }
-  for (const [worktreeId, rows] of rowsByWorktree) {
+  for (const [summary, rows] of rowsBySummary) {
     rows.sort((a, b) => a.stateStartedAt - b.stateStartedAt)
-    const summary = args.summaries.get(worktreeId)
-    if (!summary) {
-      continue
-    }
     summary.agents = rows
     let hasForegroundWorkingAgent = false
     const monitoringSources: RuntimeWorktreeAgentSource[] = []
@@ -110,7 +135,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
     }
     if (hasForegroundWorkingAgent || monitoringSources.length > 0) {
       const hasIndependentWorkingTerminal = (
-        args.terminalTitleEvidenceByWorktreeId.get(worktreeId) ?? []
+        args.terminalTitleEvidenceByRow.get(summary) ?? []
       ).some(
         (evidence) =>
           evidence.status === 'working' &&
@@ -127,7 +152,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
     summary.sidebarStatus = resolveRuntimeWorktreeSidebarStatus(
       summary,
       now,
-      args.terminalTitleEvidenceByWorktreeId.get(summary.worktreeId) ?? [],
+      args.terminalTitleEvidenceByRow.get(summary) ?? [],
       (paneKey) => rowSources.get(paneKey)
     )
   }

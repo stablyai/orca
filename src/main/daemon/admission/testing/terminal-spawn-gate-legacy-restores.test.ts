@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostPressureLevel, SpawnIntent } from '../../../../shared/host-spawn-admission'
+import type {
+  HostPressureLevel,
+  SpawnIntent
+} from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { HostTerminalLedger } from '../host-terminal-ledger'
 import { LegacyRestoreRecords } from '../legacy-restore-records'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'

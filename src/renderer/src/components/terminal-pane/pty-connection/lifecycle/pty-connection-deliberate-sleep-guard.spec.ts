@@ -32,7 +32,6 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
 
   describe('deliberate sleep keeps mounted panes cold', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -59,8 +58,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
     // Manual sleep retains tab.ptyId as a wake hint; unguarded remount would reattach and respawn its dead shell (#10205).
     it('does not reattach a slept pane through its retained session id', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -89,8 +89,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
 
     it('does not fresh-spawn a slept pane that has no session id', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -110,8 +111,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
 
     it('connects a waiting pane once the workspace is woken', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
@@ -145,8 +147,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
 
     it('does not connect a waiting pane whose tab was remounted by the wake', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
@@ -183,8 +186,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
 
     it('resumes a waiting pane mounted under a unified tab id', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
@@ -215,8 +219,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
 
     it('re-arms after a wake so a second sleep can hold the pane again', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
         await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
@@ -266,8 +271,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
         )
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks7 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         sleepIntent.markWorktreeSleepIntent('wt-1')
@@ -296,8 +302,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
 
     it('still connects a slept pane that carries a queued startup', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { markWorktreeSleepIntent } = await import('@/lib/worktree-sleep-intent')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
@@ -320,8 +327,9 @@ export function registerPtyConnectionDeliberateSleepGuardTests(): void {
 
     it('connects normally once the marker is released', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
       const deps = createDeps({

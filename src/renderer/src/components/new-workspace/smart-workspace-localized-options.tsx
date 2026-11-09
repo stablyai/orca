@@ -3,6 +3,7 @@ import { CaseSensitive, GitBranch, Github, Gitlab, Sparkles } from 'lucide-react
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 
 export type MrStateFilter = 'opened' | 'merged' | 'closed' | 'all'
@@ -21,74 +22,66 @@ function LinearModeIcon({ className }: { className?: string }): React.JSX.Elemen
   )
 }
 
-export function getMrStateFilters(): { id: MrStateFilter; label: string }[] {
+export function getMrStateFilters(
+  t: Translate = translate
+): { id: MrStateFilter; label: string }[] {
   return [
     {
       id: 'opened',
-      label: translate('auto.components.new.workspace.SmartWorkspaceNameField.622864b52a', 'Open')
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.622864b52a', 'Open')
     },
     {
       id: 'merged',
-      label: translate('auto.components.new.workspace.SmartWorkspaceNameField.2319d87718', 'Merged')
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.2319d87718', 'Merged')
     },
     {
       id: 'closed',
-      label: translate('auto.components.new.workspace.SmartWorkspaceNameField.6fad211c66', 'Closed')
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.6fad211c66', 'Closed')
     },
     {
       id: 'all',
-      label: translate('auto.components.new.workspace.SmartWorkspaceNameField.26824f60dd', 'All')
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.26824f60dd', 'All')
     }
   ]
 }
 
-export function getSmartWorkspaceNameModes(): SmartWorkspaceNameModeOption[] {
+export function getSmartWorkspaceNameModes(
+  t: Translate = translate
+): SmartWorkspaceNameModeOption[] {
   return [
     {
       id: 'smart',
-      label: translate('auto.components.new.workspace.SmartWorkspaceNameField.b3c60c2b7c', 'Smart'),
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.b3c60c2b7c', 'Smart'),
       Icon: Sparkles
     },
     {
       id: 'github',
-      label: translate(
-        'auto.components.new.workspace.SmartWorkspaceNameField.0a180280bd',
-        'GitHub'
-      ),
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.0a180280bd', 'GitHub'),
       Icon: Github
     },
     {
       id: 'linear',
-      label: translate(
-        'auto.components.new.workspace.SmartWorkspaceNameField.7a47af0565',
-        'Linear'
-      ),
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.7a47af0565', 'Linear'),
       Icon: LinearModeIcon
     },
     {
       id: 'jira',
-      label: translate('auto.components.new.workspace.SmartWorkspaceNameField.jiraMode', 'Jira'),
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.jiraMode', 'Jira'),
       Icon: JiraIcon
     },
     {
       id: 'gitlab',
-      label: translate(
-        'auto.components.new.workspace.SmartWorkspaceNameField.2cfc6be192',
-        'GitLab'
-      ),
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.2cfc6be192', 'GitLab'),
       Icon: Gitlab
     },
     {
       id: 'branches',
-      label: translate(
-        'auto.components.new.workspace.SmartWorkspaceNameField.2e4c7c95fe',
-        'Branch'
-      ),
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.2e4c7c95fe', 'Branch'),
       Icon: GitBranch
     },
     {
       id: 'text',
-      label: translate('auto.components.new.workspace.SmartWorkspaceNameField.6f07a18604', 'Name'),
+      label: t('auto.components.new.workspace.SmartWorkspaceNameField.6f07a18604', 'Name'),
       Icon: CaseSensitive
     }
   ]

@@ -21,6 +21,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
@@ -36,7 +37,6 @@ export function registerPtyConnectionForegroundBulkAndInteractiveOutputTests(): 
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -60,8 +60,9 @@ export function registerPtyConnectionForegroundBulkAndInteractiveOutputTests(): 
 
     it('queues visible bulk output off the synchronous xterm write path', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -93,8 +94,9 @@ export function registerPtyConnectionForegroundBulkAndInteractiveOutputTests(): 
 
     it('keeps ANSI redraws after terminal input on the immediate xterm write path', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -129,8 +131,9 @@ export function registerPtyConnectionForegroundBulkAndInteractiveOutputTests(): 
 
     it('keeps large ANSI redraws after terminal input on the immediate xterm write path', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -178,7 +181,6 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -202,8 +204,9 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
 
     it('keeps large ANSI redraws after captured shortcut input on the immediate path', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -234,8 +237,9 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
 
     it('does not let OpenTUI-style small ANSI redraw bursts monopolize foreground writes', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const pane = createPane(1)
       const transport = createMockTransport('pty-1')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -285,10 +289,12 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks8 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -337,10 +343,12 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks9 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -387,10 +395,12 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks10 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -437,10 +447,12 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks11 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -496,10 +508,12 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks12 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(

@@ -9,7 +9,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WORKSPACE_CLEANUP_SORT_FIELD_VALUES } from '../../../../shared/workspace-cleanup/workspace-cleanup-facet-rankings'
 import type {
   WorkspaceCleanupSortField,
@@ -38,9 +38,10 @@ export function WorkspaceCleanupSortHeader({
   onToggleSelectAll: (selectAll: boolean) => void
   onDeleteSelected: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const allSelected = selectableCount > 0 && selectedSelectableCount >= selectableCount
   const someSelected = selectableCount > 0 && selectedSelectableCount > 0 && !allSelected
-  const selectAllLabel = translate(
+  const selectAllLabel = t(
     'components.workspace.cleanup.browse.selectAllSafetyChecked',
     'Select all {{count}} safety-checked workspaces',
     { count: selectableCount, defaultValue_one: 'Select {{count}} safety-checked workspace' }
@@ -57,7 +58,7 @@ export function WorkspaceCleanupSortHeader({
       {selectedCount > 0 ? (
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className="truncate text-xs font-medium text-foreground">
-            {translate('components.workspace.cleanup.browse.selectedCount', '{{value0}} selected', {
+            {t('components.workspace.cleanup.browse.selectedCount', '{{value0}} selected', {
               value0: selectedCount
             })}
           </span>
@@ -69,7 +70,7 @@ export function WorkspaceCleanupSortHeader({
             disabled={deleteDisabled}
           >
             <Trash2 className="size-3 text-destructive" />
-            {translate(
+            {t(
               'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b771c92598',
               'Delete selected'
             )}
@@ -86,26 +87,24 @@ export function WorkspaceCleanupSortHeader({
             variant="ghost"
             size="xs"
             className="shrink-0 text-[11px] text-muted-foreground"
-            aria-label={translate(
-              'components.workspace.cleanup.browse.sortByField',
-              'Sort by {{value0}}',
-              { value0: getWorkspaceCleanupSortFieldLabel(sort.field) }
-            )}
+            aria-label={t('components.workspace.cleanup.browse.sortByField', 'Sort by {{value0}}', {
+              value0: getWorkspaceCleanupSortFieldLabel(sort.field, t)
+            })}
           >
             <ChevronsUpDown className="size-3" />
-            {translate('components.workspace.cleanup.browse.sortByField', 'Sort by {{value0}}', {
-              value0: getWorkspaceCleanupSortFieldLabel(sort.field)
+            {t('components.workspace.cleanup.browse.sortByField', 'Sort by {{value0}}', {
+              value0: getWorkspaceCleanupSortFieldLabel(sort.field, t)
             })}
             <SortDirectionIcon direction={sort.direction} />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel>
-            {translate('components.workspace.cleanup.browse.sortBy', 'Sort by')}
+            {t('components.workspace.cleanup.browse.sortBy', 'Sort by')}
           </DropdownMenuLabel>
           {WORKSPACE_CLEANUP_SORT_FIELD_VALUES.map((field) => (
             <DropdownMenuItem key={field} onSelect={() => onToggleSortField(field)}>
-              <span className="flex-1">{getWorkspaceCleanupSortFieldLabel(field)}</span>
+              <span className="flex-1">{getWorkspaceCleanupSortFieldLabel(field, t)}</span>
               {sort.field === field ? <SortDirectionIcon direction={sort.direction} /> : null}
             </DropdownMenuItem>
           ))}

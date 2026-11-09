@@ -5,7 +5,7 @@ import {
   FileSaveChunk,
   FileSaveCommit
 } from '../../../../../shared/rpc-contract/files-staged-save-params'
-import { STAGED_FILE_SAVE_METHODS } from '../../../../../shared/staged-file-save'
+import { STAGED_FILE_SAVE_METHODS } from '../../../../../shared/file-write/staged-file-save'
 
 // Saves belong to the socket that began them; in-process callers share one owner.
 const owner = (connectionId: string | undefined) => connectionId ?? 'in-process'
