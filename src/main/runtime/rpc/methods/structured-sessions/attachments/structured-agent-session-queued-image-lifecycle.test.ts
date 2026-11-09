@@ -145,6 +145,8 @@ it('publishes a complete image row to old readers before it has a submission', a
   setStructuredAgentSessionHost(rig.host)
   await rig.workingSend()
   const frames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
+  await eventually(() => expect(streamState(frames).cursor).toEqual(journal().cursor()))
+  const cursor = journal().cursor()
   const body = await imageBody('waiting image')
   const id = hostTestOperationId()
   const fields = { body, delivery: 'queue-if-active' as const }
@@ -155,6 +157,12 @@ it('publishes a complete image row to old readers before it has a submission', a
   expect(await journal().reads.submission(id)).toBeUndefined()
   expect((await history()).page.items).toContainEqual(
     expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
+  )
+  expect((await history({ direction: 'after', cursor })).page.items).toContainEqual(
+    expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
+  )
+  expect((await history({ direction: 'after', cursor }, false)).page.items).not.toContainEqual(
+    expect.objectContaining({ itemId: agentJournalSubmissionKey(id) })
   )
   await eventually(() =>
     expect(streamState(frames).items).toContainEqual(
@@ -472,6 +480,11 @@ it.each([false, true])(
     })
     expect(JSON.stringify(transient.data)).toContain('file:///device/composer-preview.png')
     const frames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
+    await eventually(() =>
+      expect(streamState(frames).items).toContainEqual(
+        expect.objectContaining({ itemId: agentJournalSubmissionKey(presentedId), body })
+      )
+    )
     const fields = {
       messageId: card.messageId,
       expectedBodyFingerprint: (await journal().queuedMessages.get(card.messageId))!.fingerprint,
@@ -500,32 +513,34 @@ it.each([false, true])(
     ).toMatchObject([
       { messageId: card.messageId, command: true, text: expect.stringContaining('edited original') }
     ])
-    expect(frames).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          result: expect.objectContaining({
-            type: 'batch',
-            batch: expect.objectContaining({
-              submissions: expect.arrayContaining([
+    await eventually(() =>
+      expect(frames).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            result: expect.objectContaining({
+              type: 'batch',
+              batch: expect.objectContaining({
+                submissions: expect.arrayContaining([
+                  expect.objectContaining({
+                    clientMessageId: presentedId,
+                    keptAsQueuedMessageId: card.messageId
+                  })
+                ])
+              })
+            })
+          }),
+          expect.objectContaining({
+            result: expect.objectContaining({
+              queuedMessages: expect.arrayContaining([
                 expect.objectContaining({
-                  clientMessageId: presentedId,
-                  keptAsQueuedMessageId: card.messageId
+                  messageId: card.messageId,
+                  body: expect.objectContaining({ command: { name: 'compact' } })
                 })
               ])
             })
           })
-        }),
-        expect.objectContaining({
-          result: expect.objectContaining({
-            queuedMessages: expect.arrayContaining([
-              expect.objectContaining({
-                messageId: card.messageId,
-                body: expect.objectContaining({ command: { name: 'compact' } })
-              })
-            ])
-          })
-        })
-      ])
+        ])
+      )
     )
     const live = frames.reduce((state, frame) => {
       if (!frame.ok) {
