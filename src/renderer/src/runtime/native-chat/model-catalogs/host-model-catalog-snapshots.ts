@@ -44,9 +44,10 @@ export function subscribeHostModelCatalogSnapshot(
 export function hostModelCatalogGeneration(
   target: RuntimeClientTarget,
   agent: string,
-  sourceKey = 'structured'
+  _sourceKey = 'structured'
 ): number {
-  const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
+  // Invalidation is per host/agent, independent of retired invocation identities.
+  const key = `${structuredAgentSessionHostKey(target)}\u0000${agent}`
   if (!catalogGenerations.has(key)) {
     catalogGenerations.set(key, 0)
   }
@@ -81,7 +82,12 @@ export function recordHostModelCatalogSnapshot(
   const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
   const previous = snapshots.get(key)
   const next = withHostModelCatalogAnswer(previous, worktree, catalog)
-  if (worktree !== null && next !== snapshots.get(key) && next?.byWorktree.has(worktree)) {
+  if (
+    sourceKey === 'structured' &&
+    worktree !== null &&
+    next !== previous &&
+    next?.byWorktree.has(worktree)
+  ) {
     chatAnswers.set(key, (chatAnswers.get(key) ?? 0) + 1)
   }
   const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b)
@@ -113,6 +119,12 @@ export function forgetHostModelCatalogSnapshots(
     const [keyHost, keyAgent] = key.split('\u0000')
     if (keyHost === hostKey && (!agents || agents.includes(keyAgent ?? ''))) {
       catalogGenerations.set(key, generation + 1)
+    }
+  }
+  for (const key of chatAnswers.keys()) {
+    const [keyHost, keyAgent] = key.split('\u0000')
+    if (keyHost === hostKey && (!agents || agents.includes(keyAgent ?? ''))) {
+      chatAnswers.delete(key)
     }
   }
   for (const key of snapshots.keys()) {
@@ -172,4 +184,12 @@ export function resetHostModelCatalogSnapshotsForTests(): void {
   generations.clear()
   catalogGenerations.clear()
   chatAnswers.clear()
+}
+
+export function hostModelCatalogSnapshotDiagnostics() {
+  return {
+    epochs: catalogGenerations.size,
+    chatAnswers: chatAnswers.size,
+    snapshots: snapshots.size
+  }
 }

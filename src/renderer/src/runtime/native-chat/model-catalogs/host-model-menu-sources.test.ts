@@ -9,6 +9,7 @@ vi.mock('../host-capabilities/structured-agent-session-host-capability', () => (
 import { hostModelMenuCatalog } from './host-model-menu-catalog'
 import {
   forgetHostModelCatalogSnapshots,
+  hostModelCatalogSnapshotDiagnostics,
   hostModelCatalogSnapshotAgents,
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
@@ -164,5 +165,52 @@ it.each(['structured-first', 'cli-first'])(
     expect(await owner.read()).toMatchObject({ models: [{ id: 'replacement' }] })
     detach()
     stopChat()
+  }
+)
+
+it.each([3, 30])(
+  'retires metadata from %i historical CLI identities without losing stale-reply fences',
+  async (count) => {
+    for (let i = 0; i < count; i++) {
+      const owner = hostModelMenuCatalog({
+        target,
+        agent: 'antigravity',
+        worktree: 'id:x',
+        sourceKey: `cli-${i}`,
+        request: async () => positive('variant')
+      })
+      const stop = owner.subscribe(() => {})
+      await owner.read()
+      stop()
+      forgetHostModelCatalogSnapshots(target, ['antigravity'])
+    }
+    // One host/agent epoch fences all invocation history; CLI never participates in structured preload.
+    expect(hostModelCatalogSnapshotDiagnostics()).toEqual({
+      epochs: 1,
+      chatAnswers: 0,
+      snapshots: 0
+    })
+    const late = Promise.withResolvers<AgentSessionModelCatalogResult>()
+    const scope = {
+      target,
+      agent: 'antigravity',
+      sourceKey: 'cli-reused',
+      request: () => late.promise
+    }
+    const old = hostModelMenuCatalog(scope)
+    const stop = old.subscribe(() => {})
+    const reading = old.read()
+    await Promise.resolve()
+    forgetHostModelCatalogSnapshots(target, ['antigravity'])
+    stop()
+    late.resolve(positive('retired'))
+    await reading
+    const fresh = hostModelMenuCatalog(scope)
+    expect(fresh.snapshot.answer).toBeUndefined()
+    expect(hostModelCatalogSnapshotDiagnostics()).toEqual({
+      epochs: 1,
+      chatAnswers: 0,
+      snapshots: 0
+    })
   }
 )
