@@ -13,6 +13,8 @@ import {
 } from '../../../../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/agent-session-availability'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { resolveHostAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
 import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
@@ -161,9 +163,30 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
+  const shell = useAppStore((s) => {
+    const status =
+      input.target.kind === 'environment'
+        ? lastVerifiedRuntimeStatus(s.runtimeStatusByEnvironmentId.get(input.target.environmentId))
+        : null
+    const platform = input.target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
+    if (!platform) {
+      return null
+    }
+    return (
+      resolveHostAgentStartupShell({
+        platform,
+        isRemote: input.target.kind !== 'local',
+        hostTerminalWindowsShell:
+          input.target.kind === 'local'
+            ? s.settings?.terminalWindowsShell
+            : status?.terminalWindowsShell
+      }) ?? (platform === 'win32' ? null : 'posix')
+    )
+  })
   const command = agentSessionSignInCommand(input.agent, {
     account: input.account,
-    remote: input.target.kind !== 'local'
+    remote: input.target.kind !== 'local',
+    shell
   })
   const viaTerminal = useMemo(
     () =>
