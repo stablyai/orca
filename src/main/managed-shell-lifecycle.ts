@@ -27,6 +27,9 @@ export class ManagedShellLifecycle {
   }
 
   accept(data: string): string {
+    if (!this.binding) {
+      return data
+    }
     let input = this.tail + data
     this.tail = ''
     let output = ''
@@ -45,6 +48,16 @@ export class ManagedShellLifecycle {
       const bel = input.indexOf('\x07')
       const st = input.indexOf('\x1b\\')
       const end = bel === -1 ? st : st === -1 ? bel : Math.min(bel, st)
+      const scanFrom = this.dropping ? 0 : PREFIX.length
+      // oxlint-disable-next-line no-control-regex -- ESC, CAN and SUB abort terminal OSC frames.
+      const abortOffset = input.slice(scanFrom).search(/\x1b(?=[^\\])|[\x18\x1a]/)
+      const abortIndex = abortOffset < 0 ? -1 : scanFrom + abortOffset
+      if (abortIndex >= 0 && (end < 0 || abortIndex < end)) {
+        this.invalidate('invalid-event')
+        this.dropping = false
+        input = input.slice(abortIndex)
+        continue
+      }
       if (end < 0) {
         this.invalidate('pending-event')
         if (input.length > MAX_EVENT_LENGTH || this.dropping) {

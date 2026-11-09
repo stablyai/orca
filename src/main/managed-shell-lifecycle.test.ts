@@ -118,3 +118,51 @@ describe.skipIf(process.platform === 'win32')('managed shell lifecycle', () => {
     })
   })
 })
+
+describe('managed shell lifecycle output filtering', () => {
+  it('keeps every output chunk unchanged without a lifecycle binding', async () => {
+    const lifecycle = new ManagedShellLifecycle(undefined)
+    const chunks = ['before\x1b]777;orca-shell-lifecycle;', `${'x'.repeat(600)}\x1b[31mvisible`]
+    for (const chunk of chunks) {
+      expect(lifecycle.accept(chunk)).toBe(chunk)
+    }
+    expect(await lifecycle.observe('no-children')).toMatchObject({
+      phase: 'unknown',
+      confidence: 'none'
+    })
+  })
+
+  it.each(['\x1b[31m', '\x18', '\x1a'])(
+    'stops suppressing oversized event output at an abort sequence %j',
+    async (abort) => {
+      const lifecycle = new ManagedShellLifecycle('test-launch', statePath)
+      expect(lifecycle.accept(`before\x1b]777;orca-shell-lifecycle;${'x'.repeat(600)}`)).toBe(
+        'before'
+      )
+      expect(lifecycle.accept(`${abort}visible`)).toBe(`${abort}visible`)
+      expect(await lifecycle.observe('no-children')).toMatchObject({
+        phase: 'unknown',
+        confidence: 'none'
+      })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'recognizes a fresh event after an interrupted partial frame',
+    async () => {
+      const lifecycle = new ManagedShellLifecycle('test-launch', statePath)
+      expect(lifecycle.accept('\x1b]777;orca-shell-lifecycle;test-launch;')).toBe('')
+      expect(lifecycle.accept(event(1, 'prompt'))).toBe('')
+      expect(await lifecycle.observe('no-children')).toMatchObject({ phase: 'prompt' })
+    }
+  )
+
+  it.each([
+    ['\\visible', 'visible'],
+    ['[31mvisible', '\x1b[31mvisible']
+  ])('handles a trailing ESC across chunks followed by %j', (next, expected) => {
+    const lifecycle = new ManagedShellLifecycle('test-launch', statePath)
+    expect(lifecycle.accept(`\x1b]777;orca-shell-lifecycle;${'x'.repeat(600)}\x1b`)).toBe('')
+    expect(lifecycle.accept(next)).toBe(expected)
+  })
+})
