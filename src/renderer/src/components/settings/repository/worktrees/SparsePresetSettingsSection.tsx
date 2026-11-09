@@ -6,7 +6,7 @@ import { parseSparsePresetDirectories, validateSparsePresetName } from '@/lib/sp
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'
 import { getSparsePresetOperationErrorMessage } from './sparse-preset-operation-error'
-import { SparsePresetDraftEditor } from './sparse-preset-draft-editor'
+import { SparsePresetInlineEditor } from '../../../sparse/SparsePresetInlineEditor'
 import type { SparsePresetDraft } from '../../../sparse/SparseCheckoutPresetDraftForm'
 import { SparsePresetSettingsRow } from './sparse-preset-settings-row'
 import { useTranslate } from '@/i18n/use-translate'
@@ -183,10 +183,10 @@ export function SparsePresetSettingsSection({
   }
 
   const draftEditor = draft ? (
-    <SparsePresetDraftEditor
+    <SparsePresetInlineEditor
       draft={draft}
       operationError={operationError}
-      setDraft={(nextDraft) => {
+      onDraftChange={(nextDraft) => {
         if (nextDraft) {
           setDraft(nextDraft)
         } else {
@@ -195,7 +195,8 @@ export function SparsePresetSettingsSection({
       }}
       nameError={nameError}
       parsedDirectories={parsedDirectories}
-      canSaveDraft={canSaveDraft}
+      canSave={canSaveDraft}
+      onCancel={closeDraft}
       submitting={submitting}
       onSave={() => void handleSaveDraft()}
       repoRootPath={repo?.path}

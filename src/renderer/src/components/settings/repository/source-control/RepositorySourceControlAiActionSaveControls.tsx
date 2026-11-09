@@ -1,4 +1,4 @@
-import { Button } from '../../ui/button'
+import { Button } from '../../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 
 type RepositorySourceControlAiActionSaveControlsProps = {

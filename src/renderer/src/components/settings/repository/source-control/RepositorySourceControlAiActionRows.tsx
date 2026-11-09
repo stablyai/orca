@@ -23,11 +23,12 @@ import { isCustomAgentId } from '../../../../../../shared/source-control/ai/gene
 import {
   type SourceControlActionId,
   SOURCE_CONTROL_ACTION_IDS,
-  SOURCE_CONTROL_ACTION_LABELS
+  SOURCE_CONTROL_ACTION_LABELS,
+  resolveSourceControlActionCommandTemplate
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { RepositorySourceControlAiActionSaveControls } from '../../source-control/RepositorySourceControlAiActionSaveControls'
+import { RepositorySourceControlAiActionSaveControls } from './RepositorySourceControlAiActionSaveControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
 import {
@@ -45,7 +46,6 @@ import {
   agentArgsStateLabel,
   commandTemplateStateLabel,
   readInheritedAgentArgs,
-  readInheritedCommandTemplate,
   resolveAgentArgsPlaceholderAgent
 } from './repository-source-control-ai-labels'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository-settings-targets'
@@ -129,7 +129,10 @@ const SelectedRepositoryActionRows = memo(
         {SOURCE_CONTROL_ACTION_IDS.map((actionId) => {
           const hasOverride = hasOwnActionOverride(repoAi.actionOverrides, actionId)
           const override = repoAi.actionOverrides?.[actionId]
-          const inheritedTemplate = readInheritedCommandTemplate(source, actionId)
+          const inheritedTemplate = resolveSourceControlActionCommandTemplate(
+            source.actions,
+            actionId
+          )
           const inheritedAgentArgs = readInheritedAgentArgs(source, actionId)
           const templateValue =
             hasOverride && typeof override?.commandInputTemplate === 'string'

@@ -1,3 +1,4 @@
+import { readCompleteRecipeForDraft } from './repository-source-control-ai-recipe-completion'
 import {
   readActionRecipeTextDraft,
   sameDraftLaunchPreferences,
@@ -6,7 +7,6 @@ import {
 } from './repository-source-control-ai-recipe-text'
 
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
-import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   SOURCE_CONTROL_ACTION_IDS,
   SOURCE_CONTROL_TEXT_ACTION_IDS,
@@ -15,7 +15,6 @@ import {
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { withRepoTextModelEdits } from '../../source-control/text-actions/source-control-text-action-model-replay'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { completeRepoActionRecipe } from './repository-source-control-ai-labels'
 import { SOURCE_CONTROL_TEXT_ACTION_ID_SET } from '../../source-control/source-control-action-recipe-options'
 
 type RepoActionRecipe = NonNullable<
@@ -59,22 +58,6 @@ export function dropRepoLegacyInstructionForAction(
     instructionsByOperation:
       Object.keys(instructionsByOperation).length > 0 ? instructionsByOperation : undefined
   }
-}
-
-/** The action an edit starts from: the complete recipe it resolves to, owned or partial, keeping a
- *  saved explicit args clear and never the agent only detected to run a default selection. */
-export function readCompleteRecipeForDraft(
-  current: RepoSourceControlAiOverrides,
-  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi' | 'defaultTuiAgent'> | null,
-  actionId: SourceControlActionId
-): RepoActionRecipe {
-  const recipe = resolveSourceControlActionRecipe({
-    settings,
-    repo: { sourceControlAi: current },
-    actionId
-  })
-  const cleared = current.actionOverrides?.[actionId]?.agentArgs === null
-  return { ...completeRepoActionRecipe(recipe, actionId), ...(cleared ? { agentArgs: null } : {}) }
 }
 
 export function setActionOverride(

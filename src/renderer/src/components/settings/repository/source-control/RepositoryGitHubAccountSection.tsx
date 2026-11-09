@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { GhAccountBindingInventory } from '../../../../../shared/github/auth-types'
-import { Button } from '../../ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
-import { SearchableSetting } from '../section-layout/SearchableSetting'
+import type { GhAccountBinding } from '../../../../../../shared/github/account-binding'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { GhAccountBindingInventory } from '../../../../../../shared/github/auth-types'
+import { Button } from '../../../ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
+import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { useAppStore } from '@/store/index'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../../../shared/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
-import { searchKeywords } from '../search/settings-search-keywords'
+import { searchKeywords } from '../../search/settings-search-keywords'
 import {
   isGhAccountBindingEnforced,
   listRepositoryGhBindableAccounts,
   validateRepositoryGhAccountBinding
-} from '../../../runtime/repository-github/repository-github-account'
+} from '../../../../runtime/repository-github/repository-github-account'
 
 type RepositoryGitHubAccountSectionProps = {
   repo: Repo
