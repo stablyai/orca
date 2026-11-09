@@ -13,6 +13,7 @@ export const MAX_JOURNAL_PROMPT_OPTIONS = 64
 export const MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS = 4
 
 const JOURNAL_PROMPT_OPTION_LIMITS = { inlineHeadBytes: 1024 }
+const JOURNAL_PROMPT_OPTION_PREVIEW_LIMITS = { inlineHeadBytes: 8 * 1024 }
 // Agent prompt content permits larger bounds than client replies but must still fit settlement batches.
 const JOURNAL_PROMPT_TEXT_LIMITS = { inlineHeadBytes: 128 * 1024 }
 const JOURNAL_PROMPT_ID_MAX_BYTES = 1024
@@ -133,7 +134,10 @@ function boundPromptOptions(
     label: boundInlineText(option.label, JOURNAL_PROMPT_OPTION_LIMITS).text,
     ...(option.description === undefined
       ? {}
-      : { description: boundInlineText(option.description, JOURNAL_PROMPT_OPTION_LIMITS).text })
+      : { description: boundInlineText(option.description, JOURNAL_PROMPT_OPTION_LIMITS).text }),
+    ...(option.preview === undefined
+      ? {}
+      : { preview: boundInlineText(option.preview, JOURNAL_PROMPT_OPTION_PREVIEW_LIMITS).text })
   }))
 }
 

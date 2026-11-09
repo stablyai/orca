@@ -15,6 +15,8 @@ export type SttRecognizerEvent =
   | { type: 'chunk'; streamId: string; text: string; samples: number }
   /** Pause-cut streams only: speech was heard that no chunk has committed yet. */
   | { type: 'speech-pending'; streamId: string; pending: boolean }
+  /** A load step finished, so a slow load is told apart from a hung GPU. */
+  | { type: 'loading' }
 
 export type SttRecognizerPost = (event: SttRecognizerEvent) => void
 
@@ -27,4 +29,6 @@ export type SttRecognizer = {
   finish(streamId: string): Promise<void>
   /** Drop the stream's audio undecoded. */
   discard(streamId: string): void
+  /** Called on a cancel's arrival, ahead of the queue: skip the stream's remaining chunks; the running decode finishes. */
+  cancel(streamId: string): void
 }
