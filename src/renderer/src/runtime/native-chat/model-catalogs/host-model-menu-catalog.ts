@@ -115,6 +115,7 @@ class HostModelMenuCatalog {
       this.snapshot.answer &&
       !this.snapshot.answer.listingInProgress
     ) {
+      this.publish({ ...this.snapshot, pending: false, attempted: true })
       this.retire()
       return Promise.resolve(this.snapshot.answer)
     }

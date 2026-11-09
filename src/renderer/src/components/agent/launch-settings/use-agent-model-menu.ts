@@ -48,9 +48,9 @@ export function useAgentModelMenu(
   const snapshot = useAppViewExternalStore(subscribe, getSnapshot, () => absent)
   useEffect(() => {
     if (scope && open && active) {
-      void hostModelMenuCatalog(scope).read()
+      void hostModelMenuCatalog(scope).read(source?.source === 'cli')
     }
-  }, [scope, open, active, snapshot.generation])
+  }, [scope, open, active, snapshot.generation, source?.source])
   const menu = modelMenuOptions(snapshot.answer, {
     agent,
     surface: 'terminal',
