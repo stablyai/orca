@@ -170,14 +170,19 @@ export function updateFileExplorerSelectionPaths(
   }
 }
 
+export type FileExplorerCopyKind = 'absolute' | 'relative' | 'name'
+
 export function formatFileExplorerPathsForClipboard(
   nodes: readonly TreeNode[],
-  pathKind: 'absolute' | 'relative',
+  pathKind: FileExplorerCopyKind,
   owner: LocalPathOpenOwner
 ): string {
   return nodes
-    .map((node) =>
-      pathKind === 'absolute' ? formatClipboardFilePath(node.path, owner) : node.relativePath
-    )
+    .map((node) => {
+      if (pathKind === 'name') {
+        return node.name
+      }
+      return pathKind === 'absolute' ? formatClipboardFilePath(node.path, owner) : node.relativePath
+    })
     .join('\n')
 }

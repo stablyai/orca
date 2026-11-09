@@ -13,6 +13,7 @@ import {
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type { TreeNode } from '../tree/file-explorer-types'
+import type { FileExplorerCopyKind } from '../selection/file-explorer-selection'
 import { useFileExplorerRowDrag } from '../mutations/useFileExplorerRowDrag'
 import { useTranslate } from '@/i18n/use-translate'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
@@ -51,7 +52,7 @@ export type FileExplorerRowProps = {
   onDoubleClick: () => void
   onViewFile: () => void
   onContextMenuSelect: () => void
-  onCopyPaths: (pathKind: 'absolute' | 'relative') => void
+  onCopyPaths: (pathKind: FileExplorerCopyKind) => void
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
