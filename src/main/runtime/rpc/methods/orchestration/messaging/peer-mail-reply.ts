@@ -6,6 +6,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import {
   deliverPeerMail,
   peerMailMessageId,
+  peerMailPairing,
   peerMailSenderLabel,
   requirePeerMailServer
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
@@ -89,7 +90,14 @@ export async function replyOverPeerMail(args: {
     )
   }
   const server = await requirePeerMailServer(runtime, environmentId)
-  await deliverPeerMail(runtime, server, conversation, {
+  // After a re-pair the server no longer knows the old conversation; continue it under the new pairing.
+  const current = db.openHomePeerMailConversation({
+    environmentId,
+    peerFingerprint: peerMailPairing(server),
+    localParty: conversation.local_party ?? '',
+    localPaneKey: conversation.local_pane_key
+  })
+  await deliverPeerMail(runtime, server, current, {
     id,
     to: route.remote_party,
     senderLabel,

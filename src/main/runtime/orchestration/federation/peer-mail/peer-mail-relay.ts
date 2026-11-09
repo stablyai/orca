@@ -73,7 +73,7 @@ export class PeerMailRelay {
         await this.pullOnce(environmentId, loop)
         failures = 0
       } catch {
-        if (this.transport()?.hasEnvironment?.(environmentId) === false) {
+        if (this.isEnvironmentRemoved(environmentId)) {
           // A removed server cannot answer; the next ensure re-arms it if it is added back.
           break
         }
@@ -85,6 +85,15 @@ export class PeerMailRelay {
     }
     if (this.loops.get(environmentId) === loop) {
       this.loops.delete(environmentId)
+    }
+  }
+
+  /** A store read error keeps the loop retrying rather than ending it. */
+  private isEnvironmentRemoved(environmentId: string): boolean {
+    try {
+      return this.transport()?.hasEnvironment?.(environmentId) === false
+    } catch {
+      return false
     }
   }
 

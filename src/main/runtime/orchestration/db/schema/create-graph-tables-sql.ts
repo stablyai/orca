@@ -116,7 +116,7 @@ CREATE INDEX IF NOT EXISTS idx_remote_questions_dispatch_status
   ON remote_questions(dispatch_id, status);
 
 -- Agent mail between paired Orcas. 'home': this Orca opened it for local_party and pulls replies
--- from environment_id. 'peer': the paired Orca peer_fingerprint opened it here; its replies wait in
+-- from environment_id over the pairing credential peer_fingerprint, so a re-pair opens a new one. 'peer': the paired Orca peer_fingerprint opened it here; its replies wait in
 -- federation_relay_items under dispatch_id = conversation_id until that Orca pulls them.
 CREATE TABLE IF NOT EXISTS peer_mail_conversations (
   conversation_id  TEXT PRIMARY KEY,
@@ -128,8 +128,8 @@ CREATE TABLE IF NOT EXISTS peer_mail_conversations (
   created_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_peer_mail_home_party
-  ON peer_mail_conversations(environment_id, local_party) WHERE role = 'home';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_peer_mail_home_pairing
+  ON peer_mail_conversations(environment_id, local_party, peer_fingerprint) WHERE role = 'home';
 CREATE INDEX IF NOT EXISTS idx_peer_mail_peer_fingerprint
   ON peer_mail_conversations(peer_fingerprint, role);
 

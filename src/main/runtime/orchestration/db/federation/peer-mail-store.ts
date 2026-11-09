@@ -21,7 +21,7 @@ export type PeerMailMessageRow = {
   remote_party: string | null
 }
 
-/** The conversation this Orca opened for one local agent with one paired server; reused for every send. */
+/** The conversation this Orca opened for one local agent with one paired server's current pairing; reused for every send. */
 export function openHomePeerMailConversation(
   this: OrchestrationDb,
   params: {
@@ -36,9 +36,8 @@ export function openHomePeerMailConversation(
       `INSERT INTO peer_mail_conversations (
          conversation_id, role, environment_id, peer_fingerprint, local_party, local_pane_key
        ) VALUES (?, 'home', ?, ?, ?, ?)
-       ON CONFLICT(environment_id, local_party) WHERE role = 'home'
-       DO UPDATE SET peer_fingerprint = excluded.peer_fingerprint,
-                     local_pane_key = COALESCE(excluded.local_pane_key, local_pane_key)`
+       ON CONFLICT(environment_id, local_party, peer_fingerprint) WHERE role = 'home'
+       DO UPDATE SET local_pane_key = COALESCE(excluded.local_pane_key, local_pane_key)`
     )
     .run(
       generateId('peerconv'),
@@ -51,9 +50,9 @@ export function openHomePeerMailConversation(
   return this.db
     .prepare(
       `SELECT * FROM peer_mail_conversations
-       WHERE role = 'home' AND environment_id = ? AND local_party = ?`
+       WHERE role = 'home' AND environment_id = ? AND local_party = ? AND peer_fingerprint = ?`
     )
-    .get(params.environmentId, params.localParty) as PeerMailConversationRow
+    .get(params.environmentId, params.localParty, params.peerFingerprint) as PeerMailConversationRow
 }
 
 export function getPeerMailConversation(
@@ -104,7 +103,7 @@ export function isPeerMailSenderLabel(this: OrchestrationDb, label: string): boo
   )
 }
 
-/** Stores mail that crossed from a paired Orca once; a replayed id returns the stored row. */
+/** Stores mail that crossed from a paired Orca once; a replayed id is a duplicate, even after a reset removed its row. */
 export function insertPeerMailMessage(
   this: OrchestrationDb,
   params: {
@@ -114,7 +113,9 @@ export function insertPeerMailMessage(
     remoteParty: string | null
     message: MessageInsert & { id: string; from: string }
   }
-): { message: MessageRow; duplicate: boolean } {
+):
+  | { message: MessageRow; duplicate: false }
+  | { message: MessageRow | undefined; duplicate: true } {
   this.db.exec('SAVEPOINT peer_mail_insert')
   try {
     if (params.peerFingerprint !== undefined) {
@@ -138,11 +139,9 @@ export function insertPeerMailMessage(
           .run(params.conversationId, params.peerFingerprint)
       }
     }
-    const existing = this.getPeerMailMessage(params.message.id)
-    const stored = existing ? this.getMessageById(params.message.id) : undefined
-    if (existing && stored) {
+    if (this.getPeerMailMessage(params.message.id)) {
       this.db.exec('RELEASE peer_mail_insert')
-      return { message: stored, duplicate: true }
+      return { message: this.getMessageById(params.message.id), duplicate: true }
     }
     const message = this.insertMessage(params.message)
     this.db

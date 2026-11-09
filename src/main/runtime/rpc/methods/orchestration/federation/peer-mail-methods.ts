@@ -59,6 +59,14 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       if (!isGeneratedId(params.messageId, 'msg')) {
         throw new OrchestrationError('invalid_argument', 'Mail between servers needs a message ID.')
       }
+      // Replies wait in the relay keyed by conversation; any other id could name another Orca's dispatch there.
+      if (!isGeneratedId(params.conversationId, 'peerconv')) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          'Mail between servers needs a conversation ID.',
+          NOTHING_DELIVERED
+        )
+      }
       const to = params.to
       if (/^(run|dispatch|task):/.test(to) || to.startsWith('@')) {
         throw new OrchestrationError(
@@ -83,7 +91,6 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         }
         return { message: { id: params.messageId, to } }
       }
-      // ast-grep-ignore: orchestration-agent-kind-branch -- peer mail may name a chat session on this Orca
       if (mayNameSession(to)) {
         // Recipient routing reads the session record store, which the host opens lazily.
         await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
@@ -124,7 +131,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       if (!stored.duplicate) {
         runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
       }
-      return { message: { id: stored.message.id, to } }
+      return { message: { id: params.messageId, to } }
     }
   }),
   defineMethod({

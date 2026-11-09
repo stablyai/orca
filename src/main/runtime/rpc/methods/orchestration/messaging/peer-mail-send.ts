@@ -6,6 +6,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import {
   deliverPeerMail,
   peerMailMessageId,
+  peerMailPairing,
   peerMailSenderLabel,
   requirePeerMailServer
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
@@ -84,7 +85,7 @@ export async function sendPeerMail(args: {
   const server = await requirePeerMailServer(runtime, params.on)
   const conversation = runtime.getOrchestrationDb().openHomePeerMailConversation({
     environmentId: server.environmentId,
-    peerFingerprint: server.peerFingerprint,
+    peerFingerprint: peerMailPairing(server),
     localParty: caller.address,
     localPaneKey: caller.paneKey
   })

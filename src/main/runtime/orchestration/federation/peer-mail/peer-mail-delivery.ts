@@ -68,6 +68,11 @@ export async function requirePeerMailServer(
   return server
 }
 
+/** The pairing credential the server knows this Orca by; a re-pair starts new conversations under it. */
+export function peerMailPairing(server: OrchestrationWorkerServer): string {
+  return server.homePeerFingerprint ?? server.peerFingerprint
+}
+
 /** Hands one message to the paired server; it stores it once and delivers it with its own mail code. */
 export async function deliverPeerMail(
   runtime: PeerMailRuntime,

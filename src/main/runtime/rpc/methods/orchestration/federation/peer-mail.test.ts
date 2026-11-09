@@ -15,6 +15,16 @@ import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcContext } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
+import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
+
+// Retries run at once so a recovering pull loop is observable without waiting out its backoff.
+vi.mock(
+  '../../../../orchestration/federation/relay/federation-relay-scheduler',
+  async (original) => ({
+    ...(await original<object>()),
+    federationRelayRetryDelayMs: () => 0
+  })
+)
 
 const A_PANE = 'tab_a:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const B_PANE = 'tab_b:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -29,6 +39,8 @@ describe('agent mail between paired Orca servers', () => {
   let b: Side
   let bCapabilities: (capabilities: string[]) => string[]
   let bClientKind: 'runtime' | 'mobile'
+  let aCredential: string
+  let hasEnvironment: () => boolean
 
   function openSide(name: string, machine: string, transport?: OrchestrationEnvironmentTransport) {
     const db = new OrchestrationDb(join(dir, `${name}.db`))
@@ -51,8 +63,13 @@ describe('agent mail between paired Orca servers', () => {
   }
 
   const transport: OrchestrationEnvironmentTransport = {
-    resolve: () => ({ environmentId: 'env_b', name: 'devB', peerFingerprint: 'fingerprint_b' }),
-    hasEnvironment: () => true,
+    resolve: () => ({
+      environmentId: 'env_b',
+      name: 'devB',
+      peerFingerprint: 'fingerprint_b',
+      homePeerFingerprint: aCredential
+    }),
+    hasEnvironment: () => hasEnvironment(),
     call: async (_selector, method, params) => {
       if (method === 'status.get') {
         const status = b.runtime.getStatus()
@@ -73,7 +90,7 @@ describe('agent mail between paired Orca servers', () => {
           orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
         },
         {
-          authenticatedCallerFingerprint: 'fingerprint_a',
+          authenticatedCallerFingerprint: aCredential,
           pairedDeviceId: 'device_a',
           clientKind: bClientKind
         }
@@ -85,6 +102,8 @@ describe('agent mail between paired Orca servers', () => {
     dir = mkdtempSync(join(tmpdir(), 'orca-peer-mail-'))
     bCapabilities = (capabilities) => capabilities
     bClientKind = 'runtime'
+    aCredential = 'fingerprint_a'
+    hasEnvironment = () => true
     b = openSide('b', 'Build Box')
     a = openSide('a', "Jinwoo's Mac", transport)
   })
@@ -298,5 +317,119 @@ describe('agent mail between paired Orca servers', () => {
 
     expect(sent).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(b.db.getInbox(10)).toEqual([])
+  })
+
+  it('refuses a conversation ID that is not a peer conversation', async () => {
+    const delivered = await transport.call('devB', 'orchestration.peerMailDeliver', {
+      conversationId: 'ctx_aaaaaaaaaaaa',
+      messageId: 'msg_aaaaaaaaaaaa',
+      to: 'term_b',
+      senderLabel: "term_a on Jinwoo's Mac",
+      subject: 'Into a dispatch'
+    })
+
+    expect(delivered).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(b.db.getInbox(10)).toEqual([])
+  })
+
+  it('keeps conversing with a server after it is re-paired', async () => {
+    await mutation(a, 'orchestration.send', {
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'First'
+    })
+    const [first] = mailFor(b, 'term_b')
+    await mutation(b, 'orchestration.reply', { id: first!.id, body: 'One.', from: 'term_b' })
+    a.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() => expect(mailFor(a, 'term_a')).toHaveLength(1))
+    const [answer] = mailFor(a, 'term_a')
+    b.db.markAsRead([first!.id])
+
+    aCredential = 'fingerprint_a_repaired'
+    await expect(
+      mutation(a, 'orchestration.send', {
+        from: 'term_a',
+        on: 'devB',
+        to: 'term_b',
+        subject: 'Second'
+      })
+    ).resolves.toMatchObject({ ok: true })
+    await expect(
+      mutation(a, 'orchestration.reply', { id: answer!.id, body: 'Thanks.', from: 'term_a' })
+    ).resolves.toMatchObject({ ok: true })
+
+    expect(mailFor(b, 'term_b').map((message) => message.subject)).toEqual(['Second', 'Re: First'])
+  })
+
+  it('acknowledges a reply replayed after this Orca reset its mail', async () => {
+    await mutation(a, 'orchestration.send', {
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'Ask'
+    })
+    const [onB] = mailFor(b, 'term_b')
+    await mutation(b, 'orchestration.reply', { id: onB!.id, body: 'Answer.', from: 'term_b' })
+    a.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() => expect(mailFor(a, 'term_a')).toHaveLength(1))
+    const [conversationId] = b.db.listPeerConversationIds('fingerprint_a')
+    await vi.waitFor(() =>
+      expect(b.db.listPendingFederationRelay(conversationId!, 'to_home')).toEqual([])
+    )
+
+    a.db.resetMessages()
+    // The ack was lost: the server serves the stored reply again.
+    b.db['db'].prepare('UPDATE federation_relay_items SET acked_at = NULL').run()
+    notifyPeerMailQueued(b.db)
+
+    await vi.waitFor(() =>
+      expect(b.db.listPendingFederationRelay(conversationId!, 'to_home')).toEqual([])
+    )
+    expect(mailFor(a, 'term_a')).toEqual([])
+  })
+
+  it('keeps a queued reply when the server resets its tasks', async () => {
+    await mutation(a, 'orchestration.send', {
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'Ask'
+    })
+    a.runtime.stopOrchestrationFederationRelay()
+    const [onB] = mailFor(b, 'term_b')
+    await mutation(b, 'orchestration.reply', { id: onB!.id, body: 'Kept.', from: 'term_b' })
+
+    b.db.resetTasks()
+
+    a.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() =>
+      expect(mailFor(a, 'term_a').map((message) => message.body)).toEqual(['Kept.'])
+    )
+  })
+
+  it('keeps pulling after a failed pull when the server list cannot be read', async () => {
+    await mutation(a, 'orchestration.send', {
+      from: 'term_a',
+      on: 'devB',
+      to: 'term_b',
+      subject: 'Ask'
+    })
+    a.runtime.stopOrchestrationFederationRelay()
+    const [onB] = mailFor(b, 'term_b')
+    await mutation(b, 'orchestration.reply', { id: onB!.id, body: 'Later.', from: 'term_b' })
+    const call = vi.spyOn(transport, 'call')
+    call.mockRejectedValueOnce(new Error('offline'))
+    hasEnvironment = () => {
+      hasEnvironment = () => true
+      throw new Error('registry unreadable')
+    }
+
+    a.runtime.ensureOrchestrationFederationRelay()
+
+    await vi.waitFor(() =>
+      expect(mailFor(a, 'term_a').map((message) => message.body)).toEqual(['Later.'])
+    )
+    call.mockRestore()
   })
 })
