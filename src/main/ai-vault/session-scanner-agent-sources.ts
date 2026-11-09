@@ -39,7 +39,10 @@ const COPILOT_SESSIONS_DIR = join(
   resolveAbsoluteDirOverride(process.env.COPILOT_HOME, join(homedir(), '.copilot')),
   'session-state'
 )
-const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
+const CURSOR_PROJECTS_DIR = join(
+  resolveAbsoluteDirOverride(process.env.CURSOR_CONFIG_DIR, join(homedir(), '.cursor')),
+  'projects'
+)
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
 export function piSessionHistorySessionsDir(): string {
@@ -150,6 +153,7 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       ]),
     extensions: ['.jsonl'],
     filePredicate: (filePath) => pathSegments(filePath).includes('agent-transcripts'),
+    directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME,
     contentDependencyPath: cursorChatMetaPath
   },
   grok: {

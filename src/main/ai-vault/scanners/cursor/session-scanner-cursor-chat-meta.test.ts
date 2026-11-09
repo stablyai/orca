@@ -379,3 +379,10 @@ it('lists a Cursor session once meta.json names the scope after a scan stored it
   const found = (await scan()).sessions.filter((row) => row.filePath === path)
   expect(found.map((row) => row.cwd)).toEqual(['/repo'])
 })
+
+it('excludes nested subagents directory from Cursor session discovery', () => {
+  const { directoryPredicate } = AI_VAULT_AGENT_SOURCES.cursor
+  expect(directoryPredicate?.('subagents', 1)).toBe(false)
+  expect(directoryPredicate?.('agent-transcripts', 1)).toBe(true)
+  expect(directoryPredicate?.('chat-123', 1)).toBe(true)
+})
