@@ -13,6 +13,8 @@ import {
   cwdBucketScopePrefixes
 } from '../../../ai-vault/session-scanner-scope-discovery'
 import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import type { RetirementScanResult } from './worktree-retirement-backfill-scan'
 import { normalizeRetirableGeneratedName } from './worktree-name-retirement'
 import { getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
@@ -49,21 +51,40 @@ export function extractBucketLeafCandidates(
   })
 }
 
+// Each probe lists a bucket and reads up to 3 transcripts. Host dirs overlap; the WSL gate still runs one scan task at a time.
+const HASHED_BUCKET_PROBE_CONCURRENCY = 4
+
+/** A permission refusal on one transcript or bucket stays refused on retry, so it must not keep the scan open. */
+function isPersistentFileRefusal(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return !(error instanceof WslTranscriptFsError) && (code === 'EACCES' || code === 'EPERM')
+}
+
 /** A `<first 200>-<hash>` bucket name has lost the workspace name; its transcript cwd still has it. */
 async function hashedBucketLeafNames(
   projectDir: string,
-  roots: readonly string[],
-  onRefusal: () => void
-): Promise<string[]> {
-  const cwd = await cachedProjectDirCwd(projectDir, onRefusal, 'claude')
+  roots: readonly string[]
+): Promise<{ names: string[]; refused: boolean }> {
+  let refused = false
+  const cwd = await cachedProjectDirCwd(
+    projectDir,
+    (_issue, error) => {
+      refused ||= !isPersistentFileRefusal(error)
+    },
+    'claude'
+  )
   if (!cwd) {
-    return []
+    // Unresolved like a bucket with no cwd; only a retryable refusal leaves the scan incomplete.
+    return { names: [], refused }
   }
   // Compare paths, not names: /repo/my-app and /repo/my/app share a bucket name. Fold case like the bucket match.
   const folded = cwd.toLowerCase()
-  return roots.flatMap(
-    (root) => relativePathInsideRoot(root.toLowerCase(), folded)?.split('/')[0] || []
-  )
+  return {
+    names: roots.flatMap(
+      (root) => relativePathInsideRoot(root.toLowerCase(), folded)?.split('/')[0] || []
+    ),
+    refused
+  }
 }
 
 /** Share WSL scan admission/deadlines; report refusals without discarding names readable from other sources. */
@@ -191,16 +212,21 @@ export async function discoverRetiredWorktreeNames(args: {
   for (const source of bucketSources.sources) {
     const listing = await readDirectoryNames(source.projectsDir)
     refused ||= listing.refused
+    const hashedDirs: string[] = []
     for (const bucket of listing.names) {
       const candidates = extractBucketLeafCandidates(bucket, source.encodedParents)
       leafNames.push(...candidates)
       // An in-scope hashed bucket always leaves a remainder (its hash), so it has candidates.
       if (candidates.length > 0 && mayBeHashedClaudeProjectBucketName(bucket)) {
-        const projectDir = join(source.projectsDir, bucket)
-        leafNames.push(
-          ...(await hashedBucketLeafNames(projectDir, source.roots, () => (refused = true)))
-        )
+        hashedDirs.push(join(source.projectsDir, bucket))
       }
+    }
+    const probes = await mapWithConcurrency(hashedDirs, HASHED_BUCKET_PROBE_CONCURRENCY, (dir) =>
+      hashedBucketLeafNames(dir, source.roots)
+    )
+    for (const probe of probes) {
+      leafNames.push(...probe.names)
+      refused ||= probe.refused
     }
   }
 
