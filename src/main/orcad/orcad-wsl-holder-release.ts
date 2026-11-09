@@ -5,7 +5,7 @@
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { ORCAD_WSL_HOLDER_RELEASE_FILENAME } from '../../shared/orcad-idle-exit'
-import { writeSecureFile } from '../../shared/secure-file'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import { ORCAD_WSL_HOST_ENV } from '../ipc/wsl-guest-windows-drive-path'
 import type { OrcadDaemonRetirement } from './orcad-daemon-retirement'
 

@@ -2,6 +2,7 @@ import React from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { toMegabytes } from './workspace-cleanup-facet-panel-model'
 
 import {
@@ -27,6 +28,7 @@ export function WorkspaceCleanupAppliedFilterChips({
   applied: readonly WorkspaceCleanupAppliedFilter[]
   onClear: (filter: WorkspaceCleanupAppliedFilter) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (applied.length === 0) {
     return null
   }
@@ -34,10 +36,7 @@ export function WorkspaceCleanupAppliedFilterChips({
     <div
       className="flex w-full flex-wrap items-center gap-1"
       role="list"
-      aria-label={translate(
-        'components.workspace.cleanup.browse.appliedFilters',
-        'Applied filters'
-      )}
+      aria-label={t('components.workspace.cleanup.browse.appliedFilters', 'Applied filters')}
     >
       {applied.map((filter) => (
         <span
@@ -50,7 +49,7 @@ export function WorkspaceCleanupAppliedFilterChips({
             variant="ghost"
             size="icon-xs"
             className="rounded-full"
-            aria-label={translate(
+            aria-label={t(
               'components.workspace.cleanup.browse.removeFilter',
               'Remove filter {{value0}}',
               { value0: filter.label }

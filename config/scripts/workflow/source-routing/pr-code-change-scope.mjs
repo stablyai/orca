@@ -102,8 +102,8 @@ const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
   'src/main/codex/trust/identity/codex-trust-identity',
   'src/main/codex/trust/toml/config-toml-hook-trust-',
   'src/main/codex/configuration/toml/config-toml-key-path',
-  'src/main/agent-hooks/posix-hook-command',
-  'src/main/agent-hooks/hook-post-command',
+  'src/main/agent-hooks/installation/commands/posix-hook-command',
+  'src/main/agent-hooks/installation/scripts/hook-post-command',
   'src/main/codex-cli/codex-read-only-app-server-args',
   'src/main/agent-launch/trust/agent-trust-presets',
   'src/main/codex/trust/toml/config-toml-trust',
@@ -198,12 +198,14 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // The R1 daemon protocol crossing gate runs in this job.
   'config/scripts/daemon-protocol-facts',
   'config/scripts/daemon-protocol/schema-facts/daemon-protocol-facts',
+  'config/scripts/daemon-protocol/schema-facts/daemon-protocol-revision-facts',
+  'config/scripts/runtime-verification/daemon-lifecycle/git-baseline-sources',
   'config/scripts/check-daemon-protocol-crossing',
   'config/scripts/daemon-protocol/admission/check-daemon-protocol-crossing',
   // R3 runtime launcher protocol ratchet; a bump always routes here via the protocol file.
   'config/scripts/check-runtime-launcher-protocol-ratchet',
   'config/scripts/daemon-protocol/admission/check-runtime-launcher-protocol-ratchet',
-  'src/main/daemon/daemon-protocol-version.ts',
+  'src/main/daemon/protocol/daemon-protocol-version.ts',
   'src/shared/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
@@ -250,7 +252,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-listing-waiters.ts',
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts',
   'src/main/claude/claude-model-catalog-probe.ts',
-  'src/main/runtime/agent-session-record-store',
   'src/main/runtime/agent-session/records/agent-session-record-store',
   'src/main/runtime/agent-session/records/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
@@ -262,17 +263,25 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/orchestration-session-caller.ts',
   'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
   'src/main/runtime/rpc/orchestration-mutation-executor.ts',
-  'src/shared/orchestration-rpc-contract.ts',
-  'src/main/runtime/rpc/methods/agent-launch',
-  'src/main/runtime/rpc/methods/ai-vault.ts',
+  'src/shared/orchestration/orchestration-rpc-contract.ts',
+  'src/main/runtime/rpc/methods/agent-launch/agent-launch',
+  'src/main/runtime/rpc/methods/history/ai-vault.ts',
   'src/shared/rpc-contract/browser-tab-create-params',
-  'src/main/runtime/rpc/methods/session-tabs.ts',
-  'src/main/runtime/rpc/methods/structured-agent-session',
-  'src/main/runtime/rpc/methods/terminal',
+  'src/main/runtime/rpc/methods/session-tabs/session-tabs.ts',
+  'src/main/runtime/rpc/methods/structured-sessions/',
+  'src/shared/rpc-contract/structured-agent-session-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-continue-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-rename-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-queued-edit-params.ts',
+  'src/main/runtime/rpc/methods/terminal/',
   'src/main/runtime/runtime-worktree-agent-',
-  'src/main/runtime/runtime-worktree-pty-agent-sources',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
+  'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
   'src/shared/runtime-worktree-contracts',
-  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
+  'src/renderer/src/runtime/hosted-terminals/streams/',
+  'src/renderer/src/runtime/hosted-terminals/snapshots/',
+  'src/renderer/src/runtime/rpc/subscriptions/runtime-environment-subscription-handle.ts',
   // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
   'src/shared/agent-status/lifecycle/agent-turn-outcome',
   'src/shared/agent-status/contracts/agent-status-types',
@@ -284,14 +293,13 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
   'src/shared/structured-native-chat-launch-route.ts',
-  'src/renderer/src/lib/agent-launch-routing.ts',
-  'src/renderer/src/runtime/paired-host-client-capabilities.ts',
+  'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
+  'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
   'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
-  'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
-  'src/main/runtime/orchestration/orchestration-schema-version-skew'
+  'src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew'
 ]
 
 const MANAGED_HOOK_PREFIXES = [
@@ -437,11 +445,11 @@ export function needsMobileDependencies(changedFiles) {
   return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
 }
 
-export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-mocks.ts'
+export const DAEMON_INIT_TEST_SUPPORT =
+  'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
 
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,
-  'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-build-dist.test.mjs'
 ])
 
@@ -560,12 +568,17 @@ function isProductBundlePath(file, extraPrefixes) {
 // These shared fixtures are consumed only by unit tests.
 export function isUnitTestSupportSource(file) {
   return (
-    file === 'src/renderer/src/store/slices/editor-slice-test-harness.ts' ||
-    file === 'src/renderer/src/store/slices/browser-slice-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/web-runtime-session-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts' ||
-    file === 'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+    file === 'src/renderer/src/store/slices/editor/editor-slice-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/browser/browser-slice-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/linear/linear-slice-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts' ||
+    file ===
+      'src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts' ||
+    file ===
+      'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx'
   )
 }
 

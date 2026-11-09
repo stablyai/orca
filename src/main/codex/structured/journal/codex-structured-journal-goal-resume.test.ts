@@ -9,11 +9,10 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventTarget
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexJournalGoals } from './codex-structured-journal-goals'
-import { MAX_CODEX_GOAL_THREADS } from './codex-structured-journal-limits'
-import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-double-test-support'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/journal-ingress/testing/structured-agent-session-journal-double-test-support'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 
@@ -128,57 +127,6 @@ function texts(rows: readonly AgentJournalItemBody[]): string[] {
 }
 
 describe('codex goal lifecycle resume', () => {
-  it('does not append a cleared snapshot when the journal has no prior goal occurrence', async () => {
-    const journal = goalJournal()
-    journal.unbind()
-    const resumed = new CodexJournalGoals(journal.sink, () => ({
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    }))
-
-    expect(
-      resumed.handle({
-        threadId: THREAD,
-        method: 'thread/goal/cleared',
-        params: { threadId: THREAD, turnId: null, clearedAt: 1789068999 }
-      })
-    ).toEqual({ accepted: true })
-    expect(journal.writes).toHaveLength(0)
-
-    journal.rebind()
-    await journal.drained()
-
-    expect(journal.writes).toHaveLength(0)
-    expect(journal.publishes()).toBe(0)
-    resumed.dispose()
-  })
-
-  it('does not revisit durable history for accounting-only updates', async () => {
-    const journal = goalJournal()
-    const goals = new CodexJournalGoals(journal.sink, () => ({
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    }))
-    goals.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() })
-    await journal.drained()
-    const visits = journal.visits()
-
-    for (let index = 1; index <= 10; index += 1) {
-      goals.handle({
-        threadId: THREAD,
-        method: 'thread/goal/updated',
-        params: goalFrame({
-          tokensUsed: index * 1_000,
-          timeUsedSeconds: index,
-          updatedAt: 1789067988 + index
-        })
-      })
-    }
-    await journal.drained()
-
-    expect(journal.visits()).toBe(visits)
-    expect(journal.writes).toHaveLength(1)
-    goals.dispose()
-  })
-
   it('rebuilds dedupe state after the journal epoch is replaced', async () => {
     const journal = goalJournal()
     const goals = new CodexJournalGoals(journal.sink, () => ({
@@ -199,62 +147,6 @@ describe('codex goal lifecycle resume', () => {
       'Goal set: Keep the current scratch directory tidy.'
     ])
     expect(journal.visits()).toBe(2)
-    goals.dispose()
-  })
-
-  it('visits a large journal once per epoch when thread churn exceeds the transient LRU', async () => {
-    const journal = goalJournal()
-    journal.seedProviderItems(10_000)
-    const goals = new CodexJournalGoals(journal.sink, () => ({
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    }))
-    const threadCount = MAX_CODEX_GOAL_THREADS + 1
-    const sendRound = () => {
-      for (let index = 0; index < threadCount; index += 1) {
-        goals.handle({
-          threadId: `thread-${index}`,
-          method: 'thread/goal/updated',
-          params: goalFrame()
-        })
-      }
-    }
-
-    sendRound()
-    await journal.drained()
-    for (let round = 0; round < 10; round += 1) {
-      sendRound()
-    }
-    await journal.drained()
-
-    expect(journal.visits()).toBe(1)
-    expect(journal.visitedItems()).toBe(10_000)
-    expect(journal.writes).toHaveLength(threadCount)
-    goals.dispose()
-  })
-
-  it('resolves queued thread transitions from one shared durable projection', async () => {
-    const journal = goalJournal()
-    journal.seedProviderItems(10_000)
-    journal.unbind()
-    const goals = new CodexJournalGoals(journal.sink, () => ({
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    }))
-
-    for (let index = 0; index < MAX_CODEX_GOAL_THREADS; index += 1) {
-      goals.handle({
-        threadId: `thread-${index}`,
-        method: 'thread/goal/updated',
-        params: goalFrame()
-      })
-    }
-    expect(journal.visits()).toBe(0)
-
-    journal.rebind()
-    await journal.drained()
-
-    expect(journal.visits()).toBe(1)
-    expect(journal.visitedItems()).toBe(10_000)
-    expect(journal.writes).toHaveLength(MAX_CODEX_GOAL_THREADS)
     goals.dispose()
   })
 

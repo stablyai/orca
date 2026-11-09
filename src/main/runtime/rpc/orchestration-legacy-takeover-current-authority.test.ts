@@ -1,7 +1,6 @@
-import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AgentHookServer } from '../../agent-hooks/server'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from './dispatcher'
 import {
@@ -12,7 +11,7 @@ import {
   CURRENT_COORDINATOR_PANE,
   request
 } from './orchestration-legacy-compatibility-dispatcher-test-fixture'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 
 afterEach(() => {
   cleanupLegacyCompatibilityDispatcherHarnesses()

@@ -90,6 +90,38 @@ const PLAIN_TRANSLATION_CACHE_LIMIT = 5000
 const plainTranslationCache = new Map<string, string>()
 let plainTranslationCacheScope = ''
 
+// translate() reads only the active language and its fallbacks, so bundles added for other
+// languages (catalog prefetch, plugin packs) must not re-render every useTranslate() consumer.
+let activeResourceVersion = 0
+const translationScopeListeners = new Set<() => void>()
+const notifyTranslationScope = (): void => {
+  for (const listener of translationScopeListeners) {
+    listener()
+  }
+}
+const onBundleChange = (language: string): void => {
+  if (language === i18n.language || i18n.languages?.includes(language)) {
+    activeResourceVersion += 1
+    notifyTranslationScope()
+  }
+}
+i18n.store.on('added', onBundleChange)
+i18n.store.on('removed', onBundleChange)
+// The language is part of the scope itself, so re-selecting the same one changes nothing.
+i18n.on('languageChanged', notifyTranslationScope)
+
+/** Changes exactly when translate() results can change: init, active language or its resources. */
+export function getTranslationScope(): string {
+  return `${i18n.isInitialized}\0${i18n.language}\0${activeResourceVersion}`
+}
+
+export function subscribeTranslationScope(listener: () => void): () => void {
+  translationScopeListeners.add(listener)
+  return () => {
+    translationScopeListeners.delete(listener)
+  }
+}
+
 export function translate(key: string, fallback: string, options?: TOptions): string {
   if (options !== undefined) {
     return orcaI18n.translate(key, fallback, options)

@@ -17,7 +17,7 @@ function log(message) {
 
 function readProtocolVersion() {
   const source = readFileSync(
-    join(projectDir, 'src/main/daemon/daemon-protocol-version.ts'),
+    join(projectDir, 'src/main/daemon/protocol/daemon-protocol-version.ts'),
     'utf8'
   )
   const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)

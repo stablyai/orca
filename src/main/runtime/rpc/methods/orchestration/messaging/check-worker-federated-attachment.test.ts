@@ -2,14 +2,18 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../core'
-import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   encodeFederatedControlMessage,
   importFederatedControlMessage
-} from '../../../../orchestration/federation-control-message'
+} from '../../../../orchestration/federation/relay/federation-control-message'
 
 const DISPATCH_ID = 'ctx_federated_worker_1'
 const WORKER_HANDLE = 'term_federated_worker'

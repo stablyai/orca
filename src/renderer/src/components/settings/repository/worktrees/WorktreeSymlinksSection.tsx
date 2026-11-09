@@ -1,0 +1,278 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Link2, Plus, X } from 'lucide-react'
+import type { Repo } from '../../../../../../shared/repo-types'
+import { Button } from '../../../ui/button'
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../../../ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '../../../ui/popover'
+import { cn } from '@/lib/utils'
+import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
+import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import {
+  getWorktreeSymlinkPathFilterState,
+  type WorktreeSymlinkPathSuggestion
+} from '../../../../lib/directory-path-suggestion-filter'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../../../shared/execution-host'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
+
+type WorktreeSymlinksSectionProps = {
+  repo: Repo
+  updateRepo: (repoId: string, updates: Partial<Repo>) => void
+}
+
+type DirectorySuggestionState = {
+  requestKey: string
+  entries: WorktreeSymlinkPathSuggestion[]
+}
+
+const EMPTY_WORKTREE_SYMLINK_PATHS: readonly string[] = []
+
+export function WorktreeSymlinksSection({
+  repo,
+  updateRepo
+}: WorktreeSymlinksSectionProps): React.JSX.Element {
+  const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const paths = repo.symlinkPaths ?? EMPTY_WORKTREE_SYMLINK_PATHS
+  // Only local selected repos may inspect this filesystem; focused host is not ownership evidence.
+  const useLocalDirectorySuggestions = getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+  const directorySuggestionKey = `${repo.path}\n${repo.connectionId ?? ''}`
+  const [directorySuggestions, setDirectorySuggestions] = useState<DirectorySuggestionState>(
+    () => ({
+      requestKey: directorySuggestionKey,
+      entries: []
+    })
+  )
+
+  useEffect(() => {
+    if (!useLocalDirectorySuggestions) {
+      return
+    }
+    let cancelled = false
+    void window.api.fs
+      .readDir({ dirPath: repo.path, connectionId: repo.connectionId ?? undefined })
+      .then((list) => {
+        if (cancelled) {
+          return
+        }
+        setDirectorySuggestions({
+          requestKey: directorySuggestionKey,
+          entries: list.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory }))
+        })
+      })
+      .catch(() => {
+        // Suggestions are optional; free-text paths remain usable after read failure.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [useLocalDirectorySuggestions, repo.path, repo.connectionId, directorySuggestionKey])
+
+  const { queryTrimmed, filtered, showLiteralItem } = useMemo(() => {
+    const suggestionEntries =
+      useLocalDirectorySuggestions && directorySuggestions.requestKey === directorySuggestionKey
+        ? directorySuggestions.entries
+        : []
+    return getWorktreeSymlinkPathFilterState({
+      query,
+      suggestions: suggestionEntries,
+      existingPaths: paths
+    })
+  }, [query, paths, directorySuggestionKey, directorySuggestions, useLocalDirectorySuggestions])
+
+  const commit = (rawName: string): void => {
+    const trimmed = rawName.trim().replace(/^\/+/, '')
+    if (!trimmed || paths.includes(trimmed)) {
+      setQuery('')
+      return
+    }
+    updateRepo(repo.id, { symlinkPaths: [...paths, trimmed] })
+    setQuery('')
+    setOpen(false)
+  }
+
+  const handleRemove = (path: string): void => {
+    updateRepo(repo.id, { symlinkPaths: paths.filter((p) => p !== path) })
+  }
+
+  return (
+    <SearchableSetting
+      title={t(
+        'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
+        'Worktree Shared Paths'
+      )}
+      description={t(
+        'auto.components.settings.WorktreeSymlinksSection.b07ef5a8b6',
+        'Paths to materialize from the primary checkout into newly created worktrees.'
+      )}
+      keywords={[
+        repo.displayName,
+        'apfs',
+        'clone',
+        'copy',
+        'symlink',
+        'symlinks',
+        'worktree',
+        'link',
+        'shared',
+        'env',
+        'node_modules'
+      ]}
+    >
+      <SettingsGroup
+        title={t(
+          'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
+          'Worktree Shared Paths'
+        )}
+        description={t(
+          'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
+          'When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.'
+        )}
+        action={
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" size="sm">
+                <Plus className="size-3.5" />
+                {t('auto.components.settings.WorktreeSymlinksSection.241325302c', 'Add Path')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-0">
+              <Command shouldFilter={false}>
+                <CommandInput
+                  placeholder={t(
+                    'auto.components.settings.WorktreeSymlinksSection.4cd2a4c077',
+                    'Type a path (e.g. .env or node_modules)…'
+                  )}
+                  value={query}
+                  onValueChange={setQuery}
+                />
+                <CommandList>
+                  <CommandEmpty>
+                    {t(
+                      'auto.components.settings.WorktreeSymlinksSection.ab40b8a5f1',
+                      'No matches. Keep typing to add a custom path.'
+                    )}
+                  </CommandEmpty>
+                  {showLiteralItem ? (
+                    <CommandItem
+                      value={`__literal__:${queryTrimmed}`}
+                      onSelect={() => commit(queryTrimmed)}
+                      className="items-center gap-2 px-3 py-2"
+                    >
+                      <Plus className="size-3.5 text-muted-foreground" />
+                      <span className="text-xs">
+                        {t('auto.components.settings.WorktreeSymlinksSection.b2429aeb31', 'Add')}{' '}
+                        <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
+                          {queryTrimmed}
+                        </code>
+                      </span>
+                    </CommandItem>
+                  ) : null}
+                  {filtered.map((entry) => {
+                    const alreadyAdded = paths.includes(entry.name)
+                    return (
+                      <CommandItem
+                        key={entry.name}
+                        value={entry.name}
+                        disabled={alreadyAdded}
+                        onSelect={() => commit(entry.name)}
+                        className={cn('items-center gap-2 px-3 py-2', alreadyAdded && 'opacity-50')}
+                      >
+                        {entry.isDirectory ? (
+                          <FolderIcon
+                            folderPath={entry.name}
+                            open={false}
+                            className="size-3.5 text-muted-foreground"
+                          />
+                        ) : (
+                          <FileTypeIcon
+                            filePath={entry.name}
+                            className="size-3.5 text-muted-foreground"
+                          />
+                        )}
+                        <span className="truncate text-xs">{entry.name}</span>
+                        {alreadyAdded ? (
+                          <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
+                            {t(
+                              'auto.components.settings.WorktreeSymlinksSection.ea06227efa',
+                              'added'
+                            )}
+                          </span>
+                        ) : null}
+                      </CommandItem>
+                    )
+                  })}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        }
+      >
+        {paths.length === 0 ? (
+          <div className="py-4 text-sm text-muted-foreground">
+            {t(
+              'auto.components.settings.WorktreeSymlinksSection.31ebab5403',
+              'No shared paths configured for this repository.'
+            )}
+          </div>
+        ) : (
+          <div className="py-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-muted/30">
+                <Link2 className="size-4 text-muted-foreground" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <h4 className="text-sm font-medium">
+                    {t(
+                      'auto.components.settings.WorktreeSymlinksSection.b814c618e2',
+                      'Linked paths'
+                    )}
+                  </h4>
+                  <span className="text-[11px] text-muted-foreground">
+                    {paths.length === 1
+                      ? t('auto.components.settings.WorktreeSymlinksSection.9ea912d811', '1 path')
+                      : t(
+                          'auto.components.settings.WorktreeSymlinksSection.d72ba8dc68',
+                          '{{value0}} paths',
+                          { value0: paths.length }
+                        )}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {paths.map((path) => (
+                    <span
+                      key={path}
+                      title={path}
+                      className="inline-flex min-w-0 max-w-full items-center gap-1 truncate rounded-md border border-border/50 bg-muted/35 py-1 pl-2 pr-1 font-mono text-[11px] text-foreground/80"
+                    >
+                      <span className="truncate">{path}</span>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        onClick={() => handleRemove(path)}
+                        aria-label={t(
+                          'auto.components.settings.WorktreeSymlinksSection.1c1e35b219',
+                          'Remove {{value0}}',
+                          { value0: path }
+                        )}
+                        className="size-4 shrink-0 rounded-sm"
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </SettingsGroup>
+    </SearchableSetting>
+  )
+}

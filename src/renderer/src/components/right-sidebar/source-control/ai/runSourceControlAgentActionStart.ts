@@ -1,18 +1,24 @@
-import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { useAppStore } from '@/store'
+import {
+  canLaunchSourceControlSectionAgentInPlace,
+  showSourceControlAgentStartedIn
+} from './section-agent-placement'
+import type { DirectWorkItemLaunchResult } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import {
   sourceControlActionRecipeEntry,
   type SelectedSourceControlActionRecipe
 } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
-import type { LaunchSource } from '../../../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
 import {
   normalizeSourceControlActionRecipe,
   type SourceControlActionRecipe,
@@ -39,10 +45,11 @@ export type RunSourceControlAgentActionStartArgs = {
   actionId: SourceControlLaunchActionId
   repoId?: string | null
   agentLaunchPreferences?: AgentLaunchPreferences
-  settings: GlobalSettings | null
-  repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
+  repo: Pick<Repo, 'id' | 'sourceControlAi' | 'connectionId' | 'executionHostId'> | null
   worktreeId?: string | null
   groupId?: string | null
+  placementWorkspaceId?: string
+  initialCwd?: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
   launchSource: LaunchSource
@@ -58,6 +65,7 @@ export type RunSourceControlAgentActionStartArgs = {
     commandInput: string
     /** Omitted when CLI arguments do not apply, so the launch resolves the global setting. */
     agentArgs?: string
+    actionAgentArgs?: string
     /** The action's saved choice, on either route. */
     sessionOptions?: Readonly<Record<string, string>>
     chatSessionOptions?: Readonly<Record<string, string>>
@@ -74,7 +82,7 @@ export type RunSourceControlAgentActionStartArgs = {
   onLaunchAccepted?: () => void
   /** Fires when a launch that already reported onLaunchAccepted failed to deliver its prompt. */
   onLaunchAborted?: () => void
-  onLaunched?: () => void
+  onLaunched?: (backgroundWorkspaceId?: string) => void
   onClose: () => void
 }
 
@@ -86,11 +94,12 @@ export async function runSourceControlAgentActionStart({
   saveTargetValue,
   actionId,
   repoId,
-  settings,
   agentLaunchPreferences,
-  repo,
+  repo: submittedRepo,
   worktreeId,
   groupId,
+  placementWorkspaceId,
+  initialCwd,
   promptDelivery,
   launchPlatform,
   launchSource,
@@ -115,6 +124,13 @@ export async function runSourceControlAgentActionStart({
   if (signal?.aborted) {
     return false
   }
+  const state = useAppStore.getState()
+  const settings = state.settings
+  const repo = submittedRepo
+    ? (state.repos.find((candidate) =>
+        repoMatchesHostIdentity(candidate, submittedRepo.id, getRepoExecutionHostId(submittedRepo))
+      ) ?? null)
+    : null
   let launched = false
   let launchFailureNotified = false
   let launchAcceptedNotified = false
@@ -138,11 +154,18 @@ export async function runSourceControlAgentActionStart({
       ) ?? recipe
     launchRecipe = sourceControlActionRecipeEntry(recipeToSave)
   }
+  const store = useAppStore.getState()
+  const inPlace =
+    placementWorkspaceId &&
+    worktreeId &&
+    canLaunchSourceControlSectionAgentInPlace(store, worktreeId, placementWorkspaceId)
+      ? placementWorkspaceId
+      : undefined
   const projection = projectSelectedSourceControlActionLaunch(
     launchRecipe,
     selectedAgent,
     { renderedPrompt: trimmedCommandInput, settings },
-    launchChoice
+    placementWorkspaceId ? { ...launchChoice, requestedSurface: 'terminal' } : launchChoice
   )
   const {
     commandInput: _prompt,
@@ -198,6 +221,7 @@ export async function runSourceControlAgentActionStart({
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
       agentArgs: launchAgentArgs,
+      ...(actionAgentArgs !== undefined ? { actionAgentArgs } : {}),
       ...launchOptions,
       ...(launchChoice ? { launchChoice } : {})
     })
@@ -211,9 +235,18 @@ export async function runSourceControlAgentActionStart({
   } else if (worktreeId) {
     const result = launchAgentInNewTab({
       requestId: newAgentLaunchRequestId(),
+      ...(placementWorkspaceId && !inPlace ? { activate: false } : {}),
       agent: selectedAgent,
-      worktreeId,
-      groupId: groupId ?? worktreeId,
+      worktreeId: inPlace ?? worktreeId,
+      ...(inPlace && inPlace !== worktreeId ? { trustWorktreeId: worktreeId } : {}),
+      groupId:
+        placementWorkspaceId && !inPlace
+          ? (store.activeGroupIdByWorktree[worktreeId] ?? worktreeId)
+          : ((inPlace ? store.activeGroupIdByWorktree[inPlace] : undefined) ??
+            groupId ??
+            placementWorkspaceId ??
+            worktreeId),
+      ...((!placementWorkspaceId || inPlace) && initialCwd ? { initialCwd } : {}),
       prompt: trimmedCommandInput,
       agentArgs: launchAgentArgs,
       ...launchOptions,
@@ -224,8 +257,11 @@ export async function runSourceControlAgentActionStart({
       launchPlatform,
       launchSource
     })
-    launched = Boolean(result)
-    if (result?.surface.kind === 'local-terminal') {
+    if (!result || 'refused' in result) {
+      return false
+    }
+    launched = true
+    if (result.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
       focusTerminalTabSurface(result.surface.tabId)
     }
     // Park launch state before slow submit-after-ready completes; host writes still wait for delivery.
@@ -258,7 +294,12 @@ export async function runSourceControlAgentActionStart({
     return false
   }
 
-  onLaunched?.()
+  const backgroundWorkspaceId =
+    placementWorkspaceId && !inPlace && worktreeId ? worktreeId : undefined
+  if (backgroundWorkspaceId) {
+    showSourceControlAgentStartedIn(backgroundWorkspaceId, selectedExecutionHostId)
+  }
+  onLaunched?.(backgroundWorkspaceId)
   if (!signal?.aborted) {
     onClose()
   }

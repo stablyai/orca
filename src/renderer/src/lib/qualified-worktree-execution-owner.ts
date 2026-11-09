@@ -3,13 +3,13 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   resolveWorktreeExecutionHost,
   type ExecutionHostOwnerRow
-} from '../../../shared/worktree-execution-host-resolution'
+} from '../../../shared/execution-host/worktree-execution-host-resolution'
 import {
   findIndexedWorktreeOwnerForHost,
-  resolveIndexedWorktreeOwner,
-  worktreeOwnerHostIds
-} from './worktree-runtime-owner-index'
-import { getIndexedRepoExecutionHostLookup } from './repo-owner-index'
+  resolveIndexedWorktreeOwner
+} from './workspace/ownership/worktree-runtime-owner-index'
+import { worktreeOwnerHostIds } from './workspace/ownership/workspace-catalog-owner-index'
+import { getIndexedRepoExecutionHostLookup } from './workspace/ownership/repo-owner-index'
 
 type WorktreeOwnerRow = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 

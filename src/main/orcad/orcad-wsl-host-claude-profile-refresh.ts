@@ -6,7 +6,7 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { posix } from 'node:path'
-import type { HostAccountLaunchEnv } from '../../shared/host-account-launch-env'
+import type { HostAccountLaunchEnv } from '../../shared/agent-launch/startup/host-account-launch-env'
 import { claudeProfileMarkerPath } from '../claude-accounts/claude-profile-paths'
 import type { ClaudeProfileSetupReport } from '../claude-accounts/claude-profile-setup'
 import { wslClaudeProfile } from '../claude-accounts/claude-profile-wsl-paths'

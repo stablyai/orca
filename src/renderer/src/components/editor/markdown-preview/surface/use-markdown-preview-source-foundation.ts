@@ -2,9 +2,9 @@ import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owne
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolution'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
-import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useFileOwnerRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import { useAppStore } from '@/store/index'
 import { exceedsMarkdownRichModeSizeLimit } from '../../markdown/render-mode/markdown-rich-size-limit'
 import { prewarmMarkdownPreviewLocalImages } from '../links/markdown-preview-local-images'
@@ -17,7 +17,7 @@ import {
 } from '../links/markdown-preview-source-routing'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { usePreserveSectionDuringExternalEdit } from '../../usePreserveSectionDuringExternalEdit'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useMarkdownPreviewSourceFoundation({
   content,

@@ -2,12 +2,14 @@
 
 import type {
   Automation,
-  AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/automation-definition'
+import type {
+  AutomationRun,
+  AutomationRunsPage
+} from '../../../../shared/automations/history/automation-run'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import {
   automationActionAvailability,
   capturedAutomationOwner,

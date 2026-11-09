@@ -1,9 +1,9 @@
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { useAppStateView } from '@/store/retained-views/app-state-view'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../../shared/migration-unsupported-agent-entry'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
   EMPTY_LIVE_PTY_IDS,
@@ -41,6 +41,7 @@ const subscribeToNothing = (): (() => void) => () => {}
 
 /** Share indexed worktree inputs across cards; derive live/retained row freshness from the available evidence. */
 export function useWorktreeAgentRows(worktreeId: string, active = true): DashboardAgentRow[] {
+  const store = useAppStateView()
   const selectInputs = useMemo(() => {
     const selectAgentFreshness = createWorktreeAgentFreshnessSelector(worktreeId)
     const readInputs = (state: AppState) =>
@@ -76,7 +77,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
       return next
     }
   }, [worktreeId, active])
-  const getInputs = useCallback(() => selectInputs(useAppStore.getState()), [selectInputs])
+  const getInputs = useCallback(() => selectInputs(store.getState()), [selectInputs, store])
   const [
     tabs,
     liveEntries,
@@ -88,11 +89,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     runtimeAgentOrchestrationByPaneKey,
     paneForegroundAgentByPaneKey,
     agentFreshnessSignature
-  ] = useSyncExternalStore(
-    active ? useAppStore.subscribe : subscribeToNothing,
-    getInputs,
-    getInputs
-  )
+  ] = useSyncExternalStore(active ? store.subscribe : subscribeToNothing, getInputs, getInputs)
 
   return useMemo<DashboardAgentRow[]>(() => {
     if (!active) {
@@ -114,7 +111,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
       buildWorktreeAgentRows({
         tabs: tabs ?? EMPTY_TABS,
         representedTabs: getStructuredAgentSessionTabsByPaneKey(
-          useAppStore.getState().unifiedTabsByWorktree
+          store.getState().unifiedTabsByWorktree
         ),
         entries,
         retained,
@@ -129,6 +126,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     active,
+    store,
     tabs,
     liveEntries,
     migrationUnsupported,

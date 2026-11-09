@@ -1,5 +1,5 @@
 import { buildSearchUrl, type SearchUrlOptions } from '../../../../shared/browser-url'
-import type { OpenWorkspaceBrowserTabRequest } from '@/lib/workspace-browser-tab-open'
+import type { OpenWorkspaceBrowserTabRequest } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 
 type NetworkTabEntryClassification = Extract<

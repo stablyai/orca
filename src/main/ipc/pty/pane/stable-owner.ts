@@ -4,7 +4,7 @@ import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessi
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Store } from '../../../persistence/loading-store/store'
-import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-session-terminal-persistence-retirement'
+import { retireTerminalSurfaceFromPersistence } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type {
   IPtyProvider,

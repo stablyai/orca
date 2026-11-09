@@ -13,6 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiscoveredSkill, SkillProvider } from '../../../../shared/skills'
@@ -35,10 +36,14 @@ const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   day: 'numeric'
 }
 
-function formatUpdatedAt(value: number | null): string {
+function formatUpdatedAt(
+  value: number | null,
+  t: Translate = translate,
+  intlLocale?: string
+): string {
   return value
-    ? uiDateTimeFormat(DATE_OPTIONS).format(new Date(value))
-    : translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')
+    ? uiDateTimeFormat(DATE_OPTIONS, intlLocale).format(new Date(value))
+    : t('auto.components.skills.SkillRow.updatedUnknown', 'No date')
 }
 
 export function SkillRow({
@@ -84,6 +89,8 @@ export function SkillRow({
   onFocus: () => void
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const reasonId = useId()
   // Capture the pointer modifier because Radix’s checkbox callback provides no event.
   const rangeRef = useRef(false)
@@ -94,38 +101,38 @@ export function SkillRow({
     await window.api.ui.writeClipboardText(
       formatClipboardFilePath(skill.skillFilePath, ownerHostId)
     )
-    toast.success(translate('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
+    toast.success(t('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
   }
 
   const actions: SkillRowAction[] = [
     {
       key: 'details',
-      label: translate('auto.components.skills.SkillRow.viewDetails', 'View details'),
+      label: t('auto.components.skills.SkillRow.viewDetails', 'View details'),
       icon: <Info />,
       onSelect: onOpenDetail
     },
     {
       key: 'share',
-      label: translate('auto.components.skills.SkillCard.d25a1b8ae6', 'Share skill'),
+      label: t('auto.components.skills.SkillCard.d25a1b8ae6', 'Share skill'),
       icon: <Share2 />,
       disabled: !shareable,
       onSelect: onShare
     },
     {
       key: 'reveal',
-      label: translate('auto.components.skills.SkillsPage.dc4c3328ee', 'Reveal file'),
+      label: t('auto.components.skills.SkillsPage.dc4c3328ee', 'Reveal file'),
       icon: <FolderOpen />,
       onSelect: onReveal
     },
     {
       key: 'copy-path',
-      label: translate('auto.components.skills.SkillRow.copyPath', 'Copy path'),
+      label: t('auto.components.skills.SkillRow.copyPath', 'Copy path'),
       icon: <ClipboardCopy />,
       onSelect: () => void copyPath()
     },
     {
       key: 'delete',
-      label: translate('auto.components.skills.SkillRow.deleteSkill', 'Delete…'),
+      label: t('auto.components.skills.SkillRow.deleteSkill', 'Delete…'),
       icon: <Trash2 />,
       disabled: !deletable,
       destructive: true,
@@ -181,11 +188,9 @@ export function SkillRow({
                 checked={selected}
                 disabled={selectionBlocked}
                 aria-describedby={showReason ? reasonId : undefined}
-                aria-label={translate(
-                  'auto.components.skills.SkillCard.01c5a16e01',
-                  'Select {{value0}}',
-                  { value0: skill.name }
-                )}
+                aria-label={t('auto.components.skills.SkillCard.01c5a16e01', 'Select {{value0}}', {
+                  value0: skill.name
+                })}
                 onCheckedChange={(value) => onSelectionChange(value === true, rangeRef.current)}
               />
             </span>
@@ -198,7 +203,7 @@ export function SkillRow({
               </span>
               {!skill.installed ? (
                 <Badge variant="outline" className="h-4 shrink-0 px-1 text-[10px]">
-                  {translate('auto.components.skills.SkillsPage.35b9a724a0', 'Available')}
+                  {t('auto.components.skills.SkillsPage.35b9a724a0', 'Available')}
                 </Badge>
               ) : null}
               {showReason ? (
@@ -215,7 +220,7 @@ export function SkillRow({
               ) : null}
             </div>
             <span className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
-              <span>{sourceKindLabel(skill.sourceKind)}</span>
+              <span>{sourceKindLabel(skill.sourceKind, t)}</span>
               <span className="hidden sm:inline" aria-hidden>
                 ·
               </span>
@@ -223,11 +228,13 @@ export function SkillRow({
                 {skill.providers.map((provider) => providerLabels[provider]).join(', ')}
               </span>
               <span aria-hidden>·</span>
-              <span className="tabular-nums">{formatUpdatedAt(skill.updatedAt)}</span>
+              <span className="tabular-nums">
+                {formatUpdatedAt(skill.updatedAt, t, intlLocale)}
+              </span>
             </span>
             <p className="col-start-1 min-w-0 truncate text-xs leading-5 text-muted-foreground">
               {skill.description ??
-                translate('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')}
+                t('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')}
             </p>
             {showReason ? (
               <span id={reasonId} className="sr-only">
@@ -245,7 +252,7 @@ export function SkillRow({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.skills.SkillRow.skillActions',
                     'Actions for {{value0}}',
                     { value0: skill.name }

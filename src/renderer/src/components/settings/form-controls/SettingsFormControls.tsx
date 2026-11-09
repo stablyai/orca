@@ -8,33 +8,7 @@ import { Switch } from '../../ui/switch'
 import { SettingsDisabledControlTooltip } from './SettingsDisabledControlTooltip'
 import { normalizeColor } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-
-type SettingsSwitchProps = {
-  checked: boolean
-  onChange: () => void
-  ariaLabel?: string
-  ariaLabelledBy?: string
-  disabled?: boolean
-}
-
-export function SettingsSwitch({
-  checked,
-  onChange,
-  ariaLabel,
-  ariaLabelledBy,
-  disabled
-}: SettingsSwitchProps): React.JSX.Element {
-  return (
-    <Switch
-      checked={checked}
-      aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledBy}
-      disabled={disabled}
-      onCheckedChange={onChange}
-    />
-  )
-}
+import { useTranslate } from '@/i18n/use-translate'
 
 type SettingsRowProps = {
   label: React.ReactNode
@@ -55,6 +29,7 @@ export function SettingsRow({
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
+      data-settings-row=""
       className={cn(
         'flex gap-4',
         description ? 'py-3' : 'py-2',
@@ -100,11 +75,11 @@ export function SettingsSwitchRow({
       description={description}
       className={className}
       control={
-        <SettingsSwitch
+        <Switch
           checked={checked}
-          onChange={onChange}
+          onCheckedChange={onChange}
           disabled={disabled}
-          ariaLabel={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
+          aria-label={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         />
       }
     />
@@ -331,6 +306,7 @@ export function NumberField({
   disabled = false,
   disabledReason
 }: NumberFieldProps): React.JSX.Element {
+  const t = useTranslate()
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
 
@@ -379,7 +355,7 @@ export function NumberField({
           {description}
           {defaultValue !== undefined ? (
             <span className="ml-1 text-muted-foreground/70">
-              {translate('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
+              {t('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
               {defaultValue}
             </span>
           ) : null}

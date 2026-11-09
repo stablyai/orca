@@ -1,11 +1,60 @@
 import ExpoModulesCore
 import QuickLook
+import UIKit
 
 public class OrcaMobileWebShellModule: Module {
   private var pdfPreview: MobileWebShellPdfPreview?
+  private var memoryWarningObserver: NSObjectProtocol?
 
   public func definition() -> ModuleDefinition {
     Name("OrcaMobileWebShell")
+
+    // A spare is the first thing to give back: nothing is shown by it.
+    OnCreate {
+      memoryWarningObserver = NotificationCenter.default.addObserver(
+        forName: UIApplication.didReceiveMemoryWarningNotification,
+        object: nil,
+        queue: .main
+      ) { _ in
+        MobileWebShellSparePool.shared.discardAll()
+      }
+    }
+
+    OnDestroy {
+      if let memoryWarningObserver {
+        NotificationCenter.default.removeObserver(memoryWarningObserver)
+      }
+      DispatchQueue.main.async {
+        MobileWebShellSparePool.shared.discardAll()
+      }
+    }
+
+    // Home boots the next one after its next foreground idle.
+    OnAppEntersBackground {
+      DispatchQueue.main.async {
+        MobileWebShellSparePool.shared.discardAll()
+      }
+    }
+
+    AsyncFunction("prepareSpareDocument") { (directory: String, sessionId: String) -> Bool in
+      MobileWebShellSparePool.shared.prepare(directory: directory, sessionId: sessionId)
+    }.runOnQueue(.main)
+
+    AsyncFunction("claimSpareDocument") { (directory: String) -> String? in
+      MobileWebShellSparePool.shared.claim(directory: directory)
+    }.runOnQueue(.main)
+
+    AsyncFunction("discardSpareDocument") {
+      MobileWebShellSparePool.shared.discardAll()
+    }.runOnQueue(.main)
+
+    // Home calls this once it has a paired host, so a user with nothing to open pays nothing.
+    Function("warmUp") {
+      // A second's delay keeps the warm-up off the launch's first frames.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        MobileWebShellWarmUp.start()
+      }
+    }
 
     AsyncFunction("presentPdf") { (url: URL) in
       guard let presenter = self.appContext?.utilities?.currentViewController() else {
@@ -17,6 +66,17 @@ public class OrcaMobileWebShellModule: Module {
       self.pdfPreview = preview
       presenter.present(controller, animated: true)
     }.runOnQueue(.main)
+
+    AsyncFunction("shareImage") { (url: URL, _: String) in
+      guard let presenter = self.appContext?.utilities?.currentViewController() else {
+        throw ImagePresenterUnavailableException()
+      }
+      presentImageShareSheet(url: url, from: presenter)
+    }.runOnQueue(.main)
+
+    AsyncFunction("saveImageToPhotos") { (url: URL, _: String, promise: Promise) in
+      saveImageToPhotoLibrary(url: url, promise: promise)
+    }
 
     View(OrcaMobileWebShellView.self) {
       Events("onLoadState", "onBridgeMessage", "onExternalNavigation", "onBackEdgeSwipe")

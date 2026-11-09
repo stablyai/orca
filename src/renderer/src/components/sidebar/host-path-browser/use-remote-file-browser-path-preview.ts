@@ -19,7 +19,7 @@ import {
   type PreviewState
 } from './remote-file-browser-path-preview-resolver'
 import type { FetchListing } from './use-remote-file-browser-listing'
-import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 
 const PATH_DEBOUNCE_MS = 300
 

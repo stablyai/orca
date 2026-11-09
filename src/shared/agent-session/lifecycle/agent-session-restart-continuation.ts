@@ -8,7 +8,7 @@ export const AGENT_SESSION_RESTART_CONTINUATION_MESSAGE =
 
 /** For interrupted children/prompts too; name no activity because providers restate it and journal-dependent wording would change retry fingerprints. */
 export const AGENT_SESSION_RESTART_WORK_CONTINUATION_MESSAGE =
-  "Orca restarted, which stopped what you were doing: a reply in progress, any subagents or background commands you had running, and any request waiting on the user. Before continuing, check what finished before the restart and don't repeat it. Restart anything still needed, ask again for anything still waiting on the user, then carry on."
+  "Orca restarted. Resume the original unfinished user task with existing commitments and authorization. Check what's completed or still running before repeating actions. Recover needed interrupted work, re-ask only necessary unanswered questions, and continue until done or genuinely blocked."
 
 /** Derive only from the marker to keep retry fingerprints stable; legacy working-lead markers retain original wording. */
 export function restartContinuationMessage(

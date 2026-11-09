@@ -7,7 +7,7 @@ import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 export async function readRemoteOrcadBuildHash(
   target: OrcadRemoteExecTarget,

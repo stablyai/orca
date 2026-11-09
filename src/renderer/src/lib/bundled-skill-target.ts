@@ -7,8 +7,8 @@ import {
 import {
   getManagedOrcadSshTargetId,
   type ManagedOrcadEnvironmentSummary
-} from '../../../shared/managed-orcad-execution-host'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+} from '../../../shared/execution-host/managed-orcad-execution-host'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /** The host whose Orca skills the Update dialog, badge and nudge plan and update. */

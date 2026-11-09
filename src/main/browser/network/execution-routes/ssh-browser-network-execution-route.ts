@@ -6,18 +6,19 @@ import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-networ
 import {
   loadHostProxyEnvironment,
   readSshHostProxyEnvironment
-} from '../../../ssh/ssh-host-proxy-environment'
+} from '../../../ssh/remote-host/ssh-host-proxy-environment'
 import {
   startSystemSshDynamicForwardProcess,
   type SystemSshDynamicForwardProcess
-} from '../../../ssh/system-transport/system-ssh-dynamic-forward-process'
+} from '../../../ssh/system-transport/forwarding/system-ssh-dynamic-forward-process'
 import { BrowserNetworkDeferredSocket } from './browser-network-deferred-socket'
-import {
-  browserNetworkExecutionHostKey,
-  type BrowserNetworkExecutionRoute,
-  type BrowserNetworkExecutionRouteContext,
-  openConnectedSocket
-} from './browser-network-execution-route'
+import './browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type {
+  BrowserNetworkExecutionRoute,
+  BrowserNetworkExecutionRouteContext
+} from './browser-network-execution-route-contract'
+import { openConnectedSocket } from '../tunnels/browser-network-connected-socket'
 import {
   connectThroughBrowserNetworkTunnelProxy,
   type BrowserNetworkTunnelDialer

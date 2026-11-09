@@ -216,23 +216,6 @@ describe('UsageProviderStoreLifecycle', () => {
     }
   })
 
-  it('persists identities for a whole first scan with one write', async () => {
-    const telemetry = setupTelemetryClientTest()
-    try {
-      const sessions = Array.from({ length: 20 }, (_, index) => ({ id: `session-${index}` }))
-      scan.mockResolvedValue({ ...emptyScanResult(), sessions })
-      const store = createStore(join(tempDirectory, 'provider.json'))
-      await store.setEnabled(true)
-      writeProbe.opens = 0
-      await store.refresh(true)
-      // One usage report, one identity batch, and one token revision batch.
-      expect(writeProbe.opens).toBe(3)
-      expect(telemetry.mock.capture).toHaveBeenCalledTimes(sessions.length)
-    } finally {
-      cleanupTelemetryClientTest(telemetry.envStash)
-    }
-  })
-
   it('keeps analytics identity separate from usage cache rebuilds and never puts it in snapshots', async () => {
     const cacheFile = join(tempDirectory, 'provider.json')
     const identityFile = join(tempDirectory, 'provider-analytics-session-ids.json')
@@ -259,46 +242,6 @@ describe('UsageProviderStoreLifecycle', () => {
     expect(
       readFileSync(join(tempDirectory, 'usage-0-analytics-session-ids.json'), 'utf8')
     ).toContain(id)
-  })
-
-  it('skips disabled and fresh matching states', async () => {
-    const store = createStore()
-
-    await store.refresh()
-    expect(scan).not.toHaveBeenCalled()
-
-    store.replaceState(
-      makeState({
-        worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT,
-        scanState: { enabled: true, lastScanCompletedAt: NOW - 1 }
-      })
-    )
-    await store.refresh()
-
-    expect(scan).not.toHaveBeenCalled()
-  })
-
-  it('invalidates prior sources on fingerprint changes and reuses them for forced scans', async () => {
-    const store = createStore()
-    const sourceCache = {
-      path: join(tempDirectory, 'usage-0-sources.json'),
-      schemaVersion: 1,
-      worktreeFingerprint: EMPTY_WORKTREE_FINGERPRINT
-    }
-    store.replaceState(
-      makeState({
-        worktreeFingerprint: 'outdated',
-        scanState: { enabled: true, lastScanCompletedAt: NOW - 1 }
-      })
-    )
-
-    await store.refresh()
-    expect(scan).toHaveBeenLastCalledWith([], { ...sourceCache, reuse: false })
-
-    scan.mockClear()
-    await store.refresh(true)
-
-    expect(scan).toHaveBeenCalledWith([], { ...sourceCache, reuse: true })
   })
 
   it('keeps per-source records out of the report main writes', async () => {

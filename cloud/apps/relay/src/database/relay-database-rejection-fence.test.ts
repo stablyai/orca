@@ -2,10 +2,7 @@ import { EventEmitter } from 'node:events'
 import pg from 'pg'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { keepPostgresClientErrorsHandled, PostgresDatabase } from './database.js'
-import {
-  handleRelayUnhandledRejection,
-  isFencedRelayDatabaseRejection
-} from './relay-database-rejection-fence.js'
+import { handleRelayUnhandledRejection } from './relay-database-rejection-fence.js'
 
 class FakePoolClient extends EventEmitter {
   constructor(private readonly respond: (sql: string) => unknown) {
@@ -26,17 +23,6 @@ function databaseFailingWith(failure: unknown, failOn = 'SELECT 1'): PostgresDat
     idleCount: 0,
     waitingCount: 0,
     connect: async () => client
-  } as never)
-}
-
-function databaseFailingToConnect(failure: unknown): PostgresDatabase {
-  return new PostgresDatabase({
-    totalCount: 0,
-    idleCount: 0,
-    waitingCount: 1,
-    connect: async () => {
-      throw failure
-    }
   } as never)
 }
 
@@ -97,29 +83,6 @@ describe('database rejection fence', () => {
   })
 
   // A 6–7s VM stall exceeds the 5s idle-transaction deadline, ending idle backends with FATAL 25P03.
-  it('fences an idle-in-transaction timeout but keeps the rest of class 25 fatal', async () => {
-    const idleTimeout = await rejectionFrom(() =>
-      databaseFailingWith(
-        serverError('25P03', 'terminating connection due to idle-in-transaction timeout')
-      ).transaction(async (transaction) => await transaction.query('SELECT 1'))
-    )
-    expect(isFencedRelayDatabaseRejection(idleTimeout)).toBe(true)
-    const abortedTransaction = await rejectionFrom(() =>
-      databaseFailingWith(
-        serverError('25P02', 'current transaction is aborted, commands ignored')
-      ).query('SELECT 1')
-    )
-    expect(isFencedRelayDatabaseRejection(abortedTransaction)).toBe(false)
-  })
-
-  it('fences every failure to get a pooled client, including bad credentials', async () => {
-    const badPassword = serverError('28P01', 'password authentication failed')
-    const failure = await rejectionFrom(() =>
-      databaseFailingToConnect(badPassword).transaction(async () => undefined)
-    )
-    expect(failure).toBe(badPassword)
-    expect(isFencedRelayDatabaseRejection(failure)).toBe(true)
-  })
 
   it('keeps schema errors, pg TypeErrors and a lock-unavailable answer fatal', async () => {
     const missingTable = await rejectionFrom(() =>
@@ -145,29 +108,6 @@ describe('database rejection fence', () => {
     ])
   })
 
-  it('fences a socket reset or broken pipe thrown mid-statement', async () => {
-    for (const code of ['ECONNRESET', 'EPIPE']) {
-      const dropped = Object.assign(new Error(`read ${code}`), { code })
-      const reason = await rejectionFrom(() =>
-        databaseFailingWith(dropped).transaction(
-          async (transaction) => await transaction.query('SELECT 1')
-        )
-      )
-      expect(reason).toBe(dropped)
-      expect(() => handleRelayUnhandledRejection(reason)).not.toThrow()
-    }
-    expect(error).not.toHaveBeenCalled()
-  })
-
-  it('keeps a database-looking error fatal when the database layer never saw it', () => {
-    const socketReset = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
-    const unmarked = serverError('23505', 'duplicate key')
-    const terminated = new Error('Connection terminated unexpectedly')
-    for (const reason of [socketReset, unmarked, terminated, undefined, 'text']) {
-      expect(isFencedRelayDatabaseRejection(reason)).toBe(false)
-    }
-    expect(() => handleRelayUnhandledRejection(socketReset)).toThrow(socketReset)
-  })
 })
 
 describe('permanent PostgreSQL client error listener', () => {

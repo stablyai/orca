@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type {
   AutomationAuthorityHealth,
   AutomationExecutionHealth,
@@ -29,14 +30,15 @@ export type AutomationHostRecoveryActions = {
 }
 
 export function authorityHealthDescriptor(
-  health: AutomationAuthorityHealth
+  health: AutomationAuthorityHealth,
+  t: Translate = translate
 ): AutomationHostStatusDescriptor {
   switch (health) {
     case 'loading':
       return {
         id: 'authority-loading',
-        label: translate('auto.components.automations.hostStatus.authority.loading', 'Loading'),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.authority.loading', 'Loading'),
+        description: t(
           'auto.components.automations.hostStatus.authority.loadingDescription',
           'Loading automations from this host.'
         ),
@@ -46,8 +48,8 @@ export function authorityHealthDescriptor(
     case 'fresh':
       return {
         id: 'authority-fresh',
-        label: translate('auto.components.automations.hostStatus.authority.fresh', 'Up to date'),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.authority.fresh', 'Up to date'),
+        description: t(
           'auto.components.automations.hostStatus.authority.freshDescription',
           'Automations loaded from this host.'
         ),
@@ -57,11 +59,8 @@ export function authorityHealthDescriptor(
     case 'refreshing':
       return {
         id: 'authority-refreshing',
-        label: translate(
-          'auto.components.automations.hostStatus.authority.refreshing',
-          'Refreshing'
-        ),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.authority.refreshing', 'Refreshing'),
+        description: t(
           'auto.components.automations.hostStatus.authority.refreshingDescription',
           'Checking this host for changes.'
         ),
@@ -72,11 +71,8 @@ export function authorityHealthDescriptor(
       // Cached rows are real but unverified; preserve that distinction in the message.
       return {
         id: 'authority-stale-error',
-        label: translate(
-          'auto.components.automations.hostStatus.authority.staleError',
-          'Not refreshed'
-        ),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.authority.staleError', 'Not refreshed'),
+        description: t(
           'auto.components.automations.hostStatus.authority.staleErrorDescription',
           'Showing the automations last loaded from this host. The most recent refresh did not complete.'
         ),
@@ -86,11 +82,8 @@ export function authorityHealthDescriptor(
     case 'unavailable':
       return {
         id: 'authority-unavailable',
-        label: translate(
-          'auto.components.automations.hostStatus.authority.unavailable',
-          'Unreachable'
-        ),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.authority.unavailable', 'Unreachable'),
+        description: t(
           'auto.components.automations.hostStatus.authority.unavailableDescription',
           'This host could not be reached, so its automations could not be loaded.'
         ),
@@ -100,11 +93,8 @@ export function authorityHealthDescriptor(
     case 'incompatible':
       return {
         id: 'authority-incompatible',
-        label: translate(
-          'auto.components.automations.hostStatus.authority.incompatible',
-          'Update server'
-        ),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.authority.incompatible', 'Update server'),
+        description: t(
           'auto.components.automations.hostStatus.authority.incompatibleDescription',
           'This server does not support host-scoped automation queries. Update it to load automations for this host.'
         ),
@@ -115,14 +105,15 @@ export function authorityHealthDescriptor(
 }
 
 export function executionHealthDescriptor(
-  health: AutomationExecutionHealth
+  health: AutomationExecutionHealth,
+  t: Translate = translate
 ): AutomationHostStatusDescriptor {
   switch (health) {
     case 'connected':
       return {
         id: 'execution-connected',
-        label: translate('auto.components.automations.hostStatus.execution.connected', 'Connected'),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.execution.connected', 'Connected'),
+        description: t(
           'auto.components.automations.hostStatus.execution.connectedDescription',
           'This host is connected and can run automations.'
         ),
@@ -132,11 +123,8 @@ export function executionHealthDescriptor(
     case 'connecting':
       return {
         id: 'execution-connecting',
-        label: translate(
-          'auto.components.automations.hostStatus.execution.connecting',
-          'Connecting'
-        ),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.execution.connecting', 'Connecting'),
+        description: t(
           'auto.components.automations.hostStatus.execution.connectingDescription',
           'Connecting to this host.'
         ),
@@ -146,11 +134,8 @@ export function executionHealthDescriptor(
     case 'disconnected':
       return {
         id: 'execution-disconnected',
-        label: translate(
-          'auto.components.automations.hostStatus.execution.disconnected',
-          'Not connected'
-        ),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.execution.disconnected', 'Not connected'),
+        description: t(
           'auto.components.automations.hostStatus.execution.disconnectedDescription',
           'Automations on this host cannot run until the connection is restored.'
         ),
@@ -160,11 +145,8 @@ export function executionHealthDescriptor(
     case 'unavailable':
       return {
         id: 'execution-unavailable',
-        label: translate(
-          'auto.components.automations.hostStatus.execution.unavailable',
-          'Unavailable'
-        ),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.execution.unavailable', 'Unavailable'),
+        description: t(
           'auto.components.automations.hostStatus.execution.unavailableDescription',
           'This execution target is no longer available.'
         ),
@@ -175,11 +157,8 @@ export function executionHealthDescriptor(
       // Why: not knowing is not the same as being down; never render this as a failure.
       return {
         id: 'execution-unknown',
-        label: translate(
-          'auto.components.automations.hostStatus.execution.unknown',
-          'Connection unknown'
-        ),
-        description: translate(
+        label: t('auto.components.automations.hostStatus.execution.unknown', 'Connection unknown'),
+        description: t(
           'auto.components.automations.hostStatus.execution.unknownDescription',
           'The connection state for this host has not loaded yet.'
         ),
@@ -238,16 +217,16 @@ function executionRecoveryAction(
   return health === 'disconnected' ? 'reconnect' : null
 }
 
-export function recoveryActionLabel(action: AutomationHostRecoveryAction): string {
+export function recoveryActionLabel(
+  action: AutomationHostRecoveryAction,
+  t: Translate = translate
+): string {
   switch (action) {
     case 'retry':
-      return translate('auto.components.automations.hostStatus.action.retry', 'Retry')
+      return t('auto.components.automations.hostStatus.action.retry', 'Retry')
     case 'reconnect':
-      return translate('auto.components.automations.hostStatus.action.reconnect', 'Reconnect')
+      return t('auto.components.automations.hostStatus.action.reconnect', 'Reconnect')
     case 'update-server':
-      return translate(
-        'auto.components.automations.hostStatus.action.updateServer',
-        'Update server'
-      )
+      return t('auto.components.automations.hostStatus.action.updateServer', 'Update server')
   }
 }

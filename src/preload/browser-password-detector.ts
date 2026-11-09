@@ -31,6 +31,9 @@ import { createBrowserPasswordSubmitTracker } from './browser-password-submit-tr
 const TYPED_DEBOUNCE_MS = 300
 const DOM_CHECK_DELAY_MS = 500
 const PENDING_ADDED_NODE_LIMIT = 200
+// Why: a page that keeps adding past the limit (feeds, dashboards) would otherwise walk the whole
+// document every check; typing or focus still discovers a field's shadow roots right away.
+const FULL_DOCUMENT_WALK_INTERVAL_MS = 5000
 const OBSERVER_OPTIONS: MutationObserverInit = {
   subtree: true,
   childList: true,
@@ -42,7 +45,16 @@ const OBSERVER_OPTIONS: MutationObserverInit = {
 
 type RunningDetector = { fill: (payload: unknown) => void }
 
-function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
+function enableReportsPageForms(payload: unknown): boolean {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'reportPageForms' in payload &&
+    payload.reportPageForms === true
+  )
+}
+
+function startDetector(port: BrowserPasswordGuestPort, reportsPageForms: boolean): RunningDetector {
   // Why only these values: page script can write any DOM value; only trusted input or our own fill is the user's.
   const trackedValues = new WeakMap<HTMLInputElement, string>()
   const valueOf = (input: HTMLInputElement): string => trackedValues.get(input) ?? ''
@@ -100,6 +112,10 @@ function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
 
   let lastPageForms = JSON.stringify([])
   const snapshotPageForms = (): void => {
+    // Main reads page forms only while judging a login that navigated here; elsewhere a scan forces layout for nothing.
+    if (!reportsPageForms) {
+      return
+    }
     const payload: BrowserPasswordGuestPageForms = {
       forms: scanner.hasAnyInput() ? scanner.scan().map(scanner.summaryOf) : []
     }
@@ -119,10 +135,13 @@ function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
         if (record.attributeName === 'type' && record.target instanceof HTMLInputElement) {
           scanner.noteTypeChange(record.target, record.oldValue)
         }
+      } else if (addedNodesOverflowed) {
+        // The pending whole-document walk already covers these.
       } else if (pendingAddedNodes.length + record.addedNodes.length <= PENDING_ADDED_NODE_LIMIT) {
         pendingAddedNodes.push(...record.addedNodes)
       } else {
         addedNodesOverflowed = true
+        pendingAddedNodes.length = 0
       }
     }
     // Why not re-armed per batch: a page that never stops mutating would otherwise never be checked.
@@ -133,16 +152,37 @@ function startDetector(port: BrowserPasswordGuestPort): RunningDetector {
       observer.observe(root, OBSERVER_OPTIONS)
     }
   }
-  function runDomCheck(): void {
-    domCheckTimer = null
-    const added = addedNodesOverflowed ? [document] : pendingAddedNodes.splice(0)
-    pendingAddedNodes.length = 0
+  let lastFullDocumentWalkAt = Date.now()
+  let fullDocumentWalkTimer: ReturnType<typeof setTimeout> | null = null
+  const walkWholeDocument = (): void => {
+    if (fullDocumentWalkTimer !== null) {
+      clearTimeout(fullDocumentWalkTimer)
+      fullDocumentWalkTimer = null
+    }
     addedNodesOverflowed = false
-    for (const node of added) {
-      if (node === document || (node.isConnected && node.nodeType === Node.ELEMENT_NODE)) {
+    lastFullDocumentWalkAt = Date.now()
+    observeShadowRoots(document)
+  }
+  const discoverAddedShadowRoots = (): void => {
+    if (addedNodesOverflowed) {
+      const wait = lastFullDocumentWalkAt + FULL_DOCUMENT_WALK_INTERVAL_MS - Date.now()
+      if (wait <= 0) {
+        walkWholeDocument()
+      } else {
+        // Own timer, so form-gone and page-form checks keep their cadence meanwhile.
+        fullDocumentWalkTimer ??= setTimeout(walkWholeDocument, wait)
+      }
+      return
+    }
+    for (const node of pendingAddedNodes.splice(0)) {
+      if (node.isConnected && node.nodeType === Node.ELEMENT_NODE) {
         observeShadowRoots(node)
       }
     }
+  }
+  function runDomCheck(): void {
+    domCheckTimer = null
+    discoverAddedShadowRoots()
     submits.checkFormGone()
     snapshotPageForms()
   }
@@ -195,8 +235,8 @@ export function installBrowserPasswordDetector(port: BrowserPasswordGuestPort): 
     return
   }
   let running: RunningDetector | null = null
-  port.on(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable, () => {
-    running ??= startDetector(port)
+  port.on(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS.enable, (payload) => {
+    running ??= startDetector(port, enableReportsPageForms(payload))
   })
   port.on(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS.fill, (payload) => running?.fill(payload))
 }

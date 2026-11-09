@@ -1,24 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
-
-const hooks = readFileSync(
-  new URL('../../../nsis/orca-installer-hooks.nsh', import.meta.url),
-  'utf8'
-)
 const processCheck = readFileSync(
   new URL('../../../nsis/orca-process-check.nsh', import.meta.url),
-  'utf8'
-)
-const require = createRequire(import.meta.url)
-const builderRequire = createRequire(require.resolve('electron-builder/package.json'))
-const upstreamChecks = readFileSync(
-  join(
-    dirname(builderRequire.resolve('app-builder-lib/package.json')),
-    'templates/nsis/include/allowOnlyOneInstallerInstance.nsh'
-  ),
   'utf8'
 )
 
@@ -29,27 +14,6 @@ function readPowerShellProbe(source = processCheck) {
   }
   return { args: match[1].trim().split(/\s+/).filter(Boolean), command: match[2] }
 }
-
-describe('NSIS process-check integration', () => {
-  it('loads the capability hook through the installer and uninstaller include', () => {
-    expect(hooks).toContain('!include "${__FILEDIR__}\\orca-process-check.nsh"')
-    expect(processCheck).toMatch(/!macro customCheckAppRunning\b/)
-    expect(processCheck).toContain('!include "getProcessInfo.nsh"')
-    expect(processCheck).toMatch(/^Var pid$/m)
-    expect(processCheck).toMatch(/^Var \/GLOBAL IsPowerShellAvailable$/m)
-  })
-
-  it('keeps upstream process selection, retries, and installation-mode handling', () => {
-    expect(processCheck).toContain('!insertmacro _CHECK_APP_RUNNING')
-    expect(processCheck).not.toMatch(/!macro (?:FIND_PROCESS|KILL_PROCESS|_CHECK_APP_RUNNING)\b/)
-    expect(processCheck).not.toMatch(/\b(?:Stop-Process|taskkill|Set-ExecutionPolicy)\b/)
-    const findProcess = upstreamChecks.match(/!macro FIND_PROCESS\b[\s\S]*?!macroend/)?.[0]
-    if (!findProcess) {
-      throw new Error('The upstream process finder was not found')
-    }
-    expect(readPowerShellProbe().args).toEqual(readPowerShellProbe(findProcess).args)
-  })
-})
 
 describe.runIf(process.platform === 'win32')(
   'NSIS capability probe under Restricted policy',

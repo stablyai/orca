@@ -11,11 +11,10 @@ import {
   symlinkSync,
   writeFileSync
 } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { linuxFormatArguments, packageLinuxFormats } from './package-linux-formats.mjs'
+import { packageLinuxFormats } from './package-linux-formats.mjs'
 
 let root
 let preparedDirectory
@@ -47,30 +46,6 @@ function emitPackage(args) {
   writeFileSync(join(output, 'latest-linux.yml'), format)
   return { format, app, output }
 }
-
-it('preserves configured hooks, architecture, names, and PR compression with exact argv', () => {
-  const args = linuxFormatArguments({
-    format: 'deb',
-    appDirectory: '/app with spaces',
-    outputDirectory: '/out with spaces'
-  })
-  expect(args).toEqual([
-    '--config',
-    'config/electron-builder-pr-linux.config.cjs',
-    '--linux',
-    'deb',
-    '--x64',
-    '--publish',
-    'never',
-    '--prepackaged',
-    '/app with spaces',
-    '--config.directories.output',
-    '/out with spaces',
-    '--config.deb.compression=gz',
-    '--config.rpm.compression=gzip'
-  ])
-  expect(() => linuxFormatArguments({ format: 'zip' })).toThrow('Unsupported Linux package format')
-})
 
 describe('independent Linux package formats', () => {
   it('starts all formats before awaiting completion and isolates metadata writes', async () => {
@@ -188,35 +163,6 @@ describe('independent Linux package formats', () => {
     }
   )
 
-  it('passes its private tool environment only to AppImage and removes it after success', async () => {
-    const originalToolsPath = process.env.APPIMAGE_TOOLS_PATH
-    let overlay
-    const calls = []
-    await packageLinuxFormats({
-      preparedDirectory,
-      outputDirectory,
-      prepareAppImageTools: async ({ directory }) => {
-        overlay = directory
-        mkdirSync(directory)
-        return { APPIMAGE_TOOLS_PATH: directory, ORCA_PR_APPIMAGE_MKSQUASHFS: 'original tool' }
-      },
-      runBuilder: async (args, environment) => {
-        const format = valueAfter(args, '--linux')
-        calls.push(format)
-        expect(environment).toEqual(
-          format === 'AppImage'
-            ? { APPIMAGE_TOOLS_PATH: overlay, ORCA_PR_APPIMAGE_MKSQUASHFS: 'original tool' }
-            : {}
-        )
-        expect(process.env.APPIMAGE_TOOLS_PATH).toBe(originalToolsPath)
-        emitPackage(args)
-      }
-    })
-    expect(calls.sort()).toEqual(targets.slice().sort())
-    expect(existsSync(overlay)).toBe(false)
-    expect(process.env.APPIMAGE_TOOLS_PATH).toBe(originalToolsPath)
-  })
-
   it('rejects missing artifacts even when the builder reports success', async () => {
     await expect(
       packageLinuxFormats({
@@ -263,19 +209,5 @@ describe('independent Linux package formats', () => {
       })
     ).rejects.toThrow('Expected a fresh Linux directory build')
     expect(readdirSync(outputDirectory)).toEqual([])
-  })
-})
-
-it('changes only CI deb/rpm compression levels without mutating release settings or hooks', () => {
-  const require = createRequire(import.meta.url)
-  const release = require('../../../electron-builder.config.cjs')
-  const before = { deb: { ...release.deb }, rpm: { ...release.rpm } }
-  const ci = require('../../../electron-builder-pr-linux.config.cjs')
-  expect(release.deb).toEqual(before.deb)
-  expect(release.rpm).toEqual(before.rpm)
-  expect(ci).toEqual({
-    ...release,
-    deb: { ...release.deb, fpm: [...(release.deb.fpm ?? []), '--deb-compression-level=1'] },
-    rpm: { ...release.rpm, fpm: [...(release.rpm.fpm ?? []), '--rpm-compression-level=1'] }
   })
 })

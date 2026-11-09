@@ -4,7 +4,8 @@ import type {
   LocalNetworkConnectionTestFailure,
   LocalNetworkConnectionTestResult
 } from '../../../../../shared/developer-permissions-types'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { Button } from '../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
@@ -16,41 +17,44 @@ import {
   type LocalNetworkConnectionSuccess
 } from './local-network-connection-history'
 
-function failureMessage(failure: LocalNetworkConnectionTestFailure | undefined): string {
+function failureMessage(
+  failure: LocalNetworkConnectionTestFailure | undefined,
+  t: Translate = translate
+): string {
   switch (failure) {
     case 'invalid-target':
-      return translate(
+      return t(
         'auto.components.settings.DeveloperPermissionsPane.connectionTestInvalidTarget',
         'Enter a hostname or private LAN IP and a port from 1 to 65535.'
       )
     case 'timeout':
-      return translate(
+      return t(
         'auto.components.settings.DeveloperPermissionsPane.connectionTestTimeout',
         'Connection timed out. Check the target, service, and macOS Local Network settings.'
       )
     case 'refused':
-      return translate(
+      return t(
         'auto.components.settings.DeveloperPermissionsPane.connectionTestRefused',
         'The host responded, but the port refused the connection.'
       )
     case 'unreachable':
-      return translate(
+      return t(
         'auto.components.settings.DeveloperPermissionsPane.connectionTestUnreachable',
         'The target could not be reached.'
       )
     case 'unresolved':
-      return translate(
+      return t(
         'auto.components.settings.DeveloperPermissionsPane.connectionTestUnresolved',
         'The hostname could not be resolved.'
       )
     case 'unsupported':
-      return translate(
+      return t(
         'auto.components.settings.DeveloperPermissionsPane.connectionTestUnsupported',
         'Connection testing is available in the macOS desktop app.'
       )
     case 'failed':
     case undefined:
-      return translate(
+      return t(
         'auto.components.settings.DeveloperPermissionsPane.connectionTestFailed',
         'The connection test could not be completed.'
       )
@@ -62,6 +66,8 @@ function formatTarget(success: LocalNetworkConnectionSuccess): string {
 }
 
 export function LocalNetworkConnectionTest(): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const [lastSuccess, setLastSuccess] = useState(loadLocalNetworkConnectionSuccess)
   const [open, setOpen] = useState(false)
   const [host, setHost] = useState(lastSuccess?.host ?? '')
@@ -98,7 +104,7 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
   }
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="mr-4 mb-3 ml-11">
+    <Collapsible open={open} onOpenChange={setOpen} className="mb-3 ml-7">
       <CollapsibleTrigger asChild>
         <Button
           type="button"
@@ -107,7 +113,7 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
         >
           <span className="min-w-0 space-y-0.5">
             <span className="block text-xs font-medium text-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.DeveloperPermissionsPane.connectionTestTitle',
                 'Test connection'
               )}
@@ -121,15 +127,15 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
               {lastSuccess && <CheckCircle2 className="size-3.5" />}
               {lastSuccess ? (
                 <>
-                  {translate(
+                  {t(
                     'auto.components.settings.DeveloperPermissionsPane.connectionTestLastVerified',
                     'Last verified'
                   )}{' '}
-                  {new Date(lastSuccess.testedAt).toLocaleString(getIntlLocale())} ·{' '}
+                  {new Date(lastSuccess.testedAt).toLocaleString(intlLocale)} ·{' '}
                   {formatTarget(lastSuccess)}
                 </>
               ) : (
-                translate(
+                t(
                   'auto.components.settings.DeveloperPermissionsPane.connectionTestNotYetVerified',
                   'No successful test saved.'
                 )
@@ -142,23 +148,20 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
       <CollapsibleContent className="collapsible-height-content">
         <div className="mt-2 rounded-lg border border-border/60 bg-muted/25 px-4 py-3 shadow-xs">
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.DeveloperPermissionsPane.connectionTestDescription',
               'Enter a service on another device on your local network. Orca tests the same network path used by terminal tools.'
             )}
           </p>
           {failure && (
             <p className="mt-1 text-xs text-destructive" role="status">
-              {failureMessage(failure)}
+              {failureMessage(failure, t)}
             </p>
           )}
           <form className="mt-3 flex items-end gap-2" onSubmit={(event) => void submit(event)}>
             <div className="space-y-1">
               <Label htmlFor="local-network-test-host" className="text-[11px]">
-                {translate(
-                  'auto.components.settings.DeveloperPermissionsPane.connectionTestHost',
-                  'Host'
-                )}
+                {t('auto.components.settings.DeveloperPermissionsPane.connectionTestHost', 'Host')}
               </Label>
               <Input
                 id="local-network-test-host"
@@ -172,10 +175,7 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
             </div>
             <div className="space-y-1">
               <Label htmlFor="local-network-test-port" className="text-[11px]">
-                {translate(
-                  'auto.components.settings.DeveloperPermissionsPane.connectionTestPort',
-                  'Port'
-                )}
+                {t('auto.components.settings.DeveloperPermissionsPane.connectionTestPort', 'Port')}
               </Label>
               <Input
                 id="local-network-test-port"
@@ -191,11 +191,11 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
             </div>
             <Button type="submit" variant="outline" disabled={running || !host || !port}>
               {running
-                ? translate(
+                ? t(
                     'auto.components.settings.DeveloperPermissionsPane.connectionTestRunning',
                     'Testing...'
                   )
-                : translate(
+                : t(
                     'auto.components.settings.DeveloperPermissionsPane.connectionTestAction',
                     'Test Connection'
                   )}

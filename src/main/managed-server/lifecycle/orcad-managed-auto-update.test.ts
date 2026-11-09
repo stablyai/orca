@@ -14,12 +14,14 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../ssh/orcad-runtime-maintenance', () => ({
+vi.mock('./orcad-managed-lifecycle', () => ({
   withManagedOrcadLifecycle: (
     _userData: string,
     _selector: string,
     run: (managed: unknown) => Promise<unknown>
-  ) => run({ environment: { id: 'env-1' }, deployment: {} }),
+  ) => run({ environment: { id: 'env-1' }, deployment: {} })
+}))
+vi.mock('./orcad-runtime-maintenance', () => ({
   runManagedOrcadUpdate: mocks.runUpdate
 }))
 vi.mock('./orcad-managed-runtime-context', () => ({
@@ -39,6 +41,8 @@ vi.mock('../install/remote-versioned-install', () => ({
 }))
 
 import { planManagedOrcadAutoUpdate } from './orcad-managed-update-decision'
+import { autoUpdateManagedOrcadEnvironment } from './orcad-managed-auto-update'
+import { OrcadCrashLoopError } from './orcad-managed-crash-loop'
 
 function record(overrides: Partial<OrcadActivationRecord>): OrcadActivationRecord {
   return { ...emptyOrcadActivationRecord(), active: '0.1.0+old', ...overrides }
@@ -92,5 +96,24 @@ describe('whether a connect updates its managed orcad', () => {
         failedBefore: false
       })
     ).toEqual({ action: 'skip', reason: 'no-template' })
+  })
+})
+
+describe('an auto-update that finds the host braked for crashing', () => {
+  // Recording it as failed would block update retries for the rest of the session.
+  it('is not an update failure: the host already runs this build', async () => {
+    mocks.state.record = record({})
+    mocks.runUpdate.mockRejectedValueOnce(
+      new OrcadCrashLoopError('Orca stopped restarting its server on Box')
+    )
+
+    expect(
+      await autoUpdateManagedOrcadEnvironment('/user-data', {
+        environmentId: 'env-1',
+        appVersion: '1.5.0',
+        failedBefore: () => false,
+        onUpdating: () => {}
+      })
+    ).toEqual({ outcome: 'skipped', reason: 'current' })
   })
 })

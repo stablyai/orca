@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { TaskProvider } from '../../../../../shared/task-providers'
+import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
@@ -9,7 +9,7 @@ import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
 import { getLocalPreflightContext } from '@/lib/local-preflight-context'
 import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store/index'
 import type { TaskProviderReadiness } from './task-source-setup-state'
 

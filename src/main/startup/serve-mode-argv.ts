@@ -8,11 +8,14 @@ const CLI_TO_SERVE_FLAG = new Map([
   ['--no-pairing', '--serve-no-pairing'],
   ['--mobile-pairing', '--serve-mobile-pairing'],
   ['--grant-desktop-control', '--serve-grant-desktop-control'],
+  ['--allow-public', '--serve-allow-public'],
+  ['--refuse-public', '--serve-refuse-public'],
   ['--recipe-json', '--serve-recipe-json']
 ])
 
 const CLI_TO_SERVE_VALUE_FLAG = new Map([
   ['--port', '--serve-port'],
+  ['--bind', '--serve-bind'],
   ['--pairing-address', '--serve-pairing-address'],
   ['--project-root', '--serve-project-root']
 ])
@@ -21,6 +24,7 @@ const CLI_TO_SERVE_VALUE_FLAG = new Map([
 export const VALUE_TAKING_FLAGS = new Set([
   ...CLI_TO_SERVE_VALUE_FLAG.keys(),
   '--serve-port',
+  '--serve-bind',
   '--serve-pairing-address',
   '--serve-project-root',
   '--disable-features',
