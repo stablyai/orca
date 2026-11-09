@@ -234,6 +234,35 @@ describe('federation host liveness verdicts', () => {
     })
   })
 
+  it('still reports its own workers when one requested Dispatch belongs to an earlier pairing', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: observation reads only these terminal fields.
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: HANDLE,
+      worktreeId: 'repo::remote-worktree',
+      connected: true,
+      status: 'running'
+    } as never)
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: observation reads only the host scope.
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      hostScope: { kind: 'local', hostId: 'local' }
+    } as never)
+
+    await expect(
+      call('orchestration.federationFleetSnapshot', {
+        dispatchIds: ['ctx_from_an_earlier_pairing', DISPATCH_ID]
+      })
+    ).resolves.toMatchObject({
+      items: [
+        {
+          dispatchId: 'ctx_from_an_earlier_pairing',
+          observation: { status: 'unverifiable', exactWorker: false }
+        },
+        { dispatchId: DISPATCH_ID, observation: { status: 'live', exactWorker: true } }
+      ]
+    })
+  })
+
   it('keeps a disconnected verdict-less pane unverifiable rather than exited', async () => {
     vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(null)
