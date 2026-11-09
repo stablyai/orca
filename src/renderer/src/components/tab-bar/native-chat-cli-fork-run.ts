@@ -28,6 +28,8 @@ import {
   type NativeChatCliForkIdentity
 } from './tab-session-history-switch'
 import { translate } from '@/i18n/i18n'
+import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const pending = new Map<string, AbortController>()
 const listeners = new Set<() => void>()
@@ -37,6 +39,30 @@ const keyFor = (subject: PendingIdentity) => `${subject.executionHostScope}\0${s
 const subscribe = (listener: () => void) => {
   listeners.add(listener)
   return () => listeners.delete(listener)
+}
+
+// Session-only: a CLI fork writes nothing until its first message, so until then its chat is the conversation.
+const forkOrigins = new Map<string, { sessionId: string; workspaceId: string }>()
+
+const quietOpenFeedback = { unavailable: () => {}, gone: () => {}, hostCannotOpen: () => {} }
+
+/** Opens the chat this client forked the terminal tab from with "Continue with Terminal Agent". */
+export async function reopenNativeChatCliForkOrigin(
+  terminal: { tabId: string; workspaceId: string; agent: string },
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  const origin = forkOrigins.get(terminal.tabId)
+  if (origin?.workspaceId !== terminal.workspaceId) {
+    return false
+  }
+  const opened = await openDesktopStructuredSession(
+    { kind: 'history', structuredSession: origin, agent: terminal.agent },
+    target,
+    undefined,
+    undefined,
+    quietOpenFeedback
+  )
+  return opened.kind === 'opened'
 }
 
 export function useNativeChatCliForkPending(subject: PendingIdentity | null): boolean {
@@ -142,10 +168,16 @@ export async function runNativeChatCliFork(args: {
       return
     }
     stop()
-    await launchAiVaultSessionAndReveal(
+    const terminalTabId = await launchAiVaultSessionAndReveal(
       { agent: target.agent, worktreeId: subject.workspaceId, ...startup },
       describeAiVaultCliForkFailure
     )
+    if (terminalTabId) {
+      forkOrigins.set(terminalTabId, {
+        sessionId: subject.sessionId,
+        workspaceId: subject.workspaceId
+      })
+    }
   } catch (error) {
     if (pending.get(key) === controller) {
       notifyAiVaultSessionPreparationFailure(
