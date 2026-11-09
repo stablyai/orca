@@ -10,8 +10,10 @@ import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeSyncWindowGraphResult
 } from '../../shared/runtime-types'
-import type { RuntimeTerminalDriverState } from '../../shared/runtime-session-contracts'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type {
+  RuntimeStatus,
+  RuntimeTerminalDriverState
+} from '../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
