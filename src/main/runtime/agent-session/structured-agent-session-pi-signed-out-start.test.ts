@@ -7,9 +7,9 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import {
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createTestParams } from '../../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createTestParams } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
 import { peekOpenedAgentSessionRecordStore } from './records/agent-session-record-store-slot'
 import {

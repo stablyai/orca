@@ -1,4 +1,4 @@
-import { assertJsonTextStructureWithinLimits } from '../../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../../json-stream/json-text-structure-limit'
 import { parseClaudeModelList } from '../../../claude-model-list-probe'
 import { labelFromModelId } from '../../../model-id-label'
 import type { CommitMessageModel, ThinkingLevel } from './commit-message-agent-spec'

@@ -8,8 +8,8 @@ import type {
 } from '../../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { useAppStore } from '@/store'
 
 export type DiscoveredModels = Partial<Record<TuiAgent, CommitMessageModelCapability[]>>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import { BUNDLED_ORCA_SKILL_UPDATE_REQUIRED_MESSAGE } from '../../../../shared/skill-install-capability'
 import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
-import { planBundledSkillsOnTarget } from '@/runtime/runtime-bundled-skills-client'
+import { planBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 
 type ReviewedPlan = { plan: BundledSkillPlan | null; loading: boolean; error: string | null }
 

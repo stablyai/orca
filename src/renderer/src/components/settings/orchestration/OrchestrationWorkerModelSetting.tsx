@@ -3,12 +3,12 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type {
   OrchestrationWorkerEfforts,
   OrchestrationWorkerModels
-} from '../../../../../shared/orchestration-worker-model-settings'
+} from '../../../../../shared/orchestration/workers/orchestration-worker-model-settings'
 import {
   getOrchestrationWorkerEffortOption,
   resolveOrchestrationWorkerEffort,
   supportsLaunchModel
-} from '../../../../../shared/orchestration-worker-model-settings'
+} from '../../../../../shared/orchestration/workers/orchestration-worker-model-settings'
 import {
   getAgentSessionOptionCatalog,
   mergeCatalogModels

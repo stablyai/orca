@@ -50,7 +50,9 @@ export function useDashboardSnapshot(): DashboardSnapshot {
         clearTimeout(topologyRefreshTimer)
       }
       const now = Date.now()
-      topologyRefreshStartedAt ??= now
+      if (topologyRefreshStartedAt == null) {
+        topologyRefreshStartedAt = now
+      }
       const remainingMaxWait = Math.max(
         0,
         TOPOLOGY_REFRESH_MAX_WAIT_MS - (now - topologyRefreshStartedAt)

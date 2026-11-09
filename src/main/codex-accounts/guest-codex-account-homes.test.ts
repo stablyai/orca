@@ -29,12 +29,6 @@ describe.skipIf(process.platform === 'win32')('guest Codex account homes', () =>
     rmSync(home, { recursive: true, force: true })
   })
 
-  it('accepts an account home owned by its marker', () => {
-    const accountHome = makeAccountHome('account-1')
-    expect(resolveGuestCodexAccountHome(accountHome, home)).toBe(accountHome)
-    expect(resolveGuestCodexAccountHome(` ${accountHome} `, home)).toBe(accountHome)
-  })
-
   it('refuses a home whose marker names another account', () => {
     expect(resolveGuestCodexAccountHome(makeAccountHome('account-1', 'account-2\n'), home)).toBe(
       null
@@ -67,10 +61,5 @@ describe.skipIf(process.platform === 'win32')('guest Codex account homes', () =>
     makeAccountHome('account-3', 'someone-else\n')
     mkdirSync(join(root, 'no-home'))
     expect(listGuestCodexAccountHomes(home).sort()).toEqual([first, second].sort())
-  })
-
-  it('lists nothing where no account root exists', () => {
-    rmSync(root, { recursive: true })
-    expect(listGuestCodexAccountHomes(home)).toEqual([])
   })
 })

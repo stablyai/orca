@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { codexStopTarget } from './codex-structured-turn-open-wait'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
@@ -6,7 +6,7 @@ import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput,
   type StructuredAgentSessionInputAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+} from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { readCodexAutoSandbox } from '../launch/codex-structured-auto-sandbox'

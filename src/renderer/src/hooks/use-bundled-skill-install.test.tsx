@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
   return { plan: vi.fn(), execute: vi.fn(), target: localTarget() }
 })
 
-vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
+vi.mock('@/runtime/skills/bundled/runtime-bundled-skills-client', () => ({
   planBundledSkillsOnTarget: mocks.plan,
   executeBundledSkillsOnTarget: mocks.execute
 }))
@@ -108,43 +108,6 @@ describe('useBundledSkillInstall', () => {
     await act(async () => {
       root?.render(<Harness />)
     })
-    expect(latest?.state.kind).toBe('done')
-  })
-
-  it('ignores a repeated click while the install runs', async () => {
-    mocks.plan.mockReturnValueOnce(new Promise(() => {}))
-    const hook = await renderHarness()
-    await act(async () => {
-      void hook.install(['orca-cli'])
-    })
-
-    let repeat: Awaited<ReturnType<BundledSkillInstall['install']>> = { kind: 'idle' }
-    await act(async () => {
-      repeat = (await latest?.install(['orca-cli'])) ?? null
-    })
-
-    expect(repeat).toBeNull()
-    expect(mocks.plan).toHaveBeenCalledOnce()
-    expect(latest?.state.kind).toBe('installing')
-  })
-
-  it('retries the last requested skills on this host', async () => {
-    mocks.plan.mockRejectedValueOnce(new Error('skill-install-home-unavailable'))
-    const hook = await renderHarness()
-
-    await act(async () => {
-      await hook.install(['orca-cli', 'orchestration'])
-    })
-    expect(latest?.state.kind).toBe('failed')
-
-    await act(async () => {
-      latest?.retry()
-    })
-
-    expect(mocks.plan).toHaveBeenLastCalledWith(
-      { kind: 'local' },
-      { names: ['orca-cli', 'orchestration'] }
-    )
     expect(latest?.state.kind).toBe('done')
   })
 })

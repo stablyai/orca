@@ -6,6 +6,10 @@ import type {
   RemoteRuntimeSocketDeathCause,
   RemoteRuntimeSocketLivenessOptions
 } from '../remote-runtime-socket-liveness'
+import type { RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
+
+/** Text, or binary that may carry compressed text; nothing else reaches the shared control socket. */
+export type SharedControlFrame = RemoteRuntimeSealedFrame
 
 export type SharedControlConnectionState =
   | 'closed'
@@ -111,6 +115,8 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   clientCapabilities?: readonly RuntimeCapability[]
   isManuallyDisconnected?: () => boolean
   isCapabilityPaused?: () => boolean
+  /** The server's VM is asleep: no socket is opened or retried until its workspace wakes it. */
+  isAsleep?: () => boolean
   /** Publishes local transport diagnostics after a meaningful state transition. */
   onDiagnosticsChanged?: (diagnostics: RemoteRuntimeSharedConnectionDiagnostics) => void
   /** Any inbound frame, ping or pong on the current socket. */

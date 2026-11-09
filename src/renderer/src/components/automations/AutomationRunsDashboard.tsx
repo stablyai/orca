@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
@@ -67,6 +67,7 @@ export function AutomationRunsDashboard({
   onRefresh: () => void
   onOpenRun: (entry: AutomationRunsDashboardEntry) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -79,7 +80,7 @@ export function AutomationRunsDashboard({
       options.set(
         getAutomationRunsHostKey(row),
         row.hostLabel ||
-          translate(
+          t(
             `auto.components.automations.AutomationRunsDashboard.${scope}`,
             scope === 'local' ? 'Local' : 'Remote'
           )
@@ -87,7 +88,7 @@ export function AutomationRunsDashboard({
     }
     return [...options].map(([key, label]) => ({ key, label }))
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [rows, languageRevision])
+  }, [rows, languageRevision, t])
   const hostEntries = useMemo(
     () => filterAutomationRunsDashboardEntries({ entries, status: 'all', query: '', hostKeys }),
     [entries, hostKeys]
@@ -119,11 +120,11 @@ export function AutomationRunsDashboard({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.automations.AutomationRunsDashboard.search',
                 'Search runs…'
               )}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.automations.AutomationRunsDashboard.search',
                 'Search runs…'
               )}
@@ -134,10 +135,7 @@ export function AutomationRunsDashboard({
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="outline" size="sm" className="h-8 text-xs">
                 <ListFilter className="size-3.5" />
-                {translate(
-                  'auto.components.automations.AutomationRunsDashboard.filters',
-                  'Filters'
-                )}
+                {t('auto.components.automations.AutomationRunsDashboard.filters', 'Filters')}
                 {activeFilterCount > 0 ? (
                   <span className="rounded-full bg-foreground px-1.5 text-[10px] font-semibold leading-4 text-background">
                     {activeFilterCount}
@@ -148,14 +146,14 @@ export function AutomationRunsDashboard({
             <DropdownMenuContent align="start">
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
-                  {translate('auto.components.automations.AutomationRunsDashboard.host', 'Host')}
+                  {t('auto.components.automations.AutomationRunsDashboard.host', 'Host')}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="scrollbar-sleek max-h-80 overflow-y-auto">
                   <DropdownMenuCheckboxItem
                     checked={hostKeys.length === 0}
                     onCheckedChange={() => setHostKeys([])}
                   >
-                    {translate('auto.components.automations.hostPicker.allHosts', 'All hosts')}
+                    {t('auto.components.automations.hostPicker.allHosts', 'All hosts')}
                   </DropdownMenuCheckboxItem>
                   {hostOptions.map((host) => (
                     <DropdownMenuCheckboxItem
@@ -172,10 +170,7 @@ export function AutomationRunsDashboard({
               <DropdownMenuSeparator />
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
-                  {translate(
-                    'auto.components.automations.AutomationRunsDashboard.status',
-                    'Status'
-                  )}
+                  {t('auto.components.automations.AutomationRunsDashboard.status', 'Status')}
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   <DropdownMenuRadioGroup
@@ -184,7 +179,7 @@ export function AutomationRunsDashboard({
                   >
                     {Object.entries(STATUS_LABELS).map(([value, label]) => (
                       <DropdownMenuRadioItem key={value} value={value}>
-                        {translate(
+                        {t(
                           `auto.components.automations.AutomationRunsDashboard.status.${label.key}`,
                           label.fallback
                         )}
@@ -201,7 +196,7 @@ export function AutomationRunsDashboard({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.automations.AutomationRunsDashboard.refresh',
                   'Refresh runs'
                 )}
@@ -213,10 +208,7 @@ export function AutomationRunsDashboard({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate(
-                'auto.components.automations.AutomationRunsDashboard.refresh',
-                'Refresh runs'
-              )}
+              {t('auto.components.automations.AutomationRunsDashboard.refresh', 'Refresh runs')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -224,28 +216,28 @@ export function AutomationRunsDashboard({
         <div>
           <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
             <SummaryCard
-              label={translate(
+              label={t(
                 'auto.components.automations.AutomationRunsDashboard.successful24h',
                 'Successful · 24h'
               )}
               value={counts.successful24h}
             />
             <SummaryCard
-              label={translate(
+              label={t(
                 'auto.components.automations.AutomationRunsDashboard.failed24h',
                 'Failed · 24h'
               )}
               value={counts.failed24h}
             />
             <SummaryCard
-              label={translate(
+              label={t(
                 'auto.components.automations.AutomationRunsDashboard.successful7d',
                 'Successful · 7d'
               )}
               value={counts.successful7d}
             />
             <SummaryCard
-              label={translate(
+              label={t(
                 'auto.components.automations.AutomationRunsDashboard.failed7d',
                 'Failed · 7d'
               )}
@@ -257,7 +249,7 @@ export function AutomationRunsDashboard({
             <div className="mb-3 flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
               <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
               <span>
-                {translate(
+                {t(
                   'auto.components.automations.AutomationRunsDashboard.historyUnavailable',
                   'Run history is unavailable for {{count}} automations. Counts include available history only.',
                   {

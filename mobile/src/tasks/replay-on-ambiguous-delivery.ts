@@ -1,8 +1,9 @@
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { waitForRpcClientReconnected } from '../transport/rpc-client-reconnect-wait'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import { waitForRpcClientReconnected } from '../transport/rpc/rpc-client-reconnect-wait'
+import '../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
 import {
   getWorktreeCreateReplayWindowMs,
   type WorktreeCreateIdempotencySupport

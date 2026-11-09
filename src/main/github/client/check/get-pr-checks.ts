@@ -7,7 +7,7 @@ import {
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-item-ssh-error'
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
 import { extractExecError } from '../../../git/exec-error'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
@@ -25,6 +25,7 @@ import {
   isPendingApprovalSuiteWithoutRuns
 } from './pr-checks-response-mapping'
 import { parseActionsRunId } from './check-detail-field-mapping'
+import { checkRunTimes } from '../../../../shared/source-control/checks/pr-check-time'
 import {
   readRestPRCheckRuns,
   readRestPRCommitStatuses,
@@ -127,25 +128,43 @@ async function readPRChecks(
     await assertRateLimitBudget('graphql', ownerRepo, ghOptions)
     await acquire()
     try {
-      const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', 'name,state,link']
-      if (ownerRepo) {
-        fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
-      }
-      const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
-        const { stderr } = extractExecError(err)
-        // gh pr checks signals an empty run set with nonzero exit.
-        if (stderr.toLowerCase().includes('no checks reported')) {
-          return { stdout: '[]', stderr }
+      const readFallback = (fields: string) => {
+        const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', fields]
+        if (ownerRepo) {
+          fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
         }
-        throw err
-      })
+        return ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
+          const { stderr } = extractExecError(err)
+          // gh pr checks signals an empty run set with nonzero exit.
+          if (stderr.toLowerCase().includes('no checks reported')) {
+            return { stdout: '[]', stderr }
+          }
+          throw err
+        })
+      }
+      const { stdout } = await readFallback('name,state,link,startedAt,completedAt').catch(
+        (err: unknown) => {
+          // Older gh builds reject unknown --json fields; their rows simply have no times.
+          if (!extractExecError(err).stderr.toLowerCase().includes('unknown json field')) {
+            throw err
+          }
+          return readFallback('name,state,link')
+        }
+      )
       noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
-      const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
+      const data: {
+        name: string
+        state: string
+        link: string
+        startedAt?: string
+        completedAt?: string
+      }[] = JSON.parse(stdout)
       return data.map((d) => ({
         name: d.name,
         status: mapCheckStatus(d.state),
         conclusion: mapCheckConclusion(d.state),
         url: d.link || null,
+        ...checkRunTimes(d.startedAt, d.completedAt),
         workflowRunId: parseActionsRunId(d.link)
       }))
     } finally {
@@ -164,13 +183,12 @@ async function readPRChecks(
     if (canUseGraphQLRollup) {
       await acquire()
       try {
-        // Explicit refresh bypasses the polling cache.
-        const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
+        // No gh disk cache: its key ignores the PR head, so it served the previous head's checks after a push, and it never evicts.
+        // Orca's own head-keyed checks cache and read coalescing bound the request volume.
         const { stdout } = await ghExecFileAsync(
           [
             'api',
             'graphql',
-            ...cacheArgs,
             '-f',
             `owner=${ownerRepo.owner}`,
             '-f',

@@ -13,14 +13,14 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import {
   FILE_OWNER_UNRESOLVED_MESSAGE,
   getRuntimeTargetForFileOwner
 } from '@/lib/file-owner-runtime-target'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const DiffViewer = lazy(() => import('../diff/monaco-view/DiffViewer'))
 
@@ -47,6 +47,7 @@ export function ExternalFileChangeCompareDialog({
   onReload: () => void
   onKeepEdits: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [diskState, setDiskState] = useState<DiskReadState>({ kind: 'loading' })
   const access = editorTabFileAccess(useAppStore.getState(), file)
 
@@ -114,13 +115,13 @@ export function ExternalFileChangeCompareDialog({
       <DialogContent className="flex h-[80vh] w-[90vw] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
         <DialogHeader className="border-b border-border/60 p-4">
           <DialogTitle>
-            {translate(
+            {t(
               'auto.components.editor.ExternalFileChangeCompareDialog.4b8de20a11',
               'File changed on disk'
             )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.editor.ExternalFileChangeCompareDialog.90cc31e4d7',
               'Disk version on the left, your unsaved edits on the right.'
             )}
@@ -130,14 +131,14 @@ export function ExternalFileChangeCompareDialog({
           {diskState.kind === 'loading' ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 size-4 animate-spin" />
-              {translate(
+              {t(
                 'auto.components.editor.ExternalFileChangeCompareDialog.8fe30ab254',
                 'Reading file from disk...'
               )}
             </div>
           ) : diskState.kind === 'error' ? (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.editor.ExternalFileChangeCompareDialog.e2b1cd0393',
                 'Could not read the file from disk: {{value0}}',
                 { value0: diskState.message }
@@ -145,7 +146,7 @@ export function ExternalFileChangeCompareDialog({
             </div>
           ) : diskState.kind === 'binary' ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.editor.ExternalFileChangeCompareDialog.b6cf20d514',
                 'The file on disk is binary — no text comparison available.'
               )}
@@ -155,7 +156,7 @@ export function ExternalFileChangeCompareDialog({
               fallback={
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                   <Loader2 className="mr-2 size-4 animate-spin" />
-                  {translate(
+                  {t(
                     'auto.components.editor.ExternalFileChangeCompareDialog.2c8f1e07b9',
                     'Loading comparison...'
                   )}
@@ -186,7 +187,7 @@ export function ExternalFileChangeCompareDialog({
               onReload()
             }}
           >
-            {translate(
+            {t(
               'auto.components.editor.ExternalFileChangeCompareDialog.3fa2b8d417',
               'Reload from Disk'
             )}
@@ -200,7 +201,7 @@ export function ExternalFileChangeCompareDialog({
               onKeepEdits()
             }}
           >
-            {translate(
+            {t(
               'auto.components.editor.ExternalFileChangeCompareDialog.a95d02c644',
               'Keep My Edits'
             )}

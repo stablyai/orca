@@ -109,6 +109,8 @@ export const ORCAD_FOREIGN_SQLITE_READER_ENTRY = 'foreign-sqlite-reader-entry.js
 export const ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY = 'port-scan-command-worker-entry.js'
 // Equals AI_VAULT_SERVICE_ENTRY_FILENAME: the forked child that lists agent sessions.
 export const ORCAD_SESSION_SCANNER_SERVICE_ENTRY = 'session-scanner-service-entry.js'
+/** Worker thread SessionSearchWorkerClient loads; without it remote session search is unavailable. */
+export const ORCAD_SESSION_SEARCH_WORKER_ENTRY = 'session-search-worker-entry.js'
 // Equals COMPUTER_SIDECAR_ENTRY_FILENAME, and the desktop's out/main entry name.
 export const ORCAD_COMPUTER_SIDECAR_ENTRY = 'computer-sidecar.js'
 /** Plain scripts, one copy for every target: each platform's sidecar runs only its own. */
@@ -231,11 +233,15 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   // Worker thread that reads other apps' SQLite (the OpenCode binder and history) off the event loop.
   { filename: ORCAD_FOREIGN_SQLITE_READER_ENTRY },
   { filename: ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY },
-  // Forked so transcript parsing stays off the server's event loop; session search stays in-process.
+  // Forked so transcript parsing stays off the server's event loop.
   { filename: ORCAD_SESSION_SCANNER_SERVICE_ENTRY },
+  // Session search queries run in a worker thread, also off the event loop.
+  { filename: ORCAD_SESSION_SEARCH_WORKER_ENTRY },
   // Account worker threads keep CLI probes and Claude setup off the event loop.
   { filename: 'worker-thread-child-process-entry.js' },
   { filename: 'claude-profile-setup-worker-entry.js' },
+  // Claude fork and rewind copy a transcript in a worker thread, off the event loop.
+  { filename: 'claude-conversation-fork-worker-entry.js' },
   // Dictation loads the recognizer named by orca serve (#31174).
   { filename: 'stt-worker.js' },
   // The forked computer sidecar finds platform runtimes beside itself (#31777).

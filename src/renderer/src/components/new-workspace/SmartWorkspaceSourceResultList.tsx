@@ -2,7 +2,7 @@ import React from 'react'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { Button } from '@/components/ui/button'
 import { CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { getSmartWorkspaceEmptyHint } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { RowIcon, RowLabel } from './smart-workspace-source-row-content'
@@ -43,6 +43,7 @@ export function SmartWorkspaceSourceResultList({
   isRowDisabled?: (row: RowEntry) => boolean
   focusBehavior?: 'page'
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     mode,
     mrStateFilters,
@@ -114,13 +115,13 @@ export function SmartWorkspaceSourceResultList({
             {credentialError ? (
               <>
                 <p className="font-medium text-foreground">
-                  {translate(
+                  {t(
                     'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableTitle',
                     'Reconnect Linear'
                   )}
                 </p>
                 <p className="mt-0.5 text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableBody',
                     'Unable to read saved Linear login. Reconnect it in Settings.'
                   )}
@@ -157,7 +158,7 @@ export function SmartWorkspaceSourceResultList({
             {jiraSource.intent
               ? null
               : mode === 'linear' && linearStatusChecked && !linearStatus.connected
-                ? translate(
+                ? t(
                     'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
                     'Connect Linear in Settings to search issues.'
                   )
@@ -188,7 +189,7 @@ export function SmartWorkspaceSourceResultList({
                 />
                 {isLinked?.(row) ? (
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {translate('workspace.links.linkedResult', 'Linked')}
+                    {t('workspace.links.linkedResult', 'Linked')}
                   </span>
                 ) : null}
               </CommandItem>

@@ -1,5 +1,8 @@
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import { getSshHostServerStatus, isSshHostServed } from '../../ssh/ssh-host-server-status'
+import {
+  getSshHostServerStatus,
+  isSshHostServed
+} from '../../ssh/host-server/ssh-host-server-status'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { restorePortForwards, savedPortForwardsAllLive } from './ssh-port-forward-persistence'
 import { forgetForwardFailures } from './ssh-port-forward-unrestored'

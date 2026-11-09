@@ -1,3 +1,4 @@
+import { agentSessionInteractionCommand } from '../../../src/shared/agent-session/options/agent-session-interaction-mode'
 import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session/requests/agent-session-current-requests'
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
@@ -21,11 +22,8 @@ import {
 import { translate } from '../i18n/mobile-i18n'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
-import {
-  structuredAgentSessionFollowUpsQueue,
-  structuredAgentSessionQueueEnabled
-} from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
-import type { RpcClient } from '../transport/rpc-client'
+import { mobileStructuredSendQueues } from './mobile-structured-send-queue-rule'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
@@ -36,32 +34,13 @@ import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-age
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import type { MobileStructuredSendsOut } from './use-mobile-structured-stop-offer'
 import { structuredSessionOperationId } from './structured-session-operation-id'
+import { UNCONFIRMED_SEND_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 import { timeoutForDeadline } from './mobile-structured-agent-session-rpc'
 import { nativeChatTextWithFileReferences } from './native-chat/composer/mobile-native-chat-file-attachment'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
 } from './mobile-structured-actionable-prompt'
-
-/** The desktop's rule: the alternate flips the setting first, then the queue's own rules decide. */
-export function mobileStructuredSendQueues(
-  queueCapable: boolean,
-  queueFollowUps: boolean,
-  state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'queuedMessages'>,
-  send: { alternate?: boolean; isWorking: boolean; stopping: boolean } = {
-    isWorking: false,
-    stopping: false
-  }
-): boolean {
-  return (
-    queueCapable &&
-    structuredAgentSessionQueueEnabled(
-      structuredAgentSessionFollowUpsQueue(queueFollowUps, send),
-      state,
-      selectAgentSessionCurrentRequests(state)
-    )
-  )
-}
 
 export type StructuredMobileSendAttachment =
   | (StructuredAgentSessionAttachment & { kind?: 'image'; id?: string })
@@ -82,7 +61,9 @@ export function useMobileStructuredSendWithOutcome(args: {
   accept: MobileStructuredSends['accept']
   acknowledge: MobileStructuredSends['acknowledge']
   reject: MobileStructuredSends['reject']
+  holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
   commandPending: { current: boolean }
+  onClearSent: () => () => void
   /** This chat's message sends still out, which a command waits behind as on desktop. */
   sendsOut: MobileStructuredSendsOut
   controller: Pick<
@@ -119,7 +100,9 @@ export function useMobileStructuredSendWithOutcome(args: {
     commandsWait,
     controller,
     enabled,
+    onClearSent,
     reject,
+    holdUnconfirmed,
     onSendError,
     queueCapable,
     queueFollowUps,
@@ -176,37 +159,45 @@ export function useMobileStructuredSendWithOutcome(args: {
           : 'rejected'
       }
       const messageText = objective === null ? text : `/goal ${objective}`
-      const commandOutcome = await dispatchMobileStructuredCommand({
-        text: messageText,
-        hasAttachments,
-        client,
-        sessionId,
-        fence: currentFence,
-        pending: commandPending,
-        controller: { agent: agent ?? undefined, ...controller, sessionCommands },
-        agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
-        holds: () => {
-          const state = stateRef.current
-          const turnId = runningStructuredAgentSessionTurnId(state)
-          const tasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
-          return {
-            working: mobileStructuredAgentSessionWorking(state) || queueSendsNext,
-            prompt: Boolean(
-              actionableStructuredApproval(state) || actionableStructuredQuestion(state)
-            ),
-            background: tasks.show || tasks.isMonitoring,
-            backgroundTasksRunning: tasks.isMonitoring,
-            sending: sendsOut.sending()
-          }
-        },
-        startFailures: () => agentSessionVisibleFailureFacts(stateRef.current.items),
-        waitsInLine: (command) =>
-          command === 'compact' &&
-          commandsWait &&
-          !pendingPromptsAllUnanswerableHere(selectAgentSessionCurrentRequests(stateRef.current)),
-        onError: onSendError,
-        timeoutMs
-      })
+      const pickedModeSkill =
+        agentSessionInteractionCommand(agent ?? '', messageText) !== null &&
+        pickedSkills?.some((skill) => messageText.trimEnd() === `/${skill.name}`)
+      const commandOutcome = pickedModeSkill
+        ? null
+        : await dispatchMobileStructuredCommand({
+            text: messageText,
+            hasAttachments,
+            client,
+            sessionId,
+            fence: currentFence,
+            pending: commandPending,
+            controller: { agent: agent ?? undefined, ...controller, sessionCommands },
+            agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
+            holds: () => {
+              const state = stateRef.current
+              const turnId = runningStructuredAgentSessionTurnId(state)
+              const tasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
+              return {
+                working: mobileStructuredAgentSessionWorking(state) || queueSendsNext,
+                prompt: Boolean(
+                  actionableStructuredApproval(state) || actionableStructuredQuestion(state)
+                ),
+                background: tasks.show || tasks.isMonitoring,
+                backgroundTasksRunning: tasks.isMonitoring,
+                sending: sendsOut.sending()
+              }
+            },
+            startFailures: () => agentSessionVisibleFailureFacts(stateRef.current.items),
+            waitsInLine: (command) =>
+              command === 'compact' &&
+              commandsWait &&
+              !pendingPromptsAllUnanswerableHere(
+                selectAgentSessionCurrentRequests(stateRef.current)
+              ),
+            onError: onSendError,
+            onClearSent,
+            timeoutMs
+          })
       if (commandOutcome !== null) {
         return commandOutcome
       }
@@ -237,7 +228,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         return 'rejected'
       }
       const send = {
-        clientMessageId: structuredSessionOperationId(),
+        clientMessageId: intent?.clientMessageId ?? structuredSessionOperationId(),
         body,
         queuedAt: Date.now(),
         ...captured,
@@ -262,6 +253,9 @@ export function useMobileStructuredSendWithOutcome(args: {
           ? { delivery: 'queue-if-active' as const }
           : {}),
         ...captured,
+        ...(intent?.usageLimitContinuationOfTurnItemId
+          ? { usageLimitContinuationOfTurnItemId: intent.usageLimitContinuationOfTurnItemId }
+          : {}),
         deadline,
         clientMessageId: send.clientMessageId,
         onAccepted: (cursor) => acknowledge(send.clientMessageId, cursor),
@@ -269,6 +263,9 @@ export function useMobileStructuredSendWithOutcome(args: {
       })
       if (outcome === 'rejected' || outcome === 'queued') {
         reject(send.clientMessageId)
+      } else if (outcome === 'unknown') {
+        // Answers and continuations have no box to return to: drop the bubble with a warning. The composer re-holds its sends to hand them back.
+        holdUnconfirmed(send.clientMessageId, () => onSendError(UNCONFIRMED_SEND_MESSAGE))
       }
       return outcome
     },
@@ -281,7 +278,9 @@ export function useMobileStructuredSendWithOutcome(args: {
       commandsWait,
       controller,
       enabled,
+      onClearSent,
       reject,
+      holdUnconfirmed,
       onSendError,
       queueCapable,
       queueFollowUps,

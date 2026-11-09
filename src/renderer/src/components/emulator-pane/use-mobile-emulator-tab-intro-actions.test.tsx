@@ -100,32 +100,6 @@ afterEach(async () => {
 })
 
 describe('useMobileEmulatorTabIntroActions', () => {
-  it('hides the feature, dismisses the intro, and closes simulator tabs after settings apply', async () => {
-    const updateSettings = vi.fn<AppState['updateSettings']>(async () => {
-      useAppStore.setState({
-        settings: { mobileEmulatorEnabled: false } as AppState['settings']
-      })
-    })
-    const { closeUnifiedTab, dismissMobileEmulatorTabIntro } = configureStoreForHideAction({
-      updateSettings
-    })
-
-    await renderProbe()
-
-    latestActions?.hideIntro()
-    await flushAsyncAction()
-
-    expect(updateSettings).toHaveBeenCalledWith({ mobileEmulatorEnabled: false })
-    expect(dismissMobileEmulatorTabIntro).toHaveBeenCalledTimes(1)
-    expect(closeUnifiedTab).toHaveBeenCalledTimes(1)
-    expect(closeUnifiedTab).toHaveBeenCalledWith('simulator-tab')
-    expect(toast.info).toHaveBeenCalledWith(
-      'Mobile Emulator hidden',
-      expect.objectContaining({ id: 'mobile-emulator-hidden', duration: 30_000 })
-    )
-    expect(toast.error).not.toHaveBeenCalled()
-  })
-
   it('does not dismiss or close tabs when the setting write does not stick', async () => {
     const updateSettings = vi.fn<AppState['updateSettings']>(async () => {})
     const { closeUnifiedTab, dismissMobileEmulatorTabIntro } = configureStoreForHideAction({

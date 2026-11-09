@@ -6,9 +6,9 @@ import type { PluginThemeRegistration } from '../../../../../shared/plugins/arti
 import { isUsablePluginLanguagePack } from '../../../../../shared/plugins/languages/plugin-language-pack-coverage'
 import { useAppStore } from '@/store'
 import { isPluginAppThemeSelected } from './plugin-theme-apply'
-import { usePluginIconThemes } from '@/store/plugin-icon-themes'
-import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
-import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugin-themes'
+import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
+import { usePluginLanguagePacks } from '@/store/plugins/localization/plugin-language-packs'
+import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 
 type ThemeMode = 'light' | 'dark'
 

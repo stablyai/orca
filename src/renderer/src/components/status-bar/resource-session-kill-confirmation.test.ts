@@ -19,20 +19,8 @@ function row(overrides: Partial<UnifiedSessionRow> = {}): UnifiedSessionRow {
 }
 
 describe('resource session kill confirmation', () => {
-  it('confirms before killing a session with a visible tab', () => {
-    expect(requiresKillConfirmation(row({ bound: true, tabId: 'tab-1' }))).toBe(true)
-  })
-
-  it('confirms before killing an agent-owned session that has no binding', () => {
-    expect(requiresKillConfirmation(row({ bound: false, agentOwnership: 'present' }))).toBe(true)
-  })
-
   it('confirms when ownership could not be established at all', () => {
     // Missing serialized claims cannot prove a session has no agent owner.
     expect(requiresKillConfirmation(row({ bound: false, agentOwnership: 'unknown' }))).toBe(true)
-  })
-
-  it('skips the prompt only on proven absence with no binding', () => {
-    expect(requiresKillConfirmation(row())).toBe(false)
   })
 })

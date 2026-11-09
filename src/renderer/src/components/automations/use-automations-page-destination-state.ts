@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react'
 import type {
   AutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
@@ -32,11 +32,11 @@ import {
   automationRuntimePairingRevision,
   groupReposByAutomationAuthority
 } from './automation-authority-identity'
-import { resolveIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
+import { resolveIndexedWorktreeOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
-} from '../../../../shared/worktree-execution-host-resolution'
+} from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { automationWorktreesForRepo } from './automation-list-row-identity'
 import { getDefaultWorktree } from './automation-draft-model'
 import type { AutomationsPageListState } from './use-automations-page-list-state'

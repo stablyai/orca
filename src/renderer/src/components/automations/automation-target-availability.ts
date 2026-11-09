@@ -2,7 +2,7 @@ import {
   automationHostReselectionMessage,
   type AutomationCapturedOwner
 } from './automation-captured-owner'
-import type { Automation } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   setupHostMatchesRunContext,
@@ -11,6 +11,7 @@ import {
 import { evaluateRuntimeCompat } from '../../../../shared/protocol-compat'
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -21,7 +22,7 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
+import type { RuntimeEnvironmentSshBucket } from '../../store/slices/ssh/runtime-environment-ssh'
 
 import type { AutomationTargetAvailability } from './automation-target-availability-types'
 export type { AutomationTargetAvailability } from './automation-target-availability-types'
@@ -38,18 +39,21 @@ type AutomationTargetAvailabilityArgs = {
   automationHostTarget?: AutomationHostTarget | null
 }
 
-export function getAutomationTargetAvailability({
-  automation,
-  capturedOwner,
-  repo,
-  workspace,
-  projectHostSetups,
-  sshConnectionStates,
-  sshStateByEnvironment,
-  runtimeStatusByEnvironmentId,
-  automationHostTarget
-}: AutomationTargetAvailabilityArgs): AutomationTargetAvailability {
-  const reselection = automationHostReselectionMessage(capturedOwner)
+export function getAutomationTargetAvailability(
+  {
+    automation,
+    capturedOwner,
+    repo,
+    workspace,
+    projectHostSetups,
+    sshConnectionStates,
+    sshStateByEnvironment,
+    runtimeStatusByEnvironmentId,
+    automationHostTarget
+  }: AutomationTargetAvailabilityArgs,
+  t: Translate = translate
+): AutomationTargetAvailability {
+  const reselection = automationHostReselectionMessage(capturedOwner, t)
   if (reselection) {
     return unavailable('host-reselection', reselection)
   }
@@ -62,7 +66,8 @@ export function getAutomationTargetAvailability({
     if (parsedHost?.kind === 'runtime') {
       const runtimeAvailability = getRuntimeAutomationAvailability(
         parsedHost.environmentId,
-        runtimeStatusByEnvironmentId
+        runtimeStatusByEnvironmentId,
+        t
       )
       if (!runtimeAvailability.canRunNow) {
         return runtimeAvailability
@@ -81,7 +86,7 @@ export function getAutomationTargetAvailability({
       if (projectHostSetups.some((candidate) => candidate.id === runContext.projectHostSetupId)) {
         return unavailable(
           'host-mismatch',
-          translate(
+          t(
             'auto.components.automations.automationTargetAvailability.hostMismatch',
             'The saved run host no longer matches this project setup.'
           )
@@ -110,7 +115,7 @@ export function getAutomationTargetAvailability({
     if (!setupMatchesContext || !repoMatchesContext) {
       return unavailable(
         'host-mismatch',
-        translate(
+        t(
           'auto.components.automations.automationTargetAvailability.hostMismatch',
           'The saved run host no longer matches this project setup.'
         )
@@ -153,7 +158,8 @@ export function getAutomationTargetAvailability({
 
 export function getRuntimeAutomationAvailability(
   environmentId: string,
-  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus> | undefined
+  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus> | undefined,
+  t?: Translate
 ): AutomationTargetAvailability {
   const entry = runtimeStatusByEnvironmentId?.get(environmentId)
   if (!entry) {
@@ -182,7 +188,7 @@ export function getRuntimeAutomationAvailability(
       entry.status.minCompatibleRuntimeClientVersion ?? entry.status.minCompatibleMobileVersion
   })
   if (compat.kind === 'blocked') {
-    return unavailable('runtime-update-required', describeRuntimeCompatBlock(compat))
+    return unavailable('runtime-update-required', describeRuntimeCompatBlock(compat, t))
   }
   return { canRunNow: true, reason: 'available', message: null }
 }

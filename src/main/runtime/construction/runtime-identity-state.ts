@@ -1,40 +1,33 @@
 import type { TerminalIdentitySource } from '../terminal/identity/terminal-identity-source'
 import type { SessionTitlePublisher } from '../session-tabs/session-title-publisher'
 import { randomUUID } from 'node:crypto'
-import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
-import { preserveTerminalRetirementProofs } from '../terminal/surface/mobile-session-terminal-retirement-proof'
-import { stampMobileSnapshotVersion } from '../mobile-session-snapshot-version'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import { mainBindsUnendedTerminal } from '../terminal/surface/main-pane-verdict'
-import {
-  headlessMobileSnapshotContentUnchanged,
-  mobileSnapshotIdentityUnchanged
-} from '../mobile-session-snapshot-equality'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from '../client/settings/runtime-client-settings'
-import type { RuntimeAutomationController } from '../runtime-automation-controller'
-import { RuntimeArtifactController } from '../runtime-artifact-controller'
-import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
-import type { RuntimeOrchestrationFederation } from '../runtime-orchestration-federation'
+import type { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
+import { RuntimeArtifactController } from '../artifacts/runtime-artifact-controller'
+import type { OrchestrationEnvironmentTransport } from '../orchestration/federation/environment-transport'
+import type { RuntimeOrchestrationFederation } from '../orchestration/federation/runtime-orchestration-federation'
 import type {
   RuntimeGraphStatus,
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../shared/runtime-session-contracts'
+import type {
   RuntimeTerminalFocus,
   RuntimeTerminalResolvePane,
   RuntimeWorktreeTerminalSleepResult
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-terminal-contracts'
 import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle
-} from '../runtime-graph-reload-lifecycle'
-import { ClientHostedPageReconciliationWindow } from '../client-hosted-page-reconciliation-window'
-import { ClientSessionTabSelectionStore } from '../client-session-tab-selection'
+} from '../session-graph/runtime-graph-reload-lifecycle'
+import { ClientHostedPageReconciliationWindow } from '../browser/client-pages/client-hosted-page-reconciliation-window'
+import { ClientSessionTabSelectionStore } from '../client/navigation/client-session-tab-selection'
 import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-terminal-mutation-lock'
 import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
@@ -44,23 +37,26 @@ import { createMobileSessionTabsNotifyCoalescer } from '../session-lifecycle/pub
 
 import type { MobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { createMobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
-import { TerminalFocusNavigationCoalescer } from '../terminal-focus-navigation-coalescer'
+import { TerminalFocusNavigationCoalescer } from '../terminal/focus/terminal-focus-navigation-coalescer'
 import type {
   PtyControllerInventory,
   RuntimePtyController
-} from '../runtime-pty-controller-contract'
+} from '../terminal/lifecycle/runtime-pty-controller-contract'
 import type {
   RuntimeLeafRecord,
   PtyRegistrationClaim,
   RuntimeWorktreeTerminalSleepState
 } from '../terminal/records/runtime-terminal-state-records'
-import { MailPointerRepointScheduler } from '../orchestration/mail-pointer-repoint-scheduler'
+import { MailPointerRepointScheduler } from '../orchestration/mailbox/notifications/mail-pointer-repoint-scheduler'
 import { RuntimeTerminalWaiterRegistry } from '../terminal/wait/terminal-waiter-registry'
 import { RuntimeTerminalWriter } from '../terminal/input/runtime-terminal-writer'
 import { writeRefused } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import { RuntimeTerminalIdlePolls } from '../terminal/wait/terminal-idle-polls'
-import { TerminalIntentionalStops } from '../terminal-intentional-stops'
-import { TerminalRunFactsRegister, type TerminalSpawnCommit } from '../terminal-run-facts'
+import { TerminalIntentionalStops } from '../terminal/stop/terminal-intentional-stops'
+import {
+  TerminalRunFactsRegister,
+  type TerminalSpawnCommit
+} from '../terminal/lifecycle/terminal-run-facts'
 import type { TuiIdleEvidenceSource } from '../terminal/wait/tui-idle-evidence-source'
 import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint'
 import {
@@ -71,11 +67,15 @@ import {
 import { RuntimeTerminalWait as RuntimeTerminalWaitController } from '../terminal/wait/terminal-wait'
 import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
-import type { TerminalHandleAccess } from '../runtime-agent-sender-associations'
+import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender-associations'
 
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
+  protected getLeafKey(tabId: string, leafId: string): string {
+    return `${tabId}::${leafId}`
+  }
+
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
   protected abstract terminalHandleAccess(): TerminalHandleAccess
   protected readonly runtimeId = randomUUID()
@@ -126,30 +126,10 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
 
-  storeMobileSessionSnapshot(
+  abstract storeMobileSessionSnapshot(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot
-  ): RuntimeMobileSessionTabsSnapshot {
-    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
-    snapshot = reconcileChatTabIdentities(snapshot, existing)
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
-      // Main-order-only rebuilds are no-ops unless occupant/publication/retirement evidence changed.
-      if (
-        existing &&
-        mobileSnapshotIdentityUnchanged(existing, snapshot) &&
-        headlessMobileSnapshotContentUnchanged(existing, merged) &&
-        !headlessMobileSnapshotContentUnchanged(snapshot, merged)
-      ) {
-        return existing
-      }
-      snapshot = merged
-    }
-    snapshot = preserveTerminalRetirementProofs(snapshot, existing)
-    const stamped = stampMobileSnapshotVersion(snapshot, existing)
-    this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
-    return stamped
-  }
+  ): RuntimeMobileSessionTabsSnapshot
 
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null
 
@@ -279,7 +259,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     null
 
   /** Rank launch authority first, then foreground evidence for agents Orca did not launch. */
-  protected getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
+  getPaneTerminalAgent(ptyId: string | null | undefined): TerminalAgent | null {
     const pty = ptyId ? this.ptysById.get(ptyId) : undefined
     return pty?.launchAgent ?? pty?.foregroundAgent ?? pty?.launchCommandAgent ?? null
   }

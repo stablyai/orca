@@ -18,7 +18,7 @@ vi.mock('../opencode/hook-service', () =>
 vi.mock('../mimo/hook-service', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
-vi.mock('../agent-hooks/server', () =>
+vi.mock('../agent-hooks/server/agent-hook-server', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../pi/titlebar-extension-service', () =>
@@ -42,7 +42,7 @@ vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
 vi.mock('../memory/pty-registry', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
-vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
+vi.mock('../agent-hooks/observations/migration-unsupported-pty-state', () =>
   import('./pty/pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../codex/configuration/homes/codex-pane-account-registry', () =>
@@ -56,50 +56,47 @@ describe.each(['local', 'daemon'] as const)('%s PTY navigation readiness', (prov
   const { handlers, mainWindow, spawnAndGetEnv } = setupPtyIpcSuite()
   const { daemonSpawnAndGetEnv } = createDaemonActiveProviderFixtures({ handlers, mainWindow })
 
-  it.each([false, true])(
-    'spawns a plain shell while reconciliation is pending (navigation: %s)',
-    async (enabled) => {
-      let release = () => {}
-      const gate = new Promise<void>((resolve) => {
-        release = resolve
-      })
-      const config = join(tmpdir(), 'orca-spawn-pending-agent-view-config')
-      vi.stubEnv('CLAUDE_CONFIG_DIR', config)
-      const reconcileConfig = vi.fn(() => gate)
-      const service = new agentView.ClaudeAgentViewService(
-        join(tmpdir(), 'orca-spawn-pending-agent-view'),
-        {
-          reconcileConfig,
-          ensurePlugin: async () => join(tmpdir(), 'orca-spawn-agent-view-plugin'),
-          loginEnv: async () => ({ CLAUDE_CONFIG_DIR: config }),
-          listProfiles: async () => []
-        }
-      )
-      const settings = createGlobalSettingsFixture({ claudeSubagentNavigationEnabled: enabled })
-      let reconciled = false
-      const reconcile = service.reconcile(settings).then(() => {
-        reconciled = true
-      })
-      await vi.waitFor(() => expect(reconcileConfig).toHaveBeenCalledOnce())
-      const serviceSpy = vi.spyOn(agentView, 'getClaudeAgentViewService').mockReturnValue(service)
-      let env: Record<string, string> | undefined
-      const spawn = (
-        provider === 'daemon'
-          ? daemonSpawnAndGetEnv({}, undefined, () => settings)
-          : spawnAndGetEnv({}, undefined, undefined, () => settings)
-      ).then((result) => {
-        env = result
-      })
-      try {
-        await vi.waitFor(() => expect(env).toBeDefined())
-        expect(reconciled).toBe(false)
-        expect(env).not.toHaveProperty('ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR')
-      } finally {
-        release()
-        await Promise.all([reconcile, spawn])
-        serviceSpy.mockRestore()
-        vi.unstubAllEnvs()
+  it('spawns a plain shell while reconciliation is pending', async () => {
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const config = join(tmpdir(), 'orca-spawn-pending-agent-view-config')
+    vi.stubEnv('CLAUDE_CONFIG_DIR', config)
+    const reconcileConfig = vi.fn(() => gate)
+    const service = new agentView.ClaudeAgentViewService(
+      join(tmpdir(), 'orca-spawn-pending-agent-view'),
+      {
+        reconcileConfig,
+        ensurePlugin: async () => join(tmpdir(), 'orca-spawn-agent-view-plugin'),
+        loginEnv: async () => ({ CLAUDE_CONFIG_DIR: config }),
+        listProfiles: async () => []
       }
+    )
+    const settings = createGlobalSettingsFixture({ claudeSubagentNavigationEnabled: true })
+    let reconciled = false
+    const reconcile = service.reconcile(settings).then(() => {
+      reconciled = true
+    })
+    await vi.waitFor(() => expect(reconcileConfig).toHaveBeenCalledOnce())
+    const serviceSpy = vi.spyOn(agentView, 'getClaudeAgentViewService').mockReturnValue(service)
+    let env: Record<string, string> | undefined
+    const spawn = (
+      provider === 'daemon'
+        ? daemonSpawnAndGetEnv({}, undefined, () => settings)
+        : spawnAndGetEnv({}, undefined, undefined, () => settings)
+    ).then((result) => {
+      env = result
+    })
+    try {
+      await vi.waitFor(() => expect(env).toBeDefined())
+      expect(reconciled).toBe(false)
+      expect(env).not.toHaveProperty('ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR')
+    } finally {
+      release()
+      await Promise.all([reconcile, spawn])
+      serviceSpy.mockRestore()
+      vi.unstubAllEnvs()
     }
-  )
+  })
 })

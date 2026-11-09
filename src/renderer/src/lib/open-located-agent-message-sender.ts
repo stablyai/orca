@@ -4,28 +4,28 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeTerminalResolvePane } from '../../../shared/runtime-terminal-contracts'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import {
   focusRendererTerminalHandle,
   focusRuntimeTerminalHandle
-} from '@/components/terminal-pane/terminal-handle-links'
-import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
+} from '@/components/terminal-pane/links/handles/terminal-handle-links'
+import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-status/stale-agent-row'
 import {
   activateAiVaultStructuredSession,
   structuredSessionOpenFeedback,
   type StructuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
-import type { LocatedAgentSender } from '@/runtime/agent-sender-associations'
+import type { LocatedAgentSender } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
 import {
   agentMessageSenderUnavailableText,
   type AgentMessageSenderTarget
-} from '@/components/native-chat/native-chat-agent-message-sender-target'
+} from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import { activateWorktreeAgentPane } from '@/components/sidebar/workspace-card/activity/use-worktree-agent-activation'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 /** older-host identifies the chat host; update may mean either side, and unreachable proves nothing. */
 export type LookupFailure = 'older-host' | 'update' | 'unreachable'

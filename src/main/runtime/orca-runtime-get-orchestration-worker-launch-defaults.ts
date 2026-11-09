@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithRestoredHandlePaneStart } from './terminal/surface/restored-handle-pane-start'
-import type { OrchestrationWorkerLaunchDefaults } from '../../shared/orchestration-worker-model-settings'
+import type { OrchestrationWorkerLaunchDefaults } from '../../shared/orchestration/workers/orchestration-worker-model-settings'
 
 export abstract class OrcaRuntimeWithGetOrchestrationWorkerLaunchDefaults extends OrcaRuntimeWithRestoredHandlePaneStart {
   getOrchestrationWorkerLaunchDefaults(): OrchestrationWorkerLaunchDefaults {

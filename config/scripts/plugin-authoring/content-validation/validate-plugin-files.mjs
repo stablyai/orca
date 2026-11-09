@@ -23,7 +23,7 @@ const {
   validatePluginInstallContent
 } = loadPluginSchemaModule('../../main/plugins/plugin-authoring-checks.ts')
 // Why shared: `orca plugin validate` runs these same strict artifact checks.
-const { strictPluginArtifactErrors } = loadPluginSchemaModule(
+const { strictPluginArtifactErrors, strictPluginArtifactWarnings } = loadPluginSchemaModule(
   'authoring/plugin-strict-artifact-checks.ts'
 )
 
@@ -116,7 +116,11 @@ for (const target of targets) {
       console.error(`${file}: ${error}`)
     }
     if (errors.length === 0 && path.basename(file) === 'orca-plugin.json') {
-      for (const warning of pluginManifestWarnings(raw)) {
+      const { manifest } = parsePluginManifest(raw)
+      for (const warning of [
+        ...pluginManifestWarnings(raw),
+        ...strictPluginArtifactWarnings(manifest, readPluginText(root))
+      ]) {
         console.warn(`${file}: warning: ${warning}`)
       }
     }

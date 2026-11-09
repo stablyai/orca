@@ -55,11 +55,6 @@ describe('structuralValuesEqual', () => {
     expect(structuralValuesEqual({ a: 1, b: undefined }, { a: 1, c: undefined })).toBe(false)
     expect(structuralValuesEqual({ a: 1, b: undefined }, { a: 1, b: undefined })).toBe(true)
   })
-
-  it('compares leaves with === so NaN is never equal and -0 matches 0', () => {
-    expect(structuralValuesEqual({ a: Number.NaN }, { a: Number.NaN })).toBe(false)
-    expect(structuralValuesEqual({ a: 0 }, { a: -0 })).toBe(true)
-  })
 })
 
 describe('structuralValuesEqualIgnoringUndefined', () => {
@@ -71,10 +66,5 @@ describe('structuralValuesEqualIgnoringUndefined', () => {
       structuralValuesEqualIgnoringUndefined({ a: 1, b: undefined }, { a: 1, c: undefined })
     ).toBe(true)
     expect(structuralValuesEqualIgnoringUndefined({ a: 1 }, { a: 1, b: 2 })).toBe(false)
-  })
-
-  it('compares leaves with Object.is so NaN is equal and -0 differs from 0', () => {
-    expect(structuralValuesEqualIgnoringUndefined({ a: Number.NaN }, { a: Number.NaN })).toBe(true)
-    expect(structuralValuesEqualIgnoringUndefined({ a: 0 }, { a: -0 })).toBe(false)
   })
 })

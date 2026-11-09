@@ -4,8 +4,8 @@ import {
   resolveOrchestrationWorkerEffort,
   supportsLaunchModel,
   type OrchestrationWorkerLaunchDefaults
-} from '../../../../../../shared/orchestration-worker-model-settings'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-model-settings'
+import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'

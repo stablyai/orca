@@ -1,9 +1,9 @@
 import { RateLimitServiceFullCycleApplication } from './service-full-cycle-application'
-import { fetchClaudeRateLimits } from '../claude-fetcher'
-import { fetchCodexRateLimits } from '../codex-fetcher'
-import { fetchGrokRateLimits } from '../grok-fetcher'
-import { readGrokAuthSession } from '../grok-auth'
-import type { ProviderRateLimits } from './service-types'
+import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
+import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
+import { fetchGrokRateLimits } from '../providers/grok/grok-fetcher'
+import { readGrokAuthSession } from '../providers/grok/grok-auth'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
 export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFullCycleApplication {
   protected async runFetchCodexOnlyCycle(signal: AbortSignal): Promise<void> {
@@ -105,7 +105,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       claude: this.withFetchingStatus(previousState.claude, 'claude')
     })
 
-    const claude = await fetchClaudeRateLimits({
+    const claude = await fetchActiveClaudeRateLimits({
       authPreparation: claudeAuthPreparation,
       allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
       allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),

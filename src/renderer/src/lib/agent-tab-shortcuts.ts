@@ -16,9 +16,12 @@ import {
   type AgentLaunchRouteStore,
   type ProspectiveWorkspace,
   worktreeLaunchWorkspace
-} from '@/lib/agent-launch-route-input'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
-import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import {
+  ensureAgentLaunchPreferences,
+  readAgentLaunchPreferencesForWorktree
+} from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 
 export type BoundAgentTabAction = {
   agent: TuiAgent
@@ -95,5 +98,28 @@ export async function resolveDefaultAgentForWorktreeNewTab(
     ...readAgentLaunchPreferencesForWorktree(state, worktreeId),
     detectedAgentIds,
     chatIn: { store: state, worktreeId }
+  })
+}
+
+/** Workspace completion honors Blank and resolves against the captured workspace copy. */
+export async function resolveDefaultAgentForWorktree(
+  getState: () => AppState,
+  worktreeId: string
+): Promise<TuiAgent | null> {
+  const workspace = worktreeLaunchWorkspace(worktreeId)
+  const [{ detected: detectedAgentIds }, preferences] = await Promise.all([
+    acquireAgentLaunchChoices(
+      workspace,
+      () => loadDetectedAgentsForWorktree(getState(), worktreeId),
+      undefined,
+      false,
+      getState
+    ),
+    ensureAgentLaunchPreferences(getState(), workspace)
+  ])
+  return resolveDefaultAgentForWorkspace({
+    ...preferences,
+    detectedAgentIds,
+    chatIn: { store: getState(), workspace }
   })
 }

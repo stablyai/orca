@@ -1,14 +1,15 @@
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
-import { conversationRecordReader } from './orchestration/structured-session-lineage'
+import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
-import { publishNativeChatFollowUpChanges } from './runtime-native-chat-follow-up-events'
-import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
+import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
+import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
+import { publishWorkspaceViewChanges } from './sidebar-inputs/runtime-workspace-view-change-events'
 import {
   OrcaRuntimeWithSidebarTemporal,
   sidebarFactsRuntime
 } from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithAgentTransitions } from './orca-runtime-agent-transitions'
+import { OrcaRuntimeWithAgentTransitions } from './construction/orca-runtime-agent-transitions'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
@@ -23,7 +24,7 @@ import type {
 import { registerWorktreeChangeInvalidator } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
-import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
+import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-record-warmup-gate'
 import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
@@ -31,13 +32,16 @@ import {
   listReferenceWorkspaces,
   selectWarmedReferenceWorkspace,
   listWorkspaceReferences
-} from './runtime-reference-catalog'
-import { findWorkspaceReferences } from './runtime-reference-find'
-import { createReferenceAgentIndex, referenceConnectionHosts } from './runtime-reference-agents'
+} from './workspaces/references/runtime-reference-catalog'
+import { findWorkspaceReferences } from './workspaces/references/runtime-reference-find'
+import {
+  createReferenceAgentIndex,
+  referenceConnectionHosts
+} from './workspaces/references/runtime-reference-agents'
 import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-contracts'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
-import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
+import { rekeyMovedPaneOwners } from './terminal/identity/moved-pane-owner-rekey'
 import * as Layout from './terminal/layout/runtime-layout-apply'
 import type { TerminalCreateOptions } from './terminal/launch/terminal-create-options'
 import {
@@ -48,8 +52,8 @@ import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-pr
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
 import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
 import { getMainHttpClient } from '../network/http-client'
-import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
-import { CollapseWriteOrder } from './workspace-view-collapse-writes'
+import { getRuntimeDesktopSurface } from './construction/runtime-desktop-surface'
+import { CollapseWriteOrder } from './sidebar-inputs/workspace-view-collapse-writes'
 import { SidebarInputsFeed } from './sidebar-inputs/sidebar-inputs-feed'
 import { sidebarInputsFeedDomains } from './sidebar-inputs/sidebar-inputs-feed-domains'
 import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
@@ -171,7 +175,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
-    publishNativeChatFollowUpChanges(this.store, (event) => this.emitClientEvent(event))
+    publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
+    publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
   }
 
   private structuredAgentAvailability?: ReturnType<typeof installAvailability>
@@ -213,6 +218,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Startup settled; opening still waits for a launch-capable client. */
   noteAgentLaunchStartupSettled(): void {
     this.agentLaunchRecordWarmup.startupSettled()
+    // Desktop and serve: CI-line watches start here, past first paint, chat or no chat.
+    this.startPullRequestWatches()
   }
 
   /** Warm up before the first client launch so that launch does not open the record. */
@@ -260,7 +267,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Apply a window command to the partitions that hold its tab. */
   async applyLayoutCommand(
     command: Layout.WindowLayoutCommand,
-    run?: Pick<Layout.LayoutCommandRunOptions, 'admit'>
+    run?: Pick<Layout.LayoutCommandRunOptions, 'admit' | 'visibility'>
   ): Promise<LayoutApplyReply> {
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)

@@ -1,9 +1,11 @@
+import { recordRelayedSpan } from '../../observability/tracer'
 import type { SessionSearchScanRoots } from '../../ai-vault-search/session-search-scan-roots'
 import type { ChildProcess } from 'node:child_process'
 import { createAiVaultScanCancelledError } from '../ai-vault-scan-cancellation'
 import type { AiVaultServiceScanListener } from './session-scanner-service-request-deadline'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
+  isAiVaultServiceChildMessage,
   aiVaultServiceLane,
   type AiVaultServiceInit,
   type AiVaultServiceLane,
@@ -213,7 +215,13 @@ export function attachAiVaultServiceChild(
     onStderr?: (text: string) => void
   }
 ): void {
-  child.on('message', handlers.onMessage)
+  child.on('message', (message: unknown) => {
+    if (isAiVaultServiceChildMessage(message) && message.type === 'trace') {
+      recordRelayedSpan(message.record)
+    } else {
+      handlers.onMessage(message)
+    }
+  })
   child.on('error', handlers.onFault)
   child.on('disconnect', () => handlers.onFault(new Error('AI Vault service disconnected.')))
   child.on('exit', (code) => handlers.onFault(new Error(`AI Vault service exited (${code}).`)))

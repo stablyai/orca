@@ -5,7 +5,7 @@ import {
   normalizeOrchestrationWorkerEfforts,
   normalizeOrchestrationWorkerModels,
   persistedOrchestrationWorkerPreferencesRepaired
-} from '../../../shared/orchestration-worker-model-settings'
+} from '../../../shared/orchestration/workers/orchestration-worker-model-settings'
 
 export type LoadedOrchestrationWorkerPreferences = {
   migratedOrchestrationDefaultWorkerAgent: GlobalSettings['orchestrationDefaultWorkerAgent']

@@ -37,6 +37,7 @@ const MODEL_OR_M_OPTION = { kind: 'model', aliases: ['-m', '--model'] } as const
 
 // Allowlist paired-client extras so they cannot alter permissions or Orca-owned prompt/resume/cwd/print/config/MCP flags.
 const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOption[]>> = {
+  antigravity: [MODEL_OPTION, { kind: 'effort', aliases: ['--effort'] }],
   claude: [
     MODEL_OPTION,
     { kind: 'effort', aliases: ['--effort'] },

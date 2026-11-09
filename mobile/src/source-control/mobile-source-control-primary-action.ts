@@ -14,7 +14,7 @@ import {
 } from '../../../src/shared/source-control/hosted-review/hosted-review-push-target'
 import type { PRState } from '../../../src/shared/github/pull-request-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
-import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
+import type { PrSidebarState } from './review/mobile-pr-sidebar-state'
 import type { MobileGitBranchCompareResult } from './mobile-branch-compare'
 import type { MobileGitStatusResult } from './mobile-git-status'
 

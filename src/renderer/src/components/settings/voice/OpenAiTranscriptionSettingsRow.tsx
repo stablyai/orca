@@ -1,7 +1,7 @@
 import { CheckCircle2, Cloud, Unlink } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type OpenAiTranscriptionSettingsRowProps = {
   configured: boolean
@@ -16,13 +16,14 @@ export function OpenAiTranscriptionSettingsRow({
   onConfigure,
   onClear
 }: OpenAiTranscriptionSettingsRowProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex items-center justify-between gap-4 py-2">
       <div className="min-w-0 space-y-0.5">
         <div className="flex items-center gap-2">
           <Cloud className="size-4 shrink-0 text-muted-foreground" />
           <Label>
-            {translate(
+            {t(
               'auto.components.settings.OpenAiTranscriptionSettingsRow.27e0cb656d',
               'OpenAI Transcription'
             )}
@@ -30,20 +31,17 @@ export function OpenAiTranscriptionSettingsRow({
           {configured && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <CheckCircle2 className="size-3.5" />
-              {translate(
-                'auto.components.settings.OpenAiTranscriptionSettingsRow.3b0ab3fc0b',
-                'Connected'
-              )}
+              {t('auto.components.settings.OpenAiTranscriptionSettingsRow.3b0ab3fc0b', 'Connected')}
             </span>
           )}
         </div>
         <p className="text-xs text-muted-foreground">
           {configured
-            ? translate(
+            ? t(
                 'auto.components.settings.OpenAiTranscriptionSettingsRow.b59b9b2b51',
                 'API key configured for cloud speech-to-text models.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.OpenAiTranscriptionSettingsRow.893790e13b',
                 'Add an OpenAI API key before selecting cloud speech-to-text models.'
               )}
@@ -52,14 +50,11 @@ export function OpenAiTranscriptionSettingsRow({
       {configured ? (
         <div className="flex shrink-0 items-center gap-1.5">
           <Button variant="outline" size="sm" disabled={disabled} onClick={onConfigure}>
-            {translate(
-              'auto.components.settings.OpenAiTranscriptionSettingsRow.a622bc3b37',
-              'Replace key'
-            )}
+            {t('auto.components.settings.OpenAiTranscriptionSettingsRow.a622bc3b37', 'Replace key')}
           </Button>
           <button
             onClick={onClear}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.OpenAiTranscriptionSettingsRow.ae2df8f511',
               'Disconnect OpenAI API key'
             )}
@@ -71,10 +66,7 @@ export function OpenAiTranscriptionSettingsRow({
         </div>
       ) : (
         <Button variant="outline" size="sm" disabled={disabled} onClick={onConfigure}>
-          {translate(
-            'auto.components.settings.OpenAiTranscriptionSettingsRow.85c589cd61',
-            'Add API key'
-          )}
+          {t('auto.components.settings.OpenAiTranscriptionSettingsRow.85c589cd61', 'Add API key')}
         </Button>
       )}
     </div>

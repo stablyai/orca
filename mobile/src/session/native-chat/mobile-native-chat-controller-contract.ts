@@ -15,6 +15,7 @@ import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
 } from '../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
 import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
@@ -33,6 +34,7 @@ import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNa
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
+import type { MobileNativeChatUsageLimit } from './use-mobile-native-chat-usage-limit'
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean
@@ -54,6 +56,8 @@ export type MobileNativeChatController = {
   nativeChatStructured: boolean
   nativeChatVisualSource: MobileNativeChatVisualSource | null
   nativeChatItemSource: MobileNativeChatVisualSource | null
+  /** The paired desktop's CI result lines setting; false until it reports one. */
+  nativeChatShowsCiResultLines: boolean
   /** Working or waiting on the reader: keeps the turn clock running. */
   nativeChatTurnActive: boolean
   nativeChatAwaitingInput: NativeChatAwaitingInput | null
@@ -125,4 +129,7 @@ export type MobileNativeChatController = {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
   nativeChatSessionCommands: ReturnType<typeof useMobileStructuredSessionCommands>
   nativeChatAcceptsImages: boolean
+  /** The structured chat's options read on whether its agent forks; absent until it answers. */
+  nativeChatForkSupport?: AgentSessionOptionsResult['forkSupport']
+  nativeChatUsageLimit: MobileNativeChatUsageLimit | null
 }

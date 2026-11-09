@@ -1,8 +1,12 @@
 import { createHash } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
-import type { RuntimeFileStatLike, TerminalFileGrant } from './file-grants'
-import { isBinaryBuffer } from '../../../../shared/binary-buffer'
+import type {
+  RuntimeFileStatLike,
+  TerminalFileContentBlocks,
+  TerminalFileGrant
+} from './file-grants'
+import { isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES
@@ -25,20 +29,43 @@ export async function readFileHandleBufferBounded(
   return buffer.subarray(0, bytesRead)
 }
 
+export const TERMINAL_ARTIFACT_CONTENT_BLOCK_BYTES = 64 * 1024
+
+/** Per-block digests, so one page is checked against the grant without re-hashing the file. */
+export function terminalArtifactContentBlocks(buffer: Buffer): TerminalFileContentBlocks {
+  const digests: string[] = []
+  for (let start = 0; start < buffer.byteLength; start += TERMINAL_ARTIFACT_CONTENT_BLOCK_BYTES) {
+    digests.push(
+      terminalArtifactContentDigest(
+        buffer.subarray(start, start + TERMINAL_ARTIFACT_CONTENT_BLOCK_BYTES)
+      )
+    )
+  }
+  return { byteLength: buffer.byteLength, digests }
+}
+
 /** Pin all returnable bytes; size-rejected files need no digest. Binary is null where unread. */
 export async function localTerminalArtifactContentDigest(
   handle: FileHandle,
   size: number
-): Promise<{ contentDigest: string | null; binary: boolean | null }> {
+): Promise<{
+  contentDigest: string | null
+  contentBlocks: TerminalFileContentBlocks | null
+  binary: boolean | null
+}> {
   if (size > LOCAL_PREVIEWABLE_BINARY_MAX_BYTES) {
-    return { contentDigest: null, binary: null }
+    return { contentDigest: null, contentBlocks: null, binary: null }
   }
   // Why: hover probes mint grants for any path, so read only the file; procfs reports size 0 for real content.
   const buffer = await readFileHandleBufferBounded(
     handle,
     size === 0 ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1 : size + 1
   )
-  return { contentDigest: terminalArtifactContentDigest(buffer), binary: isBinaryBuffer(buffer) }
+  return {
+    contentDigest: terminalArtifactContentDigest(buffer),
+    contentBlocks: terminalArtifactContentBlocks(buffer),
+    binary: isBinaryBuffer(buffer)
+  }
 }
 
 export function terminalArtifactContentDigest(buffer: Buffer): string {

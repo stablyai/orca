@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../../shared/browser-annotation-viewport-bridge'
-import { makeAnnotation } from '@/store/slices/browser-annotation-test-fixture'
+import { makeAnnotation } from '@/store/slices/browser/annotations/browser-annotation-test-fixture'
 import { getBrowserOverlayAnchor } from '../describe-page/browser-annotation-geometry'
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
 

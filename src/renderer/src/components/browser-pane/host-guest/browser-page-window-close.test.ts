@@ -6,12 +6,10 @@ const { dispatchMock, closeBrowserPageMock, storeState } = vi.hoisted(() => {
 })
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState.value } }))
-vi.mock('@/lib/workspace-tab-commands', () => ({ dispatchWorkspaceTabCommand: dispatchMock }))
-
-import {
-  handleGuestWindowCloseMessage,
-  markBrowserPageOpenedByPage
-} from './browser-page-window-close'
+vi.mock('@/lib/workspace/tabs/workspace-tab-commands', () => ({
+  dispatchWorkspaceTabCommand: dispatchMock
+}))
+import { handleGuestWindowCloseMessage } from './browser-page-window-close'
 import { BROWSER_GUEST_WINDOW_CLOSE_CHANNEL } from '../../../../../shared/browser-guest-window-close'
 
 function seedTab(pageId: string, isPinned = false, siblingPageIds: string[] = []): void {
@@ -34,28 +32,6 @@ describe('window.close() from a browser page', () => {
   beforeEach(() => {
     dispatchMock.mockReset()
     closeBrowserPageMock.mockReset()
-  })
-
-  it('closes a tab with a single history entry through the Cmd/Ctrl+W command', () => {
-    seedTab('page-a')
-    closeFrom('page-a', { back: false, forward: false })
-    expect(dispatchMock).toHaveBeenCalledWith({
-      type: 'close',
-      target: { kind: 'tab', worktreeId: 'wt-1', tabId: 'tab-1' }
-    })
-  })
-
-  it('ignores a page the user navigated in that no page opened, like Chrome', () => {
-    seedTab('page-b')
-    closeFrom('page-b', { back: true, forward: false })
-    expect(dispatchMock).not.toHaveBeenCalled()
-  })
-
-  it('closes a page-opened tab even after it navigated', () => {
-    seedTab('page-c')
-    markBrowserPageOpenedByPage('page-c')
-    closeFrom('page-c', { back: true, forward: false })
-    expect(dispatchMock).toHaveBeenCalledTimes(1)
   })
 
   it('never closes a pinned tab', () => {

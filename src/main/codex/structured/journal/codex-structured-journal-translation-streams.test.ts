@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import '../items/codex-structured-item-translation'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { MAX_CODEX_GENERIC_ROWS_PER_TURN } from './codex-structured-journal-limits'
@@ -196,6 +196,25 @@ describe('codex journal translation', () => {
     reject = false
     window.fire()
     expect(tap.rows.filter((row) => row.key.includes('provider-frame-suppressed'))).toHaveLength(1)
+  })
+
+  it('journals no row for app-server notifications that carry provider text', () => {
+    const { translator, tap, window } = translatorWith()
+
+    translator.handle(TURN_STARTED)
+    translator.handle(
+      notification('thread/prediction/updated', { threadId: THREAD_ID, text: 'Predicted reply' })
+    )
+    translator.handle(
+      notification('modelProvider/authRecoveryStarted', { message: 'Reconnecting to provider' })
+    )
+    translator.handle(
+      notification('modelProvider/authRecoveryCompleted', { message: 'Reconnected' })
+    )
+    translator.handle(notification('account/gatewayOAuth/changed', { error: 'Sign-in expired' }))
+    window.fire()
+
+    expect(tap.rows.filter((row) => row.body.kind === 'status')).toEqual([])
   })
 
   it('writes nothing more after dispose', () => {

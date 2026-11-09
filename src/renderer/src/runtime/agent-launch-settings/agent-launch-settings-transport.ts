@@ -15,7 +15,8 @@ import {
   AGENT_LAUNCH_SETTINGS_CAPABILITY,
   AGENT_LAUNCH_CHOICES_CAPABILITY
 } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 
 export type AgentLaunchSettingsOwner = {
   environmentId: string

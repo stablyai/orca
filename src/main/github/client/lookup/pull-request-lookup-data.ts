@@ -1,4 +1,5 @@
 import type {
+  GitHubOwnerRepo,
   GitHubPRMergeMethodSettings,
   GitHubPRStack,
   PRMergeableState,
@@ -91,6 +92,10 @@ export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
   // Supply the actual worktree head without probing a different main-repo checkout.
   currentHeadOid?: string | null
+  /** Bounds check pagination for CI-line watch reads only; absent reads every page. */
+  checkPageLimit?: number
+  /** A CI-line watch's own PR repository: lookups read only it, never another remote by number. */
+  exactRepository?: GitHubOwnerRepo
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {

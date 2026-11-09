@@ -16,7 +16,7 @@ import {
   structuredConversationCommandHold
 } from '../../../src/shared/structured-conversation-command-hold'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { translate } from '../i18n/mobile-i18n'
 import { sayMobileAgentSessionFailure } from './agent-session-failure-copy'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
@@ -46,12 +46,16 @@ export async function dispatchMobileStructuredCommand(input: {
   waitsInLine: (command: AgentSessionConversationCommand) => boolean
   /** `refusedWhile`: what the phone showed the refused command waiting on. */
   onError: MobileNativeChatSendErrorReporter
+  /** Called as a /clear goes out; the returned restore runs unless the host accepts it. */
+  onClearSent?: () => () => void
   timeoutMs: number
 }): Promise<MobileNativeChatSendOutcome | null> {
   if (
     !isStructuredAgentSessionHostCommand(
       input.text,
-      input.controller.changeThreadGoal !== undefined
+      input.controller.changeThreadGoal !== undefined,
+      input.controller.agent,
+      input.controller.snapshot
     )
   ) {
     return input.pending.current ? 'rejected' : null
@@ -96,6 +100,8 @@ export async function dispatchMobileStructuredCommand(input: {
         }
       }
       input.pending.current = true
+      const restoreClear = command === 'clear' ? input.onClearSent?.() : undefined
+      let accepted = false
       try {
         const result =
           await requestStructuredAgentSessionMutation<AgentSessionConversationCommandResult>({
@@ -131,6 +137,7 @@ export async function dispatchMobileStructuredCommand(input: {
           startFailures: input.startFailures(),
           say: sayMobileAgentSessionFailure
         })
+        accepted = reply.accepted
         // A refusal names its cause only when the phone showed it, as on desktop.
         return {
           accepted: reply.accepted,
@@ -144,6 +151,9 @@ export async function dispatchMobileStructuredCommand(input: {
         }
       } finally {
         input.pending.current = false
+        if (!accepted) {
+          restoreClear?.()
+        }
       }
     }
   })

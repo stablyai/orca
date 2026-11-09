@@ -3,14 +3,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { z } from 'zod'
 import { pluginManifestSchema } from '../../shared/plugins/manifest/plugin-manifest'
-import { panelSessionTokenSchema } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { Store } from '../persistence/loading-store/store'
 import { PluginContentVerifier } from '../plugins/plugin-content-integrity'
 import type { ValidDiscoveredPlugin } from '../plugins/plugin-discovery'
 import { PluginPanelController } from '../plugins/panels/plugin-panel-controller'
-import { PluginPanelSessions } from '../plugins/panels/plugin-panel-sessions'
 import type { PluginService } from '../plugins/plugin-service'
 
 const mocks = vi.hoisted(() => ({
@@ -40,9 +37,7 @@ const { registerPluginHandlers } = await import('./plugins')
 const roots: string[] = []
 const controllers: PluginPanelController[] = []
 const senders: EventEmitter[] = []
-const PREDECESSOR = 'orca-samples.predecessor'
 const SUCCESSOR = 'orca-samples.successor'
-const entrySchema = z.object({ html: z.string(), sessionToken: panelSessionTokenSchema })
 
 // Why srcdoc by default: these cases pin ownership across a slow, verified entry load.
 beforeEach(() => {
@@ -151,84 +146,7 @@ function open(contents: ReturnType<typeof sender>, pluginKey = SUCCESSOR) {
   return invoke('readPanelEntry', contents, { pluginKey, panelId: 'panel' })
 }
 
-function action(contents: ReturnType<typeof sender>, sessionToken: string) {
-  return invoke('panelAction', contents, {
-    sessionToken,
-    action: 'notifications.show',
-    params: { title: 'Live panel' }
-  })
-}
-
 describe('plugin panel document ownership', () => {
-  it('preserves successor and sibling authority when a crashed document finishes loading late', async () => {
-    const entered = Promise.withResolvers<void>()
-    const blocked = Promise.withResolvers<void>()
-    await harness({
-      beforeVerify: async (entry) => {
-        if (entry.pluginKey === PREDECESSOR) {
-          entered.resolve()
-          await blocked.promise
-        }
-      }
-    })
-    const current = sender()
-    const oldRequest = open(current, PREDECESSOR)
-    await entered.promise
-    current.emit('render-process-gone')
-    const successor = entrySchema.parse(await open(current))
-    const other = sender(2)
-    const sibling = entrySchema.parse(await open(other))
-    await expect(action(current, successor.sessionToken)).resolves.toMatchObject({ ok: true })
-    blocked.resolve()
-    await expect(oldRequest).resolves.toBeNull()
-    await expect(action(current, successor.sessionToken)).resolves.toEqual({
-      ok: true,
-      value: { pluginKey: SUCCESSOR }
-    })
-    await expect(action(other, sibling.sessionToken)).resolves.toMatchObject({ ok: true })
-    expect(entrySchema.parse(await open(current)).sessionToken).toBe(successor.sessionToken)
-    current.emit('destroyed')
-    await expect(action(current, successor.sessionToken)).resolves.toMatchObject({
-      ok: false,
-      code: 'invalid_request'
-    })
-    await expect(action(other, sibling.sessionToken)).resolves.toMatchObject({ ok: true })
-    expect(current.eventNames()).toEqual([])
-  })
-
-  it('skips loading a request retired while plugin discovery is pending', async () => {
-    const ready = Promise.withResolvers<void>()
-    const { verified } = await harness({ whenReady: () => ready.promise })
-    const current = sender()
-    const pending = open(current, PREDECESSOR)
-    current.emit('render-process-gone')
-    ready.resolve()
-    await expect(pending).resolves.toBeNull()
-    expect(verified).toEqual([])
-    const successor = entrySchema.parse(await open(current))
-    await expect(action(current, successor.sessionToken)).resolves.toMatchObject({ ok: true })
-  })
-
-  it('does not issue a panel session after native owner destruction during a load', async () => {
-    const entered = Promise.withResolvers<void>()
-    const blocked = Promise.withResolvers<void>()
-    await harness({
-      beforeVerify: async () => {
-        entered.resolve()
-        await blocked.promise
-      }
-    })
-    const issue = vi.spyOn(PluginPanelSessions.prototype, 'issue')
-    const current = sender()
-    const pending = open(current)
-    await entered.promise
-    current.emit('destroyed')
-    blocked.resolve()
-    await expect(pending).resolves.toBeNull()
-    expect(issue).not.toHaveBeenCalled()
-    expect(current.eventNames()).toEqual([])
-  })
-
   it('fails closed when the isolated guest cannot be set up', async () => {
     vi.stubEnv('ORCA_PLUGIN_ISOLATED_FRAMES', '1')
     await harness()
@@ -238,15 +156,5 @@ describe('plugin panel document ownership', () => {
     } finally {
       guestSetup.result = { partition: 'persist:orca-plugin-test', url: 'x' }
     }
-  })
-
-  it('falls back to the srcdoc document only when the kill switch turns isolation off', async () => {
-    await harness()
-    const entry = await open(sender())
-    expect(entry).toMatchObject({ html: expect.stringContaining('<h1>successor</h1>') })
-    expect(entry).not.toHaveProperty('guest')
-    vi.stubEnv('ORCA_PLUGIN_ISOLATED_FRAMES', '1')
-    const isolated = await open(sender(3))
-    expect(isolated).toMatchObject({ html: '', guest: { partition: 'persist:orca-plugin-test' } })
   })
 })

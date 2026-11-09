@@ -33,10 +33,17 @@ export async function discardEditorBuffer(fileId: string): Promise<() => void> {
 }
 
 /** "Don't Save": drop unsaved edits, let saves already writing finish, then close the tab. */
-export async function discardEditorFileChangesAndClose(fileId: string): Promise<void> {
+export async function discardEditorFileChangesAndClose(
+  fileId: string,
+  tabId?: string
+): Promise<void> {
   const release = await discardEditorBuffer(fileId)
   try {
-    useAppStore.getState().closeFile(fileId)
+    if (tabId) {
+      useAppStore.getState().closeUnifiedTab(tabId)
+    } else {
+      useAppStore.getState().closeFile(fileId)
+    }
   } finally {
     release()
   }

@@ -5,7 +5,7 @@ import type {
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
 } from '../../../shared/runtime-session-contracts'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'

@@ -2,8 +2,8 @@ import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchZcodeRateLimits } from '../rate-limits/zcode-usage-fetcher'
-import { readZcodeUsageCredentials } from '../rate-limits/zcode-usage-credentials'
+import { fetchZcodeRateLimits } from '../rate-limits/providers/zcode/zcode-usage-fetcher'
+import { readZcodeUsageCredentials } from '../rate-limits/providers/zcode/zcode-usage-credentials'
 import { readZcodeV2PlanCredential, type ZcodeCredentialHost } from './zcode-v2-plan-credentials'
 
 vi.mock('node:fs', async (importOriginal) => ({
