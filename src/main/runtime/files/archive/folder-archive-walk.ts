@@ -20,6 +20,8 @@ export type FolderArchiveEntry = {
 }
 
 export type FolderArchivePlan = {
+  /** Canonical path of the archived folder; every read must land under it. */
+  rootRealPath: string
   entries: FolderArchiveEntry[]
   fileCount: number
   directoryCount: number
@@ -62,6 +64,7 @@ export async function planFolderArchive(
     throw new Error('archive_not_directory')
   }
   const plan: FolderArchivePlan = {
+    rootRealPath,
     entries: [
       {
         archivePath: `${archiveRootName}/`,
@@ -80,15 +83,20 @@ export async function planFolderArchive(
     excludedDirCount: 0
   }
   // Depth-first with an explicit stack: deep trees must not grow the JS call stack.
-  const pending: { absolutePath: string; archivePath: string }[] = [
-    { absolutePath: rootRealPath, archivePath: `${archiveRootName}/` }
+  const pending: PendingDirectory[] = [
+    {
+      absolutePath: rootRealPath,
+      archivePath: `${archiveRootName}/`,
+      dev: rootStat.dev,
+      ino: rootStat.ino
+    }
   ]
   while (pending.length > 0) {
     if (options.signal?.aborted) {
       throw new Error('archive_canceled')
     }
     const dir = pending.pop()!
-    if (dir.absolutePath !== rootRealPath && !(await isUnmovedDirectory(dir.absolutePath))) {
+    if (!(await isUnmovedDirectory(dir))) {
       continue
     }
     let names: string[]
@@ -113,14 +121,22 @@ export async function planFolderArchive(
         }
       })
     )
-    const childDirs: { absolutePath: string; archivePath: string }[] = []
+    // A directory swapped for a link while it was listed would have its children lstat'ed outside
+    // the root; check it again and drop the whole listing if it moved.
+    if (!(await isUnmovedDirectory(dir))) {
+      continue
+    }
+    const childDirs: PendingDirectory[] = []
+    // ZIP extractors on macOS and Windows fold case and Unicode form, so `A` and `a` (or NFC and
+    // NFD spellings) would land on one path; later twins get a ` (2)` suffix instead.
+    const usedNames = new Set<string>()
     for (const item of stats) {
       if (!item) {
         continue
       }
       const { name, stat } = item
       const absolutePath = join(dir.absolutePath, name)
-      const archivePath = `${dir.archivePath}${sanitizeArchiveSegment(name)}`
+      const archivePath = `${dir.archivePath}${uniqueArchiveSegment(sanitizeArchiveSegment(name), usedNames)}`
       if (stat.isDirectory()) {
         if (excluded.has(name)) {
           plan.excludedDirCount += 1
@@ -137,7 +153,12 @@ export async function planFolderArchive(
           dev: stat.dev,
           ino: stat.ino
         })
-        childDirs.push({ absolutePath, archivePath: `${archivePath}/` })
+        childDirs.push({
+          absolutePath,
+          archivePath: `${archivePath}/`,
+          dev: stat.dev,
+          ino: stat.ino
+        })
       } else if (stat.isFile() || stat.isSymbolicLink()) {
         const kind = stat.isFile() ? 'file' : 'symlink'
         if (kind === 'file') {
@@ -176,18 +197,53 @@ export async function planFolderArchive(
  * extractors treat `\` as a separator, so a file named `..\..\x` would escape the extract folder.
  */
 export function sanitizeArchiveSegment(name: string): string {
-  // oxlint-disable-next-line no-control-regex
-  const cleaned = name.replace(/[\u0000-\u001f\\]/g, '_')
-  return cleaned === '.' || cleaned === '..' ? '_' : cleaned
+  // Bidi overrides and zero-width characters let `exe.txt` display as `txt.exe`; drop them.
+  const visible = name.replace(INVISIBLE_FORMAT_CHARS, '')
+  // Windows refuses these characters (`:` can even open an alternate data stream) and drops
+  // trailing dots and spaces, so map them as local download names are mapped. `.`/`..` become `_`/`__`.
+  const cleaned = visible
+    // oxlint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f\\:*?"<>|]/g, '_')
+    .replace(/[. ]+$/, (tail) => '_'.repeat(tail.length))
+  if (cleaned === '') {
+    return '_'
+  }
+  return WINDOWS_RESERVED_NAME.test(cleaned) ? `_${cleaned}` : cleaned
 }
 
-async function isUnmovedDirectory(absolutePath: string): Promise<boolean> {
+const WINDOWS_RESERVED_NAME =
+  /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])(?:\..*)?$/i
+
+const INVISIBLE_FORMAT_CHARS = /[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g
+
+function uniqueArchiveSegment(segment: string, used: Set<string>): string {
+  const fold = (value: string) => value.normalize('NFC').toLowerCase()
+  let candidate = segment
+  const dot = segment.lastIndexOf('.')
+  const stem = dot > 0 ? segment.slice(0, dot) : segment
+  const extension = dot > 0 ? segment.slice(dot) : ''
+  for (let copy = 2; used.has(fold(candidate)); copy += 1) {
+    candidate = `${stem} (${copy})${extension}`
+  }
+  used.add(fold(candidate))
+  return candidate
+}
+
+type PendingDirectory = { absolutePath: string; archivePath: string; dev: number; ino: number }
+
+async function isUnmovedDirectory(dir: PendingDirectory): Promise<boolean> {
   try {
-    const resolved = await realpath(absolutePath)
+    const resolved = await realpath(dir.absolutePath)
     // Windows paths compare case-insensitively; realpath may report a different casing.
-    return process.platform === 'win32'
-      ? resolved.toLowerCase() === absolutePath.toLowerCase()
-      : resolved === absolutePath
+    const samePath =
+      process.platform === 'win32'
+        ? resolved.toLowerCase() === dir.absolutePath.toLowerCase()
+        : resolved === dir.absolutePath
+    if (!samePath) {
+      return false
+    }
+    const current = await lstat(dir.absolutePath)
+    return current.isDirectory() && current.dev === dir.dev && current.ino === dir.ino
   } catch (error) {
     if (isVanishedOrDenied(error)) {
       return false

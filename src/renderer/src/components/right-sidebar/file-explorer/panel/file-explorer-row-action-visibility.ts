@@ -1,5 +1,6 @@
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { TreeNode } from '../tree/file-explorer-types'
+import { canOpenRuntimeDownloadLocally } from '../../../../../../shared/runtime-downloads/runtime-download-contract'
 
 export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boolean): boolean {
   return node.isDirectory && isExpanded
@@ -36,13 +37,21 @@ export function shouldShowRemoteDownloadAction(
   )
 }
 
-/** Fetch a runtime-hosted file into a temp copy and open it with the local default app. */
+/**
+ * Fetch a runtime-hosted file into a temp copy and open it with the local default app. Hidden for
+ * files the OS would run (scripts, installers, apps): those can only be downloaded.
+ */
 export function shouldShowOpenLocallyAction(
   node: TreeNode,
   connectionId: string | null | undefined,
   canStreamFromRuntime: boolean
 ): boolean {
-  return !node.isDirectory && !connectionId && canStreamFromRuntime
+  return (
+    !node.isDirectory &&
+    !connectionId &&
+    canStreamFromRuntime &&
+    canOpenRuntimeDownloadLocally(node.name)
+  )
 }
 
 export function shouldShowCopyFileAction(

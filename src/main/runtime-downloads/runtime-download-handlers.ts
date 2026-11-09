@@ -1,8 +1,9 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
-import { open } from 'node:fs/promises'
+import { open, rm } from 'node:fs/promises'
 import { z } from 'zod'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
+  canOpenRuntimeDownloadLocally,
   RUNTIME_OPEN_LOCALLY_MAX_BYTES,
   type RuntimeDownloadProgressEvent,
   type RuntimeDownloadResult,
@@ -18,6 +19,7 @@ import {
   promoteDownloadedFile
 } from '../ipc/filesystem/filesystem-download-promotion'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
+import { markPluginSavedFileAsDownloaded as markFileAsDownloaded } from '../plugins/panels/plugin-save-as-download-mark'
 import {
   RuntimeDownloadError,
   transferRuntimeFile,
@@ -37,6 +39,9 @@ const PROGRESS_INTERVAL_MS = 120
 const MAX_ACTIVE_DOWNLOADS = 8
 
 const activeDownloads = new Map<string, AbortController>()
+// Counted from the moment a destination is chosen: a download still at its save dialog isn't
+// using the link and has no toast to cancel it from.
+let transferringCount = 0
 
 const Text = z.string().max(4096)
 const RequiredText = Text.refine((value) => value.trim() !== '')
@@ -143,10 +148,40 @@ async function runDownload(
   args: RuntimeDownloadStartArgs,
   controller: AbortController
 ): Promise<RuntimeDownloadResult> {
+  if (
+    args.intent === 'open' &&
+    !canOpenRuntimeDownloadLocally(sanitizeLocalDownloadFilename(args.name))
+  ) {
+    throw new RuntimeDownloadError('open_refused')
+  }
   const destinationPath = await chooseDestination(sender, args)
   if (!destinationPath || controller.signal.aborted) {
     return { status: 'canceled' }
   }
+  if (transferringCount >= MAX_ACTIVE_DOWNLOADS) {
+    if (args.intent === 'open') {
+      await rm(dirname(destinationPath), { recursive: true, force: true }).catch(() => {})
+    }
+    return {
+      status: 'error',
+      code: 'host_busy',
+      message: 'Too many downloads are running; wait for one to finish.'
+    }
+  }
+  transferringCount += 1
+  try {
+    return await transferToDestination(sender, args, controller, destinationPath)
+  } finally {
+    transferringCount -= 1
+  }
+}
+
+async function transferToDestination(
+  sender: WebContents,
+  args: RuntimeDownloadStartArgs,
+  controller: AbortController,
+  destinationPath: string
+): Promise<RuntimeDownloadResult> {
   const emitter = createProgressEmitter(sender, args.downloadId)
   emitter.setDestination(destinationPath)
   emitter.preparing()
@@ -179,6 +214,9 @@ async function runDownload(
     }
     await promoteDownloadedFile(tempPath, destinationPath, existed)
     promoted = true
+    // The bytes come from a remote machine: mark them like a browser download so Gatekeeper,
+    // SmartScreen and Protected View still apply (a zip's mark carries over to what it extracts).
+    await markFileAsDownloaded(destinationPath)
     let openError: string | undefined
     if (args.intent === 'open') {
       const message = await shell.openPath(destinationPath)
@@ -194,6 +232,10 @@ async function runDownload(
     await sink.close().catch(() => {})
     if (!promoted) {
       await cleanupLocalTransferPath(tempPath)
+      if (args.intent === 'open') {
+        // The per-open folder holds nothing else; don't leave it behind empty.
+        await rm(dirname(destinationPath), { recursive: true, force: true }).catch(() => {})
+      }
     }
   }
 }
@@ -205,13 +247,6 @@ export function registerRuntimeDownloadHandlers(): void {
       const args = validateArgs(rawArgs)
       if (activeDownloads.has(args.downloadId)) {
         throw new Error('Download already running')
-      }
-      if (activeDownloads.size >= MAX_ACTIVE_DOWNLOADS) {
-        return {
-          status: 'error',
-          code: 'host_busy',
-          message: 'Too many downloads are running; wait for one to finish.'
-        }
       }
       const controller = new AbortController()
       activeDownloads.set(args.downloadId, controller)

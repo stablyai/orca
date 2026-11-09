@@ -9,7 +9,7 @@ import {
   planFolderArchive,
   sanitizeArchiveSegment
 } from './folder-archive-walk'
-import { FolderArchiveZipStream } from './folder-archive-zip-stream'
+import { FolderArchiveZipStream, isContainedLinkTarget } from './folder-archive-zip-stream'
 
 let root: string
 
@@ -20,6 +20,17 @@ beforeEach(async () => {
 afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
+
+async function zipEntries(stream: FolderArchiveZipStream) {
+  const parts: Buffer[] = []
+  for (;;) {
+    const page = await stream.read(1 << 20)
+    parts.push(page.bytes)
+    if (page.eof) {
+      return unzipSync(Buffer.concat(parts))
+    }
+  }
+}
 
 async function drain(sessions: FolderArchiveSessions, archiveId: string, ownerKey = 'device-a') {
   const parts: Buffer[] = []
@@ -77,28 +88,64 @@ describe('FolderArchiveSessions', () => {
     expect(plan.entries.map((entry) => entry.archivePath)).toContain('r/node_modules/x.js')
   })
 
-  it('stores symlinks as links and never reads what they point at', async () => {
+  it('keeps links that stay inside the folder and drops ones that point out of it', async () => {
     const outside = join(root, 'outside-secret.txt')
     await writeFile(outside, 'secret')
     const project = join(root, 'p')
-    await mkdir(project)
-    await symlink(outside, join(project, 'link'))
+    await mkdir(join(project, 'sub'), { recursive: true })
+    await writeFile(join(project, 'target.txt'), 'in')
+    await symlink(outside, join(project, 'abs-link'))
+    await symlink('../outside-secret.txt', join(project, 'rel-escape'))
     await symlink(root, join(project, 'dir-link'))
+    await symlink('../target.txt', join(project, 'sub', 'inner-link'))
     const plan = await planFolderArchive(project, 'p', { excludeDefaultDirs: true })
-    expect(plan.totalBytes).toBe(0)
-    const stream = new FolderArchiveZipStream(plan.entries)
-    const parts: Buffer[] = []
-    for (;;) {
-      const page = await stream.read(1 << 20)
-      parts.push(page.bytes)
-      if (page.eof) {
-        break
-      }
+    const stream = new FolderArchiveZipStream(plan.entries, plan.rootRealPath)
+    const files = await zipEntries(stream)
+    expect(Buffer.from(files['p/sub/inner-link']).toString()).toBe('../target.txt')
+    for (const dropped of ['p/abs-link', 'p/rel-escape', 'p/dir-link', 'p/dir-link/']) {
+      expect(files[dropped]).toBeUndefined()
     }
-    const files = unzipSync(Buffer.concat(parts))
-    expect(Buffer.from(files['p/link']).toString()).toBe(outside)
     expect(Object.keys(files).some((name) => name.includes('outside-secret'))).toBe(false)
-    expect(Object.keys(files)).not.toContain('p/dir-link/')
+    expect(stream.skippedCount).toBe(3)
+  })
+
+  it('judges link targets against the archive root', () => {
+    expect(isContainedLinkTarget('p/a/l', '../b')).toBe(true)
+    expect(isContainedLinkTarget('p/a/l', '../../x')).toBe(false)
+    expect(isContainedLinkTarget('p/l', '/etc/passwd')).toBe(false)
+    expect(isContainedLinkTarget('p/l', 'C:x')).toBe(false)
+    expect(isContainedLinkTarget('p/l', '..\\x')).toBe(false)
+  })
+
+  it('skips a file moved out of the folder and linked back in after the walk', async () => {
+    const project = join(root, 'p')
+    await mkdir(join(project, 'sub'), { recursive: true })
+    await writeFile(join(project, 'sub', 'a.txt'), 'moved-out')
+    const plan = await planFolderArchive(project, 'p', { excludeDefaultDirs: true })
+    // Same dev/ino as the walk saw, but now outside the root.
+    await rename(join(project, 'sub'), join(root, 'moved'))
+    await symlink(join(root, 'moved'), join(project, 'sub'))
+    const stream = new FolderArchiveZipStream(plan.entries, plan.rootRealPath)
+    const files = await zipEntries(stream)
+    expect(files['p/sub/a.txt']).toBeUndefined()
+    expect(stream.skippedCount).toBe(1)
+  })
+
+  it('never reads past the walked size of a file that grew', async () => {
+    await writeFile(join(root, 'log.bin'), Buffer.alloc(100 * 1024, 1))
+    const plan = await planFolderArchive(root, 'r', { excludeDefaultDirs: true })
+    await writeFile(join(root, 'log.bin'), Buffer.alloc(900 * 1024, 1), { flag: 'a' })
+    const files = await zipEntries(new FolderArchiveZipStream(plan.entries, plan.rootRealPath))
+    expect(files['r/log.bin'].byteLength).toBe(100 * 1024)
+  })
+
+  it('gives case- and Unicode-folded twins distinct names', async () => {
+    await writeFile(join(root, 'Read.md'), 'a')
+    await writeFile(join(root, 'read.md'), 'b')
+    const plan = await planFolderArchive(root, 'r', { excludeDefaultDirs: true })
+    const names = plan.entries.map((entry) => entry.archivePath).filter((p) => p.endsWith('.md'))
+    // macOS temp dirs fold case themselves; then there is only one file to name.
+    expect(new Set(names.map((name) => name.toLowerCase())).size).toBe(names.length)
   })
 
   it('skips a file whose parent directory was swapped for a link after the walk', async () => {
@@ -112,7 +159,7 @@ describe('FolderArchiveSessions', () => {
     // Same name, different file: O_NOFOLLOW alone would follow the swapped parent.
     await rename(join(project, 'sub'), join(root, 'moved'))
     await symlink(outside, join(project, 'sub'))
-    const stream = new FolderArchiveZipStream(plan.entries)
+    const stream = new FolderArchiveZipStream(plan.entries, plan.rootRealPath)
     const parts: Buffer[] = []
     for (;;) {
       const page = await stream.read(1 << 20)
@@ -129,8 +176,14 @@ describe('FolderArchiveSessions', () => {
   it('rewrites backslashes and control characters so Windows extractors cannot escape', () => {
     expect(sanitizeArchiveSegment('..\\..\\evil')).toBe('.._.._evil')
     expect(sanitizeArchiveSegment('a\u0001b')).toBe('a_b')
-    expect(sanitizeArchiveSegment('..')).toBe('_')
+    expect(sanitizeArchiveSegment('..')).toBe('__')
+    expect(sanitizeArchiveSegment('CON')).toBe('_CON')
+    expect(sanitizeArchiveSegment('aux.txt')).toBe('_aux.txt')
+    expect(sanitizeArchiveSegment('a:b*c?.txt')).toBe('a_b_c_.txt')
+    expect(sanitizeArchiveSegment('notes. ')).toBe('notes__')
     expect(sanitizeArchiveSegment('normal name.txt')).toBe('normal name.txt')
+    expect(sanitizeArchiveSegment('invoice\u202Etxt.exe')).toBe('invoicetxt.exe')
+    expect(sanitizeArchiveSegment('\u200B')).toBe('_')
   })
 
   it('refuses folders over the byte or entry limits', async () => {
@@ -187,10 +240,20 @@ describe('FolderArchiveSessions', () => {
     ).rejects.toThrow('archive_not_found')
   })
 
+  it('limits archives per client so one client cannot hold every slot', async () => {
+    const sessions = new FolderArchiveSessions(60_000, 8, 2)
+    const start = (ownerKey: string) =>
+      sessions.start({ folderPath: root, ownerKey, excludeDefaultDirs: true })
+    // Concurrent starts reserve their slot before walking.
+    const results = await Promise.allSettled([start('a'), start('a'), start('a')])
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2)
+    await expect(start('b')).resolves.toMatchObject({ suggestedName: expect.any(String) })
+  })
+
   it('pauses the producer at the high-water mark until the reader drains', async () => {
     await writeFile(join(root, 'big.png'), Buffer.alloc(4 * 1024 * 1024, 7))
     const plan = await planFolderArchive(root, 'r', { excludeDefaultDirs: true })
-    const stream = new FolderArchiveZipStream(plan.entries, 512 * 1024)
+    const stream = new FolderArchiveZipStream(plan.entries, plan.rootRealPath, 512 * 1024)
     // The producer fills to the mark, then must stop until something is read.
     await vi.waitFor(() => expect(stream.processedBytes).toBeGreaterThanOrEqual(512 * 1024))
     expect(stream.processedBytes).toBeLessThanOrEqual(1024 * 1024)

@@ -1,5 +1,5 @@
 import { readlink, type FileHandle } from 'node:fs/promises'
-import { extname } from 'node:path'
+import { extname, isAbsolute, posix } from 'node:path'
 import { Zip, ZipDeflate, ZipPassThrough, type ZipInputFile } from 'fflate'
 import { isVanishedOrDenied, type FolderArchiveEntry } from './folder-archive-walk'
 import {
@@ -71,6 +71,7 @@ export class FolderArchiveZipStream {
 
   constructor(
     private readonly entries: readonly FolderArchiveEntry[],
+    private readonly rootRealPath: string,
     private readonly highWaterBytes = DEFAULT_HIGH_WATER_BYTES
   ) {
     this.zip = new Zip((error, data, final) => {
@@ -152,7 +153,7 @@ export class FolderArchiveZipStream {
         ) {
           const next = this.entries[ahead]
           if (!prefetched.has(ahead) && isSmallFile(next)) {
-            prefetched.set(ahead, readSmallFile(next))
+            prefetched.set(ahead, readSmallFile(next, this.rootRealPath))
           }
         }
         const small = prefetched.get(index)
@@ -179,7 +180,12 @@ export class FolderArchiveZipStream {
       } catch (error) {
         return this.skip(error)
       }
-      // Stored as a link, never dereferenced: the target may name anything on the host.
+      // Stored as a link, never dereferenced. A link that points outside the archived folder would
+      // let an extractor write through it (zip-slip), so only links that stay inside are kept.
+      if (!isContainedLinkTarget(entry.archivePath, target)) {
+        this.skippedCount += 1
+        return
+      }
       const file = withAttributes(
         new ZipPassThrough(entry.archivePath),
         entry,
@@ -204,23 +210,30 @@ export class FolderArchiveZipStream {
     }
     let handle: FileHandle
     try {
-      handle = await openUnchangedFile(entry)
+      handle = await openUnchangedFile(entry, this.rootRealPath)
     } catch (error) {
       return this.skip(error)
     }
     try {
       const file = this.addFileEntry(entry)
       const buffer = Buffer.allocUnsafe(FILE_READ_BYTES)
+      // Never past the walked size: a file that keeps growing (a log, /dev/zero behind a bind
+      // mount) cannot push the archive past the limits the walk enforced.
+      let remaining = entry.size
       for (;;) {
         await this.waitForRoom()
         if (this.canceled) {
           return
         }
-        const { bytesRead } = await handle.read(buffer, 0, FILE_READ_BYTES, null)
+        const { bytesRead } =
+          remaining > 0
+            ? await handle.read(buffer, 0, Math.min(FILE_READ_BYTES, remaining), null)
+            : { bytesRead: 0 }
         if (bytesRead === 0) {
           file.push(new Uint8Array(0), true)
           return
         }
+        remaining -= bytesRead
         this.processedBytes += bytesRead
         // fflate may keep a reference until it deflates, so hand it a copy.
         file.push(new Uint8Array(buffer.subarray(0, bytesRead)), false)
@@ -273,6 +286,16 @@ export class FolderArchiveZipStream {
     this.wakeProducer = null
     wake?.()
   }
+}
+
+/** True when a link stored at `archivePath` resolves inside the archive's top folder. */
+export function isContainedLinkTarget(archivePath: string, target: string): boolean {
+  if (target === '' || isAbsolute(target) || target.includes('\\') || /^[a-zA-Z]:/.test(target)) {
+    return false
+  }
+  const rootName = archivePath.slice(0, archivePath.indexOf('/'))
+  const resolved = posix.normalize(posix.join(posix.dirname(archivePath), target))
+  return resolved === rootName || resolved.startsWith(`${rootName}/`)
 }
 
 function withAttributes<T extends ZipInputFile>(

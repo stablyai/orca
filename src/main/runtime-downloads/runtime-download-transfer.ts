@@ -1,7 +1,9 @@
 import type { FileHandle } from 'node:fs/promises'
 import type { RuntimeFileReadChunkResult } from '../../shared/file-content/runtime-file-read'
 import {
+  FOLDER_ARCHIVE_MAX_ENTRIES,
   FOLDER_ARCHIVE_MAX_READ_BYTES,
+  FOLDER_ARCHIVE_MAX_TOTAL_BYTES,
   type FileArchiveReadResult,
   type FileArchiveStartResult
 } from '../../shared/rpc-contract/files-archive-params'
@@ -14,6 +16,13 @@ const FILE_CHUNK_CONCURRENCY = 4
 const CHUNK_TIMEOUT_MS = 60_000
 // The walk of a large tree runs before the first byte; give it room.
 const ARCHIVE_START_TIMEOUT_MS = 120_000
+// The host is not trusted to stop. A file may grow a little while it is copied; past this much over
+// its announced size the download stops instead of filling this computer's disk.
+const FILE_GROWTH_ALLOWANCE_BYTES = 64 * 1024 * 1024
+// A ZIP of at most 2 GiB of files: deflate never grows data by more than ~0.1 %, plus local and
+// central headers (well under 1 KiB each for 65,000 entries).
+const FOLDER_ARCHIVE_MAX_ZIP_BYTES =
+  FOLDER_ARCHIVE_MAX_TOTAL_BYTES * 1.01 + FOLDER_ARCHIVE_MAX_ENTRIES * 1024
 
 export class RuntimeDownloadError extends Error {
   constructor(
@@ -66,6 +75,11 @@ export async function transferRuntimeFile(
   if (input.maxBytes !== undefined && stat.size > input.maxBytes) {
     throw new RuntimeDownloadError('too_large')
   }
+  // Hard stop for a host that keeps answering full pages past the size it announced.
+  const byteLimit = Math.min(
+    input.maxBytes ?? Number.POSITIVE_INFINITY,
+    stat.size + FILE_GROWTH_ALLOWANCE_BYTES
+  )
   let nextOffset = 0
   // The file may change size mid-transfer; the first EOF page fixes the final length.
   let endOffset: number | null = null
@@ -90,6 +104,9 @@ export async function transferRuntimeFile(
         },
         { timeoutMs: CHUNK_TIMEOUT_MS, signal: input.signal }
       )
+      if (offset + chunk.bytesRead > byteLimit) {
+        throw new RuntimeDownloadError('too_large')
+      }
       if (chunk.bytesRead > 0) {
         const bytes = Buffer.from(chunk.contentBase64, 'base64')
         if (bytes.byteLength !== chunk.bytesRead) {
@@ -157,6 +174,9 @@ export async function transferRuntimeFolder(
       )
       if (page.bytesRead > 0) {
         const bytes = Buffer.from(page.contentBase64, 'base64')
+        if (received + bytes.byteLength > FOLDER_ARCHIVE_MAX_ZIP_BYTES) {
+          throw new RuntimeDownloadError('too_large')
+        }
         await input.sink.write(bytes, 0, bytes.byteLength, received)
         received += bytes.byteLength
       }

@@ -52,7 +52,7 @@ function menuFixture(kind: 'file' | 'folder') {
             ) : null}
             <DropdownMenuItem>
               <Download />
-              {kind === 'file' ? 'Download' : 'Download as ZIP…'}
+              {kind === 'file' ? 'Download…' : 'Download as ZIP…'}
             </DropdownMenuItem>
             {kind === 'file' ? (
               <DropdownMenuItem>
@@ -95,7 +95,8 @@ export const fileProgress = toastFixture({
     receivedBytes: 87 * MB,
     totalBytes: 200 * MB,
     processedBytes: 87 * MB,
-    bytesPerSecond: 14.2 * MB
+    bytesPerSecond: 11.5 * MB,
+    rateWindowMs: 7_500
   }
 })
 export const folderCollecting = toastFixture({
@@ -117,7 +118,8 @@ export const folderProgress = toastFixture({
     totalBytes: 2.4 * MB,
     processedBytes: 1.6 * MB,
     fileCount: 5000,
-    bytesPerSecond: 1.2 * MB
+    bytesPerSecond: 1.2 * MB,
+    rateWindowMs: 1_200
   }
 })
 export const openProgress = toastFixture({
@@ -131,7 +133,8 @@ export const openProgress = toastFixture({
     receivedBytes: 0.6 * MB,
     totalBytes: 1.9 * MB,
     processedBytes: 0.6 * MB,
-    bytesPerSecond: 5.4 * MB
+    bytesPerSecond: 5.4 * MB,
+    rateWindowMs: 400
   }
 })
 export const fileDone = toastFixture({
@@ -139,14 +142,14 @@ export const fileDone = toastFixture({
   itemKind: 'file',
   name: 'random-200mb.bin',
   bytes: 200 * MB,
-  elapsedMs: 14_300
+  elapsedMs: 17_400
 })
 export const folderDone = toastFixture({
   kind: 'done',
   itemKind: 'folder',
   name: 'smallfiles.zip',
-  bytes: 0.7 * MB,
-  elapsedMs: 2_400,
+  bytes: 0.86 * MB,
+  elapsedMs: 2_900,
   fileCount: 5000,
   excludedDefaultDirs: true
 })
@@ -200,3 +203,50 @@ export const errorNotFound = toastFixture({
   place: 'sandbox'
 })
 export const errorNoApp = toastFixture({ kind: 'no_app', name: 'trace.perfetto' })
+export const errorOpenRefused = toastFixture({
+  kind: 'failed',
+  intent: 'open',
+  itemKind: 'file',
+  name: 'install.sh',
+  code: 'open_refused',
+  place: 'sandbox'
+})
+export const errorFileGrew = toastFixture({
+  kind: 'failed',
+  intent: 'save',
+  itemKind: 'file',
+  name: 'server.log',
+  code: 'too_large',
+  place: 'sandbox'
+})
+export const errorTooManyItems = toastFixture({
+  kind: 'failed',
+  intent: 'save',
+  itemKind: 'folder',
+  name: 'node_cache',
+  code: 'too_many_entries',
+  place: 'sandbox'
+})
+const LONG_NAME = 'a-very-long-generated-artifact-name-2026-11-09-build-output.tar.gz'
+export const longNameProgress = toastFixture({
+  kind: 'progress',
+  intent: 'save',
+  itemKind: 'file',
+  name: LONG_NAME,
+  snapshot: {
+    downloadId: 'l',
+    phase: 'transferring',
+    receivedBytes: 412 * MB,
+    totalBytes: 980 * MB,
+    processedBytes: 412 * MB,
+    bytesPerSecond: 12.1 * MB,
+    rateWindowMs: 30_000
+  }
+})
+export const longNameDone = toastFixture({
+  kind: 'done',
+  itemKind: 'file',
+  name: LONG_NAME,
+  bytes: 980 * MB,
+  elapsedMs: 83_000
+})

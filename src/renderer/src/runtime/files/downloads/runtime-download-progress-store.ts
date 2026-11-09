@@ -3,12 +3,15 @@ import type { RuntimeDownloadProgressEvent } from '../../../../../shared/runtime
 export type RuntimeDownloadProgressSnapshot = RuntimeDownloadProgressEvent & {
   /** Recent receive rate, smoothed so the label does not jitter. */
   bytesPerSecond: number | null
+  /** How long the rate has been sampled; a time-left estimate waits until it settles. */
+  rateWindowMs: number
 }
 
 type Entry = {
   snapshot: RuntimeDownloadProgressSnapshot | null
   listeners: Set<() => void>
   lastSample: { at: number; bytes: number } | null
+  firstSampleAt: number | null
 }
 
 const entries = new Map<string, Entry>()
@@ -19,7 +22,7 @@ const RATE_SMOOTHING = 0.3
 function entryFor(downloadId: string): Entry {
   let entry = entries.get(downloadId)
   if (!entry) {
-    entry = { snapshot: null, listeners: new Set(), lastSample: null }
+    entry = { snapshot: null, listeners: new Set(), lastSample: null, firstSampleAt: null }
     entries.set(downloadId, entry)
   }
   return entry
@@ -43,7 +46,8 @@ export function applyRuntimeDownloadProgress(
         : bytesPerSecond + RATE_SMOOTHING * (instant - bytesPerSecond)
   }
   entry.lastSample = { at: now, bytes: event.receivedBytes }
-  entry.snapshot = { ...event, bytesPerSecond }
+  entry.firstSampleAt ??= now
+  entry.snapshot = { ...event, bytesPerSecond, rateWindowMs: now - entry.firstSampleAt }
   for (const listener of entry.listeners) {
     listener()
   }
@@ -70,7 +74,12 @@ export function subscribeRuntimeDownloadProgress(
   downloadId: string,
   listener: () => void
 ): () => void {
-  const entry = entryFor(downloadId)
+  // Never creates an entry: a toast rendering after release() must not resurrect one, or the IPC
+  // listener would never be removed.
+  const entry = entries.get(downloadId)
+  if (!entry) {
+    return () => {}
+  }
   entry.listeners.add(listener)
   return () => {
     entry.listeners.delete(listener)

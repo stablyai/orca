@@ -5,12 +5,15 @@ import type {
   FileArchiveReadResult,
   FileArchiveStartResult
 } from '../../../../shared/rpc-contract/files-archive-params'
-import { planFolderArchive } from './folder-archive-walk'
+import { planFolderArchive, sanitizeArchiveSegment } from './folder-archive-walk'
 import { FolderArchiveZipStream } from './folder-archive-zip-stream'
 
 // A lost cancel (closed laptop, dropped socket) must not pin host memory or file handles.
 export const FOLDER_ARCHIVE_IDLE_TIMEOUT_MS = 2 * 60_000
-const MAX_ACTIVE_ARCHIVES = 4
+/** Per client (paired device or connection), so one client can't hold every slot. */
+const MAX_ARCHIVES_PER_OWNER = 2
+/** Host-wide backstop across all clients. */
+const MAX_ACTIVE_ARCHIVES = 8
 
 type ArchiveSession = {
   id: string
@@ -23,11 +26,50 @@ type ArchiveSession = {
 
 export class FolderArchiveSessions {
   private readonly sessions = new Map<string, ArchiveSession>()
+  // Slots held by walks still running, so parallel starts can't all walk before the limit applies.
+  private readonly reservations = new Map<string, number>()
+  private reservedTotal = 0
 
   constructor(
     private readonly idleTimeoutMs = FOLDER_ARCHIVE_IDLE_TIMEOUT_MS,
-    private readonly maxActive = MAX_ACTIVE_ARCHIVES
+    private readonly maxActive = MAX_ACTIVE_ARCHIVES,
+    private readonly maxPerOwner = MAX_ARCHIVES_PER_OWNER
   ) {}
+
+  private ownerCount(ownerKey: string): number {
+    let count = this.reservations.get(ownerKey) ?? 0
+    for (const session of this.sessions.values()) {
+      if (session.ownerKey === ownerKey) {
+        count += 1
+      }
+    }
+    return count
+  }
+
+  private reserve(ownerKey: string): () => void {
+    if (
+      this.sessions.size + this.reservedTotal >= this.maxActive ||
+      this.ownerCount(ownerKey) >= this.maxPerOwner
+    ) {
+      throw new Error('archive_busy')
+    }
+    this.reservations.set(ownerKey, (this.reservations.get(ownerKey) ?? 0) + 1)
+    this.reservedTotal += 1
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      this.reservedTotal -= 1
+      const left = (this.reservations.get(ownerKey) ?? 1) - 1
+      if (left > 0) {
+        this.reservations.set(ownerKey, left)
+      } else {
+        this.reservations.delete(ownerKey)
+      }
+    }
+  }
 
   /** `folderPath` must already be confined to an allowed workspace root by the caller. */
   async start(input: {
@@ -36,22 +78,23 @@ export class FolderArchiveSessions {
     excludeDefaultDirs: boolean
     signal?: AbortSignal
   }): Promise<FileArchiveStartResult> {
-    if (this.sessions.size >= this.maxActive) {
-      throw new Error('archive_busy')
-    }
-    const rootName = sanitizeArchiveRootName(basename(await realpath(input.folderPath)))
-    const plan = await planFolderArchive(input.folderPath, rootName, {
-      excludeDefaultDirs: input.excludeDefaultDirs,
-      ...(input.signal ? { signal: input.signal } : {})
-    })
-    // Re-check after the walk: concurrent starts may have filled the slots meanwhile.
-    if (this.sessions.size >= this.maxActive) {
-      throw new Error('archive_busy')
+    const releaseReservation = this.reserve(input.ownerKey)
+    let rootName: string
+    let plan: Awaited<ReturnType<typeof planFolderArchive>>
+    try {
+      rootName = sanitizeArchiveRootName(basename(await realpath(input.folderPath)))
+      plan = await planFolderArchive(input.folderPath, rootName, {
+        excludeDefaultDirs: input.excludeDefaultDirs,
+        ...(input.signal ? { signal: input.signal } : {})
+      })
+    } finally {
+      // The session below takes over the slot synchronously, so no other start can slip in.
+      releaseReservation()
     }
     const session: ArchiveSession = {
       id: randomUUID(),
       ownerKey: input.ownerKey,
-      stream: new FolderArchiveZipStream(plan.entries),
+      stream: new FolderArchiveZipStream(plan.entries, plan.rootRealPath),
       reading: false,
       idleTimer: null
     }
@@ -149,7 +192,9 @@ function sanitizeArchiveRootName(name: string): string {
   // A filesystem root has no basename; zip readers choke on separators or control characters here.
   // oxlint-disable-next-line no-control-regex
   const cleaned = name.replace(/[\u0000-\u001f/\\]/g, '_').trim()
-  return cleaned === '' || cleaned === '.' || cleaned === '..' ? 'folder' : cleaned
+  return cleaned === '' || cleaned === '.' || cleaned === '..'
+    ? 'folder'
+    : sanitizeArchiveSegment(cleaned)
 }
 
 const sessionsByRuntime = new WeakMap<object, FolderArchiveSessions>()

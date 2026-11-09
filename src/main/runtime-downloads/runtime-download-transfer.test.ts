@@ -87,6 +87,21 @@ describe('transferRuntimeFile', () => {
       new RuntimeDownloadError('too_large')
     )
   })
+
+  it('stops a host that keeps sending pages past the limit', async () => {
+    const endless = fakeCall(async (method: string, params: { length: number }) =>
+      method === 'files.stat'
+        ? { size: 10, isDirectory: false }
+        : {
+            contentBase64: Buffer.alloc(params.length, 1).toString('base64'),
+            bytesRead: params.length,
+            eof: false
+          }
+    )
+    await expect(runFile(endless, { maxBytes: 50 })).rejects.toEqual(
+      new RuntimeDownloadError('too_large')
+    )
+  })
 })
 
 describe('transferRuntimeFolder', () => {

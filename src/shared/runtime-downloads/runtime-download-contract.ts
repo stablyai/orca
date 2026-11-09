@@ -1,4 +1,5 @@
 /** Desktop downloads of files and folders that live on a paired runtime host. */
+import { blockedPluginSaveAsExtension } from '../plugins/frames/plugin-save-as-extensions'
 
 export type RuntimeDownloadErrorCode =
   | 'canceled'
@@ -11,10 +12,20 @@ export type RuntimeDownloadErrorCode =
   | 'not_found'
   | 'disconnected'
   | 'open_failed'
+  /** "Open on this computer" refuses files the OS would run (scripts, installers, apps). */
+  | 'open_refused'
   | 'transfer_failed'
 
 /** Largest file "Open locally" will fetch into the temp cache. */
 export const RUNTIME_OPEN_LOCALLY_MAX_BYTES = 1024 * 1024 * 1024
+
+/**
+ * Whether Orca may hand a fetched copy straight to the OS opener. The host controls the bytes and the
+ * name, so anything Windows or macOS would run on a double-click is only ever saved, never opened.
+ */
+export function canOpenRuntimeDownloadLocally(name: string): boolean {
+  return blockedPluginSaveAsExtension(name) === null
+}
 
 export type RuntimeDownloadStartArgs = {
   /** Caller-chosen id; progress events and cancel use it. */

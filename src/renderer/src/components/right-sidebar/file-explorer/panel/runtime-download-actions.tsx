@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
@@ -15,7 +15,11 @@ import {
   trackRuntimeDownload
 } from '@/runtime/files/downloads/runtime-download-progress-store'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import type { RuntimeDownloadResult } from '../../../../../../shared/runtime-downloads/runtime-download-contract'
+import {
+  canOpenRuntimeDownloadLocally,
+  type RuntimeDownloadResult
+} from '../../../../../../shared/runtime-downloads/runtime-download-contract'
+import { requestFileExplorerRefresh } from '../watching/file-explorer-refresh-requests'
 import type { TreeNode } from '../tree/file-explorer-types'
 import {
   RuntimeDownloadToast,
@@ -27,7 +31,12 @@ import {
 export type RuntimeDownloadIntent = RuntimeDownloadToastIntent
 
 // Long enough to reach "Reveal in Finder" after a long download, short enough not to pile up.
+// Errors stay until dismissed: their one next action must not time out.
 const DONE_TOAST_MS = 12_000
+
+// One transfer per path and intent: "Open on This Computer" has no dialog, so a double click or a
+// retry while the first copy still runs would otherwise fetch and open it twice.
+const inFlight = new Set<string>()
 
 /** Whether this desktop can stream the node straight from its runtime host. */
 export function canStreamRuntimeDownload(
@@ -54,10 +63,13 @@ function LiveProgressToast({
   state: Omit<Extract<RuntimeDownloadToastState, { kind: 'progress' }>, 'snapshot'>
   onAction: (action: RuntimeDownloadToastAction) => void
 }): React.JSX.Element {
-  const snapshot = useSyncExternalStore(
-    (listener) => subscribeRuntimeDownloadProgress(downloadId, listener),
-    () => getRuntimeDownloadProgress(downloadId)
+  // Stable identities: an inline subscribe would resubscribe on every progress tick.
+  const subscribe = useCallback(
+    (listener: () => void) => subscribeRuntimeDownloadProgress(downloadId, listener),
+    [downloadId]
   )
+  const getSnapshot = useCallback(() => getRuntimeDownloadProgress(downloadId), [downloadId])
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot)
   return (
     <RuntimeDownloadToast
       state={{ ...state, snapshot }}
@@ -77,6 +89,30 @@ export async function startRuntimeDownload(
   const api = window.api.runtimeDownloads
   const remote = getRemoteFileArgs(context, node.path)
   if (!api || !remote) {
+    return
+  }
+  const environmentId = remote.target.environmentId
+  const flightKey = `${environmentId}\u0000${remote.worktreeSelector}\u0000${remote.relativePath}\u0000${intent}`
+  if (inFlight.has(flightKey)) {
+    return
+  }
+  inFlight.add(flightKey)
+  try {
+    await runRuntimeDownload(node, context, intent, options, remote)
+  } finally {
+    inFlight.delete(flightKey)
+  }
+}
+
+async function runRuntimeDownload(
+  node: TreeNode,
+  context: RuntimeFileOperationArgs,
+  intent: RuntimeDownloadIntent,
+  options: { excludeDefaultDirs?: boolean },
+  remote: NonNullable<ReturnType<typeof getRemoteFileArgs>>
+): Promise<void> {
+  const api = window.api.runtimeDownloads
+  if (!api) {
     return
   }
   const environmentId = remote.target.environmentId
@@ -114,6 +150,8 @@ export async function startRuntimeDownload(
       { id: toastId, duration: Number.POSITIVE_INFINITY, dismissible: false }
     )
   }
+  // `preparing` is always the first event and is sent once the save dialog has closed, so the
+  // elapsed time never includes the dialog, even for a file too small to send any progress.
   const stopProgressWatch = api.onProgress((event) => {
     if (event.downloadId === downloadId) {
       stopProgressWatch()
@@ -158,6 +196,8 @@ export async function startRuntimeDownload(
       void startRuntimeDownload(node, context, intent, options)
     } else if (action === 'download_instead') {
       void startRuntimeDownload(node, context, 'save', options)
+    } else if (action === 'refresh') {
+      requestFileExplorerRefresh()
     }
   }
   toast.custom(
@@ -169,7 +209,11 @@ export async function startRuntimeDownload(
         onDismiss={() => toast.dismiss(toastId)}
       />
     ),
-    { id: toastId, duration: DONE_TOAST_MS, dismissible: true }
+    {
+      id: toastId,
+      duration: outcome.kind === 'done' ? DONE_TOAST_MS : Number.POSITIVE_INFINITY,
+      dismissible: true
+    }
   )
 }
 
@@ -209,6 +253,7 @@ export function outcomeState(
     elapsedMs: input.elapsedMs,
     ...(result.fileCount !== undefined ? { fileCount: result.fileCount } : {}),
     excludedDefaultDirs: (result.excludedDirCount ?? 0) > 0,
+    canOpen: canOpenRuntimeDownloadLocally(node.name),
     ...(result.skippedCount ? { skippedCount: result.skippedCount } : {})
   }
 }

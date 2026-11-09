@@ -2027,8 +2027,8 @@
     "runtimeDownload": {
       "fileCount_one": "{{files}} file",
       "fileCount_other": "{{files}} files",
-      "folderProgress_one": "{{files}} file · {{amount}}",
-      "folderProgress_other": "{{files}} files · {{amount}}",
+      "folderFilesProgress_one": "{{files}} file",
+      "folderFilesProgress_other": "{{files}} files",
       "skipped_one": "{{count}} item couldn’t be read and was left out.",
       "skipped_other": "{{count}} items couldn’t be read and were left out."
     },

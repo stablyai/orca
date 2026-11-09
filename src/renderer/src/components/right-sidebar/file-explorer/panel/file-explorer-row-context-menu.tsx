@@ -263,7 +263,10 @@ export function FileExplorerRowContextMenu({
                   'Download as ZIP…'
                 )
               : t('auto.components.right.sidebar.FileExplorerRow.7ac885bd2f', 'Download Folder')
-            : t('auto.components.right.sidebar.FileExplorerRow.c2112579f6', 'Download')}
+            : canStreamFromRuntime
+              ? // Opens a save dialog, like "Download as ZIP…".
+                t('auto.components.right.sidebar.FileExplorerRow.downloadFileEllipsis', 'Download…')
+              : t('auto.components.right.sidebar.FileExplorerRow.c2112579f6', 'Download')}
         </ContextMenuItem>
       )}
       {showOpenLocallyAction && (

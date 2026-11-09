@@ -1,5 +1,6 @@
 import { constants } from 'node:fs'
-import { open, type FileHandle } from 'node:fs/promises'
+import { open, readlink, realpath, type FileHandle } from 'node:fs/promises'
+import { sep } from 'node:path'
 import type { FolderArchiveEntry } from './folder-archive-walk'
 
 /** Files up to this size are read whole, ahead of the zipper, so per-file open/stat/close overlaps. */
@@ -17,17 +18,29 @@ export function isSmallFile(entry: FolderArchiveEntry): boolean {
   return entry.kind === 'file' && entry.size <= SMALL_FILE_BYTES
 }
 
+// O_NONBLOCK: a file swapped for a FIFO after the walk must not park a libuv thread in open();
+// fstat then refuses it. Regular files ignore the flag; Windows has neither flag.
+const ARCHIVE_OPEN_FLAGS =
+  constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+
 /**
  * Opens a planned file without following a final link, and refuses it if it is no longer the file
- * the walk saw. A parent directory swapped for a link after the walk slips past O_NOFOLLOW but
- * changes dev/ino, so nothing outside the root is ever read.
+ * the walk saw or if the opened file does not live under `rootRealPath`. A parent directory swapped
+ * for a link after the walk slips past O_NOFOLLOW; the fd's real path (or, off Linux, a re-resolve
+ * plus dev/ino) catches that, so nothing outside the root is ever read.
  */
-export async function openUnchangedFile(entry: FolderArchiveEntry): Promise<FileHandle> {
-  const handle = await open(entry.absolutePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+export async function openUnchangedFile(
+  entry: FolderArchiveEntry,
+  rootRealPath: string
+): Promise<FileHandle> {
+  const handle = await open(entry.absolutePath, ARCHIVE_OPEN_FLAGS)
   try {
     const opened = await handle.stat()
     if (!opened.isFile() || opened.dev !== entry.dev || opened.ino !== entry.ino) {
       throw new ChangedSinceWalkError('archive_entry_changed')
+    }
+    if (!isInsideRoot(await openedRealPath(handle, entry), rootRealPath)) {
+      throw new ChangedSinceWalkError('archive_entry_escaped')
     }
     return handle
   } catch (error) {
@@ -36,11 +49,32 @@ export async function openUnchangedFile(entry: FolderArchiveEntry): Promise<File
   }
 }
 
+async function openedRealPath(handle: FileHandle, entry: FolderArchiveEntry): Promise<string> {
+  if (process.platform === 'linux') {
+    try {
+      return await readlink(`/proc/self/fd/${handle.fd}`)
+    } catch {
+      // No /proc (unusual containers): fall through to the path check.
+    }
+  }
+  return realpath(entry.absolutePath)
+}
+
+function isInsideRoot(path: string, rootRealPath: string): boolean {
+  const root = rootRealPath.endsWith(sep) ? rootRealPath : `${rootRealPath}${sep}`
+  return process.platform === 'win32'
+    ? path.toLowerCase().startsWith(root.toLowerCase())
+    : path.startsWith(root)
+}
+
 /** Never rejects: failures come back as `skip` so a look-ahead read cannot go unhandled. */
-export async function readSmallFile(entry: FolderArchiveEntry): Promise<SmallFileRead> {
+export async function readSmallFile(
+  entry: FolderArchiveEntry,
+  rootRealPath: string
+): Promise<SmallFileRead> {
   let handle: FileHandle
   try {
-    handle = await openUnchangedFile(entry)
+    handle = await openUnchangedFile(entry, rootRealPath)
   } catch (error) {
     return { kind: 'skip', error }
   }
