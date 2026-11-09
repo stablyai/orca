@@ -48,6 +48,8 @@ export type Workload = {
   }
   /** Large completed rows written then rewound on a disposable chat, an outside reader held for `holdMs`, reclaim watched for `reclaimWaitMs`. */
   maintenance: { debtTools: number; debtToolBytes: number; holdMs: number; reclaimWaitMs: number }
+  /** Completed diff originals the seed writes once into the last filler chat, each under the detail reply cap. */
+  diffs: { count: number; patchBytes: number }
 }
 
 const MiB = 1024 * 1024
@@ -87,7 +89,8 @@ export const WORKLOADS: Record<Workload['profile'], Workload> = {
     conversionSourceBytes: 0,
     shapes: { hugeTools: 3, hugeToolBytes: MiB, capToolBytes: 5 * MiB, messageBytes: 3 * MiB },
     subagents: { interleavedTurns: 2, agents: 2, childrenPerAgent: 30, sparseChildren: 250 },
-    maintenance: { debtTools: 4, debtToolBytes: 2 * MiB, holdMs: 10_000, reclaimWaitMs: 150_000 }
+    maintenance: { debtTools: 4, debtToolBytes: 2 * MiB, holdMs: 10_000, reclaimWaitMs: 150_000 },
+    diffs: { count: 2, patchBytes: MiB }
   },
   full: {
     profile: 'full',
@@ -117,7 +120,8 @@ export const WORKLOADS: Record<Workload['profile'], Workload> = {
     shapes: { hugeTools: 4, hugeToolBytes: 3 * MiB, capToolBytes: 16 * MiB, messageBytes: 3 * MiB },
     subagents: { interleavedTurns: 20, agents: 2, childrenPerAgent: 40, sparseChildren: 400 },
     // 160 MiB of rows rewound under a held reader passes the candidate's 32,768-frame WAL admission threshold.
-    maintenance: { debtTools: 10, debtToolBytes: 16 * MiB, holdMs: 60_000, reclaimWaitMs: 600_000 }
+    maintenance: { debtTools: 10, debtToolBytes: 16 * MiB, holdMs: 60_000, reclaimWaitMs: 600_000 },
+    diffs: { count: 4, patchBytes: 3 * MiB }
   }
 }
 
@@ -216,6 +220,22 @@ export const debtPrompt = (workload: Workload, tag: string): string =>
     toolOutputBytes: workload.maintenance.debtToolBytes,
     replyBytes: 400
   })
+/** A known ASCII unified diff of exactly `bytes` bytes; the seed writes it and every arm reads it back. */
+export function diffPatch(index: number, bytes: number): { path: string; patch: string } {
+  const file = `4a/diff-${index}.txt`
+  const lines = [
+    `diff --git a/${file} b/${file}`,
+    `--- a/${file}`,
+    `+++ b/${file}`,
+    '@@ -0,0 +1 @@'
+  ]
+  let length = lines.join('\n').length
+  for (let line = 0; length < bytes; line += 1) {
+    lines.push(`+4A-DIFF-${index} line ${line}`)
+    length += lines.at(-1)!.length + 1
+  }
+  return { path: file, patch: lines.join('\n').slice(0, bytes) }
+}
 export const holdPrompt = (tag: string, ms: number): string =>
   providerText.formatDirective({ op: 'hold', tag, ms })
 export const replyPrompt = (tag: string): string =>
@@ -266,6 +286,10 @@ export function dryRunWorkload(workload: Workload): Record<string, unknown> {
     shapes: workload.shapes,
     subagents: workload.subagents,
     maintenance: workload.maintenance,
+    diffs: workload.diffs,
+    diffPatchDigests: Array.from({ length: workload.diffs.count }, (_, index) =>
+      providerText.digest(diffPatch(index, workload.diffs.patchBytes).patch)
+    ),
     retained: workload.retained,
     rewind: workload.rewind,
     conversion: {

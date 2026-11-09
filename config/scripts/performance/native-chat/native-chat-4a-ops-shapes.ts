@@ -1,10 +1,11 @@
-// 4a history/detail rows for named shapes: sparse and interleaved subagent grouping, huge completed tool originals, an
-// original above the detail reply cap and an oversized ordinary message. Each shape is verified on the real route first.
+// 4a history/detail rows for named shapes: subagent grouping, huge tool originals, one above the detail reply cap, an
+// oversized ordinary message and the seed's completed diff originals. Each shape is verified on the real route first.
 import { read } from './native-chat-4a-ops-reads'
 import { rpc, samplePressure } from './native-chat-4a-probes'
 import type { Row } from './native-chat-4a-report'
 import { addRow, page, sampled, tagFor, type RunContext } from './native-chat-4a-run-context'
 import { createChat, history, send, waitForDurable, waitForIdle } from './native-chat-4a-session'
+import { seededPatches } from './native-chat-4a-seed-diffs'
 import { shapesPrompt, subagentPrompt, type Workload } from './native-chat-4a-workloads'
 
 // JOURNAL_ITEM_DETAIL_MAX_BYTES on the candidate (journal-domain-history-metadata.ts): 4 MiB outbound JSON less 64 KiB.
@@ -18,6 +19,7 @@ type WireItem = {
     kind?: string
     presentation?: string
     output?: { head?: string; byteLength?: number }
+    patch?: { head?: string; byteLength?: number }
     blocks?: { text?: string }[]
   }
 }
@@ -259,12 +261,59 @@ export async function itemShapeRows(ctx: RunContext): Promise<void> {
   await verifiedRow(ctx, messageDetail, {}, messageMismatch, () =>
     detail(ctx, sessionId, carrying!.item.itemId)()
   )
-  addRow(ctx, {
+  await diffRows(ctx)
+}
+
+/** The seed's known diff originals: kind, original length and a short page head, then the exact patch from detail. */
+async function diffRows(ctx: RunContext): Promise<void> {
+  const { sessionId, itemIds, patchBytes } = ctx.manifest.diffChat
+  const patches = seededPatches(ctx.manifest.diffChat)
+  const tail = await history(page(ctx), sessionId, 'tail', 40)
+  const diffs = itemIds.map((itemId) => itemsOf(tail.page).find((item) => item.itemId === itemId))
+  const patchHeadBytes = (item: WireItem | undefined): number =>
+    Buffer.byteLength(item?.body?.patch?.head ?? '')
+  const mismatch = !patches
+    ? 'the harness generates other patches than the seed wrote'
+    : diffs.some((item) => !item)
+      ? `${diffs.filter(Boolean).length} of ${itemIds.length} seeded diff items on the tail page`
+      : diffs.find(
+            (item) => item!.body?.kind !== 'diff' || item!.body.patch?.byteLength !== patchBytes
+          )
+        ? 'a seeded item is not a diff reporting its whole original byteLength'
+        : diffs.find(
+              (item, index) =>
+                patchHeadBytes(item) === 0 ||
+                patchHeadBytes(item) >= patchBytes ||
+                !patches[index]!.startsWith(item!.body!.patch!.head!)
+            )
+          ? 'a diff item carries no short head of its own patch on the page'
+          : null
+  const pageRow = addRow(ctx, {
     family: 'history',
-    operation: 'completed diff originals',
-    variant: 'tail 40',
-    context: {},
-    skipped:
-      'missing evidence: the 4a stub speaks Claude stream-json, and the Claude adapter writes no diff items (only the Codex and ACP adapters do)'
+    operation: 'completed diff originals, heads on one page',
+    variant: `tail 40 (${itemIds.length} × ${MiB(patchBytes)} diff originals)`,
+    context: { sessionId }
   })
+  const observed = {
+    originalBytes: itemIds.length * patchBytes,
+    largestHeadBytes: Math.max(0, ...diffs.map(patchHeadBytes))
+  }
+  await verifiedRow(ctx, pageRow, observed, mismatch, () =>
+    read(ctx, 'agentSession.history', { sessionId, direction: 'tail', limit: 40 })
+  )
+  const detailRow = addRow(ctx, {
+    family: 'history',
+    operation: 'agentSession.item detail',
+    variant: 'completed diff original under the reply cap',
+    context: { originalBytes: patchBytes, replyCapBytes: DETAIL_REPLY_CAP_BYTES }
+  })
+  const full = mismatch ? undefined : await detailOf(ctx, sessionId, itemIds[0]!)
+  const detailMismatch =
+    mismatch ??
+    (full?.body?.patch?.head === patches![0] && patchBytes < DETAIL_REPLY_CAP_BYTES
+      ? null
+      : `detail returned ${patchHeadBytes(full)} of ${patchBytes} B, not the exact seeded patch under the cap`)
+  await verifiedRow(ctx, detailRow, { detailHeadBytes: patchHeadBytes(full) }, detailMismatch, () =>
+    detail(ctx, sessionId, itemIds[0]!)()
+  )
 }
