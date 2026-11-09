@@ -32,14 +32,19 @@ import {
   browserAnnotationCopyTooltip
 } from './BrowserAnnotationSendMenuContent'
 import { preventAgentSendTargetOutsideDismiss } from './prevent-agent-send-target-outside-dismiss'
-import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
 import { useBrowserAnnotationImages } from './use-browser-annotation-images'
 import { BrowserAnnotationImageStrip } from './browser-annotation-image-strip'
-import type { BrowserPageAnnotationTrayProps } from '../describe-page/browser-page-types'
+import type {
+  AnnotationTrayItem,
+  BrowserPageAnnotationTrayProps
+} from '../describe-page/browser-page-types'
 
-export function BrowserPageAnnotationTray({
+/** Design Mode's note tray (send, copy, clear, edit); other annotate surfaces reuse it with their own notes. */
+export function BrowserPageAnnotationTray<T extends AnnotationTrayItem = BrowserPageAnnotation>({
   browserAnnotations,
-  currentUrl,
+  getAnnotationTitle,
+  getAnnotationElsewhereLabel,
+  clearLabel,
   annotationTraySendOpen,
   handleAnnotationTraySendOpenChange,
   worktreeId,
@@ -54,7 +59,7 @@ export function BrowserPageAnnotationTray({
   handleClearBrowserAnnotations,
   handleDeleteBrowserAnnotation,
   handleUpdateBrowserAnnotation
-}: BrowserPageAnnotationTrayProps): React.JSX.Element {
+}: BrowserPageAnnotationTrayProps<T>): React.JSX.Element {
   const t = useTranslate()
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null)
   const [editComment, setEditComment] = useState('')
@@ -72,7 +77,7 @@ export function BrowserPageAnnotationTray({
     editImages.resetImages()
   }
 
-  const handleStartEdit = (annotation: BrowserPageAnnotation): void => {
+  const handleStartEdit = (annotation: T): void => {
     setEditingAnnotationId(annotation.id)
     setEditComment(annotation.comment)
     setEditIntent(annotation.intent)
@@ -208,10 +213,7 @@ export function BrowserPageAnnotationTray({
                 variant="ghost"
                 className="text-muted-foreground hover:text-foreground"
                 onClick={handleClearBrowserAnnotations}
-                aria-label={t(
-                  'auto.components.browser.pane.BrowserPane.734e4343ec',
-                  'Clear browser annotations'
-                )}
+                aria-label={clearLabel}
               >
                 <Trash2 className="size-3" />
               </Button>
@@ -229,6 +231,7 @@ export function BrowserPageAnnotationTray({
           >
             {browserAnnotations.map((annotation, index) => {
               const isEditing = annotation.id === editingAnnotationId
+              const elsewhereLabel = getAnnotationElsewhereLabel?.(annotation)
               return (
                 <div
                   key={annotation.id}
@@ -327,9 +330,7 @@ export function BrowserPageAnnotationTray({
                     <>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-foreground">
-                          {annotation.payload.target.accessibility.accessibleName ||
-                            annotation.payload.target.textSnippet ||
-                            annotation.payload.target.tagName}
+                          {getAnnotationTitle(annotation)}
                         </div>
                         <div className="mt-0.5 line-clamp-2 text-muted-foreground">
                           {annotation.comment}
@@ -342,13 +343,9 @@ export function BrowserPageAnnotationTray({
                               {annotation.imagePaths.length}
                             </span>
                           ) : null}
-                          {currentUrl !== undefined &&
-                          !browserAnnotationMatchesPageUrl(
-                            annotation.payload.page.sanitizedUrl,
-                            currentUrl
-                          ) ? (
-                            <span className="truncate" title={annotation.payload.page.sanitizedUrl}>
-                              {annotation.payload.page.sanitizedUrl}
+                          {elsewhereLabel ? (
+                            <span className="truncate" title={elsewhereLabel}>
+                              {elsewhereLabel}
                             </span>
                           ) : null}
                         </div>

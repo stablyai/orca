@@ -109,16 +109,26 @@ export type BrowserPageFailLoadEvent = {
   isMainFrame?: boolean
 }
 
-export type BrowserPageAnnotationTrayProps = {
-  browserAnnotations: BrowserPageAnnotation[]
-  currentUrl?: string
+/** What the tray reads from a note; Design Mode and other annotate surfaces supply their own records. */
+export type AnnotationTrayItem = Pick<
+  BrowserPageAnnotation,
+  'id' | 'comment' | 'intent' | 'imagePaths'
+>
+
+export type BrowserPageAnnotationTrayProps<T extends AnnotationTrayItem = BrowserPageAnnotation> = {
+  browserAnnotations: T[]
+  getAnnotationTitle: (annotation: T) => string
+  /** Where the note was made, shown only when that is not what is on screen now. */
+  getAnnotationElsewhereLabel?: (annotation: T) => string | undefined
+  clearLabel: string
   annotationTraySendOpen: boolean
   handleAnnotationTraySendOpenChange: (open: boolean) => void
   worktreeId: string
   activeGroupId: string | undefined
   browserAnnotationsPrompt: string
-  includePageDetails: boolean
-  handleIncludePageDetailsChange: (include: boolean) => void
+  includePageDetails?: boolean
+  /** Omit to hide the "Include page details" option. */
+  handleIncludePageDetailsChange?: (include: boolean) => void
   handleBrowserAnnotationsSentToAgent: () => void
   handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
   handleCopyBrowserAnnotations: () => void

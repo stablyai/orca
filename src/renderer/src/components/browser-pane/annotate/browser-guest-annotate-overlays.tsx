@@ -18,6 +18,7 @@ import {
   type BrowserOverlayViewport
 } from '../describe-page/browser-annotation-geometry'
 import { BrowserPageAnnotationTray } from './browser-page-annotation-tray'
+import { browserAnnotationMatchesPageUrl } from './browser-annotation-page-url'
 import { BrowserPageGrabToast } from './browser-page-grab-toast'
 import { PendingBrowserAnnotationCard } from './pending-browser-annotation-card'
 import type { useBrowserPageAnnotationSend } from './use-browser-page-annotation-send'
@@ -98,7 +99,17 @@ export function BrowserGuestAnnotateOverlays({
         : null}
       {pendingAnnotationPayload ? (
         <PendingBrowserAnnotationCard
-          payload={pendingAnnotationPayload}
+          title={
+            pendingAnnotationPayload.target.accessibility.accessibleName ||
+            pendingAnnotationPayload.target.textSnippet ||
+            pendingAnnotationPayload.target.selector
+          }
+          tag={pendingAnnotationPayload.target.tagName}
+          tooltip={pendingAnnotationPayload.target.selector}
+          ariaLabel={t(
+            'auto.components.browser.pane.BrowserPane.b472c5fe03',
+            'Add browser annotation'
+          )}
           worktreeId={worktreeId}
           resolveAnchor={(cardHeight) =>
             getBrowserOverlayAnchor(
@@ -117,7 +128,21 @@ export function BrowserGuestAnnotateOverlays({
       {browserAnnotations.length > 0 ? (
         <BrowserPageAnnotationTray
           browserAnnotations={browserAnnotations}
-          currentUrl={currentUrl}
+          getAnnotationTitle={(annotation) =>
+            annotation.payload.target.accessibility.accessibleName ||
+            annotation.payload.target.textSnippet ||
+            annotation.payload.target.tagName
+          }
+          getAnnotationElsewhereLabel={(annotation) =>
+            currentUrl !== undefined &&
+            !browserAnnotationMatchesPageUrl(annotation.payload.page.sanitizedUrl, currentUrl)
+              ? annotation.payload.page.sanitizedUrl
+              : undefined
+          }
+          clearLabel={t(
+            'auto.components.browser.pane.BrowserPane.734e4343ec',
+            'Clear browser annotations'
+          )}
           annotationTraySendOpen={annotationTraySendOpen}
           handleAnnotationTraySendOpenChange={handleAnnotationTraySendOpenChange}
           worktreeId={worktreeId}
