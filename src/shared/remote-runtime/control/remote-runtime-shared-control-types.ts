@@ -115,6 +115,8 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   clientCapabilities?: readonly RuntimeCapability[]
   isManuallyDisconnected?: () => boolean
   isCapabilityPaused?: () => boolean
+  /** The server's VM is asleep: no socket is opened or retried until its workspace wakes it. */
+  isAsleep?: () => boolean
   /** Publishes local transport diagnostics after a meaningful state transition. */
   onDiagnosticsChanged?: (diagnostics: RemoteRuntimeSharedConnectionDiagnostics) => void
   /** Any inbound frame, ping or pong on the current socket. */
