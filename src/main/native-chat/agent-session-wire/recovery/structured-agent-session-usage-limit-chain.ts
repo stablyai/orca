@@ -163,26 +163,20 @@ export function usageLimitContinueChain(
   return chain
 }
 
-/** A cut as the host's sweep reads it: with the chain that led to it. */
-export type HostUsageLimitCut = NativeChatUsageLimitCut & { chain: number }
+/** A cut as the host's sweep reads it: with the chain that led to it, and what that chain was read
+ *  from so a rebuild can tell whether it still holds. */
+export type HostUsageLimitCut = NativeChatUsageLimitCut & { chain: number; chainKey?: string }
 
-/** The chain depends only on history before the cut, so a rebuild for the same cut reuses it. */
 export function hostUsageLimitCut(
   snapshot: {
     items: readonly AgentJournalRenderItem[]
     submissions: readonly ChainSubmission[]
   },
-  cut: NativeChatUsageLimitCut | null,
-  previous?: HostUsageLimitCut | null
+  cut: NativeChatUsageLimitCut | null
 ): HostUsageLimitCut | null {
-  if (!cut) {
-    return null
-  }
-  const chain =
-    previous && usageLimitContinueIdentity(previous) === usageLimitContinueIdentity(cut)
-      ? previous.chain
-      : usageLimitContinueChain(snapshot.items, snapshot.submissions, cut)
-  return { ...cut, chain }
+  return cut
+    ? { ...cut, chain: usageLimitContinueChain(snapshot.items, snapshot.submissions, cut) }
+    : null
 }
 
 /** Reads a chat's saved conversation without opening it, as main does for unopened chats. */

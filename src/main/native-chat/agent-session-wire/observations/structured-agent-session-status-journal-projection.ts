@@ -1,6 +1,10 @@
-import { latestNativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
-  hostUsageLimitCut,
+  latestNativeChatUsageLimitCut,
+  type NativeChatUsageLimitCut
+} from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import {
+  usageLimitContinueChain,
+  usageLimitContinueIdentity,
   type HostUsageLimitCut
 } from '../recovery/structured-agent-session-usage-limit-chain'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -37,6 +41,34 @@ export type StructuredAgentSessionJournalProjection = {
   firstInputSubmissionKey: string | null
   submissionCount: number
   stopping: boolean
+}
+
+/** The chain reads only history before the cut, plus the cut turn's opener and its send's acceptance;
+ *  a rebuild that changed none of those reuses it instead of walking the journal again. */
+function usageLimitCutWithChain(
+  journal: AgentSessionJournal,
+  snapshot: ReturnType<AgentSessionJournal['statusRead']>,
+  cut: NativeChatUsageLimitCut | null,
+  previous: HostUsageLimitCut | null | undefined
+): HostUsageLimitCut | null {
+  if (!cut) {
+    return null
+  }
+  // A late receipt can attribute the opener after the turn ended: the turn row or the newest send changes.
+  const newest = snapshot.submissions.at(-1)
+  const chainKey = JSON.stringify([
+    usageLimitContinueIdentity(cut),
+    journal.item(cut.turnItemId)?.revision,
+    snapshot.submissions.length,
+    newest?.clientMessageId,
+    newest?.dispatchState,
+    newest?.providerItemId
+  ])
+  const chain =
+    previous?.chainKey === chainKey
+      ? previous.chain
+      : usageLimitContinueChain(snapshot.items, snapshot.submissions, cut)
+  return { ...cut, chain, chainKey }
 }
 
 export class StructuredAgentSessionJournalProjections {
@@ -123,7 +155,8 @@ export class StructuredAgentSessionJournalProjections {
       projection = {
         ...cursor,
         contextId,
-        usageLimitCut: hostUsageLimitCut(
+        usageLimitCut: usageLimitCutWithChain(
+          journal,
           snapshot,
           latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions, journal.itemBody),
           sameContext?.usageLimitCut
