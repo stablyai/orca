@@ -9,7 +9,7 @@ import {
 import { RuntimeClientSettingsController } from '../../src/main/runtime/client/settings/runtime-client-settings'
 import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/agents/launch/HostAgentLaunchSettings'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
-import { getAgentCatalog } from '../../src/renderer/src/lib/agent-catalog'
+import { getAgentCatalog } from '../../src/renderer/src/lib/agent-catalog/agent-catalog'
 
 const transport = vi.hoisted(() => ({ read: vi.fn(), mutate: vi.fn() }))
 const hooks = vi.hoisted(() => ({ apply: vi.fn(async () => {}) }))

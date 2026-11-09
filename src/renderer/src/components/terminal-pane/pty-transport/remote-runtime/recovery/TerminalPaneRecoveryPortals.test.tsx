@@ -21,7 +21,7 @@ vi.mock('@/i18n/i18n', () => ({
 vi.mock('@/store/index', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector({ wslHostStatuses })
 }))
-vi.mock('../../../../../lib/wsl-host-availability', () => ({
+vi.mock('../../../../../runtime/hosts/wsl/wsl-host-availability', () => ({
   useWslHostUnavailableReason: () => null
 }))
 vi.mock('./use-managed-pairing-refused', () => ({

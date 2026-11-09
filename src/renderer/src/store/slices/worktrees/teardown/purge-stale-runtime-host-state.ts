@@ -18,7 +18,7 @@ import {
 } from '../../../host-catalog/removed-runtime-host-rows'
 import { dropWorktreeRowsForRemovedRuntimeEnvironments } from './stale-runtime-worktree-rows'
 import { buildFullWorktreePurgeState } from './worktree-purge-state'
-import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
+import { removeWorktreeVisitEntriesForTargets } from '@/lib/workspace/activation/worktree-visit-recency'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
 import { flushRetiredHostEdits } from './removed-workspace-unsaved-files'
 

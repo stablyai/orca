@@ -19775,6 +19775,7 @@
         "orcaStopCanContinue": "Vous pouvez continuer dans cette conversation.",
         "orcaStopUnnamedServer": "le serveur distant",
         "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
+        "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
         "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
         "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
         "forkedFrom": "Branche créée à partir de"
@@ -19949,7 +19950,8 @@
       "contextUsage": {
         "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
         "title": "Contexte",
-        "estimated": "Estimation basée sur la dernière réponse."
+        "estimated": "Estimation basée sur la dernière réponse.",
+        "deferredNote": "Chargé à la demande. Non compté dans le total utilisé."
       },
       "dismissDeliveryNotice": "Ignorer",
       "addSelectionToChat": "Ajouter au chat",

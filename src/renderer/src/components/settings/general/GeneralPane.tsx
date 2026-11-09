@@ -22,7 +22,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { DefaultWindowsProjectRuntimeSetting } from './project-runtime/DefaultWindowsProjectRuntimeSetting'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type GeneralSearchEntry = ReturnType<typeof getGeneralNavigationSearchEntries>[number]

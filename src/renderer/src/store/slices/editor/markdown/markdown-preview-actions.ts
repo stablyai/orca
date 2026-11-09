@@ -1,7 +1,7 @@
 import { editorPlacementIntent } from '../tabs/editor-placement-intent'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
+import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { createUntitledFileInActiveWorkspace } from '../opening/untitled-file-creation'
 import type { OpenFile } from '../types/open-file'
 import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'

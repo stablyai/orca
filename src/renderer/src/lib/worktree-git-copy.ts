@@ -3,18 +3,18 @@ import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseRoutableExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
-import { getActiveWorkspaceExecutionHostId } from './active-workspace-host'
+import { getActiveWorkspaceExecutionHostId } from './workspace/ownership/active-workspace-host'
 import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import { worktreeCopyOwnerKey } from '@/store/slices/worktrees/metadata/worktree-copy-review-clear'
-import { runtimeTargetForWorkspaceOwner } from './resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from './workspace/ownership/resolve-owner'
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
-} from './connection-owner-resolution'
+} from './workspace/ownership/connection-owner-resolution'
 
 /**
  * One host's copy of a worktree, for git work whose answer is written back to the store. Worktree
