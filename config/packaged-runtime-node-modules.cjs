@@ -76,7 +76,7 @@ const ELECTRON_ARCHITECTURE_BY_ENUM = {
 const PACKAGED_NATIVE_ARCHITECTURES = new Set(['ia32', 'x64', 'arm', 'arm64'])
 const PACKAGED_MAIN_REQUIRED_FILES = [
   'out/main/index.js',
-  'out/main/agent-hooks/managed-agent-hook-controls.js'
+  'out/main/agent-hooks/installation/managed-agent-hook-controls.js'
 ]
 const PACKAGED_MAIN_SOURCE_RE = /^out\/main\/.+\.js$/
 const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/

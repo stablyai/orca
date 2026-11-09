@@ -12,6 +12,7 @@ import { WorktreeRowOpenInSubMenu } from '../open/WorktreeRowOpenInSubMenu'
 import { PerforceCopyUpMenuItem } from '../../../perforce-copies/PerforceCopyUpMenuItem'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
+import { WorkspaceVmLifecycleMenuItems } from '../sleep/WorkspaceVmLifecycleMenuItems'
 import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controller/worktree-card-dom-events'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
@@ -48,6 +49,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleRemoveParentLink,
     handleRename,
     handleSleepSubtree,
+    handleSleepSubtreeWithVm,
     handleTogglePin,
     handleToggleRead,
     hasAnyContextLineage,
@@ -71,6 +73,17 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const t = useTranslate()
+  const sleepItems = (
+    <WorkspaceSleepMenuItems
+      isMultiContext={isMultiContext}
+      sleepLabel={sleepLabel}
+      sleepDisabled={deletingContext || sleepableWorktrees.length === 0}
+      descendantCount={lineageDescendantCount}
+      subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
+      onSleep={handleCloseTerminals}
+      onSleepSubtree={handleSleepSubtree}
+    />
+  )
   return (
     <div
       ref={scopeRef}
@@ -131,15 +144,26 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             </span>
           </DropdownMenuLabel>
           {!isMultiContext && <WorktreeWslHostStartMenuItem worktreeId={worktree.id} />}
-          <WorkspaceSleepMenuItems
-            isMultiContext={isMultiContext}
-            sleepLabel={sleepLabel}
-            sleepDisabled={deletingContext || sleepableWorktrees.length === 0}
-            descendantCount={lineageDescendantCount}
-            subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
-            onSleep={handleCloseTerminals}
-            onSleepSubtree={handleSleepSubtree}
-          />
+          {isMultiContext ? (
+            sleepItems
+          ) : (
+            <WorkspaceVmLifecycleMenuItems
+              worktreeId={worktree.id}
+              hasSleepableActivity={sleepableWorktrees.length > 0}
+              disabled={
+                deletingContext ||
+                (deletingSubtree &&
+                  subtreeSleepableWorktrees.some((target) => target.id !== worktree.id))
+              }
+              onSleep={handleCloseTerminals}
+              hasActiveDescendants={subtreeSleepableWorktrees.some(
+                (target) => target.id !== worktree.id
+              )}
+              onSleepSubtree={handleSleepSubtreeWithVm}
+              sleepItems={sleepItems}
+              replacesSleep={lineageDescendantCount === 0}
+            />
+          )}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
               {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}

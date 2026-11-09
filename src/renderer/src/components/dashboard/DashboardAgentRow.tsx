@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
+import {
+  opensClaudeParentConversation,
+  viewClaudeAgentFromRow
+} from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { useClaudeAgentRowView } from './use-claude-agent-row-view'
 import {
   AgentStateDot,
@@ -8,26 +11,32 @@ import {
   agentStateProgressLabel,
   type AgentDotState
 } from '@/components/AgentStateDot'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import { programStatusAttentionLine } from '../../../../shared/program-status/presentation'
-import { agentRowToolInput, showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import {
+  agentRowToolInput,
+  showsAgentToolPreview
+} from '@/lib/agent-status/presentation/agent-row-tool-preview'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
-import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
+import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
 import {
   agentNoUpdateLabel,
   formatCompactDuration
 } from '../../../../shared/agent-status/presentation/agent-row-decay-state'
-import { agentRowDisplayDotState, agentRowDotState as asDotState } from '@/lib/agent-row-dot-state'
+import {
+  agentRowDisplayDotState,
+  agentRowDotState as asDotState
+} from '@/lib/agent-status/presentation/agent-row-dot-state'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
+import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'

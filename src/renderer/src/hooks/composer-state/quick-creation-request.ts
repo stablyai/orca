@@ -4,7 +4,7 @@ import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/t
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'

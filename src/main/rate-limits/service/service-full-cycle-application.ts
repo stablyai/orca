@@ -1,12 +1,12 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
+import { isZcodeUsageCredentialCurrent } from '../providers/zcode/zcode-usage-credentials'
 import {
   settleSiblingProviderResult,
   type SettledProviderResult
 } from './service-sibling-provider-result'
-import { disabledUsageSnapshot } from '../disabled-usage-snapshot'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
 import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
-import type { ProviderRateLimits } from './service-types'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 
 function hasKnownProvenanceChange(
   previous: ProviderRateLimits | null,

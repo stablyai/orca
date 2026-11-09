@@ -1,16 +1,18 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSkillPackageArchive } from '../../package-archive/skill-package-creation'
 import type { SkillInstallServiceInput } from '../skill-installation'
+import type { ManagementDependencies } from '../skill-install-preview'
 
 const temporaryDirectories: string[] = []
 
 export async function createSkillInstallHome(): Promise<{
   root: string
   input: SkillInstallServiceInput
+  managementDependencies: ManagementDependencies
 }> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-skill-service-test-'))
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'orca-skill-service-test-')))
   temporaryDirectories.push(root)
   const source = join(root, 'source')
   await mkdir(source)
@@ -39,6 +41,16 @@ export async function createSkillInstallHome(): Promise<{
       expectedPackageDigest: archive.manifest.packageDigest,
       expectedPackageId: archive.manifest.packageId,
       expectedVersionId: archive.manifest.versionId
+    },
+    managementDependencies: {
+      authority: {
+        environmentId: 'test-host',
+        homeDirectory: join(root, 'home'),
+        resolveWorktree: async () => null,
+        resolveFolderWorkspace: async () => null
+      },
+      stateDirectory: join(root, 'orca-state'),
+      detectProviders: async () => []
     }
   }
 }

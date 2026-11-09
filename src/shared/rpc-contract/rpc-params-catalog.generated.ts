@@ -68,6 +68,7 @@ import {
   SelectCodexAccountForTargetParams,
   SelectDataAccountParams
 } from './accounts-params'
+import { AgentActivityClearParams, AgentActivitySetReadParams } from './agent-activity-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch-settings-params'
@@ -102,6 +103,7 @@ import {
   AutomationUpdate
 } from './automation-params'
 import { CertificateProceed } from './browser-core-params'
+import { ExtensionList, ExtensionReload } from './browser-extension-params'
 import { MouseClick } from './browser-extras-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser-identity-params'
 import { Screenshot, Snapshot } from './browser-observation-params'
@@ -219,6 +221,7 @@ import {
   TapParams,
   TypeParams
 } from './emulator-params'
+import { EnvironmentDoctorParams } from './environment-doctor-params'
 import {
   FileCommitUpload,
   FileCopy,
@@ -753,6 +756,7 @@ import {
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
+  WorktreePreviewNestedRemoval,
   WorktreePsParams,
   WorktreeRemove,
   WorktreeResolveCallerParent,
@@ -828,6 +832,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.zcodePlanSaveApiKey': UsageCredentialApiKeyParams,
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
+  'agentActivity.clear': AgentActivityClearParams,
+  'agentActivity.setRead': AgentActivitySetReadParams,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
@@ -934,6 +940,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.drag': Drag,
   'browser.eval': Eval,
   'browser.exec': Exec,
+  'browser.extensionList': ExtensionList,
+  'browser.extensionReload': ExtensionReload,
   'browser.fill': Fill,
   'browser.find': Find,
   'browser.focus': Element,
@@ -1050,6 +1058,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.tap': TapParams,
   'emulator.type': TypeParams,
   'emulator.unregisterActive': EmulatorUnregisterActiveParams,
+  'environment.doctor': EnvironmentDoctorParams,
   'files.browseServerDir': ServerDirectoryBrowse,
   'files.commitUpload': FileCommitUpload,
   'files.copy': FileCopy,
@@ -1487,6 +1496,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.add': RepoPath,
   'repo.addRemote': RepoAddRemote,
   'repo.baseRefDefault': RepoSelector,
+  'repo.checkCloneTarget': RepoClone,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,
@@ -1661,6 +1671,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.listRetiredNames': WorktreeDetectedListParams,
   'worktree.persistSortOrder': WorktreeSortOrder,
   'worktree.prefetchCreateBase': WorktreePrefetchCreateBase,
+  'worktree.previewNestedRemoval': WorktreePreviewNestedRemoval,
   'worktree.ps': WorktreePsParams,
   'worktree.resolveCallerParent': WorktreeResolveCallerParent,
   'worktree.resolveMrBase': WorktreeResolveMrBase,

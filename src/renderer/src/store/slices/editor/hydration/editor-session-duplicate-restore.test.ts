@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { buildWorkspaceSessionPayload } from '../../../../lib/workspace/persistence/workspace-session'
@@ -19,7 +19,7 @@ vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (import
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

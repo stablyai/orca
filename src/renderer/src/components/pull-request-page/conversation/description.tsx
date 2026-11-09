@@ -22,6 +22,7 @@ export function ConversationDescription({
   bodySaving,
   bodyChanged,
   body,
+  bodyImageUrls,
   resolvedBodyDraft,
   bodyTextareaRef,
   mentionOptions,
@@ -41,6 +42,7 @@ export function ConversationDescription({
   bodySaving: boolean
   bodyChanged: boolean
   body: string
+  bodyImageUrls?: Record<string, string>
   resolvedBodyDraft: string
   bodyTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   mentionOptions: MentionOption[]
@@ -152,6 +154,7 @@ export function ConversationDescription({
         ) : body.trim() ? (
           <CommentMarkdown
             content={body}
+            bodyImageUrls={bodyImageUrls}
             variant="document"
             githubRepo={markdownGitHubRepo}
             className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"

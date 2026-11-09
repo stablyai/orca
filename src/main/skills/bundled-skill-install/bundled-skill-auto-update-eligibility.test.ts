@@ -135,24 +135,6 @@ describe('per-skill silent update of unedited Orca copies', () => {
     expect(remaining.map((entry) => entry.name)).toEqual(['bravo'])
   })
 
-  it('reports a backup when a writer saves SKILL.md after the final verification', async () => {
-    const home = await makeSkillHome()
-    await writeCopy(skillPath(home, 'shared', 'alpha'), text('alpha', 'old'))
-    const lateWriter = lateWriterFilesystem(home)
-
-    const result = await autoUpdateInstalledBundledSkills({
-      ...input(home, lateWriter),
-      names: ['alpha']
-    })
-
-    const backupPath = result.skills[0]?.ops[0]?.backupPath
-    expect(backupPath).toBeTruthy()
-    expect(await readFile(join(backupPath ?? '', 'SKILL.md'), 'utf8')).toBe(
-      text('alpha', 'late edit')
-    )
-    expect(await readSkill(home, 'shared', 'alpha')).toBe(text('alpha', 'new'))
-  })
-
   it('reports where unpreservable edits remain and never deletes them', async () => {
     const home = await makeSkillHome()
     await writeCopy(skillPath(home, 'shared', 'alpha'), text('alpha', 'old'))

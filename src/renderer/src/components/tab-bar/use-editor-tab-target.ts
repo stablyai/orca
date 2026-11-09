@@ -1,5 +1,5 @@
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
-import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { resolveReviewRepository } from '@/lib/review-owner'
 import { useAppStore } from '@/store'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'

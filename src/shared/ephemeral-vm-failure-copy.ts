@@ -1,3 +1,6 @@
+import type { OrcaVmRecipeLifecycleMode } from './orca-yaml-hook-types'
+import { formatEphemeralVmRecipeTimeout } from './ephemeral-vm-recipe-timeouts'
+
 // One English table for ephemeral VM failures: main builds the wire/persisted English, the renderer translates by code.
 export const EPHEMERAL_VM_FAILURE_COPY = {
   repoNotFound: 'Repo not found: {{repoId}}',
@@ -6,6 +9,8 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   runtimeNotFound: 'Unknown ephemeral VM runtime: {{runtimeId}}',
   runtimeRepoMissing: 'Ephemeral VM runtime has no repo id: {{runtimeId}}',
   provisionCancelled: 'Provisioning cancelled.',
+  provisionInterrupted:
+    'Orca stopped while this VM was being created. Destroy it to release any provider resources.',
   startRefUnresolved: 'Could not resolve provisioned-root start ref: {{ref}}',
   defaultStartRefUnresolved: 'Could not resolve a default provisioned-root start ref.',
   recipeExited: 'Recipe exited with code {{exitCode}}.',
@@ -18,6 +23,12 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
     'Provisioned-root recipes must return schemaVersion 2 with checkoutMode "provisioned-root".',
   provisionedRootNotConfigured:
     'Recipe result requests provisioned-root checkout, but the recipe is not configured for it.',
+  suspendExited: 'Suspend exited with code {{exitCode}}.',
+  suspendExitedWithoutCode: 'Suspend exited with code unknown.',
+  resumeExited: 'Resume exited with code {{exitCode}}.',
+  resumeExitedWithoutCode: 'Resume exited with code unknown.',
+  recipeTimedOut:
+    'The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.',
   destroyExited: 'Destroy exited with code {{exitCode}}.',
   destroyExitedWithoutCode: 'Destroy exited with code unknown.',
   destroyFailed: 'Destroy failed.',
@@ -35,6 +46,9 @@ type EphemeralVmFailureParams = {
   runtimeId?: string
   ref?: string
   exitCode?: number
+  mode?: OrcaVmRecipeLifecycleMode
+  timeout?: string
+  timeoutSeconds?: number
 }
 
 /** Wire/persisted shape: `error` stays English for older clients; the code is optional and open. */
@@ -50,7 +64,7 @@ export function ephemeralVmFailure(
 ): EphemeralVmFailure {
   // One pass so an id containing "{{ref}}" stays verbatim.
   const error = EPHEMERAL_VM_FAILURE_COPY[errorCode].replace(
-    /\{\{(repoId|recipeId|runtimeId|ref|exitCode)\}\}/g,
+    /\{\{(repoId|recipeId|runtimeId|ref|exitCode|mode|timeout)\}\}/g,
     (_slot, slot: keyof EphemeralVmFailureParams) => String(params[slot] ?? '')
   )
   const errorParams = Object.fromEntries(
@@ -65,18 +79,32 @@ export function ephemeralVmFailure(
   }
 }
 
+const EXIT_FAILURE_CODES = {
+  recipe: ['recipeExited', 'recipeExitedWithoutCode'],
+  suspend: ['suspendExited', 'suspendExitedWithoutCode'],
+  resume: ['resumeExited', 'resumeExitedWithoutCode'],
+  destroy: ['destroyExited', 'destroyExitedWithoutCode']
+} as const satisfies Record<string, readonly [EphemeralVmFailureCode, EphemeralVmFailureCode]>
+
 export function ephemeralVmExitFailure(
-  step: 'recipe' | 'destroy',
+  step: keyof typeof EXIT_FAILURE_CODES,
   exitCode: number | null
 ): EphemeralVmFailure {
-  if (step === 'recipe') {
-    return exitCode === null
-      ? ephemeralVmFailure('recipeExitedWithoutCode')
-      : ephemeralVmFailure('recipeExited', { exitCode })
-  }
+  const [withCode, withoutCode] = EXIT_FAILURE_CODES[step]
   return exitCode === null
-    ? ephemeralVmFailure('destroyExitedWithoutCode')
-    : ephemeralVmFailure('destroyExited', { exitCode })
+    ? ephemeralVmFailure(withoutCode)
+    : ephemeralVmFailure(withCode, { exitCode })
+}
+
+export function ephemeralVmTimeoutFailure(
+  mode: OrcaVmRecipeLifecycleMode,
+  timeoutSeconds: number
+): EphemeralVmFailure {
+  return ephemeralVmFailure('recipeTimedOut', {
+    mode,
+    timeout: formatEphemeralVmRecipeTimeout(timeoutSeconds),
+    timeoutSeconds
+  })
 }
 
 /** In-process carrier so a catch site can persist the code next to the English message. */
@@ -107,6 +135,23 @@ export function toCleanupLastErrorFields(failure: EphemeralVmFailure | null): {
     cleanupLastError: failure?.error,
     cleanupLastErrorCode: failure?.errorCode,
     cleanupLastErrorParams: failure?.errorParams
+  }
+}
+
+/** Suspend/resume record fields; undefined writes nothing, null clears all three. */
+export function toLifecycleLastErrorFields(failure: EphemeralVmFailure | null | undefined): {
+  lifecycleLastError?: string
+  lifecycleLastErrorCode?: string
+  lifecycleLastErrorParams?: Record<string, string | number>
+} {
+  if (failure === undefined) {
+    return {}
+  }
+  return {
+    // The record rejects an empty string; a bare `new Error()` must still record the failure.
+    lifecycleLastError: failure ? failure.error || 'Unknown error.' : undefined,
+    lifecycleLastErrorCode: failure?.errorCode,
+    lifecycleLastErrorParams: failure?.errorParams
   }
 }
 

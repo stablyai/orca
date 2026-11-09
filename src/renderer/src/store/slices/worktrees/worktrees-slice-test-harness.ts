@@ -29,6 +29,7 @@ import {
 } from './listing/worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktree.test-fixture'
 import { createWorkspaceAttentionSlice } from '../workspace-attention/workspace-attention-slice'
+import { createEphemeralVmLifecycleSlice } from '../ephemeral-vm/ephemeral-vm-lifecycle'
 
 /** Bare `vi.fn()` infers @vitest/spy's un-nameable `Procedure`, which breaks declaration emit. */
 export type StubMock<TArgs extends unknown[] = never[]> = Mock<(...args: TArgs) => unknown>
@@ -135,6 +136,7 @@ export function createTestStore() {
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
         ...createWorkspaceAttentionSlice(...a),
+        ...createEphemeralVmLifecycleSlice(...a),
         ...createAgentStatusSlice(...a),
         trustedOrcaHooks: {},
         sshConnectionStates: new Map([

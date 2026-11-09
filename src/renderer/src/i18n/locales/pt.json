@@ -301,6 +301,7 @@
       "switch": "Trocar de branch: {{branch}}",
       "search": "Pesquisar branches",
       "recover": "Trocar para {{branch}}",
+      "copy": "Copiar nome do branch",
       "create": "Criar branch {{name}} a partir de {{branch}}",
       "open": "Abrir espaço de trabalho",
       "occupied": "Em uso em {{path}}",
@@ -793,7 +794,6 @@
       "loadMore": "Carregar mais resultados",
       "indexedHistory": "Histórico indexado · melhores resultados",
       "hostsSkipped": "Não pesquisado: {{value0}}",
-      "consent": "Ativar a busca em texto completo? O Orca cria um índice neste computador a partir das transcrições locais dos agentes, incluindo conversas completas e até 3.072 caracteres por saída de ferramenta. O conteúdo não é ocultado. Clientes pareados autenticados podem pesquisá-lo.",
       "remoteDisabled": "A busca está desativada neste computador. Ative a indexação de transcrições nesse computador para pesquisar suas sessões.",
       "notReady": "O índice de busca ainda não está pronto. Tente novamente em breve.",
       "noService": "A busca não está disponível neste computador. Pode ser necessário atualizar o Orca ou usar um runtime com suporte a busca.",
@@ -893,7 +893,6 @@
       "description": "Pesquise tudo o que seus agentes disseram e fizeram, neste computador e em qualquer servidor Orca pareado.",
       "searchDescription": "Ative a busca de sessões para este computador e servidores pareados, ou limpe os dados de busca.",
       "indexComputers": "Pesquisar dentro das sessões",
-      "computersConsent": "Cada computador mantém uma cópia pesquisável das próprias conversas de agente e saídas de ferramentas. Nada sai desse computador.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Pesquisar sessões em {{host}}",
       "serverOffline": "Off-line",
@@ -1730,8 +1729,7 @@
         "parakeetJa": "Somente japonês. Treinado com mais de 35 mil horas de fala natural. Inclui pontuação.",
         "whisperTiny": "Mais de 90 idiomas. Menor precisão que Parakeet, mas com a maior cobertura de idiomas.",
         "senseVoice": "Chinês, inglês, japonês, coreano e cantonês com detecção automática de idioma.",
-        "gpt4oMiniTranscribe": "Transcrição na nuvem com alta precisão e baixo custo. Exige uma chave de API da OpenAI.",
-        "gpt4oTranscribe": "Transcrição na nuvem com maior precisão. Exige uma chave de API da OpenAI."
+        "gptTranscribe": "Transcrição na nuvem com alta precisão. Exige uma chave de API da OpenAI."
       }
     },
     "diagnostics": {
@@ -3631,6 +3629,9 @@
             "accounts": "Contas Antigravity salvas",
             "readAgo": "Lido {{time}}",
             "notRead": "Uso desconhecido: ainda não consultado"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Redefinição em {{when}}"
           }
         }
       },
@@ -4975,7 +4976,6 @@
           "f828e1de19": "- compartilhado com sua equipe",
           "673a7fd10e": "Verificando...",
           "5426ecbdcb": "Scripts locais não serão executados",
-          "b2b06c7ce8": "Variáveis de ambiente disponíveis (passe o mouse para detalhes):",
           "95a0411b3e": "modelo",
           "175daba180": "Exemplo",
           "b20c5df6ca": "Adicione um arquivo `orca.yaml` para habilitar padrões compartilhados de configuração, arquivamento ou automação de issue para este repositório. Modelo de exemplo:",
@@ -6505,7 +6505,8 @@
           "cd9fe37556": "Permissão do microfone concedida",
           "openAiKeyName": "Sua chave de transcrição da OpenAI",
           "dictationShortcutDescription": "Pressione {{shortcut}} para ditar texto em qualquer painel com foco.",
-          "dictationModesDescription": "Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado."
+          "dictationModeAuto": "Automático",
+          "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar."
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar Notificação de Teste",
@@ -6612,7 +6613,10 @@
               "modelUnloadTitle": "Descarregar modelo de voz",
               "modelUnloadDescription": "Escolha quando o modelo de voz local é descarregado da memória.",
               "modelUnloadKeyword": "descarregar",
-              "modelMemoryKeyword": "memória"
+              "modelMemoryKeyword": "memória",
+              "fillerWordsTitle": "Remover hesitações",
+              "fillerWordsDescription": "Remove “hã”, “hum” e sons parecidos do texto ditado.",
+              "fillerWordsKeyword": "hesitações"
             }
           }
         },
@@ -11806,13 +11810,12 @@
           "eefa756190": "Configurar manualmente",
           "ca4efcbc25": "Salvar",
           "fdbc6cb064": "Script de configuração detectado",
-          "7275f674cc": "Configuração detectada",
           "822ff300ad": "Descartar",
           "5bfd5c8779": "Descartar scripts de configuração",
-          "detectedFromSource": "Detectado em <source>{{source}}</source>",
           "ignoresSharedSetup": "Este repositório ignora scripts de configuração compartilhados de <yaml>orca.yaml</yaml>. Adicione um comando local ou altere a origem em Configurações.",
-          "foundSetupCommandIn": "Foi encontrado um comando de configuração em <source>{{source}}</source>. Salve-o para executá-lo nas novas worktrees.",
-          "reviewSetupScript": "Revisar script de configuração"
+          "reviewSetupScript": "Revisar script de configuração",
+          "7275f674cc": "Configuração detectada",
+          "detectedFromSource": "Detectado em <file>{{source}}</file>"
         },
         "SetupScriptReviewDialog": {
           "title": "Revisar script de configuração",
@@ -11952,7 +11955,10 @@
           "69f5b5380d": "Clonando...",
           "cloneOnHostDescription": "Digite a URL do Git e escolha onde cloná-lo em {{value0}}.",
           "cloneParentFolder": "Pasta pai",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Nome da pasta",
+          "cloneFolderTakenByRepo": "\"{{value0}}\" nesta pasta já é outro repositório, então este clone precisa da sua própria pasta.",
+          "cloneFolderNotEmpty": "\"{{value0}}\" já existe nesta pasta, então este clone precisa da sua própria pasta."
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Reiniciar o Orca",
@@ -12356,9 +12362,6 @@
           "888b83bf78": "Falha ao salvar o script de configuração",
           "a49196d538": "Executa quando o Orca cria uma nova worktree.",
           "savedSetupCommand": "O comando de configuração foi salvo.",
-          "savedWithSkippedFields_one": "{{count}} campo não compatível foi ignorado. O comando de configuração foi salvo.",
-          "savedWithSkippedFields_other": "{{count}} campos não compatíveis foram ignorados. O comando de configuração foi salvo.",
-          "savedWithSkippedFields_many": "{{count}} campos não compatíveis foram ignorados. O comando de configuração foi salvo.",
           "savedInProjectSettings": "Salvo nas <settings>configurações deste projeto</settings>"
         },
         "FolderWorkspaceComposerDialog": {
@@ -13091,6 +13094,7 @@
           "kernelStartFailed": "Não foi possível iniciar o kernel.",
           "noPython": "O Python não foi encontrado neste computador. Instale-o pelo [python.org](https://www.python.org/downloads/) e execute a célula novamente.",
           "kernelDied": "O kernel parou.",
+          "outputTruncated": "Saída truncada: o Orca manteve o início da saída desta célula e descartou o restante. Para manter tudo, grave-a em um arquivo.",
           "localOnly": "As células do notebook só podem ser executadas para arquivos neste computador.",
           "pythonOnly": "O Orca só executa notebooks Python.",
           "ownerUnresolved": "O Orca ainda não sabe em qual computador este notebook está, por isso não pode executar suas células.",
@@ -16652,6 +16656,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Ligar"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Dimensionado para outra janela",
+            "fitHere": "Ajustar aqui"
           }
         },
         "quick": {
@@ -17165,7 +17173,6 @@
             "4f327c8b3d": "Abrir Markdown...",
             "3d5d6c960d": "Novo Markdown",
             "fd2b42aaa3": "Novo Emulador Móvel",
-            "aea43b5748": "Abra a aba do emulador existente.",
             "b426bb2615": "Ir para o Emulador Móvel",
             "4833fb2cbe": "Nova Aba do Navegador",
             "d364f3c8d4": "Novo Terminal",
@@ -19252,7 +19259,8 @@
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
           "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
-          "stoppedAfterSilence": "Parou após um minuto de silêncio"
+          "stoppedAfterSilence": "Parou após um minuto de silêncio",
+          "retryUnmatched": "Ao tentar de novo, não foi possível saber quais palavras já estavam digitadas, então todas foram inseridas."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência.",
@@ -19260,13 +19268,21 @@
           "lost": "Não foi possível inserir nem copiar o ditado."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Parar ditado",
-          "7f3660a7ba": "Iniciando microfone…",
-          "f082d0cb9d": "Processando…",
-          "3de5a129e7": "Ouvindo",
           "4977162383": "Muito alto",
-          "25f2b7a6a5": "Falando",
-          "loadingModel": "Carregando modelo de fala…"
+          "finishing": "Finalizando…",
+          "listening": "Ouvindo…",
+          "cancel": "Cancelar",
+          "finish": "Concluir",
+          "oneMinuteLeft": "Falta um minuto.",
+          "sendsWhenLanded": "Envia quando o texto chegar",
+          "entersWhenLanded": "Pressiona Enter quando o texto chegar"
+        },
+        "DictationPillFailure": {
+          "discard": "Descartar gravação",
+          "modelFailed": "Modelo não carregou.",
+          "transcribeFailed": "Não transcrito. Gravação mantida.",
+          "openSettings": "Configurações",
+          "retry": "Repetir"
         }
       },
       "link": {
@@ -19501,7 +19517,6 @@
             "a3346fc6ed": "Cancelar criação da worktree",
             "532aea14ce": "Cancelar",
             "767951265d": "Algo deu errado ao criar a worktree.",
-            "vmProvisioningTitle": "Provisionando VM",
             "cancelProvisioning": "Cancelar",
             "vmProvisioningLogEmpty": "Esperando a saída da receita…"
           }
@@ -20192,6 +20207,7 @@
         "orcaStopCanContinue": "Você pode continuar nesta conversa.",
         "orcaStopUnnamedServer": "o servidor remoto",
         "permissionDenied": "{{agent}} negou a permissão. Ver detalhes.",
+        "safetyReviewApproved": "{{agent}} aprovou esta ação. Ver detalhes.",
         "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
         "forkedFrom": "Ramificado de"
@@ -20215,6 +20231,7 @@
         "noCommands": "Nenhum comando correspondente",
         "commands": "Comandos",
         "skills": "Skills",
+        "checkingSkills": "Procurando novas habilidades…",
         "loadingSkills": "Carregando skills...",
         "skillsLoaded": "Skills carregadas",
         "skillsUnavailableHost": "As skills não estão disponíveis para este host",
@@ -20913,7 +20930,8 @@
       "contextUsage": {
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
         "title": "Contexto",
-        "estimated": "Estimado a partir da última resposta."
+        "estimated": "Estimado a partir da última resposta.",
+        "deferredNote": "Carregado sob demanda. Não conta no total usado."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Copiar ID de sessão do Orca",
@@ -21168,8 +21186,10 @@
       "composerWorkspace": {
         "copyFailed": "Falha ao copiar",
         "copyIdentity": "Copiar {{value0}}",
+        "detachedCommit": "Commit {{head}} (não é uma branch)",
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
+        "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal.",
@@ -21644,7 +21664,14 @@
           "cloud": "Modelos na nuvem rodam nos servidores do provedor, então nada fica carregado aqui.",
           "never": "Nunca",
           "immediately": "Imediatamente"
+        },
+        "fillerWords": {
+          "title": "Remover hesitações",
+          "description": "Remove sons como “hã” e “hum” do texto ditado, conforme o idioma do ditado."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Variáveis de ambiente disponíveis"
       }
     },
     "jiraIssueAssigneeField": {
@@ -22214,11 +22241,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Não foi possível salvar a preferência de exclusão",
     "alwaysForceDelete": "Sempre forçar exclusão",
+    "alwaysForceDeleteDescription": "Aplica-se a todas as futuras exclusões de espaços de trabalho.",
     "moreActions": "Mais opções de exclusão forçada",
-    "alwaysForceDeleteTooltip": "Aplica-se a todas as futuras exclusões de espaços de trabalho.",
     "moreBranchActions": "Mais opções de exclusão de branches",
     "alwaysForceDeleteBranches": "Sempre excluir branches preservadas",
-    "alwaysForceDeleteBranchesTooltip": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho.",
+    "alwaysForceDeleteBranchesDescription": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho.",
     "moreDeleteOptions": "Mais opções de exclusão",
     "alwaysDelete": "Sempre excluir",
     "alwaysDeleteTooltip": "Pular esta confirmação em futuras exclusões."
@@ -22765,7 +22792,8 @@
     "openToObserve": "Abra Recursos para observar as sessões de terminal.",
     "killAllLocal": "Encerrar todas as sessões locais",
     "ptys": "PTYs",
-    "restartLocal": "Reiniciar daemon local"
+    "restartLocal": "Reiniciar daemon local",
+    "metricDetails": "Detalhes das métricas"
   },
   "browserTab": {
     "agentDriving": "Um agente está usando esta página",

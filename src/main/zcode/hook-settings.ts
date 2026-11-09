@@ -2,15 +2,17 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
-  getSharedManagedScriptPath,
-  hookDefinitionHasManagedCommand,
-  isPlainObject,
-  removeManagedCommands,
-  wrapPosixHookCommand,
   type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  hookDefinitionHasManagedCommand,
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 
 const ZCODE_SCRIPT_BASE = 'zcode-hook'
 

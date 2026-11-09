@@ -19,6 +19,7 @@ export function decodeRuntimeEnvironmentSubscriptionEvents(
         event !== null &&
         'type' in event &&
         (event.type === 'structuredChatMessageDispatch' ||
+          event.type === 'structuredChatPromptAccepted' ||
           event.type === 'structuredChatAgentStart') &&
         recordRemoteStructuredChatTelemetry(event)
       ) {

@@ -5,7 +5,7 @@ import { useAppStore } from '@/store/index'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/workspace/creation/worktree-creation-agent-seeds'
-import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 
 export async function completeWorktreeCreation(args: {

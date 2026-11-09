@@ -6,7 +6,7 @@ import {
   buildLinearPersonalApiKeySettingsUrl,
   buildLinearWorkspaceApiSettingsUrl
 } from '../../../shared/linear/links'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'

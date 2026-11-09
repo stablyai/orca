@@ -173,6 +173,7 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     error: undefined,
     provisioningLog: undefined,
     progressDetail: undefined,
+    environmentCheck: undefined,
     checkoutProgress: undefined,
     worktreeId: undefined
   })

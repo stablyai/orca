@@ -1,5 +1,5 @@
-import { detectLanguage } from '@/lib/language-detect'
-import { canPreviewLanguage } from '@/lib/file-preview'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
+import { canPreviewLanguage } from '@/lib/browser/documents/file-preview'
 import type { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import type { MarkdownDefaultViewMode } from '../../../../shared/markdown-default-view-mode'

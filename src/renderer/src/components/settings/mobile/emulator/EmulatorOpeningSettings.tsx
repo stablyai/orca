@@ -3,7 +3,7 @@ import { getEmulatorOpeningMode } from '../../../../../../shared/emulator-openin
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { useTranslate } from '@/i18n/use-translate'
-import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
+import { simulatorRuntimeLabel } from '@/lib/simulator/launch/simulator-runtime-label'
 
 type Device = { name: string; udid: string; runtime?: string; isAvailable?: boolean }
 type Props = {

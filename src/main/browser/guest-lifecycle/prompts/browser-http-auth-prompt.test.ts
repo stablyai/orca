@@ -5,13 +5,13 @@ const mocks = vi.hoisted(() => ({
   resolvePagePromptTarget: vi.fn()
 }))
 
-vi.mock('../../browser-manager', () => ({
+vi.mock('../manager/browser-manager', () => ({
   browserManager: {
     resolvePagePromptTarget: mocks.resolvePagePromptTarget
   }
 }))
 
-import type { BrowserPagePromptRequest } from '../../../../shared/browser-page-prompt'
+import type { BrowserPagePromptRequest } from '../../../../shared/browser/prompts/browser-page-prompt'
 import { handleBrowserGuestLogin } from './browser-http-auth-prompt'
 import { BROWSER_PAGE_PROMPT_TIMEOUT_MS, respondToBrowserPagePrompt } from './browser-page-prompts'
 

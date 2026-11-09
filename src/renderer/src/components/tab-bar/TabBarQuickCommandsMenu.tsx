@@ -13,7 +13,7 @@ import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { TabBarQuickCommandItem } from './TabBarQuickCommandItem'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'

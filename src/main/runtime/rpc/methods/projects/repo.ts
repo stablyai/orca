@@ -173,10 +173,21 @@ export const REPO_METHODS = [
     params: RepoClone,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.cloneRepo(params.url, params.destination),
+        await context.runtime.cloneRepo(
+          params.url,
+          params.destination,
+          undefined,
+          params.folderName
+        ),
         context
       )
     })
+  }),
+  defineMethod({
+    name: 'repo.checkCloneTarget',
+    permission: 'workspace',
+    params: RepoClone,
+    handler: async (params, { runtime }) => ({ target: await runtime.checkCloneTarget(params) })
   }),
   defineMethod({
     name: 'repo.show',
