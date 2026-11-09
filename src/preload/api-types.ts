@@ -1,3 +1,4 @@
+import type { AgentApiKeysApi } from './api/agent-api-keys-bridge'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -164,6 +165,8 @@ export type PreloadApi = {
   ssh: SshApi
   /** Desktop only: an unmanaged ssh login to a host whose move is blocked. */
   plainSsh?: PlainSshTerminalApi
+  /** Desktop only: the API keys Orca hands to agent launches. */
+  agentApiKeys?: AgentApiKeysApi
   /** COMPAT(legacy-relay-bridge): desktop-only, revisit 2027-01-15. */
   legacyRelayBridge?: LegacyRelayBridgeApi
   automations: AutomationsApi
