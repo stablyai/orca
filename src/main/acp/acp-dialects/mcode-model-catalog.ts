@@ -90,6 +90,7 @@ export function parseMcodeModelCatalog(content: string): AgentSessionModelOption
   return models
 }
 
+/** Reads and parses the config.yaml at `configPath`; read failures surface to discovery. */
 export async function parseMcodeModelCatalogFromConfigFile(
   configPath: string
 ): Promise<AgentSessionModelOption[]> {

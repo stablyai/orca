@@ -28,6 +28,8 @@ function resolveMcodeModelNameAndDescription(choice: SessionConfigSelectOption):
   return { name, description: choice.description ?? mcodeModelDescription(rawId) }
 }
 
+/** Cleans mcode's session menus: thinking-variant models only, canonical names, an on/off
+ *  thinking menu where the model is switchable but offers none. */
 export function normalizeMcodeConfigOptions(options: SessionConfigOption[]): SessionConfigOption[] {
   const modelOption = options.find(
     (opt) => opt.type === 'select' && (opt.category === 'model' || opt.id === 'model')
