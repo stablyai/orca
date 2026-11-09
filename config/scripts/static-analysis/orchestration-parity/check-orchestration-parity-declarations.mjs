@@ -64,7 +64,9 @@ export function censusProblems(methods, sections, codeExists) {
           `${method}: "${value}" is not supported, refused \`<code>\`: <reason>, or n/a: <reason>.`
         )
       } else if (match[1] && !codeExists(match[1])) {
-        problems.push(`${method}: ${match[1]} is not an error code in src/main or src/shared.`)
+        problems.push(
+          `${method}: ${match[1]} is not an error code in src/main, src/shared or src/cli.`
+        )
       }
     }
   }
@@ -91,7 +93,9 @@ export function sourceErrorCodes(sources) {
 export function main(root = process.cwd()) {
   const read = (rel) => readFileSync(path.join(root, rel), 'utf8')
   const codes = sourceErrorCodes(
-    readTrackedSources(root, ['src/main', 'src/shared'], (rel) => /(?<!\.test)\.ts$/.test(rel))
+    readTrackedSources(root, ['src/main', 'src/shared', 'src/cli'], (rel) =>
+      /(?<!\.test)\.ts$/.test(rel)
+    )
   )
   const codeExists = (code) => codes.has(code)
   const problems = censusProblems(
