@@ -110,11 +110,12 @@ function readUncompiledFiles(root) {
     : new Set()
 }
 
-// Why: the build matches the exact id, so `../`, a directory or another case would silently compile.
+// Why: the build matches the exact id, so `\`, `../`, a directory or another case would silently compile.
 function isCanonicalFile(root, rel) {
   try {
     const file = path.join(root, rel)
     return (
+      !rel.includes('\\') &&
       path.posix.normalize(rel) === rel &&
       fs.statSync(file).isFile() &&
       fs.realpathSync.native(file) === path.join(fs.realpathSync.native(root), rel)
