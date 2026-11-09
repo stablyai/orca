@@ -19270,13 +19270,7 @@
           "lost": "Não foi possível inserir nem copiar o ditado."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Parar ditado",
-          "7f3660a7ba": "Iniciando microfone…",
-          "f082d0cb9d": "Processando…",
-          "3de5a129e7": "Ouvindo",
-          "4977162383": "Muito alto",
-          "25f2b7a6a5": "Falando",
-          "loadingModel": "Carregando modelo de fala…"
+          "4977162383": "Muito alto"
         }
       },
       "link": {

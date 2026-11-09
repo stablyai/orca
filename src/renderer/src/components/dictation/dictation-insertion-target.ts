@@ -16,7 +16,7 @@ type ComposerInsert = (text: string) => boolean
 type TerminalInsert = (text: string, paneId: number) => Promise<boolean>
 
 export type DictationInsertionTarget =
-  | { kind: 'composer'; insert: ComposerInsert }
+  | { kind: 'composer'; insert: ComposerInsert; root: HTMLElement }
   | { kind: 'terminal'; tabId: string; paneId: number }
   | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
   | { kind: 'contentEditable'; element: HTMLElement }
@@ -65,8 +65,8 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
 
   for (let root: Element | null = activeElement; root; root = root.parentElement) {
     const insert = root instanceof HTMLElement ? composerTargets.get(root) : undefined
-    if (insert) {
-      return { kind: 'composer', insert }
+    if (insert && root instanceof HTMLElement) {
+      return { kind: 'composer', insert, root }
     }
   }
 

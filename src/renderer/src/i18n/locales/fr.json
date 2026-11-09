@@ -16937,13 +16937,7 @@
           "lost": "La dictée n'a pu être ni insérée ni copiée."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Arrêter la dictée",
-          "7f3660a7ba": "Démarrage du micro…",
-          "f082d0cb9d": "Traitement…",
-          "3de5a129e7": "Écoute en cours",
-          "4977162383": "Trop fort",
-          "25f2b7a6a5": "Vous parlez",
-          "loadingModel": "Chargement du modèle vocal…"
+          "4977162383": "Trop fort"
         }
       },
       "dashboard": {

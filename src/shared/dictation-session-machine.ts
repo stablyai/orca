@@ -20,7 +20,7 @@ export type DictationSessionEvent =
   | { type: 'abandon' }
   /** Starting failed: drop the session and show the error. */
   | { type: 'fail' }
-  /** Drop the session without finishing it. */
+  /** Drop the live session without finishing it; its words still in flight are never inserted. */
   | { type: 'cancel' }
   /** Teardown finished; back to idle. */
   | { type: 'ended' }
@@ -38,6 +38,11 @@ export function canStartDictation(phase: DictationState): boolean {
 
 export function isDictationUnderway(phase: DictationState): boolean {
   return phase === 'starting' || phase === 'listening'
+}
+
+/** The pill shows from start until the last words land, including while a dropped session tears down. */
+export function isDictationPillShown(phase: DictationState): boolean {
+  return phase === 'starting' || phase === 'listening' || phase === 'stopping'
 }
 
 /** Returns the same object when the event does not apply, so callers can skip its effects. */
@@ -64,6 +69,8 @@ export function transitionDictationSession(
     case 'fail':
       return dropSession(session, 'error')
     case 'cancel':
+      // A dropped session is already tearing down; idle comes with its 'ended'.
+      return session.sessionId === null ? session : dropSession(session, 'idle')
     case 'ended':
       return dropSession(session, 'idle')
   }
