@@ -15,6 +15,11 @@ import {
   type AgentHookSource
 } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
+  captureClaudeTaskAdmissionState,
+  restoreClaudeTaskAdmissionState
+} from './server-claude-task-notification-admission'
+import { hasClaudeIdlePromptTaskObservation } from '../../../shared/agent-hook-listener/providers/claude-task-notification-reconciliation'
+import {
   bindOpenCodeTuiSession,
   isOpenCodeSharedServerPost
 } from '../../../shared/agent-hook-listener/opencode-session-registry'
@@ -155,24 +160,45 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!paneKey) {
       return { event: normalizeHookPayload(this.state, source, body, this.env) }
     }
-    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
-    const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    const rawHookPayload = readHookPayload(body)
+    const eventName = rawHookPayload['hook_event_name']
+    const tracksTranscriptObservation =
+      eventName === 'Stop' ||
+      eventName === 'StopFailure' ||
+      eventName === 'SubagentStart' ||
+      eventName === 'SubagentStop'
+    const isIdlePrompt =
+      eventName === 'Notification' && rawHookPayload['notification_type'] === 'idle_prompt'
+    const hasIdlePromptTaskObservation =
+      isIdlePrompt && hasClaudeIdlePromptTaskObservation(this.state, paneKey, rawHookPayload)
+    const admissionOptions = {
+      transcript: tracksTranscriptObservation || hasIdlePromptTaskObservation,
+      idlePrompt: hasIdlePromptTaskObservation
+    }
+    const previousAdmissionState = captureClaudeTaskAdmissionState(
+      this.state,
+      paneKey,
+      admissionOptions
+    )
     const event = normalizeHookPayload(this.state, source, body, this.env)
     const transcriptPath = event?.providerSession?.transcriptPath
     if (transcriptPath) {
       // A wrapper's CLAUDE_CONFIG_DIR is only visible here; History scans it too (#23505).
       getClaudeObservedConfigDirs()?.observeTranscriptPath(transcriptPath)
     }
-    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
-    const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
+    const nextAdmissionState = captureClaudeTaskAdmissionState(
+      this.state,
+      paneKey,
+      admissionOptions
+    )
+    restoreClaudeTaskAdmissionState(this.state, paneKey, previousAdmissionState)
     if (!event || event.paneKey !== paneKey) {
       return { event }
     }
     // Nested CLIs inherit pane keys; rejected status must not change the owner's background-work gate.
     return {
       event,
-      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
+      onAccepted: () => restoreClaudeTaskAdmissionState(this.state, paneKey, nextAdmissionState)
     }
   }
 
@@ -232,4 +258,15 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }
   }
+}
+
+function readHookPayload(body: unknown): Record<string, unknown> {
+  if (!isRecord(body) || !isRecord(body.payload)) {
+    return {}
+  }
+  return body.payload
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

@@ -1,4 +1,4 @@
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { appendFileSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -347,6 +347,147 @@ describe.each([false, true])('real automation Claude wake-up oracle remote=%s', 
   )
 })
 
+describe.each([false, true])('Claude transcript task completion remote=%s', (remote) => {
+  it('retires only the notified child at an idle prompt boundary', async () => {
+    const transcriptDir = mkdtempSync(join(tmpdir(), 'orca-claude-idle-notification-'))
+    const transcriptPath = join(transcriptDir, 'session.jsonl')
+    writeFileSync(transcriptPath, '')
+    const server = await host(remote)
+    try {
+      await server.post({
+        hook_event_name: 'SessionStart',
+        source: 'startup',
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'delegate two agents',
+        transcript_path: transcriptPath
+      })
+      for (const id of ['a1', 'a2']) {
+        await server.post({
+          hook_event_name: 'SubagentStart',
+          agent_id: id,
+          transcript_path: transcriptPath
+        })
+        await server.post({
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Agent',
+          tool_response: { isAsync: true, agentId: id },
+          transcript_path: transcriptPath
+        })
+      }
+      await server.post({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          { id: 'a1', type: 'subagent', status: 'running' },
+          { id: 'a2', type: 'subagent', status: 'running' }
+        ],
+        transcript_path: transcriptPath
+      })
+
+      appendFileSync(transcriptPath, providerTaskNotification('a1'))
+      await server.post({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: taskNotificationPrompt('a1'),
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'Notification',
+        notification_type: 'idle_prompt',
+        transcript_path: transcriptPath
+      })
+      expect(server.row()?.state).toBe('working')
+      expect(server.row()?.subagents?.map(({ id }) => id)).toEqual(['a2'])
+
+      appendFileSync(transcriptPath, providerTaskNotification('a2'))
+      await server.post({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: taskNotificationPrompt('a2'),
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'Notification',
+        notification_type: 'idle_prompt',
+        transcript_path: transcriptPath
+      })
+      expect(server.row()?.state).toBe('done')
+    } finally {
+      server.stop()
+      rmSync(transcriptDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not apply an earlier notification to a resumed task with the same id', async () => {
+    const transcriptDir = mkdtempSync(join(tmpdir(), 'orca-claude-resumed-notification-'))
+    const transcriptPath = join(transcriptDir, 'session.jsonl')
+    writeFileSync(transcriptPath, '')
+    const server = await host(remote)
+    try {
+      await server.post({
+        hook_event_name: 'SessionStart',
+        source: 'startup',
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'start a background agent',
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Agent',
+        tool_response: { isAsync: true, agentId: 'a1' },
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }],
+        transcript_path: transcriptPath
+      })
+
+      appendFileSync(transcriptPath, providerTaskNotification('a1'))
+      await server.post({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: taskNotificationPrompt('a1'),
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'Notification',
+        notification_type: 'idle_prompt',
+        transcript_path: transcriptPath
+      })
+      expect(server.row()?.state).toBe('working')
+
+      appendFileSync(transcriptPath, providerTaskNotification('a1'))
+      await server.post({
+        hook_event_name: 'UserPromptSubmit',
+        prompt: taskNotificationPrompt('a1'),
+        transcript_path: transcriptPath
+      })
+      await server.post({
+        hook_event_name: 'Notification',
+        notification_type: 'idle_prompt',
+        transcript_path: transcriptPath
+      })
+      expect(server.row()?.state).toBe('done')
+    } finally {
+      server.stop()
+      rmSync(transcriptDir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('Claude finishing turn permission restoration', () => {
   it.each(['lead', 'child'])(
     'retains the cycle through a %s question and clears it on Stop or a fresh prompt',
@@ -404,3 +545,20 @@ describe('Claude finishing turn permission restoration', () => {
     }
   )
 })
+
+function providerTaskNotification(taskId: string): string {
+  return `${JSON.stringify({
+    type: 'user',
+    sessionId: SESSION,
+    promptSource: 'system',
+    origin: { kind: 'task-notification' },
+    message: {
+      role: 'user',
+      content: taskNotificationPrompt(taskId)
+    }
+  })}\n`
+}
+
+function taskNotificationPrompt(taskId: string): string {
+  return `<task-notification>\n<task-id>${taskId}</task-id>\n<status>completed</status>\n<summary>finished</summary>\n</task-notification>`
+}

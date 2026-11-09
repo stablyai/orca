@@ -19,6 +19,10 @@ import {
   clearClaudePendingWaitForAgent,
   getOrCreateClaudeSubagentRoster
 } from './claude-roster-state'
+import {
+  forgetClaudeTaskTranscriptObservation,
+  recordClaudeSubagentTranscriptObservation
+} from './claude-task-notification-reconciliation'
 import { buildClaudeStatusPayload } from './claude-status-build'
 
 /** Child lifecycle updates roster and re-emits cached lead state when children outlive its turn; child StopFailure ends a turn like SubagentStop. */
@@ -74,6 +78,7 @@ export function normalizeClaudeSubagentLifecycleEvent(
           state.claudeLaunchedBackgroundTasksByPaneKey.get(paneKey),
           agentId
         )
+        recordClaudeSubagentTranscriptObservation(state, paneKey, agentId, hookPayload)
       }
       roster = getOrCreateClaudeSubagentRoster(state, paneKey)
       upsertWorkingClaudeSubagent(
@@ -90,6 +95,9 @@ export function normalizeClaudeSubagentLifecycleEvent(
         // One-shots finish; teammate stops park idle until another SubagentStart.
         stopClaudeSubagent(roster, agentId)
         endedChildWork = wasWorking && roster.get(agentId)?.state !== 'working'
+      }
+      if (compatibleSession) {
+        forgetClaudeTaskTranscriptObservation(state, paneKey, agentId)
       }
       // The roster distinguishes finished tasks from idle teammates.
       if (compatibleSession && roster?.get(agentId)?.state !== 'idle') {

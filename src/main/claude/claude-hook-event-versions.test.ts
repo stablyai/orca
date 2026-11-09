@@ -23,22 +23,22 @@ describe('identified Claude version output', () => {
   // Recorded macOS 2.1.310 / Windows 2.1.221 probes; historical releases' CLI source
   // registers the same suffix (1.0.23, 1.0.64, 2.0.0 and 2.1.100).
   it.each([
-    ['2.1.310 (Claude Code)\n', '', '2.1.310', 16, 0],
-    ['2.1.221 (Claude Code)\n', '', '2.1.221', 15, 1],
-    ['1.0.23 (Claude Code)', '', '1.0.23', 2, 14],
-    ['1.0.64 (Claude Code)', '', '1.0.64', 6, 10],
-    ['2.0.0 (Claude Code)', '', '2.0.0', 6, 10],
-    ['2.1.100 (Claude Code)', '', '2.1.100', 14, 2],
-    ['launcher 11.17.0\n1.0.64 (Claude Code)', '', '1.0.64', 6, 10],
-    ['launcher 0.1.0\n2.1.310 (Claude Code)', '', '2.1.310', 16, 0],
-    ['launcher 0.1.0', '2.1.310 (Claude Code)\n', '2.1.310', 16, 0],
-    ['', '2.1.310 (Claude Code)\n', '2.1.310', 16, 0],
-    ['2.1.94-rc.1+build.2 (Claude Code)', '', '2.1.94-rc.1+build.2', 14, 2],
-    ['11.17.0\n', '', null, 6, 0],
-    ['2.30.0', '', null, 6, 0],
-    ['2.1.310\nwrapper for (Claude Code)', '', null, 6, 0],
-    ['2.1.310\n(Claude Code)', '', null, 6, 0],
-    ['2.1 (Claude Code)', '', null, 6, 0]
+    ['2.1.310 (Claude Code)\n', '', '2.1.310', 17, 0],
+    ['2.1.221 (Claude Code)\n', '', '2.1.221', 16, 1],
+    ['1.0.23 (Claude Code)', '', '1.0.23', 3, 14],
+    ['1.0.64 (Claude Code)', '', '1.0.64', 7, 10],
+    ['2.0.0 (Claude Code)', '', '2.0.0', 7, 10],
+    ['2.1.100 (Claude Code)', '', '2.1.100', 15, 2],
+    ['launcher 11.17.0\n1.0.64 (Claude Code)', '', '1.0.64', 7, 10],
+    ['launcher 0.1.0\n2.1.310 (Claude Code)', '', '2.1.310', 17, 0],
+    ['launcher 0.1.0', '2.1.310 (Claude Code)\n', '2.1.310', 17, 0],
+    ['', '2.1.310 (Claude Code)\n', '2.1.310', 17, 0],
+    ['2.1.94-rc.1+build.2 (Claude Code)', '', '2.1.94-rc.1+build.2', 15, 2],
+    ['11.17.0\n', '', null, 7, 0],
+    ['2.30.0', '', null, 7, 0],
+    ['2.1.310\nwrapper for (Claude Code)', '', null, 7, 0],
+    ['2.1.310\n(Claude Code)', '', null, 7, 0],
+    ['2.1 (Claude Code)', '', null, 7, 0]
   ] as const)(
     'uses the identified version and hook plan for stdout=%s stderr=%s',
     async (stdout, stderr, expected, installs, retirements) => {
@@ -66,6 +66,13 @@ describe('identified Claude version output', () => {
       }
     }
   )
+
+  it('installs an idle-prompt notification hook for supported Claude versions', () => {
+    const plan = getClaudeManagedHookPlan('2.1.310')
+    expect(plan.install.find((event) => event.eventName === 'Notification')).toMatchObject({
+      definition: { matcher: 'idle_prompt' }
+    })
+  })
 
   it('does not accept marked output from a failed probe', async () => {
     vi.mocked(runProcess).mockResolvedValue({

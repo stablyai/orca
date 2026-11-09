@@ -23,6 +23,7 @@ import {
   movePaneScopedMapEntries,
   movePaneScopedSetEntries
 } from './pane-scoped-cache-entries'
+import * as claudeTaskNotificationState from './claude-task-notification-state'
 import type { JcodeUserPromptEvidence } from '../jcode-session-files'
 import type { HookRootAttempt } from './presence/hook-process-root-evidence'
 import {
@@ -58,6 +59,7 @@ export type HookListenerState = {
   claudeUnconfirmedRestoredStatusPaneKeys: Set<string>
   /** Panes whose latest authoritative Claude task inventory still has running non-agent work. */
   claudeRunningNonAgentTaskPaneKeys: Set<string>
+  claudeTaskNotificationState: claudeTaskNotificationState.ClaudeTaskNotificationState
   /** Panes whose latest authoritative Claude cron inventory still has a scheduled job. */
   claudeActiveSessionCronPaneKeys: Set<string>
   /** Background tasks each pane's main agent launched, and which of them still owe it a notification. */
@@ -149,6 +151,7 @@ export function createHookListenerState(
     claudeOpenToolUsesByPaneKey: new Map(),
     claudeUnconfirmedRestoredStatusPaneKeys: new Set(),
     claudeRunningNonAgentTaskPaneKeys: new Set(),
+    claudeTaskNotificationState: claudeTaskNotificationState.createClaudeTaskNotificationState(),
     claudeActiveSessionCronPaneKeys: new Set(),
     claudeLaunchedBackgroundTasksByPaneKey: new Map(),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
@@ -248,8 +251,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeLeadStateByPaneKey.delete(paneKey)
   state.claudeOpenToolUsesByPaneKey.delete(paneKey)
   state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
-  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-  state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+  claudeTaskNotificationState.clearClaudeTaskNotificationPane(state, paneKey)
   state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
@@ -288,7 +290,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeOpenToolUsesByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeUnconfirmedRestoredStatusPaneKeys, fromPaneKey, toPaneKey)
-  movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
+  claudeTaskNotificationState.moveClaudeTaskNotificationPane(state, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLaunchedBackgroundTasksByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSessionOwnerByPaneKey, fromPaneKey, toPaneKey)
@@ -333,7 +335,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeLeadStateByPaneKey.clear()
   state.claudeOpenToolUsesByPaneKey.clear()
   state.claudeUnconfirmedRestoredStatusPaneKeys.clear()
-  state.claudeRunningNonAgentTaskPaneKeys.clear()
+  claudeTaskNotificationState.clearAllClaudeTaskNotificationPanes(state)
   state.claudeActiveSessionCronPaneKeys.clear()
   state.claudeLaunchedBackgroundTasksByPaneKey.clear()
   state.claudeSessionOwnerByPaneKey.clear()
