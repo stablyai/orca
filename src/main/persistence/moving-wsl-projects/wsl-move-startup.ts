@@ -10,7 +10,7 @@ import { installWslMoveRetention } from './wsl-move-retention'
 import { registerWslMoveDesktopRewriteRegistry } from './wsl-move-desktop-rewrite-registry'
 import { sweepOrphanedWslMoveSleptSpools } from './wsl-move-slept-spool-sweep'
 import { settleInterruptedWslMoveUndos } from './wsl-move-undo-host-automations'
-import { enableWslHostAutomations } from '../../ipc/wsl-host-automation-enable'
+import { enableWslHostAutomations } from '../../wsl/host-lifecycle/wsl-host-automation-enable'
 import {
   scheduleWslMoveRewriteRetry,
   setWslMoveHostAutomationRestorer
@@ -18,7 +18,7 @@ import {
 import {
   disableWslHostAutomations,
   restoreWslHostAutomations
-} from '../../ipc/wsl-host-automation-disable'
+} from '../../wsl/host-lifecycle/wsl-host-automation-disable'
 import { orchestrationDbFile } from '../../runtime/orchestration/db/orchestration-db-file'
 import { productionWslMoveBrowserCookieCopyDependencies } from './wsl-move-browser-cookie-store'
 

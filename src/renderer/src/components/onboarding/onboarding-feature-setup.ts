@@ -7,15 +7,15 @@ import {
   ORCA_LINEAR_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-skill-names'
-import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
+} from '@/lib/skills/installation/agent-feature-skill-names'
+import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
-import type { EventProps } from '../../../../shared/telemetry-events'
+import type { EventProps } from '../../../../shared/telemetry-event-classification'
 import type { BundledSkillInstallState } from '@/hooks/use-bundled-skill-install'
 
 export type OnboardingFeatureSetupId =

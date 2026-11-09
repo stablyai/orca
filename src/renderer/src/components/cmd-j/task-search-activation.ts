@@ -1,10 +1,10 @@
 import { useAppStore } from '@/store'
-import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
-import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import {
   getProvenWorkspaceReferenceIdentity,
   parseWorkspaceReferenceUrl
-} from '../../../../shared/workspace-reference-identity'
+} from '../../../../shared/workspace-attachments/workspace-reference-identity'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
 import {
   getLinkedWorkItemWorkspaceName,
@@ -16,7 +16,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   haveConflictingTaskSourceAccounts,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type { CmdJTaskSearchResult } from './task-search-results'
 import { getJiraIssueWorkspaceSeed } from '../task-page/task-page-source-context'
 

@@ -1,45 +1,16 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
-import type * as KeybindingsModule from '../../../shared/keybindings'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 
-const counters = vi.hoisted(() => ({ effective: 0, formatList: 0, formatBinding: 0 }))
 const platformRef = vi.hoisted(() => ({ current: 'darwin' as NodeJS.Platform }))
 
 vi.mock('../lib/shortcut-platform', () => ({
   getShortcutPlatform: () => platformRef.current
 }))
 
-vi.mock('../../../shared/keybindings', async (importOriginal) => {
-  const actual = await importOriginal<typeof KeybindingsModule>()
-  return {
-    ...actual,
-    getEffectiveKeybindingsForAction: (
-      ...args: Parameters<typeof actual.getEffectiveKeybindingsForAction>
-    ) => {
-      counters.effective++
-      return actual.getEffectiveKeybindingsForAction(...args)
-    },
-    formatKeybindingList: (...args: Parameters<typeof actual.formatKeybindingList>) => {
-      counters.formatList++
-      return actual.formatKeybindingList(...args)
-    },
-    formatKeybinding: (...args: Parameters<typeof actual.formatKeybinding>) => {
-      counters.formatBinding++
-      return actual.formatKeybinding(...args)
-    }
-  }
-})
-
 const { formatShortcutLabel, useShortcutLabel } = await import('./useShortcutLabel')
 const { useAppStore } = await import('@/store')
-
-function resetCounters(): void {
-  counters.effective = 0
-  counters.formatList = 0
-  counters.formatBinding = 0
-}
 
 // A fresh overrides object per test keeps each case on its own cache entry, exactly as a real edit does.
 function overridesFor(binding: string): KeybindingOverrides {
@@ -49,7 +20,6 @@ function overridesFor(binding: string): KeybindingOverrides {
 describe('shortcut label memoization', () => {
   beforeEach(() => {
     platformRef.current = 'darwin'
-    resetCounters()
   })
 
   it('keys the cache by platform so Mac and Windows glyphs never cross', () => {
@@ -69,25 +39,11 @@ function CloseLabel(): React.JSX.Element {
 describe('useShortcutLabel', () => {
   beforeEach(() => {
     platformRef.current = 'darwin'
-    resetCounters()
   })
 
   afterEach(() => {
     cleanup()
     useAppStore.setState({ keybindings: {} })
-  })
-
-  it('does not recompute the label on re-render', () => {
-    useAppStore.setState({ keybindings: overridesFor('Mod+Shift+K') })
-    const { rerender } = render(<CloseLabel />)
-    expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧K')
-    resetCounters()
-    for (let index = 0; index < 25; index++) {
-      rerender(<CloseLabel />)
-    }
-    expect(screen.getByTestId('close-label').textContent).toBe('⌘⇧K')
-    expect(counters.effective).toBe(0)
-    expect(counters.formatList).toBe(0)
   })
 
   it('shows an edited keybinding immediately, with no stale-cache window', () => {

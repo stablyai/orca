@@ -1,4 +1,4 @@
-import type { AiVaultSession } from '../../../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { asRecord } from '../../../session-scanner-record-value'
 import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
 import type { TranscriptMessage } from '../../../transcripts/session-transcript-consumers'

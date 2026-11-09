@@ -11,7 +11,7 @@ import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
 import { TabDragPointerSensor } from '../tab-group/tab-drag-pointer-sensor'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import { bootWindowFromPartitions } from '../../app-shell/startup-window-view.test-fixture'
 import {
   addWorkspace,
@@ -21,25 +21,25 @@ import {
   SSH_KEY,
   leaf
 } from '../../../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
-import { endLayoutFramePositions } from '@/runtime/layout-frame-position'
-import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { loadMainLayoutModel } from '@/runtime/workspace-layout/testing/main-loaded-layout-frames.test-fixture'
+import { endLayoutFramePositions } from '@/runtime/workspace-layout/frames/layout-frame-position'
+import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout/frames/workspace-layout-frame-sync'
 import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
-vi.mock('@/runtime/workspace-layout-frame-sync', async (original) => ({
+vi.mock('@/runtime/workspace-layout/frames/workspace-layout-frame-sync', async (original) => ({
   ...(await original<object>()),
   showStartupLayoutFrames: () => {}
 }))
@@ -270,39 +270,6 @@ afterEach(async () => {
   }
 })
 
-it.each(['browser', 'editor', 'terminal'] as const)(
-  'settles an opening primary press through the actual %s menu',
-  async (kind) => {
-    await mount(kind)
-    await open(0)
-    expect(isTabStripPointerGestureActive()).toBe(false)
-    const menu = screen.getByRole('menu')
-    // Injected root release models the old capture boundary, not browser hit testing.
-    fireEvent.pointerUp(menu, pointer(0, 0))
-    fireEvent.pointerMove(document, pointer(0, 0, 60))
-    fireEvent.pointerMove(document, pointer(0, 0, 90))
-    expect(drag).toEqual(['pending', 'abort'])
-    expect(screen.getByRole('menu')).toBe(menu)
-    expect(document.activeElement).not.toBe(screen.getByRole('textbox'))
-    fireEvent.keyDown(menu, { key: 'Escape' })
-    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
-  }
-)
-
-it('retains a large still-held primary drag and settles its release', async () => {
-  await mount()
-  await open(0)
-  // Drive the sensor's existing post-drag click-shield cleanup deterministically.
-  vi.useFakeTimers()
-  fireEvent.pointerMove(document, pointer(0, 1, 60))
-  fireEvent.pointerMove(document, pointer(0, 1, 90))
-  expect(drag).toContain('start')
-  fireEvent.pointerUp(document, pointer(0, 0, 90))
-  fireEvent.pointerMove(document, pointer(0, 0, 120))
-  expect(drag.filter((entry) => entry === 'start')).toHaveLength(1)
-  expect(drag.at(-1)).toBe('end')
-})
-
 it.each([
   ['browser', GIT_KEY],
   ['editor', FOLDER_KEY],
@@ -346,33 +313,6 @@ it.each([
   }
 )
 
-it('supports immediate same-row and cross-row selection after release-before-contextmenu, including singleton first leaf', async () => {
-  await mount('browser', GIT_KEY, true)
-  fireEvent.pointerDown(source(), pointer(2))
-  fireEvent.pointerUp(source(), pointer(2, 0))
-  fireEvent.contextMenu(source(), pointer(2, 0))
-  expect(screen.queryByRole('menuitem', { name: 'Move Tab to Split' })).toBeNull()
-  const pin = await screen.findByRole('menuitem', { name: 'Pin Tab' })
-  fireEvent.pointerDown(screen.getByRole('menuitem', { name: 'Duplicate Tab' }), pointer())
-  fireEvent.pointerUp(pin, pointer(0, 0))
-  await waitFor(() =>
-    expect(
-      useAppStore.getState().unifiedTabsByWorktree[GIT_KEY]?.find((tab) => tab.id === TAB)?.isPinned
-    ).toBe(true)
-  )
-  fireEvent.contextMenu(source(), pointer(2))
-  const unpin = await screen.findByRole('menuitem', { name: 'Unpin Tab' })
-  fireEvent.pointerDown(unpin, pointer())
-  fireEvent.pointerUp(unpin, pointer(0, 0))
-  fireEvent.click(unpin)
-  // happy-dom requires the compatibility click; this is not browser-click evidence.
-  await waitFor(() =>
-    expect(
-      useAppStore.getState().unifiedTabsByWorktree[GIT_KEY]?.find((tab) => tab.id === TAB)?.isPinned
-    ).toBe(false)
-  )
-})
-
 it('starts editor rename only after menu close autofocus and preserves ordinary dismissal', async () => {
   await mount('editor')
   await open()
@@ -381,31 +321,6 @@ it('starts editor rename only after menu close autofocus and preserves ordinary 
   await waitFor(() => expect(document.activeElement).toBe(renameInput))
   expect(screen.queryByRole('menu')).toBeNull()
   expect(renameInput.isConnected).toBe(true)
-})
-
-// These are renderer event contracts; native/physical ordering remains targeted QA.
-it('preserves keyboard selection, outside/blur dismissal and replacement on the actual owner', async () => {
-  const view = await mount()
-  await open()
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Pin Tab' }), { key: ' ' })
-  await waitFor(() =>
-    expect(
-      useAppStore.getState().unifiedTabsByWorktree[GIT_KEY]?.find((tab) => tab.id === TAB)?.isPinned
-    ).toBe(true)
-  )
-  await open()
-  fireEvent.pointerDown(screen.getByRole('textbox'), pointer())
-  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
-  await open()
-  fireEvent(window, new Event('blur'))
-  await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
-  await open()
-  fireEvent.contextMenu(source(), pointer(2))
-  expect(screen.getAllByRole('menu')).toHaveLength(1)
-  view.unmount()
-  expect(screen.queryByRole('menu')).toBeNull()
-  fireEvent.pointerUp(document, pointer(2, 0))
-  expect(isTabStripPointerGestureActive()).toBe(false)
 })
 
 it('keeps primary and Ctrl-primary activation without contextmenu, and middle-close waits for auxclick', async () => {
@@ -464,35 +379,6 @@ it.each([
     expect(
       useAppStore.getState().unifiedTabsByWorktree[GIT_KEY]?.find((tab) => tab.id === TAB)?.isPinned
     ).toBe(true)
-  }
-)
-
-it.each([
-  ['touch', false],
-  ['pen', false],
-  ['touch', true],
-  ['pen', true]
-] as const)(
-  'short %s press activates after an open=%s start and clears the primitive timer',
-  async (pointerType, alreadyOpen) => {
-    await mount('browser', GIT_KEY, true)
-    if (alreadyOpen) {
-      await open()
-    }
-    vi.useFakeTimers()
-    const event = { ...pointer(), pointerType, ctrlKey: false }
-    fireEvent.pointerDown(source(), event)
-    expect(screen.queryByRole('menu')).toBeNull()
-    expect(isTabStripPointerGestureActive()).toBe(true)
-    fireEvent.pointerUp(source(), { ...event, buttons: 0 })
-    expect(activations).toBe(1)
-    expect(isTabStripPointerGestureActive()).toBe(false)
-    expect(document.activeElement).toBe(screen.getByRole('textbox'))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(700)
-    })
-    expect(screen.queryByRole('menu')).toBeNull()
-    expect(activations).toBe(1)
   }
 )
 

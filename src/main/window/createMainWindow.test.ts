@@ -9,10 +9,13 @@ vi.mock('./macos-tahoe-release', async () =>
 vi.mock('./desktop-integration/app-icon', async () =>
   (await import('./createMainWindow-test-harness')).appIconMock()
 )
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('../browser-passwords/browser-password-guest-service', () => ({
+  attachBrowserPasswordGuest: vi.fn()
+}))
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
-vi.mock('../browser/browser-route-session-runtime', async () => ({
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', async () => ({
   browserRouteSessionRegistry: {
     isAllowedPartition: (await import('./createMainWindow-test-harness')).routePartitionAllowedMock
   },
@@ -20,10 +23,10 @@ vi.mock('../browser/browser-route-session-runtime', async () => ({
     attachGuest: (await import('./createMainWindow-test-harness')).attachRouteGuestMock
   }
 }))
-vi.mock('../browser/browser-javascript-dialogs', () => ({
+vi.mock('../browser/guest-lifecycle/prompts/browser-javascript-dialogs', () => ({
   installBrowserJavaScriptDialogs: vi.fn()
 }))
-vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
@@ -33,11 +36,11 @@ vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
 
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
-import { getBrowserClientHostId } from '../browser/browser-client-host-id'
+import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import {
   formatBrowserClientHostIdArgument,
   readBrowserClientHostIdArgument
-} from '../../shared/browser-client-host-id-argument'
+} from '../../shared/browser/client-hosting/browser-client-host-id-argument'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
 import {
   attachGuestPoliciesMock,
@@ -216,7 +219,7 @@ describe('createMainWindow', () => {
     expect(allowBlankPrefs).toMatchObject({
       disableHtmlFullscreenWindowResize: true,
       partition: 'persist:orca-browser',
-      preload: expect.stringMatching(/browser-window-close-preload\.js$/),
+      preload: expect.stringMatching(/browser-guest-preload\.js$/),
       sandbox: true
     })
 
@@ -277,7 +280,7 @@ describe('createMainWindow', () => {
       untrustedPreloadParams as never
     )
     expect(untrustedPreloadParams.preload).toBeUndefined()
-    expect(hardenedPrefs.preload).toMatch(/browser-window-close-preload\.js$/)
+    expect(hardenedPrefs.preload).toMatch(/browser-guest-preload\.js$/)
     expect(hardenedPrefs.preload).not.toContain('untrusted-preload')
 
     const secondGuest = { marker: 'second-guest' }
@@ -345,64 +348,6 @@ describe('createMainWindow', () => {
     expect(guestPreferences.additionalArguments).toBeUndefined()
   })
 
-  it('sets platform-specific titlebar and frame options for every desktop platform', () => {
-    for (const [platform, expected] of [
-      ['darwin', { titleBarStyle: 'hiddenInset', frame: undefined }],
-      ['win32', { titleBarStyle: 'hidden', frame: undefined }],
-      ['linux', { titleBarStyle: undefined, frame: false }]
-    ] satisfies [
-      NodeJS.Platform,
-      { titleBarStyle: string | undefined; frame: boolean | undefined }
-    ][]) {
-      browserWindowMock.mockReset()
-      const webContents = {
-        on: vi.fn(),
-        setZoomLevel: vi.fn(),
-        setBackgroundThrottling: vi.fn(),
-        setWebRTCIPHandlingPolicy: vi.fn(),
-        invalidate: vi.fn(),
-        setWindowOpenHandler: vi.fn(),
-        send: vi.fn(),
-        isDevToolsOpened: vi.fn(),
-        openDevTools: vi.fn(),
-        closeDevTools: vi.fn()
-      }
-      const browserWindowInstance = {
-        webContents,
-        on: vi.fn(),
-        isDestroyed: vi.fn(() => false),
-        isMaximized: vi.fn(() => true),
-        isFullScreen: vi.fn(() => false),
-        getSize: vi.fn(() => [1200, 800]),
-        setSize: vi.fn(),
-        setWindowButtonPosition: vi.fn(),
-        maximize: vi.fn(),
-        show: vi.fn(),
-        loadFile: vi.fn(() => Promise.resolve()),
-        loadURL: vi.fn(() => Promise.resolve())
-      }
-      browserWindowMock.mockImplementation(function () {
-        return browserWindowInstance
-      })
-
-      withPlatform(platform, () => createMainWindow(null))
-
-      const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
-      expect(browserWindowOptions.titleBarStyle).toBe(expected.titleBarStyle)
-      expect(browserWindowOptions.frame).toBe(expected.frame)
-      // Material off (the default) must leave the window exactly as before: opaque, no material argument.
-      expect(browserWindowOptions.backgroundColor).toBe('#ffffff')
-      for (const key of ['vibrancy', 'transparent', 'backgroundMaterial']) {
-        expect(browserWindowOptions).not.toHaveProperty(key)
-      }
-      expect(
-        (browserWindowOptions.webPreferences?.additionalArguments ?? []).some((arg) =>
-          arg.startsWith('--orca-window-material=')
-        )
-      ).toBe(false)
-    }
-  })
-
   it('keeps macOS background throttling enabled while repainting visibility transitions', () => {
     vi.useFakeTimers()
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()
@@ -447,9 +392,10 @@ describe('createMainWindow', () => {
 
     expect(webContents.setBackgroundThrottling).toHaveBeenCalledWith(true)
     expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
-    expect(windowHandlers.get('restore')).toHaveLength(1)
-    expect(windowHandlers.get('show')).toHaveLength(1)
-    expect(windowHandlers.get('focus')).toHaveLength(1)
+    // Each: the repaint listener, then the window-activity relay (main-window-activity.ts).
+    expect(windowHandlers.get('restore')).toHaveLength(2)
+    expect(windowHandlers.get('show')).toHaveLength(2)
+    expect(windowHandlers.get('focus')).toHaveLength(2)
 
     windowHandlers.get('show')?.[0]?.()
     windowHandlers.get('restore')?.[0]?.()

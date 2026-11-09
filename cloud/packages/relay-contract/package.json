@@ -49,6 +49,38 @@
     "./relay-regions": {
       "types": "./dist/relay-regions.d.ts",
       "default": "./dist/relay-regions.js"
+    },
+    "./director-messages": {
+      "types": "./dist/director-messages.d.ts",
+      "default": "./dist/director-messages.js"
+    },
+    "./close-codes": {
+      "types": "./dist/close-codes.d.ts",
+      "default": "./dist/close-codes.js"
+    },
+    "./host-proof-transcript": {
+      "types": "./dist/host-proof-transcript.d.ts",
+      "default": "./dist/host-proof-transcript.js"
+    },
+    "./persistence-invariants": {
+      "types": "./dist/persistence-invariants.d.ts",
+      "default": "./dist/persistence-invariants.js"
+    },
+    "./credential-messages": {
+      "types": "./dist/credential-messages.d.ts",
+      "default": "./dist/credential-messages.js"
+    },
+    "./host-close-reason": {
+      "types": "./dist/host-close-reason.d.ts",
+      "default": "./dist/host-close-reason.js"
+    },
+    "./control-continuity": {
+      "types": "./dist/control-continuity.d.ts",
+      "default": "./dist/control-continuity.js"
+    },
+    "./control-messages": {
+      "types": "./dist/control-messages.d.ts",
+      "default": "./dist/control-messages.js"
     }
   }
 }

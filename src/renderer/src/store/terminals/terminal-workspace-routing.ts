@@ -2,12 +2,16 @@ import type { AppState } from '../types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
-import { getIndexedRepoMap, getIndexedWorktreeMap } from '../worktree-repo-index'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../workspace-record-selectors'
+import { getFolderWorkspaceConnectionId } from '@/lib/workspace/ownership/folder-workspace-connection'
+import { getIndexedRepoMap } from '../repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '../slices/worktrees/listing/worktree-catalog-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../workspaces/catalog/workspace-record-fields'
 
 export function isWindowsRendererRuntime(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')

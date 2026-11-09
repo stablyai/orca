@@ -6,7 +6,7 @@ import {
 } from './pane-fit-resize-observer'
 import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { cancelDeferredScrollRestore } from './pane-scroll'
-import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal/appearance/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
 import {
@@ -23,7 +23,7 @@ import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import { attachInlineImages, detachInlineImages } from './pane-inline-images'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 import { cancelPendingTerminalViewportPresents } from './pane-viewport-present'
-import { releaseReplayGuardsForDisposedTerminal } from '@/components/terminal-pane/replay-guard'
+import { releaseReplayGuardsForDisposedTerminal } from '@/components/terminal-pane/snapshots/replay-guard'
 
 export { createPaneDOM } from './pane-dom-creation'
 

@@ -71,6 +71,7 @@ type AzureDevOpsAuthConfig = {
 export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  onResponse?: (response: Response) => void
 }
 
 function envValue(name: string): string | null {
@@ -171,6 +172,7 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       const url = apiUrl(baseUrl, path, options.searchParams)
       const response = await doFetch(url)
       if (response.ok) {
+        options.onResponse?.(response)
         return (await response.json()) as T
       }
       const body = response.status === 400 ? await response.text().catch(() => '') : ''

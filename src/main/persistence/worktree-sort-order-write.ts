@@ -86,12 +86,18 @@ export function writeWorktreeSortOrder(
       ? store.getWorktreeMetaForHost(worktreeId, target.hostId)
       : store.getWorktreeMeta(worktreeId)
   }
-  return planWorktreeSortOrderUpdates(request.orderedIds, metaFor, now).filter((update) => {
-    const target = targets.get(update.worktreeId)
-    if (!target) {
-      return false
+  // Why: an unwritable row's unqualified meta can be a twin's rank, so it must never anchor a partial re-rank.
+  const rerankAll = [...targets].some(
+    ([worktreeId, target]) => !target && store.getWorktreeMeta(worktreeId) !== undefined
+  )
+  return planWorktreeSortOrderUpdates(request.orderedIds, metaFor, now, { rerankAll }).filter(
+    (update) => {
+      const target = targets.get(update.worktreeId)
+      if (!target) {
+        return false
+      }
+      store.setWorktreeMeta(target, { sortOrder: update.sortOrder })
+      return true
     }
-    store.setWorktreeMeta(target, { sortOrder: update.sortOrder })
-    return true
-  })
+  )
 }

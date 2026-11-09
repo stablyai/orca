@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   REMOTE_SERVER_PAIRING_FAILURE_COPY as EN,
   type RemoteServerPairingFailureCode
-} from '../../../shared/remote-server-pairing-failure-copy'
+} from '../../../shared/remote-runtime/pairing/remote-server-pairing-failure-copy'
 
 // null = required server name missing; caller shows the host's English `message`.
 const COPY: Record<RemoteServerPairingFailureCode, (name: string | null) => string | null> = {

@@ -1,7 +1,7 @@
 import type {
   AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import { readAiVaultFirstUserPromptInBackground } from './scan-service/session-scanner-background'
 
 export function handleAiVaultGetFirstUserPrompt(

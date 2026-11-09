@@ -7,7 +7,7 @@ import {
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './session-search-file-cursor'
 import { sessionSearchReadDecision } from './session-search-read-decision'
-import type { SessionSearchFileRow, SessionSearchStore } from './session-search-store'
+import type { SessionSearchFileRow, SessionSearchIndexStore } from './session-search-store'
 
 export type SessionSearchIndexPassOptions = {
   signal?: AbortSignal
@@ -19,7 +19,7 @@ export type SessionSearchIndexPassOptions = {
 
 /** Deferred candidates stay owed by their stored state; left counts backlog outside the due-row count. */
 export async function runSessionSearchIndexPass(
-  store: SessionSearchStore,
+  store: SessionSearchIndexStore,
   candidates: readonly SessionFileCandidate[],
   options: SessionSearchIndexPassOptions
 ): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number }> {
@@ -60,8 +60,10 @@ export async function runSessionSearchIndexPass(
         process.platform,
         stats,
         decision,
-        options.signal
+        options.signal,
+        true
       )
+      await store.flush?.()
     } catch (error) {
       throwIfAiVaultScanCancelled(options.signal)
       console.warn(

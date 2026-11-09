@@ -1,19 +1,19 @@
-import { z } from 'zod'
-import { isValidTerminalTabId } from '../terminal-tab-id'
+import * as z from 'zod'
+import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
 import {
   RESUMABLE_TUI_AGENTS,
   hasUnsafeProviderSessionIdChars
 } from '../agent-session/lifecycle/agent-session-resume'
-import { getAgentResumeArgv } from '../agent-resume-argv'
-import { AGENT_EFFORT_LEVEL } from '../agent-effort-level'
+import { getAgentResumeArgv } from '../agent-launch/startup/agent-resume-argv'
+import { AGENT_EFFORT_LEVEL } from '../agent-launch/choices/agent-effort-level'
 import {
   parseAgentSessionOperationTimestamp,
   type RuntimeCreateAgentSessionRequest,
   type RuntimeEnsureAgentSessionRequest
 } from '../agent-session/agent-session-host-authority'
-import { isTuiAgent } from '../tui-agent-config'
-import { RESTORE_SPAWN_INTENTS } from '../host-spawn-admission'
-import { AgentLaunchAccountEnv } from '../agent-launch-account-env'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import { RESTORE_SPAWN_INTENTS } from '../terminal/pty/admission/spawn-admission-contract'
+import { AgentLaunchAccountEnv } from '../agent-launch/startup/agent-launch-account-env'
 
 export const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
 
@@ -186,8 +186,11 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
       .optional(),
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
+    sessionOptions: z.record(z.string(), z.string()).optional(),
+    extraAgentArgs: z.string().optional(),
     launchPreferences: LaunchPreferences.optional(),
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
+    trustWorktreeId: WorktreeSelector.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
     viewMode: z.enum(['terminal', 'chat']).optional(),

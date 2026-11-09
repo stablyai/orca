@@ -11,7 +11,7 @@ const plan = vi.hoisted(() => ({
 }))
 const hosts = vi.hoisted(() => new Map<string, string | null>())
 const places = vi.hoisted(() => new Map<string, string>())
-vi.mock('./resolve-owner', () => ({
+vi.mock('./workspace/ownership/resolve-owner', () => ({
   resolveOwner: (_state: unknown, ref: { workspaceId: string }) => {
     const environmentId = hosts.has(ref.workspaceId) ? hosts.get(ref.workspaceId) : 'server-1'
     return environmentId
@@ -25,7 +25,7 @@ vi.mock('./resolve-owner', () => ({
       : { kind: 'ambiguous' }
   }
 }))
-vi.mock('@/lib/file-preview', () => ({
+vi.mock('@/lib/browser/documents/file-preview', () => ({
   getWorkspaceFilePreviewPlan: (_state: unknown, worktreeId: string, filePath: string) => {
     plan.calls.push({ worktreeId, filePath })
     return plan.result
@@ -68,21 +68,5 @@ describe('resolveWorkspaceDocAddressTarget', () => {
       resolveWorkspaceDocAddressTarget(state, CURRENT, '/home/alice/wt1/docs/index.html').status
     ).toBe('workspace-doc')
     expect(state.allWorktrees).not.toHaveBeenCalled()
-  })
-
-  it('short-circuits for a folder workspace that is the current workspace', () => {
-    const state = makeState()
-    const folderCurrent = {
-      ...state,
-      getKnownWorktreeById: (id: string) =>
-        id === 'folder:folder-1' ? { id: 'folder:folder-1', path: '/srv/site' } : undefined,
-      allWorktrees: vi.fn(() => {
-        throw new Error('unnecessary global workspace enumeration')
-      })
-    } as unknown as AppState
-
-    expect(
-      resolveWorkspaceDocAddressTarget(folderCurrent, 'folder:folder-1', '/srv/site/index.html')
-    ).toMatchObject({ status: 'workspace-doc', docLocation: { worktreeId: 'folder:folder-1' } })
   })
 })

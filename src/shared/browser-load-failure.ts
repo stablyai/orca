@@ -1,9 +1,9 @@
 // English copy lives here so desktop (translating each piece) and mobile never say different things.
 
 import type { BrowserLoadError } from './browser-workspace-types'
-import { classifyRemotePairingHostname } from './remote-pairing-address'
+import { classifyRemotePairingHostname } from './remote-runtime/pairing/remote-pairing-address'
 import { isWildcardBindHost } from './browser-url'
-import { isChromiumCertificateErrorCode } from './browser-certificate-errors'
+import { isChromiumCertificateErrorCode } from './browser/certificate-trust/browser-certificate-errors'
 
 export type BrowserLoadFailureKind =
   | 'not-running'

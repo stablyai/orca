@@ -2,7 +2,7 @@ import {
   automationHostReselectionMessage,
   type AutomationCapturedOwner
 } from './automation-captured-owner'
-import type { Automation } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   setupHostMatchesRunContext,
@@ -11,19 +11,18 @@ import {
 import { evaluateRuntimeCompat } from '../../../../shared/protocol-compat'
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import type { AutomationHostTarget } from './automation-host-client'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
-import type { TaskSourceHostAvailability } from '../task-source-context-summary'
+import type { RuntimeEnvironmentSshBucket } from '../../store/slices/ssh/runtime-environment-ssh'
 
 import type { AutomationTargetAvailability } from './automation-target-availability-types'
 export type { AutomationTargetAvailability } from './automation-target-availability-types'
@@ -38,22 +37,23 @@ type AutomationTargetAvailabilityArgs = {
   sshStateByEnvironment?: ReadonlyMap<string, RuntimeEnvironmentSshBucket>
   runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeEnvironmentStatus>
   automationHostTarget?: AutomationHostTarget | null
-  sourceHostAvailability?: readonly TaskSourceHostAvailability[]
 }
 
-export function getAutomationTargetAvailability({
-  automation,
-  capturedOwner,
-  repo,
-  workspace,
-  projectHostSetups,
-  sshConnectionStates,
-  sshStateByEnvironment,
-  runtimeStatusByEnvironmentId,
-  automationHostTarget,
-  sourceHostAvailability
-}: AutomationTargetAvailabilityArgs): AutomationTargetAvailability {
-  const reselection = automationHostReselectionMessage(capturedOwner)
+export function getAutomationTargetAvailability(
+  {
+    automation,
+    capturedOwner,
+    repo,
+    workspace,
+    projectHostSetups,
+    sshConnectionStates,
+    sshStateByEnvironment,
+    runtimeStatusByEnvironmentId,
+    automationHostTarget
+  }: AutomationTargetAvailabilityArgs,
+  t: Translate = translate
+): AutomationTargetAvailability {
+  const reselection = automationHostReselectionMessage(capturedOwner, t)
   if (reselection) {
     return unavailable('host-reselection', reselection)
   }
@@ -66,7 +66,8 @@ export function getAutomationTargetAvailability({
     if (parsedHost?.kind === 'runtime') {
       const runtimeAvailability = getRuntimeAutomationAvailability(
         parsedHost.environmentId,
-        runtimeStatusByEnvironmentId
+        runtimeStatusByEnvironmentId,
+        t
       )
       if (!runtimeAvailability.canRunNow) {
         return runtimeAvailability
@@ -85,7 +86,7 @@ export function getAutomationTargetAvailability({
       if (projectHostSetups.some((candidate) => candidate.id === runContext.projectHostSetupId)) {
         return unavailable(
           'host-mismatch',
-          translate(
+          t(
             'auto.components.automations.automationTargetAvailability.hostMismatch',
             'The saved run host no longer matches this project setup.'
           )
@@ -114,7 +115,7 @@ export function getAutomationTargetAvailability({
     if (!setupMatchesContext || !repoMatchesContext) {
       return unavailable(
         'host-mismatch',
-        translate(
+        t(
           'auto.components.automations.automationTargetAvailability.hostMismatch',
           'The saved run host no longer matches this project setup.'
         )
@@ -123,14 +124,6 @@ export function getAutomationTargetAvailability({
   }
   if (automation.workspaceMode === 'existing' && !workspace) {
     return unavailable('missing-workspace', 'The target workspace is no longer available.')
-  }
-
-  const sourceAvailability = getAutomationSourceAvailability(
-    automation.sourceContext,
-    sourceHostAvailability
-  )
-  if (sourceAvailability) {
-    return sourceAvailability
   }
 
   const sshTargetId = getAutomationSshTargetId(automation, repo)
@@ -163,89 +156,10 @@ export function getAutomationTargetAvailability({
   }
 }
 
-function getAutomationSourceAvailability(
-  sourceContext: TaskSourceContext | null | undefined,
-  sourceHostAvailability: readonly TaskSourceHostAvailability[] | undefined
-): AutomationTargetAvailability | null {
-  if (!sourceContext) {
-    return null
-  }
-  const availability = sourceHostAvailability?.find(
-    (entry) => entry.hostId === sourceContext.hostId
-  )
-  if (!availability) {
-    return null
-  }
-  const providerLabel = getAutomationSourceProviderLabel(sourceContext.provider)
-  switch (availability.reason) {
-    case undefined:
-      break
-    case 'missing-provider-auth':
-      return unavailable(
-        'source-auth-needed',
-        `Connect the saved ${providerLabel} source account before running manually.`
-      )
-    case 'unavailable-source-tool':
-      return unavailable(
-        'source-tool-unavailable',
-        `Install or configure the ${providerLabel} source tool before running manually.`
-      )
-    case 'unsupported-provider':
-    case 'missing-task-source-capability':
-      return unavailable(
-        'source-provider-unsupported',
-        `The saved ${providerLabel} source is not supported on this automation host.`
-      )
-    case 'checking-task-source-capability':
-      return unavailable(
-        'source-host-unavailable',
-        `Checking the saved ${providerLabel} source host before running manually.`
-      )
-  }
-  if (
-    availability.health === 'disconnected' ||
-    availability.health === 'blocked' ||
-    availability.health === 'error' ||
-    availability.status === 'disconnected' ||
-    availability.status === 'auth-failed' ||
-    availability.status === 'reconnection-failed' ||
-    availability.status === 'error'
-  ) {
-    return unavailable(
-      'source-host-unavailable',
-      `Reconnect the saved ${providerLabel} source host before running manually.`
-    )
-  }
-  if (
-    availability.health === 'connecting' ||
-    availability.status === 'connecting' ||
-    availability.status === 'deploying-relay' ||
-    availability.status === 'reconnecting'
-  ) {
-    return unavailable(
-      'source-host-unavailable',
-      `The saved ${providerLabel} source host is still connecting.`
-    )
-  }
-  return null
-}
-
-function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider']): string {
-  switch (provider) {
-    case 'github':
-      return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
-  }
-}
-
 export function getRuntimeAutomationAvailability(
   environmentId: string,
-  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus> | undefined
+  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus> | undefined,
+  t?: Translate
 ): AutomationTargetAvailability {
   const entry = runtimeStatusByEnvironmentId?.get(environmentId)
   if (!entry) {
@@ -274,7 +188,7 @@ export function getRuntimeAutomationAvailability(
       entry.status.minCompatibleRuntimeClientVersion ?? entry.status.minCompatibleMobileVersion
   })
   if (compat.kind === 'blocked') {
-    return unavailable('runtime-update-required', describeRuntimeCompatBlock(compat))
+    return unavailable('runtime-update-required', describeRuntimeCompatBlock(compat, t))
   }
   return { canRunNow: true, reason: 'available', message: null }
 }

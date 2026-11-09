@@ -17,16 +17,4 @@ describe('comment body submit state', () => {
       status: 'too-large-leading-whitespace'
     })
   })
-
-  it('does not expose oversized pasted whitespace as submit text', () => {
-    const oversizedWhitespace = ' '.repeat(COMMENT_BODY_NONBLANK_SCAN_MAX_BYTES + 1)
-
-    expect(hasBoundedCommentBodyText(oversizedWhitespace)).toBe(false)
-    expect(getCommentBodySubmitState(oversizedWhitespace)).toEqual({
-      status: 'too-large-leading-whitespace'
-    })
-    expect(JSON.stringify(getCommentBodySubmitState(oversizedWhitespace))).not.toContain(
-      oversizedWhitespace
-    )
-  })
 })

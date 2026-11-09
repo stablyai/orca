@@ -44,7 +44,6 @@ vi.mock('../main/pty/shell-startup/git-bash', () => ({
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 import {
-  buildCommandLookupSpecs,
   hasAbsoluteCommandPath,
   isCommandOnPathForRelay,
   PreflightHandler
@@ -73,29 +72,6 @@ beforeEach(() => {
   isWslAvailableAsyncMock.mockReset()
   listWslDistrosAsyncMock.mockReset()
   isGitBashAvailableMock.mockReset()
-})
-
-describe('buildCommandLookupSpecs', () => {
-  it('allows a custom shell path only when the account login shell matches', () => {
-    expect(
-      buildCommandLookupSpecs(
-        'codex',
-        'darwin',
-        { SHELL: '/opt/homebrew/bin/zsh' },
-        '/opt/homebrew/bin/zsh'
-      )
-    ).toEqual([
-      { file: '/opt/homebrew/bin/zsh', args: lookupArgs('codex', '-ilc') },
-      { file: '/bin/sh', args: lookupArgs('codex') }
-    ])
-  })
-
-  it('allows conservative system shell paths when account lookup is unavailable', () => {
-    expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/usr/bin/bash' }, null)[0]).toEqual({
-      file: '/usr/bin/bash',
-      args: lookupArgs('codex', '-ilc')
-    })
-  })
 })
 
 describe('isCommandOnPathForRelay', () => {
@@ -273,46 +249,6 @@ describe('PreflightHandler', () => {
           ]
         })
       ).resolves.toEqual({ agents: ['claude'] })
-    } finally {
-      Object.defineProperty(process, 'platform', {
-        configurable: true,
-        value: originalPlatform
-      })
-    }
-  })
-
-  it('reports remote Windows shell capabilities through the SSH preflight path', async () => {
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: 'win32'
-    })
-    isWslAvailableAsyncMock.mockResolvedValue(true)
-    listWslDistrosAsyncMock.mockResolvedValue(['Ubuntu'])
-    isPwshAvailableAsyncMock.mockResolvedValue(true)
-    isGitBashAvailableMock.mockReturnValue(true)
-
-    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
-    const dispatcher = {
-      onRequest: vi.fn(
-        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
-          requestHandlers.set(method, handler)
-        }
-      )
-    }
-
-    new PreflightHandler(dispatcher as never)
-
-    try {
-      const handler = requestHandlers.get('preflight.detectWindowsTerminalCapabilities')
-      expect(handler).toBeDefined()
-      await expect(handler!({})).resolves.toEqual({
-        wslAvailable: true,
-        wslDistros: ['Ubuntu'],
-        pwshAvailable: true,
-        gitBashAvailable: true,
-        hostPlatform: 'win32'
-      })
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,

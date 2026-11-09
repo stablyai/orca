@@ -1,9 +1,11 @@
-import type { HostProfile } from '../transport/types'
+import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostMachine } from '../../../src/shared/host-machine-line'
 
 export type HostStoredDescriptor = {
   personalName?: string
   lastKnownMachineName?: string
   lastKnownHostPlatform?: NodeJS.Platform
+  lastKnownHostMachine?: HostMachine
 }
 
 export function storedHostDescriptor(host: HostProfile): HostStoredDescriptor {
@@ -14,6 +16,9 @@ export function storedHostDescriptor(host: HostProfile): HostStoredDescriptor {
       : {}),
     ...(host.lastKnownHostPlatform !== undefined
       ? { lastKnownHostPlatform: host.lastKnownHostPlatform }
+      : {}),
+    ...(host.lastKnownHostMachine !== undefined
+      ? { lastKnownHostMachine: host.lastKnownHostMachine }
       : {})
   }
 }

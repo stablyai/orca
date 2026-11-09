@@ -5,20 +5,23 @@ import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktrees/creation/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../ipc/pty/kill-all'
-import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-provider-state'
+import {
+  disconnectDaemon,
+  shutdownDaemon
+} from '../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
-import { agentHookServer } from '../agent-hooks/server'
-import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
+import { removeManagedAgentHooksAsync } from '../agent-hooks/installation/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
-import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
-import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
-import { disposeDesktopBrowserBridge } from '../ipc/desktop-browser-bridge-wiring'
-import { browserManager } from '../browser/browser-manager'
-import { stopCodexStateDbBackfillRecoveries } from '../codex/codex-state-db-backfill-recovery'
-import { stopCodexAccountSessionBridges } from '../codex/codex-account-session-bridge'
+import { clearRuntimeMetadataIfOwned } from '../runtime/rpc/server/runtime-metadata'
+import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { disposeDesktopBrowserBridge } from '../ipc/browser/desktop-browser-bridge-wiring'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { stopCodexStateDbBackfillRecoveries } from '../codex/history/index/codex-state-db-backfill-recovery'
+import { stopCodexAccountSessionBridges } from '../codex/history/bridges/codex-account-session-bridge'
 import { awaitPackedRefsLockRelease } from '../git/refs/maintenance/local-repo-ref-maintenance'
 import { stopBackgroundWorktreeRemovals } from '../workspaces/removal/worktree-background-removal'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit/quit-teardown-deadline'
@@ -26,7 +29,7 @@ import { quitTeardownStartGate } from './quit/quit-teardown-start-gate'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
 import { shutdownTelemetry } from '../telemetry/client'
-import { shutdownObservability } from '../observability'
+import { shutdownObservability } from '../observability/index'
 import { isQuittingForUpdate } from '../updater/updater-service'
 import { recordUpdaterLifecycle } from '../updater/updater-lifecycle-diagnostics'
 import { stopTccPromptNotice } from '../macos-permissions/macos-tcc-prompt-notice'
@@ -196,9 +199,10 @@ function installWillQuitHandler(): void {
       await state.runtime?.getAgentBrowserBridge()?.destroyAllSessions()
     })()
     // Local SSH browser routes own loopback listeners and ssh -N -D children that must not outlive the app (P2-4).
-    const localSshRouteShutdown = import('../browser/local-ssh-browser-route')
-      .then((routes) => routes.closeAllLocalSshBrowserRoutes())
-      .catch(() => {})
+    const localSshRouteShutdown =
+      import('../browser/routing/local-host-partitions/local-ssh-browser-route')
+        .then((routes) => routes.closeAllLocalSshBrowserRoutes())
+        .catch(() => {})
     browserManager.setBrowserGuestStateChangedListener(null)
     browserManager.setOffscreenTabOpener(null)
     const emulatorShutdown =

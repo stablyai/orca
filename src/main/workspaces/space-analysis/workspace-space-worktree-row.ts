@@ -6,8 +6,8 @@ import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceScanStatus,
   WorkspaceSpaceWorktree
-} from '../../../shared/workspace-space-types'
-import type { WorkspaceSpaceEntryScan } from '../../../shared/workspace-space-directory-frame'
+} from '../../../shared/workspace-disk-space/workspace-space-types'
+import type { WorkspaceSpaceEntryScan } from '../../../shared/workspace-disk-space/workspace-space-directory-frame'
 import { getWorktreeExecutionHostId } from '../../../shared/execution-host'
 
 export function basenameWorkspaceFilesystemPath(pathValue: string): string {

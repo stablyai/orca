@@ -2,16 +2,16 @@
 import { act, cleanup, fireEvent, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { AiVaultSession } from '../../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { Tab } from '../../../shared/tab-types'
-import { useAiVaultSessionLaunchActions } from '@/components/right-sidebar/ai-vault-session-launch-actions'
-import { useAiVaultOriginalPaneActions } from '@/components/right-sidebar/ai-vault-original-pane-actions'
+import { useAiVaultSessionLaunchActions } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-session-launch-actions'
+import { useAiVaultOriginalPaneActions } from '@/components/right-sidebar/ai-vault/session-actions/ai-vault-original-pane-actions'
 import { reportCliChatResumeFailure } from '@/components/tab-bar/cli-chat-resume-feedback'
 import AiVaultSessionDropLayer from '@/components/tab-group/AiVaultSessionDropLayer'
-import { writeAiVaultSessionDragData } from './ai-vault-session-drag'
+import { writeAiVaultSessionDragData } from './agent-session/resume/history/ai-vault-session-drag'
 const transport = vi.hoisted(() => ({ rpc: vi.fn(), toast: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: transport.toast, success: vi.fn() } }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: transport.rpc
 }))

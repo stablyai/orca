@@ -1,5 +1,10 @@
-import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault-types'
+import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { asRecord } from '../session-scanner-record-value'
+import {
+  isClaudeToolUseContent,
+  isClaudeToolResultContent,
+  claudeToolResultTextParts
+} from '../../../shared/claude-tool-content'
 
 export type DecodedToolCall = {
   kind: 'tool_call'
@@ -77,18 +82,21 @@ export function decodeSessionMessage(
       continue
     }
     const type = typeof item.type === 'string' ? item.type.toLowerCase() : null
-    if (type === 'tool_use') {
+    if (type === 'tool_use' || isClaudeToolUseContent(item)) {
       if (options.includeTools !== false) {
         blocks.push(decodeToolCall(item.name, item.input))
       }
       continue
     }
-    if (type === 'tool_result') {
+    if (type === 'tool_result' || isClaudeToolResultContent(item)) {
       if (options.includeTools !== false) {
         const content = item.content
         blocks.push({
           kind: 'tool_result',
-          textParts: { [Symbol.iterator]: () => toolResultParts(content) }
+          textParts: {
+            [Symbol.iterator]: () =>
+              type === 'tool_result' ? toolResultParts(content) : claudeToolResultTextParts(content)
+          }
         })
       }
       continue

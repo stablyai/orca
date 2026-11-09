@@ -60,7 +60,7 @@ jobs:
         if: steps.restore.outputs.cache-hit == 'true' && steps.restore.outcome == 'success'
         shell: bash
         run: |
-          if node -e "require('./config/dark-build-switches.cjs').assertNotDarkBuild(['out/orcad-template']); require('./config/scripts/verify-packaged-orcad-template.cjs').verifyPackagedOrcadTemplate('out')"; then
+          if node -e "require('./config/dark-build-switches.cjs').assertNotDarkBuild(['out/orcad-template']); require(require('node:fs').existsSync('./config/scripts/orcad-distribution/template/verify-packaged-orcad-template.cjs') ? './config/scripts/orcad-distribution/template/verify-packaged-orcad-template.cjs' : './config/scripts/verify-packaged-orcad-template.cjs').verifyPackagedOrcadTemplate('out')"; then
             echo 'valid=true' >> "$GITHUB_OUTPUT"
           else
             rm -rf out/orcad-template

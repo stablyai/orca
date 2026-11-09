@@ -4,15 +4,17 @@ import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
-import { decodePairingOffer } from '../../../src/shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
+import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
+import { isServeMintedPtySessionId } from '../../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead
 } from '../../../src/shared/runtime-terminal-contracts'
-import type { TerminalPaneLayoutNode } from '../../../src/shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../src/shared/workspace-layout/terminal-tab-types'
 import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
 import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
 
@@ -47,7 +49,7 @@ export class IdLabels {
     if (!id) {
       return null
     }
-    const kind = id.includes('@@') ? 'pty@@' : id.startsWith('serve-') ? 'ptyServe' : 'pty'
+    const kind = isServeMintedPtySessionId(id) ? 'ptyServe' : id.includes('@@') ? 'pty@@' : 'pty'
     return this.label(kind, id)
   }
 }
@@ -155,7 +157,7 @@ export async function readPublishedLayout(
     resolveSnapshot = resolve
     rejectSnapshot = reject
   })
-  const subscription = await subscribeRemoteRuntimeRequest<unknown>(
+  const subscription = await subscribeRemoteRuntimeTransport<unknown>(
     pairedRuntimeConnectionFromOffer(decodePairingOffer(pairingUrl)),
     'layout.subscribe',
     {},

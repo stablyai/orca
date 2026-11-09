@@ -1,4 +1,6 @@
-import type { MobileRelayPairingJournal } from '../../../transport/mobile-relay-pairing-journal'
+import type * as MobileRelayPairingRecoveryModule from '../../../pairing/mobile-relay-pairing-recovery'
+import type * as PreProfilePairingCoordinatorModule from '../../../pairing/pre-profile-pairing-coordinator'
+import type { MobileRelayPairingJournal } from '../../../pairing/mobile-relay-pairing-journal'
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import {
@@ -17,9 +19,9 @@ export function pairingJournalMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'relay.pairing-recovery': ({ client, effect }: MountContext) => {
-      const recovery = modules.load<
-        typeof import('../../../transport/mobile-relay-pairing-recovery')
-      >('mobile/src/transport/mobile-relay-pairing-recovery.ts')
+      const recovery = modules.load<typeof MobileRelayPairingRecoveryModule>(
+        'mobile/src/pairing/mobile-relay-pairing-recovery.ts'
+      )
       let journal: MobileRelayPairingJournal | null = pairingJournal(credentialHash(modules))
       let outcome: unknown = 'unrecovered'
       return {
@@ -71,9 +73,9 @@ export function pairingJournalMountAdapters(
       }
     },
     'pairing.pre-profile': ({ client, effect }: MountContext) => {
-      const start = modules.load<
-        typeof import('../../../transport/pre-profile-pairing-coordinator')
-      >('mobile/src/transport/pre-profile-pairing-coordinator.ts').startPreProfilePairing
+      const start = modules.load<typeof PreProfilePairingCoordinatorModule>(
+        'mobile/src/pairing/pre-profile-pairing-coordinator.ts'
+      ).startPreProfilePairing
       let outcome: unknown = 'unpaired'
       let attempt: ReturnType<typeof start> | null = null
       let savedHost: unknown = null

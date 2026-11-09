@@ -1,13 +1,13 @@
 /** Whether any process runs from an orcad slot: its server, or a terminal daemon a candidate spawned there, which outlives the candidate's stop. */
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { posixProcessArgsShellFunction } from '../../managed-server/install/orcad-remote-host-support'
 import { isOrcadInstallDirLive } from '../../managed-server/install/orcad-remote-gc'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import type { OrcadSlotOptions } from '../../managed-server/activation/orcad-recovery-slot'
 
 // Every shell running this probe carries it in argv, so the probe never counts itself.
 const PROBE_MARKER = '__ORCA_SLOT_PROCESS_PROBE__'

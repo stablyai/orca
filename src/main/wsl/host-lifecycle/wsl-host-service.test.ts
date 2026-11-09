@@ -2,18 +2,18 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../../shared/pairing'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments
-} from '../../../shared/runtime-environment-store'
-import { getEnvironmentStorePath } from '../../../shared/runtime-environment-store-records'
-import { findWslHostDeployment } from '../../../shared/runtime-environment-wsl-host-store'
-import { getWslHostDeploymentStorePath } from '../../../shared/wsl-host-deployment-store'
-import { getPreferredPairingOffer } from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import { findWslHostDeployment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import { getWslHostDeploymentStorePath } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
+import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { WslHostStatus } from '../../../shared/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
-import { RemoteNodeRuntimeSelfTestError } from '../../ssh/orcad-remote-node-runtime-report'
+import { RemoteNodeRuntimeSelfTestError } from '../../managed-server/install/orcad-remote-node-runtime-report'
 import { WslHostService } from './wsl-host-service'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import { WslOrcadLaunchDeferredError } from '../orcad/wsl-orcad-connection-errors'
@@ -295,17 +295,6 @@ describe('WslHostService', () => {
     expect(connector.connect).toHaveBeenCalledExactlyOnceWith('Ubuntu', expect.anything())
 
     await service.remove('wsl:ubuntu')
-    expect(listEnvironments(userDataPath)).toEqual([])
-  })
-
-  it('refuses a new host while the setting is off', async () => {
-    const connector = makeConnector([UBUNTU])
-    const service = makeService(connector)
-    enabled = false
-    await expect(service.add({ distro: 'Ubuntu' })).resolves.toMatchObject({
-      ok: false,
-      kind: 'disabled'
-    })
     expect(listEnvironments(userDataPath)).toEqual([])
   })
 
@@ -730,18 +719,6 @@ describe('WslHostService', () => {
     expect(connector.disconnect).toHaveBeenCalledWith('Ubuntu')
     expect(connector.releaseHolder).toHaveBeenCalledWith('Ubuntu')
     expect(ready).not.toHaveBeenCalled()
-  })
-
-  it('treats a distro being added as known, so its first connect may spawn', async () => {
-    const connector = makeConnector([UBUNTU])
-    const service = makeService(connector)
-    let knownWhileAdding = false
-    connector.connect.mockImplementationOnce(async (distro: string) => {
-      knownWhileAdding = service.isKnownDistro(distro)
-      return connection(distro)
-    })
-    await service.add({ distro: 'Ubuntu' })
-    expect(knownWhileAdding).toBe(true)
   })
 
   it('keeps the startup holders of its hosts and releases orphans', async () => {

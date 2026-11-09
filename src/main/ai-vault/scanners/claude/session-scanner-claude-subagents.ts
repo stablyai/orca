@@ -5,7 +5,7 @@ import type {
   AiVaultSession,
   AiVaultSubagentListResult,
   AiVaultSubagentRunStatus
-} from '../../../../shared/ai-vault-types'
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   CLAUDE_TASK_NOTIFICATION_MARKER,
   readClaudeTaskNotification

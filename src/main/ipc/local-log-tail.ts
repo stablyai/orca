@@ -8,7 +8,7 @@ import type {
 } from '../../shared/local-log-tail-types'
 import { readLocalLogTailRange } from '../ai-vault/transcripts/local-log-tail-reader'
 import type { Store } from '../persistence/loading-store/store'
-import { resolveUserNamedRegularFile } from './local-file-access-resolution'
+import { resolveUserNamedRegularFile } from './filesystem/access/local-file-access-resolution'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 type TailSenderOwner = {

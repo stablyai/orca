@@ -2,7 +2,7 @@ import React from 'react'
 import { PowerOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
@@ -22,16 +22,17 @@ export function RepoWslDistroStoppedIndicator({
   repo: Repo
   notRunning: WslDistroNotRunning
 }): React.JSX.Element {
+  const t = useTranslate()
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const [pending, setPending] = React.useState(false)
   const title =
     notRunning.state === 'stopped'
-      ? translate(
+      ? t(
           'auto.components.sidebar.RepoScanUnavailableIndicator.wslStoppedTitle',
           'WSL distro {{value0}} is stopped',
           { value0: notRunning.distro }
         )
-      : translate(
+      : t(
           'auto.components.sidebar.RepoScanUnavailableIndicator.wslUnverifiableTitle',
           "Couldn't confirm WSL distro {{value0}} is running",
           { value0: notRunning.distro }
@@ -45,13 +46,13 @@ export function RepoWslDistroStoppedIndicator({
     }
     await fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
   }
-  const startAndScanLabel = translate(
+  const startAndScanLabel = t(
     'auto.components.sidebar.RepoScanUnavailableIndicator.wslStartAndScan',
     'Start distro and scan'
   )
   return (
     <TooltipProvider disableHoverableContent={false}>
-      <Tooltip delayDuration={400}>
+      <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
@@ -79,13 +80,13 @@ export function RepoWslDistroStoppedIndicator({
           <div className="space-y-1">
             <div className="font-medium">{title}</div>
             <div className="text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.sidebar.RepoScanUnavailableIndicator.wslRetained',
                 'Showing the worktrees Orca already knew about. They refresh when Orca sees the distro running.'
               )}
             </div>
             <div className="text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.sidebar.RepoScanUnavailableIndicator.wslStartAndScanHint',
                 'Click the icon to start the distro and scan again.'
               )}

@@ -1,8 +1,10 @@
+import { bumpWorktreeScanGeneration } from '../catalog/worktree-scan-cache'
+import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { resolveWorktreeHostPath } from '../../../../shared/git-metadata-path'
-import { findLinkedWorktreeGitDirectory } from '../../../../shared/git-worktree-admin'
+import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
+import { findLinkedWorktreeGitDirectory } from '../../../../shared/git/worktrees/git-worktree-admin'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
@@ -100,6 +102,9 @@ export async function performDiscardPreparedWorktree(
         cleanupGitOptions
       )
     }
+    if (cleanupGitOptions.canStart?.() === false) {
+      return
+    }
     // Double force requires a freshly verified ownership marker.
     await gitExecFileAsync(
       [
@@ -154,5 +159,20 @@ export async function removeFailedFinalization(
       ['branch', '-D', '--', branch],
       gitCleanupOptions(repoPath, options)
     ).catch(() => {})
+  }
+}
+
+export async function discardPreparedWorktree(
+  repoPath: string,
+  worktreePath: string,
+  options: GitWorktreeExecOptions = {},
+  expectedLockReason?: string
+): Promise<void> {
+  try {
+    await runWithGitReadCacheInvalidation(() =>
+      performDiscardPreparedWorktree(repoPath, worktreePath, options, expectedLockReason)
+    )
+  } finally {
+    bumpWorktreeScanGeneration(repoPath)
   }
 }

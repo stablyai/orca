@@ -1,5 +1,5 @@
-import { analyzeAgentChoiceArgs } from '../../../../../shared/agent-choice-args'
-import { projectAgentLaunchProfile } from '../../../../../shared/agent-launch-profile'
+import { analyzeAgentChoiceArgs } from '../../../../../shared/agent-launch/choices/agent-choice-args'
+import { projectAgentLaunchProfile } from '../../../../../shared/agent-launch/choices/agent-launch-profile'
 import {
   findCatalogModel,
   getAgentSessionOptionLaunchCatalog
@@ -7,10 +7,10 @@ import {
 import type {
   AgentChoicePatch,
   AgentDedicatedChoices
-} from '../../../../../shared/agent-launch-choices'
-import type { AgentArgsProjectionContext } from '../../../../../shared/agent-launch-picker-arguments'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import type { AgentArgsChoice } from './AgentPermissionChoiceControls'
+} from '../../../../../shared/agent-launch/choices/agent-launch-choices'
+import type { AgentArgsProjectionContext } from '../../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentArgsChoice } from './agent-args-choice'
 
 export function agentModelChoiceChips(
   agent: TuiAgent | null | undefined,

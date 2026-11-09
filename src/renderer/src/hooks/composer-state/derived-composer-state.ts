@@ -16,10 +16,10 @@ import {
   renderIssueCommandTemplate
 } from '@/lib/new-workspace'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
-import { deriveWorkspaceSetupState } from '@/lib/workspace-setup-preparation'
+import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
-import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
+import { getSuggestedCreatureName } from '@/components/sidebar/workspace-creation/naming/worktree-name-suggestions'
 const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
 
 export function useDerivedComposerState(input: DerivedComposerStateInput) {

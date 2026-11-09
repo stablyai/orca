@@ -1,5 +1,5 @@
 import { exposeDispatchContext } from './dispatch-context-exposure'
-import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
+import { contextOnlyAbandonWarning } from '../../../../orchestration/workers/lifecycle/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import {
@@ -11,12 +11,12 @@ import {
   showContextOnlyWorker
 } from './worker-observation'
 import { readArchivedWorkerOutput } from './worker-archive-read'
-import { readStructuredWorkerOutput } from '../../orchestration-structured-worker-lifecycle'
-import { releaseStructuredWorkerSession } from '../../orchestration-structured-worker-session'
-import { sessionIdFromStructuredWorkerIncarnation } from '../../../../structured-worker-identity'
+import { readStructuredWorkerOutput } from '../structured-workers/orchestration-structured-worker-lifecycle'
+import { releaseStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
+import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
-import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/worker-terminal-ownership'
+import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
 import { showFederatedWorker } from '../federation/federated-worker-show'
 import {

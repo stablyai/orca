@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { runPullRequestStateUpdate } from '@/components/github/github-work-item-edit-mutations'
@@ -15,7 +15,7 @@ import type {
   GitHubPRMergeMethod
 } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { translate } from '@/i18n/i18n'
 import type { GitHubPRMergeStatePresentation } from '@/components/github-pr-merge-state'

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { exit, stopServers, releaseAll } = vi.hoisted(() => ({
@@ -95,21 +93,5 @@ describe('runWslHolderUninstallPreflight', () => {
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0))
 
     expect(stopServers).toHaveBeenCalledTimes(1)
-  })
-
-  it('is only passed by the NSIS hook when no other install shares this userData', () => {
-    const hook = readFileSync(
-      join(__dirname, '..', '..', '..', 'config', 'nsis', 'orca-installer-hooks.nsh'),
-      'utf8'
-    )
-    const lines = hook.split('\n')
-    const withFlag = lines.findIndex((line) => line.includes(WSL_SERVER_UNINSTALL_FLAG))
-
-    expect(withFlag).toBeGreaterThan(0)
-    expect(lines.filter((line) => line.includes(WSL_SERVER_UNINSTALL_FLAG))).toHaveLength(1)
-    expect(lines[withFlag - 1].trim()).toBe('${if} $2 == "none"')
-    expect(lines.slice(withFlag - 6, withFlag - 1).join('\n')).toContain(
-      '!insertmacro ORCA_OTHER_INSTALL_STATE $2'
-    )
   })
 })

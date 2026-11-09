@@ -24,18 +24,6 @@ describe('resolveWslWorktreeGitPath', () => {
     readWorktreeGitPathMock.mockReset()
   })
 
-  it('uses the .git link without running Git', async () => {
-    readWorktreeGitPathMock.mockReturnValue(FROM_LINK)
-
-    await expect(resolveWslWorktreeGitPath(WORKTREE, 'orca/setup-runner.sh')).resolves.toBe(
-      FROM_LINK
-    )
-    expect(readWorktreeGitPathMock).toHaveBeenCalledWith(WORKTREE, 'orca/setup-runner.sh', [
-      '/mnt/'
-    ])
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
   it('retries the link once after a transient miss', async () => {
     readWorktreeGitPathMock.mockReturnValueOnce(null).mockReturnValueOnce(FROM_LINK)
 

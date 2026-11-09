@@ -1,4 +1,4 @@
-import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { requireAcceptedSpawn } from '../spawn-outcome'
 import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn-operation'
 import { checkPtyIpcLaunchPane, resolveEarlyPaneKey } from './spawn-begin'
@@ -118,5 +118,10 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
   })
   return args.agentLaunch === undefined
     ? outcome.result
-    : requireAcceptedSpawn(outcome, AGENT_LAUNCH_PANE_REFUSED_CODE)
+    : typeof args.agentLaunch === 'object' &&
+        args.agentLaunch !== null &&
+        'returnLaunchFailure' in args.agentLaunch &&
+        args.agentLaunch.returnLaunchFailure === true
+      ? requireAcceptedSpawn(outcome)
+      : requireAcceptedSpawn(outcome, AGENT_LAUNCH_PANE_REFUSED_CODE)
 }

@@ -3,11 +3,13 @@ import { createElement } from 'react'
 import { Pressable } from 'react-native'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { MobileNativeChatSendOutcome } from '../native-chat/mobile-native-chat-send'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { RpcResponse, ConnectionState } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
 import type { MobileNativeChatController } from '../native-chat/mobile-native-chat-controller-contract'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../test-support/query-client-test-renderer'
 import { vi } from 'vitest'
 import { useMobileNativeChatController } from '../native-chat/use-mobile-native-chat-controller'
 import { MobileNativeChatOverlay } from '../native-chat/MobileNativeChatOverlay'
@@ -51,6 +53,10 @@ vi.mock('../use-mobile-session-view-mode', () => ({
       Object.assign(visible, { value: view === 'chat' }),
     toggleTabChatView: () => Object.assign(visible, { value: !visible.value })
   })
+}))
+// The chat's per-connection CI setting read isn't a prompt write; these tests count only those.
+vi.mock('../use-mobile-native-chat-ci-result-lines', () => ({
+  useMobileNativeChatCiResultLines: () => false
 }))
 vi.mock('../native-chat/use-mobile-native-chat-session-lane', () => ({
   useMobileNativeChatSessionLane: () => ({ session, structuredSession, sessionCommands })
@@ -155,7 +161,10 @@ function Harness(props: HarnessProps) {
   captureRenderedController(current)
   return createElement(MobileNativeChatOverlay, {
     controller: current,
+    worktreePath: null,
+    connState,
     onOpenFile: vi.fn(),
+    onRunInTerminal: vi.fn(),
     images: {
       sendNativeChat: (text: string) => controller.handleNativeChatSend(text),
       attachments: [],
@@ -187,7 +196,7 @@ export async function render(props: HarnessProps = lastProps ?? {}) {
     if (tree) {
       tree.update(element)
     } else {
-      tree = create(element)
+      tree = createWithQueryClient(element)
     }
   })
 }

@@ -3,28 +3,29 @@ import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/sna
 import {
   makeSnapshot,
   resetWebSessionTabsSyncTestState
-} from '@/runtime/web-session-tabs-sync-test-harness'
+} from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
-import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
-import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { resumeSleepingAgentSessionsForWorktree } from './agent-session/resume/resume-sleeping-agent-session'
+import { makeCreatedAgentWorktree } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
-} from '@/runtime/host-session-mirror-hydration'
+} from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
 import {
-  clearRuntimeEnvironmentConnectionGenerationsForTests,
+  clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
-} from '@/store/slices/runtime-status'
-import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
+} from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   HOST_MIRROR_HANDLE_GAP_DEADLINE_MS,
   countParkedHostMirrorHandleGapPanesForTests,
   hasHostMirrorHandleWaitExpired,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
-import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
+import { makeTerminalTab } from '../store/terminals/terminal-row.test-fixture'
 
 // Published rows without handles are unverifiable, never exited (ssh-execution-boundary.md). Assert the ORIGINAL deadline: accidental release/re-park looks identical but silently restarts its budget.
 

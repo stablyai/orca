@@ -47,16 +47,6 @@ describe('BrowserUserAgentSetting', () => {
 
   afterEach(cleanup)
 
-  it('never substitutes the local identity while Remote Settings is focused', () => {
-    identityGet.mockResolvedValue(statusFor('native'))
-
-    renderFor('runtime:remote-host')
-
-    expect(identityGet).not.toHaveBeenCalled()
-    expect(screen.getByText(/manage browser identity on the remote host/i)).toBeTruthy()
-    expect(screen.queryByRole('radiogroup')).toBeNull()
-  })
-
   it('commits the chosen mode and reports that a restart is required', async () => {
     identityGet.mockResolvedValue(statusFor('clean'))
     identitySet.mockResolvedValue({

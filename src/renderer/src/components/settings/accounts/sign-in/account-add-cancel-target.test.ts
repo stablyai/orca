@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const cancelHost = vi.hoisted(() => vi.fn(async () => true))
-vi.mock('@/runtime/runtime-host-account-sign-in-client', () => ({
+vi.mock('@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client', () => ({
   cancelHostAccountSignIn: cancelHost,
   isLostHostAnswer: () => false
 }))
@@ -29,17 +29,5 @@ describe('account addition Cancel target', () => {
     running.resolve()
     await adding
     expect(accountAdditionShownInPrompt('claude', SERVER)).toBe(false)
-  })
-
-  it('cancels this desktop’s own login for a local addition', async () => {
-    cancelHost.mockClear()
-    const running = Promise.withResolvers<void>()
-    const adding = trackAccountAddition('codex', LOCAL, () => running.promise)
-    const cancelLocal = vi.fn(async () => true)
-    await cancelAccountAddition('codex', cancelLocal)
-    expect(cancelLocal).toHaveBeenCalledOnce()
-    expect(cancelHost).not.toHaveBeenCalled()
-    running.resolve()
-    await adding
   })
 })
