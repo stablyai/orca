@@ -29,7 +29,7 @@ import {
   createBrowserHomePageDraftState,
   resolveBrowserHomePageDraftState
 } from './browser-home-page-draft-state'
-import { buildExecutionHostRegistry } from '../../../../../shared/execution-host/execution-host-registry'
+import { buildSidebarHostOptions } from '../../sidebar/worktree-list/controls/sidebar-host-options'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
@@ -138,15 +138,18 @@ export function BrowserPane({
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const browserSessionHostOptions = useMemo(
     () =>
-      buildExecutionHostRegistry({
-        repos,
-        sshTargetLabels,
-        sshConnectionStates,
-        settings,
-        runtimeEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides
-      })
+      buildSidebarHostOptions(
+        {
+          repos,
+          sshTargetLabels,
+          sshConnectionStates,
+          settings,
+          runtimeEnvironments,
+          runtimeStatusByEnvironmentId,
+          hostLabelOverrides
+        },
+        t
+      )
         .filter((host) => host.kind === 'local' || host.kind === 'runtime')
         .map((host) => ({
           id: host.id,
