@@ -27,11 +27,13 @@ if [ -n "${ORCA_GIT_EXTRAHEADER:-}" ]; then
   # Every github.com request carries the placeholder; the egress policy swaps in a 1h repo token.
   git config --global http.https://github.com/.extraheader "$ORCA_GIT_EXTRAHEADER"
 fi
+# First boot clones while orcad starts (orcad only needs the directory to exist); ready waits for both.
+clone_pid=''
 if [ ! -d "$PROJECT" ]; then
+  mkdir -p "$PROJECT"
   if [ -n "${ORCA_REPO_URL:-}" ]; then
-    git clone --quiet ${ORCA_REPO_REF:+--branch "$ORCA_REPO_REF"} -- "$ORCA_REPO_URL" "$PROJECT"
-  else
-    mkdir -p "$PROJECT"
+    git clone --quiet ${ORCA_REPO_REF:+--branch "$ORCA_REPO_REF"} -- "$ORCA_REPO_URL" "$PROJECT" 2>"$STATE/clone.log" &
+    clone_pid=$!
   fi
 fi
 
@@ -55,7 +57,8 @@ fi
 node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
 env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
   PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:/usr/local/bin:/usr/bin:/bin" \
-  ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${agent_env[@]}" \
+  ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" \
+  NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" "${agent_env[@]}" \
   setsid nohup "$node" "$ORCA_HOME/runtime/orcad/orcad-server.js" \
   --port 6768 --bind 0.0.0.0 --pairing-address "$ORCA_PUBLIC_WSS" \
   --recipe-json --project-root "$PROJECT" \
@@ -64,6 +67,11 @@ echo $! >"$STATE/orcad.pid"
 
 for _ in $(seq 1 1200); do
   if grep -q '"pairingCode"' "$STATE/ready.json" 2>/dev/null; then
+    if [ -n "$clone_pid" ] && ! wait "$clone_pid"; then
+      echo 'repository clone failed' >&2
+      tail -n 5 "$STATE/clone.log" >&2
+      exit 1
+    fi
     tail -n 1 "$STATE/ready.json"
     exit 0
   fi
