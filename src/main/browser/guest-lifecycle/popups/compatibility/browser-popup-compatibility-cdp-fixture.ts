@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest'
 import { build as buildVite } from 'vite'
-import { waitForBrowserCdpEndpoint } from '../../../identity/browser-session-ua-cdp-collector'
+import { waitForBrowserCdpEndpoint } from '../../../identity/wire-probes/browser-session-ua-cdp-collector'
 import { popupFixtureHtml } from './browser-popup-compatibility-page-fixture'
 import { resolveElectronProbeLaunch } from '../../../electron-fixtures/electron-probe-display-launch'
 import {

@@ -60,6 +60,9 @@ export function getEphemeralVmRuntimeStatusLabel(
       'Cleanup running'
     )
   }
+  if (runtime.status === 'provisioning') {
+    return t('auto.components.settings.EphemeralVmRuntimesSection.provisioning', 'Provisioning')
+  }
   if (runtime.cleanupStatus === 'disabled') {
     return t(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupDisabled',
@@ -118,9 +121,11 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
     void refresh()
   }, [refresh])
 
-  const hasRunningCleanup = runtimes.some(isCleanupRunning) || cleaningId !== null
+  const hasRunningLifecycle =
+    runtimes.some((runtime) => isCleanupRunning(runtime) || runtime.status === 'provisioning') ||
+    cleaningId !== null
   useEffect(() => {
-    if (!hasRunningCleanup) {
+    if (!hasRunningLifecycle) {
       return
     }
     let cancelled = false
@@ -138,7 +143,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
         clearTimeout(timer)
       }
     }
-  }, [hasRunningCleanup, refresh])
+  }, [hasRunningLifecycle, refresh])
 
   const cleanupRuntime = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
     setCleaningId(runtime.id)
@@ -224,6 +229,24 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
     }
   }
 
+  const forgetRuntime = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
+    try {
+      await window.api.ephemeralVm.forgetRuntime({ runtimeId: runtime.id })
+    } catch (error) {
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t(
+                'auto.components.settings.EphemeralVmRuntimesSection.removeFromListFailed',
+                'Couldn’t remove Cloud VM runtime from the list.'
+              )
+        )
+      }
+    }
+    await refresh(false)
+  }
+
   const stopCleanup = async (runtime: EphemeralVmRuntimeRecord): Promise<void> => {
     setStoppingId(runtime.id)
     try {
@@ -307,6 +330,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
               onCleanup={() => void cleanupRuntime(runtime)}
               onStopCleanup={() => setPendingStop(runtime)}
               onCopyCleanupCommand={() => void copyCleanupCommand(runtime)}
+              onForget={() => void forgetRuntime(runtime)}
             />
           ))}
         </div>

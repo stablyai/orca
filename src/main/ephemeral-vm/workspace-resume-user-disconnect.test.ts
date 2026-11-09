@@ -14,8 +14,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({ app: { getPath: () => '/user-data' } }))
 vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
-  findWorkspaceEphemeralVmRuntime: () => ({ id: 'vm-1', status: 'suspended', repoId: 'repo-1' }),
   updateEphemeralVmRuntimeStatus: mocks.updateStatus
+}))
+vi.mock('../../shared/ephemeral-vm-workspace-runtime', () => ({
+  findWorkspaceEphemeralVmRuntime: () => ({ id: 'vm-1', status: 'suspended', repoId: 'repo-1' })
 }))
 vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: () => ({ id: 'env-vm', pairingRevision: 9, createdAt: 0 }),
@@ -26,7 +28,7 @@ vi.mock('../../shared/ephemeral-vm-recipes', () => ({
   getEphemeralVmRecipeResultPairingCode: () => null
 }))
 vi.mock('../ipc/ephemeral-vm-recipe-context', () => ({
-  getRuntimeRecipeContext: () => ({ repo: { repo: { path: '/repo' } }, recipe: {} })
+  getRuntimeRecipeContext: () => ({ repoPath: '/repo', recipe: {} })
 }))
 vi.mock('../ipc/runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: vi.fn()

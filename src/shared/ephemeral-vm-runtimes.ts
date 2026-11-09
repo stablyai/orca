@@ -51,6 +51,8 @@ export const EphemeralVmRuntimeRecordSchema = z.object({
   /** Snapshot lifecycle commands so later pack updates/disabling/removal cannot change an existing runtime’s cleanup. */
   recipe: EphemeralVmRuntimeRecipeSchema.optional(),
   repoId: z.string().min(1).optional(),
+  /** Repo checkout the lifecycle commands ran from, so destroy still works if `repoId` stops resolving. */
+  repoPath: z.string().min(1).optional(),
   projectId: z.string().min(1).optional(),
   workspaceId: z.string().min(1).optional(),
   workspaceName: z.string().min(1).optional(),
@@ -67,10 +69,30 @@ export const EphemeralVmRuntimeRecordSchema = z.object({
   cleanupLastErrorParams: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
   createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
-  recipeResult: EphemeralVmRecipeResultSchema
+  /** Absent only on write-ahead records persisted before `create` returned a result. */
+  recipeResult: EphemeralVmRecipeResultSchema.optional()
 })
 
 export type EphemeralVmRuntimeRecord = z.infer<typeof EphemeralVmRuntimeRecordSchema>
+
+export type EphemeralVmProvisionedRuntimeRecord = EphemeralVmRuntimeRecord & {
+  recipeResult: NonNullable<EphemeralVmRuntimeRecord['recipeResult']>
+}
+
+export function hasEphemeralVmRecipeResult(
+  runtime: EphemeralVmRuntimeRecord
+): runtime is EphemeralVmProvisionedRuntimeRecord {
+  return runtime.recipeResult !== undefined
+}
+
+export function requireEphemeralVmRecipeResult(
+  runtime: EphemeralVmRuntimeRecord
+): EphemeralVmProvisionedRuntimeRecord {
+  if (!hasEphemeralVmRecipeResult(runtime)) {
+    throw new Error(`Ephemeral VM runtime never finished provisioning: ${runtime.id}`)
+  }
+  return runtime
+}
 
 export const EphemeralVmRuntimeStoreSchema = z.object({
   version: z.literal(1),

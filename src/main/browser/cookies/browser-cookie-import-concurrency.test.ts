@@ -43,7 +43,7 @@ vi.mock('./browser-cookie-clear-store', () => ({
     dispose: () => undefined
   })
 }))
-vi.mock('../sessions/browser-session-registry', () => ({
+vi.mock('../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
@@ -56,7 +56,8 @@ vi.mock('../../../shared/windows-retry-file-operations', () => ({
   copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
 }))
 
-import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
+import { importCookiesFromBrowser } from './browser-cookie-import'
+import { importCookiesFromFile } from './imports/import-cookie-file'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 
 describe('two concurrent imports into one partition', () => {

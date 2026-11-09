@@ -1,3 +1,4 @@
+import { isInheritedAgentSessionItem } from '../../../../shared/agent-session/agent-session-fork'
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
@@ -83,10 +84,15 @@ export function structuredRewindCut(
 }
 
 /** Admission only; already-saved rewinds complete even if their target is no longer eligible. */
-export function isStructuredRewindTarget(journal: AgentSessionJournal, itemId: string): boolean {
+export function isStructuredRewindTarget(
+  journal: AgentSessionJournal,
+  itemId: string,
+  boundary?: NonNullable<AgentSessionRecord['forkedFrom']>['childBoundary']
+): boolean {
   const item = journal.currentRead().items.find((row) => row.itemId === itemId)
   return (
     item !== undefined &&
+    !isInheritedAgentSessionItem(journal.currentRead().items, boundary, itemId) &&
     isAgentSessionRewindTarget(
       item,
       (turnItemId) => readAgentJournalTurn(journal.itemBody(turnItemId) ?? undefined)?.userItemId

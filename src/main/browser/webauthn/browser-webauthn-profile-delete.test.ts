@@ -46,7 +46,7 @@ vi.mock('../identity/browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({ mode: 'clean', userAgent: 'Mozilla/5.0 Test' })
 }))
 
-import { browserSessionRegistry } from '../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import {
   cancelAllBrowserWebAuthnAccountRequests,
   respondToBrowserWebAuthnAccountRequest

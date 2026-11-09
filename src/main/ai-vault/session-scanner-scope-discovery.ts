@@ -25,7 +25,7 @@ const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
 // Bucket encodings are lossy; retain Claude’s cache and verify other transcripts individually.
 const PROJECT_DIR_CWD_CACHE_MAX = 2048
 const projectDirCwdCache = new Map<string, string>()
-export type IssueSink = (issue: AiVaultScanIssue) => void
+export type IssueSink = (issue: AiVaultScanIssue, error?: unknown) => void
 
 export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
@@ -39,7 +39,7 @@ export function recordRefusal(
   agent: AiVaultAgent
 ): void {
   if (!isMissingTranscriptPathError(error)) {
-    issues({ agent, path, ...scanIssueTextFromError(error) })
+    issues({ agent, path, ...scanIssueTextFromError(error) }, error)
   }
 }
 

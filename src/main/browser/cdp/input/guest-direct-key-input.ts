@@ -21,15 +21,13 @@ import {
 
 // Main-session CDP keys follow window focus; guest widget events protect the user's input (#20595).
 
-export type GuestCdpSender = GuestSessionCdpSender
-
 // Offscreen and headless pages lack a host frame tree, so CDP already targets them.
 export function isEmbeddedGuest(webContents: WebContents): boolean {
   return webContents.getType() === 'webview'
 }
 
 // Wait for widget input handling before callers read its effects, matching CDP behavior.
-async function waitForPageToHandleInput(send: GuestCdpSender): Promise<void> {
+async function waitForPageToHandleInput(send: GuestSessionCdpSender): Promise<void> {
   await settleWithin(
     send('Runtime.evaluate', {
       // MessageChannel avoids hidden-page timer throttling.
@@ -73,7 +71,7 @@ const NO_FOCUS_GUARD: AgentInputFocusGuard = async () => () => {}
 // Restore user focus after CDP fallback; emulation keeps the page from seeing blur.
 async function focusGuestForCdpInput(
   webContents: WebContents,
-  send: GuestCdpSender,
+  send: GuestSessionCdpSender,
   guardFocus: AgentInputFocusGuard
 ): Promise<() => void> {
   await enablePageFocusEmulation(send)
@@ -85,7 +83,7 @@ async function focusGuestForCdpInput(
 // Cross-site frame sessions route CDP input without borrowing user focus.
 async function sendToFrameSession(
   webContents: WebContents,
-  send: GuestCdpSender,
+  send: GuestSessionCdpSender,
   sessionId: string,
   method: string,
   params: Record<string, unknown>
@@ -99,7 +97,7 @@ async function sendToFrameSession(
 export async function dispatchPageKeyEvent(
   webContents: WebContents,
   params: Record<string, unknown>,
-  send: GuestCdpSender,
+  send: GuestSessionCdpSender,
   guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD
 ): Promise<unknown> {
   return await dispatchPageKeyEvents(webContents, [params], send, guardFocus)
@@ -112,7 +110,7 @@ const isTabDown = (params: Record<string, unknown>): boolean =>
 export async function dispatchPageKeyEvents(
   webContents: WebContents,
   events: readonly Record<string, unknown>[],
-  send: GuestCdpSender,
+  send: GuestSessionCdpSender,
   guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD
 ): Promise<unknown> {
   let result: unknown = {}
@@ -211,7 +209,7 @@ export async function releaseHeldPageInput(
   release: HeldInputRelease,
   guardFocus: AgentInputFocusGuard
 ): Promise<unknown> {
-  const send: GuestCdpSender = (method, params, sessionId) =>
+  const send: GuestSessionCdpSender = (method, params, sessionId) =>
     sendGuestCdpCommand(webContents, method, params, sessionId)
   // The command's debugger lease may already have detached.
   const lease = acquireElectronDebugger(webContents)
@@ -245,7 +243,7 @@ export type TextInsertionRoute = {
 export async function routePageTextInsertion(
   webContents: WebContents,
   params: Record<string, unknown>,
-  send: GuestCdpSender,
+  send: GuestSessionCdpSender,
   guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD
 ): Promise<TextInsertionRoute> {
   const sendText = (insertParams: Record<string, unknown>): Promise<unknown> =>

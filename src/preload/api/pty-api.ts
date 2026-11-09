@@ -115,6 +115,8 @@ export type PtyApi = {
     shellReadyArmed?: boolean
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  /** Genuine xterm input admitted by a local or remote transport; carries no terminal bytes. */
+  noteUserInput?: () => void
   /** `requireWriteSettlement` waits for the provider's acknowledgment on any provider. */
   writeAccepted: (
     id: string,
