@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { ClaudeRateLimitAccountsState } from '../../../shared/managed-account-types'
+import type { ClaudeRateLimitAccountsState } from '../../../../shared/managed-account-types'
 
 /** Display label for a selected Claude account row; null is System default. */
 export function getClaudeAccountLabel(

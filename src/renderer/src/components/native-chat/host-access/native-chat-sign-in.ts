@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
+import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
 import { agentSessionRemoteSignInCommand } from '../../../../../shared/agent-session/lifecycle/agent-session-sign-in'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { createWebRuntimeSessionTerminalOnHost } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'

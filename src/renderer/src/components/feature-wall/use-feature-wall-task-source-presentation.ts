@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { FeatureWallWorkflow } from '../../../../shared/feature-wall-workflows'
 import { useAppStore } from '@/store'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { deriveIntegrationConnectionStatus } from './use-integration-connection-status'
 
 export type FeatureWallTaskSourcePresentation = {

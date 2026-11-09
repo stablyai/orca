@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ClaudeAccountSwitchRunningSessions } from '../../../shared/claude-account-switch-settings'
-import type { ClaudeManagedAccountSummary } from '../../../shared/managed-account-types'
-import { findClaudeSwitchSessions } from './claude-session-account-move'
-import type * as AccountMove from './claude-session-account-move'
-import type { ClaudeSwitchSessions } from './claude-session-account-move'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/claude-account-switch-settings'
+import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
+import { findClaudeSwitchSessions } from '../agent-session/accounts/claude/claude-session-account-move'
+import type * as AccountMove from '../agent-session/accounts/claude/claude-session-account-move'
+import type { ClaudeSwitchSessions } from '../agent-session/accounts/claude/claude-session-account-move'
 import {
   answerClaudeAccountSwitchPrompt,
   getClaudeAccountSwitchPrompt,
@@ -31,9 +31,9 @@ const store = vi.hoisted((): StoreStub => ({
 const toastSuccess = vi.hoisted(() => vi.fn())
 const toastWarning = vi.hoisted(() => vi.fn())
 
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, warning: toastWarning } }))
-vi.mock('./claude-session-account-move', async (importOriginal) => ({
+vi.mock('../agent-session/accounts/claude/claude-session-account-move', async (importOriginal) => ({
   ...(await importOriginal<typeof AccountMove>()),
   findClaudeSwitchSessions: vi.fn(),
   findQueuedClaudeRestartsOnAccount: vi.fn(() => [])

@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
-import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
-import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
-import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
-import { getDefaultSettings } from '../../../shared/constants'
+import { useAppStore } from '@/store/index'
+import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
+import type { ClaudeManagedAccount } from '../../../../../../shared/managed-account-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
+import { getDefaultSettings } from '../../../../../../shared/constants'
 import type * as localPreflightContext from '@/lib/local-preflight-context'
-import type * as paneSelectionLane from './codex-pane-selection-lane'
+import type * as paneSelectionLane from '../../../codex-pane-selection-lane'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
@@ -25,12 +25,12 @@ vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspecti
   inspectRuntimeTerminalProcess: vi.fn(),
   confirmRuntimeTerminalForegroundProcess: vi.fn()
 }))
-vi.mock('./renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
+vi.mock('../../../renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
 vi.mock('@/lib/local-preflight-context', async (importOriginal) => ({
   ...(await importOriginal<typeof localPreflightContext>()),
   getLocalProjectExecutionRuntimeContext: () => projectRuntime
 }))
-vi.mock('./codex-pane-selection-lane', async (importOriginal) => ({
+vi.mock('../../../codex-pane-selection-lane', async (importOriginal) => ({
   ...(await importOriginal<typeof paneSelectionLane>()),
   resolveCodexPaneSelectionLane: ({ ptyId }: { ptyId: string }) => ({
     laneKey: laneByPtyId[ptyId] ?? 'host',

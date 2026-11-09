@@ -67,7 +67,7 @@ vi.mock(
     })
   })
 )
-vi.mock('@/lib/claude-account-switch-sessions', () => ({
+vi.mock('@/lib/provider-accounts/claude-account-switch-sessions', () => ({
   handleRunningClaudeSessionsAfterSwitch: vi.fn()
 }))
 vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog', () => ({
