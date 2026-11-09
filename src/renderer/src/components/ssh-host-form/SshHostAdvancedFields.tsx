@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { SettingsSwitch } from '../settings/form-controls/SettingsFormControls'
 import type { EditingTarget } from './ssh-target-draft'
 import { useTranslate } from '@/i18n/use-translate'
 

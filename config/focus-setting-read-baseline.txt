@@ -77,7 +77,7 @@
 1 src/renderer/src/components/right-sidebar/hosted-review/creation/useCreatePullRequestDialogFields.ts
 1 src/renderer/src/components/right-sidebar/source-control/sync/git-history-commit-context-menu.tsx
 2 src/renderer/src/components/settings/Settings.tsx
-2 src/renderer/src/components/settings/browser/BrowserPane.tsx
+1 src/renderer/src/components/settings/browser/BrowserPane.tsx
 1 src/renderer/src/components/settings/general/GeneralPane.tsx
 1 src/renderer/src/components/settings/general/WorkspaceDirectorySetting.tsx
 1 src/renderer/src/components/settings/integrations/IntegrationsPane.tsx

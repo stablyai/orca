@@ -1,11 +1,11 @@
-import type { SshManagedServerStatus } from '../../../../../../shared/ssh-types'
+import type { SshManagedServerStatus } from '../../../../shared/ssh-types'
 import { useAppStore } from '@/store/index'
 import { nodeMirrorRecoveryLabel } from '@/ssh/ssh-host-node-download-copy'
 import {
   openNodeMirrorRecovery,
   thisComputerNodeMirrorRecovery
 } from '@/ssh/node-dist-mirror-recovery'
-import { Button } from '../../../ui/button'
+import { Button } from '../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function SshHostNodeMirrorAction({

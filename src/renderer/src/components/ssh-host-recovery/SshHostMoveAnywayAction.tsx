@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import type { SshManagedServerStatus, SshTarget } from '../../../../../../shared/ssh-types'
+import type { SshManagedServerStatus, SshTarget } from '../../../../shared/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { sshHostServerReassurance } from '@/ssh/ssh-host-server-setup-copy'
 import { trackSshConnect } from '@/ssh/ssh-connect-in-flight'
-import { Button } from '../../../ui/button'
+import { Button } from '../ui/button'
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from '../../../ui/dialog'
-import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
+} from '../ui/dialog'
+import { getManagedOrcadApi } from '../../runtime/hosts/installation/managed-orcad-api-availability'
 
 /** Offered only for a refusal that saved state alone causes. */
 export function canMoveSshHostAnyway(status: SshManagedServerStatus | undefined): boolean {

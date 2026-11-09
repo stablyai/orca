@@ -1,4 +1,4 @@
-import type { AiVaultSearchStatus } from '../../../../../shared/ai-vault/search/ai-vault-search-types'
+import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatMessageCount, formatSessionCount } from './session-search-count-format'
