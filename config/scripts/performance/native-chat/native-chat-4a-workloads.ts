@@ -64,7 +64,7 @@ export const WORKLOADS: Record<Workload['profile'], Workload> = {
       promptBytes: 300,
       replyBytes: 1500,
       queuedEvery: 10,
-      fillerChats: 3,
+      fillerChats: 6,
       fillerTurns: 1
     },
     stream: { cases: streamCases([MiB / 4]), chunkBytes: 16_384, intervalMs: 1, samples: 1 },

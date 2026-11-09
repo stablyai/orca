@@ -218,6 +218,9 @@ export async function openRows(ctx: RunContext): Promise<void> {
     context
   })
   const untouched = fillerSessionIds.slice(3, -1)
+  if (untouched.length === 0) {
+    unopened.skipped = 'profile has no filler chat left untouched by earlier families'
+  }
   await sampled(ctx, unopened, Math.min(ctx.workload.samples, untouched.length), (index) => {
     const chat = { sessionId: untouched[index]!, worktreeId: workspace.worktreeIds[1] }
     const chatIndex = fillerSessionIds.indexOf(chat.sessionId)
