@@ -90,8 +90,9 @@ export function hostWithParent(): AgentHookServer {
   return host
 }
 
-/** With `host`, evidence goes through the host's own ingest instead of straight to reconciliation. */
-export async function producer(host?: AgentHookServer) {
+/** With `host`, evidence goes through the host's own ingest instead of straight to reconciliation;
+ * with `events`, rows go to that sink instead of the in-memory recorder. */
+export async function producer(host?: AgentHookServer, events?: StructuredAgentSessionEventSink) {
   const claude = fakeClaude()
   const store = createAgentStatusStore({ epoch: 'epoch-1', mode: 'authority' })
   expect(store.applyMutation({ parent: { subject: parent } })).not.toBeNull()
@@ -157,7 +158,7 @@ export async function producer(host?: AgentHookServer) {
     identity: identityFor(),
     fence: 7,
     spawnToken: 'spawn-9',
-    events: journal
+    events: events ?? journal
   })
   const send = (message: Record<string, unknown>): Delivery[] => {
     const from = deliveries.length

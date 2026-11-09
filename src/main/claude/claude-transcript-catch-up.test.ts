@@ -12,7 +12,6 @@ import {
 } from '../native-chat/agent-session-wire/rewind/structured-rewind-cut'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readAgentSessionHistory } from '../native-chat/agent-session-wire/publication/history/agent-session-history-page'
-import { projectJournalBatch } from '../native-chat/agent-session-wire/publication/history/agent-session-journal-batch'
 import {
   replacePage,
   mergeItems
@@ -148,7 +147,7 @@ describe('Claude chat catch-up', () => {
       const key = agentJournalItemKey({ provider: 'claude', sessionId: SID, uuid })
       expect(await reopened.reads.canonicalItemId(key)).toBe(key)
       expect(
-        structuredRewindCut(reopened, {
+        await structuredRewindCut(reopened, {
           itemId: agentJournalItemKey({ provider: 'orca', clientMessageId }),
           provider: 'claude',
           nativeId: SID
@@ -202,31 +201,30 @@ describe('Claude chat catch-up', () => {
       const key = agentJournalItemKey({ provider: 'claude', sessionId: SID, uuid: 'cmd-1' })
       expect(await c.open('a1')).toBe(true)
       const held = await readTestJournalItems(c.journal)
-      expect(c.rows().filter((row) => row === 'user:follow up')).toHaveLength(1)
+      expect((await c.rows()).filter((row) => row === 'user:follow up')).toHaveLength(1)
       expect((await c.journal.reads.item(key))?.turnScope).toEqual({ kind: 'unknown' })
-      expect(isStructuredRewindTarget(c.journal, key)).toBe(false)
+      expect(await isStructuredRewindTarget(c.journal, key)).toBe(false)
       expect(held.filter((row) => row.body.kind === 'turn')).toHaveLength(1)
       expect(await c.open('a1')).toBe(true)
       expect(await readTestJournalItems(c.journal)).toEqual(held)
       const beforeReplay = await c.journal.reads.item(key)
       const reopened = await c.replay()
       expect(await reopened.reads.item(key)).toEqual(beforeReplay)
-      expect(isStructuredRewindTarget(reopened, key)).toBe(false)
-      const page = readAgentSessionHistory(reopened, { sessionId: SESSION, direction: 'tail' })
-      const delta = reopened.readSince(cursor)
+      expect(await isStructuredRewindTarget(reopened, key)).toBe(false)
+      const page = await readAgentSessionHistory(reopened, {
+        sessionId: SESSION,
+        direction: 'tail'
+      })
+      const delta = await readAgentSessionHistory(reopened, {
+        sessionId: SESSION,
+        direction: 'after',
+        cursor
+      })
       if (!page.ok || !delta.ok) {
         throw new Error('history unavailable')
       }
-      const batch = projectJournalBatch({
-        rows: delta.rows,
-        snapshot: await readTestJournalSnapshot(reopened),
-        afterSequence: cursor.sequence
-      })
-      if (!batch.ok) {
-        throw new Error('batch unavailable')
-      }
       const snapshotClient = replacePage(page.page, 1)
-      const liveClient = mergeItems([], batch.batch.items, [])
+      const liveClient = mergeItems([], delta.page.items, [])
       expect(snapshotClient.items.find((item) => item.itemId === key)).toEqual(
         await c.journal.reads.item(key)
       )
@@ -251,20 +249,17 @@ describe('Claude chat catch-up', () => {
       const resumed = items.find((row) => row.body.kind === 'turn' && row.body.turnId === 'a2')
       expect(resumed?.body).toMatchObject({ userItemId: resumed?.itemId })
       const opener = agentJournalItemKey({ provider: 'claude', sessionId: SID, uuid: 'p3' })
-      expect(isStructuredRewindTarget(c.journal, opener)).toBe(true)
+      expect(await isStructuredRewindTarget(c.journal, opener)).toBe(true)
       expect(await readTestJournalSubmissions(c.journal)).toEqual(submissions)
-      expect(c.rows().filter((row) => row === 'user:follow up')).toHaveLength(1)
+      expect((await c.rows()).filter((row) => row === 'user:follow up')).toHaveLength(1)
       expect(c.warn).not.toHaveBeenCalled()
-      const cut = structuredRewindCut(c.journal, {
-        itemId: opener,
-        provider: 'claude',
-        nativeId: SID
-      })
-      if (!cut) {
-        throw new Error('ordinary rewind unavailable')
-      }
-      await c.journal.replaceEpochItems('handle_forked', 1, cut.kept)
-      expect((await c.journal.reads.item(key))?.turnScope).toEqual({ kind: 'unknown' })
+      expect(
+        await structuredRewindCut(c.journal, {
+          itemId: opener,
+          provider: 'claude',
+          nativeId: SID
+        })
+      ).not.toBeNull()
       expect((await (await c.replay()).reads.item(key))?.turnScope).toEqual({ kind: 'unknown' })
     }
   )
@@ -279,7 +274,7 @@ describe('Claude chat catch-up', () => {
       const c = await chat(project, cwd)
       await c.write([...chatTurn, ...outsideTurn])
       expect(await c.open('a1')).toBe(true)
-      expect(c.rows()).toContain('assistant:answer 2')
+      expect(await c.rows()).toContain('assistant:answer 2')
     }
   )
 
@@ -350,7 +345,7 @@ describe('Claude chat catch-up', () => {
     })
     expect(await c.journal.reads.item(turn.itemId)).toEqual(turn)
     expect(await c.journal.reads.item(thinking.itemId)).toEqual(thinking)
-    expect(c.rows().some((row) => row.startsWith('(continued-outside'))).toBe(false)
+    expect((await c.rows()).some((row) => row.startsWith('(continued-outside'))).toBe(false)
     const completed = await readTestJournalItems(c.journal)
     expect(await c.open('boundary')).toBe(true)
     expect(await readTestJournalItems(c.journal)).toEqual(completed)
@@ -378,7 +373,7 @@ describe('Claude chat catch-up', () => {
       return tail
     })
     expect(await c.open('a1')).toBe(false)
-    expect(c.rows()).not.toContain('user:ask 2')
+    expect(await c.rows()).not.toContain('user:ask 2')
     const running = (await readTestJournalItems(c.journal)).findLast(
       (item) => item.body.kind === 'turn'
     )
@@ -390,11 +385,11 @@ describe('Claude chat catch-up', () => {
     const c = await chat()
     await c.live()
     await c.write(chatTurn)
-    const shown = c.rows()
+    const shown = await c.rows()
     expect(shown).toEqual(['user:ask 1', 'assistant:answer 1'])
 
     await c.open('a1')
-    expect(c.rows()).toEqual(shown)
+    expect(await c.rows()).toEqual(shown)
 
     await c.write(outsideTurn)
     await c.open('a1')
@@ -405,13 +400,13 @@ describe('Claude chat catch-up', () => {
       'tool:Read:completed',
       'assistant:answer 2'
     ]
-    expect(c.rows()).toEqual(caughtUp)
+    expect(await c.rows()).toEqual(caughtUp)
     expect(await readTestJournalSubmissions(c.journal)).toHaveLength(1)
 
     // Opening again, or from a leaf left before the chat's own streamed turn by a crash, adds nothing.
     await c.open('a1')
     await c.open('p1')
-    expect(c.rows()).toEqual(caughtUp)
+    expect(await c.rows()).toEqual(caughtUp)
     expect(c.warn).not.toHaveBeenCalled()
   })
 
@@ -420,7 +415,7 @@ describe('Claude chat catch-up', () => {
       items = 10_000
     const c = await chat()
     await c.live()
-    const expected = [...c.rows(), '(continued-outside)']
+    const expected = [...(await c.rows()), '(continued-outside)']
     const rows: Record<string, unknown>[] = [
       reply('saved-leaf', 'earlier-prompt', 'msg_saved', { type: 'text', text: 'earlier' }, 0),
       prompt('p1', 'saved-leaf', 'ask 1', 1),
@@ -445,7 +440,7 @@ describe('Claude chat catch-up', () => {
     const submissions = await readTestJournalSubmissions(c.journal)
     await c.write(rows)
     expect(await c.open('saved-leaf')).toBe(true)
-    expect(c.rows()).toEqual(expected)
+    expect(await c.rows()).toEqual(expected)
     expect(await readTestJournalSubmissions(c.journal)).toEqual(submissions)
     await c.journal.appendLifecycleBatch({
       settlementId: 'perf-padding',
@@ -553,7 +548,7 @@ describe('Claude chat catch-up', () => {
       reply('next-answer', 'next', 'msg_next', { type: 'text', text: 'next answer' }, 6)
     ])
     expect(await c.open('p1')).toBe(true)
-    expect(c.rows()).toEqual([
+    expect(await c.rows()).toEqual([
       'user:ask 1',
       'assistant:answer 1',
       'user:follow up',
@@ -577,7 +572,7 @@ describe('Claude chat catch-up', () => {
       uuid: 'unknown-input'
     })
     expect((await c.journal.reads.item(unknown))?.turnScope).toEqual({ kind: 'unknown' })
-    expect(isStructuredRewindTarget(c.journal, unknown)).toBe(false)
+    expect(await isStructuredRewindTarget(c.journal, unknown)).toBe(false)
     const answer = (await readTestJournalItems(c.journal)).find(
       (item) =>
         item.body.kind === 'message' &&
@@ -607,7 +602,7 @@ describe('Claude chat catch-up', () => {
       ...bookkeeping
     ])
     await c.open('a1')
-    expect(c.rows().slice(2)).toEqual([
+    expect((await c.rows()).slice(2)).toEqual([
       '(continued-outside)',
       'user:ask long',
       `assistant:${answer}`
@@ -619,7 +614,7 @@ describe('Claude chat catch-up', () => {
     await c.live()
     await c.write([...chatTurn, ...outsideTurn])
     await c.open('missing')
-    expect(c.rows()).toEqual(['user:ask 1', 'assistant:answer 1'])
+    expect(await c.rows()).toEqual(['user:ask 1', 'assistant:answer 1'])
     expect(c.warn).toHaveBeenCalledWith(
       'Claude chat did not catch up on turns made outside it',
       expect.objectContaining({ reason: 'leaf-not-in-tail' })

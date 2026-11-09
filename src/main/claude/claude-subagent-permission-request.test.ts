@@ -8,16 +8,16 @@ import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalResolution
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem,
+  type AgentJournalResolution
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AgentStatusStructuredSessionSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServer } from '../agent-hooks/server'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { StructuredAgentSessionCurrentWork } from '../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
@@ -125,19 +125,28 @@ async function pipeline() {
   const viewOf = (providerId: string) =>
     published &&
     server.getStructuredChildWorkViews(published).find((view) => view.providerId === providerId)
+  // Read the cards in command order, so each entry sees exactly the journal it published.
+  const askersRead: Promise<void>[] = []
   const record = (subject: AgentStatusStructuredSessionSubject): void => {
     published = subject
-    const cards = pendingCards(journal.snapshot().items)
-    publishes.push({
+    const entry: Publish = {
       waiting: server
         .getStructuredChildWorkViews(subject)
         .flatMap((view) =>
           view.state === 'waiting' && view.membership === 'live' ? [view.providerId ?? '?'] : []
         ),
-      askers: cards.flatMap((card) => (card.agentId ? [card.agentId] : [])),
+      askers: [],
       row: parentRow(server),
       unwaited: parentRow(unwaited)
-    })
+    }
+    publishes.push(entry)
+    askersRead.push(
+      journal.readInOrder(async (reads) => {
+        entry.askers = pendingCards(await readTestJournalItems({ reads })).flatMap((card) =>
+          card.agentId ? [card.agentId] : []
+        )
+      })
+    )
   }
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
@@ -217,13 +226,15 @@ async function pipeline() {
       expect(await deferred.drained()).toEqual({ ok: true })
       await new Promise((resolve) => setTimeout(resolve, 0))
     }
+    await Promise.all(askersRead)
   }
   const hostRecords =
-    (resolution: Pick<AgentJournalResolution, 'state' | 'selectedOptionId'>, itemId = cardId()) =>
+    (resolution: Pick<AgentJournalResolution, 'state' | 'selectedOptionId'>, itemId?: string) =>
     async (): Promise<void> => {
       await deferred.drained()
+      const recorded = itemId ?? (await cardId())
       const card = pendingCards(await readTestJournalItems(journal)).find(
-        (item) => item.itemId === itemId
+        (item) => item.itemId === recorded
       )
       const identity = card && parseAgentJournalItemKey(card.itemId)
       if (card?.body.kind !== 'approval' || !identity) {
@@ -232,14 +243,11 @@ async function pipeline() {
       await journal.appendItem(
         identity,
         { ...card.body, resolution: { ...resolution, resolvedBy: 'client-1', resolvedAt: now() } },
-        {
-          fence: FENCE,
-          turnScope: new StructuredAgentSessionCurrentWork(journal, FENCE).turnScope()
-        }
+        { fence: FENCE, turnScope: card.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE }
       )
     }
-  const cardId = (): string => {
-    const card = pendingCards(journal.snapshot().items)[0]
+  const cardId = async (): Promise<string> => {
+    const card = pendingCards(await readTestJournalItems(journal))[0]
     if (!card) {
       throw new Error('no pending card')
     }
@@ -317,15 +325,15 @@ async function pipeline() {
 
 type Pipeline = Awaited<ReturnType<typeof pipeline>>
 
-function answer(
+async function answer(
   run: Pipeline,
   optionId: 'allow' | 'deny',
   commit = run.hostRecords({ state: 'resolved', selectedOptionId: optionId }),
-  itemId = run.cardId()
+  itemId?: string
 ) {
   return run.adapter.answerPrompt({
     sessionId: SESSION,
-    itemId,
+    itemId: itemId ?? (await run.cardId()),
     kind: 'approval',
     response: { kind: 'option', optionId },
     fence: FENCE,
@@ -344,7 +352,7 @@ describe("a Claude subagent's permission request", () => {
     run.deferred.unbind()
     run.raise('req-late', 'toolu_late', ASKER)
     await new Promise((resolve) => setTimeout(resolve, 0))
-    run.publishStatus()
+    await run.publishStatus()
     expect(run.publishes.at(-1)?.waiting).toEqual([])
     run.deferred.bind(run.target)
     await run.settle()
@@ -376,9 +384,10 @@ describe("a Claude subagent's permission request", () => {
     run.raise('req-two', 'toolu_two_bash', 'agent-two')
     await run.settle()
     expect([...(run.publishes.at(-1)?.waiting ?? [])].sort()).toEqual([ASKER, 'agent-two'].sort())
-    const cardOf = (agentId: string) =>
-      pendingCards(run.journal.snapshot().items).find((card) => card.agentId === agentId)?.itemId
-    const first = cardOf(ASKER)
+    const cardOf = async (agentId: string) =>
+      pendingCards(await readTestJournalItems(run.journal)).find((card) => card.agentId === agentId)
+        ?.itemId
+    const first = await cardOf(ASKER)
     await answer(
       run,
       'allow',
@@ -387,7 +396,7 @@ describe("a Claude subagent's permission request", () => {
     )
     await run.settle()
     expect(run.publishes.at(-1)?.waiting).toEqual(['agent-two'])
-    const second = cardOf('agent-two')
+    const second = await cardOf('agent-two')
     await answer(
       run,
       'allow',
