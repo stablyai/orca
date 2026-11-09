@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { homeWorktreeCountsKey } from '../worktree/home-host-worktree-fetch'
+import { homeWorktreeCountsKey } from '../host-screen/host-list-queries'
 import { restoreHomeQueries } from './home-query-restore'
 
 const LEGACY_KEY = 'orca:home-snapshot:v1'

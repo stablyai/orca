@@ -23,10 +23,6 @@ import {
 } from '../worktree/worktree-catalog-snapshot-client'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
-  homeWorktreeCountsKey,
-  type HomeWorktreeCounts
-} from '../worktree/home-host-worktree-fetch'
-import {
   hostRepoCatalogRepos,
   hostSshTargetSummarySchema,
   type HostRepoCatalogRow
@@ -111,6 +107,11 @@ export const hostWorktreeCatalogQuery = defineHostQuery<
   }
 })
 
+// Native Home's per-desktop counts (home-host-worktree-fetch.ts); keyed here so the page never loads Home's module.
+export const HOME_WORKTREE_COUNTS_FAMILY = 'worktree.homeCounts'
+export const homeWorktreeCountsKey = (hostId: string) =>
+  hostQueryKey(hostId, HOME_WORKTREE_COUNTS_FAMILY, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+
 export const hostWorktreeCatalogKey = (hostId: string) =>
   hostQueryKey(hostId, hostWorktreeCatalogQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
 
@@ -125,7 +126,8 @@ export function cachedHostWorktrees(
   const cached =
     queryClient.getQueryData<WorktreeCatalogSnapshot>(hostWorktreeCatalogKey(hostId)) ??
     // Native Home's last read, for the wide layout's host list beside it; shown only, never a delta base.
-    queryClient.getQueryData<HomeWorktreeCounts>(homeWorktreeCountsKey(hostId))?.catalog
+    queryClient.getQueryData<{ catalog?: WorktreeCatalogSnapshot }>(homeWorktreeCountsKey(hostId))
+      ?.catalog
   return cached ? [...cached.worktrees] : null
 }
 

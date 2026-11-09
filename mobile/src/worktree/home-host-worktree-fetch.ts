@@ -1,8 +1,9 @@
 import * as z from 'zod'
-// Type only: the host list's module reads these counts' rows, so a value import would be a cycle.
-import type { NO_HOST_LIST_INPUT } from '../host-screen/host-list-queries'
+import {
+  HOME_WORKTREE_COUNTS_FAMILY,
+  type NO_HOST_LIST_INPUT
+} from '../host-screen/host-list-queries'
 import { defineHostQuery } from '../query/host-query'
-import { hostQueryKey } from '../query/host-query-key'
 import {
   homeAgentEntries,
   type HomeAgentEntry,
@@ -30,7 +31,7 @@ export const homeWorktreeCountsQuery = defineHostQuery<
   typeof NO_HOST_LIST_INPUT,
   HomeWorktreeCounts
 >({
-  family: 'worktree.homeCounts',
+  family: HOME_WORKTREE_COUNTS_FAMILY,
   fetch: async (client, _target, _input, previous) => {
     const catalog = await readWorktreeCatalogSnapshot(client, previous?.catalog)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque because three screens project a row differently. Home reads `status`, `sidebarStatus` and its counts through their own guards, plus the host-typed `agents` the Agents list shows, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
@@ -72,7 +73,3 @@ export const homeWorktreeCountsQuery = defineHostQuery<
     strip: ({ totalWorktrees, activeCount }) => ({ totalWorktrees, activeCount, agents: [] })
   }
 })
-
-// The host list's target and input (HOST_LIST_TARGET, NO_HOST_LIST_INPUT), spelled out to keep the import type-only.
-export const homeWorktreeCountsKey = (hostId: string) =>
-  hostQueryKey(hostId, homeWorktreeCountsQuery.family, { exec: 'local' }, {})

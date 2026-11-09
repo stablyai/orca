@@ -87,8 +87,10 @@ export function restoreStoredHostQueries(
   const byHost = persistences.get(queryClient)
   const hostIds = new Set(keys.map((key) => key.queryKey[1]))
   return Promise.all(
-    [...hostIds].map((hostId) =>
-      byHost?.get(hostId)?.restore(keys.filter((key) => key.queryKey[1] === hostId))
+    [...hostIds].map(
+      (hostId) =>
+        byHost?.get(hostId)?.restore(keys.filter((key) => key.queryKey[1] === hostId)) ??
+        Promise.resolve()
     )
   ).then(() => undefined)
 }

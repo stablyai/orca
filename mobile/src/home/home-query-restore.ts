@@ -1,14 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { QueryClient } from '@tanstack/react-query'
 import * as z from 'zod'
-import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from '../host-screen/host-list-queries'
+import {
+  HOST_LIST_TARGET,
+  homeWorktreeCountsKey,
+  NO_HOST_LIST_INPUT
+} from '../host-screen/host-list-queries'
 import { hostObserverOptions } from '../query/host-query'
 import { persistedHostQueryKey } from '../query/host-query-persistence'
 import { keepNativeHostQueries, nativeQueryStoreReady } from '../query/native-query-persistence'
 import { homeStatsKey, homeStatsQuery } from '../stats/home-stats-summary-read'
 import { loadStoredHostProfiles } from '../transport/hosts/host-metadata-store'
 import {
-  homeWorktreeCountsKey,
   homeWorktreeCountsQuery,
   type HomeWorktreeCounts
 } from '../worktree/home-host-worktree-fetch'
@@ -91,7 +94,9 @@ async function seedFromLegacySnapshot(
   }
   // Off the first paint's path: the seeded counts already show.
   void Promise.all(
-    hostIds.map((hostId) => keepNativeHostQueries(queryClient, hostId)?.flush())
+    hostIds.map(
+      (hostId) => keepNativeHostQueries(queryClient, hostId)?.flush() ?? Promise.resolve()
+    )
   ).then(() => AsyncStorage.removeItem(LEGACY_SNAPSHOT_KEY).catch(() => undefined))
 }
 
@@ -100,13 +105,14 @@ export async function restoreHomeQueries(queryClient: QueryClient): Promise<void
   const hosts = await loadStoredHostProfiles().catch(() => null)
   const hostIds = hosts?.map((host) => host.id) ?? null
   await Promise.all(
-    (hostIds ?? []).map((hostId) =>
-      keepNativeHostQueries(queryClient, hostId)?.restore(
-        [
-          persistedHostQueryKey(homeStatsQuery, homeStatsKey(hostId)),
-          persistedHostQueryKey(homeWorktreeCountsQuery, homeWorktreeCountsKey(hostId))
-        ].filter((key) => key !== null)
-      )
+    (hostIds ?? []).map(
+      (hostId) =>
+        keepNativeHostQueries(queryClient, hostId)?.restore(
+          [
+            persistedHostQueryKey(homeStatsQuery, homeStatsKey(hostId)),
+            persistedHostQueryKey(homeWorktreeCountsQuery, homeWorktreeCountsKey(hostId))
+          ].filter((key) => key !== null)
+        ) ?? Promise.resolve()
     )
   )
   await seedFromLegacySnapshot(queryClient, hostIds)
