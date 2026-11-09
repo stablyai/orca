@@ -16,6 +16,7 @@ import {
   selectRuntimeServerTailscaleHost
 } from '../../recovery/server-outage/remote-server-outage'
 import { useAppStore } from '@/store/index'
+import { useRuntimeHostRetired } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 
 type BannerProps = {
   recovery: Pick<VisiblePtyRecoveryState, 'phase' | 'cause' | 'waiting'>
@@ -173,6 +174,7 @@ export function CalmRemoteRuntimeReconnectBanner({
   heldByServer: boolean
   environmentId: string | null
 }): React.JSX.Element | null {
+  const hostRetired = useRuntimeHostRetired(environmentId)
   const serverName = useAppStore((state) =>
     environmentId ? selectRuntimeServerName(state, environmentId) : fallbackRemoteServerName()
   )
@@ -202,7 +204,13 @@ export function CalmRemoteRuntimeReconnectBanner({
   const reveal = useCalmStatusReveal(active && !heldByServer, needsAction, recoveringSince)
   const shown = recovery ?? lastRecovery
   // Why a resolved action card goes at once: its copy would describe a state that no longer holds.
-  if (heldByServer || !reveal.visible || !shown || (!active && lastNeededAction)) {
+  if (
+    (hostRetired && recovery?.phase !== 'disconnected') ||
+    heldByServer ||
+    !reveal.visible ||
+    !shown ||
+    (!active && lastNeededAction)
+  ) {
     return null
   }
   return (

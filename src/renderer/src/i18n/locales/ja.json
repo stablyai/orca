@@ -3981,15 +3981,12 @@
             "63f36455cc": "接続",
             "bf07aee59e": "切断に失敗しました",
             "2c29e2de68": "接続に失敗しました",
-            "remote_server": "リモートサーバー",
             "runtime_checking": "確認中",
             "runtime_online": "接続済み",
             "runtime_unavailable": "切断済み",
             "runtime_connect_unavailable": "リモートホストに到達できません",
             "runtime_disconnect_failed": "切断に失敗しました",
             "runtime_reconnecting": "再接続中",
-            "runtime_last_close_reason": "クローズ: {{value0}}",
-            "runtime_reconnect_attempt": "試行 {{value0}}",
             "connectedHostCount_one": "{{count}} 台のホスト",
             "connectedHostCount_other": "{{count}} 台のホスト",
             "searchSshHosts": "SSH ホストを検索…",
@@ -4252,9 +4249,6 @@
             "notYetUpdated": "未更新",
             "rateLimitResetsAvailable_other": "レート制限リセットが {{count}} 回利用可能"
           },
-          "SshTargetStatusRow": {
-            "sshHost": "SSH ホスト"
-          },
           "usagePercentageLabel": {
             "used": "{{value0}}% 使用済み",
             "remaining": "残り {{value0}}%",
@@ -4338,29 +4332,17 @@
             "runningSkills_other": "{{count}} 件のスキルを更新中…"
           },
           "RuntimeHostStatusRow": {
-            "previous_connection_closed": "以前の接続が閉じられました",
-            "workspace_window_closed": "ワークスペースウィンドウが閉じられています",
-            "checking_host": "Orca はこのホストが到達可能かどうかを確認しています",
-            "restoring_connection": "Orca は接続を復元しようとしています",
-            "host_unreachable": "このホストでは Orca にアクセスできません",
-            "runtime_unavailable": "SSH トランスポートは接続されていますが、Orca ランタイムは使用できません",
-            "runtime_unavailable_explanation": "リモートホストがまだ実行されている可能性があります。 Orca ランタイム接続のみが利用できません。",
             "contact_note": "ホストはまだ実行中の可能性があります。 Orca 接続のみが利用できません。",
-            "last_connected": "最後に接続したのは {{value0}}",
-            "reconnect_attempt": "{{value0}} を試みます",
             "access_revoked": "Access revoked",
-            "access_revoked_summary": "このサーバーはこのコンピュータへのアクセスを取り消しました",
-            "access_revoked_explanation": "サーバーで発行した新規ペアリングリンクで再度ペアリングし、接続し直してください。",
-            "managed_access_revoked_explanation": "Orca は SSH 経由で再ペアリングできませんでした。接続してもう一度お試しください。",
-            "connect_access_revoked_explanation": "接続してもう一度お試しください。",
             "update_required": "Update required",
-            "update_required_summary": "Orca のバージョンに互換性がありません",
-            "update_required_explanation": "このコンピュータまたはサーバーの Orca を更新してから、再度接続してください。",
             "repair": "Re-pair…",
             "open_settings": "設定を開く…",
             "server_replaced": "別のサーバー",
-            "server_replaced_summary": "このホストでは、このコンピューターとペアリングしたものとは別の Orca サーバーが実行されています",
-            "server_replaced_explanation": "Orca が別の SSH ユーザーとしてホストに接続しているか、サーバーが再インストールされました。「設定」›「リモート Orca サーバー」でこのサーバーの ⋯ メニューから「登録を解除…」を選び、SSH ホストに接続して現在のサーバーとペアリングしてください。"
+            "access_revoked_explanation": "サーバーで発行した新規ペアリングリンクで再度ペアリングし、接続し直してください。",
+            "managed_access_revoked_explanation": "Orca は SSH 経由で再ペアリングできなかったため、接続して再試行してください。",
+            "connect_access_revoked_explanation": "接続してもう一度お試しください。",
+            "server_replaced_explanation": "設定 › リモート Orca サーバーでこのサーバーの「登録を解除…」を選択し、SSH ホストに接続して現在のサーバーとペアリングしてください。",
+            "update_required_explanation": "このコンピュータまたはサーバーの Orca を更新してから、再度接続してください。"
           },
           "NativeChatResumeStatusSegment": {
             "tooltip": "中断されたチャットを開いて再開可能",
@@ -4461,6 +4443,18 @@
           },
           "InlineUsageBars": {
             "resetsAt": "{{when}} にリセット"
+          },
+          "RemoteHostStatusRow": {
+            "unreachable_since": "{{time}}からこのホストに接続できません。",
+            "copy_error": "エラーをコピー",
+            "retry_now": "今すぐ再試行",
+            "stop_reconnecting": "再接続を停止",
+            "reconnecting_attempt": "再接続中（{{attempt}} 回目）",
+            "stop": "停止",
+            "ssh_sign_in_failed": "このホストにサインインできませんでした。SSH 認証情報を確認してください。",
+            "ssh_connect_failed": "このホストに接続できませんでした。SSH 設定を確認して再試行してください。",
+            "server": "サーバー",
+            "ssh": "SSH"
           }
         }
       },

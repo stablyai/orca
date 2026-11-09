@@ -263,6 +263,18 @@ export class RemoteRuntimePtyRecoveryState {
     this.onChange?.()
   }
 
+  /** Host retirement ends this epoch; only a current successor or explicit Connect can resume it. */
+  suspend(): void {
+    if (this.phase === 'disposed') {
+      return
+    }
+    this.clearOwnerRefresh()
+    this.epoch += 1
+    this.clearTimers()
+    this.phase = 'disconnected'
+    this.onChange?.()
+  }
+
   cancel(): void {
     if (this.phase === 'disposed') {
       return

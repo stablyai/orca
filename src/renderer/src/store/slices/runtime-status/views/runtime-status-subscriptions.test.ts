@@ -138,3 +138,51 @@ describe('runtime status notification isolation', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(2)
   })
 })
+
+it.each([100, 1000])('limits lifetime delivery to affected owners among %i hosts', (count) => {
+  const { store, subscriptions, publish } = setup()
+  store.setState({
+    runtimeStatusByEnvironmentId: new Map(
+      Array.from({ length: count }, (_, i) => [String(i), entry({ environmentId: String(i) })])
+    )
+  })
+  const subscribe = vi.spyOn(store, 'subscribe')
+  const affected = vi.fn()
+  const unaffected = vi.fn()
+  const release = Array.from({ length: count }, (_, i) =>
+    subscriptions.subscribeHostLifetime(String(i), i === 0 ? affected : unaffected)
+  )
+  expect(subscribe).toHaveBeenCalledTimes(1)
+  store.setState({ unrelated: 3 })
+  publish('0', entry({ environmentId: '0', sequence: 4, checkedAt: 4 }))
+  expect(affected).not.toHaveBeenCalled()
+  expect(unaffected).not.toHaveBeenCalled()
+  publish('0', entry({ environmentId: '0', retired: true }))
+  expect(affected).toHaveBeenCalledTimes(1)
+  expect(unaffected).not.toHaveBeenCalled()
+  expect(subscriptions.getHostSnapshot('0')?.retired).toBe(true)
+  release.forEach((stop) => stop())
+  publish('0', entry({ environmentId: '0', pairingRevision: 2 }))
+  expect(affected).toHaveBeenCalledTimes(1)
+})
+
+it('keeps lifetime baselines current through nested successor publication and a late subscriber', () => {
+  const { subscriptions, publish } = setup()
+  const seen: boolean[] = []
+  const release = subscriptions.subscribeHostLifetime('a', () => {
+    seen.push(Boolean(subscriptions.getHostSnapshot('a')?.retired))
+    if (seen.length === 1) {
+      publish('a', entry({ pairingRevision: 2 }))
+    }
+  })
+  publish('a', entry({ retired: true }))
+  expect(seen).toEqual([true, false])
+  release()
+  publish('a', entry({ retired: true, pairingRevision: 3 }))
+  expect(subscriptions.getHostSnapshot('a')?.retired).toBe(true)
+  const late = vi.fn()
+  const stop = subscriptions.subscribeHostLifetime('a', late)
+  publish('a', entry({ pairingRevision: 4 }))
+  expect(late).toHaveBeenCalledTimes(1)
+  stop()
+})

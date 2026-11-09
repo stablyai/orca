@@ -1,5 +1,11 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
+import { createStore } from 'zustand/vanilla'
+import { createRuntimeStatusSubscriptions } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
+import type {
+  RuntimeHostStatusSnapshot,
+  RuntimeEnvironmentStatus
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   createTerminalStreamFixtures,
   type MultiplexSubscriptionCallbacks
@@ -45,7 +51,31 @@ export function readyHostSessionInventoryResponse(
   }
 }
 
+export function stubRuntimeHostStatusSubscriptions(): (
+  snapshot: RuntimeHostStatusSnapshot
+) => void {
+  const hostStatuses = createStore(() => ({
+    runtimeStatusByEnvironmentId: new Map<string, RuntimeEnvironmentStatus>()
+  }))
+  const runtimeStatusSubscriptions = createRuntimeStatusSubscriptions(hostStatuses)
+  vi.doMock('@/store/slices/runtime-status/views/runtime-status-subscription-store', () => ({
+    runtimeStatusSubscriptions
+  }))
+  return (snapshot) => {
+    hostStatuses.setState({
+      runtimeStatusByEnvironmentId: new Map(
+        hostStatuses.getState().runtimeStatusByEnvironmentId
+      ).set(snapshot.environmentId, {
+        snapshot,
+        status: snapshot.retired ? null : snapshot.status,
+        checkedAt: snapshot.checkedAt
+      })
+    })
+  }
+}
+
 export type RemoteRuntimeTransportMocks = {
+  publishHostSnapshot: (snapshot: RuntimeHostStatusSnapshot) => void
   // Why: specs re-implement these with their own request/callback shapes, so keep the loose spy type.
   runtimeCall: Mock
   runtimeSubscribe: Mock
@@ -60,6 +90,9 @@ export function createRemoteRuntimeTransportMocks(
   bindings: RemoteRuntimeTransportBindings
 ): RemoteRuntimeTransportMocks {
   const runtimeCall = vi.fn()
+  let publishHostSnapshot: (snapshot: RuntimeHostStatusSnapshot) => void = () => {
+    throw new Error('Reset the runtime transport fixture before publishing host state')
+  }
   const runtimeSubscribe = vi.fn()
   const refreshSessionTabsSnapshot = vi.fn(async () => {})
   const subscriptionSendBinary = vi.fn()
@@ -70,6 +103,7 @@ export function createRemoteRuntimeTransportMocks(
 
   function resetRemoteRuntimeTransport(): void {
     vi.resetModules()
+    publishHostSnapshot = stubRuntimeHostStatusSubscriptions()
     vi.doUnmock(
       '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
     )
@@ -145,6 +179,7 @@ export function createRemoteRuntimeTransportMocks(
   }
 
   return {
+    publishHostSnapshot: (snapshot) => publishHostSnapshot(snapshot),
     runtimeCall,
     runtimeSubscribe,
     refreshSessionTabsSnapshot,

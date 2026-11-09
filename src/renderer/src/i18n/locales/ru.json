@@ -4657,7 +4657,6 @@
             "63f36455cc": "Подключить",
             "bf07aee59e": "Не удалось отключиться",
             "2c29e2de68": "Не удалось подключиться",
-            "remote_server": "Удалённый сервер",
             "runtime_checking": "Проверка",
             "runtime_online": "Подключён",
             "runtime_unavailable_transport_up": "Orca недоступна",
@@ -4665,8 +4664,6 @@
             "runtime_connect_unavailable": "Удалённый сервер недоступен",
             "runtime_disconnect_failed": "Не удалось отключиться",
             "runtime_reconnecting": "Повторное подключение",
-            "runtime_last_close_reason": "Закрыто: {{value0}}",
-            "runtime_reconnect_attempt": "Попытка {{value0}}",
             "runtime_workspace_window_closed": "Окно рабочего пространства закрыто",
             "connectedHostCount_one": "{{count}} сервер",
             "connectedHostCount_few": "{{count}} сервера",
@@ -4978,9 +4975,6 @@
             "rateLimitResetsAvailable_many": "Доступно {{count}} сбросов лимита",
             "rateLimitResetsAvailable_other": "Доступно {{count}} сброса лимита"
           },
-          "SshTargetStatusRow": {
-            "sshHost": "SSH-сервер"
-          },
           "usagePercentageLabel": {
             "used": "Использовано {{value0}}%",
             "remaining": "Осталось {{value0}}%",
@@ -5061,29 +5055,17 @@
             "offDescription": "Разрешить обычный режим сна системы"
           },
           "RuntimeHostStatusRow": {
-            "previous_connection_closed": "Предыдущее соединение закрыто",
-            "workspace_window_closed": "Окно рабочего пространства закрыто",
-            "checking_host": "Orca проверяет доступность этого компьютера",
-            "restoring_connection": "Orca пытается восстановить соединение",
-            "host_unreachable": "Orca недоступна на этом компьютере",
-            "runtime_unavailable": "SSH подключён, но среда выполнения Orca недоступна",
-            "runtime_unavailable_explanation": "Удалённый компьютер может продолжать работу; недоступно только соединение со средой выполнения Orca.",
             "contact_note": "Компьютер может продолжать работу; недоступно только соединение с Orca.",
-            "last_connected": "Последнее подключение: {{value0}}",
-            "reconnect_attempt": "Попытка {{value0}}",
             "access_revoked": "Доступ отозван",
-            "access_revoked_summary": "Этот сервер отозвал доступ для этого компьютера",
-            "access_revoked_explanation": "Для подключения создайте сопряжение заново по новой ссылке с сервера.",
-            "managed_access_revoked_explanation": "Orca не удалось восстановить сопряжение через SSH. Подключитесь, чтобы повторить попытку.",
-            "connect_access_revoked_explanation": "Подключитесь, чтобы повторить попытку.",
             "update_required": "Требуется обновление",
-            "update_required_summary": "Версии Orca несовместимы",
-            "update_required_explanation": "Обновите Orca на этом компьютере или сервере, затем подключитесь снова.",
             "repair": "Создать сопряжение заново…",
             "open_settings": "Открыть настройки…",
             "server_replaced": "Другой сервер",
-            "server_replaced_summary": "На этом хосте теперь работает другой сервер Orca, не тот, с которым сопряжён этот компьютер",
-            "server_replaced_explanation": "Orca подключается к хосту как другой пользователь SSH или сервер был переустановлен. В разделе Настройки › Удалённые серверы Orca откройте меню ⋯ этого сервера и выберите «Забыть…», затем подключитесь к SSH-хосту для сопряжения с текущим сервером."
+            "access_revoked_explanation": "Для подключения создайте сопряжение заново по новой ссылке с сервера.",
+            "managed_access_revoked_explanation": "Orca не удалось повторно выполнить сопряжение по SSH; подключитесь, чтобы попробовать снова.",
+            "connect_access_revoked_explanation": "Подключитесь, чтобы повторить попытку.",
+            "server_replaced_explanation": "В разделе «Настройки › Удалённые серверы Orca» выберите «Забыть…» для этого сервера, затем подключите SSH-хост для сопряжения с его текущим сервером.",
+            "update_required_explanation": "Обновите Orca на этом компьютере или сервере, затем подключитесь снова."
           },
           "NativeChatResumeStatusSegment": {
             "tooltip": "Открыть прерванные чаты, доступные для продолжения",
@@ -5237,6 +5219,18 @@
           },
           "InlineUsageBars": {
             "resetsAt": "Сброс: {{when}}"
+          },
+          "RemoteHostStatusRow": {
+            "unreachable_since": "Этот хост недоступен с {{time}}.",
+            "copy_error": "Копировать ошибку",
+            "retry_now": "Повторить сейчас",
+            "stop_reconnecting": "Остановить переподключение",
+            "reconnecting_attempt": "Переподключение (попытка {{attempt}})",
+            "stop": "Остановить",
+            "ssh_sign_in_failed": "Не удалось войти на этот хост; проверьте его учётные данные SSH.",
+            "ssh_connect_failed": "Не удалось подключиться к этому хосту; проверьте его настройки SSH и повторите попытку.",
+            "server": "Сервер",
+            "ssh": "SSH"
           }
         }
       },

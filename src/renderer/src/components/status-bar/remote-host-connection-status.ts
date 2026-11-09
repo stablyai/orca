@@ -1,7 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimePairingRepairRoute } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
@@ -34,8 +33,7 @@ export function runtimeHostStatusForOverall(
 export type RuntimeHostBlockedCopy = {
   label: string
   summary: string
-  explanation: string
-  /** Untranslated protocol detail, shown in the diagnostics box. */
+  /** Untranslated protocol detail, copied only on request. */
   detail?: string
 }
 
@@ -63,12 +61,7 @@ export function runtimeHostBlockedCopy(
   if (reason === 'access-revoked') {
     return {
       label: t('auto.components.status.bar.RuntimeHostStatusRow.access_revoked', 'Access revoked'),
-      summary: t(
-        'auto.components.status.bar.RuntimeHostStatusRow.access_revoked_summary',
-        'This server revoked access for this computer'
-      ),
-      // Why: Orca pairs a managed server over SSH by itself; it reaches here only when that failed.
-      explanation:
+      summary:
         repairRoute === 'access-link'
           ? t(
               'auto.components.status.bar.RuntimeHostStatusRow.access_revoked_explanation',
@@ -77,7 +70,7 @@ export function runtimeHostBlockedCopy(
           : repairRoute === 'ssh'
             ? t(
                 'auto.components.status.bar.RuntimeHostStatusRow.managed_access_revoked_explanation',
-                "Orca couldn't pair with it again over SSH. Connect to try again."
+                "Orca couldn't pair with it again over SSH; connect to try again."
               )
             : t(
                 'auto.components.status.bar.RuntimeHostStatusRow.connect_access_revoked_explanation',
@@ -92,23 +85,14 @@ export function runtimeHostBlockedCopy(
         'Different server'
       ),
       summary: t(
-        'auto.components.status.bar.RuntimeHostStatusRow.server_replaced_summary',
-        'This host now runs a different Orca server than the one this computer paired with'
-      ),
-      // Why: SSH access alone can't re-pin another server key, so reconnecting can't fix this.
-      explanation: t(
         'auto.components.status.bar.RuntimeHostStatusRow.server_replaced_explanation',
-        'Orca connects to the host as a different SSH user, or its server was reinstalled. In Settings › Remote Orca Servers, open the ⋯ menu on this server and choose Forget…, then connect the SSH host to pair with its current server.'
+        'In Settings › Remote Orca Servers, choose Forget… for this server, then connect the SSH host to pair with its current server.'
       )
     }
   }
   return {
     label: t('auto.components.status.bar.RuntimeHostStatusRow.update_required', 'Update required'),
     summary: t(
-      'auto.components.status.bar.RuntimeHostStatusRow.update_required_summary',
-      'Orca versions are not compatible'
-    ),
-    explanation: t(
       'auto.components.status.bar.RuntimeHostStatusRow.update_required_explanation',
       'Update Orca on this computer or on the server, then connect again.'
     ),
@@ -118,36 +102,10 @@ export function runtimeHostBlockedCopy(
   }
 }
 
-export function runtimeHostConnectionDetail(
-  remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null,
-  t: Translate = translate
-): string | undefined {
-  if (!remoteControl) {
-    return undefined
-  }
-  if (
-    remoteControl.state === 'awaiting_ready' ||
-    remoteControl.state === 'awaiting_authenticated'
-  ) {
-    return undefined
-  }
-  if (remoteControl.state === 'reconnecting') {
-    return t(
-      'auto.components.status.bar.SshStatusSegment.runtime_reconnect_attempt',
-      'Attempt {{value0}}',
-      { value0: String(remoteControl.reconnectAttempt + 1) }
-    )
-  }
-  if (remoteControl.lastError) {
-    return remoteControl.lastError
-  }
-  if (remoteControl.lastClose?.reason) {
-    return t(
-      'auto.components.status.bar.SshStatusSegment.runtime_last_close_reason',
-      'Closed: {{value0}}',
-      { value0: remoteControl.lastClose.reason }
-    )
-  }
-  // Hide internal RPC counts; only errors, close reasons and reconnect attempts help users act.
-  return undefined
+export function ambiguousRemoteHostNames(
+  servers: readonly { label: string }[],
+  sshHosts: readonly { label: string }[]
+): ReadonlySet<string> {
+  const serverNames = new Set(servers.map((host) => host.label))
+  return new Set(sshHosts.filter((host) => serverNames.has(host.label)).map((host) => host.label))
 }

@@ -1,3 +1,4 @@
+import { stubRuntimeHostStatusSubscriptions } from '../remote/remote-runtime-pty-transport-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
@@ -27,6 +28,7 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    stubRuntimeHostStatusSubscriptions()
     runtimeCall.mockReset()
     capabilities = ['agent-session.host-authority.v1']
     ensureResponse = {

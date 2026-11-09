@@ -1,3 +1,4 @@
+import { stubRuntimeHostStatusSubscriptions } from '../remote/remote-runtime-pty-transport-test-harness'
 /** STA-3107: multiplex close races six pane recoveries; every pane must regain a host handle, including parked PTYs requiring session.tabs.activate (STA-3002). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // These transport fixtures never read abandoned-launch ownership from the app store.
@@ -80,6 +81,7 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    stubRuntimeHostStatusSubscriptions()
     vi.doUnmock(
       '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
     )

@@ -7,6 +7,7 @@ import {
   CALM_STATUS_MIN_VISIBLE_MS,
   CALM_STATUS_REVEAL_DELAY_MS
 } from '../../../../../../../shared/calm-status-reveal'
+import type { PtyTransport } from '../../pty-transport-types'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
 import { resetRemoteServerNoticeClaimsForTests } from '../../recovery/server-outage/remote-server-notice-claims'
 
@@ -17,6 +18,13 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, options?: Record<string, string>) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => options?.[name] ?? ''),
   getIntlLocale: () => 'en-US'
+}))
+const hostLifetime = vi.hoisted(() => ({ retired: false }))
+vi.mock('@/store/slices/runtime-status/views/use-runtime-status-view', () => ({
+  useRuntimeHostRetired: (id: string | null) => Boolean(id && hostLifetime.retired)
+}))
+vi.mock('@/store/slices/runtime-status/views/runtime-status-subscription-store', () => ({
+  runtimeStatusSubscriptions: { getHostSnapshot: () => ({ retired: hostLifetime.retired }) }
 }))
 vi.mock('@/store/index', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector({ wslHostStatuses })
@@ -39,6 +47,7 @@ vi.mock('../../recovery/server-outage/remote-server-outage', () => ({
 }))
 
 afterEach(() => {
+  hostLifetime.retired = false
   outage.environmentId = 'env-1'
   delete wslHostStatuses['env-1']
   cleanup()
@@ -224,3 +233,75 @@ describe('TerminalPaneRecoveryPortals', () => {
     expect(notices()).toHaveLength(1)
   })
 })
+
+it('releases a held shared notice immediately for the stopped pane action', async () => {
+  vi.useFakeTimers()
+  const { TerminalPaneRecoveryPortals } = await import('./TerminalPaneRecoveryPortals')
+  const pane = document.createElement('div')
+  document.body.append(pane)
+  const controller = controllerFor([pane])
+  const view = render(<TerminalPaneRecoveryPortals controller={controller} />)
+  act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
+  expect(view.container.querySelector('[data-remote-server-outage-notice]')).not.toBeNull()
+  outage.environmentId = null
+  hostLifetime.retired = true
+  view.rerender(
+    <TerminalPaneRecoveryPortals
+      controller={{
+        ...controller,
+        ptyRecoveryStatesByPaneId: { 1: { phase: 'disconnected', epoch: 2, attempt: 1 } }
+      }}
+    />
+  )
+  expect(view.container.querySelector('[data-remote-server-outage-notice]')).toBeNull()
+  expect(
+    pane.querySelector('[data-terminal-remote-runtime-reconnect-banner="disconnected"] button')
+  ).not.toBeNull()
+})
+
+it.each(['success', 'failure', 'later-stop', 'rebind', 'already-revived'] as const)(
+  'lifts the main hold before pane retry, with %s settlement',
+  async (settlement) => {
+    const { createPaneRecoveryReconnect } = await import('./TerminalPaneRecoveryPortals')
+    const retry = vi.fn()
+    let epoch = 3
+    const stub = {
+      getRuntimeEnvironmentId: () => 'env-1',
+      getRecoveryState: () => ({ epoch }),
+      retryRecovery: retry
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this action reads only environment, epoch and retry from the transport.
+    const transport = stub as unknown as PtyTransport
+    let current = transport
+    let finish: (response: { ok: boolean }) => void = () => {}
+    const connect = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { runtimeEnvironments: { connect } }
+    })
+    hostLifetime.retired = true
+    createPaneRecoveryReconnect(() => current, null)()
+    expect(connect).toHaveBeenCalledWith({ selector: 'env-1' })
+    expect(retry).not.toHaveBeenCalled()
+    if (settlement !== 'failure') {
+      hostLifetime.retired = false
+    }
+    if (settlement === 'later-stop') {
+      epoch += 1
+      hostLifetime.retired = true
+    }
+    if (settlement === 'already-revived') {
+      epoch += 1
+    }
+    if (settlement === 'rebind') {
+      current = { ...transport }
+    }
+    await act(async () => finish({ ok: settlement !== 'failure' }))
+    expect(retry).toHaveBeenCalledTimes(settlement === 'success' ? 1 : 0)
+  }
+)

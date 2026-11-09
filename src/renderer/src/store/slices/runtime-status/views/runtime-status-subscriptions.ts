@@ -1,4 +1,7 @@
-import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type {
+  RuntimeEnvironmentStatus,
+  RuntimeHostStatusSnapshot
+} from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RuntimeHostConnectionState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { createPairedRuntimeParkingEnvironmentIdsSelector } from '@/components/terminal-pane/parking/retention/paired-runtime-parking-capabilities'
@@ -14,6 +17,8 @@ type Listener = () => void
 type ConnectionSubscription = {
   snapshot: RuntimeHostConnectionState
   listeners: Set<Listener>
+  host: RuntimeHostStatusSnapshot | undefined
+  lifetimeListeners: Set<Listener>
 }
 
 export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
@@ -23,6 +28,12 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
   let parkingSnapshot: ReadonlySet<string> | null = null
   let previousStatuses: RuntimeStatusState['runtimeStatusByEnvironmentId'] | null = null
   let unsubscribeStore: (() => void) | null = null
+
+  function getHostSnapshot(environmentId: string | null): RuntimeHostStatusSnapshot | undefined {
+    return environmentId === null
+      ? undefined
+      : store.getState().runtimeStatusByEnvironmentId.get(environmentId)?.snapshot
+  }
 
   function getConnectionSnapshot(environmentId: string | null): RuntimeHostConnectionState {
     return runtimeHostConnectionStateForEntry(
@@ -54,12 +65,23 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
           continue
         }
         const snapshot = runtimeHostConnectionStateForEntry(statuses.get(environmentId))
-        if (snapshot === subscription.snapshot) {
-          continue
+        if (snapshot !== subscription.snapshot) {
+          subscription.snapshot = snapshot
+          for (const listener of subscription.listeners) {
+            pending.push({ listeners: subscription.listeners, listener })
+          }
         }
-        subscription.snapshot = snapshot
-        for (const listener of subscription.listeners) {
-          pending.push({ listeners: subscription.listeners, listener })
+        const host = statuses.get(environmentId)?.snapshot
+        const previousHost = subscription.host
+        subscription.host = host
+        if (
+          host?.pairingRevision !== previousHost?.pairingRevision ||
+          Boolean(host?.retired) !== Boolean(previousHost?.retired) ||
+          (host?.verification === 'verified') !== (previousHost?.verification === 'verified')
+        ) {
+          for (const listener of subscription.lifetimeListeners) {
+            pending.push({ listeners: subscription.lifetimeListeners, listener })
+          }
         }
       }
       if (parkingListeners.size > 0) {
@@ -91,31 +113,46 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
     selectParking = createPairedRuntimeParkingEnvironmentIdsSelector()
   }
 
-  function subscribeConnection(environmentId: string | null, listener: Listener): () => void {
+  function subscribeHost(
+    environmentId: string | null,
+    listener: Listener,
+    lifetime: boolean
+  ): () => void {
     if (environmentId === null) {
       return () => {}
     }
     ensureSubscription()
     let subscription = connections.get(environmentId)
     if (!subscription) {
-      subscription = { snapshot: getConnectionSnapshot(environmentId), listeners: new Set() }
+      subscription = {
+        snapshot: getConnectionSnapshot(environmentId),
+        listeners: new Set(),
+        host: getHostSnapshot(environmentId),
+        lifetimeListeners: new Set()
+      }
       connections.set(environmentId, subscription)
     }
     const registered = () => listener()
-    subscription.listeners.add(registered)
+    const listeners = lifetime ? subscription.lifetimeListeners : subscription.listeners
+    listeners.add(registered)
     let released = false
     return () => {
       if (released) {
         return
       }
       released = true
-      subscription.listeners.delete(registered)
-      if (subscription.listeners.size === 0) {
+      listeners.delete(registered)
+      if (subscription.listeners.size === 0 && subscription.lifetimeListeners.size === 0) {
         connections.delete(environmentId)
       }
       releaseIfUnused()
     }
   }
+
+  const subscribeConnection = (environmentId: string | null, listener: Listener) =>
+    subscribeHost(environmentId, listener, false)
+  const subscribeHostLifetime = (environmentId: string | null, listener: Listener) =>
+    subscribeHost(environmentId, listener, true)
 
   function subscribeParking(listener: Listener): () => void {
     ensureSubscription()
@@ -135,5 +172,12 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
     }
   }
 
-  return { getConnectionSnapshot, subscribeConnection, getParkingSnapshot, subscribeParking }
+  return {
+    getConnectionSnapshot,
+    subscribeConnection,
+    getHostSnapshot,
+    subscribeHostLifetime,
+    getParkingSnapshot,
+    subscribeParking
+  }
 }

@@ -5,6 +5,7 @@ import { expect, it } from 'vitest'
 import { useAppStore } from '../../../index'
 import {
   usePairedRuntimeParkingEnvironmentIds,
+  useRuntimeHostRetired,
   useRuntimeHostDisconnected
 } from './use-runtime-status-view'
 
@@ -101,6 +102,62 @@ it('observes a commit between render and subscription without waiting for anothe
       )
     )
     expect(container.textContent).toBe('true')
+  } finally {
+    act(() => root.unmount())
+    useAppStore.setState(original, true)
+  }
+})
+
+it('renders only the retired host and rebinds to the current host without waiting for another event', () => {
+  const original = useAppStore.getState()
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  const renders = { a: 0, b: 0 }
+  function Probe({ id }: { id: 'a' | 'b' }) {
+    renders[id] += 1
+    return <output>{String(useRuntimeHostRetired(id))}</output>
+  }
+  try {
+    useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
+    act(() =>
+      root.render(
+        <>
+          <Probe id="a" />
+          <Probe id="b" />
+        </>
+      )
+    )
+    renders.a = renders.b = 0
+    act(() =>
+      useAppStore.setState({
+        runtimeStatusByEnvironmentId: new Map([
+          [
+            'a',
+            {
+              status: null,
+              checkedAt: 1,
+              snapshot: {
+                environmentId: 'a',
+                pairingRevision: 1,
+                sequence: 1,
+                checkedAt: 1,
+                status: null,
+                verification: 'blocked',
+                transport: 'disconnected',
+                retired: true
+              }
+            }
+          ]
+        ])
+      })
+    )
+    expect(container.textContent).toBe('truefalse')
+    expect(renders.a).toBeGreaterThan(0)
+    expect(renders.b).toBe(0)
+    act(() => root.render(<Probe id="a" />))
+    expect(container.textContent).toBe('true')
+    act(() => root.render(<Probe id="b" />))
+    expect(container.textContent).toBe('false')
   } finally {
     act(() => root.unmount())
     useAppStore.setState(original, true)

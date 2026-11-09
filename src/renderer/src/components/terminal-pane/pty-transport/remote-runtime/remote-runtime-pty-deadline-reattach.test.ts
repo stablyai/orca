@@ -1,3 +1,4 @@
+import { stubRuntimeHostStatusSubscriptions } from '../remote/remote-runtime-pty-transport-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
@@ -162,6 +163,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
   beforeEach(() => {
     vi.resetModules()
+    stubRuntimeHostStatusSubscriptions()
     vi.doUnmock(
       '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
     )

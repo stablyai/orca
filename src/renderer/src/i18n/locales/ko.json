@@ -3981,15 +3981,12 @@
             "63f36455cc": "연결",
             "bf07aee59e": "연결 해제 실패",
             "2c29e2de68": "연결 실패",
-            "remote_server": "원격 서버",
             "runtime_checking": "확인 중",
             "runtime_online": "연결됨",
             "runtime_unavailable": "연결 끊김",
             "runtime_connect_unavailable": "원격 호스트에 연결할 수 없습니다.",
             "runtime_disconnect_failed": "연결 해제 실패",
             "runtime_reconnecting": "다시 연결 중",
-            "runtime_last_close_reason": "닫힘: {{value0}}",
-            "runtime_reconnect_attempt": "{{value0}}번째 시도",
             "connectedHostCount_one": "호스트 {{count}}개",
             "connectedHostCount_other": "호스트 {{count}}개",
             "searchSshHosts": "SSH 호스트 검색…",
@@ -4252,9 +4249,6 @@
             "notYetUpdated": "아직 업데이트되지 않음",
             "rateLimitResetsAvailable_other": "속도 제한 재설정 {{count}}회 사용 가능"
           },
-          "SshTargetStatusRow": {
-            "sshHost": "SSH 호스트"
-          },
           "usagePercentageLabel": {
             "used": "{{value0}}% 사용",
             "remaining": "{{value0}}% 남음",
@@ -4338,29 +4332,17 @@
             "runningSkills_other": "스킬 {{count}}개 업데이트 중…"
           },
           "RuntimeHostStatusRow": {
-            "previous_connection_closed": "이전 연결이 종료되었습니다.",
-            "workspace_window_closed": "워크스페이스 창이 닫혔습니다.",
-            "checking_host": "Orca가 이 호스트에 연결할 수 있는지 확인 중입니다.",
-            "restoring_connection": "Orca가 연결을 복원하려고 합니다.",
-            "host_unreachable": "이 호스트에서는 Orca에 연결할 수 없습니다.",
-            "runtime_unavailable": "SSH 전송이 연결되었지만 Orca 런타임을 사용할 수 없습니다.",
-            "runtime_unavailable_explanation": "원격 호스트가 아직 실행 중일 수 있습니다. Orca 런타임 연결만 사용할 수 없습니다.",
             "contact_note": "호스트가 아직 실행 중일 수 있습니다. Orca 연결만 사용할 수 없습니다.",
-            "last_connected": "마지막 연결 {{value0}}",
-            "reconnect_attempt": "{{value0}} 시도",
             "access_revoked": "Access revoked",
-            "access_revoked_summary": "이 서버가 이 컴퓨터에 대한 액세스를 취소했습니다.",
-            "access_revoked_explanation": "다시 연결하려면 서버에서 새로운 페어링 링크로 다시 페어링하세요.",
-            "managed_access_revoked_explanation": "Orca가 SSH로 다시 페어링하지 못했습니다. 연결하여 다시 시도하세요.",
-            "connect_access_revoked_explanation": "연결하여 다시 시도하세요.",
             "update_required": "Update required",
-            "update_required_summary": "Orca 버전이 호환되지 않습니다",
-            "update_required_explanation": "이 컴퓨터나 서버의 Orca를 업데이트한 후 다시 연결하세요.",
             "repair": "Re-pair…",
             "open_settings": "설정 열기…",
             "server_replaced": "다른 서버",
-            "server_replaced_summary": "이 호스트에서 이 컴퓨터와 페어링한 서버와 다른 Orca 서버가 실행 중입니다",
-            "server_replaced_explanation": "Orca가 다른 SSH 사용자로 호스트에 연결하거나 서버가 다시 설치되었습니다. 설정 › 원격 Orca 서버에서 이 서버의 ⋯ 메뉴를 열고 삭제…를 선택한 다음 SSH 호스트에 연결하여 현재 서버와 페어링하세요."
+            "access_revoked_explanation": "다시 연결하려면 서버에서 새로운 페어링 링크로 다시 페어링하세요.",
+            "managed_access_revoked_explanation": "Orca가 SSH를 통해 다시 페어링하지 못했으니 연결하여 다시 시도하세요.",
+            "connect_access_revoked_explanation": "연결하여 다시 시도하세요.",
+            "server_replaced_explanation": "설정 › 원격 Orca 서버에서 이 서버의 잊기…를 선택한 다음 SSH 호스트에 연결하여 현재 서버와 페어링하세요.",
+            "update_required_explanation": "이 컴퓨터나 서버의 Orca를 업데이트한 후 다시 연결하세요."
           },
           "NativeChatResumeStatusSegment": {
             "tooltip": "중단된 채팅을 열어 재개할 수 있습니다.",
@@ -4461,6 +4443,18 @@
           },
           "InlineUsageBars": {
             "resetsAt": "{{when}}에 초기화"
+          },
+          "RemoteHostStatusRow": {
+            "unreachable_since": "{{time}}부터 이 호스트에 연결할 수 없습니다.",
+            "copy_error": "오류 복사",
+            "retry_now": "지금 다시 시도",
+            "stop_reconnecting": "재연결 중지",
+            "reconnecting_attempt": "재연결 중({{attempt}}번째 시도)",
+            "stop": "중지",
+            "ssh_sign_in_failed": "이 호스트에 로그인할 수 없으니 SSH 자격 증명을 확인하세요.",
+            "ssh_connect_failed": "이 호스트에 연결할 수 없으니 SSH 설정을 확인하고 다시 시도하세요.",
+            "server": "서버",
+            "ssh": "SSH"
           }
         }
       },

@@ -1,3 +1,4 @@
+import { stubRuntimeHostStatusSubscriptions } from '../remote/remote-runtime-pty-transport-test-harness'
 /** Inject Electron-shaped RPC rejections with codes stripped to verify message classification, bounded outage surfaces and revivable reconnect, including host-side activation of pending panes (STA-3002). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const appStore = vi.hoisted(() => ({
@@ -162,6 +163,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
 
   beforeEach(() => {
     vi.resetModules()
+    stubRuntimeHostStatusSubscriptions()
     vi.doUnmock(
       '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
     )

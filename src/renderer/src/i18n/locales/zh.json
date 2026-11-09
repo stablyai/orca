@@ -3981,15 +3981,12 @@
             "63f36455cc": "连接",
             "bf07aee59e": "断开连接失败",
             "2c29e2de68": "连接失败",
-            "remote_server": "远程服务器",
             "runtime_checking": "检查中",
             "runtime_online": "已连接",
             "runtime_unavailable": "已断开",
             "runtime_connect_unavailable": "远程主机不可达",
             "runtime_disconnect_failed": "断开连接失败",
             "runtime_reconnecting": "重新连接中",
-            "runtime_last_close_reason": "已关闭：{{value0}}",
-            "runtime_reconnect_attempt": "第 {{value0}} 次尝试",
             "connectedHostCount_one": "{{count}} 个主机",
             "connectedHostCount_other": "{{count}} 个主机",
             "searchSshHosts": "搜索 SSH 主机…",
@@ -4252,9 +4249,6 @@
             "notYetUpdated": "尚未更新",
             "rateLimitResetsAvailable_other": "可重置速率限制 {{count}} 次"
           },
-          "SshTargetStatusRow": {
-            "sshHost": "SSH 主机"
-          },
           "usagePercentageLabel": {
             "used": "已用 {{value0}}%",
             "remaining": "剩余 {{value0}}%",
@@ -4338,29 +4332,17 @@
             "runningSkills_other": "正在更新 {{count}} 个技能…"
           },
           "RuntimeHostStatusRow": {
-            "previous_connection_closed": "之前的连接关闭了",
-            "workspace_window_closed": "工作区窗口已关闭",
-            "checking_host": "Orca 正在检查该主机是否可达",
-            "restoring_connection": "Orca 正在尝试恢复连接",
-            "host_unreachable": "在此主机上无法访问 Orca",
-            "runtime_unavailable": "SSH 传输已连接，但 Orca 运行时不可用",
-            "runtime_unavailable_explanation": "远程主机可能仍在运行；仅 Orca 运行时连接不可用。",
             "contact_note": "主机可能仍在运行；仅 Orca 连接不可用。",
-            "last_connected": "最后连接 {{value0}}",
-            "reconnect_attempt": "尝试{{value0}}",
             "access_revoked": "Access revoked",
-            "access_revoked_summary": "该服务器已撤销对此计算机的访问权限",
-            "access_revoked_explanation": "使用服务器新生成的配对链接重新配对，以恢复连接。",
-            "managed_access_revoked_explanation": "Orca 无法通过 SSH 重新与其配对。请连接以重试。",
-            "connect_access_revoked_explanation": "请连接以重试。",
             "update_required": "Update required",
-            "update_required_summary": "Orca 版本不兼容",
-            "update_required_explanation": "更新此计算机或服务器上的 Orca，然后重新连接。",
             "repair": "Re-pair…",
             "open_settings": "打开设置…",
             "server_replaced": "不同的服务器",
-            "server_replaced_summary": "此主机现在运行的 Orca 服务器与此计算机配对的服务器不同",
-            "server_replaced_explanation": "Orca 正以其他 SSH 用户连接主机，或者其服务器已重新安装。请在“设置”›“远程 Orca 服务器”中打开此服务器的 ⋯ 菜单并选择“遗忘…”，然后连接 SSH 主机以配对当前服务器。"
+            "access_revoked_explanation": "使用服务器新生成的配对链接重新配对，以恢复连接。",
+            "managed_access_revoked_explanation": "Orca 无法通过 SSH 重新配对；请连接以重试。",
+            "connect_access_revoked_explanation": "请连接以重试。",
+            "server_replaced_explanation": "在「设置 › 远程 Orca 服务器」中，对此服务器选择「忘记…」，然后连接 SSH 主机以与其当前服务器配对。",
+            "update_required_explanation": "更新此计算机或服务器上的 Orca，然后重新连接。"
           },
           "NativeChatResumeStatusSegment": {
             "tooltip": "打开可恢复的中断聊天",
@@ -4461,6 +4443,18 @@
           },
           "InlineUsageBars": {
             "resetsAt": "将在 {{when}} 重置"
+          },
+          "RemoteHostStatusRow": {
+            "unreachable_since": "自 {{time}} 起无法连接此主机。",
+            "copy_error": "复制错误",
+            "retry_now": "立即重试",
+            "stop_reconnecting": "停止重新连接",
+            "reconnecting_attempt": "正在重新连接（第 {{attempt}} 次尝试）",
+            "stop": "停止",
+            "ssh_sign_in_failed": "无法登录此主机，请检查其 SSH 凭据。",
+            "ssh_connect_failed": "无法连接此主机，请检查其 SSH 设置后重试。",
+            "server": "服务器",
+            "ssh": "SSH"
           }
         }
       },

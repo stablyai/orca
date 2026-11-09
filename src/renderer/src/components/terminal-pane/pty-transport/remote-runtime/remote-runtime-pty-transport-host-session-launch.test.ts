@@ -1,3 +1,4 @@
+import { stubRuntimeHostStatusSubscriptions } from '../remote/remote-runtime-pty-transport-test-harness'
 import { createHostSessionLaunchRuntimeFixture } from './remote-runtime-host-session-launch-test-fixture'
 import { ExplicitEnsure } from '../../../../../../shared/rpc-contract/agent-session-params'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -42,6 +43,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    stubRuntimeHostStatusSubscriptions()
     delivery.mockReset().mockResolvedValue(true)
     promptFailure.error.mockClear()
     promptFailure.copy.mockClear()
