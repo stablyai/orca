@@ -276,7 +276,7 @@ export function CloudWorkspacesHome({
                 {showHeading && (
                   <h3
                     id={headingId}
-                    className="px-3 py-2 text-xs font-medium text-muted-foreground"
+                    className="px-3 py-2 text-2xs font-medium text-muted-foreground"
                   >
                     {section || t('auto.components.cloudWorkspaces.noSection', 'No section')}
                     {/* The bare number is visual; screen readers get the counted phrase. */}

@@ -163,7 +163,7 @@ export function CloudWorkspaceRow({
         />
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-[13px] font-medium text-foreground">{title}</span>
+            <span className="truncate text-sm font-medium text-foreground">{title}</span>
             {w.visibility === 'private' && (
               <Lock
                 role="img"

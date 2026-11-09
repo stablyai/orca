@@ -42,7 +42,7 @@ export function MemberAvatar({
         'inline-flex shrink-0 select-none items-center justify-center rounded-full font-medium',
         'bg-[hsl(var(--avatar-hue)_45%_88%)] text-[hsl(var(--avatar-hue)_45%_28%)]',
         'dark:bg-[hsl(var(--avatar-hue)_30%_26%)] dark:text-[hsl(var(--avatar-hue)_55%_82%)]',
-        size === 'sm' ? 'size-5 text-[9px]' : 'size-6 text-[10px]',
+        size === 'sm' ? 'size-5 text-3xs' : 'size-6 text-3xs',
         className
       )}
       style={hueStyle}
@@ -117,7 +117,7 @@ export function PresenceStack({
             )
           })}
           {extra > 0 && (
-            <span className="relative inline-flex size-5 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-background">
+            <span className="relative inline-flex size-5 items-center justify-center rounded-full bg-muted text-3xs font-medium text-muted-foreground ring-2 ring-background">
               +{extra}
             </span>
           )}
