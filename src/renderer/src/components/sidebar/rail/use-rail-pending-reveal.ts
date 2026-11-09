@@ -37,6 +37,9 @@ export function useRailPendingReveal(args: {
   const [scrollTarget, setScrollTarget] = React.useState<{ key: string; activeKey?: string }>()
 
   React.useEffect(() => {
+    if (forcedRevealWorktreeId && forcedRevealWorktreeId !== pendingReveal?.worktreeId) {
+      onForceReveal(null)
+    }
     if (!pendingReveal) {
       return
     }
