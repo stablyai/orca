@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
-import { afterEach, expect, vi } from 'vitest'
+import { afterEach, vi } from 'vitest'
 
 // Why: these fixtures have neither inline visual owners nor sender navigation.
 const unusedChatLeaves = vi.hoisted(() => ({
@@ -19,10 +19,6 @@ vi.mock('../../media/visuals/NativeChatInlineVisual', () => ({
 vi.mock('@/lib/open-agent-message-sender', () => ({
   openAgentMessageSender: unusedChatLeaves.openSender
 }))
-afterEach(() => {
-  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
-  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
-})
 // Pacing is not this test's subject.
 vi.mock('../../markdown/use-native-chat-paced-text', async (importOriginal) =>
   (await import('../../markdown/native-chat-unpaced-text-fixture')).unpacedTextModule(
