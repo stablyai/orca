@@ -118,7 +118,7 @@ describe('accounts snapshot', () => {
     expect(read().snapshot?.rateLimits.claude?.session?.usedPercent).toBe(42)
   })
 
-  it('hides usage read before the latest connect, keeping the accounts', async () => {
+  it('hides usage this screen did not read on the current connection, keeping the accounts', async () => {
     const queryClient = createOrcaQueryClient()
     queryClient.setQueryData(accountsSnapshotKey(HOST), SNAPSHOT, { updatedAt: CONNECTED_AT - 1 })
     const read = await mountAccounts(queryClient, accountsClient(SNAPSHOT).client)

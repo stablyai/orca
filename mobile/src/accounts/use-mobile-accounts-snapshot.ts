@@ -34,14 +34,12 @@ export function useMobileAccountsSnapshot({
   // Dated by when its read was sent, so a failure from an earlier connection doesn't outlive it.
   const [failure, setFailure] = useState<{ message: string; at: number } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  // Data this screen didn't read itself, such as a previous visit's in the same document, can't vouch for usage.
+  const [mountedAt] = useState(Date.now)
 
-  // Dated by when the read was sent: a reply from before the latest connect lands but never counts as live.
   const acceptSnapshot = useCallback(
-    (nextSnapshot: AccountsSnapshot, readAt = Date.now()) => {
-      const key = accountsSnapshotKey(hostId)
-      if ((queryClient.getQueryState(key)?.dataUpdatedAt ?? 0) <= readAt) {
-        queryClient.setQueryData(key, nextSnapshot, { updatedAt: readAt })
-      }
+    (nextSnapshot: AccountsSnapshot) => {
+      queryClient.setQueryData(accountsSnapshotKey(hostId), nextSnapshot)
       setFailure(null)
     },
     [hostId, queryClient]
@@ -64,14 +62,22 @@ export function useMobileAccountsSnapshot({
     }
     setRefreshing(true)
     const sentAt = Date.now()
+    // A reply sent before a reconnect speaks for the old connection; the new one's stream answers instead.
+    const reconnectedSince = () => (client.getLastConnectedAt() ?? 0) > sentAt
     try {
       const res = await client.sendRequest('accounts.list')
+      if (reconnectedSince()) {
+        return
+      }
       if (res.ok) {
-        acceptSnapshot(decodeAccountsSnapshot(res.result), sentAt)
+        acceptSnapshot(decodeAccountsSnapshot(res.result))
       } else {
         setFailure({ message: res.error.message, at: sentAt })
       }
     } catch (e) {
+      if (reconnectedSince()) {
+        return
+      }
       if (e instanceof AccountsSnapshotError) {
         rejectInvalidSnapshot(sentAt)
       } else {
@@ -88,20 +94,20 @@ export function useMobileAccountsSnapshot({
       return
     }
     return subscribeAccountsSnapshots(client, {
-      onSnapshot: (nextSnapshot) => acceptSnapshot(nextSnapshot),
+      onSnapshot: acceptSnapshot,
       onInvalidSnapshot: () => rejectInvalidSnapshot(),
       onStreamError: () => void refresh()
     })
   }, [acceptSnapshot, client, connState, refresh, rejectInvalidSnapshot])
 
-  // A stored snapshot, or one read before the latest connect, can't vouch for usage. Stored data can postdate the
-  // connect: native Home writes it from its own stream.
+  // Only this screen's own read on the current connection shows usage. A stored snapshot never does, whatever its
+  // date: native Home writes it from its own stream, possibly after this connect or on a clock since set back.
   const live =
     data != null &&
     !holdsRestoredHostQueryData(queryClient, hashKey(accountsSnapshotKey(hostId))) &&
     connState === 'connected' &&
     lastConnectedAt !== null &&
-    dataUpdatedAt >= lastConnectedAt
+    dataUpdatedAt >= Math.max(lastConnectedAt, mountedAt)
   const snapshot = useMemo(
     () => (live ? (data ?? null) : withoutAccountUsage(data ?? null)),
     [live, data]
