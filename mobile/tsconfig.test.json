@@ -5,6 +5,7 @@
   "extends": "./tsconfig.json",
   "exclude": [
     "node_modules",
+    "harmonyos",
     // Outside this RN program: RN's numeric timers and Expo's process.env break the desktop graphs these
     // tests import. The roots of tsconfig.test.node.json are checked there against emitted
     // declarations; the others are legacy runtime-only coverage whose test bodies nothing typechecks.

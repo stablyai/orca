@@ -135,7 +135,7 @@ describe('NewWorktreeModal project targets', () => {
   it('submits the typed branch for a workspace without a selected source', async () => {
     const creates: unknown[] = []
     const client = requestsOnly(
-      vi.fn((method, params) => {
+      vi.fn((method, params): Promise<RpcResponse> => {
         if (method === 'repo.list') {
           return replied({ repos })
         }
