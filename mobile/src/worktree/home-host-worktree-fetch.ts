@@ -4,6 +4,7 @@ import '../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
 import {
   homeAgentEntries,
+  homeWorkspaceEntries,
   markHomeWorktreeCatalogUnavailable,
   type HomeWorktreeSummary,
   type HostWorktreeInfo
@@ -73,6 +74,7 @@ export function fetchHomeHostWorktreeInfo(
             totalWorktrees: listed.length,
             activeCount: listed.filter(isWorktreeActive).length,
             lastActiveWorktree: lastActive,
+            workspaces: homeWorkspaceEntries(listed),
             agents: homeAgentEntries(listed),
             countsProvenAt: Date.now()
           }

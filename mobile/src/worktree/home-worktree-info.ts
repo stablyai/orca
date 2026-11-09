@@ -27,11 +27,21 @@ export type HomeAgentEntry = Readonly<{
   agent: RuntimeWorktreeAgentRow
 }>
 
+/** A listed workspace, so search can find one with no agent. */
+export type HomeWorkspaceEntry = Readonly<{
+  worktreeId: string
+  workspaceName: string
+  repo: string
+  branch: string
+}>
+
 export type HostWorktreeInfo = {
   hostId: string
   totalWorktrees: number
   activeCount: number
   lastActiveWorktree: HomeWorktreeSummary | null
+  /** Every unarchived workspace from the latest list read. */
+  workspaces?: HomeWorkspaceEntry[]
   /** Every agent from this connection's latest list read. */
   agents?: HomeAgentEntry[]
   /** The agents of a read the connection has since lost: what they were, not what they are. */
@@ -41,6 +51,17 @@ export type HostWorktreeInfo = {
   staleCounts?: boolean
   // Epoch ms of the last proven counts.
   countsProvenAt?: number
+}
+
+export function homeWorkspaceEntries(
+  worktrees: readonly HomeWorktreeSummary[]
+): HomeWorkspaceEntry[] {
+  return worktrees.map((worktree) => ({
+    worktreeId: worktree.worktreeId,
+    workspaceName: worktree.displayName || worktree.repo,
+    repo: worktree.repo,
+    branch: worktree.branch
+  }))
 }
 
 export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): HomeAgentEntry[] {
