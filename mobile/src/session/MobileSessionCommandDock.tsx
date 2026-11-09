@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react'
 import { View } from 'react-native'
-import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
 import {
@@ -18,7 +17,6 @@ import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
 import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
 import { useSessionTerminalKeyRail } from './use-session-terminal-key-rail'
 import { terminalDockStyles as dockStyles } from './terminal-dock-styles'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
@@ -105,19 +103,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           controller={controller}
           keysInRail={rail.keysInRail}
           inputMasked={inputMasked}
+          onToggleMask={toggleInputMask}
           trailing={
-            <>
-              <MobileTerminalPasswordMaskToggle
-                masked={inputMasked}
-                onToggleMask={toggleInputMask}
-              />
-              <MobileTerminalLiveInputStatus
-                dictation={dictation}
-                dictationMode={dictationMode}
-                heard={liveDictationText}
-                isAttaching={isAttaching}
-              />
-            </>
+            <MobileTerminalLiveInputStatus
+              dictation={dictation}
+              dictationMode={dictationMode}
+              heard={liveDictationText}
+              isAttaching={isAttaching}
+            />
           }
         />
         <MobileTerminalInputActions
@@ -146,11 +139,13 @@ function LiveInputField({
   controller,
   keysInRail,
   inputMasked,
+  onToggleMask,
   trailing
 }: {
   controller: MobileSessionController
   keysInRail: boolean
   inputMasked: boolean
+  onToggleMask: () => void
   trailing: ReactNode
 }) {
   const t = useMobileTranslation()
@@ -177,7 +172,9 @@ function LiveInputField({
         ) : undefined
       }
       style={dockStyles.liveField}
-      leading={<KeyboardIcon size={17} color={colors.textSecondary} strokeWidth={2} />}
+      leading={
+        <MobileTerminalPasswordMaskToggle masked={inputMasked} onToggleMask={onToggleMask} />
+      }
       label={t('session.terminalLiveInputStatus.liveInput', 'Live input')}
       trailing={trailing}
       value={text}

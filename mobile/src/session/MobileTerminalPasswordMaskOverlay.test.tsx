@@ -28,14 +28,14 @@ import {
 } from './MobileTerminalPasswordMaskOverlay'
 
 describe('MobileTerminalPasswordMaskOverlay', () => {
-  it('masks typed characters with COMPOSER_TEXT_SIZE asterisks and renders a separate trailing toggle cleanly', () => {
+  it('masks typed characters with COMPOSER_TEXT_SIZE asterisks and renders the leading toggle button cleanly', () => {
     const onToggleMask = vi.fn()
     let tree!: TestRenderer.ReactTestRenderer
     act(() => {
       tree = TestRenderer.create(
         <>
-          <MobileTerminalPasswordMaskOverlay value="oiu" masked />
           <MobileTerminalPasswordMaskToggle masked onToggleMask={onToggleMask} />
+          <MobileTerminalPasswordMaskOverlay value="oiu" masked />
         </>
       )
     })
@@ -54,14 +54,14 @@ describe('MobileTerminalPasswordMaskOverlay', () => {
     expect(onToggleMask).toHaveBeenCalledTimes(1)
   })
 
-  it('omits the asterisk overlay when masked=false while keeping the trailing toggle button accessible', () => {
+  it('omits the asterisk overlay when masked=false while keeping the leading toggle button accessible', () => {
     const onToggleMask = vi.fn()
     let tree!: TestRenderer.ReactTestRenderer
     act(() => {
       tree = TestRenderer.create(
         <>
-          <MobileTerminalPasswordMaskOverlay value="oiu" masked={false} />
           <MobileTerminalPasswordMaskToggle masked={false} onToggleMask={onToggleMask} />
+          <MobileTerminalPasswordMaskOverlay value="oiu" masked={false} />
         </>
       )
     })
