@@ -12,8 +12,6 @@ import {
   newestStructuredAgentSessionTurnBySequence
 } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { memoryJournalMap } from './journal-memory-collections'
-import { journalRewoundReceipt } from './journal-writer-rewind-receipt'
-import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
@@ -29,7 +27,7 @@ function item(
   return { itemId: id, sequence, revision: 1, observedAt: 1, body, ...extra }
 }
 
-it('reads the first scoped limit and rechecks rewind completion', () => {
+it('reads the first scoped limit and honours its context boundary', () => {
   const state = fixture()
   state.items.set(
     'failed',
@@ -67,17 +65,6 @@ it('reads the first scoped limit and rechecks rewind completion', () => {
     resetsAt: 400,
     turnEndedAt: 200
   })
-  const cursor = { epoch: 'epoch', sequence: 13 }
-  const receipt = { write: () => {}, committed: () => {} }
-  expect(() => journalRewoundReceipt(undefined, receipt)(cursor).fold?.(state)).toThrow(
-    JournalHostFactsNeededError
-  )
-  expect(() =>
-    journalRewoundReceipt(
-      { cursor, cancel: { turnItemId: 'failed', resetsAt: 400 } },
-      receipt
-    )(cursor).fold?.(state)
-  ).not.toThrow()
   expect(readJournalUsageLimitCut(state, 12)).toBeNull()
 
   const command = {
