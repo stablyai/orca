@@ -78,9 +78,12 @@ export function selectPatchEntries(patchText, matches) {
     .join('')
 }
 
-/** The hand-editable half of a patch: everything under `src/`. */
+/** The hand-editable half of a patch: source and public declarations. */
 export function sourceHunks(patchText) {
-  return selectPatchEntries(patchText, (file) => file.startsWith('src/'))
+  return selectPatchEntries(
+    patchText,
+    (file) => file.startsWith('src/') || file.startsWith('typings/')
+  )
 }
 
 // Require source/emitted patches to apply identical bytes or next --write would delete source-only hunks.

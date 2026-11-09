@@ -1,7 +1,13 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY } from '../../../../../../shared/constants'
-import { NumberField, SettingsSubsectionHeader } from '../../form-controls/SettingsFormControls'
+import {
+  NumberField,
+  SettingsRow,
+  SettingsSegmentedControl,
+  SettingsSubsectionHeader
+} from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { getTerminalPaneAppearanceSearchEntries } from './terminal-pane-appearance-search'
 import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -16,6 +22,7 @@ export function TerminalPaneAppearanceSection({
 }: TerminalPaneAppearanceSectionProps): React.JSX.Element {
   const t = useTranslate()
   const paneStyleOptions = resolvePaneStyleOptions(settings)
+  const linkUnderlinesEntry = getTerminalPaneAppearanceSearchEntries()[2]!
 
   return (
     <section className="space-y-3">
@@ -84,6 +91,35 @@ export function TerminalPaneAppearanceSection({
               updateSettings({
                 terminalDividerThicknessPx: clampNumber(value, 1, 32)
               })
+            }
+          />
+        </SearchableSetting>
+        <SearchableSetting {...linkUnderlinesEntry}>
+          <SettingsRow
+            label={linkUnderlinesEntry.title}
+            description={linkUnderlinesEntry.description}
+            control={
+              <SettingsSegmentedControl
+                ariaLabel={linkUnderlinesEntry.title}
+                value={settings.terminalLinkUnderlines ?? 'hover'}
+                onChange={(option) => updateSettings({ terminalLinkUnderlines: option })}
+                options={[
+                  {
+                    value: 'always',
+                    label: t(
+                      'auto.components.settings.TerminalAppearanceSection.linkUnderlines.always',
+                      'Always'
+                    )
+                  },
+                  {
+                    value: 'hover',
+                    label: t(
+                      'auto.components.settings.TerminalAppearanceSection.linkUnderlines.hover',
+                      'On hover'
+                    )
+                  }
+                ]}
+              />
             }
           />
         </SearchableSetting>
