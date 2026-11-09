@@ -9773,7 +9773,8 @@
           "cd9fe37556": "Microphone permission granted",
           "openAiKeyName": "Your OpenAI transcription key",
           "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
-          "dictationModesDescription": "Toggle: press {{shortcut}} once to start, again to stop. Hold: dictate while {{shortcut}} is held."
+          "dictationModeAuto": "Auto",
+          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",

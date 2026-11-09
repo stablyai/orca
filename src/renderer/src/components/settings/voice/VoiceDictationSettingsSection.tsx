@@ -54,14 +54,14 @@ export function VoiceDictationSettingsSection({
           <Label>{t('auto.components.settings.VoicePane.ba4a900d1d', 'Dictation Mode')}</Label>
           <p className="text-xs text-muted-foreground">
             {t(
-              'auto.components.settings.VoicePane.dictationModesDescription',
-              'Toggle: press {{shortcut}} once to start, again to stop. Hold: dictate while {{shortcut}} is held.',
+              'auto.components.settings.VoicePane.dictationModesWithAutoDescription',
+              'Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop.',
               { shortcut: shortcutLabel }
             )}
           </p>
         </div>
         <div className="flex shrink-0 items-center rounded-md border border-border/60 bg-background/50 p-0.5">
-          {(['toggle', 'hold'] as const).map((mode) => (
+          {(['auto', 'hold', 'toggle'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => onUpdateVoiceSettings({ dictationMode: mode })}
@@ -72,9 +72,11 @@ export function VoiceDictationSettingsSection({
                   : 'text-muted-foreground hover:text-foreground'
               } ${!voiceSettings.enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              {mode === 'toggle'
-                ? t('auto.components.settings.VoicePane.118b3c2dee', 'Toggle')
-                : t('auto.components.settings.VoicePane.174da92062', 'Hold')}
+              {mode === 'auto'
+                ? t('auto.components.settings.VoicePane.dictationModeAuto', 'Auto')
+                : mode === 'toggle'
+                  ? t('auto.components.settings.VoicePane.118b3c2dee', 'Toggle')
+                  : t('auto.components.settings.VoicePane.174da92062', 'Hold')}
             </button>
           ))}
         </div>

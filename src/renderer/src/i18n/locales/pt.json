@@ -6504,7 +6504,8 @@
           "cd9fe37556": "Permissão do microfone concedida",
           "openAiKeyName": "Sua chave de transcrição da OpenAI",
           "dictationShortcutDescription": "Pressione {{shortcut}} para ditar texto em qualquer painel com foco.",
-          "dictationModesDescription": "Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado."
+          "dictationModeAuto": "Automático",
+          "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar."
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar Notificação de Teste",

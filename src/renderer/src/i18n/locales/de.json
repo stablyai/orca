@@ -9472,7 +9472,8 @@
           "cd9fe37556": "Mikrofonberechtigung erteilt",
           "openAiKeyName": "OpenAI-Transkriptionsschlüssel",
           "dictationShortcutDescription": "Mit {{shortcut}} Text in den jeweils fokussierten Bereich diktieren.",
-          "dictationModesDescription": "Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt."
+          "dictationModeAuto": "Automatisch",
+          "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} entfernen",

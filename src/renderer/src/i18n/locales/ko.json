@@ -8776,7 +8776,8 @@
           "6fa734ed95": "{{value0}} 삭제",
           "openAiKeyName": "OpenAI 트랜스크립션 키",
           "dictationShortcutDescription": "{{shortcut}} 단축키를 눌러 포커스된 패널에 텍스트를 받아쓰세요.",
-          "dictationModesDescription": "토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다."
+          "dictationModeAuto": "자동",
+          "dictationModesWithAutoDescription": "자동: {{shortcut}} 단축키를 길게 누르면 손을 뗄 때까지 받아쓰기하고, 짧게 누르면 시작하고 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다. 토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",

@@ -16,8 +16,12 @@ type HoldDictationReleaseMatcher = (event: KeyboardEvent) => boolean
 
 type ActiveHold = {
   matchesRelease: HoldDictationReleaseMatcher
+  pressedAt: number
   startedDictation: boolean
 }
+
+// Auto: a press held this long records until release; a shorter tap leaves dictation running.
+const AUTO_HOLD_THRESHOLD_MS = 300
 
 type HeldModifiers = {
   alt: boolean
@@ -110,7 +114,7 @@ export function useHoldDictationGesture({
   stopDictation
 }: HoldDictationGestureOptions): void {
   const activeHoldRef = useRef<ActiveHold | null>(null)
-  const mode = settings?.voice?.dictationMode ?? 'toggle'
+  const mode = settings?.voice?.dictationMode ?? 'auto'
   const enabled = settings?.voice?.enabled === true
   // Settings and keybinding refreshes re-create these inputs; re-running the effect would end a held dictation.
   const start = useEffectEvent(() => void startDictation())
@@ -120,30 +124,48 @@ export function useHoldDictationGesture({
     keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)
   )
 
-  // Hold mode owns DOM press/release events; main before-input-event suppresses keyup after preventDefault.
+  // Hold and Auto own DOM press/release events; main before-input-event suppresses keyup after preventDefault.
   useEffect(() => {
-    if (mode !== 'hold' || !enabled) {
+    if (mode === 'toggle' || !enabled) {
       return
     }
 
-    // Losing the release (blur, hidden, mode change) still stops, which inserts what was said.
+    // Losing the release (blur, hidden, mode change) counts as releasing now, which inserts what was said.
     const endHold = (): void => {
-      if (!activeHoldRef.current) {
+      const hold = activeHoldRef.current
+      if (!hold) {
         return
       }
       activeHoldRef.current = null
-      stop()
+      if (
+        mode === 'hold' ||
+        (hold.startedDictation && performance.now() - hold.pressedAt >= AUTO_HOLD_THRESHOLD_MS)
+      ) {
+        stop()
+      }
     }
 
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (!matchesShortcut(e)) {
+      // keyCode 229: IME keydowns that some engines send without isComposing.
+      if (e.isComposing || e.keyCode === 229 || !matchesShortcut(e)) {
+        return
+      }
+      if (e.target instanceof Element && e.target.closest('[data-shortcut-recorder-active]')) {
         return
       }
       e.preventDefault()
       e.stopPropagation()
       if (!e.repeat) {
+        // macOS drops the shortcut key's keyup while Cmd is held, so every fresh press starts over.
+        activeHoldRef.current = null
+        if (mode === 'auto' && !canStart()) {
+          // A tap started this dictation; the next press ends it.
+          stop()
+          return
+        }
         activeHoldRef.current = {
           matchesRelease: createHoldDictationReleaseMatcher(e),
+          pressedAt: performance.now(),
           startedDictation: false
         }
       }

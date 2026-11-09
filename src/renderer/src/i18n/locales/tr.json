@@ -9456,7 +9456,8 @@
           "cd9fe37556": "Mikrofon izni verildi",
           "openAiKeyName": "OpenAI transkripsiyon anahtarınız",
           "dictationShortcutDescription": "Odaktaki herhangi bir bölmeye metin dikte etmek için {{shortcut}} tuşlarına basın.",
-          "dictationModesDescription": "Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın. Basılı tut: {{shortcut}} basılıyken dikte edin."
+          "dictationModeAuto": "Otomatik",
+          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",

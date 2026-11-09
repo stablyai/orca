@@ -9293,7 +9293,8 @@
           "cd9fe37556": "已授予麥克風權限",
           "openAiKeyName": "您的 OpenAI 轉錄金鑰",
           "dictationShortcutDescription": "按 {{shortcut}} 可將文字聽寫到目前取得焦點的任意窗格中。",
-          "dictationModesDescription": "切換：按一次 {{shortcut}} 開始，再按一次停止。按住：按住 {{shortcut}} 期間進行聽寫。"
+          "dictationModeAuto": "自動",
+          "dictationModesWithAutoDescription": "自動：按住 {{shortcut}} 聽寫，放開即停止；輕按則開始或停止。按住：按住 {{shortcut}} 期間進行聽寫。切換：按一次 {{shortcut}} 開始，再按一次停止。"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "刪除 {{value0}}",

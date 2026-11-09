@@ -9070,7 +9070,8 @@
           "6fa734ed95": "Eliminar {{value0}}",
           "openAiKeyName": "Su clave de transcripción OpenAI",
           "dictationShortcutDescription": "Pulsa {{shortcut}} para dictar texto en cualquier panel con foco.",
-          "dictationModesDescription": "Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado."
+          "dictationModeAuto": "Automático",
+          "dictationModesWithAutoDescription": "Automático: mantén {{shortcut}} para dictar hasta que lo sueltes, o tócalo para empezar y parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado. Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",

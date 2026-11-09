@@ -9826,7 +9826,8 @@
           "cd9fe37556": "Доступ к микрофону разрешён",
           "openAiKeyName": "Ваш ключ расшифровки OpenAI",
           "dictationShortcutDescription": "Нажмите {{shortcut}}, чтобы диктовать текст в любую активную панель.",
-          "dictationModesDescription": "Переключение: нажмите {{shortcut}} для начала и ещё раз для остановки. Удержание: диктуйте, пока удерживаете {{shortcut}}."
+          "dictationModeAuto": "Авто",
+          "dictationModesWithAutoDescription": "Авто: удерживайте {{shortcut}}, чтобы диктовать до отпускания, или нажмите коротко, чтобы начать и остановить. Удержание: диктуйте, пока удерживаете {{shortcut}}. Переключение: нажмите {{shortcut}} для начала и ещё раз для остановки."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Удалить {{value0}}",

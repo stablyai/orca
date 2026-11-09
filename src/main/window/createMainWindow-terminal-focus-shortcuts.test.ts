@@ -58,11 +58,12 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    const voice: { enabled: boolean; sttModel: string; dictationMode: 'toggle' | 'hold' } = {
-      enabled: false,
-      sttModel: '',
-      dictationMode: 'toggle'
-    }
+    const voice: { enabled: boolean; sttModel: string; dictationMode: 'auto' | 'toggle' | 'hold' } =
+      {
+        enabled: false,
+        sttModel: '',
+        dictationMode: 'toggle'
+      }
     createMainWindow({
       getUI: () => ({}) as never,
       getSettings: () => ({ windowBackgroundBlur: false, voice }) as never,
@@ -106,7 +107,24 @@ describe('createMainWindow', () => {
     expect(holdPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
+    voice.dictationMode = 'auto'
+    const autoPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: autoPreventDefault } as never,
+      dictationInput as never
+    )
+    expect(autoPreventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
+
     voice.dictationMode = 'toggle'
+    const composingPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: composingPreventDefault } as never,
+      { ...dictationInput, isComposing: true } as never
+    )
+    expect(composingPreventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
+
     const togglePreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: togglePreventDefault } as never,
@@ -125,7 +143,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalled()
   })
 
-  it('only intercepts double-tap dictation when enabled toggle mode can handle it', () => {
+  it('only intercepts double-tap dictation when enabled toggle or auto mode can handle it', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -158,11 +176,12 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    const voice: { enabled: boolean; sttModel: string; dictationMode: 'toggle' | 'hold' } = {
-      enabled: false,
-      sttModel: '',
-      dictationMode: 'toggle'
-    }
+    const voice: { enabled: boolean; sttModel: string; dictationMode: 'auto' | 'toggle' | 'hold' } =
+      {
+        enabled: false,
+        sttModel: '',
+        dictationMode: 'toggle'
+      }
     createMainWindow(
       {
         getUI: () => ({}),
@@ -214,9 +233,9 @@ describe('createMainWindow', () => {
     expect(holdPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
-    voice.dictationMode = 'toggle'
-    const togglePreventDefault = triggerDoubleTapShift()
-    expect(togglePreventDefault).toHaveBeenCalledTimes(1)
+    voice.dictationMode = 'auto'
+    const autoPreventDefault = triggerDoubleTapShift()
+    expect(autoPreventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
   })
 

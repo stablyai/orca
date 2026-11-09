@@ -73,6 +73,16 @@ export function normalizeLoadedGlobalSettings(
   } = profile
   const pluginOwnedSettings = normalizePluginOwnedSettings(parsed.settings ?? {})
   const voice = { ...getDefaultVoiceSettings(), ...parsed.settings?.voice }
+  // Stored 'toggle' was everyone's old default, and Auto still toggles on a tap; Hold was always a choice.
+  if (
+    voice.dictationMode !== 'hold' &&
+    !(
+      parsed.settings?.voiceDictationModeDefaultedToAuto === true &&
+      voice.dictationMode === 'toggle'
+    )
+  ) {
+    voice.dictationMode = 'auto'
+  }
   const matchTerminalSidebarInputs = {
     pluginAppThemeLight: pluginOwnedSettings.pluginAppThemeLight,
     pluginAppThemeDark: pluginOwnedSettings.pluginAppThemeDark,
@@ -184,6 +194,7 @@ export function normalizeLoadedGlobalSettings(
       migratedSourceControlAi,
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
     ),
-    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) }
+    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) },
+    voiceDictationModeDefaultedToAuto: true
   }
 }

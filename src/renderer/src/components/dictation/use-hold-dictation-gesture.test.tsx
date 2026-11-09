@@ -12,6 +12,7 @@ const originalUserAgent = navigator.userAgent
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 let dictationState: DictationState
+let dictationMode: 'auto' | 'hold'
 let startDictation: ReturnType<typeof vi.fn<() => void>>
 let stopDictation: ReturnType<typeof vi.fn<() => void>>
 
@@ -27,7 +28,7 @@ function holdSettings(): GlobalSettings {
     voice: {
       enabled: true,
       sttModel: 'test-model',
-      dictationMode: 'hold'
+      dictationMode
     }
   } as GlobalSettings
 }
@@ -74,6 +75,7 @@ function beginHold(init: KeyboardEventInit = {}): void {
 beforeEach(() => {
   setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')
   dictationState = 'idle'
+  dictationMode = 'hold'
   startDictation = vi.fn<() => void>()
   stopDictation = vi.fn<() => void>()
 })
@@ -151,5 +153,57 @@ describe('useHoldDictationGesture', () => {
     })
 
     expect(startDictation).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('useHoldDictationGesture in Auto mode', () => {
+  let now = 0
+
+  beforeEach(() => {
+    dictationMode = 'auto'
+    now = 1000
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+  })
+
+  it('keeps recording after a tap and stops on the next press', async () => {
+    await renderProbe()
+
+    beginHold()
+    now += 299
+    act(() => {
+      dispatchKeyUp({ key: 'e', code: 'KeyE', metaKey: true })
+    })
+    expect(stopDictation).not.toHaveBeenCalled()
+
+    act(() => {
+      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true })
+    })
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops on release after a press held for 300 ms', async () => {
+    await renderProbe()
+
+    beginHold()
+    act(() => {
+      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, repeat: true })
+    })
+    now += 300
+    act(() => {
+      dispatchKeyUp({ key: 'Meta', code: 'MetaLeft', metaKey: false })
+    })
+
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the shortcut to the IME while composing', async () => {
+    await renderProbe()
+
+    const event = dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, isComposing: true })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(startDictation).not.toHaveBeenCalled()
   })
 })
