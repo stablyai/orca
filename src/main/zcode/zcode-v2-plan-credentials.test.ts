@@ -13,8 +13,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readZcodeV2PlanCredential, type ZcodeCredentialHost } from './zcode-v2-plan-credentials'
-import { readZcodeUsageCredentials } from '../rate-limits/zcode-usage-credentials'
-import { fetchZcodeRateLimits } from '../rate-limits/zcode-usage-fetcher'
+import { readZcodeUsageCredentials } from '../rate-limits/providers/zcode/zcode-usage-credentials'
+import { fetchZcodeRateLimits } from '../rate-limits/providers/zcode/zcode-usage-fetcher'
 
 let dir: string
 let host: ZcodeCredentialHost

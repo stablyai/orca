@@ -107,7 +107,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/workspaces/removal/runtime-failed-local-worktree-removal.test.ts',
   'src/main/runtime/workspaces/removal/runtime-interrupted-local-worktree-removal.test.ts',
   'src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts',
-  'src/main/rate-limits/codex-rpc-worker-backpressure.test.ts',
+  'src/main/rate-limits/providers/codex/codex-rpc-worker-backpressure.test.ts',
   'src/main/computer/macos-native-provider-client.test.ts',
   'src/main/ai-vault-search/session-search-schema.test.ts',
   'src/main/ai-vault-search/session-search-fts5-contract.test.ts',
