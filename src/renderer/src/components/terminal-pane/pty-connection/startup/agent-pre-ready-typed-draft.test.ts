@@ -22,7 +22,9 @@ import {
 import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import type * as TerminalWorktreeRouteModule from '@/lib/terminal-worktree-route'
-const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+  '@/lib/agent-status/aggregation/worktree-agent-status'
+)
 
 const {
   notifyCodexPaneBoundForStaleSweep,
@@ -59,7 +61,9 @@ vi.mock('../../../../../../shared/layout-owner-switch', () => ({
 
 vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 
-vi.mock('@/lib/agent-draft-readiness', () => ({ waitForAgentDraftInputReady }))
+vi.mock('@/lib/agent-session/messaging/paste/agent-draft-readiness', () => ({
+  waitForAgentDraftInputReady
+}))
 
 const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => undefined)
@@ -101,7 +105,9 @@ vi.mock('../../pty-transport/remote-runtime/remote-runtime-pty-transport', () =>
   )
 }))
 
-vi.mock('@/lib/agent-draft-paste-content', () => ({ sendAgentDraftPasteContent }))
+vi.mock('@/lib/agent-session/messaging/paste/agent-draft-paste-content', () => ({
+  sendAgentDraftPasteContent
+}))
 
 vi.mock('@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice', () => ({
   createPasteReadinessTimeoutNotice: (args: unknown) => {
@@ -122,7 +128,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())

@@ -3,7 +3,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { jiraGetProjectStatusOrder } from '@/runtime/jira/runtime-jira-client'
-import type { RowLessSource as RuntimeJiraSettings } from '@/lib/default-creation-host'
+import type { RowLessSource as RuntimeJiraSettings } from '@/runtime/hosts/selection/default-creation-host'
 import { createMetadataRequestStore, loadMetadata } from '@/hooks/metadata-request-cache'
 
 export type TaskPageJiraProjectScope = {

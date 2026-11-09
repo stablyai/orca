@@ -58,8 +58,9 @@ export function registerPtyConnectionPendingSpawnTests(): void {
 
     it('does not hold a successor behind a canceled spawn serializer declaration', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { pendingSpawnByPaneKey } = await import('./pending-pane-spawn')
       const declaration = createDeferred<number>()
       const spawn = createDeferred<null>()
@@ -100,8 +101,9 @@ export function registerPtyConnectionPendingSpawnTests(): void {
 
     it('joins a successful pending spawn across a StrictMode remount', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const pendingSpawn = createDeferred<string>()
       const firstTransport = createMockTransport()
       firstTransport.connect.mockReturnValueOnce(pendingSpawn.promise)
