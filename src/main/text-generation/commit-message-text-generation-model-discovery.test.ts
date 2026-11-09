@@ -414,6 +414,23 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     }
   })
 
+  it('lists again for a different Codex home when Windows env names differ only in case', async () => {
+    const listing = {
+      data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }],
+      nextCursor: null
+    }
+    for (const home of ['C:\\accounts\\a', 'C:\\accounts\\b']) {
+      const child = createMockDiscoveryChild()
+      spawnMock.mockReturnValueOnce(child as never)
+      answerCodexAppServer(child, [listing])
+      await expect(
+        discoverCommitMessageModelsLocal('codex', { codex_home: 'C:\\shell', CODEX_HOME: home })
+      ).resolves.toMatchObject({ success: true })
+      child.emit('exit', 0, null)
+    }
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
   it.each([
     ['an unsupported model/list', { rpcError: { code: -32601, message: 'Method not found' } }],
     ['an unreadable page', { data: 'not-a-list', nextCursor: null }]

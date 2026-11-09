@@ -30,11 +30,13 @@ onAgentsRefreshedOnHost(() => {
   inFlight.clear()
 })
 
-// Windows environment names ignore case, so `codex_home` still picks the login there.
+// Windows environment names ignore case; like Node's spawn, the lexicographically first spelling wins.
 function accountDir(env: NodeJS.ProcessEnv | undefined, name: string): string | null {
   const key =
     process.platform === 'win32'
-      ? Object.keys(env ?? {}).find((entry) => entry.toUpperCase() === name)
+      ? Object.keys(env ?? {})
+          .filter((entry) => entry.toUpperCase() === name)
+          .sort()[0]
       : name
   return (key && env?.[key]) ?? null
 }
