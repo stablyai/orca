@@ -107,7 +107,7 @@ async function publishPlainRollout(source: ThreadCopy, targetPath: string, targe
       await link(source.path, targetPath)
       return
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      if (isExistsError(error)) {
         await assertOccupantMatches(source, targetPath)
         return
       }
@@ -117,7 +117,7 @@ async function publishPlainRollout(source: ThreadCopy, targetPath: string, targe
   try {
     await link(stagedPath, targetPath)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+    if (!isExistsError(error)) {
       throw error
     }
     await assertOccupantMatches(source, targetPath)
@@ -203,4 +203,8 @@ export async function prepareLatestCodexThreadCopy(args: {
     throw new CodexHistoryNotSharedError()
   }
   await publishPlainRollout(source, plainTargetPath, args.targetHome)
+}
+
+function isExistsError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'EEXIST'
 }

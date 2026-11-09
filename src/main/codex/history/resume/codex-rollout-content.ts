@@ -31,13 +31,13 @@ async function comparePrefix(
       if (leftChunk.length === 0 && !leftDone) {
         const next = await leftIterator.next()
         leftDone = Boolean(next.done)
-        leftChunk = next.done ? Buffer.alloc(0) : (next.value as Buffer)
+        leftChunk = next.done ? Buffer.alloc(0) : asBuffer(next.value)
         continue
       }
       if (rightChunk.length === 0 && !rightDone) {
         const next = await rightIterator.next()
         rightDone = Boolean(next.done)
-        rightChunk = next.done ? Buffer.alloc(0) : (next.value as Buffer)
+        rightChunk = next.done ? Buffer.alloc(0) : asBuffer(next.value)
         continue
       }
       if (leftChunk.length === 0 || rightChunk.length === 0) {
@@ -66,4 +66,12 @@ export async function contentRelation(
     return 'same'
   }
   return comparePrefix(left, right)
+}
+
+// File and zstd streams emit Buffers; anything else is a stream misuse.
+function asBuffer(chunk: unknown): Buffer {
+  if (!Buffer.isBuffer(chunk)) {
+    throw new TypeError('Expected a Buffer chunk from a rollout stream')
+  }
+  return chunk
 }
