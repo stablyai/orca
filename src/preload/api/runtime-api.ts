@@ -114,6 +114,7 @@ export type RuntimeApi = {
       request: RuntimePortForwardOpenRequest
     ) => Promise<RuntimePortForwardOpenResult>
     closePortForward?: (request: { id: string }) => Promise<RuntimePortForward | null>
+    wakePortForwardHost?: (request: { environmentId: string }) => Promise<boolean>
     onPortForwardsChanged?: (callback: (forwards: RuntimePortForward[]) => void) => () => void
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void

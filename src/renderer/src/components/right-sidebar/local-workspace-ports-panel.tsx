@@ -250,6 +250,11 @@ export function LocalWorkspacePortsPanel({
       </div>
 
       {sshForwardTargetId && <SshForwardedPortsSection connectionId={sshForwardTargetId} />}
+      {runtimeForwarding && (
+        <div aria-live="polite" className="sr-only">
+          {runtimeForwarding.announcement}
+        </div>
+      )}
 
       {displayScan?.unavailableReason && (
         <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border">

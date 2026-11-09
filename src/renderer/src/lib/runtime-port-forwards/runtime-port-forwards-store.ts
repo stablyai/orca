@@ -12,6 +12,8 @@ type ForwardState = {
   pending: ReadonlySet<string>
   /** Last failure per `${environmentId}:${remotePort}`, cleared when it forwards. */
   failures: ReadonlyMap<string, RuntimePortForwardFailure>
+  /** Latest outcome for the Ports panel's polite live region. */
+  announcement: string
 }
 
 export type RuntimePortForwardFailure = {
@@ -20,7 +22,12 @@ export type RuntimePortForwardFailure = {
 }
 
 const EMPTY_FORWARDS: RuntimePortForward[] = []
-let state: ForwardState = { forwards: EMPTY_FORWARDS, pending: new Set(), failures: new Map() }
+let state: ForwardState = {
+  forwards: EMPTY_FORWARDS,
+  pending: new Set(),
+  failures: new Map(),
+  announcement: ''
+}
 const listeners = new Set<() => void>()
 let started = false
 let broadcastSeen = false
@@ -175,7 +182,17 @@ export async function openRuntimePortForward(
       ? [...state.forwards.filter((forward) => forward.id !== result.forward.id), result.forward]
       : state.forwards,
     pending,
-    failures
+    failures,
+    announcement: result.ok
+      ? translate(
+          'auto.lib.runtimePortForwards.forwardedAnnouncement',
+          'Forwarded :{{value0}} to localhost:{{value1}}',
+          { value0: request.remotePort, value1: result.forward.localPort }
+        )
+      : `:${request.remotePort} ${runtimePortForwardFailureText({
+          code: result.code,
+          localPort: request.localPort ?? request.remotePort
+        })}`
   })
   return result
 }
@@ -202,17 +219,25 @@ export async function closeRuntimePortForward(
 export function runtimePortForwardFailureText(failure: RuntimePortForwardFailure): string {
   switch (failure.code) {
     case 'port_busy':
-      return translate('auto.lib.runtimePortForwards.busy', 'localhost:{{value0}} busy', {
+      return translate('auto.lib.runtimePortForwards.busyInUse', 'localhost:{{value0}} in use', {
         value0: failure.localPort
       })
     case 'host_unsupported':
-      return translate('auto.lib.runtimePortForwards.unsupported', 'Host needs an Orca update')
+      return translate('auto.lib.runtimePortForwards.updateHost', 'Update Orca on this host')
     case 'invalid_request':
     case 'listen_failed':
-      return translate('auto.lib.runtimePortForwards.listenFailed', 'Could not listen here')
+      return translate(
+        'auto.lib.runtimePortForwards.listenFailedHere',
+        'Could not listen on this computer'
+      )
     case 'tunnel_failed':
-      return translate('auto.lib.runtimePortForwards.tunnelFailed', 'Host unreachable')
+      return translate('auto.lib.runtimePortForwards.hostNotReachable', 'Host not reachable')
   }
+}
+
+/** Reconnects (and wakes a sleeping VM) by opening the environment's tunnel. */
+export async function wakeRuntimePortForwardHost(environmentId: string): Promise<void> {
+  await bridge()?.wakePortForwardHost?.({ environmentId })
 }
 
 export function runtimePortForwardUrl(

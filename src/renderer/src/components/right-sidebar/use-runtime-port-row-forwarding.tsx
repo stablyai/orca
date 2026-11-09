@@ -12,7 +12,8 @@ import {
   runtimePortForwardFailureText,
   runtimePortForwardingAvailable,
   runtimePortForwardUrl,
-  useRuntimePortForwardState
+  useRuntimePortForwardState,
+  wakeRuntimePortForwardHost
 } from '@/lib/runtime-port-forwards/runtime-port-forwards-store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimePortForward } from '../../../../shared/runtime-port-forwards'
@@ -46,6 +47,8 @@ export type RuntimePortRowForwarding = {
   /** Forwards (if needed) and opens the port in the system browser through this computer's localhost. */
   openLocally: (port: WorkspacePort) => Promise<void>
   forwards: RuntimePortForward[]
+  /** Latest forward outcome for one always-mounted polite live region. */
+  announcement: string
 }
 
 /** Row forwarding UI for a remote environment's ports; null when the target is this computer. */
@@ -56,7 +59,7 @@ export function useRuntimePortRowForwarding(
 ): RuntimePortRowForwarding | null {
   const t = useTranslate()
   const environmentId = runtimeTarget?.kind === 'environment' ? runtimeTarget.environmentId : null
-  const { forwards: allForwards, pending, failures } = useRuntimePortForwardState()
+  const { forwards: allForwards, pending, failures, announcement } = useRuntimePortForwardState()
   // A known host whose connection is down: forwards stay bound but nothing reaches it until it returns.
   const hostOffline = useAppStore((s) => {
     const entry = environmentId ? s.runtimeStatusByEnvironmentId.get(environmentId) : undefined
@@ -122,6 +125,9 @@ export function useRuntimePortRowForwarding(
           remotePort={port.port}
           state={rowState(port)}
           onForward={() => void forward(port)}
+          onReconnect={
+            environmentId ? () => void wakeRuntimePortForwardHost(environmentId) : undefined
+          }
           onOpenLocal={(target) =>
             openAppHttpLink(localUrl(target, port), {
               worktreeId: port.kind === 'workspace' ? port.owner.worktreeId : null
@@ -156,7 +162,7 @@ export function useRuntimePortRowForwarding(
               }}
             >
               <Copy size={13} />
-              {t('auto.components.right.sidebar.RuntimePortForward.copyLocal', 'Copy Local URL')}
+              {t('auto.components.right.sidebar.RuntimePortForward.copyLocalUrl', 'Copy local URL')}
             </ContextMenuItem>
             <ContextMenuItem
               className={MENU_ITEM_CLASS}
@@ -165,11 +171,14 @@ export function useRuntimePortRowForwarding(
               {existing.reason === 'auto' ? <BellOff size={13} /> : <Unplug size={13} />}
               {existing.reason === 'auto'
                 ? t(
-                    'auto.components.right.sidebar.RuntimePortForward.stopAuto',
-                    "Stop and Don't Auto-Forward :{{value0}}",
+                    'auto.components.right.sidebar.RuntimePortForward.stopAndSkip',
+                    "Stop and don't auto-forward :{{value0}}",
                     { value0: port.port }
                   )
-                : t('auto.components.right.sidebar.RuntimePortForward.stop', 'Stop Forwarding')}
+                : t(
+                    'auto.components.right.sidebar.RuntimePortForward.stopForwarding',
+                    'Stop forwarding'
+                  )}
             </ContextMenuItem>
           </>
         ) : (
@@ -195,5 +204,5 @@ export function useRuntimePortRowForwarding(
   if (!environmentId || !runtimePortForwardingAvailable()) {
     return null
   }
-  return { forwarding, openLocally, forwards }
+  return { forwarding, openLocally, forwards, announcement }
 }

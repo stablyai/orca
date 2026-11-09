@@ -58,8 +58,8 @@ const states: Record<number, RuntimePortForwardRowState> = {
   5173: { kind: 'forwarded', forward: forward(5173) },
   3000: { kind: 'forwarded', forward: forward(3000, { localPort: 3001, reason: 'user' }) },
   8080: { kind: 'pending' },
-  4000: { kind: 'failed', message: 'localhost:4000 busy', busy: true },
-  9000: { kind: 'failed', message: 'Host unreachable', busy: false },
+  4000: { kind: 'failed', message: 'localhost:4000 in use', busy: true },
+  9000: { kind: 'failed', message: 'Host not reachable', busy: false },
   9229: { kind: 'unforwarded' }
 }
 
@@ -120,6 +120,7 @@ export const hostOffline = defineFixture({
       <RuntimePortForwardStatus
         remotePort={5173}
         state={{ kind: 'forwarded', forward: forward(5173), hostOffline: true }}
+        onReconnect={() => {}}
         onForward={() => {}}
         onOpenLocal={() => {}}
       />

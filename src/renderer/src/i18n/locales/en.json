@@ -2157,11 +2157,12 @@
         "seePlans": "See plans"
       },
       "runtimePortForwards": {
-        "busy": "localhost:{{value0}} busy",
-        "unsupported": "Host needs an Orca update",
-        "listenFailed": "Could not listen here",
-        "tunnelFailed": "Host unreachable",
-        "desktopOnly": "Port forwarding needs the desktop app."
+        "desktopOnly": "Port forwarding needs the desktop app.",
+        "forwardedAnnouncement": "Forwarded :{{value0}} to localhost:{{value1}}",
+        "busyInUse": "localhost:{{value0}} in use",
+        "updateHost": "Update Orca on this host",
+        "listenFailedHere": "Could not listen on this computer",
+        "hostNotReachable": "Host not reachable"
       }
     },
     "hooks": {
@@ -2287,7 +2288,7 @@
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
         "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
         "portsTitle": "Ports",
-        "portsDescription": "Forward dev servers on remote hosts to localhost on this computer."
+        "portsDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -9392,7 +9393,7 @@
           "remoteServersDescription": "Run Orca on another machine and work on it from here.",
           "noSettingsFoundForQuery": "No settings found for \"{{value0}}\"",
           "portsTitle": "Ports",
-          "portsDescription": "Forward dev servers on remote hosts to localhost on this computer."
+          "portsDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -14027,13 +14028,14 @@
           "notify": "Notify when a port is forwarded",
           "search": {
             "title": "Port Forwarding",
-            "description": "Forward dev servers on remote hosts to localhost on this computer.",
             "ports": "ports",
             "forward": "forward",
             "localhost": "localhost",
             "tunnel": "tunnel",
-            "devServer": "dev server"
-          }
+            "devServer": "dev server",
+            "descriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
+          },
+          "rangeInvalid": "\"{{value0}}\" isn't a usable port. Use a port from 1 to 65535, lowest first."
         }
       },
       "right": {
@@ -14266,7 +14268,7 @@
             "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024.",
             "remoteEmpty": "No ports yet. Dev servers started here are forwarded to localhost.",
             "remoteEmptyOff": "No ports yet. Auto-forward is off.",
-            "portsSettings": "Ports settings"
+            "portsSettingsLink": "Ports settings"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",
@@ -15591,27 +15593,28 @@
           },
           "RuntimeForwardedPorts": {
             "title": "Other forwards",
-            "connections": "in use ({{value0}})",
             "ssh": "SSH access",
             "stopped": "stopped",
-            "stopLabel": "Stop forwarding port {{value0}}"
+            "stopLabel": "Stop forwarding port {{value0}}",
+            "oneConnection": "1 connection",
+            "manyConnections": "{{value0}} connections"
           },
           "RuntimePortForward": {
-            "stop": "Stop Forwarding",
-            "noResponse": "no response on host",
-            "remapped": "({{value0}} taken)",
-            "unreachableLabel": "Port {{value0}} is forwarded to localhost:{{value1}}, but nothing answers on the host. Open in browser",
-            "forwardedLabel": "Port {{value0}} is forwarded to localhost:{{value1}}. Open in browser",
             "pending": "Forwarding…",
             "useAnother": "Use another port",
             "retry": "Retry",
             "forward": "Forward to localhost",
             "copied": "Copied {{value0}}",
-            "copyLocal": "Copy Local URL",
-            "stopAuto": "Stop and Don't Auto-Forward :{{value0}}",
             "localAddress": "localhost:{{value0}}",
-            "hostOffline": "host offline",
-            "offlineLabel": "Port {{value0}} is forwarded to localhost:{{value1}}, but the host is offline. Open in browser"
+            "stopForwarding": "Stop forwarding",
+            "hostOfflineNote": "Host offline",
+            "notAnswering": "Nothing answering on :{{value0}} yet",
+            "remappedInUse": "{{value0}} in use",
+            "forwardedToLabel": "Port {{value0}} is forwarded to {{value1}}. Open in browser",
+            "reconnect": "Reconnect",
+            "actionLabel": "{{value0}} for port {{value1}}",
+            "copyLocalUrl": "Copy local URL",
+            "stopAndSkip": "Stop and don't auto-forward :{{value0}}"
           },
           "CloudShare": {
             "alreadyShared": "Already shared",
@@ -19931,12 +19934,14 @@
       },
       "ports": {
         "RuntimePortAutoForwarder": {
-          "ready": "localhost:{{value0}} is ready",
-          "remapped": "{{value0}} · :{{value1}} was taken here",
           "open": "Open",
-          "busy": "localhost:{{value0}} is in use here",
           "busyDescription": "\"Same port number only\" is on, so :{{value0}} was not forwarded.",
-          "useAnother": "Use another port"
+          "useAnother": "Use another port",
+          "forwarded": "Forwarded :{{value0}} to localhost:{{value1}}",
+          "remappedInUse": "{{value0}} · {{value1}} in use on this computer",
+          "many": "{{value0}} ports forwarded",
+          "openPorts": "Open Ports",
+          "busyInUse": "localhost:{{value0}} in use on this computer"
         }
       }
     },

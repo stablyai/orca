@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { ChevronRight, Copy, KeyRound, Server, Unplug } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -34,7 +35,7 @@ export function RuntimeForwardedPortsSection({
           size={12}
           className={cn('shrink-0 motion-safe:transition-transform', !collapsed && 'rotate-90')}
         />
-        <span className="text-3xs font-semibold uppercase tracking-wider">
+        <span className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('auto.components.right.sidebar.RuntimeForwardedPorts.title', 'Other forwards')}
         </span>
         <span className="ml-1 text-3xs text-muted-foreground/60">{forwards.length}</span>
@@ -54,18 +55,17 @@ function OtherForwardRow({ forward }: { forward: RuntimePortForward }): React.JS
   const t = useTranslate()
   const ssh = forward.reason === 'ssh'
   const address = `localhost:${forward.localPort}`
-  const detail = [
-    address,
-    forward.openConnections > 0
-      ? t(
-          'auto.components.right.sidebar.RuntimeForwardedPorts.connections',
-          'in use ({{value0}})',
-          { value0: forward.openConnections }
-        )
-      : null
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const connections =
+    forward.openConnections === 0
+      ? null
+      : forward.openConnections === 1
+        ? t('auto.components.right.sidebar.RuntimeForwardedPorts.oneConnection', '1 connection')
+        : t(
+            'auto.components.right.sidebar.RuntimeForwardedPorts.manyConnections',
+            '{{value0}} connections',
+            { value0: forward.openConnections }
+          )
+  const detail = [address, connections].filter(Boolean).join(' · ')
   return (
     <div className="group -mx-1 flex items-center gap-2 rounded px-1 py-1 hover:bg-accent/50 motion-safe:transition-colors">
       <div className="flex size-5 shrink-0 items-center justify-center text-muted-foreground/70">
@@ -80,9 +80,9 @@ function OtherForwardRow({ forward }: { forward: RuntimePortForward }): React.JS
               : (forward.label ?? '')}
           </span>
           {ssh ? null : (
-            <span className="shrink-0 rounded-sm border border-border px-1 text-3xs text-muted-foreground">
+            <Badge variant="referenceLabel">
               {t('auto.components.right.sidebar.RuntimeForwardedPorts.stopped', 'stopped')}
-            </span>
+            </Badge>
           )}
         </div>
         <div className="truncate text-2xs text-muted-foreground">{detail}</div>
@@ -137,7 +137,10 @@ function OtherForwardRow({ forward }: { forward: RuntimePortForward }): React.JS
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {t('auto.components.right.sidebar.RuntimePortForward.stop', 'Stop Forwarding')}
+              {t(
+                'auto.components.right.sidebar.RuntimePortForward.stopForwarding',
+                'Stop forwarding'
+              )}
             </TooltipContent>
           </Tooltip>
         )}

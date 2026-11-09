@@ -28,10 +28,10 @@ export function RuntimePortsEmptyText(): React.JSX.Element {
       )}{' '}
       <button
         type="button"
-        className="rounded-sm text-foreground underline underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="rounded-sm text-foreground underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         onClick={() => openSettingsTarget({ pane: 'ports', repoId: null })}
       >
-        {t('auto.components.right.sidebar.PortsPanel.portsSettings', 'Ports settings')}
+        {t('auto.components.right.sidebar.PortsPanel.portsSettingsLink', 'Ports settings')}
       </button>
     </>
   )

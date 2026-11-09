@@ -90,6 +90,17 @@ export class RuntimePortForwardManager {
     return attempt
   }
 
+  /** Opens the environment's host session now; waking a sleeping VM is the connector's job. */
+  async wake(environmentId: string): Promise<boolean> {
+    try {
+      await this.tunnelFor(environmentId).warm()
+      return true
+    } catch {
+      this.retireIdleTunnel(environmentId)
+      return false
+    }
+  }
+
   close(id: string): RuntimePortForward | null {
     const forward = this.forwards.get(id)
     if (!forward) {

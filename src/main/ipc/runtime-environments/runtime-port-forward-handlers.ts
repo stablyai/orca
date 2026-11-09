@@ -94,6 +94,10 @@ export function registerRuntimePortForwardHandlers(getUserDataPath: () => string
       ? manager().open(request)
       : { ok: false, code: 'invalid_request', message: 'Invalid port forward.' }
   })
+  ipcMain.handle('runtimePortForwards:wake', (_event, value: unknown) => {
+    const environmentId = field(value, 'environmentId')
+    return typeof environmentId === 'string' ? manager().wake(environmentId) : false
+  })
   ipcMain.handle('runtimePortForwards:close', (_event, value: unknown) => {
     const id = field(value, 'id')
     return typeof id === 'string' ? manager().close(id) : null
@@ -103,5 +107,6 @@ export function registerRuntimePortForwardHandlers(getUserDataPath: () => string
 export const RUNTIME_PORT_FORWARD_HANDLER_CHANNELS = [
   'runtimePortForwards:list',
   'runtimePortForwards:open',
-  'runtimePortForwards:close'
+  'runtimePortForwards:close',
+  'runtimePortForwards:wake'
 ] as const

@@ -55,6 +55,8 @@ export const runtimeEnvironmentsApi = {
     ipcRenderer.invoke('runtimePortForwards:open', request),
   closePortForward: (request: { id: string }): Promise<RuntimePortForward | null> =>
     ipcRenderer.invoke('runtimePortForwards:close', request),
+  wakePortForwardHost: (request: { environmentId: string }): Promise<boolean> =>
+    ipcRenderer.invoke('runtimePortForwards:wake', request),
   onPortForwardsChanged: (callback: (forwards: RuntimePortForward[]) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, forwards: RuntimePortForward[]): void =>
       callback(forwards)
