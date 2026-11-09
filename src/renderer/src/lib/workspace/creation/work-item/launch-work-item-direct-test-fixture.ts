@@ -91,7 +91,7 @@ vi.mock('@/lib/ensure-hooks-confirmed', () => ({
   ensureHooksApproved: vi.fn().mockResolvedValue({ decision: 'run' })
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: mocks.getConnectionId
 }))
 

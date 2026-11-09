@@ -264,17 +264,20 @@ export async function runShellEffect(
       context.manifest.current = null
       await (effect.kind === 'download' ? download : stageUpdate)({ ...context, opened })
       return
-    case 'open-generation':
+    case 'open-generation': {
+      // A remount mints its own id below; only a first open adopts a page Home booted.
+      const spare = await runtime.claimSpareSessionId(effect.directory)
       send({
         type: 'activated',
         flow,
         generationDirectory: effect.directory,
-        sessionId: runtime.mintSessionId(),
+        sessionId: spare ?? runtime.mintSessionId(),
         buildId: effect.buildId,
         totalBytes: effect.totalBytes,
         elapsedMs: runtime.now() - context.startedAt
       })
       return
+    }
     case 'remount': {
       const remount = (): void =>
         send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })

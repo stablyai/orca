@@ -1,6 +1,6 @@
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolution'
+import { createConnectionIdForFileSelector } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'

@@ -16,9 +16,15 @@ import {
 } from '../../ratchet-baseline/ratchet-baseline.mjs'
 import {
   HAZARD_FIXES,
+  LIVE_MODULE_READERS,
+  VIRTUALIZER_HOOKS,
+  findLiveReadWrappers,
   findMemoizedCalls,
   findSourceHazards,
+  findVirtualizerMemoFlows,
+  findVirtualizerWrappers,
   hookCallLines,
+  renderLiveReadLines,
   renderStoreReadLines
 } from './react-compiler-hazards.mjs'
 
@@ -28,6 +34,8 @@ import {
 const SCAN_ROOT = 'src/renderer/src'
 const BAILOUT_BASELINE = 'config/react-compiler-bailout-baseline.txt'
 const HAZARD_BASELINE = 'config/react-compiler-hazard-baseline.txt'
+// The build leaves these files uncompiled, so their hazards cannot run.
+const UNCOMPILED_LIST = 'config/react-compiler-uncompiled-files.txt'
 const COMMAND = 'pnpm check:react-compiler-compat-ratchet'
 const NOT_SHIPPED =
   /(?:^|\/)__(?:mocks|fixtures|tests)__\/|\.(?:test|spec|bench)\.[cm]?tsx?$|[.-]test-|[.-]fixtures?\.tsx?$/
@@ -93,6 +101,59 @@ function addTo(map, key, value) {
   map.set(key, [...(map.get(key) ?? []), value])
 }
 
+function readUncompiledFiles(root) {
+  const file = path.join(root, UNCOMPILED_LIST)
+  if (!fs.existsSync(file)) {
+    return new Set()
+  }
+  return new Set(
+    fs
+      .readFileSync(file, 'utf8')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'))
+  )
+}
+
+/** Virtualizer hooks plus every hook that returns one, followed through wrappers of wrappers. */
+function collectVirtualizerHooks(sources) {
+  const hooks = new Map(VIRTUALIZER_HOOKS)
+  for (let grew = true; grew;) {
+    grew = false
+    for (const [rel, text] of sources) {
+      for (const { name, shape } of findVirtualizerWrappers(rel, text, hooks)) {
+        if (!hooks.has(name)) {
+          hooks.set(name, shape)
+          grew = true
+        }
+      }
+    }
+  }
+  return hooks
+}
+
+/** Live module-state readers plus every plain function that calls one, followed through wrappers. */
+function collectLiveReaders(sources) {
+  const readers = new Set(LIVE_MODULE_READERS)
+  for (let grew = true; grew;) {
+    grew = false
+    for (const [rel, text] of sources) {
+      for (const name of findLiveReadWrappers(rel, text, readers)) {
+        if (!readers.has(name)) {
+          readers.add(name)
+          grew = true
+        }
+      }
+    }
+  }
+  return readers
+}
+
+function sourceLineOf(text, snippet) {
+  const index = text.split('\n').findIndex((line) => line.includes(snippet.split('(')[0]))
+  return index === -1 ? '?' : index + 1
+}
+
 async function scanFile(rel, text, result) {
   const output = await transform(rel, text, COMPILER_OPTIONS)
   if (output.fatal) {
@@ -105,13 +166,35 @@ async function scanFile(rel, text, result) {
     const message = error.message.split('\n')[0]
     addTo(result.diagnostics, rel, { line: lineAt(bytes, error.labels[0]?.start ?? 0), message })
   }
+  if (result.uncompiled.has(rel)) {
+    return
+  }
+  for (const { fn, text: snippet } of findVirtualizerMemoFlows(
+    rel,
+    text,
+    output.code,
+    result.virtualizerHooks
+  )) {
+    addTo(
+      result.hazards,
+      `${rel}#${fn}:virtualizer-in-memo-block`,
+      `${sourceLineOf(text, snippet)}: ${snippet}`
+    )
+  }
   for (const hazard of findSourceHazards(rel, text)) {
     addTo(result.hazards, `${rel}#${hazard.fn}:${hazard.kind}`, `${hazard.line}: ${hazard.text}`)
   }
   const storeReadFns = new Set()
-  for (const { fn, kind, name } of findMemoizedCalls(rel, output.code)) {
+  for (const { fn, kind, name } of findMemoizedCalls(rel, output.code, result.liveReaders)) {
     if (kind === 'store-read') {
       storeReadFns.add(fn)
+      continue
+    }
+    if (kind === 'live-read') {
+      // A call inside the source's own useMemo or a closure keeps its written behavior.
+      for (const line of renderLiveReadLines(rel, text, fn, name)) {
+        addTo(result.hazards, `${rel}#${fn}:live-read-in-memo-block`, `${line}: ${name}()`)
+      }
       continue
     }
     const lines = hookCallLines(rel, text, fn, name)
@@ -126,8 +209,17 @@ async function scanFile(rel, text, result) {
 }
 
 export async function scanRenderer(root = process.cwd()) {
-  const result = { files: 0, compiled: 0, diagnostics: new Map(), hazards: new Map() }
-  const pending = [...readTrackedSources(root, [SCAN_ROOT], isScannedPath)]
+  const sources = [...readTrackedSources(root, [SCAN_ROOT], isScannedPath)]
+  const result = {
+    files: 0,
+    compiled: 0,
+    diagnostics: new Map(),
+    hazards: new Map(),
+    uncompiled: readUncompiledFiles(root),
+    virtualizerHooks: collectVirtualizerHooks(sources),
+    liveReaders: collectLiveReaders(sources)
+  }
+  const pending = [...sources]
   result.files = pending.length
   await Promise.all(
     Array.from({ length: IN_FLIGHT }, async () => {

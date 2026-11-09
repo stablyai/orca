@@ -3,7 +3,6 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import {
   ConfigureOnlyAction,
   DetectedSetupPreview,
-  DetectedSetupSummary,
   DismissButton,
   InspectionErrorActions,
   PackageManagerActions,
@@ -52,6 +51,7 @@ export function SetupScriptPromptCardShell({
   const t = useTranslate()
   const [reviewOpen, setReviewOpen] = useState(false)
   const showDetected = !isInspectionError && !sharedSetupIgnored && detectedSetupPreview !== null
+  const isImport = showDetected && !detectedSetupPreview.editable
   return (
     <div
       data-setup-script-prompt-layer=""
@@ -60,7 +60,12 @@ export function SetupScriptPromptCardShell({
       <div className="pointer-events-auto rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-semibold leading-snug">
-            {t('auto.components.sidebar.SetupScriptPromptCard.ff1e819a11', 'Add a setup script')}
+            {isImport
+              ? t(
+                  'auto.components.sidebar.SetupScriptPromptCard.importTitle',
+                  'Import setup script'
+                )
+              : t('auto.components.sidebar.SetupScriptPromptCard.ff1e819a11', 'Add a setup script')}
           </p>
           <DismissButton onDismiss={onDismiss} />
         </div>
@@ -75,7 +80,7 @@ export function SetupScriptPromptCardShell({
             isInspectionError={isInspectionError}
             sharedSetupIgnored={sharedSetupIgnored}
             isPackageManagerSuggestion={isPackageManagerSuggestion}
-            candidateSource={candidateSource}
+            candidateSource={candidateProvenance ?? candidateSource}
           />
         </p>
 
@@ -83,11 +88,6 @@ export function SetupScriptPromptCardShell({
           <DetectedSetupPreview
             setup={detectedSetupPreview.setup}
             onSetupChange={onSetupDraftChange}
-            provenance={candidateProvenance}
-          />
-        ) : showDetected ? (
-          <DetectedSetupSummary
-            setup={detectedSetupPreview.setup}
             provenance={candidateProvenance}
           />
         ) : null}
@@ -108,14 +108,15 @@ export function SetupScriptPromptCardShell({
           <ConfigureOnlyAction onConfigure={onConfigure} />
         ) : null}
       </div>
-      {/* Imported scripts are saved verbatim, so saving only happens after the full text is on screen. */}
-      {showDetected && !detectedSetupPreview.editable ? (
+      {/* Imported scripts are saved verbatim, so saving happens from a dialog that can show all of the text. */}
+      {isImport ? (
         <SetupScriptReviewDialog
           open={reviewOpen}
           onOpenChange={setReviewOpen}
           repoDisplayName={repoDisplayName}
           setup={detectedSetupPreview.setup}
           archive={detectedSetupPreview.archive}
+          skippedFields={detectedSetupPreview.skippedFields}
           provenance={candidateProvenance}
           isSaving={isImporting}
           onSave={onImport}

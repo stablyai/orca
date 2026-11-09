@@ -7,7 +7,7 @@ import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { makeState } from './testing/sync-runtime-graph-test-harness'
 import type { Tab } from '../../../../shared/tab-types'
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: () => null
 }))
 

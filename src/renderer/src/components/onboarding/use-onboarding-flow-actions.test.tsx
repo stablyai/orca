@@ -8,7 +8,7 @@ import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useCloseWith } from './use-onboarding-flow-persistence'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import { STEPS } from './use-onboarding-flow-types'
-import type { WorkspaceActivationOutcome } from '@/lib/worktree-activation-outcome'
+import type { WorkspaceActivationOutcome } from '@/lib/workspace/activation/worktree-activation-outcome'
 
 const {
   track,

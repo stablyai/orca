@@ -101,19 +101,9 @@ describe('folding while the host-area page shows a session', () => {
     expect(dependencies.push.mock.calls).toEqual([[DETAIL]])
   })
 
-  it('stays on the list when the page was showing the list', async () => {
-    await foldAfterPageShows(HOST)
-    expect(dependencies.push).not.toHaveBeenCalled()
-  })
-
   it('leaves the stack alone from a host-route shell covered by a pushed session', async () => {
     await foldAfterPageShows(HOST, false)
     expect(dependencies.push).not.toHaveBeenCalled()
     expect(dependencies.dispatch).not.toHaveBeenCalled()
-  })
-
-  it('stays on the list for an older page that never reports where it is', async () => {
-    await foldAfterPageShows(null)
-    expect(dependencies.push).not.toHaveBeenCalled()
   })
 })

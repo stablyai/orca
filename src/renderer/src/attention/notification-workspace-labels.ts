@@ -6,7 +6,7 @@ import {
   worktreeMatchesHost
 } from '../store/slices/worktrees/listing/worktree-host-ownership'
 import { getResolvedExecutionHostIdForWorktree } from '../lib/resolved-worktree-execution-host'
-import { getActiveWorkspaceExecutionHostId } from '../lib/active-workspace-host'
+import { getActiveWorkspaceExecutionHostId } from '../lib/workspace/ownership/active-workspace-host'
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner

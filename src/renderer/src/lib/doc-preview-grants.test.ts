@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   revokeGrant: vi.fn()
 }))
 
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionId
 }))
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({

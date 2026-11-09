@@ -111,7 +111,6 @@ export default function CombinedDiffViewer({
     setGeneration,
     setSectionHeights,
     setSections,
-    setSideBySide: preferences.setSideBySide,
     succession: buildCombinedDiffViewTabSuccession(file.id, viewStateScopeId),
     viewStateKey
   })
@@ -242,7 +241,6 @@ export default function CombinedDiffViewer({
     scrollContainerRef,
     sectionHeights,
     sections,
-    sideBySide: preferences.sideBySide,
     viewStateKey
   })
   useCombinedDiffScrollPersistence({

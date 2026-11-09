@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   chmodSync,
   existsSync,
@@ -14,7 +14,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { uploadDirectoryIntoWsl } from './wsl-directory-upload'
 import {
   createWslOrcadHostTransport,
@@ -37,7 +36,7 @@ describe.skipIf(process.platform === 'win32' || !hasSha256sum())('uploadDirector
   let dest: string
   let commands: string[]
   const transports: WslOrcadHostTransport[] = []
-  const children: PipedChildProcess[] = []
+  const children: ChildProcessWithoutNullStreams[] = []
 
   const getTransport = (): WslOrcadHostTransport => {
     const transport = transports.at(-1)

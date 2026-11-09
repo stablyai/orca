@@ -4,7 +4,7 @@ import type {
   BrowserClickResult,
   BrowserGotoResult,
   BrowserFillResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { BrowserError } from '../../browser-error'

@@ -136,6 +136,8 @@ export type CodexStructuredSessionAdapterDeps = {
 export type CodexSession = {
   events?: StructuredAgentSessionEventSink
   account?: AgentSessionAccountKind
+  /** CODEX_HOME this app-server launched under. */
+  codexHome?: string | null
   connection: CodexAppServerConnection
   ended: boolean
   /** First observed child exit survives rejected settlement admission. */

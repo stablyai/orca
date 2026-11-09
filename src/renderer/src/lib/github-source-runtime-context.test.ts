@@ -6,7 +6,7 @@ import {
   getGitHubRepoRoutingTarget,
   resolveGitHubRepoOperationOwner
 } from './github-source-runtime-context'
-import type { RepoRuntimeOwnerState } from './repo-runtime-owner'
+import type { RepoRuntimeOwnerState } from './workspace/ownership/repo-runtime-owner'
 
 const runtimeSourceContext: TaskSourceContext = {
   kind: 'task-source',

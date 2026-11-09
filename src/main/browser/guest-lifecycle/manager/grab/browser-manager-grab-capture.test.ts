@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { GRAB_BUDGET } from '../../../../../shared/browser-grab-types'
+import { GRAB_BUDGET } from '../../../../../shared/browser/element-grab/browser-grab-types'
 
 const grabMocks = vi.hoisted(() => ({
   webContentsFromIdMock: vi.fn(),

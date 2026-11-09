@@ -20,7 +20,7 @@ export function NewWorkspacePageScreen() {
   const { hostCapabilities } = useHostProtocolGates()
   const connected = connState === 'connected'
   const worktrees = useHostWorktreeRows(client, connected, hostId)
-  const hostLabelById = useHostLabelById(client, connected)
+  const hostLabelById = useHostLabelById(client, connected, hostId)
   const worktreePaths = useMemo(() => worktrees.map((worktree) => worktree.path), [worktrees])
 
   return (
