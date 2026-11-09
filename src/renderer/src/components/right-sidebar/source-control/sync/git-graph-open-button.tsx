@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight } from 'lucide-react'
+import { SquareArrowOutUpRight } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSourceControlState } from '../panel/worktree-scope'
 import {
@@ -61,7 +61,7 @@ export function GitGraphOpenButton({
               void openGitGraph(worktreeId)
             }}
           >
-            <ArrowUpRight className="size-3.5" />
+            <SquareArrowOutUpRight className="size-3.5" />
           </CommitsHeaderIconButton>
         </span>
       </TooltipTrigger>
