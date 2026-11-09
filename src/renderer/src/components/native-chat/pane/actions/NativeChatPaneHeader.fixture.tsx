@@ -119,7 +119,20 @@ function ToolbarTranscript({
 export const toolbarWide = defineFixture({
   width: 800,
   store: toolbarStore,
-  render: () => <ToolbarTranscript />
+  render: () => <ToolbarTranscript />,
+  interact: (frame) => {
+    const buttons = frame.querySelectorAll('.native-chat-pane-actions > button')
+    if (buttons.length !== 4) {
+      throw new Error('Expected all four pane actions')
+    }
+    for (const button of buttons) {
+      const bounds = button.getBoundingClientRect()
+      const icon = button.querySelector('svg')?.getBoundingClientRect()
+      if (bounds.width !== 28 || bounds.height !== 28 || icon?.width !== 16 || icon.height !== 16) {
+        throw new Error('Pane actions must use 28px targets and 16px icons')
+      }
+    }
+  }
 })
 export const toolbarNarrow = defineFixture({
   ...toolbarWide,
