@@ -44,14 +44,17 @@ const READ_FOCUSED_FIELD_SCRIPT = `(() => {
 })()`
 
 // execCommand types into the frame that owns the field; webContents.insertText only reaches the top frame.
-// Rich-text editors that model input themselves take a cancelable beforeinput first, as in Orca's own editors.
+// Rich-text editors get a cancelable beforeinput first; a cancel counts as landed only if the field's text then changes.
 const typeIntoFocusedFieldScript = (text: string): string => `(() => {
   const text = ${JSON.stringify(text)}
   const field = ${FOCUSED_FIELD_EXPRESSION}
   if (!field) return false
   if (field.isContentEditable) {
+    const previous = field.textContent
     const beforeInput = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text })
-    if (!field.dispatchEvent(beforeInput)) return true
+    if (!field.dispatchEvent(beforeInput)) {
+      return new Promise((resolve) => setTimeout(() => resolve(field.textContent !== previous), 50))
+    }
   }
   return document.execCommand('insertText', false, text)
 })()`
