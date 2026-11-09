@@ -123,7 +123,7 @@ export function VmBuildCloudAgentStepView({
                 setMode(OFFER)
               }}
             >
-              {t('cloudSecrets.cancel', 'Cancel')}
+              {t('cloudAgentSetup.skipSignIn', 'Don’t sign in')}
             </Button>
           }
         />
