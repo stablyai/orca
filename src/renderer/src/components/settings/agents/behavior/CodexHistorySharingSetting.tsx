@@ -11,6 +11,7 @@ import {
 } from './codex-history-sharing-copy'
 import { useCodexHistorySharingHostSetting } from './use-codex-history-sharing-host-setting'
 import { useTranslate } from '@/i18n/use-translate'
+import { CODEX_HISTORY_SHARING_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 
 export function CodexHistorySharingSetting({
   settings,
@@ -38,16 +39,19 @@ export function CodexHistorySharingSetting({
   )
   const enabled = setting.state === 'ready' ? setting.enabled : true
   return (
-    <SettingsSwitchRow
-      label={getCodexHistorySharingTitle(t)}
-      description={
-        setting.state === 'unsupported'
-          ? getCodexHistorySharingUnsupported(hostLabel, t)
-          : getCodexHistorySharingDescription(t)
-      }
-      checked={enabled}
-      disabled={setting.state !== 'ready' || !hostScope.available}
-      onChange={() => void update(!enabled)}
-    />
+    // A Codex chat refused for unshared history links here.
+    <div id={CODEX_HISTORY_SHARING_SETTINGS_TARGET_ID} className="scroll-mt-6">
+      <SettingsSwitchRow
+        label={getCodexHistorySharingTitle(t)}
+        description={
+          setting.state === 'unsupported'
+            ? getCodexHistorySharingUnsupported(hostLabel, t)
+            : getCodexHistorySharingDescription(t)
+        }
+        checked={enabled}
+        disabled={setting.state !== 'ready' || !hostScope.available}
+        onChange={() => void update(!enabled)}
+      />
+    </div>
   )
 }

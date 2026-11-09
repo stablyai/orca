@@ -89,6 +89,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     'The folder this chat ran in no longer exists. Restore it to continue this chat.',
   historyInOtherAccount:
     "This chat's history is in another Claude account. Switch back to that account to continue it.",
+  codexHistoryNotShared:
+    "The selected Codex account doesn't have this chat's history, and Share Codex history across accounts is off. Turn it on in Settings → Agents, or switch back to the account this chat ran on.",
   claudeAccountFolderMissing: CLAUDE_PROFILE_MISSING_MESSAGE,
   claudeAccountSetupFailed: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE,
   agentCommandNotRunnable:

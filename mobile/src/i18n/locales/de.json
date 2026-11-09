@@ -2108,6 +2108,7 @@
       "emptyMessage": "Diese Nachricht ist leer und wurde daher nicht gesendet.",
       "fullAccessAsRoot": "{{agent}} verwendet keinen Vollzugriff, solange die Ausführung als root erfolgt. Unter Einstellungen → Agenten für den Computer, auf dem dieser Chat läuft, eine andere Berechtigung für {{agent}} auswählen und anschließend einen neuen Chat starten.",
       "historyInOtherAccount": "Der Verlauf dieses Chats befindet sich in einem anderen Claude-Konto. Zu diesem Konto zurückwechseln, um den Chat fortzusetzen.",
+      "codexHistoryNotShared": "Das ausgewählte Codex-Konto hat den Verlauf dieses Chats nicht, und „Codex-Verlauf zwischen Konten teilen“ ist aus. In Orca unter Einstellungen → Agenten auf dem Computer, auf dem dieser Chat läuft, einschalten oder zum Konto zurückwechseln, in dem dieser Chat lief.",
       "historyTooLarge": "Der Verlauf dieser Unterhaltung ist zu groß, um ihn hier wiederherzustellen.",
       "hostFault": "Bei Orca ist ein Problem aufgetreten, daher wurde dies nicht übermittelt.",
       "hostFaultTryAgain": "Bei Orca ist ein Problem aufgetreten, daher wurde dies nicht übermittelt. Erneut versuchen.",

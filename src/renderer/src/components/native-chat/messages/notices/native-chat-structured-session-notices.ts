@@ -1,4 +1,5 @@
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
+import { nativeChatCodexHistorySharingContent } from '../../host-access/native-chat-codex-history-sharing'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
@@ -54,12 +55,13 @@ function nativeChatLaunchNotice(
   const saysStartFailure =
     failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
   const details = failure?.details
-  const signInContent = nativeChatAntigravitySignInContent(
-    details?.reason,
-    agentLabel,
-    details && 'account' in details ? details.account : undefined,
-    t
-  )
+  const signInContent =
+    nativeChatAntigravitySignInContent(
+      details?.reason,
+      agentLabel,
+      details && 'account' in details ? details.account : undefined,
+      t
+    ) ?? nativeChatCodexHistorySharingContent(details?.reason, t)
   return {
     content: signInContent,
     key: 'launch',

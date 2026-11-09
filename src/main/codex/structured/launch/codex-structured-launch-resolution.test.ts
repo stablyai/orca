@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { configureCodexThreadHistory } from '../../history/resume/codex-thread-latest-copy'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
@@ -148,6 +149,10 @@ describe('codex structured launch resolution', () => {
       const newHome = join(root, 'account-b')
       mkdirSync(join(oldHome, 'sessions', '2026', '11', '04'), { recursive: true })
       writeFileSync(join(oldHome, rollout), '{"type":"session_meta"}\n')
+      configureCodexThreadHistory(() => ({
+        homes: { homes: [oldHome, newHome], unreadable: false },
+        historyShared: true
+      }))
       const prepareLaunchAccountHome = vi.fn(async () => ({
         variable: 'CODEX_HOME' as const,
         path: newHome

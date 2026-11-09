@@ -39,6 +39,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'managedAccountUnsupported',
   'launchFolderMissing',
   'historyInOtherAccount',
+  /** Codex history sharing is off and the selected Codex account lacks the chat's conversation. */
+  'codexHistoryNotShared',
   'claudeAccountFolderMissing',
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',

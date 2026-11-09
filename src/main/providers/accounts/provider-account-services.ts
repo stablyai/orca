@@ -4,6 +4,10 @@ import type { Store } from '../../persistence/loading-store/store'
 import { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import { CodexRuntimeHomeService } from '../../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../../codex-accounts/service'
+import {
+  configureCodexThreadHistory,
+  readCodexThreadHistory
+} from '../../codex/history/resume/codex-thread-latest-copy'
 import { ClaudeRuntimeAuthService } from '../../claude-accounts/runtime-auth-service'
 import { ClaudeAccountService } from '../../claude-accounts/service'
 import { getInitialCodexRateLimitTarget } from '../../rate-limits/providers/codex/codex-rate-limit-target'
@@ -44,6 +48,7 @@ export function createProviderAccountServices(
   void agentView.reconcile(store.getSettings())
   const rateLimits = new RateLimitService()
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
+  configureCodexThreadHistory(() => readCodexThreadHistory(codexRuntimeHome, store.getSettings()))
   const codexAccounts = new CodexAccountService(
     store,
     rateLimits,

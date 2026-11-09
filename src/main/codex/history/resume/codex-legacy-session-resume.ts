@@ -89,32 +89,6 @@ export async function prepareLegacySharedCodexSessionResume(
   return { useRealCodexHome: true }
 }
 
-/** Explicit account restarts must move the verified rollout before changing credentials. */
-export async function prepareCodexAccountRestartResume(args: {
-  sourceHome: string
-  transcriptPath: string
-  targetHome: string
-  systemCodexHomePath: string
-}): Promise<string> {
-  if (sameRuntimePath(args.sourceHome, args.targetHome)) {
-    return args.targetHome
-  }
-  const relativePath = codexDatedRolloutRelativePath(
-    join(args.sourceHome, 'sessions'),
-    resolve(args.transcriptPath)
-  )
-  if (!relativePath) {
-    throw new Error(RETRYABLE_RESUME_ERROR)
-  }
-  const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
-  await materializeLegacyRollout(
-    args.transcriptPath,
-    join(args.targetHome, 'sessions', relativePath),
-    paths.auditLogPath
-  )
-  return args.targetHome
-}
-
 /**
  * Vault dedup may choose any account's bridge alias; prefer selected credentials when its rollout exists.
  * Return null for unbridged/unsupported layouts; transient read failures must not switch credentials.

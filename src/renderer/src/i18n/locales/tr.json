@@ -19237,6 +19237,7 @@
         "managedAccountUnsupported": "WSL'de bir Claude hesabı eklenmiş olsa da Claude sohbetleri Windows'ta bir Claude hesabı gerektirir.",
         "launchFolderMissing": "Bu sohbetin çalıştığı klasör artık yok. Sohbete devam etmek için klasörü geri yükleyin.",
         "historyInOtherAccount": "Bu sohbetin geçmişi başka bir Claude hesabında. Devam etmek için o hesaba geri dönün.",
+        "codexHistoryNotShared": "Seçili Codex hesabında bu sohbetin geçmişi yok ve Codex geçmişini hesaplar arasında paylaş kapalı. Ayarlar → Ajanlar bölümünden açın veya bu sohbetin çalıştığı hesaba geri dönün.",
         "claudeAccountFolderMissing": "Seçilen Claude hesabının klasörü bulunamıyor. O hesapta yeniden oturum açın veya başka bir hesap seçin.",
         "claudeAccountSetupFailed": "Seçilen Claude hesabı ayarlanamadı. Yeniden deneyin veya başka bir hesap seçin.",
         "agentCommandNotRunnable": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı, Orca'nın bulabileceği bir program yolu veya adı olmalı; argüman ya da değişken içermemelidir. Değiştirin veya sıfırlayın.",
@@ -20222,7 +20223,10 @@
         "many_other": "{{count}} pull request oluşturuldu"
       },
       "splitRight": "Sağa Böl",
-      "splitDown": "Aşağı Böl"
+      "splitDown": "Aşağı Böl",
+      "codexHistorySharing": {
+        "sentence": "Seçili Codex hesabında bu sohbetin geçmişi yok ve Codex geçmişini hesaplar arasında paylaş kapalı. <settings>Ayarlar → Ajanlar</settings> bölümünden açın veya bu sohbetin çalıştığı hesaba geri dönün."
+      }
     },
     "tab": {
       "bar": {

@@ -19226,6 +19226,7 @@
         "managedAccountUnsupported": "Tant qu'un compte Claude est ajouté dans WSL, les chats Claude nécessitent un compte Claude Windows.",
         "launchFolderMissing": "Le dossier dans lequel ce chat s'exécutait n'existe plus. Restaurez-le pour poursuivre ce chat.",
         "historyInOtherAccount": "L'historique de ce chat se trouve dans un autre compte Claude. Revenez à ce compte pour le poursuivre.",
+        "codexHistoryNotShared": "Le compte Codex sélectionné n'a pas l'historique de ce chat, et « Partager l'historique Codex entre les comptes » est désactivé. Activez-le dans Paramètres → Agents, ou revenez au compte sur lequel ce chat s'exécutait.",
         "claudeAccountFolderMissing": "Le dossier du compte Claude sélectionné est introuvable. Reconnectez-vous à ce compte ou choisissez-en un autre.",
         "claudeAccountSetupFailed": "Le compte Claude sélectionné n'a pas pu être configuré. Réessayez ou choisissez un autre compte.",
         "agentCommandNotRunnable": "La Commande de {{agent}} dans Réglages → Agents doit commencer par un programme qu’Orca peut trouver. Les variables, tubes et autres syntaxes shell ne sont pas pris en charge ; utilisez le réglage Environnement pour les variables. Modifiez-la ou réinitialisez-la.",
@@ -20264,7 +20265,10 @@
         "many_many": "{{count}} pull requests créées"
       },
       "splitRight": "Diviser à droite",
-      "splitDown": "Diviser vers le bas"
+      "splitDown": "Diviser vers le bas",
+      "codexHistorySharing": {
+        "sentence": "Le compte Codex sélectionné n'a pas l'historique de ce chat, et « Partager l'historique Codex entre les comptes » est désactivé. Activez-le dans <settings>Paramètres → Agents</settings>, ou revenez au compte sur lequel ce chat s'exécutait."
+      }
     },
     "tab": {
       "bar": {

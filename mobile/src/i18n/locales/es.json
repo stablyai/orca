@@ -2176,6 +2176,7 @@
       "emptyMessage": "Este mensaje está vacío, así que no se envió.",
       "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
       "historyInOtherAccount": "El historial de este chat está en otra cuenta de Claude. Vuelva a esa cuenta para continuarlo.",
+      "codexHistoryNotShared": "La cuenta de Codex seleccionada no tiene el historial de este chat y «Compartir el historial de Codex entre cuentas» está desactivado. Actívelo en Configuración → Agentes de Orca en el equipo que ejecuta este chat o vuelva a la cuenta en la que se ejecutó este chat.",
       "historyTooLarge": "El historial de esta conversación es demasiado grande para restaurarlo aquí.",
       "hostFault": "Orca tuvo un problema, así que esto no se completó.",
       "hostFaultTryAgain": "Orca tuvo un problema, así que esto no se completó. Vuelva a intentarlo.",

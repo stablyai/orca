@@ -114,6 +114,11 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.historyInOtherAccount',
         COPY.historyInOtherAccount
       ),
+    codexHistoryNotShared: () =>
+      translate(
+        'components.native-chat.failureWords.codexHistoryNotShared',
+        COPY.codexHistoryNotShared
+      ),
     claudeAccountFolderMissing: () =>
       translate(
         'components.native-chat.failureWords.claudeAccountFolderMissing',

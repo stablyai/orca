@@ -5,10 +5,8 @@ import {
   type CodexSessionResumePreparation
 } from './codex-session-resume-home'
 import { prepareCodexSessionResume } from './codex-session-resume-preparation'
-import {
-  prepareCodexAccountRestartResume,
-  prepareLegacySharedCodexSessionResume
-} from './codex-legacy-session-resume'
+import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'
+import { prepareLatestCodexThreadCopy, readCodexThreadHistory } from './codex-thread-latest-copy'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
 import { codexHookService } from '../../hooks/installation/hook-service'
 import { reconcileCodexHooksForLaunch } from '../../hooks/reconciliation/codex-hook-reconcile'
@@ -75,6 +73,17 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       systemCodexHomePath: systemHomePath,
       sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
       resolveVerifiedResumeHome: async (sessionSource) => {
+        if (args.useSelectedAccount) {
+          // Sharing and newest-copy checks come before any install, including the legacy one.
+          const targetHome = selectedAccountCodexHome ?? systemHomePath
+          await prepareLatestCodexThreadCopy({
+            threadId: args.providerSession.id,
+            targetHome,
+            ...readCodexThreadHistory(runtimeHome, deps.getSettings())
+          })
+          await prepareCodexPinnedLaunchHome(targetHome, systemHomePath)
+          return targetHome
+        }
         let migrated = { useRealCodexHome: false }
         try {
           migrated = await prepareLegacySharedCodexSessionResume(
@@ -101,16 +110,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
             error
           )
         }
-        const resumeHome = args.useSelectedAccount
-          ? await prepareCodexAccountRestartResume({
-              sourceHome: sessionSource.homePath,
-              transcriptPath: sessionSource.transcriptPath,
-              targetHome: selectedAccountCodexHome ?? systemHomePath,
-              systemCodexHomePath: systemHomePath
-            })
-          : migrated.useRealCodexHome
-            ? systemHomePath
-            : sessionSource.homePath
+        const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
         await prepareCodexPinnedLaunchHome(resumeHome, systemHomePath)
         return resumeHome
       }

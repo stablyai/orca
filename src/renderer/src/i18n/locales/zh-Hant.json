@@ -18992,6 +18992,7 @@
         "managedAccountUnsupported": "雖然已在 WSL 中新增 Claude 帳戶，Claude 聊天仍需要 Windows Claude 帳戶。",
         "launchFolderMissing": "此聊天執行所在的資料夾已不存在。請恢復該資料夾以繼續此聊天。",
         "historyInOtherAccount": "此聊天的歷史記錄位於另一個 Claude 帳戶中。請切換回該帳戶以繼續此聊天。",
+        "codexHistoryNotShared": "所選 Codex 帳戶沒有此聊天的歷史記錄，且「在帳戶之間共用 Codex 歷史記錄」已關閉。請在「設定 → 代理程式」中開啟，或切換回此聊天執行時使用的帳戶。",
         "claudeAccountFolderMissing": "所選 Claude 帳戶的資料夾不存在。請重新登入該帳戶或選擇其他帳戶。",
         "claudeAccountSetupFailed": "無法設定所選 Claude 帳戶。請重試或選擇其他帳戶。",
         "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
@@ -19931,7 +19932,10 @@
         "many_other": "已建立 {{count}} 個 PR"
       },
       "splitRight": "向右分割",
-      "splitDown": "向下分割"
+      "splitDown": "向下分割",
+      "codexHistorySharing": {
+        "sentence": "所選 Codex 帳戶沒有此聊天的歷史記錄，且「在帳戶之間共用 Codex 歷史記錄」已關閉。請在<settings>「設定 → 代理程式」</settings>中開啟，或切換回此聊天執行時使用的帳戶。"
+      }
     },
     "tab": {
       "bar": {
