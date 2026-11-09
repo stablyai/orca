@@ -41,7 +41,7 @@ export async function prepareHomeSparePage(
       if (active === null) {
         continue
       }
-      if (!homeShown) {
+      if (!homeShown || homeSpareRefillWaitMs() > 0) {
         return
       }
       const directory = generationDirectoryPath(active.directory)
