@@ -2,7 +2,7 @@
 // PR is watched whether or not any chat was opened.
 
 import { PRWatchService } from '../../github/pr-watch/pr-watch-service'
-import type { PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
+import type { PRPublishedBranch, PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
 import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
@@ -15,6 +15,7 @@ export type PRWatchRuntimeDeps = {
   hostId: string
   logger: StructuredAgentSessionLogger
   resolveWorkspace: (workspaceId: string) => Promise<PRWatchWorkspace | 'not-git' | null>
+  adoptPublishedBranch: (workspaceId: string, published: PRPublishedBranch) => Promise<void>
 }
 
 let generation = 0
@@ -57,6 +58,12 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
         return location.workspaceKind === 'git-worktree'
           ? deps.resolveWorkspace(location.workspaceId).catch(() => null)
           : 'not-git'
+      },
+      adoptPublishedBranch: async (chatId, published) => {
+        const location = store.getConversation(chatId)?.location
+        if (location?.workspaceKind === 'git-worktree') {
+          await deps.adoptPublishedBranch(location.workspaceId, published)
+        }
       },
       openJournal: openChatJournal,
       logger: deps.logger

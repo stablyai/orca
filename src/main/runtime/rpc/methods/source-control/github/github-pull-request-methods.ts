@@ -25,7 +25,8 @@ export const GITHUB_PULL_REQUEST_METHODS = [
         params.acceptMergedFallbackPR,
         params.currentHeadOid,
         params.reason,
-        params.userRefresh
+        params.userRefresh,
+        params.linkedPRRepository
       )
   }),
   defineMethod({

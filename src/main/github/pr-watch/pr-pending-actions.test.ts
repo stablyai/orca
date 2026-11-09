@@ -217,34 +217,51 @@ describe('pending PR actions', () => {
     expect(count('pr_pending_actions')).toBe(0)
   })
 
-  it('records both actions of one call that pushes and opens a PR', async () => {
-    const journal = await openJournal()
-    await journal.appendItem(
-      { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
-      shellCall(
-        'git push origin HEAD:review && gh pr create --head review --fill',
-        'To github.com:acme/repo.git\n * [new branch]      HEAD -> review\nhttps://github.com/acme/repo/pull/8\n'
-      ),
-      { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    const resume = resumeAfterRestart()
-    resume.drain()
-    // The create alone doesn't complete the row; the push's PR read does, with both actions.
-    const read = prInfoFixture({
-      number: 8,
-      headRefName: 'review',
-      headSha: '89abcde0000000000000000000000000000000ff',
-      headRepo: { owner: 'acme', repo: 'repo' },
-      prRepo: { owner: 'acme', repo: 'repo' }
-    })
-    await vi.waitFor(() => {
-      resume.verifyRead(prWatchCandidate(WORKSPACE, null), read, clock)
-      expect(count('pr_pending_actions')).toBe(0)
-    })
-    resume.clear()
-    const kinds = openTestJournalHostDatabase(root)
-      .db.prepare('SELECT kind FROM pr_chat_actions ORDER BY kind')
-      .all()
-    expect(kinds.map((row) => row.kind)).toEqual(['opened', 'pushed'])
-  })
+  it.each(['work', 'review'])(
+    'records a push and PR creation and the checkout that published them: %s',
+    async (branch) => {
+      const journal = await openJournal()
+      await journal.appendItem(
+        { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
+        shellCall(
+          'git push origin HEAD:review && gh pr create --head review --fill',
+          'To github.com:acme/repo.git\n * [new branch]      HEAD -> review\nhttps://github.com/acme/repo/pull/8\n'
+        ),
+        { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+      const resume = resumeAfterRestart({
+        chatWorkspace: async () => ({ ...WORKSPACE, branch })
+      })
+      resume.drain()
+      // The create alone doesn't complete the row; the push's PR read does, with both actions.
+      const read = prInfoFixture({
+        number: 8,
+        headRefName: 'review',
+        headSha: '89abcde0000000000000000000000000000000ff',
+        headRepo: { owner: 'acme', repo: 'repo' },
+        prRepo: { owner: 'acme', repo: 'repo' }
+      })
+      await vi.waitFor(() => {
+        resume.verifyRead(prWatchCandidate(WORKSPACE, null), read, clock)
+        expect(count('pr_pending_actions')).toBe(0)
+      })
+      resume.clear()
+      const kinds = openTestJournalHostDatabase(root)
+        .db.prepare('SELECT kind FROM pr_chat_actions ORDER BY kind')
+        .all()
+      expect(kinds.map((row) => row.kind)).toEqual(['opened', 'pushed'])
+      // The push's intent, saved after the create's, replaces it with the URL it pushed to.
+      const adoptions = openTestJournalHostDatabase(root)
+        .db.prepare('SELECT chat_id, number, checkout_branch, remote_url FROM pr_branch_adoptions')
+        .all()
+      expect(adoptions).toEqual([
+        {
+          chat_id: 'chat-1',
+          number: 8,
+          checkout_branch: branch,
+          remote_url: 'github.com:acme/repo.git'
+        }
+      ])
+    }
+  )
 })

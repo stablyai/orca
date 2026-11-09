@@ -13,13 +13,15 @@ import {
   openTestJournalHostDatabase
 } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { assemblePRRefreshFoundOutcome } from '../client/lookup/pr-refresh-outcome-assembly'
+import { resolveRepoUpstream } from '../client/fetch/repo-slug-upstream'
+import { resolveGitHubApiRepositoryCandidates } from '../github-api-repository'
 import type { PRWatchJob } from '../pr-refresh-watch-jobs'
 import { readPRPendingDeliveryChatIds, readPRPendingHeads } from './pr-check-event-tables'
 import { readPRHeadCheckRollup } from './pr-head-check-read'
 import { capturePRPendingActions } from './pr-pending-actions'
 import { shellCallRow } from './pr-watch-test-fixtures'
 import { PRWatchService } from './pr-watch-service'
-import type { PRWatchWorkspace } from './pr-watch-types'
+import { prWatchCandidate, type PRWatchServiceDeps, type PRWatchWorkspace } from './pr-watch-types'
 
 // The PR read queue and GitHub are the boundary; everything from the observer inward is real.
 type QueueObserver = (candidate: GitHubPRRefreshCandidate, outcome: PRRefreshOutcome) => void
@@ -54,9 +56,13 @@ vi.mock('./pr-head-check-read', () => ({
   isCommitInPRHead: async () => false
 }))
 vi.mock('../github-api-repository', () => ({
-  resolveGitHubApiRepositoryCandidates: async () => ({
-    candidates: [{ owner: 'acme', repo: 'repo', host: 'github.com' }]
-  })
+  resolveGitHubApiRepositoryCandidates: vi.fn(async () => ({
+    candidates: [{ owner: 'acme', repo: 'repo', host: 'github.com' }],
+    headRepo: { owner: 'acme', repo: 'repo', host: 'github.com' }
+  }))
+}))
+vi.mock('../client/fetch/repo-slug-upstream', () => ({
+  resolveRepoUpstream: vi.fn(async () => null)
 }))
 
 const P_KEY = 'github.com/acme/repo#7'
@@ -82,12 +88,16 @@ const run = (status: string, conclusion: string | null) => ({
 let root: string
 const journals = createTrackedJournalOpener()
 
-function service(chatWorkspace: (chatId: string) => Promise<PRWatchWorkspace>): PRWatchService {
+function service(
+  chatWorkspace: (chatId: string) => Promise<PRWatchWorkspace>,
+  adoptPublishedBranch: PRWatchServiceDeps['adoptPublishedBranch'] = async () => {}
+): PRWatchService {
   return new PRWatchService({
     database: openTestJournalHostDatabase(root),
     chatExists: () => true,
     chatFence: () => 0,
     chatWorkspace,
+    adoptPublishedBranch,
     openJournal: () => null,
     logger: { warn: () => {} }
   })
@@ -166,6 +176,87 @@ describe('PRWatchService startup retirement', () => {
     vi.useRealTimers()
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })
+  })
+
+  it('records an opened origin PR while fork parent metadata is inaccessible', async () => {
+    const database = openTestJournalHostDatabase(root)
+    vi.mocked(resolveRepoUpstream).mockRejectedValue(new Error('parent inaccessible'))
+    capturePRPendingActions(
+      database.db,
+      'origin-chat',
+      [shellCallRow('origin-item', 'gh pr create --fill', 'https://github.com/acme/repo/pull/7\n')],
+      Date.now(),
+      () => undefined
+    )
+    const watch = service(async () => WORKSPACE)
+    await watch.start()
+    await vi.waitFor(() =>
+      expect(database.db.prepare('SELECT owner, repo, number FROM pr_chat_actions').all()).toEqual([
+        { owner: 'acme', repo: 'repo', number: 7 }
+      ])
+    )
+    watch.stop()
+    vi.mocked(resolveRepoUpstream).mockResolvedValue(null)
+  })
+
+  it.each([false, true])(
+    'follows a fork parent PR after transient lookup failure: %s',
+    async (transient) => {
+      vi.useFakeTimers()
+      const database = openTestJournalHostDatabase(root)
+      const fork = {
+        candidates: [{ owner: 'fork-owner', repo: 'repo' }],
+        headRepo: { owner: 'fork-owner', repo: 'repo' }
+      }
+      vi.mocked(resolveGitHubApiRepositoryCandidates).mockResolvedValueOnce(fork)
+      if (transient) {
+        vi.mocked(resolveGitHubApiRepositoryCandidates).mockResolvedValueOnce(fork)
+        vi.mocked(resolveRepoUpstream).mockRejectedValueOnce(new Error('network unavailable'))
+      }
+      vi.mocked(resolveRepoUpstream).mockResolvedValueOnce({ owner: 'acme', repo: 'repo' })
+      capturePRPendingActions(
+        database.db,
+        'fork-chat',
+        [shellCallRow('fork-item', 'gh pr create --fill', 'https://github.com/acme/repo/pull/7\n')],
+        Date.now(),
+        () => undefined
+      )
+      const watch = service(async () => WORKSPACE)
+      await watch.start()
+      await vi.runAllTimersAsync()
+      expect(database.db.prepare('SELECT owner, repo, number FROM pr_chat_actions').all()).toEqual([
+        { owner: 'acme', repo: 'repo', number: 7 }
+      ])
+      watch.stop()
+    }
+  )
+
+  it('retries a failed adoption on the next read and ends it once followed', async () => {
+    const database = await seedOpenedPR('chat-p', 7)
+    const intents = () => database.db.prepare('SELECT chat_id FROM pr_branch_adoptions').all()
+    const adopt = vi
+      .fn<PRWatchServiceDeps['adoptPublishedBranch']>()
+      .mockRejectedValueOnce(new Error('workspace busy'))
+      .mockResolvedValue(undefined)
+    const watch = service(async () => WORKSPACE, adopt)
+    await watch.start()
+    const candidate = { ...prWatchCandidate(WORKSPACE, 7), branch: 'review' }
+    observe(candidate, readOfP(HEAD_A))
+    await vi.waitFor(() => expect(adopt).toHaveBeenCalledTimes(1))
+    await Promise.resolve()
+    expect(intents()).toEqual([{ chat_id: 'chat-p' }])
+    observe(candidate, readOfP(HEAD_A))
+    await vi.waitFor(() => expect(intents()).toEqual([]))
+    observe(candidate, readOfP(HEAD_A))
+    expect(adopt).toHaveBeenCalledTimes(2)
+    expect(adopt).toHaveBeenLastCalledWith('chat-p', {
+      branch: 'review',
+      headSha: HEAD_A,
+      pr: { host: 'github.com', owner: 'acme', repo: 'repo', number: 7 },
+      checkoutBranch: 'work',
+      headRepo: { owner: 'acme', repo: 'repo' }
+    })
+    watch.stop()
   })
 
   it('keeps a push verified while startup waits, so its earlier head still reports', async () => {

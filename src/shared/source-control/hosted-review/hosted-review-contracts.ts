@@ -64,6 +64,7 @@ export type HostedReviewForBranchArgs = {
   repoOwnerExecutionHostId?: string
   branch: string
   linkedGitHubPR?: number | null
+  linkedGitHubPRRepository?: GitHubRepositoryIdentity
   fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null

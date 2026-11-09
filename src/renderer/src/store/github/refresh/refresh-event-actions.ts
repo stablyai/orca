@@ -122,7 +122,8 @@ export const createRefreshEventActions = (
               alias.worktreeId,
               linkedPRNumber,
               aliasExecutionHostId,
-              worktreeLookupIndex
+              worktreeLookupIndex,
+              alias.linkedPRRepository
             )
           ) {
             continue

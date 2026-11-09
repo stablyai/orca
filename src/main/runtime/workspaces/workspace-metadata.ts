@@ -7,6 +7,7 @@ import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-pro
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import {
+  type WorktreeMetadataUpdateGuard,
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
 } from './metadata/runtime-managed-worktree-metadata'
@@ -66,7 +67,8 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
         crossStoreParent?: CrossStoreParentRef
         noParent?: boolean
       }
-    }
+    },
+    guard?: WorktreeMetadataUpdateGuard
   ) {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -74,6 +76,7 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
     return updateRuntimeManagedWorktreeMetadata({
       selector: worktreeSelector,
       updates,
+      guard,
       store: this.store,
       ports: {
         resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),

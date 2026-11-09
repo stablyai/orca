@@ -241,22 +241,9 @@ export function applyGitHubPRResultToCaches(
     rejectedPRUrls: args.rejectedPRUrls
   })
   const hostedReviewSync = syncHostedReviewCacheFromGitHubPRResult({
+    ...args,
     cache: args.hostedReviewCache,
-    repoPath: args.repoPath,
-    branch: args.branch,
-    settings: args.settings,
-    repoId: args.repoId,
-    connectionId: args.connectionId,
-    executionHostId: args.executionHostId,
-    hasRepoOwner: args.hasRepoOwner,
-    pr: args.pr,
-    fetchedAt: args.fetchedAt,
-    linkedPRNumber: args.linkedPRNumber,
-    fallbackPRNumber: args.fallbackPRNumber,
-    fallbackPRSource: args.fallbackPRSource,
-    preserveExistingPRForFallbackMiss,
-    requestStartedAt: args.requestStartedAt,
-    requestStartedEntry: args.requestStartedEntry
+    preserveExistingPRForFallbackMiss
   })
   return {
     prCache:

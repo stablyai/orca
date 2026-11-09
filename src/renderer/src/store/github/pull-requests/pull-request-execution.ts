@@ -1,3 +1,4 @@
+import { linkedPRRepository } from '../../../../../shared/github/linked-pr-repository'
 import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
@@ -93,6 +94,7 @@ export function startPullRequestLookup(args: {
           ? captureLinkedReviewClearScope(get(), options?.worktreeId, repo)
           : undefined
       const requestHeadOid = candidateWorktree?.head ?? null
+      const repository = linkedPRRepository(candidateWorktree)
       let transportFailed = false
       const response = runtimeRepo
         ? callRuntimeRpc<PRRefreshOutcome | PRInfo | null>(
@@ -102,6 +104,7 @@ export function startPullRequestLookup(args: {
               repo: runtimeRepo.repo.id,
               branch,
               linkedPRNumber,
+              linkedPRRepository: repository,
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
               ...(options?.userRefresh === true ? { userRefresh: true } : {}),
@@ -121,6 +124,7 @@ export function startPullRequestLookup(args: {
               worktreeId: options?.worktreeId,
               currentHeadOid: requestHeadOid,
               linkedPRNumber,
+              linkedPRRepository: repository,
               fallbackPRNumber,
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
@@ -162,7 +166,16 @@ export function startPullRequestLookup(args: {
         let skippedStaleLinkedPRLookup = false
         set((s) => {
           // Why: unlinking a PR mid exact-linked-PR-lookup must stop the older result from restoring the manual link UI.
-          if (isStaleExactLinkedPRLookup(s, options?.worktreeId, linkedPRNumber, executionHostId)) {
+          if (
+            isStaleExactLinkedPRLookup(
+              s,
+              options?.worktreeId,
+              linkedPRNumber,
+              executionHostId,
+              undefined,
+              repository
+            )
+          ) {
             skippedStaleLinkedPRLookup = true
             return s
           }

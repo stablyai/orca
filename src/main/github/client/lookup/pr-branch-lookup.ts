@@ -23,6 +23,8 @@ import type { PRProviderReadOptions } from './shared-pr-provider-reads'
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
+import { sameOwnerRepo } from '../github-exec-scope'
+import { getRepositoryForkParent } from '../fetch/repo-slug-upstream'
 
 // Why: GitHub lists a branch's PRs newest first, so with a page of one a closed PR opened after
 // the live one wins. Fetch a page and prefer the open PR; fall back to the newest one.
@@ -106,6 +108,8 @@ export async function hydrateBranchLookupWithExactPR(
 export async function lookupPRByBranchName(args: {
   candidates: OwnerRepo[]
   headRepo: OwnerRepo | null
+  discoverForkParent?: boolean
+  isStale?: (data: PullRequestLookupData, prRepo: OwnerRepo | null) => Promise<boolean>
   branchName: string
   ghOptions: GhExecOptions
   executionScope: string
@@ -147,7 +151,8 @@ export async function lookupPRByBranchName(args: {
         if (
           data &&
           (!args.policy || (await args.policy.accepts(data, candidate))) &&
-          pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
+          pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
+          (!args.isStale || !(await args.isStale(data, candidate)))
         ) {
           return { data, dataRepo: candidate }
         }
@@ -176,7 +181,8 @@ export async function lookupPRByBranchName(args: {
           if (
             data &&
             (!args.policy || (await args.policy.accepts(data, candidate))) &&
-            pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
+            pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
+            (!args.isStale || !(await args.isStale(data, candidate)))
           ) {
             return { data, dataRepo: candidate }
           }
@@ -185,6 +191,20 @@ export async function lookupPRByBranchName(args: {
             pendingError = retryErr
             hasPendingError = true
           }
+        }
+      }
+    }
+    // A push to a fork no remote names can open its PR in that fork's parent.
+    if (args.discoverForkParent && args.headRepo) {
+      const parent = await getRepositoryForkParent(args.headRepo, args.ghOptions)
+      if (parent && !args.candidates.some((candidate) => sameOwnerRepo(candidate, parent))) {
+        const parentLookup = await lookupPRByBranchName({
+          ...args,
+          candidates: [parent],
+          discoverForkParent: false
+        })
+        if (parentLookup.data || !hasPendingError) {
+          return parentLookup
         }
       }
     }
@@ -216,7 +236,8 @@ export async function lookupPRByBranchName(args: {
           checksUnavailable: true
         }
     const lookup = { data, dataRepo: null }
-    return !args.policy || (await args.policy.accepts(lookup.data, null))
+    return (!args.policy || (await args.policy.accepts(lookup.data, null))) &&
+      (!args.isStale || !(await args.isStale(lookup.data, null)))
       ? lookup
       : { data: null, dataRepo: null }
   } catch (err) {

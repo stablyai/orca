@@ -37,8 +37,12 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
+import { isGitHubHostAuthenticated } from './github-enterprise-repository'
 import { getPRForBranch } from './client/lookup/get-pr-for-branch'
+import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
 import { resetPRForBranchMocks } from './client-test-harness'
+import { hostedReviewOptionArgs } from './pr-refresh-candidate-policy'
+import { completePRCheckGraphQLResponse } from '../../shared/github/complete-pr-check-test-fixture'
 
 const {
   ghExecFileAsyncMock,
@@ -51,6 +55,199 @@ describe('getPRForBranch', () => {
   beforeEach(() => {
     resetPRForBranchMocks(clientMocks)
   })
+
+  it('keeps failed fork-parent discovery retryable instead of reporting no PR', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'fork-owner', repo: 'orca' }],
+      headRepo: { owner: 'fork-owner', repo: 'orca' }
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '[]' })
+      .mockRejectedValueOnce(new Error('network unavailable'))
+      .mockResolvedValue({ stdout: '[]' })
+
+    const outcome = await getPRForBranchOutcome('/repo-root', 'work', null, null, null, {
+      headRepository: { owner: 'fork-owner', repo: 'orca' }
+    })
+
+    expect(outcome).toMatchObject({ kind: 'upstream-error' })
+  })
+
+  it('never reads a linked PR on an unconfigured, unauthenticated host', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'stablyai', repo: 'orca' }
+    })
+    vi.mocked(isGitHubHostAuthenticated).mockResolvedValueOnce(false)
+
+    const outcome = await getPRForBranchOutcome('/repo-root', 'work', 42, null, null, {
+      exactRepository: { owner: 'stablyai', repo: 'orca', host: 'ghe.attacker.example' }
+    })
+
+    expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'auth' })
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('never asks an unauthenticated push host for its fork parent', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'stablyai', repo: 'orca' }],
+      headRepo: { owner: 'stablyai', repo: 'orca' }
+    })
+    vi.mocked(isGitHubHostAuthenticated).mockResolvedValueOnce(false)
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await getPRForBranchOutcome('/repo-root', 'work', null, null, null, {
+      headRepository: { owner: 'fork-owner', repo: 'orca', host: 'git.attacker.example' }
+    })
+
+    expect(ghExecFileAsyncMock.mock.calls.map(([args]) => args)).not.toContainEqual(
+      expect.arrayContaining(['repo', 'view'])
+    )
+  })
+
+  it('finds a PR in the known fork without requiring access to its parent', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [{ owner: 'fork-owner', repo: 'orca' }],
+      headRepo: { owner: 'fork-owner', repo: 'orca' }
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 72,
+            title: 'Fork PR',
+            state: 'open',
+            html_url: 'https://github.com/fork-owner/orca/pull/72',
+            head: { ref: 'work', sha: 'fork-head' }
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 72,
+          title: 'Fork PR',
+          state: 'OPEN',
+          url: 'https://github.com/fork-owner/orca/pull/72',
+          mergeable: 'MERGEABLE',
+          headRefName: 'work',
+          headRefOid: 'fork-head',
+          statusCheckRollup: []
+        })
+      })
+      .mockRejectedValue(new Error('parent inaccessible'))
+
+    const pr = await getPRForBranch('/repo-root', 'work', null, null, null, {
+      headRepository: { owner: 'fork-owner', repo: 'orca' }
+    })
+
+    expect(pr).toMatchObject({ number: 72, prRepo: { owner: 'fork-owner', repo: 'orca' } })
+  })
+
+  it.each([
+    { originOwner: 'stablyai', staleMerged: false },
+    { originOwner: 'fork-owner', staleMerged: false },
+    { originOwner: 'fork-owner', staleMerged: true },
+    { originOwner: 'other-fork', staleMerged: false }
+  ])(
+    'discovers a parent PR with origin $originOwner and stale merged fork PR $staleMerged',
+    async ({ originOwner, staleMerged }) => {
+      resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+        candidates: [{ owner: originOwner, repo: 'orca' }],
+        headRepo: { owner: originOwner, repo: 'orca' }
+      })
+      if (originOwner !== 'stablyai') {
+        if (originOwner === 'other-fork') {
+          ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+        }
+        if (staleMerged) {
+          ghExecFileAsyncMock
+            .mockResolvedValueOnce({
+              stdout: JSON.stringify([
+                {
+                  number: 11,
+                  title: 'Old fork work',
+                  state: 'closed',
+                  merged_at: '2026-01-01T00:00:00Z',
+                  html_url: 'https://github.com/fork-owner/orca/pull/11',
+                  head: { ref: 'work', sha: 'old-head' }
+                }
+              ])
+            })
+            .mockResolvedValueOnce({
+              stdout: JSON.stringify({
+                number: 11,
+                title: 'Old fork work',
+                state: 'MERGED',
+                url: 'https://github.com/fork-owner/orca/pull/11',
+                mergeable: 'MERGEABLE',
+                headRefName: 'work',
+                headRefOid: 'old-head',
+                statusCheckRollup: []
+              })
+            })
+            .mockResolvedValueOnce(completePRCheckGraphQLResponse(11, 'old-head'))
+        } else {
+          ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+        }
+        ghExecFileAsyncMock.mockResolvedValueOnce({
+          stdout: JSON.stringify({
+            isFork: true,
+            parent: { name: 'orca', owner: { login: 'stablyai' } }
+          })
+        })
+      }
+      ghExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify([
+            {
+              number: 91,
+              title: 'Published fork work',
+              state: 'open',
+              html_url: 'https://github.com/stablyai/orca/pull/91',
+              head: {
+                ref: 'work',
+                sha: 'published-head',
+                repo: { name: 'orca', owner: { login: 'fork-owner' } }
+              }
+            }
+          ])
+        })
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({
+            number: 91,
+            title: 'Published fork work',
+            state: 'OPEN',
+            url: 'https://github.com/stablyai/orca/pull/91',
+            statusCheckRollup: [],
+            mergeable: 'MERGEABLE',
+            headRefName: 'work',
+            headRefOid: 'published-head',
+            headRepositoryOwner: { login: 'fork-owner' },
+            headRepository: { name: 'orca' }
+          })
+        })
+      const options = hostedReviewOptionArgs(
+        { headRepository: { owner: 'fork-owner', repo: 'orca' }, currentHeadOid: 'published-head' },
+        'post-push'
+      )[0]
+
+      const pr = await getPRForBranch('/repo-root', 'work', null, null, null, options)
+
+      expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+        [
+          'api',
+          'repos/stablyai/orca/pulls?head=fork-owner%3Awork&state=all&per_page=10',
+          '--include'
+        ],
+        { cwd: '/repo-root' }
+      )
+      expect(pr).toMatchObject({
+        number: 91,
+        prRepo: { owner: 'stablyai', repo: 'orca' },
+        headRepo: { owner: 'fork-owner', repo: 'orca' }
+      })
+    }
+  )
 
   it('uses the tracked upstream remote owner for fork branch lookup', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({

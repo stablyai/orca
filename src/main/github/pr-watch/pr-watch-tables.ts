@@ -60,6 +60,19 @@ CREATE TABLE IF NOT EXISTS pr_pending_actions (
   PRIMARY KEY (chat_id, anchor_item_id)
 );
 CREATE INDEX IF NOT EXISTS pr_pending_actions_by_due ON pr_pending_actions (next_attempt_at);
+CREATE TABLE IF NOT EXISTS pr_branch_adoptions (
+  chat_id         TEXT    NOT NULL,
+  forge_host      TEXT    NOT NULL,
+  owner           TEXT    NOT NULL,
+  repo            TEXT    NOT NULL,
+  number          INTEGER NOT NULL,
+  checkout_branch TEXT    NOT NULL,
+  remote_url      TEXT,
+  created_at      INTEGER NOT NULL,
+  PRIMARY KEY (chat_id, forge_host, owner, repo, number)
+);
+CREATE INDEX IF NOT EXISTS pr_branch_adoptions_by_pr
+  ON pr_branch_adoptions (forge_host, owner, repo, number, created_at);
 CREATE TABLE IF NOT EXISTS pr_check_contexts (
   pr_key       TEXT    NOT NULL,
   head_sha     TEXT    NOT NULL,
@@ -148,14 +161,11 @@ export function insertPRChatAction(db: Database.Database, action: PRChatAction):
   return Number(result.changes) > 0
 }
 
-export function readPRChatActions(db: Database.Database, prKey?: string): PRChatAction[] {
-  const rows =
-    prKey === undefined
-      ? db.prepare('SELECT * FROM pr_chat_actions ORDER BY observed_at').all()
-      : db
-          .prepare(`SELECT * FROM pr_chat_actions WHERE ${PR_KEY_SQL} = ? ORDER BY observed_at`)
-          .all(prKey)
-  return rows.flatMap(actionFromRow)
+export function readPRChatActions(db: Database.Database): PRChatAction[] {
+  return db
+    .prepare('SELECT * FROM pr_chat_actions ORDER BY observed_at')
+    .all()
+    .flatMap(actionFromRow)
 }
 
 export function hasPRChatActionFrom(
@@ -188,10 +198,12 @@ export function deletePRWatchChats(db: Database.Database, chatIds: readonly stri
   const actions = db.prepare('DELETE FROM pr_chat_actions WHERE chat_id = ?')
   const deliveries = db.prepare('DELETE FROM pr_event_deliveries WHERE chat_id = ?')
   const pending = db.prepare('DELETE FROM pr_pending_actions WHERE chat_id = ?')
+  const adoptions = db.prepare('DELETE FROM pr_branch_adoptions WHERE chat_id = ?')
   for (const chatId of chatIds) {
     actions.run(chatId)
     deliveries.run(chatId)
     pending.run(chatId)
+    adoptions.run(chatId)
   }
   db.exec(`
 DELETE FROM pr_check_events WHERE id NOT IN (SELECT event_id FROM pr_event_deliveries);

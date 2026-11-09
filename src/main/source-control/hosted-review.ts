@@ -1,3 +1,4 @@
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import { githubRepoContext, withGitHubRepoExecution } from '../github/github-repository-identity'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
@@ -49,6 +50,7 @@ export async function readHostedReviewForBranch(
     executionHostId: ExecutionHostId
     branch: string
     linkedGitHubPR?: number | null
+    linkedGitHubPRRepository?: GitHubOwnerRepo
     fallbackGitHubPR?: number | null
     linkedGitLabMR?: number | null
     linkedBitbucketPR?: number | null
@@ -139,6 +141,9 @@ export async function readHostedReviewForBranch(
             ? { localGitExecOptions: providerOptions.localGitExecOptions }
             : {}),
           githubCurrentHeadOid: headOid,
+          ...(input.linkedGitHubPR != null && input.linkedGitHubPRRepository
+            ? { githubExactRepository: input.linkedGitHubPRRepository }
+            : {}),
           ...(input.userRefresh === true ? { userRefresh: true } : {}),
           ...reviewLinkForProvider(input, provider.id)
         })

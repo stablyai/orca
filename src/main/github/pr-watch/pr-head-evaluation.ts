@@ -15,6 +15,8 @@ import {
 import { insertPRChatAction, readPRChatActions, type PRChatAction } from './pr-watch-tables'
 import { markPRPendingObligationsDone, type PRPendingActionRow } from './pr-pending-actions'
 import type Database from '../../sqlite/sync-database'
+import { insertPRBranchAdoption } from './pr-branch-adoption-intents'
+import type { PRVerifiedAction } from './pr-pending-action-types'
 
 /** How long a head the PR moved off keeps being read for its result. */
 export const MOVED_HEAD_TTL_MS = 2 * 60 * 60_000
@@ -89,11 +91,20 @@ export function settlePRPendingObligations(
   database: JournalHostDatabase,
   row: PRPendingActionRow,
   indices: readonly number[],
-  verified: readonly { action: PRChatAction; movedAt: number | null }[]
+  verified: readonly PRVerifiedAction[]
 ): void {
   database.transaction((db) => {
-    for (const { action, movedAt } of verified) {
+    for (const { action, movedAt, adoption } of verified) {
       insertActionWithHead(db, action, movedAt)
+      if (adoption) {
+        const pr = { host: action.forgeHost, owner: action.owner, repo: action.repo }
+        insertPRBranchAdoption(db, {
+          ...adoption,
+          chatId: action.chatId,
+          pr: { ...pr, number: action.number },
+          createdAt: action.observedAt
+        })
+      }
     }
     markPRPendingObligationsDone(db, row, indices)
   })

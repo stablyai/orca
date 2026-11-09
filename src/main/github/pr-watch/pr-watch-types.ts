@@ -1,6 +1,6 @@
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { GitHubOwnerRepo, PRInfo } from '../../../shared/github/pull-request-types'
 import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
 import type { RepoKind } from '../../../shared/repo-types'
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
@@ -19,11 +19,22 @@ export type PRWatchWorkspace = {
   wslDistro?: string
 }
 
+/** A chat's verified PR head and the checkout branch that published it. */
+export type PRPublishedBranch = {
+  branch: string
+  headSha: string
+  pr: ParsedPRKey
+  checkoutBranch: string
+} & ({ remoteUrl: string; headRepo?: never } | { remoteUrl?: never; headRepo: GitHubOwnerRepo })
+
 export type PRWatchServiceDeps = {
   database: JournalHostDatabase
   /** The chat's git workspace. 'not-git': a folder workspace or a chat outside a worktree, which
    *  never gets lines. Null: gone or not resolvable right now. */
   chatWorkspace: (chatId: string) => Promise<PRWatchWorkspace | 'not-git' | null>
+  /** Lets the checkout follow its work to the branch it was published under. Resolves once the
+   *  publication is followed or no longer applies; rejects when it should be retried. */
+  adoptPublishedBranch: (chatId: string, published: PRPublishedBranch) => Promise<void>
   chatExists: (chatId: string) => boolean
   /** The chat's journal when it is open; closed chats take their lines when they next open. */
   openJournal: (chatId: string) => AgentSessionJournal | null

@@ -16,6 +16,7 @@ export function lookupPRForBranchOverIpc(
     branch: candidate.branch,
     ...(options.userRefresh === true ? { userRefresh: true } : {}),
     linkedPRNumber: candidate.linkedPRNumber ?? null,
+    linkedPRRepository: candidate.linkedPRRepository,
     fallbackPRNumber,
     acceptMergedFallbackPR:
       fallbackPRNumber !== null && (candidate.fallbackPRSource ?? null) !== null,

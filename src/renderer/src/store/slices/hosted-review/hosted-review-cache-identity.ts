@@ -1,3 +1,5 @@
+import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { composeRepoCacheKey } from '../../../../../shared/github/github-cache-key'
 import {
@@ -8,6 +10,7 @@ import {
 
 export type LinkedReviewHints = {
   linkedGitHubPR?: number | null
+  linkedGitHubPRRepository?: GitHubOwnerRepo
   fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
@@ -60,6 +63,9 @@ export function linkedReviewHintKey(options?: LinkedReviewHints): string {
   ] as const
   return hints
     .filter(([, number]) => number !== null)
-    .map(([provider, number]) => `${provider}:${number}`)
+    .map(
+      ([provider, number]) =>
+        `${provider}:${number}${provider === 'github' && options?.linkedGitHubPRRepository ? `@${githubRepoIdentityKey(options.linkedGitHubPRRepository)}` : ''}`
+    )
     .join('|')
 }

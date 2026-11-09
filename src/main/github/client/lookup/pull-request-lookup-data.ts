@@ -88,6 +88,8 @@ export const PR_BRANCH_LIST_JSON_FIELDS =
   'number,title,state,url,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
+  /** Verified push repository, which can differ from the checkout's configured origin. */
+  headRepository?: GitHubOwnerRepo
   userRefresh?: boolean
   acceptMergedFallbackPR?: boolean
   // Supply the actual worktree head without probing a different main-repo checkout.

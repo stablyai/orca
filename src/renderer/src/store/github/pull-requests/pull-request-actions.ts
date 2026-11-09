@@ -1,3 +1,7 @@
+import { linkedPRRepository } from '../../../../../shared/github/linked-pr-repository'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { findWorktreeById } from '../refresh/worktree-refresh'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
@@ -67,9 +71,19 @@ export const createPullRequestActions = (
         ? null
         : (options?.fallbackPRSource ??
           (explicitFallbackPRNumber != null ? 'explicit' : 'hosted-review'))
-    const lookupHintKey = prLookupHintKey(linkedPRNumber, fallbackPRNumber)
+    const workspace = options?.worktreeId
+      ? findWorktreeById(get(), options.worktreeId, repo ? getRepoExecutionHostId(repo) : undefined)
+      : null
+    const repository = linkedPRRepository(workspace)
+    const repositoryKey = repository ? githubRepoIdentityKey(repository) : null
+    const lookupHintKey = `${prLookupHintKey(linkedPRNumber, fallbackPRNumber)}${repositoryKey ? `@${repositoryKey}` : ''}`
     const linkedRefetch =
-      cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)
+      (cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)) ||
+      (linkedPRNumber !== null &&
+        cached?.data != null &&
+        (cached.data.number !== linkedPRNumber ||
+          (repositoryKey !== null &&
+            (!cached.data.prRepo || githubRepoIdentityKey(cached.data.prRepo) !== repositoryKey))))
     if (!options?.force && !options?.userRefresh && !linkedRefetch && isFresh(cached)) {
       // Why: even a fresh cache hit carries the head-scoped divergence signal; if a prior clear was declined for a mid-request head move and we're back on that head, clear the durable link.
       if (

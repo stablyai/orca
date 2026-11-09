@@ -20,6 +20,16 @@ export function shouldStopAfterExactLookupError(err: unknown): boolean {
   return classifyGhError(extractExecError(err).stderr).type !== 'not_found'
 }
 
+/** The host is not authenticated, so the repository was never asked. */
+export function prRefreshAuthError(): Extract<PRRefreshOutcome, { kind: 'upstream-error' }> {
+  return {
+    kind: 'upstream-error',
+    errorType: 'auth',
+    message: safePRRefreshErrorMessage('auth'),
+    fetchedAt: Date.now()
+  }
+}
+
 export function prRefreshUpstreamError(
   err: unknown
 ): Extract<PRRefreshOutcome, { kind: 'upstream-error' }> {

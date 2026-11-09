@@ -1,3 +1,4 @@
+import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 import { reviewRefreshIntervalMs } from '../../shared/review-refresh-policy'
 import type {
   GitHubPRRefreshAlias,
@@ -15,7 +16,13 @@ export const POST_PUSH_DELAY_MS = 2_500
 
 type PRBranchLookupCandidate = Pick<
   GitHubPRRefreshCandidate,
-  'localGitOptions' | 'linkedPRNumber' | 'fallbackPRNumber' | 'fallbackPRSource' | 'currentHeadOid'
+  | 'localGitOptions'
+  | 'headRepository'
+  | 'linkedPRRepository'
+  | 'linkedPRNumber'
+  | 'fallbackPRNumber'
+  | 'fallbackPRSource'
+  | 'currentHeadOid'
 >
 
 function shouldAcceptMergedFallbackPR(candidate: PRBranchLookupCandidate): boolean {
@@ -38,6 +45,12 @@ export function hostedReviewOptionArgs(
       ? { wslDistro: candidate.localGitOptions.wslDistro }
       : {}),
     admissionTier: admissionTierForRefreshReason(reason)
+  }
+  if (candidate.linkedPRRepository && candidate.linkedPRNumber != null) {
+    options.exactRepository = candidate.linkedPRRepository
+  }
+  if (candidate.headRepository) {
+    options.headRepository = candidate.headRepository
   }
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
@@ -72,9 +85,9 @@ export function refreshKey(candidate: GitHubPRRefreshCandidate): string {
     ? 'remote'
     : `runtime:${candidate.localGitOptions?.wslDistro ? `wsl:${candidate.localGitOptions.wslDistro}` : 'host'}`
   if (typeof candidate.linkedPRNumber === 'number') {
-    return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
+    return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRRepository ? `${githubRepoIdentityKey(candidate.linkedPRRepository)}::` : ''}${candidate.linkedPRNumber}`
   }
-  return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
+  return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.headRepository ? `${githubRepoIdentityKey(candidate.headRepository)}::` : ''}${candidate.branch}`
 }
 
 export function validateCandidate(
@@ -148,6 +161,7 @@ export function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubP
     connectionId: candidate.connectionId ?? null,
     currentHeadOid: candidate.currentHeadOid ?? null,
     linkedPRNumber: candidate.linkedPRNumber ?? null,
+    ...(candidate.linkedPRRepository ? { linkedPRRepository: candidate.linkedPRRepository } : {}),
     fallbackPRNumber:
       candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
     fallbackPRSource: candidate.linkedPRNumber == null ? (candidate.fallbackPRSource ?? null) : null
@@ -218,6 +232,8 @@ export function sameAliasRequestIdentity(
     left.connectionId === right.connectionId &&
     left.executionHostId === right.executionHostId &&
     left.linkedPRNumber === right.linkedPRNumber &&
+    (left.linkedPRRepository ? githubRepoIdentityKey(left.linkedPRRepository) : '') ===
+      (right.linkedPRRepository ? githubRepoIdentityKey(right.linkedPRRepository) : '') &&
     left.fallbackPRNumber === right.fallbackPRNumber &&
     left.fallbackPRSource === right.fallbackPRSource &&
     left.currentHeadOid === right.currentHeadOid

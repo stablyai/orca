@@ -54,11 +54,17 @@ type Ports = {
   showWorktree: (selector: string) => Promise<Worktree>
 }
 
+export type WorktreeMetadataUpdateGuard = {
+  validate?: () => Promise<boolean>
+  matches: (meta: WorktreeMeta | undefined) => boolean
+}
+
 export async function updateRuntimeManagedWorktreeMetadata(args: {
   selector: string
   updates: Updates
   store: RuntimeStore
   ports: Ports
+  guard?: WorktreeMetadataUpdateGuard
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
   const { lineage, ...metaUpdates } = args.updates
@@ -156,10 +162,20 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       )
     }
   }
+  if (args.guard?.validate && !(await args.guard.validate())) {
+    return worktree
+  }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   // Recheck removal: an earlier resolution snapshot may still contain this workspace (#22712).
   if (isRemovedFolderWorkspaceInstance(args.store, worktree.id, executionHostId)) {
     throw new Error('selector_not_found')
+  }
+  if (
+    args.guard &&
+    (!args.store.getWorktreeMetaForHost ||
+      !args.guard.matches(args.store.getWorktreeMetaForHost(worktree.id, target.hostId)))
+  ) {
+    return worktree
   }
   args.store.setWorktreeMeta(target, metadataUpdates)
   // Push explicitly for CLI mutations outside renderer optimistic updates.

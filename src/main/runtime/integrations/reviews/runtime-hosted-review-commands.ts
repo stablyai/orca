@@ -72,7 +72,8 @@ export class RuntimeHostedReviewCommands {
     acceptMergedFallbackPR?: boolean,
     currentHeadOid?: string | null,
     reason?: GitHubPRRefreshReason,
-    userRefresh?: boolean
+    userRefresh?: boolean,
+    linkedPRRepository?: GitHubOwnerRepo
   ): Promise<PRRefreshOutcome> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
@@ -80,6 +81,9 @@ export class RuntimeHostedReviewCommands {
         repo,
         reason ? admissionTierForRefreshReason(reason) : undefined
       )
+    }
+    if (linkedPRNumber != null && linkedPRRepository) {
+      lookupOptions.exactRepository = linkedPRRepository
     }
     if (userRefresh === true) {
       lookupOptions.userRefresh = true
@@ -124,6 +128,7 @@ export class RuntimeHostedReviewCommands {
     active?: boolean
     force?: boolean
     userRefresh?: boolean
+    linkedGitHubPRRepository?: GitHubOwnerRepo
     reportReadOutcome?: boolean
     linkedGitHubPR?: number | null
     fallbackGitHubPR?: number | null
@@ -143,6 +148,7 @@ export class RuntimeHostedReviewCommands {
       ...(args.force === true ? { force: true } : {}),
       ...(args.userRefresh === true ? { userRefresh: true } : {}),
       linkedGitHubPR: args.linkedGitHubPR ?? null,
+      linkedGitHubPRRepository: args.linkedGitHubPRRepository,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,

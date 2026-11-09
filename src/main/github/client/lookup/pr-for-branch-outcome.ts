@@ -53,6 +53,7 @@ export async function getPRForBranchOutcome(
         options.currentHeadOid ?? null,
         options.checkPageLimit ?? null,
         options.exactRepository ?? null,
+        options.headRepository ?? null,
         githubReadExecutionScope(ghOptions)
       ])
       return runCoalescedProbe(

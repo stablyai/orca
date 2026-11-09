@@ -1,3 +1,6 @@
+import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
+import { linkedPRRepository } from '../../../../../shared/github/linked-pr-repository'
 import type { AppState } from '../../types'
 import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -206,13 +209,19 @@ export function isStaleExactLinkedPRLookup(
   worktreeId: string | undefined,
   linkedPRNumber: number | null | undefined,
   executionHostId?: string,
-  lookupIndex?: WorktreeLookupIndex
+  lookupIndex?: WorktreeLookupIndex,
+  repository?: GitHubOwnerRepo
 ): boolean {
   if (!worktreeId || linkedPRNumber == null) {
     return false
   }
   const worktree = findWorktreeById(state, worktreeId, executionHostId, lookupIndex)
-  return worktree?.linkedPR !== linkedPRNumber
+  const currentRepository = linkedPRRepository(worktree)
+  return (
+    worktree?.linkedPR !== linkedPRNumber ||
+    (currentRepository ? githubRepoIdentityKey(currentRepository) : undefined) !==
+      (repository ? githubRepoIdentityKey(repository) : undefined)
+  )
 }
 
 export function buildPRRefreshCandidate(
@@ -283,6 +292,7 @@ export function buildPRRefreshCandidate(
     isSelected: state.activeWorktreeId === worktree.id,
     // Why: persisted linked PR metadata is exact; PR cache numbers are only fallback hints after branch-lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
+    linkedPRRepository: linkedPRRepository(worktree),
     fallbackPRNumber,
     fallbackPRSource,
     isBare: worktree.isBare,

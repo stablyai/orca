@@ -4,9 +4,14 @@
 
 import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
 import type { PRInfo } from '../../../shared/github/pull-request-types'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { pushedPullRequestHead, type PushRemote } from './pr-chat-action-recorder'
 import { PRPendingActionDrain } from './pr-pending-action-drain'
-import type { PRPendingActionResumeDeps, PRVerifiedAction } from './pr-pending-action-types'
+import type {
+  PendingPush,
+  PRPendingActionResumeDeps,
+  PRVerifiedAction
+} from './pr-pending-action-types'
 import {
   deferPRPendingAction,
   nextPRPendingActionAt,
@@ -36,18 +41,6 @@ const RETRY_MAX_MS = 30 * 60_000
 
 type Transient = { transient: true }
 const TRANSIENT: Transient = { transient: true }
-
-type PendingPush = {
-  candidate: GitHubPRRefreshCandidate
-  update: { branch: string; newSha: string | null }
-  remote: PushRemote | null
-  late: boolean
-  deadline: number
-  resolving: boolean
-  noPRReads: number
-  finish: (result: PRVerifiedAction | null) => void
-  row: PRPendingActionRow
-}
 
 export class PRPendingActionResume {
   private readonly pushes = new Set<PendingPush>()
@@ -160,7 +153,7 @@ export class PRPendingActionResume {
     if (obligation.kind === 'opened') {
       const pr = obligation.target
       // Only a PR in one of the chat repository's own GitHub remotes gets lines.
-      const own = (await this.deps.repositories(workspace)).some(
+      const own = (await this.deps.repositories(workspace, pr)).some(
         (repo) =>
           repo.owner.toLowerCase() === pr.owner.toLowerCase() &&
           repo.repo.toLowerCase() === pr.repo.toLowerCase() &&
@@ -175,7 +168,10 @@ export class PRPendingActionResume {
         observedAt: row.finishedAt
       }
       const candidate = prWatchCandidate(workspace, pr.number)
-      return this.settle(row, [index], own ? [{ action, candidate, movedAt: null }] : [])
+      const adoption = workspace.branch
+        ? { checkoutBranch: workspace.branch, remoteUrl: null }
+        : undefined
+      return this.settle(row, [index], own ? [{ action, candidate, movedAt: null, adoption }] : [])
     }
     const remote = await this.deps.resolvePushRemote(workspace, obligation.evidence)
     if (remote === null) {
@@ -199,13 +195,18 @@ export class PRPendingActionResume {
     const deadline = late ? this.deps.now() + LATE_PUSH_WINDOW_MS : row.verifyDeadlineAt
     const base = prWatchCandidate(workspace, null)
     const branch = obligation.target.branch
+    const { remoteUrl } = obligation.evidence
     // Each pushed branch is read by name: `work:review` updated review, whatever is checked out.
-    const candidate = { ...base, branch, cacheKey: `${base.cacheKey}>${branch}` }
+    const candidate = { ...base, branch, headRepository: remote ?? undefined }
+    candidate.cacheKey += `>${branch}>${remote ? githubRepoIdentityKey(remote) : ''}`
     return new Promise((resolve) => {
       const push: PendingPush = {
         candidate,
         update: { branch, newSha: obligation.evidence.newSha },
         remote,
+        // The checkout as resolved right after the push: a later switch ends this intent.
+        adoption:
+          remoteUrl && workspace.branch ? { checkoutBranch: workspace.branch, remoteUrl } : null,
         late,
         deadline,
         resolving: false,
@@ -280,11 +281,10 @@ export class PRPendingActionResume {
     head: { headSha: string; superseded: boolean },
     observedAt: number
   ): Promise<void> {
-    const { row } = push
     const verified = (headSha: string | null, movedAt: number | null): PRVerifiedAction => ({
       action: {
-        chatId: row.chatId,
-        anchor: row.anchor,
+        chatId: push.row.chatId,
+        anchor: push.row.anchor,
         forgeHost: key.host,
         owner: key.owner,
         repo: key.repo,
@@ -297,12 +297,13 @@ export class PRPendingActionResume {
         ...push.candidate,
         branch: pr.headRefName ?? push.candidate.branch,
         linkedPRNumber: key.number,
+        linkedPRRepository: { host: key.host, owner: key.owner, repo: key.repo },
         cacheKey: `${push.candidate.cacheKey}#${key.number}`
       },
       movedAt
     })
     if (!head.superseded) {
-      push.finish(verified(head.headSha, null))
+      push.finish({ ...verified(head.headSha, null), adoption: push.adoption ?? undefined })
       return
     }
     push.resolving = true

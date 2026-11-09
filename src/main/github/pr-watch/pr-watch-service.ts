@@ -10,6 +10,8 @@ import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-req
 import type { JournalRow } from '../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import { resolveGitHubApiRepositoryCandidates } from '../github-api-repository'
+import { resolveRepoUpstream } from '../client/fetch/repo-slug-upstream'
+import { sameOwnerRepo } from '../client/github-exec-scope'
 import { observedPRCheckRollup } from '../client/lookup/pr-refresh-outcome-assembly'
 import {
   addPRRefreshOutcomeObserver,
@@ -34,7 +36,9 @@ import type { PRVerifiedAction } from './pr-pending-action-types'
 import { finishesPRActionCall, type PRPendingActionRow } from './pr-pending-actions'
 import { resolvePushRemote } from './pr-push-remote-resolution'
 import { sweepGonePRWatchChats, type PRChatAction } from './pr-watch-tables'
-import { prKeyOf, prWatchCandidate, type PRWatchServiceDeps } from './pr-watch-types'
+import { parsePRKey, prKeyOf, prWatchCandidate, type PRWatchServiceDeps } from './pr-watch-types'
+import { PRBranchAdoptionOffers } from './pr-branch-adoption-offers'
+import { deleteExpiredPRBranchAdoptions } from './pr-branch-adoption-intents'
 
 const ACTION_WINDOW_MS = 14 * 24 * 60 * 60_000
 const STARTUP_SPACING_MS = 10_000
@@ -50,6 +54,7 @@ function settled(pr: PRInfo): boolean {
 
 export class PRWatchService {
   private readonly chatWatches = new Map<string, ChatWatch>()
+  private readonly adoptions: PRBranchAdoptionOffers
   private readonly resume: PRPendingActionResume
   private readonly earlierHeads: PREarlierHeadJobs
   private readonly deliveries: PREventDeliveryTrigger
@@ -61,9 +66,23 @@ export class PRWatchService {
     this.now = deps.now ?? Date.now
     this.resume = new PRPendingActionResume({
       ...deps,
-      repositories: async ({ repoPath, connectionId, wslDistro }) =>
-        (await resolveGitHubApiRepositoryCandidates(repoPath, connectionId, { wslDistro }))
-          .candidates,
+      repositories: async ({ repoPath, connectionId, wslDistro }, opened) => {
+        const { candidates, headRepo } = await resolveGitHubApiRepositoryCandidates(
+          repoPath,
+          connectionId,
+          { wslDistro }
+        )
+        if (candidates.some((repo) => sameOwnerRepo(repo, { ...opened, host: opened.forgeHost }))) {
+          return candidates
+        }
+        const parent =
+          candidates.length === 1 && headRepo
+            ? await resolveRepoUpstream(repoPath, connectionId, {
+                localGitExecOptions: { wslDistro }
+              })
+            : null
+        return parent ? [...candidates, parent] : candidates
+      },
       resolvePushRemote,
       readAfterPush: (candidate) => enqueuePRRefresh(candidate, 'post-push'),
       resolveCommitSha: resolvePRCommitSha,
@@ -78,6 +97,7 @@ export class PRWatchService {
       now: this.now
     })
     this.deliveries = new PREventDeliveryTrigger(deps)
+    this.adoptions = new PRBranchAdoptionOffers({ ...deps, stopped: () => this.stopped })
   }
 
   async start(): Promise<void> {
@@ -92,6 +112,9 @@ export class PRWatchService {
       readHeadChecks: (job, candidate) => this.earlierHeads.read(job, candidate)
     })
     this.sweepGoneChats(true)
+    this.deps.database.transaction((db) =>
+      deleteExpiredPRBranchAdoptions(db, this.now() - ACTION_WINDOW_MS)
+    )
     this.deliveries.load()
     const active = activeSavedPRWatches(this.deps.database, this.now(), ACTION_WINDOW_MS)
     // Spaced as the queue would space them anyway, so a restart starts no burst.
@@ -178,6 +201,10 @@ export class PRWatchService {
     if (!candidate || this.stopped) {
       return
     }
+    candidate = {
+      ...candidate,
+      linkedPRRepository: { host: action.forgeHost, owner: action.owner, repo: action.repo }
+    }
     this.chatWatches.set(prKey, {
       candidate,
       lastActionAt: Math.max(existing?.lastActionAt ?? 0, action.observedAt)
@@ -225,6 +252,10 @@ export class PRWatchService {
     const active = this.activeCandidate(prKey)
     if (!active) {
       return
+    }
+    const key = parsePRKey(prKey)
+    if (key) {
+      this.adoptions.offer(key, pr, this.now() - ACTION_WINDOW_MS)
     }
     this.sweepGoneChats(false)
     const rollup = observedPRCheckRollup(outcome)

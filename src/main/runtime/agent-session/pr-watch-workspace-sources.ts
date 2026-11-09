@@ -1,16 +1,34 @@
+import { getGitHubApiRepositoryForRemote } from '../../github/github-api-repository'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
+import { HOSTED_REVIEW_LINK_KEYS } from '../../../shared/worktree/hosted-review-links'
+import { withCheckoutLock } from '../../git/branch-switch'
+import type { WorktreeMetadataUpdateGuard } from '../workspaces/metadata/runtime-managed-worktree-metadata'
+import type { WorkspaceAttachment, GitPushTarget } from '../../../shared/worktree/types'
+import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import type { PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
 import { hostedReviewSshConnectionId } from '../../source-control/hosted-review-execution-host'
 import type { ProjectRuntimeResolutionStore } from '../../workspaces/execution-host/local-project-runtime-resolution'
-import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
+import {
+  getLocalProjectGhExecOptions,
+  getLocalProjectWorktreeGitOptions
+} from '../../workspaces/execution-host/project-runtime-git-options'
+import {
+  adoptPublishedPRBranch,
+  type PublishedBranchWorkspace
+} from './pr-published-branch-adoption'
 import type { PRWatchRuntimeDeps } from './pr-watch-runtime'
 
 type WorkspaceSourcesRuntime = {
   resolveRuntimeFileTarget(selector: string): Promise<{
-    worktree: { repoId: string; path: string; git: { branch: string } }
+    worktree: PublishedBranchWorkspace & { repoId: string; path: string }
     executionHostId: ExecutionHostId
   }>
+  updateManagedWorktreeMeta(
+    selector: string,
+    updates: { pushTarget: GitPushTarget; linkedPR: number; linkedItems: WorkspaceAttachment[] },
+    guard: WorktreeMetadataUpdateGuard
+  ): Promise<unknown>
   store: () => ProjectRuntimeResolutionStore & { getRepo(repoId: string): Repo | undefined }
 }
 
@@ -32,7 +50,7 @@ function repoSource(
 /** A chat's checkout, for the host's CI-line watches. */
 export function prWatchWorkspaceSources(
   runtime: WorkspaceSourcesRuntime
-): Pick<PRWatchRuntimeDeps, 'resolveWorkspace'> {
+): Pick<PRWatchRuntimeDeps, 'resolveWorkspace' | 'adoptPublishedBranch'> {
   return {
     resolveWorkspace: async (workspaceId) => {
       const { worktree, executionHostId } = await runtime.resolveRuntimeFileTarget(
@@ -48,6 +66,49 @@ export function prWatchWorkspaceSources(
         return null
       }
       return { ...repoSource(runtime, repo, executionHostId), checkoutPath: worktree.path, branch }
+    },
+    adoptPublishedBranch: async (workspaceId, published) => {
+      const selector = `id:${workspaceId}`
+      const { worktree, executionHostId } = await runtime.resolveRuntimeFileTarget(selector)
+      const repo = runtime.store().getRepo(worktree.repoId)
+      if (!repo || repo.kind === 'folder' || hostedReviewSshConnectionId(executionHostId)) {
+        return
+      }
+      const gitOptions = {
+        cwd: worktree.path,
+        ...getLocalProjectWorktreeGitOptions(runtime.store(), repo)
+      }
+      const expected = JSON.stringify([
+        worktree.pushTarget,
+        ...HOSTED_REVIEW_LINK_KEYS.map((key) => worktree[key] ?? null),
+        worktree.suppressedGitHubPR ?? null,
+        worktree.linkedItems
+      ])
+      await adoptPublishedPRBranch({
+        worktree,
+        published,
+        execGit: (args) => gitExecFileAsync(args, gitOptions),
+        resolveRemote: (remoteName) =>
+          getGitHubApiRepositoryForRemote(
+            worktree.path,
+            remoteName,
+            null,
+            getLocalProjectGhExecOptions(runtime.store(), repo)
+          ),
+        update: (updates, validateCheckout) =>
+          withCheckoutLock(worktree.path, () =>
+            runtime.updateManagedWorktreeMeta(selector, updates, {
+              validate: validateCheckout,
+              matches: (current) =>
+                JSON.stringify([
+                  current?.pushTarget,
+                  ...HOSTED_REVIEW_LINK_KEYS.map((key) => current?.[key] ?? null),
+                  current?.suppressedGitHubPR ?? null,
+                  current?.linkedItems
+                ]) === expected
+            })
+          )
+      })
     }
   }
 }

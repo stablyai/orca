@@ -1,3 +1,4 @@
+import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 import type {
   CacheEntry,
   HostedReviewBranchCacheIdentity,
@@ -69,6 +70,9 @@ export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIden
     identity.branch,
     // Each linked id selects a different lookup, so it belongs in the identity.
     identity.linkedGitHubPR ?? '',
+    ...(identity.linkedGitHubPRRepository
+      ? [githubRepoIdentityKey(identity.linkedGitHubPRRepository)]
+      : []),
     identity.fallbackGitHubPR ?? '',
     identity.linkedGitLabMR ?? '',
     identity.linkedBitbucketPR ?? '',

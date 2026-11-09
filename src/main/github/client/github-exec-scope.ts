@@ -28,8 +28,4 @@ export function sameOwnerRepo(left: OwnerRepo | null, right: OwnerRepo | null): 
   return Boolean(left && right && githubRepoIdentityKey(left) === githubRepoIdentityKey(right))
 }
 
-// Exact-linked fallback has no dataRepo; use its URL for host-aware merged-commit membership.
-export function ownerRepoFromPullRequestUrl(url: string): OwnerRepo | null {
-  const match = url.match(/^https?:\/\/([^/\s]+)\/([^/\s]+)\/([^/\s]+)\/pull\/\d+/)
-  return match ? { owner: match[2], repo: match[3], host: match[1] } : null
-}
+export { ownerRepoFromPullRequestUrl } from '../../../shared/github/linked-pr-repository'

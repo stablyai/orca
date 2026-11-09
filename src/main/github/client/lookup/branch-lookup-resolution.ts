@@ -5,14 +5,11 @@ import {
   type MergedPRCommitMembership
 } from '../../merged-pr-commit-membership'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../../../source-control/repo-default-branch'
-import {
-  getGitHubApiRepositoryForRemote,
-  resolveGitHubApiRepositoryCandidates
-} from '../../github-api-repository'
-import { exactRepositoryCandidates } from '../pull-request-lookup-candidates'
+import { getGitHubApiRepositoryForRemote } from '../../github-api-repository'
+import { pullRequestRepositoryCandidates } from '../pull-request-lookup-candidates'
 import { mapPRState } from '../../mappers'
 import { ownerRepoFromPullRequestUrl } from './../github-exec-scope'
-import { prRefreshUpstreamError } from './../gh-error-predicates'
+import { prRefreshAuthError, prRefreshUpstreamError } from './../gh-error-predicates'
 import {
   isMergedImplicitPR,
   shouldHideMergedImplicitPR,
@@ -55,13 +52,12 @@ export async function resolvePRForBranchOutcome(input: {
     ghOptions,
     executionScope
   } = input
-  const resolved = await resolveGitHubApiRepositoryCandidates(
-    repoPath,
-    connectionId,
-    localGitOptions
-  )
-  const { headRepo } = resolved
-  const candidates = exactRepositoryCandidates(resolved.candidates, options.exactRepository)
+  const repositories = await pullRequestRepositoryCandidates(options, input)
+  // Unreadable is not absent: an error keeps the linked PR on display until a read succeeds.
+  if (!repositories) {
+    return prRefreshAuthError()
+  }
+  const { candidates, headRepo, readableHead } = repositories
   const reads = { checkPageLimit: options.checkPageLimit, userRefresh: options.userRefresh }
   // Without local cwd, unresolved connection-backed lookups could follow ambient GH_REPO/GH_HOST.
   if (connectionId && candidates.length === 0) {
@@ -132,6 +128,7 @@ export async function resolvePRForBranchOutcome(input: {
     )
   }
 
+  let mergedBranchLookupNumber: number | null = null
   if (typeof linkedPRNumber === 'number') {
     usedExactNumberLookup = true
     const exactLookup = await lookupPRByNumber({
@@ -148,6 +145,12 @@ export async function resolvePRForBranchOutcome(input: {
     const branchLookup = await lookupPRByBranchName({
       candidates,
       headRepo,
+      discoverForkParent: readableHead !== null,
+      isStale: async (candidate, repo) => {
+        const hidden = await hideMergedImplicitPR(candidate, repo)
+        mergedBranchLookupNumber ??= hidden ? candidate.number : null
+        return hidden
+      },
       branchName,
       ghOptions,
       executionScope,
@@ -160,7 +163,7 @@ export async function resolvePRForBranchOutcome(input: {
       pendingBranchLookupError = branchLookup.pendingError
       hasPendingBranchLookupError = true
     }
-    if (!data) {
+    if (!data && !options.headRepository) {
       // Tracked upstream disambiguates head branch and fork owner beyond local branch names.
       const upstreamBranch = await getTrackedUpstreamBranch(
         repoPath,
@@ -206,7 +209,6 @@ export async function resolvePRForBranchOutcome(input: {
       }
     }
   }
-  let mergedBranchLookupNumber: number | null = null
   if (await hideMergedImplicitPR(data, dataRepo)) {
     mergedBranchLookupNumber = data?.number ?? null
     data = null

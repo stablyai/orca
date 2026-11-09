@@ -1,5 +1,11 @@
 import type { RepoKind } from '../repo-types'
-import type { CheckStatus, PRInfo, PRMergeableState, PRState } from './pull-request-types'
+import type {
+  GitHubOwnerRepo,
+  CheckStatus,
+  PRInfo,
+  PRMergeableState,
+  PRState
+} from './pull-request-types'
 
 /** Classified failures drive stable empty-state copy. Auth/permission/repo_unavailable/gh_unavailable make existing-review lookup impossible and must hide Create. */
 export type PRRefreshErrorType =
@@ -45,6 +51,7 @@ export type GitHubPRRefreshAlias = {
   connectionId?: string | null
   executionHostId?: string | null
   linkedPRNumber?: number | null
+  linkedPRRepository?: GitHubOwnerRepo
   fallbackPRNumber?: number | null
   fallbackPRSource?: 'explicit' | 'pr-cache' | 'hosted-review' | null
   // Carry request-time HEAD so merged PR containment can confirm divergence before consumers clear durable links.
@@ -52,6 +59,8 @@ export type GitHubPRRefreshAlias = {
 }
 
 export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
+  /** Host-verified push destination for branch discovery before the workspace follows it. */
+  headRepository?: GitHubOwnerRepo
   repoKind: RepoKind
   repoId: string
   isBare?: boolean

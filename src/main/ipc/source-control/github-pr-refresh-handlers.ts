@@ -1,3 +1,4 @@
+import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import { ipcMain } from 'electron'
 import { resolve } from 'node:path'
 import type {
@@ -69,6 +70,7 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
         repoPath: string
         branch: string
         linkedPRNumber?: number | null
+        linkedPRRepository?: GitHubOwnerRepo
         fallbackPRNumber?: number | null
         acceptMergedFallbackPR?: boolean
         currentHeadOid?: string | null
@@ -90,9 +92,13 @@ export function registerGitHubPRRefreshHandlers(store: Store, stats: StatsCollec
         ? { ...hostedReviewOptions }
         : args.acceptMergedFallbackPR === true ||
             currentHeadOid !== null ||
-            args.userRefresh === true
+            args.userRefresh === true ||
+            args.linkedPRRepository != null
           ? {}
           : undefined
+      if (lookupOptions && args.linkedPRNumber != null && args.linkedPRRepository) {
+        lookupOptions.exactRepository = args.linkedPRRepository
+      }
       if (lookupOptions && args.userRefresh === true) {
         lookupOptions.userRefresh = true
       }

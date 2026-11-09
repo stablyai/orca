@@ -128,6 +128,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
           executionHostId: getStoredRepoExecutionHostId(repo),
           branch: args.branch,
           linkedGitHubPR: args.linkedGitHubPR ?? null,
+          linkedGitHubPRRepository: args.linkedGitHubPRRepository,
           fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
           linkedGitLabMR: args.linkedGitLabMR ?? null,
           linkedBitbucketPR: args.linkedBitbucketPR ?? null,

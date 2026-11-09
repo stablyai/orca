@@ -48,3 +48,29 @@ export function findGitRemoteNameByFetchUrl(
   }
   return null
 }
+
+/** URL as git prints it in a push's `To` line: `user[:pass]@` dropped, as transport_anonymize_url does. */
+export function anonymizeGitRemoteUrl(url: string): string {
+  return url.includes('://')
+    ? url.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/iu, '$1')
+    : url.replace(/^[^/@]+@(?=[^/]*:)/u, '')
+}
+
+/** The remote a push printed as `To <url>`, matched on its (insteadOf-expanded) push URL. */
+export function findGitRemoteNameByPushedUrl(
+  stdout: string,
+  printedUrl: string,
+  remoteName?: string
+): string | null {
+  for (const line of iterateProcessOutputLines(stdout)) {
+    const parsed = parseGitRemoteVerboseLine(line)
+    if (
+      parsed?.direction === 'push' &&
+      (!remoteName || parsed.name === remoteName) &&
+      anonymizeGitRemoteUrl(parsed.url) === printedUrl
+    ) {
+      return parsed.name
+    }
+  }
+  return null
+}

@@ -1,3 +1,5 @@
+import type { WorktreeMetadataUpdateGuard } from '../metadata/runtime-managed-worktree-metadata'
+import type { GitPushTarget, Worktree } from '../../../../shared/worktree/types'
 import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
@@ -63,6 +65,11 @@ import { startPRWatchRuntime } from '../../agent-session/pr-watch-runtime'
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 
 export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEvents {
+  abstract updateManagedWorktreeMeta(
+    selector: string,
+    updates: { pushTarget: GitPushTarget; linkedPR: number },
+    guard?: WorktreeMetadataUpdateGuard
+  ): Promise<Worktree>
   protected readonly workerAutoReleaseActivity = new WorkerAutoReleaseActivity(
     () => this._orchestrationDb
   )
@@ -224,6 +231,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
       ...prWatchWorkspaceSources({
         resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+        updateManagedWorktreeMeta: (selector, updates, guard) =>
+          this.updateManagedWorktreeMeta(selector, updates, guard),
         store: () => this.requireStore()
       })
     })

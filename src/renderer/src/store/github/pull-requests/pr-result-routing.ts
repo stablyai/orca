@@ -1,6 +1,7 @@
 import type { AppState } from '../../types'
 import type { RuntimeFocusSettings } from '../../../../../shared/github/github-cache-key'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import { linkedGitHubPRRepositoryForBranch } from '../../slices/hosted-review/workspace-review-repository'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../shared/source-control/hosted-review/hosted-review-github'
 import {
   getHostedReviewCacheKey,
@@ -82,6 +83,8 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
   executionHostId?: string | null
   hasRepoOwner?: boolean
   pr: PRInfo | null
+  /** Workspaces whose link qualifies the hosted-review hint, as the hosted-review slice does. */
+  state?: AppState
   fetchedAt: number
   linkedPRNumber?: number | null
   fallbackPRNumber?: number | null
@@ -146,13 +149,23 @@ export function syncHostedReviewCacheFromGitHubPRResult(args: {
       hostedReviewEntry?.branchLookupGitHubPRNumber === args.pr.number)
       ? args.pr.number
       : undefined
+  const { state, pr } = args
+  const linkedRepo =
+    pr && args.repoId ? state?.repos.find((repo) => repo.id === args.repoId) : undefined
+  const linkedGitHubPRRepository =
+    pr && state && linkedRepo
+      ? linkedGitHubPRRepositoryForBranch(state, linkedRepo, args.branch, pr.number)
+      : undefined
   // Bound hosted-review keys across host/repo/branch churn like the shared slice.
   return {
     cache: withHostedReviewCacheEntry(args.cache, hostedReviewCacheKey, {
       data: args.pr ? hostedReviewInfoFromGitHubPRInfo(args.pr) : null,
       fetchedAt: args.fetchedAt,
       linkedReviewHintKey: args.pr
-        ? linkedReviewHintKey({ linkedGitHubPR: args.pr.number })
+        ? linkedReviewHintKey({
+            linkedGitHubPR: args.pr.number,
+            linkedGitHubPRRepository
+          })
         : linkedReviewHintKeyForNoGitHubPR(hostedReviewEntry),
       ...(branchLookupGitHubPRNumber !== undefined ? { branchLookupGitHubPRNumber } : {})
     }),

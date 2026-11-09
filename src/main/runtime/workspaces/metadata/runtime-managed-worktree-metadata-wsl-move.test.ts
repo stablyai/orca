@@ -1,3 +1,4 @@
+import { HOSTED_REVIEW_LINK_KEYS } from '../../../../shared/worktree/hosted-review-links'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -99,6 +100,77 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
   type Updates = Parameters<typeof updateRuntimeManagedWorktreeMetadata>[0]['updates']
   const update = (selector: string, updates: Updates, p = ports()) =>
     updateRuntimeManagedWorktreeMetadata({ selector: `id:${selector}`, updates, store, ports: p })
+
+  it('preserves a user PR change while a conditional metadata update resolves', async () => {
+    const target = hostWorktreeTarget({ id: STAYING, hostId: 'local' })
+    store.setWorktreeMeta(target, { linkedPR: null })
+    let release = (_worktree: ResolvedWorktree) => {}
+    const resolving = new Promise<ResolvedWorktree>((resolve) => (release = resolve))
+    const p = ports()
+    p.resolveWorktree.mockReturnValue(resolving)
+    const updating = updateRuntimeManagedWorktreeMetadata({
+      selector: `id:${STAYING}`,
+      updates: { linkedPR: 42, pushTarget: { remoteName: 'origin', branchName: 'review' } },
+      store,
+      ports: p,
+      guard: { matches: (meta) => meta?.linkedPR === null }
+    })
+    store.setWorktreeMeta(target, {
+      linkedPR: 8,
+      pushTarget: { remoteName: 'fork', branchName: 'user-choice' }
+    })
+    release(resolved(STAYING))
+    await updating
+    expect(store.getWorktreeMetaForHost(STAYING, 'local')).toMatchObject({
+      linkedPR: 8,
+      pushTarget: { remoteName: 'fork', branchName: 'user-choice' }
+    })
+  })
+
+  it('preserves a different provider selected during checkout validation', async () => {
+    const target = hostWorktreeTarget({ id: STAYING, hostId: 'local' })
+    store.setWorktreeMeta(target, { linkedPR: null })
+    await updateRuntimeManagedWorktreeMetadata({
+      selector: `id:${STAYING}`,
+      updates: { linkedPR: 42, pushTarget: { remoteName: 'origin', branchName: 'review' } },
+      store,
+      ports: ports(),
+      guard: {
+        validate: async () => {
+          store.setWorktreeMeta(target, { linkedGitLabMR: 7 })
+          return true
+        },
+        matches: (meta) => HOSTED_REVIEW_LINK_KEYS.every((key) => meta?.[key] == null)
+      }
+    })
+    const saved = store.getWorktreeMetaForHost(STAYING, 'local')
+    expect({
+      linkedPR: saved?.linkedPR,
+      linkedGitLabMR: saved?.linkedGitLabMR,
+      pushTarget: saved?.pushTarget
+    }).toEqual({
+      linkedPR: null,
+      linkedGitLabMR: 7,
+      pushTarget: undefined
+    })
+  })
+
+  it('does not save metadata when the final checkout validation rejects it', async () => {
+    const target = hostWorktreeTarget({ id: STAYING, hostId: 'local' })
+    store.setWorktreeMeta(target, { linkedPR: null })
+    await updateRuntimeManagedWorktreeMetadata({
+      selector: `id:${STAYING}`,
+      updates: { linkedPR: 42, pushTarget: { remoteName: 'origin', branchName: 'review' } },
+      store,
+      ports: ports(),
+      guard: { validate: async () => false, matches: () => true }
+    })
+    const saved = store.getWorktreeMetaForHost(STAYING, 'local')
+    expect({ linkedPR: saved?.linkedPR, pushTarget: saved?.pushTarget }).toEqual({
+      linkedPR: null,
+      pushTarget: undefined
+    })
+  })
 
   it('drops background bookkeeping quietly and writes nothing', async () => {
     const p = ports()

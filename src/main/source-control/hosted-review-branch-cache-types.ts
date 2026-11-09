@@ -1,3 +1,4 @@
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 
@@ -14,6 +15,7 @@ export type HostedReviewBranchCacheIdentity = {
   executionHostId: ExecutionHostId
   branch: string
   linkedGitHubPR?: number | null
+  linkedGitHubPRRepository?: GitHubOwnerRepo
   fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null

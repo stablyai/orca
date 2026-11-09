@@ -1,3 +1,4 @@
+import { linkedGitHubPRRepositoryForBranch } from './workspace-review-repository'
 import { createHostedReviewCreation } from './hosted-review-creation'
 import type { StateCreator } from 'zustand'
 import type {
@@ -107,6 +108,20 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const repo = findHostedReviewRepoForFetch(get().repos, repoPath, options)
     if (repo === null) {
       return null
+    }
+    if (
+      repo &&
+      options?.linkedGitHubPR != null &&
+      !options.linkedGitHubPRRepository &&
+      !options.exactReviewKey
+    ) {
+      const linkedGitHubPRRepository = linkedGitHubPRRepositoryForBranch(
+        get(),
+        repo,
+        branch,
+        options.linkedGitHubPR
+      )
+      options = { ...options, linkedGitHubPRRepository }
     }
     const target = hostedReviewRepoOwnerTarget(repo)
     const cacheKey =

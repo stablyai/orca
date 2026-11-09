@@ -42,6 +42,7 @@ export type GithubPullRequestApi = {
     repoOwnerExecutionHostId?: string
     branch: string
     linkedPRNumber?: number | null
+    linkedPRRepository?: GitHubOwnerRepo
     fallbackPRNumber?: number | null
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
