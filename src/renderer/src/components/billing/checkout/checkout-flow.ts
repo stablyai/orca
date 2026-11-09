@@ -30,6 +30,8 @@ export type CheckoutPhase =
 /** Poll cadence and window while Stripe's page is open (design review M3). */
 export const CHECKOUT_POLL_MS = 2_000
 export const CHECKOUT_WATCH_MS = 3 * 60_000
+/** After the window, or while the bank wants a step: keep listening, gently. */
+export const CHECKOUT_SLOW_POLL_MS = 10_000
 
 export type CheckoutPollVerdict = 'paid' | 'needs-attention' | 'waiting'
 

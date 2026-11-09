@@ -13,6 +13,8 @@ export type TeamCreateViewProps = {
   organizations: OrcaCloudOrgSummary[]
   creating: boolean
   error: string | null
+  /** This account service can't create teams yet: show a notice, not a field error. */
+  unavailable: boolean
   switchingOrgId: string | null
   onCreate: (name: string) => void
   onSwitch: (orgId: string) => void
@@ -70,13 +72,24 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
               aria-invalid={props.error ? true : undefined}
               aria-describedby={props.error ? `${id}-error` : undefined}
               onChange={(event) => setName(event.target.value)}
-              disabled={props.creating}
+              disabled={props.creating || props.unavailable}
             />
-            <Button type="submit" disabled={!trimmed || props.creating}>
+            <Button type="submit" disabled={!trimmed || props.creating || props.unavailable}>
               {props.creating ? <LoadingSpinner className="size-3.5" /> : null}
               {t('auto.components.billing.team.createCta', 'Create team')}
             </Button>
           </div>
+          {props.unavailable ? (
+            <p
+              role="status"
+              className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground"
+            >
+              {t(
+                'auto.components.billing.team.createUnavailable',
+                'Team creation isn’t available yet. Ask a teammate to invite you.'
+              )}
+            </p>
+          ) : null}
           {props.error ? (
             <p id={`${id}-error`} role="alert" className="text-xs text-destructive">
               {props.error}

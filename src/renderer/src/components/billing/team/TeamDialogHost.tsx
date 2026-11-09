@@ -30,6 +30,7 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
   const [billingBusy, setBillingBusy] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [createUnavailable, setCreateUnavailable] = useState(false)
   const [switchingOrgId, setSwitchingOrgId] = useState<string | null>(null)
   const [now] = useState(() => Date.now())
 
@@ -41,7 +42,7 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
 
   const rosterResult =
     roster.result?.status === 'ok'
-      ? { ...roster.result, roster: actions.applyOverlays(roster.result.roster) }
+      ? { ...roster.result, roster: actions.applyOverlays(roster.result.roster, roster.resultSeq) }
       : roster.result
 
   const openPortal = (): void => {
@@ -78,6 +79,8 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
               value0: outcome.name
             })
           )
+        } else if (outcome.status === 'unsupported') {
+          setCreateUnavailable(true)
         } else {
           setCreateError(createTeamFailureCopy(outcome, t))
         }
@@ -145,6 +148,7 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
         ),
         creating,
         error: createError,
+        unavailable: createUnavailable,
         switchingOrgId
       }}
       onCreateTeam={createTeam}
@@ -216,6 +220,8 @@ export function TeamDialogContent({ children }: { children: React.ReactNode }): 
  */
 export function TeamDialogHost(): React.JSX.Element {
   const { open, arrival } = useTeamPageState()
+  // Remount per team so optimistic rows and row errors never carry over to another org.
+  const orgKey = useAppStore((state) => state.orcaProfileAuthStatus?.cloud?.activeOrgId ?? 'none')
   return (
     <Dialog
       open={open}
@@ -227,7 +233,7 @@ export function TeamDialogHost(): React.JSX.Element {
     >
       {open ? (
         <TeamDialogContent>
-          <TeamPageBody arrival={arrival} />
+          <TeamPageBody key={orgKey} arrival={arrival} />
         </TeamDialogContent>
       ) : null}
     </Dialog>

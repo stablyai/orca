@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaBillingOpenResult } from '../../../../../shared/orca-billing'
+import { recordBillingStatus } from '../billing-summary-store'
 import {
   CHECKOUT_POLL_MS,
+  CHECKOUT_SLOW_POLL_MS,
   CHECKOUT_WATCH_MS,
   checkoutPollVerdict,
   nextPhaseAfterOpen,
@@ -56,16 +58,23 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
     setPhase({ kind: 'idle' })
   }, [])
 
-  const awaiting = phase.kind === 'awaiting-payment' ? phase : null
+  // Watch while a payment can still land: fast while Stripe's page is open, slower after the
+  // window ends or when the bank asked for a step (3-D Secure can finish minutes later).
+  const watching =
+    phase.kind === 'awaiting-payment' ||
+    phase.kind === 'timed-out' ||
+    phase.kind === 'needs-attention'
+      ? phase
+      : null
 
-  // Poll while Stripe's page is open.
   useEffect(() => {
-    if (!awaiting) {
+    if (!watching) {
       return
     }
+    const order = watching.order
     let disposed = false
     let inFlight = false
-    const poll = (): void => {
+    const check = (onUnpaid?: () => void): void => {
       if (inFlight) {
         return
       }
@@ -78,26 +87,36 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
           if (disposed || result?.status !== 'ok') {
             return
           }
+          recordBillingStatus(result)
           const verdict = checkoutPollVerdict(result.entitlement)
           if (verdict === 'paid') {
-            setPhase({ kind: 'paid', order: awaiting.order, seats: result.entitlement.seats })
-          } else if (verdict === 'needs-attention') {
-            setPhase({ kind: 'needs-attention', order: awaiting.order })
+            setPhase({ kind: 'paid', order, seats: result.entitlement.seats })
+          } else if (verdict === 'needs-attention' && watching.kind !== 'needs-attention') {
+            setPhase({ kind: 'needs-attention', order })
+          } else {
+            onUnpaid?.()
           }
         })
     }
-    const timer = window.setInterval(poll, CHECKOUT_POLL_MS)
-    const deadline = window.setTimeout(
-      () => setPhase({ kind: 'timed-out', order: awaiting.order }),
-      Math.max(0, awaiting.since + CHECKOUT_WATCH_MS - Date.now())
+    const poll = (): void => check()
+    const timer = window.setInterval(
+      poll,
+      watching.kind === 'awaiting-payment' ? CHECKOUT_POLL_MS : CHECKOUT_SLOW_POLL_MS
     )
+    const deadline =
+      watching.kind === 'awaiting-payment'
+        ? window.setTimeout(
+            () => setPhase({ kind: 'timed-out', order }),
+            Math.max(0, watching.since + CHECKOUT_WATCH_MS - Date.now())
+          )
+        : undefined
     window.addEventListener('focus', poll)
     const disposeReturn = window.api.orcaProfiles.onBillingReturn?.((event) => {
-      if (event.kind === 'checkout-cancel') {
-        setPhase({ kind: 'canceled', order: awaiting.order })
-      } else {
-        poll()
-      }
+      // Any local app can open an orca:// link, so "canceled" is shown only after billing
+      // confirms there is still no paid plan.
+      check(
+        event.kind === 'checkout-cancel' ? () => setPhase({ kind: 'canceled', order }) : undefined
+      )
     })
     return () => {
       disposed = true
@@ -107,7 +126,7 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
       disposeReturn?.()
     }
     // watchKey restarts the window after "Keep waiting".
-  }, [awaiting, watchKey])
+  }, [watching, watchKey])
 
   // Hand off to the Team page after the check has had a moment.
   const paidSeats = phase.kind === 'paid' ? phase.seats : null

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { AlertCircle, Check, ExternalLink, Lock, RotateCcw, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -125,6 +125,7 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
   const { phase } = props
   const now = props.now
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const bodyId = useId()
 
   // Move focus with the state so keyboard users land on the new message and its actions.
   useEffect(() => {
@@ -204,21 +205,20 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-5 py-2">
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic
-        className="flex flex-col items-center gap-3 text-center"
-      >
+      {/* Focus moves to the heading on each change (described by the body), which screen
+          readers announce once; no separate live region, so nothing is read twice. */}
+      <div className="flex flex-col items-center gap-3 text-center">
         <StatusIcon phase={phase} />
         <h3
           ref={headingRef}
           tabIndex={-1}
+          aria-describedby={bodyId}
           className="text-lg font-semibold tracking-tight outline-none"
         >
           {title}
         </h3>
         <p
+          id={bodyId}
           className={cn(
             'max-w-sm text-sm text-pretty',
             phase.kind === 'open-failed' ? 'text-destructive' : 'text-muted-foreground'

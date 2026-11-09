@@ -38,7 +38,9 @@ export function PlansDialogContent(
               ? t('auto.components.billing.plans.titleSubscribed', 'Your Orca Cloud plan')
               : t('auto.components.billing.plans.title', 'Cloud sandboxes for your whole team')}
         </DialogTitle>
-        <DialogDescription className={subscribed && !checkout ? 'sr-only' : 'max-w-xl'}>
+        <DialogDescription
+          className={subscribed || checkout ? 'sr-only' : 'mx-auto max-w-xl text-center'}
+        >
           {checkout
             ? t(
                 'auto.components.billing.checkout.subtitle',

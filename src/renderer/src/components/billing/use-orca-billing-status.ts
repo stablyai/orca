@@ -38,8 +38,8 @@ export function useOrcaBillingStatus(
       setState((previous) => ({ ...previous, loading: true }))
       void readBillingStatus().then((result) => {
         // A newer request, or unmounting, supersedes this one.
-        recordBillingStatus(result)
         if (!disposed && request === latest) {
+          recordBillingStatus(result)
           setState({ loading: false, result })
         }
       })

@@ -77,10 +77,10 @@ function RoleControl({
   return (
     <Select
       value={member.role}
-      disabled={busy}
+      // Not disabled while saving: disabling would drop keyboard focus. Changes wait instead.
       onValueChange={(next) => {
         const role = roles.find((candidate) => candidate === next)
-        if (role && role !== member.role) {
+        if (role && role !== member.role && !busy) {
           onChange(role)
         }
       }}

@@ -63,6 +63,17 @@ export async function createCheckout(
   const live = orgId ? await membership(orgId) : null
   const seats = Math.max(1, live ?? request.seats)
   const customer = await ensureCustomer(env, stripe, caller, now)
+  // One live Checkout per account: a reopened or retried checkout expires the earlier page, so
+  // two browser tabs can never both be paid into two subscriptions. A session that can no longer
+  // be expired is completing right now; treat the account as subscribed.
+  const open = await stripe.listOpenCheckoutSessions(customer)
+  for (const session of open.data) {
+    try {
+      await stripe.expireCheckoutSession(session.id)
+    } catch {
+      return { ok: false, status: 409, error: 'already_subscribed' }
+    }
+  }
   const metadata = { account_id: caller.accountId, plan: request.plan, interval: request.interval }
   const session = await stripe.createCheckoutSession(
     {

@@ -26,18 +26,18 @@ export function TeamCheckoutCelebration({
   const t = useTranslate()
   const headingRef = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
-    headingRef.current?.focus()
+    // Billing can answer seconds after the page opens; only take focus if the user hasn't
+    // moved it into the page yet (it's still on the dialog itself or nowhere).
+    const active = document.activeElement
+    if (!active || active === document.body || active.getAttribute('role') === 'dialog') {
+      headingRef.current?.focus()
+    }
   }, [])
   return (
     <section
       aria-labelledby="team-celebration-title"
-      className="relative overflow-hidden rounded-xl border border-status-success-border bg-status-success-background p-4 animate-in fade-in-0 slide-in-from-top-2 duration-300 motion-reduce:animate-none"
+      className="relative overflow-hidden rounded-xl border border-border bg-muted/40 p-4 animate-in fade-in-0 slide-in-from-top-2 duration-300 motion-reduce:animate-none"
     >
-      {/* Soft glow; static, so reduced motion loses nothing. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-16 -right-10 size-48 rounded-full bg-status-success/20 blur-3xl"
-      />
       <div className="relative flex items-start gap-3">
         <span
           aria-hidden
@@ -52,15 +52,13 @@ export function TeamCheckoutCelebration({
             tabIndex={-1}
             className="text-base font-semibold tracking-tight outline-none"
           >
-            {t('auto.components.billing.team.celebrateTitle', 'You’re on {{value0}}', {
-              value0: planLabel
-            })}
+            {t('auto.components.billing.team.celebrateTitle2', 'Welcome to Orca Cloud')}
           </h3>
           <p className="text-sm text-muted-foreground text-pretty">
             {t(
-              'auto.components.billing.team.celebrateBody',
-              '{{value0}} active. Orca Cloud is ready: agents keep running in the cloud when you step away.',
-              { value0: seatCountLabel(seats, t) }
+              'auto.components.billing.team.celebrateBody2',
+              '{{value0}} plan · {{value1}} active. Agents keep running in the cloud when you step away.',
+              { value0: planLabel, value1: seatCountLabel(seats, t) }
             )}
           </p>
           <div className="flex flex-wrap gap-2 pt-2">
@@ -141,7 +139,7 @@ export function TeamSeatsCard({
         <span className="flex-1" />
         {entitlement.canManageBilling ? (
           <>
-            <Button type="button" variant="ghost" size="sm" onClick={onSeePlans}>
+            <Button type="button" variant="outline" size="sm" onClick={onSeePlans}>
               {t('auto.components.billing.team.usage', 'Usage & plan')}
             </Button>
             <Button
@@ -229,7 +227,7 @@ export function TeamUpgradeCard({
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_100%_0%,color-mix(in_oklab,var(--foreground)_7%,transparent),transparent_60%)]"
       />
       <div className="relative flex flex-wrap items-center gap-4">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
           <Cloud className="size-4" />
         </span>
         <div className="min-w-[14rem] flex-1 space-y-0.5">
@@ -243,22 +241,23 @@ export function TeamUpgradeCard({
                   'Hosted sandboxes for the whole team. Agents keep running when you close your laptop.'
                 )
               : t(
-                  'auto.components.billing.upgrade.body',
-                  'Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{value0}} per seat / month.',
+                  'auto.components.billing.upgrade.body2',
+                  'Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{value0}}/seat/month.',
                   { value0: formatCents(monthly, locale) }
                 )}
           </p>
+          {entitlement.canManageBilling ? null : (
+            <p className="pt-1 text-xs font-medium text-muted-foreground">
+              {t('auto.components.billing.upgrade.askOwner', 'Ask an owner or admin to upgrade.')}
+            </p>
+          )}
         </div>
         {entitlement.canManageBilling ? (
           <Button type="button" onClick={onSeePlans}>
             {t('auto.components.billing.upgrade.cta', 'See plans')}
             <ArrowRight />
           </Button>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            {t('auto.components.billing.upgrade.askOwner', 'Ask an owner or admin to upgrade.')}
-          </p>
-        )}
+        ) : null}
       </div>
     </section>
   )

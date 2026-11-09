@@ -51,6 +51,8 @@ export type InviteSeatImpact =
   | { kind: 'no-plan' }
   /** Every new invite fits in seats already paid this period. */
   | { kind: 'covered'; freeSeats: number }
+  /** Seats will be added but the price or period isn't known (older billing service). */
+  | { kind: 'adds-seats-unpriced'; addedSeats: number }
   | {
       kind: 'adds-seats'
       /** How many of the new invites would add a seat when accepted. */
@@ -81,8 +83,11 @@ export function inviteSeatImpact(args: {
   const paidSeats = Math.max(entitlement.seats, 1)
   const freeSeats = Math.max(0, paidSeats - args.members - args.pendingInvites)
   const addedSeats = Math.max(0, args.newInvites - freeSeats)
-  if (addedSeats === 0 || !pricing || !entitlement.period) {
+  if (addedSeats === 0) {
     return { kind: 'covered', freeSeats }
+  }
+  if (!pricing || !entitlement.period) {
+    return { kind: 'adds-seats-unpriced', addedSeats }
   }
   return {
     kind: 'adds-seats',

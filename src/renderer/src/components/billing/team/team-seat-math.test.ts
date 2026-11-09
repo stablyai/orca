@@ -77,6 +77,21 @@ describe('inviteSeatImpact', () => {
   })
 })
 
+describe('inviteSeatImpact without prices', () => {
+  it('still says seats are added (never "covered") when pricing is unknown', () => {
+    const unpriced = team({ offers: null })
+    expect(
+      inviteSeatImpact({
+        entitlement: unpriced,
+        members: 3,
+        pendingInvites: 0,
+        newInvites: 2,
+        now: 0
+      })
+    ).toEqual({ kind: 'adds-seats-unpriced', addedSeats: 2 })
+  })
+})
+
 describe('nextInvoiceEstimate', () => {
   it('bills the renewal seat count, not the period peak', () => {
     const estimate = nextInvoiceEstimate(

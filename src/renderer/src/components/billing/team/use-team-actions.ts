@@ -1,6 +1,6 @@
 // Team mutations with optimistic rows: the change shows at once, the row shows a spinner while
 // auth confirms, and a failure rolls back with the reason on that row (design review M11/M12).
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
@@ -14,6 +14,7 @@ import type { InviteBatchOutcome } from './TeamInviteComposer'
 import type { TeamRowState } from './TeamMemberList'
 import { mutationFailureCopy } from './team-copy'
 import { roleLabel } from './team-roles'
+import { currentRosterReadSeq } from './use-org-roster'
 
 type Overlay = (roster: OrcaOrgMembersRoster) => OrcaOrgMembersRoster
 
@@ -38,7 +39,12 @@ export function useTeamActions({
   const t = useTranslate()
   const confirm = useConfirmationDialog()
   const api = window.api.orcaProfiles
-  const [overlays, setOverlays] = useState<{ id: number; apply: Overlay }[]>([])
+  // `settledAfterSeq`: once confirmed, any roster read started after this sequence includes the
+  // change, so the overlay stops applying to it (no timers; review FE-1).
+  const [overlays, setOverlays] = useState<
+    { id: number; apply: Overlay; settledAfterSeq: number | null }[]
+  >([])
+  const nextOverlayId = useRef(0)
   const [rowStates, setRowStates] = useState<Record<string, TeamRowState>>({})
 
   const setRow = useCallback((key: string, state: TeamRowState | null) => {
@@ -52,20 +58,19 @@ export function useTeamActions({
       overlay: Overlay | null,
       call: () => Promise<OrcaProfileOrgMemberMutationResult>
     ): Promise<OrcaProfileOrgMemberMutationResult> => {
-      const id = Math.random()
+      const id = ++nextOverlayId.current
       if (overlay) {
-        setOverlays((list) => [...list, { id, apply: overlay }])
+        setOverlays((list) => [...list, { id, apply: overlay, settledAfterSeq: null }])
       }
       setRow(key, { busy: true })
       const outcome = await settle(call)
       if (outcome.status === 'ok') {
         setRow(key, null)
-        onChanged()
-        // The refreshed roster carries the change; drop the overlay once it has had time to land.
-        window.setTimeout(
-          () => setOverlays((list) => list.filter((entry) => entry.id !== id)),
-          4_000
+        const settledAfterSeq = currentRosterReadSeq()
+        setOverlays((list) =>
+          list.map((entry) => (entry.id === id ? { ...entry, settledAfterSeq } : entry))
         )
+        onChanged()
       } else {
         setOverlays((list) => list.filter((entry) => entry.id !== id))
         setRow(key, { error: mutationFailureCopy(outcome, t) ?? undefined })
@@ -76,8 +81,12 @@ export function useTeamActions({
   )
 
   const applyOverlays = useCallback(
-    (roster: OrcaOrgMembersRoster): OrcaOrgMembersRoster =>
-      overlays.reduce((current, overlay) => overlay.apply(current), roster),
+    (roster: OrcaOrgMembersRoster, rosterSeq: number): OrcaOrgMembersRoster =>
+      overlays
+        .filter(
+          (overlay) => overlay.settledAfterSeq === null || rosterSeq <= overlay.settledAfterSeq
+        )
+        .reduce((current, overlay) => overlay.apply(current), roster),
     [overlays]
   )
 
@@ -226,6 +235,8 @@ export function useTeamActions({
         () => api.orgMemberRemove({ orgId, userId })
       ).then((outcome) => {
         if (outcome.status === 'ok') {
+          // The row (and the menu that had focus) is gone; land on the list heading.
+          document.getElementById('team-members-title')?.focus()
           toast.success(
             t('auto.components.billing.team.removedToast', '{{value0}} removed', { value0: name })
           )

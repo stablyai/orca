@@ -85,8 +85,8 @@ export function mutationFailureCopy(
       return t('auto.components.billing.team.notFound', 'That member or invite no longer exists.')
     case 'unsupported':
       return t(
-        'auto.components.billing.team.unsupported',
-        'Your Orca account service doesn’t support this yet. Ask an owner or admin to do it for you.'
+        'auto.components.billing.team.unsupported2',
+        'This isn’t available yet. Ask an owner or admin to do it for you.'
       )
     case 'rate-limited':
       return t(
@@ -113,8 +113,8 @@ export function createTeamFailureCopy(
       return t('auto.components.billing.team.createInvalid', 'Choose a different team name.')
     case 'unsupported':
       return t(
-        'auto.components.billing.team.createUnsupported',
-        'Creating teams from Orca isn’t available on your account service yet. Ask a teammate to invite you to theirs.'
+        'auto.components.billing.team.createUnavailable',
+        'Team creation isn’t available yet. Ask a teammate to invite you.'
       )
     case 'rate-limited':
       return t(

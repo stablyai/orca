@@ -5,6 +5,7 @@ import { registerAccountMenuItem } from '../sidebar/account-menu/account-menu-it
 import {
   getBillingSummary,
   refreshBillingSummary,
+  resetBillingSummary,
   subscribeBillingSummary
 } from './billing-summary-store'
 import { openPlansPage } from './plans/plans-page-store'
@@ -67,11 +68,17 @@ export function registerPlanBillingMenuItem(): () => void {
     const key = enabled ? `${auth?.cloud?.userId}:${auth?.cloud?.activeOrgId ?? ''}` : null
     if (key !== lastKey) {
       lastKey = key
+      resetBillingSummary()
       if (key) {
         void refreshBillingSummary(true)
       }
     }
   }
+  // Back from Stripe (Checkout, the Portal, or 3-D Secure after the in-app wait ended): the
+  // plan may have changed even if no billing view is open.
+  const disposeReturn = globalThis.window?.api?.orcaProfiles?.onBillingReturn?.(() => {
+    void refreshBillingSummary(true)
+  })
   const unsubscribeAuth = useAppStore.subscribe(onAuth)
   onAuth()
 
@@ -81,5 +88,6 @@ export function registerPlanBillingMenuItem(): () => void {
     disposeUpgrade?.()
     unsubscribeSummary()
     unsubscribeAuth()
+    disposeReturn?.()
   }
 }

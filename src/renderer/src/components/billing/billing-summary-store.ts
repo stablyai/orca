@@ -41,20 +41,39 @@ export function recordBillingStatus(result: OrcaBillingStatusResult): void {
   }
 }
 
+/** Bumped on every account/org switch; answers from an older account are ignored. */
+let generation = 0
+
+/** Forget the previous account's plan at once (sign-out, account or org switch). */
+export function resetBillingSummary(): void {
+  generation++
+  inFlight = null
+  lastReadAt = 0
+  recordBillingStatus({ status: 'signed-out' })
+}
+
 /** Re-reads billing status at most once a minute unless `force` (account or org switched). */
 export function refreshBillingSummary(force = false): Promise<void> {
-  if (inFlight || (!force && Date.now() - lastReadAt < MIN_REFRESH_MS)) {
+  if (!force && (inFlight || Date.now() - lastReadAt < MIN_REFRESH_MS)) {
     return inFlight ?? Promise.resolve()
   }
+  const requestGeneration = generation
   lastReadAt = Date.now()
-  inFlight = window.api.orcaProfiles
+  const request = window.api.orcaProfiles
     .billingStatus()
-    .then(recordBillingStatus)
+    .then((result) => {
+      if (requestGeneration === generation) {
+        recordBillingStatus(result)
+      }
+    })
     .catch(() => undefined)
     .finally(() => {
-      inFlight = null
+      if (inFlight === request) {
+        inFlight = null
+      }
     })
-  return inFlight
+  inFlight = request
+  return request
 }
 
 export function getBillingSummary(): BillingSummary {

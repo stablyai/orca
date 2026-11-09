@@ -53,7 +53,13 @@ const base: TeamPageViewProps = {
   refreshing: false,
   billingBusy: false,
   now: NOW,
-  create: { organizations: [], creating: false, error: null, switchingOrgId: null },
+  create: {
+    organizations: [],
+    creating: false,
+    error: null,
+    unavailable: false,
+    switchingOrgId: null
+  },
   onCreateTeam: noop,
   onSwitchOrg: noop,
   onRefresh: noop,
@@ -178,6 +184,7 @@ export const personalCreateTeam = defineFixture({
         ],
         creating: false,
         error: null,
+        unavailable: false,
         switchingOrgId: null
       }}
     />
@@ -192,8 +199,8 @@ export const createTeamUnsupported = defineFixture({
       create={{
         organizations: [],
         creating: false,
-        error:
-          'Creating teams from Orca isn’t available on your account service yet. Ask a teammate to invite you to theirs.',
+        error: null,
+        unavailable: true,
         switchingOrgId: null
       }}
     />

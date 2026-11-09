@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { OrcaBillingStatusResult } from '../../../../../shared/orca-billing'
 import type {
@@ -16,7 +16,6 @@ import { TeamInviteComposer, type InviteBatchOutcome } from './TeamInviteCompose
 import { TeamMemberList, type TeamRowState } from './TeamMemberList'
 import { TeamBillingBlock, TeamCheckoutCelebration } from './TeamPlanSummary'
 import { memberCountLabel } from './team-copy'
-import { roleLabel } from './team-roles'
 import { otherOwnerCount, teamRows } from './team-roster-rows'
 import type { TeamPageArrival } from './team-page-store'
 
@@ -47,6 +46,41 @@ export type TeamPageViewProps = {
   onManageBilling: () => void
   onCreateWorkspace: () => void
   onDismissArrival: () => void
+}
+
+function viewerRoleSentence(role: OrcaOrgRole, t: Translate): string {
+  switch (role) {
+    case 'owner':
+      return t('auto.components.billing.team.youAreOwner', 'You’re an owner')
+    case 'admin':
+      return t('auto.components.billing.team.youAreAdmin', 'You’re an admin')
+    case 'member':
+      return t('auto.components.billing.team.youAreMember', 'You’re a member')
+  }
+}
+
+/** Mirrors the plan card (title + badge, three stats, a two-line note) so loading doesn't jump. */
+function PlanSkeleton(): React.JSX.Element {
+  const bar = 'block rounded bg-muted motion-safe:animate-pulse'
+  return (
+    <div aria-hidden className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-xs">
+      <div className="flex items-center gap-2">
+        <span className={`${bar} h-4 w-12`} />
+        <span className={`${bar} h-5 w-14 rounded-full`} />
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        {[0, 1, 2].map((index) => (
+          <span key={index} className="space-y-1.5">
+            <span className={`${bar} h-3 w-16`} />
+            <span className={`${bar} h-4 w-12`} />
+            <span className={`${bar} h-3 w-24`} />
+          </span>
+        ))}
+      </div>
+      <span className={`${bar} h-3 w-11/12`} />
+      <span className={`${bar} h-3 w-2/3`} />
+    </div>
+  )
 }
 
 function SkeletonRows(): React.JSX.Element {
@@ -100,24 +134,22 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
           <h2 className="truncate text-lg font-semibold tracking-tight">{props.org.name}</h2>
           <p className="text-xs text-muted-foreground">
             {roster
-              ? `${memberCountLabel(roster.members.length, t)} · ${t(
-                  'auto.components.billing.team.youAre',
-                  'You’re {{value0}}',
-                  { value0: roleLabel(viewerRole, t).toLowerCase() }
-                )}`
-              : t('auto.components.billing.team.loading', 'Loading your team…')}
+              ? [
+                  memberCountLabel(roster.members.length, t),
+                  roster.pendingInvites.length > 0
+                    ? t('auto.components.billing.team.invitedN', '{{value0}} invited', {
+                        value0: String(roster.pendingInvites.length)
+                      })
+                    : null,
+                  viewerRoleSentence(viewerRole, t)
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : props.roster === null
+                ? t('auto.components.billing.team.loading', 'Loading your team…')
+                : t('auto.components.billing.team.loadFailedTitle', 'Couldn’t load team')}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={props.onRefresh}
-          disabled={props.refreshing}
-          aria-label={t('auto.components.billing.team.refresh', 'Refresh team')}
-        >
-          <RefreshCw className={cn(props.refreshing && 'motion-safe:animate-spin')} />
-        </Button>
       </header>
 
       {props.arrival?.kind === 'checkout-success' && entitlement ? (
@@ -129,7 +161,11 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
             props.onDismissArrival()
             inviteInput.current?.focus()
           }}
-          onDismiss={props.onDismissArrival}
+          onDismiss={() => {
+            props.onDismissArrival()
+            // The focused dismiss button unmounts; keep focus on something real.
+            ;(inviteInput.current ?? document.getElementById('team-members-title'))?.focus()
+          }}
         />
       ) : null}
 
@@ -142,10 +178,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
           onSeePlans={props.onSeePlans}
         />
       ) : props.billing === null ? (
-        <div
-          aria-hidden
-          className="h-[8.5rem] rounded-xl border border-border bg-muted/30 motion-safe:animate-pulse"
-        />
+        <PlanSkeleton />
       ) : null}
 
       {roster?.canManageMembers ? (
@@ -161,16 +194,21 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
       ) : null}
 
       <section aria-labelledby="team-members-title" className="space-y-2">
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 id="team-members-title" className="text-sm font-medium">
+        <div className="flex items-center justify-between gap-3">
+          <h3 id="team-members-title" tabIndex={-1} className="text-sm font-medium outline-none">
             {t('auto.components.billing.team.members', 'Members')}
           </h3>
-          {roster && roster.pendingInvites.length > 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {t('auto.components.billing.team.pendingCount', '{{value0}} invites pending', {
-                value0: String(roster.pendingInvites.length)
-              })}
-            </p>
+          {roster ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={props.onRefresh}
+              disabled={props.refreshing}
+              aria-label={t('auto.components.billing.team.refresh', 'Refresh team')}
+            >
+              <RefreshCw className={cn(props.refreshing && 'motion-safe:animate-spin')} />
+            </Button>
           ) : null}
         </div>
         {roster ? (
@@ -201,8 +239,8 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                     'Sign in to Orca again to manage billing.'
                   )
                 : t(
-                    'auto.components.billing.team.loadFailed',
-                    'Could not load your team. Try again.'
+                    'auto.components.billing.team.loadFailed2',
+                    'Couldn’t load your team. Check your connection.'
                   )}
             </p>
             <Button type="button" variant="outline" size="sm" onClick={props.onRefresh}>
@@ -256,7 +294,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
           >
             <Button
               type="button"
-              variant="destructive"
+              variant="outline"
               size="sm"
               disabled={!canLeave}
               onClick={props.onLeave}
