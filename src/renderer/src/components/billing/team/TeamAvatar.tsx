@@ -29,10 +29,10 @@ export function PersonAvatar({
     <span
       aria-hidden
       className={cn(
-        'flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-medium select-none',
+        'flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium select-none',
         pending
           ? 'border border-dashed border-muted-foreground/50 text-muted-foreground'
-          : 'bg-foreground/85 text-background',
+          : 'border border-border bg-secondary text-secondary-foreground',
         className
       )}
     >

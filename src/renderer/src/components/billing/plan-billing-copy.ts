@@ -6,7 +6,11 @@ import type {
   OrcaBillingOverageResult
 } from '../../../../shared/orca-billing'
 
-export function denyReasonCopy(reason: OrcaBillingDenyReason, t: Translate): string {
+export function denyReasonCopy(
+  reason: OrcaBillingDenyReason,
+  t: Translate,
+  canManage = true
+): string {
   switch (reason) {
     case 'no_subscription':
       return t('auto.components.billing.reasonNoPlan', 'Hosted sandboxes need a paid plan.')
@@ -31,10 +35,15 @@ export function denyReasonCopy(reason: OrcaBillingDenyReason, t: Translate): str
         'You have used all included hours this month. Turn on overage to keep starting sandboxes.'
       )
     case 'overage_cap_reached':
-      return t(
-        'auto.components.billing.reasonCapRaise',
-        'You reached this month’s overage spend cap. An admin can raise it.'
-      )
+      return canManage
+        ? t(
+            'auto.components.billing.reasonCapAdmin',
+            'This month’s overage cap is spent. Raise the cap to keep starting sandboxes.'
+          )
+        : t(
+            'auto.components.billing.reasonCapMember',
+            'This month’s overage cap is spent. Ask an owner or admin to raise it.'
+          )
   }
 }
 
@@ -45,7 +54,7 @@ export function statusLabel(status: string, t: Translate): string {
     case 'trialing':
       return t('auto.components.billing.statusTrial', 'Trial')
     case 'past_due':
-      return t('auto.components.billing.statusPastDue', 'Payment due')
+      return t('auto.components.billing.paymentFailed', 'Payment failed')
     case 'canceled':
       return t('auto.components.billing.statusCanceled', 'Canceled')
     default:

@@ -1,17 +1,22 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Dialog } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import type { OrcaBillingOpenResult } from '../../../../../shared/orca-billing'
+import { CheckoutPanel } from '../checkout/CheckoutPanel'
+import { useCheckoutFlow } from '../checkout/use-checkout-flow'
 import { openFailureCopy } from '../plan-billing-copy'
+import { openTeamPage } from '../team/team-page-store'
 import { useOrcaBillingStatus } from '../use-orca-billing-status'
 import { PlansDialogContent } from './PlansDialogContent'
 import { closePlansPage, usePlansPageState } from './plans-page-store'
 import { useOrgSeatCount } from './use-org-seat-count'
-import { useAppStore } from '@/store/index'
 
 /**
  * The plans page. A dialog because choosing a plan is a decision step in front of Checkout;
  * it reads the billing service's offers, so prices and limits are never hardcoded here.
+ * Checkout itself runs on Stripe's hosted page in the browser; this dialog follows it and,
+ * once paid, hands over to the Team page.
  */
 export function PlansDialogHost(): React.JSX.Element {
   const t = useTranslate()
@@ -21,14 +26,23 @@ export function PlansDialogHost(): React.JSX.Element {
   const seats = useOrgSeatCount(open ? orgId : null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [orderedAt, setOrderedAt] = useState(0)
 
-  const run = async (action: () => Promise<OrcaBillingOpenResult>): Promise<void> => {
+  const onPaid = useCallback((paidSeats: number) => {
+    closePlansPage()
+    openTeamPage({ kind: 'checkout-success', seats: paidSeats })
+  }, [])
+  const checkout = useCheckoutFlow({ active: open, onPaid })
+
+  const openPortal = async (): Promise<void> => {
     setBusy(true)
     setNotice(null)
-    const outcome = await action().catch((error: unknown): OrcaBillingOpenResult => ({
-      status: 'failed',
-      error: String(error)
-    }))
+    const outcome = await window.api.orcaProfiles
+      .billingOpenPortal()
+      .catch((error: unknown): OrcaBillingOpenResult => ({
+        status: 'failed',
+        error: String(error)
+      }))
     setBusy(false)
     setNotice(
       outcome.status === 'opened'
@@ -39,6 +53,8 @@ export function PlansDialogHost(): React.JSX.Element {
         : openFailureCopy(outcome, t)
     )
   }
+
+  const team = billing.result?.status === 'ok' ? billing.result.entitlement.offers?.team : null
 
   return (
     <Dialog
@@ -52,20 +68,32 @@ export function PlansDialogHost(): React.JSX.Element {
     >
       {open ? (
         <PlansDialogContent
-          // Remount once the status arrives so the interval starts fresh.
-          key={billing.result ? 'ready' : 'loading'}
           result={billing.result}
           busy={busy}
           notice={notice}
           seats={seats}
-          onCheckout={({ interval, seats: count }) =>
-            void run(() =>
-              window.api.orcaProfiles.billingOpenCheckout({ plan: 'team', interval, seats: count })
-            )
-          }
-          onManage={() => void run(() => window.api.orcaProfiles.billingOpenPortal())}
+          onCheckout={({ interval, seats: count }) => {
+            setOrderedAt(Date.now())
+            checkout.start({ interval, seats: count })
+          }}
+          onManage={() => void openPortal()}
           onContactSales={(url) => void window.api.shell.openUrl(url)}
           onRetry={billing.refresh}
+          checkout={
+            checkout.phase.kind !== 'idle' && team ? (
+              <CheckoutPanel
+                phase={checkout.phase}
+                team={team}
+                now={orderedAt}
+                onReopen={checkout.reopen}
+                onKeepWaiting={checkout.keepWaiting}
+                onBack={() => {
+                  checkout.reset()
+                  billing.refresh()
+                }}
+              />
+            ) : undefined
+          }
         />
       ) : null}
     </Dialog>

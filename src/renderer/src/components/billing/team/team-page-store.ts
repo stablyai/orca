@@ -36,10 +36,10 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function getState(): TeamPageState {
+export function getTeamPageState(): TeamPageState {
   return state
 }
 
 export function useTeamPageState(): TeamPageState {
-  return useSyncExternalStore(subscribe, getState)
+  return useSyncExternalStore(subscribe, getTeamPageState)
 }

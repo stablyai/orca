@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ArrowRight, Check, Cloud, ExternalLink, Sparkles, UserPlus, X } from 'lucide-react'
+import { ArrowRight, Check, Cloud, ExternalLink, UserPlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaBillingEntitlement } from '../../../../../shared/orca-billing'
@@ -31,17 +31,17 @@ export function TeamCheckoutCelebration({
   return (
     <section
       aria-labelledby="team-celebration-title"
-      className="relative overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/[0.07] p-4 animate-in fade-in-0 slide-in-from-top-2 duration-300 motion-reduce:animate-none"
+      className="relative overflow-hidden rounded-xl border border-status-success-border bg-status-success-background p-4 animate-in fade-in-0 slide-in-from-top-2 duration-300 motion-reduce:animate-none"
     >
       {/* Soft glow; static, so reduced motion loses nothing. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-16 -right-10 size-48 rounded-full bg-emerald-400/20 blur-3xl"
+        className="pointer-events-none absolute -top-16 -right-10 size-48 rounded-full bg-status-success/20 blur-3xl"
       />
       <div className="relative flex items-start gap-3">
         <span
           aria-hidden
-          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm animate-in zoom-in-50 duration-300 motion-reduce:animate-none"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-status-success text-background shadow-sm animate-in zoom-in-50 duration-300 motion-reduce:animate-none"
         >
           <Check className="size-5" strokeWidth={2.5} />
         </span>
@@ -78,7 +78,6 @@ export function TeamCheckoutCelebration({
           type="button"
           variant="ghost"
           size="icon-xs"
-          className="text-muted-foreground"
           onClick={onDismiss}
           aria-label={t('auto.components.billing.team.dismiss', 'Dismiss')}
         >
@@ -231,7 +230,7 @@ export function TeamUpgradeCard({
       />
       <div className="relative flex flex-wrap items-center gap-4">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
-          <Sparkles className="size-4" />
+          <Cloud className="size-4" />
         </span>
         <div className="min-w-[14rem] flex-1 space-y-0.5">
           <h3 id="team-upgrade-title" className="text-sm font-semibold">

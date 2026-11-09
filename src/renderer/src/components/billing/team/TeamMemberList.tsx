@@ -68,7 +68,7 @@ function RoleControl({
   const member = row.member
   if (!row.manageable) {
     return (
-      <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">
+      <span className="w-28 shrink-0 text-right text-xs text-muted-foreground">
         {roleLabel(member.role, t)}
       </span>
     )
@@ -87,7 +87,7 @@ function RoleControl({
     >
       <SelectTrigger
         size="sm"
-        className="w-24 shrink-0"
+        className="w-28 shrink-0"
         aria-label={t('auto.components.billing.team.roleFor', 'Role for {{value0}}', {
           value0: member.displayName ?? member.email
         })}
@@ -96,11 +96,8 @@ function RoleControl({
       </SelectTrigger>
       <SelectContent align="end">
         {roles.map((role) => (
-          <SelectItem key={role} value={role} textValue={roleLabel(role, t)}>
-            <span className="flex flex-col items-start">
-              <span>{roleLabel(role, t)}</span>
-              <span className="text-xs text-muted-foreground">{roleDescription(role, t)}</span>
-            </span>
+          <SelectItem key={role} value={role} title={roleDescription(role, t)}>
+            {roleLabel(role, t)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -184,7 +181,7 @@ function RowMenu({
           type="button"
           variant="ghost"
           size="icon-sm"
-          className="size-7 shrink-0 text-muted-foreground"
+          className="size-7 shrink-0"
           aria-label={t('auto.components.billing.team.actionsFor', 'Actions for {{value0}}', {
             value0: name
           })}
@@ -226,7 +223,7 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
             data-team-row={row.key}
             aria-busy={state.busy || undefined}
             className={cn(
-              'group/row bg-card px-3 py-2.5 transition-colors animate-in fade-in-0 duration-200 motion-reduce:animate-none',
+              'group/row flex min-h-12 flex-col justify-center bg-card px-3 py-2 transition-colors animate-in fade-in-0 duration-200 motion-reduce:animate-none',
               state.busy && 'opacity-70'
             )}
           >
@@ -245,7 +242,7 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                       className={cn(
                         'shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium leading-4',
                         row.status === 'invited'
-                          ? 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+                          ? 'border-callout-note/40 bg-callout-note/10 text-callout-note'
                           : 'border-border text-muted-foreground'
                       )}
                     >
@@ -266,14 +263,14 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                   onChange={(role) => props.onChangeRole(row.member, role)}
                 />
               ) : (
-                <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">
+                <span className="w-28 shrink-0 text-right text-xs text-muted-foreground">
                   {roleLabel(row.invite.role, t)}
                 </span>
               )}
               <RowMenu row={row} props={props} />
             </div>
             {state.error ? (
-              <p role="alert" className="mt-1.5 pl-11 text-xs text-destructive">
+              <p role="alert" className="mt-1 pl-9 text-xs text-destructive">
                 {state.error}
               </p>
             ) : null}

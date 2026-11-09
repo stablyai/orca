@@ -79,6 +79,41 @@ everyone not suspended at renewal and prorates later additions.
   (pull-only in production for now, stablyai/orca-cloud#691). Missing or malformed counts are
   rejected, and seats are never below 1.
 
+## Desktop: Team page, upgrade moments, checkout (decision)
+
+**Checkout = Stripe hosted Checkout in the system browser, followed in-app.** Options weighed:
+- *Embedded Checkout in an Electron window*: looks in-app, but there is no URL bar to verify (it trains users to type
+  cards into chrome-less windows), Apple Pay does not work in Electron/Chromium, password-manager and browser card
+  autofill are missing, and it needs Stripe.js under a relaxed CSP plus a hosted page anyway.
+- *Stripe Elements*: same Electron limits, plus we own the PaymentIntent/subscription confirmation and 3DS edge cases.
+- *Hosted Checkout in the browser* (chosen): PCI SAQ A (no card data near Orca), Apple Pay/Link/autofill, 3-D Secure
+  handled by Stripe, a verifiable `checkout.stripe.com` URL, no CSP change in the app.
+The in-app half: "Continue to checkout" turns the plans dialog into a checkout panel (order summary, "Finish payment in
+your browser", Reopen/Cancel). It polls the entitlement every 2 s for 3 min (then "Keep waiting"), and the Worker's
+`/return` page opens `orca://billing/return?checkout=success|cancel` (also `?portal=return`) so Orca comes to the front
+and reacts at once. Paid → a short check → the Team page with a one-time "You're on Team" card (Create a cloud
+workspace / Invite teammates). Canceled → "Nothing was charged". `incomplete`/`past_due` first invoice → "Your payment
+needs one more step". The return page is static per outcome, no scripts, strict CSP.
+
+**Team page** (account menu → Team; Settings → Orca account links to it): team mark and name, plan + seats card (seats
+paid / in use, interval, next invoice estimate = renewal seats × price, before tax), or "Upgrade to use Orca Cloud" when
+there is no plan; multi-email invite (paste lists, `Name <email>` lines; invalid entries stay as red chips) with seat
+impact copy computed client-side from the peak-seat rules ("When alex accepts, they add a seat: $23.96 prorated that
+day, then $50/month", or "Covered: uses a seat you already paid for"); members and invites in one list with status
+(Active / Pending sign-in / Invited), inline role select, row menu (Make owner…, Remove…, Resend/Revoke invite, Leave
+team…). Changes are optimistic per row with rollback + the reason on the row, and toasts with Undo (role, revoke).
+Members see a read-only view. Personal accounts get "Create a team" and a list of teams to switch to.
+Ownership transfer is auth's two-step model: an owner makes someone an owner, then that person changes the old
+owner's role (auth refuses self role changes and the last owner leaving).
+
+**Auth routes the desktop calls that auth does not have yet** (desktop maps a route 404 to "not available yet"):
+`POST /v1/desktop/orgs {name}` → `{orgId, name}` (creator becomes owner) and `POST /v1/desktop/orgs/:orgId/members/leave`
+(400 `last_owner` for the last owner). Resend invite = revoke + invite.
+
+**Upgrade entry points:** account menu "Upgrade to Orca Cloud" (only once billing reports no plan, never while
+loading), the Run-on picker's Orca Cloud row ("Upgrade" pill → plans page; members are told to ask an admin), and the
+Team page card. All open the plans page.
+
 ## Payment failure
 
 - On `invoice.payment_failed` (status `past_due`, later `unpaid` when retries are exhausted) billing records
@@ -166,6 +201,13 @@ never followed with the key; JWT max age 15 min.
   billing tokens, dev also accepts the operator key set `BILLING_DEV_JWKS` (issuer `orca-billing-dev-test`; refused
   when `BILLING_ENV=prod`).
 - Same e2e run against dev: 18/18 passed (grace expiry is exercised locally; dev keeps the 96 h grace).
+
+**Shared dev signing key.** `BILLING_DEV_JWKS` on orca-billing-dev holds two public keys: `e2e` (the original e2e
+key) and `dev1` (`/tmp/vdrv/secrets/dev-jwk.json`, the key the dev sandbox control plane also trusts). Tokens use
+issuer `orca-billing-dev-test`, `aud=orca-billing`, `purpose=billing`; sandbox tokens use the same key with issuer
+`orca-sandbox-dev-test`, `aud=orca-sandbox`. Unpackaged desktop builds with `ORCA_BILLING_DEV_KEY_FILE=<dev-jwk.json>`
+self-sign billing tokens (sub = profile user, org/orgRole from the active org's live roster); packaged builds never
+read the file.
 
 ## What the user sets
 

@@ -23,7 +23,7 @@ export function PlansIntervalToggle({
       hint:
         savingsPercent === null
           ? null
-          : t('auto.components.billing.plans.saveShort', '−{{value0}}%', {
+          : t('auto.components.billing.plans.savePercent', 'Save {{value0}}%', {
               value0: String(savingsPercent)
             })
     }

@@ -12,13 +12,16 @@ export function planHealth(entitlement: OrcaBillingEntitlement, t: Translate): P
     return { label: t('auto.components.billing.health.suspended', 'Suspended'), dot: 'destructive' }
   }
   if (entitlement.payment.pastDueSince !== null || entitlement.status === 'past_due') {
-    return { label: t('auto.components.billing.statusPastDue', 'Payment due'), dot: 'destructive' }
+    return {
+      label: t('auto.components.billing.paymentFailed', 'Payment failed'),
+      dot: 'destructive'
+    }
   }
   if (entitlement.reason === 'overage_cap_reached') {
     return { label: t('auto.components.billing.health.capReached', 'Cap reached'), dot: 'warning' }
   }
   if (entitlement.reason === 'included_hours_exhausted') {
-    return { label: t('auto.components.billing.health.hoursUsed', 'Hours used up'), dot: 'warning' }
+    return { label: t('auto.components.billing.health.outOfHours', 'Out of hours'), dot: 'warning' }
   }
   if (entitlement.cancelAtPeriodEnd) {
     return { label: t('auto.components.billing.health.ending', 'Ending'), dot: 'warning' }
@@ -37,13 +40,13 @@ export function PlanStatusBadge({
   const t = useTranslate()
   const health = planHealth(entitlement, t)
   return (
-    <Badge variant="outline" className={cn('gap-1.5', className)}>
+    <Badge variant="outline" className={className}>
       {health.dot ? (
         <span
           aria-hidden
           className={cn(
             'size-1.5 rounded-full',
-            health.dot === 'destructive' ? 'bg-destructive' : 'bg-amber-500'
+            health.dot === 'destructive' ? 'bg-destructive' : 'bg-status-warning'
           )}
         />
       ) : null}

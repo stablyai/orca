@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { KeyRound, LaptopMinimal, RefreshCw, Zap } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Cloud, KeyRound, RefreshCw, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   ORCA_BILLING_MAX_SEATS,
@@ -12,7 +10,8 @@ import {
   type OrcaBillingStatusResult
 } from '../../../../../shared/orca-billing'
 import { PaymentIssueNotice } from '../PaymentIssueNotice'
-import { statusLabel } from '../plan-billing-copy'
+import { PlanStatusBadge } from '../PlanStatusBadge'
+import { seatCountLabel } from '../team/team-copy'
 import { formatHours, includedUsagePercent } from '../plan-billing-format'
 import { EnterprisePlanCard } from './EnterprisePlanCard'
 import { PlansIntervalToggle } from './PlansIntervalToggle'
@@ -44,7 +43,7 @@ function ValueProps(): React.JSX.Element {
   // Same promises as the marketing site's /cloud page.
   const items = [
     {
-      icon: LaptopMinimal,
+      icon: Cloud,
       title: t('auto.components.billing.plans.vpRunningTitle', 'Agents keep running'),
       body: t(
         'auto.components.billing.plans.vpRunningBody2',
@@ -92,7 +91,6 @@ function CurrentPlanStrip({
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
-  const paymentIssue = entitlement.payment.pastDueSince !== null
   const resets = entitlement.usageWindow
     ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(entitlement.usageWindow.end)
     : null
@@ -101,18 +99,15 @@ function CurrentPlanStrip({
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="font-medium">{entitlement.planLabel}</span>
         <span className="text-muted-foreground">
-          {t('auto.components.billing.plans.seatsAndPeriod', 'Seats: {{value0}} · {{value1}}', {
-            value0: String(entitlement.seats),
+          {t('auto.components.billing.plans.seatsPeriod', '{{value0}} · {{value1}}', {
+            value0: seatCountLabel(entitlement.seats, t),
             value1:
               entitlement.interval === 'year'
                 ? t('auto.components.billing.annual', 'Annual')
                 : t('auto.components.billing.monthly', 'Monthly')
           })}
         </span>
-        {/* The payment banner carries the alarm; the badge stays quiet. */}
-        <Badge variant={paymentIssue ? 'outline' : 'secondary'}>
-          {statusLabel(entitlement.status, t)}
-        </Badge>
+        <PlanStatusBadge entitlement={entitlement} />
       </div>
       <Progress
         value={includedUsagePercent(entitlement)}
@@ -146,41 +141,74 @@ function CurrentPlanStrip({
   )
 }
 
-function PlaceholderCards({
-  failed,
-  onRetry
-}: {
-  failed: boolean
-  onRetry: () => void
-}): React.JSX.Element {
+function SkeletonLine({ className }: { className: string }): React.JSX.Element {
+  return <span className={`block rounded bg-muted motion-safe:animate-pulse ${className}`} />
+}
+
+function SkeletonCard({ lines }: { lines: number }): React.JSX.Element {
+  return (
+    <div className="flex h-full flex-col gap-5 rounded-xl border border-border bg-card p-5 shadow-xs">
+      <SkeletonLine className="h-4 w-24" />
+      <div className="space-y-2">
+        <SkeletonLine className="h-8 w-32" />
+        <SkeletonLine className="h-3 w-28" />
+      </div>
+      <div className="flex-1 space-y-3">
+        {Array.from({ length: lines }, (_, index) => (
+          <SkeletonLine key={index} className={index % 2 ? 'h-3 w-4/5' : 'h-3 w-11/12'} />
+        ))}
+      </div>
+      <div className="min-h-[6rem] space-y-2 border-t border-border/60 pt-4">
+        <SkeletonLine className="h-9 w-full" />
+        <SkeletonLine className="mx-auto h-3 w-3/5" />
+      </div>
+    </div>
+  )
+}
+
+/** Same geometry as the loaded page (value props, toggle, two cards) so nothing jumps (review M4). */
+function PlansSkeleton(): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div
+      className="space-y-6"
+      role="status"
+      aria-label={t('auto.components.billing.plans.loading', 'Loading plans…')}
+    >
+      <ValueProps />
+      <div className="flex justify-center">
+        <SkeletonLine className="h-8 w-56 rounded-full" />
+      </div>
+      <div className="grid items-stretch gap-4 md:grid-cols-2">
+        <SkeletonCard lines={5} />
+        <SkeletonCard lines={4} />
+      </div>
+    </div>
+  )
+}
+
+function PlansLoadError({ onRetry }: { onRetry: () => void }): React.JSX.Element {
   const t = useTranslate()
   return (
     <div className="space-y-6">
       <ValueProps />
-      <div className="relative grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div aria-hidden className="h-[26rem] rounded-xl border border-border bg-muted/40" />
-        <div aria-hidden className="h-[26rem] rounded-xl border border-border bg-muted/40" />
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-          {failed ? (
-            <>
-              <p>
-                {t(
-                  'auto.components.billing.plans.loadFailed',
-                  'Could not load plans. Try again in a moment.'
-                )}
-              </p>
-              <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-                <RefreshCw />
-                {t('auto.components.billing.plans.retry', 'Try again')}
-              </Button>
-            </>
-          ) : (
-            <>
-              <LoadingSpinner />
-              <p>{t('auto.components.billing.plans.loading', 'Loading plans…')}</p>
-            </>
+      <div
+        role="alert"
+        className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-xl border border-border p-8 text-center"
+      >
+        <p className="text-sm font-medium">
+          {t('auto.components.billing.plans.loadFailedTitle', 'Plans didn’t load')}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {t(
+            'auto.components.billing.plans.loadFailed',
+            'Could not load plans. Try again in a moment.'
           )}
-        </div>
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+          <RefreshCw />
+          {t('auto.components.billing.plans.retry', 'Try again')}
+        </Button>
       </div>
     </div>
   )
@@ -202,7 +230,7 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
     )
   }
   if (!result || result.status !== 'ok' || !result.entitlement.offers) {
-    return <PlaceholderCards failed={result !== null} onRetry={props.onRetry} />
+    return result === null ? <PlansSkeleton /> : <PlansLoadError onRetry={props.onRetry} />
   }
 
   const entitlement = result.entitlement
@@ -237,7 +265,7 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
           onChange={setInterval}
         />
       ) : null}
-      <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid items-stretch gap-4 md:grid-cols-2">
         <TeamPlanCard
           team={offers.team}
           interval={subscribed && entitlement.interval ? entitlement.interval : interval}
@@ -257,14 +285,14 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
       <div className="space-y-1 text-center text-xs text-muted-foreground text-pretty">
         <p>
           {t(
-            'auto.components.billing.plans.footHours',
-            'Hours reset every month, including on annual plans. When they run out, new sandboxes wait until the next month unless overage is on.'
+            'auto.components.billing.plans.footHours2',
+            'Hours reset monthly, including on annual plans.'
           )}
         </p>
         <p>
           {t(
-            'auto.components.billing.plans.footTerms',
-            'Prices in USD, before tax. Overage stays off until an owner or admin turns it on and sets a spend cap. Cancel anytime; your plan runs to the end of the period.'
+            'auto.components.billing.plans.footTerms2',
+            'Prices in USD, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.'
           )}
         </p>
       </div>

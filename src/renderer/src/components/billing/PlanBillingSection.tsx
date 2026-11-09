@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { CreditCard, ExternalLink, RefreshCw, Sparkles } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatCents } from './plans/plans-pricing'
@@ -14,13 +13,8 @@ import type {
 import { openPlansPage } from './plans/plans-page-store'
 import { PaymentIssueNotice } from './PaymentIssueNotice'
 import { OverageControls, UsageSummary } from './PlanBillingUsage'
-import {
-  denyReasonCopy,
-  openFailureCopy,
-  overageFailureCopy,
-  statusLabel
-} from './plan-billing-copy'
-import { planBillingTone } from './plan-billing-format'
+import { denyReasonCopy, openFailureCopy, overageFailureCopy } from './plan-billing-copy'
+import { PlanStatusBadge } from './PlanStatusBadge'
 import { useOrcaBillingStatus } from './use-orca-billing-status'
 
 export function PlanBillingSection(): React.JSX.Element | null {
@@ -137,10 +131,9 @@ export function PlanBillingView({
   }
 
   const entitlement = result.entitlement
-  const tone = planBillingTone(entitlement)
   const hasPlan = entitlement.plan !== null && entitlement.status !== 'canceled'
-  const annualCents = entitlement.offers?.team.annualPriceCentsPerSeat ?? null
-  const teamFrom = annualCents === null ? null : formatCents(Math.round(annualCents / 12), locale)
+  const monthlyCents = entitlement.offers?.team.monthlyPriceCentsPerSeat ?? null
+  const teamPrice = monthlyCents === null ? null : formatCents(monthlyCents, locale)
 
   return (
     <div className="space-y-4 border-t border-border/60 pt-5">
@@ -159,48 +152,40 @@ export function PlanBillingView({
                     : t('auto.components.billing.monthly', 'Monthly')
               })}
             </span>
-            <Badge
-              variant={
-                tone === 'blocked' ? 'destructive' : tone === 'warning' ? 'secondary' : 'outline'
-              }
-            >
-              {statusLabel(entitlement.status, t)}
-            </Badge>
+            <PlanStatusBadge entitlement={entitlement} />
           </div>
           <UsageSummary entitlement={entitlement} />
-          <OverageControls
-            // Re-seed the cap field when the saved cap changes.
-            key={entitlement.overage.spendCapCents}
-            entitlement={entitlement}
-            busy={busy}
-            onSetOverage={onSetOverage}
-          />
+          <OverageControls entitlement={entitlement} busy={busy} onSetOverage={onSetOverage} />
         </div>
       ) : null}
 
       <PaymentIssueNotice entitlement={entitlement} busy={busy} onUpdatePayment={onPortal} />
 
       {entitlement.reason && entitlement.payment.pastDueSince === null ? (
-        <p className="text-xs text-muted-foreground">{denyReasonCopy(entitlement.reason, t)}</p>
+        <p className="text-xs text-muted-foreground">
+          {denyReasonCopy(entitlement.reason, t, entitlement.canManageBilling)}
+        </p>
       ) : null}
 
-      {!hasPlan && teamFrom ? (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.billing.teamFrom',
-            'Team starts at {{value0}} per seat per month, billed annually.',
-            {
-              value0: teamFrom
-            }
-          )}
+      {!hasPlan ? (
+        <p className="text-sm text-pretty">
+          {teamPrice
+            ? t(
+                'auto.components.billing.upsellLine',
+                'Orca Cloud runs agents in hosted sandboxes. Team is {{value0}} per seat / month.',
+                { value0: teamPrice }
+              )
+            : t(
+                'auto.components.billing.upsellLineNoPrice',
+                'Orca Cloud runs agents in hosted sandboxes for your whole team.'
+              )}
         </p>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
         {hasPlan ? null : (
           <Button type="button" size="sm" onClick={onSeePlans}>
-            <Sparkles />
-            {t('auto.components.billing.choosePlan', 'Choose a plan')}
+            {t('auto.components.billing.upgrade.cta', 'See plans')}
           </Button>
         )}
         {hasPlan && entitlement.canManageBilling && entitlement.payment.pastDueSince === null ? (

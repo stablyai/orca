@@ -1,5 +1,7 @@
 import React from 'react'
-import { Box, Boxes, ChevronDown, Network, Plus, Server } from 'lucide-react'
+import { Box, Boxes, ChevronDown, Network, Plus, Server, Sparkles } from 'lucide-react'
+import { useBillingSummary } from '@/components/billing/billing-summary-store'
+import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
@@ -53,6 +55,7 @@ export function RecipesSubmenuRow({
   onSelectRecipe: (recipeId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const billing = useBillingSummary()
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>
@@ -84,17 +87,46 @@ export function RecipesSubmenuRow({
         <div id={submenuArm.listId} role="listbox" aria-label={getEphemeralVmLabel(t)}>
           {recipes.map((recipe) => {
             const key = getRecipeSubmenuItemKey(recipe.id)
+            // Orca Cloud without a plan: the row explains and leads to plans instead of failing later.
+            const needsPlan = recipe.provider === 'orca-cloud' && billing.subscribed === false
             return (
               <RunTargetRow
                 key={recipe.id}
                 icon={<Box className="size-3.5 shrink-0 text-muted-foreground" />}
                 label={recipe.name}
-                detail={getRecipeDetail(recipe, t)}
+                detail={
+                  needsPlan
+                    ? billing.canManageBilling
+                      ? t(
+                          'auto.components.NewWorkspaceComposerCard.orcaCloudUpgrade',
+                          'Upgrade to run agents in the cloud'
+                        )
+                      : t(
+                          'auto.components.NewWorkspaceComposerCard.orcaCloudAskAdmin',
+                          'Needs a plan. Ask an owner or admin to upgrade.'
+                        )
+                    : getRecipeDetail(recipe, t)
+                }
                 armed={submenuArm.armedItemKey === key}
                 current={recipe.id === selectedRecipeId}
                 optionId={itemId(submenuArm, key)}
                 onArm={() => submenuArm.onArmItem(key)}
-                onCommit={() => onSelectRecipe(recipe.id)}
+                onCommit={() => {
+                  if (needsPlan) {
+                    onOpenChange(false)
+                    openPlansPage('run-on')
+                  } else {
+                    onSelectRecipe(recipe.id)
+                  }
+                }}
+                trailing={
+                  needsPlan ? (
+                    <span className="ml-auto inline-flex shrink-0 items-center gap-1 self-center rounded-full border border-border bg-background px-1.5 py-px text-[10px] font-medium text-foreground">
+                      <Sparkles className="size-2.5" />
+                      {t('auto.components.NewWorkspaceComposerCard.upgradePill', 'Upgrade')}
+                    </span>
+                  ) : undefined
+                }
               />
             )
           })}

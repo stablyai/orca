@@ -38,7 +38,10 @@ type Ready =
 
 /** Dev builds with ORCA_BILLING_DEV_KEY_FILE self-sign instead of asking auth (see billing-dev-token). */
 function prepareDev(userDataPath: string, keyFile: string): Ready {
-  const billingApiUrl = cleanCloudServiceUrl(process.env.ORCA_BILLING_API_URL, true)
+  const billingApiUrl = cleanCloudServiceUrl(
+    withCloudBuildDefaults(process.env).ORCA_BILLING_API_URL,
+    true
+  )
   if (!billingApiUrl) {
     return { ok: false, status: 'unconfigured' }
   }

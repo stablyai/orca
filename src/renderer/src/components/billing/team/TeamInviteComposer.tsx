@@ -9,6 +9,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { OrcaBillingEntitlement } from '../../../../../shared/orca-billing'
@@ -171,7 +172,7 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
         <div
           className={cn(
-            'flex min-h-9 min-w-0 flex-1 cursor-text flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-1 shadow-xs transition-[color,box-shadow] dark:bg-input/30',
+            'flex min-h-8 min-w-0 flex-1 cursor-text flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-0.5 shadow-xs transition-[color,box-shadow] dark:bg-input/30',
             'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50'
           )}
           onClick={() => localInput.current?.focus()}
@@ -237,7 +238,7 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
                   )
                 : undefined
             }
-            className="h-7 min-w-[10rem] flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+            className="h-6 min-w-[10rem] flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
             value={draft}
             onChange={(event) => {
               const value = event.target.value
@@ -279,6 +280,7 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
             }}
           >
             <SelectTrigger
+              size="sm"
               className="w-28"
               aria-label={t('auto.components.billing.team.inviteRole', 'Role for the invite')}
             >
@@ -286,36 +288,44 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
             </SelectTrigger>
             <SelectContent align="end">
               {roles.map((option) => (
-                <SelectItem key={option} value={option} textValue={roleLabel(option, t)}>
-                  <span className="flex flex-col items-start">
-                    <span>{roleLabel(option, t)}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {roleDescription(option, t)}
-                    </span>
-                  </span>
+                <SelectItem key={option} value={option} title={roleDescription(option, t)}>
+                  {roleLabel(option, t)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Button type="submit" disabled={sending || valid.length === 0} className="min-w-[7.5rem]">
-            {sending ? <LoadingSpinner className="size-3.5" /> : <Send />}
-            {valid.length > 1
-              ? t('auto.components.billing.team.sendN', 'Send {{value0}} invites', {
-                  value0: String(valid.length)
-                })
-              : t('auto.components.billing.team.send', 'Send invite')}
-          </Button>
+          <SettingsDisabledControlTooltip
+            reason={
+              !sending && valid.length === 0
+                ? t('auto.components.billing.team.enterEmail', 'Enter a teammate’s email')
+                : undefined
+            }
+          >
+            <Button type="submit" size="sm" disabled={sending || valid.length === 0}>
+              {sending ? <LoadingSpinner className="size-3.5" /> : <Send />}
+              {valid.length > 1
+                ? t('auto.components.billing.team.sendN', 'Send {{value0}} invites', {
+                    value0: String(valid.length)
+                  })
+                : t('auto.components.billing.team.send', 'Send invite')}
+            </Button>
+          </SettingsDisabledControlTooltip>
         </div>
       </div>
       <p id={hintId} aria-live="polite" className="text-xs text-muted-foreground text-pretty">
         {impactCopy(impact, valid, locale, t)}
-        {invalidCount > 0
+        {invalidCount === 1
           ? ` ${t(
-              'auto.components.billing.team.invalidCount',
-              '{{value0}} entries aren’t email addresses and won’t be sent.',
-              { value0: String(invalidCount) }
+              'auto.components.billing.team.invalidOne',
+              'One entry isn’t an email address and won’t be sent.'
             )}`
-          : null}
+          : invalidCount > 1
+            ? ` ${t(
+                'auto.components.billing.team.invalidCount',
+                '{{value0}} entries aren’t email addresses and won’t be sent.',
+                { value0: String(invalidCount) }
+              )}`
+            : null}
       </p>
       {describedErrors.length > 0 ? (
         <ul role="alert" className="space-y-0.5 text-xs text-destructive">

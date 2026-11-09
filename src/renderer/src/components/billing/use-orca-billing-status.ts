@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
+import { recordBillingStatus } from './billing-summary-store'
 
 type BillingStatusState = {
   loading: boolean
@@ -37,6 +38,7 @@ export function useOrcaBillingStatus(
       setState((previous) => ({ ...previous, loading: true }))
       void readBillingStatus().then((result) => {
         // A newer request, or unmounting, supersedes this one.
+        recordBillingStatus(result)
         if (!disposed && request === latest) {
           setState({ loading: false, result })
         }

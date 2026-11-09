@@ -186,9 +186,15 @@ export function SidebarAccountMenu(): React.JSX.Element {
                   <DropdownMenuItem
                     key={item.id}
                     data-account-menu-item={item.id}
+                    data-tone={item.tone}
                     onSelect={item.onSelect}
+                    className={cn(item.tone === 'accent' && 'font-medium text-foreground')}
                   >
-                    {Icon ? <Icon className="size-3.5" /> : null}
+                    {Icon ? (
+                      <Icon
+                        className={cn('size-3.5', item.tone === 'accent' && 'text-foreground')}
+                      />
+                    ) : null}
                     {item.label()}
                   </DropdownMenuItem>
                 )

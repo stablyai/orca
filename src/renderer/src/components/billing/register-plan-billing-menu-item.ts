@@ -1,25 +1,30 @@
-import { CreditCard, Users } from 'lucide-react'
+import { CreditCard, Sparkles, Users } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { registerAccountMenuItem } from '../sidebar/account-menu/account-menu-items'
+import {
+  getBillingSummary,
+  refreshBillingSummary,
+  subscribeBillingSummary
+} from './billing-summary-store'
 import { openPlansPage } from './plans/plans-page-store'
+import { openTeamPage } from './team/team-page-store'
 
 /** Cloud capability flag that turns billing on per account (server-controlled rollout). */
 export const BILLING_CAPABILITY = 'billing'
 
-function openAccountSettings(): void {
-  const state = useAppStore.getState()
-  state.openSettingsTarget({ pane: 'orca-account', repoId: null })
-  state.openSettingsPage()
-}
+const UPGRADE_ITEM_ID = 'orca.upgrade'
 
-/** Account menu: "Plan & billing" opens the plans page; "Team" opens the Orca account settings. */
+/**
+ * Account menu: "Team" opens the Team page; "Plan & billing" opens the plans page. Accounts
+ * without a plan also get "Upgrade to Orca Cloud" at the top of the group.
+ */
 export function registerPlanBillingMenuItem(): () => void {
   const disposeBilling = registerAccountMenuItem({
     id: 'orca.plan-billing',
     label: () => translate('auto.components.billing.menuItem', 'Plan & billing'),
     icon: CreditCard,
-    order: 10,
+    order: 11,
     requiredCapability: BILLING_CAPABILITY,
     onSelect: () => openPlansPage('account-menu')
   })
@@ -27,12 +32,54 @@ export function registerPlanBillingMenuItem(): () => void {
     id: 'orca.team',
     label: () => translate('auto.components.billing.team.menuItem', 'Team'),
     icon: Users,
-    order: 11,
+    order: 10,
     requiredCapability: BILLING_CAPABILITY,
-    onSelect: openAccountSettings
+    onSelect: () => openTeamPage()
   })
+
+  let disposeUpgrade: (() => void) | null = null
+  const syncUpgrade = (): void => {
+    // Only a known "no plan" shows it: never flash an upsell at a paying team while loading.
+    const show = getBillingSummary().subscribed === false
+    if (show && !disposeUpgrade) {
+      disposeUpgrade = registerAccountMenuItem({
+        id: UPGRADE_ITEM_ID,
+        label: () => translate('auto.components.billing.upgrade.menuItem', 'Upgrade to Orca Cloud'),
+        icon: Sparkles,
+        order: 9,
+        tone: 'accent',
+        requiredCapability: BILLING_CAPABILITY,
+        onSelect: () => openPlansPage('account-menu')
+      })
+    } else if (!show && disposeUpgrade) {
+      disposeUpgrade()
+      disposeUpgrade = null
+    }
+  }
+  const unsubscribeSummary = subscribeBillingSummary(syncUpgrade)
+
+  // Re-read when the signed-in account or its org changes; billing-flagged accounts only.
+  let lastKey: string | null = null
+  const onAuth = (): void => {
+    const auth = useAppStore.getState().orcaProfileAuthStatus
+    const enabled =
+      auth?.state === 'connected' && auth.capabilities?.flags[BILLING_CAPABILITY] === true
+    const key = enabled ? `${auth?.cloud?.userId}:${auth?.cloud?.activeOrgId ?? ''}` : null
+    if (key !== lastKey) {
+      lastKey = key
+      if (key) {
+        void refreshBillingSummary(true)
+      }
+    }
+  }
+  const unsubscribeAuth = useAppStore.subscribe(onAuth)
+  onAuth()
+
   return () => {
     disposeBilling()
     disposeTeam()
+    disposeUpgrade?.()
+    unsubscribeSummary()
+    unsubscribeAuth()
   }
 }

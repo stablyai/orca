@@ -31,6 +31,7 @@ import { OverageRequestSchema, updateOverage } from './overage'
 import { LiveModeRefusedError, StripeError, createStripeClient, type StripeClient } from './stripe'
 import { UsageReportSchema, flushMeterReports, recordUsage, validateSegment } from './usage'
 import { handleStripeWebhook } from './webhook'
+import { renderReturnPage, returnOutcome } from './return-page'
 
 const MAX_JSON_BYTES = 16 * 1024
 
@@ -68,13 +69,8 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
   try {
     switch (route) {
       case 'GET /return':
-        // Where Checkout and the Portal send the browser back. Static; reveals nothing.
-        return new Response(
-          '<!doctype html><meta charset="utf-8"><title>Orca</title>' +
-            '<body style="font:15px system-ui;margin:4rem auto;max-width:28rem;text-align:center">' +
-            '<p>You can close this tab and return to Orca.</p></body>',
-          { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } }
-        )
+        // Where Checkout and the Portal send the browser back; hands off to the desktop app.
+        return renderReturnPage(returnOutcome(url))
 
       case 'POST /v1/stripe/webhook':
         return await handleStripeWebhook(env, stripe, request, now)

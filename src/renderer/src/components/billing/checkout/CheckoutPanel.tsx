@@ -82,7 +82,7 @@ function StatusIcon({ phase }: { phase: CheckoutPanelProps['phase'] }): React.JS
     return (
       <span
         aria-hidden
-        className="flex size-11 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 animate-in zoom-in-50 fade-in-0 duration-300 motion-reduce:animate-none dark:text-emerald-400"
+        className="flex size-11 items-center justify-center rounded-full border border-status-success-border bg-status-success-background text-status-success animate-in zoom-in-50 fade-in-0 duration-300 motion-reduce:animate-none"
       >
         <Check className="size-6" strokeWidth={2.5} />
       </span>
@@ -102,7 +102,7 @@ function StatusIcon({ phase }: { phase: CheckoutPanelProps['phase'] }): React.JS
     return (
       <span
         aria-hidden
-        className="flex size-11 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400"
+        className="flex size-11 items-center justify-center rounded-full border border-status-warning-border bg-status-warning-background text-status-warning-text"
       >
         <AlertCircle className="size-5" />
       </span>

@@ -2,7 +2,7 @@
 // sandbox" upsell) calls openPlansPage(); PlansDialogHost renders it.
 import { useSyncExternalStore } from 'react'
 
-export type PlansPageSource = 'account-menu' | 'settings' | 'sandbox' | 'other'
+export type PlansPageSource = 'account-menu' | 'settings' | 'sandbox' | 'team' | 'run-on' | 'other'
 
 type PlansPageState = { open: boolean; source: PlansPageSource | null }
 

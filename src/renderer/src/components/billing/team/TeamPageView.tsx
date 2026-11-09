@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { OrcaBillingStatusResult } from '../../../../../shared/orca-billing'
@@ -55,8 +56,8 @@ function SkeletonRows(): React.JSX.Element {
       className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border"
     >
       {[0, 1, 2].map((index) => (
-        <div key={index} className="flex items-center gap-3 bg-card px-3 py-2.5">
-          <span className="size-8 rounded-full bg-muted motion-safe:animate-pulse" />
+        <div key={index} className="flex min-h-12 items-center gap-3 bg-card px-3 py-2">
+          <span className="size-6 rounded-full bg-muted motion-safe:animate-pulse" />
           <span className="flex-1 space-y-1.5">
             <span className="block h-3 w-32 rounded bg-muted motion-safe:animate-pulse" />
             <span className="block h-2.5 w-44 rounded bg-muted/70 motion-safe:animate-pulse" />
@@ -179,7 +180,10 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
             rowStates={props.rowStates}
             canLeave={canLeave}
             now={props.now}
-            onChangeRole={props.onChangeRole}
+            // Promoting to owner hands over billing control, so it always confirms first.
+            onChangeRole={(member, role) =>
+              role === 'owner' ? props.onMakeOwner(member) : props.onChangeRole(member, role)
+            }
             onMakeOwner={props.onMakeOwner}
             onRemove={props.onRemove}
             onResend={props.onResend}
@@ -240,17 +244,27 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                   )}
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            disabled={!canLeave}
-            onClick={props.onLeave}
+          <SettingsDisabledControlTooltip
+            reason={
+              canLeave
+                ? undefined
+                : t(
+                    'auto.components.billing.team.leaveNeedsOwner',
+                    'Make someone else an owner first'
+                  )
+            }
           >
-            <LogOut />
-            {t('auto.components.billing.team.leaveCta', 'Leave team')}
-          </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={!canLeave}
+              onClick={props.onLeave}
+            >
+              <LogOut />
+              {t('auto.components.billing.team.leaveCta', 'Leave team')}
+            </Button>
+          </SettingsDisabledControlTooltip>
         </section>
       ) : null}
     </div>
