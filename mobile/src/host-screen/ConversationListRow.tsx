@@ -7,6 +7,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { ConversationRow } from './conversation-project'
 import { conversationCopy, conversationTimeAgo } from './conversation-copy'
+import { agentStateLabel } from '../worktree/agent-row-display'
 import { conversationStyles as styles } from './conversation-styles'
 
 export function ConversationListRow({
@@ -75,7 +76,9 @@ export function ConversationListRow({
                         ? copy.failedState
                         : item.status === 'unverifiable'
                           ? copy.unconfirmed
-                          : copy[item.status],
+                          : item.status === 'permission'
+                            ? agentStateLabel(item.status)
+                            : copy[item.status],
                 item.at ? conversationTimeAgo(item.at, now) : null
               ]
                 .filter(Boolean)
