@@ -26,6 +26,8 @@ export type LaunchedAgentWriteGuardOptions = {
   unprovableHost?: UnprovableHostPolicy
   /** A fresh launch can reach the writer before the agent owns the terminal's foreground; poll until here before refusing. */
   agentForegroundWaitMs?: number
+  /** Absolute epoch deadline the poll must not outlive (the caller's readiness deadline). */
+  agentForegroundDeadlineMs?: number
 }
 
 export type LaunchedAgentWriteGuard = {
@@ -36,8 +38,8 @@ export type LaunchedAgentWriteGuard = {
 // A launcher's readiness can come from the shell prompt just before the agent claims the foreground (#40253).
 const FOREGROUND_CLAIM_RETRY_MS = 250
 
-function waitForForegroundClaim(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, FOREGROUND_CLAIM_RETRY_MS))
+function waitForForegroundClaim(ms = FOREGROUND_CLAIM_RETRY_MS): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /** Require fresh agent foreground before the first prompt write; ready signals can be shell prompts.
@@ -45,7 +47,11 @@ function waitForForegroundClaim(): Promise<void> {
 export function createLaunchedAgentWriteGuard(
   runtime: LaunchedAgentWriteGuardRuntime,
   agent: TuiAgent,
-  { unprovableHost = 'refuse', agentForegroundWaitMs = 0 }: LaunchedAgentWriteGuardOptions = {}
+  {
+    unprovableHost = 'refuse',
+    agentForegroundWaitMs = 0,
+    agentForegroundDeadlineMs
+  }: LaunchedAgentWriteGuardOptions = {}
 ): LaunchedAgentWriteGuard {
   let disposed = false
   let current: {
@@ -120,9 +126,21 @@ export function createLaunchedAgentWriteGuard(
       }
       let foreground = await readForeground()
       // Why: a fresh launch's readiness can come from the shell prompt just before the agent claims the foreground (#40253).
-      const deadline = Date.now() + Math.max(0, agentForegroundWaitMs)
-      while (foreground !== 'agent' && Date.now() < deadline) {
-        await waitForForegroundClaim()
+      // The caller's readiness deadline bounds the poll: a hook that consumed the budget leaves no wait, not a fresh one.
+      const deadline = Math.min(
+        agentForegroundDeadlineMs ?? Number.POSITIVE_INFINITY,
+        Date.now() + Math.max(0, agentForegroundWaitMs)
+      )
+      while (foreground !== 'agent') {
+        const remainingMs = deadline - Date.now()
+        if (remainingMs <= 0) {
+          break
+        }
+        await waitForForegroundClaim(Math.min(FOREGROUND_CLAIM_RETRY_MS, remainingMs))
+        // A read started at the deadline can still land an `agent` result late; do not start one.
+        if (Date.now() >= deadline) {
+          break
+        }
         foreground = await readForeground()
       }
       if (foreground === 'agent') {
@@ -154,7 +172,10 @@ export function createWorkerBriefWriteGuard(
   runtime: LaunchedAgentWriteGuardRuntime,
   agent: string | null | undefined,
   freshLaunch: boolean,
-  options: Pick<LaunchedAgentWriteGuardOptions, 'agentForegroundWaitMs'> = {}
+  options: Pick<
+    LaunchedAgentWriteGuardOptions,
+    'agentForegroundWaitMs' | 'agentForegroundDeadlineMs'
+  > = {}
 ): LaunchedAgentWriteGuard | null {
   return freshLaunch && isTuiAgent(agent)
     ? createLaunchedAgentWriteGuard(runtime, agent, {

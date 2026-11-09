@@ -68,7 +68,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     devMode: args.devMode,
     requestId: args.requestId,
     launchedAgent: args.launchedAgent,
-    readinessTimeoutMs: Math.max(0, args.readinessDeadline - Date.now())
+    readinessTimeoutMs: Math.max(0, args.readinessDeadline - Date.now()),
+    readinessDeadline: args.readinessDeadline
   })
   effects.push({
     kind: 'dispatch_input',

@@ -45,6 +45,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   launchedAgent?: string | null
   /** The caller's readiness budget; a structured worker's start counts against it. */
   readinessTimeoutMs?: number
+  /** Absolute end of the caller's readiness budget; a fresh launch's foreground poll must not outlive it. */
+  readinessDeadline?: number
 }): Promise<{
   prompt?: RuntimeTerminalSend['prompt']
   structuredTurnStart?: WorkerTurnStartObservation
@@ -115,9 +117,12 @@ export async function deliverWorkerDispatchPreamble(args: {
     !!args.launchedAgent,
     {
       agentForegroundWaitMs: Math.min(
-        args.readinessTimeoutMs ?? 0,
+        args.readinessTimeoutMs ?? FRESH_LAUNCH_FOREGROUND_CLAIM_TIMEOUT_MS,
         FRESH_LAUNCH_FOREGROUND_CLAIM_TIMEOUT_MS
-      )
+      ),
+      ...(args.readinessDeadline === undefined
+        ? {}
+        : { agentForegroundDeadlineMs: args.readinessDeadline })
     }
   )
   try {
