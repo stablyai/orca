@@ -9,6 +9,7 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { useAppStore } from '@/store/index'
+import { forgetAiVaultSessionResult } from '../scanning/ai-vault-session-result-cache'
 import '../session-list/ai-vault-session-filters'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
@@ -135,6 +136,7 @@ export function useAiVaultSessionDeleteAction({
           // Use one failure message rather than exposing raw main-side reasons.
           throw new Error(result.outcome)
         }
+        forgetAiVaultSessionResult(session.id)
         onDeleted?.(session)
         toast.success(
           translate('auto.components.right.sidebar.AiVaultPanel.sessionDeleted', 'Session deleted')
