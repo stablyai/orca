@@ -34,9 +34,17 @@ export function watchMobileNativeChatRow(
     visibility.observe(row)
     return true
   }
+  let frame: number | null = null
   if (!observeRow()) {
-    onShown(false)
-    // The list draws older rows in its own commits, after this watch started.
+    // The list draws older rows in its own commits after this watch starts; wait for them before calling the row hidden.
+    frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        frame = null
+        if (!visibility) {
+          onShown(false)
+        }
+      })
+    })
     const box = mobileNativeChatRowBox(scroller)
     if (box instanceof Element) {
       drawing = new MutationObserver(() => {
@@ -49,6 +57,9 @@ export function watchMobileNativeChatRow(
     }
   }
   return () => {
+    if (frame !== null) {
+      cancelAnimationFrame(frame)
+    }
     visibility?.disconnect()
     drawing?.disconnect()
   }
