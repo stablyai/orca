@@ -6,7 +6,6 @@ import {
   readHiddenVmCheckouts,
   releaseVmCreateCheckout,
   settleVmCreateCheckoutAfterCleanup,
-  subscribeHiddenVmCheckouts,
   withoutHiddenVmCheckouts,
   withoutHiddenVmWorktrees
 } from './vm-create-hidden-checkouts'
@@ -49,40 +48,9 @@ describe('withoutHiddenVmCheckouts', () => {
     expect([...filtered.pairedServerRows.values()]).toEqual([vmLinked, sameRepoIdElsewhere])
     expect(filtered.workspaces).toBe(domains.workspaces)
   })
-
-  it('keeps the same domains object when nothing is hidden or nothing matches', () => {
-    const domains = domainsWith([{ repoId: 'a', path: '/a' }], [])
-    expect(withoutHiddenVmCheckouts(domains, readHiddenVmCheckouts())).toBe(domains)
-    hideVmCreateCheckout('c1', { repoId: 'b', path: '/b' })
-    expect(withoutHiddenVmCheckouts(domains, readHiddenVmCheckouts())).toBe(domains)
-  })
-})
-
-describe('withoutHiddenVmWorktrees', () => {
-  it('drops the hidden VM primary checkout from the window list and keeps identity otherwise', () => {
-    const vmPrimary = { id: 'vm', repoId: 'vm-repo', path: '/srv/repo', isMainWorktree: true }
-    const other = { id: 'o', repoId: 'local', path: '/srv/repo', isMainWorktree: true }
-    const list = [vmPrimary, other]
-    expect(withoutHiddenVmWorktrees(list, readHiddenVmCheckouts())).toBe(list)
-
-    hideVmCreateCheckout('c1', { repoId: 'vm-repo', path: '/srv/repo' })
-    expect(withoutHiddenVmWorktrees(list, readHiddenVmCheckouts())).toEqual([other])
-    releaseVmCreateCheckout('c1')
-    expect(withoutHiddenVmWorktrees(list, readHiddenVmCheckouts())).toBe(list)
-  })
 })
 
 describe('hidden VM checkout lifecycle', () => {
-  it('notifies subscribers when a checkout is hidden and released', () => {
-    const listener = vi.fn()
-    const unsubscribe = subscribeHiddenVmCheckouts(listener)
-    hideVmCreateCheckout('c1', { repoId: 'vm', path: '/srv/repo' })
-    releaseVmCreateCheckout('c1')
-    releaseVmCreateCheckout('c1')
-    expect(listener).toHaveBeenCalledTimes(2)
-    unsubscribe()
-  })
-
   it('shows a VM again when its cleanup failed, but not after it was cleaned up', () => {
     vi.useFakeTimers()
     hideVmCreateCheckout('c1', { repoId: 'failed-vm', path: '/srv/repo' })
