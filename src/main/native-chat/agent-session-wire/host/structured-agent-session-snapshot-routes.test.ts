@@ -7,6 +7,7 @@ import { createTrackedJournalOpener } from '../../agent-session-journal/store-li
 import { createDeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import { StructuredAgentSessionSnapshotRoutes } from './structured-agent-session-snapshot-routes'
 import { testEventSinkLogging } from './testing/structured-agent-session-logger.test-fixture'
+import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 
 const journals = createTrackedJournalOpener()
 let root: string
@@ -22,7 +23,7 @@ afterEach(async () => {
 
 const thread = { kind: 'thread' as const }
 
-it("holds reading across an epoch replacement and resumes only on the new epoch's facts", async () => {
+async function snapshotFixture() {
   const journal = await journals.open({
     identity: {
       sessionId: 'orca-session',
@@ -46,11 +47,24 @@ it("holds reading across an epoch replacement and resumes only on the new epoch'
       attempt: 0
     }
   )
-  const routes = new StructuredAgentSessionSnapshotRoutes(testEventSinkLogging().logger)
+  const failure = Promise.withResolvers<void>()
+  const logging = testEventSinkLogging()
+  const routes = new StructuredAgentSessionSnapshotRoutes({
+    ...logging.logger,
+    warn: () => failure.resolve()
+  })
   journal.epochReplacements.observe((replaced) =>
     routes.replacing('orca-session', journal, replaced)
   )
-  const reading = { pauseReading: vi.fn(), resumeReading: vi.fn() }
+  let paused = false
+  const reading = {
+    pauseReading: () => {
+      paused = true
+    },
+    resumeReading: () => {
+      paused = false
+    }
+  }
   const live = createDeferredStructuredAgentSessionEventSink({
     ...testEventSinkLogging(),
     readingControl: reading
@@ -67,7 +81,11 @@ it("holds reading across an epoch replacement and resumes only on the new epoch'
   }
   expect(live.sink.journalSnapshot?.()).toEqual(saved)
   retired.close()
+  return { journal, live, retired, saved, failure: failure.promise, paused: () => paused }
+}
 
+it("holds reading across an epoch replacement and resumes only on the new epoch's facts", async () => {
+  const { journal, live, retired, saved, paused } = await snapshotFixture()
   const replaced = journal.write({
     kind: 'epoch-replace',
     reason: 'handle_forked',
@@ -75,7 +93,7 @@ it("holds reading across an epoch replacement and resumes only on the new epoch'
     items: []
   })
   // Reading pauses in the tick the replacement reaches the writer.
-  expect(reading.pauseReading).toHaveBeenCalledTimes(1)
+  expect(paused()).toBe(true)
   await replaced
   await live.sink.snapshotCurrent?.()
 
@@ -85,7 +103,74 @@ it("holds reading across an epoch replacement and resumes only on the new epoch'
     subagents: [],
     threadGoal: { goal: null, row: null }
   })
-  expect(reading.resumeReading).toHaveBeenCalledTimes(1)
+  expect(paused()).toBe(false)
   expect(retired.sink.journalSnapshot?.()).toEqual(saved)
   live.close()
+})
+
+it('rereads the retained facts after a replacement rolls back before allowing translation', async () => {
+  const { journal, live, saved, paused } = await snapshotFixture()
+  const before = journal.cursor()
+  await withTestAgentSessionDatabase(root, (db) =>
+    db.exec(`CREATE TRIGGER reject_snapshot_replacement
+      BEFORE UPDATE OF context_boundary ON journal_chat_state
+      BEGIN SELECT RAISE(ABORT, 'snapshot_replacement_rollback'); END`)
+  )
+  try {
+    const replaced = journal.write({
+      kind: 'epoch-replace',
+      reason: 'handle_forked',
+      fence: 0,
+      items: []
+    })
+    expect(paused()).toBe(true)
+    await expect(replaced).rejects.toThrow('snapshot_replacement_rollback')
+    await live.sink.snapshotCurrent?.()
+    expect(paused()).toBe(false)
+    expect(journal.cursor()).toEqual(before)
+    expect(live.sink.journalSnapshot?.()).toEqual(saved)
+    expect(await journal.reads.claudeSnapshot()).toEqual(saved)
+  } finally {
+    live.close()
+    await withTestAgentSessionDatabase(root, (db) =>
+      db.exec('DROP TRIGGER reject_snapshot_replacement')
+    )
+  }
+})
+
+it('keeps translation held when the replacement commits but its saved facts cannot be reread', async () => {
+  const { journal, live, saved, failure, paused } = await snapshotFixture()
+  const snapshot = vi
+    .spyOn(journal.reads, 'claudeSnapshot')
+    .mockRejectedValueOnce(new Error('snapshot read failed'))
+  try {
+    const replaced = journal.write({
+      kind: 'epoch-replace',
+      reason: 'handle_forked',
+      fence: 0,
+      items: []
+    })
+    expect(paused()).toBe(true)
+    let translationAllowed = false
+    const waiting = live.sink.snapshotCurrent?.().then(() => {
+      translationAllowed = true
+    })
+    await replaced
+    await failure
+    expect(paused()).toBe(true)
+    expect(translationAllowed).toBe(false)
+    expect(live.sink.journalSnapshot?.()).toEqual(saved)
+    expect(await journal.reads.claudeSnapshot()).toEqual({
+      canonicalByToolUse: [],
+      attemptByAgent: [],
+      subagents: [],
+      threadGoal: { goal: null, row: null }
+    })
+    live.close()
+    await waiting
+    expect(translationAllowed).toBe(true)
+  } finally {
+    snapshot.mockRestore()
+    live.close()
+  }
 })
