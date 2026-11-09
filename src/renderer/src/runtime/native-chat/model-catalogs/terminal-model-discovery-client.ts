@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type {
   RuntimeGitContext,
   RuntimeDiscoverCommitMessageModelsResult
@@ -19,13 +20,22 @@ export async function discoverRuntimeTerminalModels(
     if (context.connectionId) {
       return {
         success: false,
-        error: 'Terminal model discovery is unavailable on this connection.'
+        error: translate(
+          'agents.terminalModels.connectionUnavailable',
+          'Terminal model discovery is unavailable on this connection.'
+        )
       }
     }
     return window.api.git.discoverTerminalModels({ agentId, ...(worktree ? { worktree } : {}) })
   }
   if (!context.worktreeId) {
-    return { success: false, error: 'Terminal model discovery requires a workspace on this host.' }
+    return {
+      success: false,
+      error: translate(
+        'agents.terminalModels.workspaceRequired',
+        'Terminal model discovery requires a workspace on this host.'
+      )
+    }
   }
   return callRuntimeRpc<RuntimeDiscoverCommitMessageModelsResult>(
     context.target,

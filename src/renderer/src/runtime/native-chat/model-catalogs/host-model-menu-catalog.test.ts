@@ -238,8 +238,15 @@ it('keeps native-only answers out of guest and differing paired-command routes',
     await import('../../../../../shared/agent-session/options/model-menu-options')
   const entry = {
     agent: 'codex',
-    catalogRead: 'pending'
-  } as AgentPickerEntry
+    catalogRead: 'pending',
+    label: 'Codex',
+    rows: [],
+    surfaces: ['chat', 'terminal'],
+    defaultSurface: 'chat',
+    terminal: {},
+    structured: {},
+    catalog: { origin: 'unknown' }
+  } satisfies AgentPickerEntry
   mocks.call.mockResolvedValue(catalog('native-only'))
   for (const input of [
     { target, nativeRuntime: false, settings: {} },

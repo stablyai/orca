@@ -10,7 +10,6 @@ import { resolveProjectExecutionRuntime } from '../../../../../../shared/executi
 import { agentPickerUsesNativeRuntime } from '@/components/agent/agent-launch-picker-runtime'
 import { modelMenuOptions } from '../../../../../../shared/agent-session/options/model-menu-options'
 import { agentPickerModelCatalogReads } from '@/components/agent/agent-launch-picker-host-reads'
-import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type * as ConnectionOwnerResolutionModule from '../../../workspace/ownership/connection-owner-resolution'
 
 const mocks = vi.hoisted(() => ({
@@ -204,7 +203,17 @@ describe('buildAgentLaunchRouteInput', () => {
         nativeRuntime: agentPickerUsesNativeRuntime(route, 'win32', 'C:\\repo'),
         settings: {},
         serverSettings: async () => ({})
-      }).catalog({ agent: 'codex', catalogRead: 'pending' } as AgentPickerEntry)
+      }).catalog({
+        agent: 'codex',
+        catalogRead: 'pending',
+        label: 'Codex',
+        rows: [],
+        surfaces: ['chat', 'terminal'],
+        defaultSurface: 'chat',
+        terminal: {},
+        structured: {},
+        catalog: { origin: 'unknown' }
+      })
       expect(
         modelMenuOptions(answer, {
           agent: 'codex',

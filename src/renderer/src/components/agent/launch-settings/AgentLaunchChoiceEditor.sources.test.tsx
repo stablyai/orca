@@ -6,8 +6,8 @@ import { cliModelMenuScope } from '@/runtime/native-chat/model-catalogs/model-me
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { cliResult } from '../agent-launch-picker-sources.test-fixture'
 const mocks = vi.hoisted(() => ({ discover: vi.fn() }))
-vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
-  discoverRuntimeCommitMessageModels: mocks.discover
+vi.mock('@/runtime/native-chat/model-catalogs/terminal-model-discovery-client', () => ({
+  discoverRuntimeTerminalModels: mocks.discover
 }))
 vi.mock('./AgentChoiceMenu', () => ({
   AgentChoiceMenu: (props: {

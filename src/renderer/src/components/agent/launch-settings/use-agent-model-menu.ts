@@ -1,5 +1,5 @@
 import type { ModelCatalogSource } from '../../../../../shared/agent-session/options/model-catalog-source'
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import {
   useAppStateViewActive,
   useAppViewExternalStore
@@ -13,7 +13,6 @@ import { modelMenuOptions } from '../../../../../shared/agent-session/options/mo
 import { getAgentSessionOptionLaunchCatalog } from '../../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentDedicatedChoices } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
-import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 
 export type AgentModelMenuSource = {
   scope: HostModelMenuScope
@@ -30,27 +29,18 @@ export function useAgentModelMenu(
   open: boolean
 ) {
   const active = useAppStateViewActive()
-  const key = source ? structuredAgentSessionHostKey(source.scope.target) : null
-  const scope = useMemo(
-    () => source?.scope,
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Scope identity is host/agent/worktree, not the caller's object.
-    [key, agent, source?.scope.worktree, source?.scope.sourceKey]
-  )
+  const catalog = source ? hostModelMenuCatalog(source.scope) : undefined
   const subscribe = useCallback(
-    (listener: () => void) =>
-      scope ? hostModelMenuCatalog(scope).subscribe(listener) : subscribeAbsent(),
-    [scope]
+    (listener: () => void) => (catalog ? catalog.subscribe(listener) : subscribeAbsent()),
+    [catalog]
   )
-  const getSnapshot = useCallback(
-    () => (scope ? hostModelMenuCatalog(scope).snapshot : absent),
-    [scope]
-  )
+  const getSnapshot = useCallback(() => catalog?.snapshot ?? absent, [catalog])
   const snapshot = useAppViewExternalStore(subscribe, getSnapshot, () => absent)
   useEffect(() => {
-    if (scope && open && active) {
-      void hostModelMenuCatalog(scope).read(source?.source === 'cli')
+    if (catalog && open && active) {
+      void catalog.read(source?.source === 'cli')
     }
-  }, [scope, open, active, snapshot.generation, source?.source])
+  }, [catalog, open, active, snapshot.generation, source?.source])
   const menu = modelMenuOptions(snapshot.answer, {
     agent,
     surface: 'terminal',

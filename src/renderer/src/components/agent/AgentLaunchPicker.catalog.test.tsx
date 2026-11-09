@@ -5,16 +5,13 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { sourceEntry } from './agent-launch-picker-sources.test-fixture'
 import {
   agentPickerDraft,
-  agentPickerFreshLaunchInputs
+  agentPickerFreshLaunchInputs,
+  agentPickerLaunchInputs
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { AgentLaunchPicker } from './AgentLaunchPicker'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
-import {
-  agentPickerLaunchInputs,
-  type AgentPickerDraft
-} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
@@ -70,12 +67,17 @@ it.each(['codex', 'pi'] as const)(
               refresh: async () => [agent]
             }
           }}
-          onPick={(_agent, draft) => picks.push(agentPickerLaunchInputs(draft as AgentPickerDraft))}
+          onPick={(_agent, draft) => {
+            if (!draft) {
+              throw new Error('Expected a model setup draft')
+            }
+            picks.push(agentPickerLaunchInputs(draft))
+          }}
         />
       </TooltipProvider>
     )
     await userEvent.setup().click(screen.getByRole('button', { name: 'Select agent' }))
-    const search = await screen.findByPlaceholderText('Search agents and setups…')
+    const search = await screen.findByRole('textbox')
     fireEvent.change(search, { target: { value: 'Account model' } })
     await waitFor(() =>
       expect(screen.getByRole('menuitem', { name: /Account model/ })).toBeTruthy()
@@ -123,7 +125,7 @@ it('searches a terminal dialog preset with a chat-default entry and launches its
     </TooltipProvider>
   )
   await userEvent.setup().click(screen.getByRole('button', { name: 'Select agent' }))
-  fireEvent.change(await screen.findByPlaceholderText('Search agents and setups…'), {
+  fireEvent.change(await screen.findByRole('textbox'), {
     target: { value: 'Flash Low' }
   })
   fireEvent.click(await screen.findByRole('menuitem', { name: /Gemini 3.8 Flash \(Low\)/ }))

@@ -81,7 +81,7 @@ export async function discoverTerminalModels(
     if (!env.ok) {
       return { success: false, error: env.error }
     }
-    return discoverCommitMessageModelsLocal(
+    return await discoverCommitMessageModelsLocal(
       agentId,
       env.env,
       context.store.getSettings().agentCmdOverrides?.[agentId],

@@ -237,7 +237,10 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     }),
     discoverTerminalModels: async () => ({
       success: false,
-      error: 'Terminal model discovery requires a connected host.'
+      error: translate(
+        'agents.terminalModels.hostRequired',
+        'Terminal model discovery requires a connected host.'
+      )
     }),
     discoverCommitMessageModels: async () => ({
       success: false,

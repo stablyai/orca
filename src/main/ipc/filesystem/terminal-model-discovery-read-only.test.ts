@@ -1,20 +1,15 @@
+import type { DiscoveryIO } from './terminal-model-discovery.test-fixture'
 import { expect, it, vi } from 'vitest'
-const io = vi.hoisted(() => ({
+const io = vi.hoisted<DiscoveryIO>(() => ({
   generateCommit: vi.fn(),
   generatePr: vi.fn(),
   handle: vi.fn(),
   env: vi.fn(),
   discover: vi.fn(),
   materialize: vi.fn(),
-  distros: ['Ubuntu'] as string[],
+  distros: ['Ubuntu'],
   distrosKnown: false,
-  rows: [] as {
-    path: string
-    head: string
-    branch: string
-    isBare: boolean
-    isMainWorktree: boolean
-  }[],
+  rows: [],
   mutations: vi.fn(),
   userAct: vi.fn()
 }))

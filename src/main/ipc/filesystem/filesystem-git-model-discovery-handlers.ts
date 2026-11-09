@@ -63,13 +63,13 @@ export function registerFilesystemGitModelDiscoveryHandlers(
           return { success: false, error: localEnv.error }
         }
         return localDiscoveryOptions
-          ? discoverCommitMessageModelsLocal(
+          ? await discoverCommitMessageModelsLocal(
               agentId as TuiAgent,
               localEnv.env,
               agentCommandOverride,
               localDiscoveryOptions
             )
-          : discoverCommitMessageModelsLocal(
+          : await discoverCommitMessageModelsLocal(
               agentId as TuiAgent,
               localEnv.env,
               agentCommandOverride

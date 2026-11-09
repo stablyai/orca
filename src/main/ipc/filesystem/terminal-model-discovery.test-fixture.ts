@@ -6,7 +6,7 @@ import { registerTerminalModelDiscoveryHandler } from '../terminal-model-discove
 import { AGENT_MODEL_DISCOVERY_METHODS } from '../../runtime/rpc/methods/terminal/agent-model-discovery'
 
 export const FOLDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-type DiscoveryIO = {
+export type DiscoveryIO = {
   generateCommit: Mock
   generatePr: Mock
   handle: Mock

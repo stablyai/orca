@@ -1,3 +1,7 @@
+import {
+  NewSessionResponseSchema,
+  SessionModelStateSchema
+} from '../../../../main/acp/generated/acp-protocol.generated'
 import recording from '../../../../main/acp/fixtures/antigravity-v1.4.3-options.json'
 import { AcpStructuredOptions } from '../../../../main/acp/options/acp-structured-options'
 import { parseAntigravityModels } from '../../../../shared/source-control/ai/generation/commit-message-model-parsers'
@@ -20,11 +24,10 @@ export function sourceEntry(
   defaultSurface: AgentPickerEntry['defaultSurface'] = 'chat'
 ): AgentPickerEntry {
   const options = new AcpStructuredOptions()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recorded ACP JSON has the protocol's select discriminator values.
-  options.adoptSession(
-    recording.session as Parameters<AcpStructuredOptions['adoptSession']>[0],
-    'new'
+  const session = NewSessionResponseSchema.extend({ models: SessionModelStateSchema }).parse(
+    recording.session
   )
+  options.adoptSession(session, 'new')
   return {
     agent: 'antigravity',
     label: 'Antigravity',

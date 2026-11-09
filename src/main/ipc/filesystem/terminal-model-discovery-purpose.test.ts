@@ -1,20 +1,16 @@
+import { GitDiscoverCommitMessageModels } from '../../../shared/rpc-contract/git-params'
+import type { DiscoveryIO } from './terminal-model-discovery.test-fixture'
 import { expect, it, vi } from 'vitest'
-const io = vi.hoisted(() => ({
+const io = vi.hoisted<DiscoveryIO>(() => ({
   generateCommit: vi.fn(),
   generatePr: vi.fn(),
   handle: vi.fn(),
   env: vi.fn(),
   discover: vi.fn(),
   materialize: vi.fn(),
-  distros: ['Ubuntu'] as string[],
+  distros: ['Ubuntu'],
   distrosKnown: false,
-  rows: [] as {
-    path: string
-    head: string
-    branch: string
-    isBare: boolean
-    isMainWorktree: boolean
-  }[],
+  rows: [],
   mutations: vi.fn(),
   userAct: vi.fn()
 }))
@@ -90,12 +86,17 @@ it('keeps terminal Ubuntu inventory separate from native Git discovery and commi
   })
   expect(await rig.rpc()).toMatchObject({ models: [{ id: 'ubuntu-model' }] })
   const git = GIT_COMMIT_MESSAGE_GENERATION_METHODS.find(
-    ({ name }) => name === 'git.discoverCommitMessageModels'
+    (
+      method
+    ): method is Extract<
+      (typeof GIT_COMMIT_MESSAGE_GENERATION_METHODS)[number],
+      { params: typeof GitDiscoverCommitMessageModels }
+    > => method.params === GitDiscoverCommitMessageModels
   )!
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each method reads the real runtime; dispatcher context ports are not needed.
   const context = { runtime: rig.runtime } as never
   expect(
-    await git.handler({ worktree: rig.selector, agentId: 'antigravity' } as never, context)
+    await git.handler({ worktree: rig.selector, agentId: 'antigravity' }, context)
   ).toMatchObject({ success: true, models: [{ id: 'native-model' }] })
   const override = {
     sourceControlAiResolvedParams: {
@@ -135,10 +136,10 @@ it('settles a terminal repair refusal before preparing an environment or probing
   io.distros = []
   expect(await rig.ipc()).toMatchObject({ success: false })
   const target = await rig.runtime.resolveTerminalWorkspaceReadTarget(rig.selector)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the real launch resolver's store reads.
-  expect(() =>
-    resolveAgentLaunchRuntime(rig.store as never, target.scope, undefined, 'antigravity')
-  ).toThrow('No agent was started.')
+  expect(() => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read-port fixture supplies the launch resolver's store reads, as for the real runtime constructor.
+    return resolveAgentLaunchRuntime(rig.store as never, target.scope, undefined, 'antigravity')
+  }).toThrow('No agent was started.')
   expect(io.env).not.toHaveBeenCalled()
   expect(io.discover).not.toHaveBeenCalled()
 })

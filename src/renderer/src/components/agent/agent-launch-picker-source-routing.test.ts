@@ -3,7 +3,10 @@ import {
   withAgentPickerCatalogAvailability,
   agentPickerCatalogJobs
 } from './agent-picker-catalog-jobs'
-import { agentPickerModelMenu } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
+import {
+  agentPickerModelMenu,
+  agentPickerModels
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ discover: vi.fn(), structured: vi.fn() }))
 vi.mock('@/runtime/native-chat/model-catalogs/terminal-model-discovery-client', () => ({
@@ -14,14 +17,13 @@ vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
 }))
 import { agentPickerModelCatalogReads } from './agent-launch-picker-host-reads'
 import { cliModelCatalogAnswer } from '@/runtime/native-chat/model-catalogs/model-menu-cli-catalog'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
+  resetHostModelCatalogSnapshotsForTests,
   forgetHostModelCatalogSnapshots,
   recordHostModelCatalogSnapshot,
   subscribeHostModelCatalogSnapshot
 } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { projectAgentLaunchProfile } from '../../../../shared/agent-launch/choices/agent-launch-profile'
-import { agentPickerModels } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { cliResult, sourceEntry } from './agent-launch-picker-sources.test-fixture'
 
 beforeEach(() => {

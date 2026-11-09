@@ -1,7 +1,14 @@
 // @vitest-environment happy-dom
-import { act, renderHook, render, fireEvent, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  renderHook,
+  render,
+  fireEvent,
+  screen,
+  waitFor,
+  cleanup
+} from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup } from '@testing-library/react'
 import { useState } from 'react'
 import type { AgentDedicatedChoices } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
@@ -135,8 +142,7 @@ it('keeps options-only effort editable through pinning and clearing the model', 
     )
   }
   render(<Editor />)
-  const effort = () =>
-    screen.getByRole('combobox', { name: 'Reasoning effort' }) as HTMLSelectElement
+  const effort = () => screen.getByRole<HTMLSelectElement>('combobox', { name: 'Reasoning effort' })
   expect(effort().value).toBe('high')
   fireEvent.change(effort(), { target: { value: 'medium' } })
   expect(changed).toHaveBeenLastCalledWith({ options: { effort: 'medium' } })
@@ -272,7 +278,7 @@ it.each(['live', 'empty', 'saved-empty'] as const)(
         onChange={change}
       />
     )
-    const model = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement
+    const model = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Model' })
     expect([...model.options].map(({ value }) => value)).toEqual([
       '__agent_default__',
       ...(kind === 'live' ? ['gpt-6.1-sol'] : saved ? ['old-only'] : [])
@@ -280,7 +286,7 @@ it.each(['live', 'empty', 'saved-empty'] as const)(
     expect(model.value).toBe(saved ? 'old-only' : '__agent_default__')
     expect(screen.queryByRole('note')).toBeNull()
     if (saved) {
-      const effort = screen.getByRole('combobox', { name: 'Reasoning effort' }) as HTMLSelectElement
+      const effort = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Reasoning effort' })
       expect(effort.value).toBe('ultra')
       expect(effort.disabled).toBe(true)
       expect(hook.result.current.descriptors.find(({ id }) => id === 'effort')).toMatchObject({
