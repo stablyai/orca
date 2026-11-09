@@ -204,7 +204,7 @@ function automaticNaming(state: ReturnType<typeof rig>, before?: 'prompt' | 'see
   record.providerHandleChain[0]!.handle.nativeId = PROVIDER_SESSION_ID
   const blocked = Promise.withResolvers<void>()
   const entered = Promise.withResolvers<void>()
-  const pause = async (stage: 'prompt' | 'seed') => {
+  const awaitPreparationRelease = async (stage: 'prompt' | 'seed') => {
     if (before === stage) {
       entered.resolve()
       await blocked.promise
@@ -216,7 +216,7 @@ function automaticNaming(state: ReturnType<typeof rig>, before?: 'prompt' | 'see
       compareAndSetAgentSessionRecordName(
         async (apply) => {
           if (expected === null) {
-            await pause('seed')
+            await awaitPreparationRelease('seed')
           }
           record = apply(record)
           return record
@@ -233,7 +233,7 @@ function automaticNaming(state: ReturnType<typeof rig>, before?: 'prompt' | 'see
     ...state.deps,
     getStore: () => store,
     readFirstPrompt: async () => {
-      await pause('prompt')
+      await awaitPreparationRelease('prompt')
       return 'Repair login'
     },
     wait: async () => {}
