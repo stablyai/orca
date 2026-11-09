@@ -176,7 +176,8 @@ const props: CloudRoutinesViewProps = {
     ok: true,
     data: { url: 'https://api.orca.dev/hooks/rt_fix/n3wS3cr3tQz8xK' }
   }),
-  loadRuns
+  loadRuns,
+  onOpenWorkspace: () => {}
 }
 
 export const list = defineFixture({ width: 820, render: () => <CloudRoutinesView {...props} /> })
