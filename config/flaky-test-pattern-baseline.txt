@@ -79,7 +79,6 @@
 1 test-no-polling-loop:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-polling-loop:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 1 test-no-polling-loop:src/shared/darwin-terminal-names-real-ps.test.ts
-1 test-no-polling-loop:src/shared/fish-query-reply-child-stdin.node-pty.test.ts
 1 test-no-polling-loop:src/shared/remote-runtime/control/remote-runtime-shared-control-standing-intent.test.ts
 1 test-no-polling-loop:src/shared/startup-command-staging.node-pty.test.ts
 1 test-no-polling-loop:src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts
@@ -288,7 +287,6 @@
 1 test-no-real-time-wait:src/shared/darwin-process-table-capture.test.ts
 1 test-no-real-time-wait:src/shared/darwin-terminal-names-real-ps.test.ts
 1 test-no-real-time-wait:src/shared/darwin-terminal-names.test.ts
-5 test-no-real-time-wait:src/shared/fish-query-reply-child-stdin.node-pty.test.ts
 1 test-no-real-time-wait:src/shared/git/status/git-branch-line-total-soft-deadline.test.ts
 2 test-no-real-time-wait:src/shared/remote-runtime/control/remote-runtime-shared-control-auth-refusal.test.ts
 1 test-no-real-time-wait:src/shared/remote-runtime/control/remote-runtime-shared-control-standing-intent.test.ts
@@ -678,7 +676,6 @@
 7 test-no-wall-clock:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 1 test-no-wall-clock:src/shared/agent-hook-listener/transport/agent-hook-spool-drain.test.ts
 1 test-no-wall-clock:src/shared/agent-hook-listener/transport/agent-hook-spool-read.test.ts
-2 test-no-wall-clock:src/shared/fish-query-reply-child-stdin.node-pty.test.ts
 1 test-no-wall-clock:src/shared/mobile-push-contract.test.ts
 2 test-no-wall-clock:src/shared/startup-command-staging.node-pty.test.ts
 1 test-no-wall-clock:src/shared/startup-command-staging.test.ts
