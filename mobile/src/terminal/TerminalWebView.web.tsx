@@ -90,16 +90,19 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
               (message) => receiveRef.current?.(message),
               atMount
             )
+            documentRef.current = live
+            // Replay the pre-handle ready flush; theme/scale also ride init today, but future commands may not.
+            for (const command of beforeMountRef.current) {
+              live.send(command)
+            }
+            beforeMountRef.current = []
           } catch (error) {
+            // A throw here would escape the promise unseen; ready already stopped the watchdog, so show the overlay.
+            documentRef.current = null
+            live?.dispose()
+            live = null
             reportStartupFailure(error)
-            return
           }
-          documentRef.current = live
-          // Replay the pre-handle ready flush; theme/scale also ride init today, but future commands may not.
-          for (const command of beforeMountRef.current) {
-            live.send(command)
-          }
-          beforeMountRef.current = []
         },
         (error: unknown) => {
           if (!disposed) {
