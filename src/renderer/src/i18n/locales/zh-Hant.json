@@ -9242,7 +9242,9 @@
           "speechGpuLabel": "使用 GPU",
           "speechGpuDescription": "顯示卡可用時在顯示卡上辨識語音，失敗時改用 CPU。如果聽寫導致電腦當機或重新啟動，請關閉。",
           "updateToFasterVersion": "更新到更快的版本（{{value0}} MB）",
-          "c5ea32143e": "語音模型"
+          "c5ea32143e": "語音模型",
+          "ba4a900d1d": "聽寫模式",
+          "0121960365": "啟用語音聽寫"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "刪除 {{value0}}",

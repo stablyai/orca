@@ -9847,7 +9847,9 @@
           "speechGpuLabel": "Use GPU",
           "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer.",
           "updateToFasterVersion": "Update to the faster version ({{value0}} MB)",
-          "c5ea32143e": "Speech model"
+          "c5ea32143e": "Speech model",
+          "ba4a900d1d": "Dictation Mode",
+          "0121960365": "Enable Voice Dictation"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",

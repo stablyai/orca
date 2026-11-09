@@ -9405,7 +9405,9 @@
           "speechGpuLabel": "GPU kullan",
           "speechGpuDescription": "Konuşmayı çalıştığında ekran kartında, başarısız olduğunda CPU’da tanır. Dikte bilgisayarınızı donduruyor veya yeniden başlatıyorsa kapatın.",
           "updateToFasterVersion": "Daha hızlı sürüme güncelle ({{value0}} MB)",
-          "c5ea32143e": "Konuşma Modeli"
+          "c5ea32143e": "Konuşma Modeli",
+          "ba4a900d1d": "Dikte Modu",
+          "0121960365": "Sesli Dikteyi Etkinleştir"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",

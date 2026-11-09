@@ -8759,7 +8759,9 @@
           "speechGpuLabel": "GPU を使用",
           "speechGpuDescription": "動作する場合はグラフィックカードで音声を認識し、失敗した場合は CPU で認識します。音声入力でコンピュータがフリーズしたり再起動したりする場合はオフにしてください。",
           "updateToFasterVersion": "高速版に更新 ({{value0}} MB)",
-          "c5ea32143e": "音声モデル"
+          "c5ea32143e": "音声モデル",
+          "ba4a900d1d": "ディクテーションモード",
+          "0121960365": "音声ディクテーションを有効にする"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} を削除",

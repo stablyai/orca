@@ -9421,7 +9421,9 @@
           "speechGpuLabel": "GPU verwenden",
           "speechGpuDescription": "Sprache auf der Grafikkarte erkennen, wenn sie funktioniert, und auf der CPU, wenn sie versagt. Deaktivieren, wenn das Diktieren Ihren Computer einfrieren oder neu starten lässt.",
           "updateToFasterVersion": "Auf die schnellere Version aktualisieren ({{value0}} MB)",
-          "c5ea32143e": "Spracherkennungsmodell"
+          "c5ea32143e": "Spracherkennungsmodell",
+          "ba4a900d1d": "Diktatmodus",
+          "0121960365": "Diktat aktivieren"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} entfernen",

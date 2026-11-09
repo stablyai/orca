@@ -1,4 +1,4 @@
-import { skillPlanHasDetails } from '@/lib/skill-freshness-display-status'
+import { skillPlanHasDetails } from '@/lib/skills/presentation/skill-freshness-display-status'
 import { SkillSetupRow } from './SkillSetupRow'
 import { bundledSkillSetupActionLabel } from './bundled-skill-setup-copy'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
