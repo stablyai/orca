@@ -46,6 +46,10 @@ export function readTabRowChanges<T extends Row>(
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the net endpoints belong to the supplied T snapshots.
         const change = untypedChange as TabRowChange<T>
         const earlier = bucket.get(tabId)
+        // Reinsertion may change which duplicate entity owns the assignment.
+        if (earlier && earlier.after === undefined && change.after !== undefined) {
+          return 'unknown'
+        }
         bucket.set(tabId, { before: earlier ? earlier.before : change.before, after: change.after })
       }
     }

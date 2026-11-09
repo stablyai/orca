@@ -39,6 +39,15 @@ describe('addressed tab row references', () => {
     expect(readTabRowChanges(start, start)).toBeNull()
   })
 
+  it('requires resync when a removed row is reinserted across skipped writes', () => {
+    const a = { id: 'a', contentType: 'terminal', entityId: 't0', groupId: 'g' }
+    const b = { id: 'b', contentType: 'terminal', entityId: 't0', groupId: 'h' }
+    const start = { workspace: [a, b] }
+    const removed = replaceTabBuckets(start, [['workspace', [b]]])
+    const reinserted = replaceTabBuckets(removed, [['workspace', [b, a]]])
+    expect(readTabRowChanges(reinserted, start)).toBe('unknown')
+  })
+
   it('requires resync for unavailable or reordered histories', () => {
     const first = { id: 'first' }
     const second = { id: 'second' }
