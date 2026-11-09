@@ -43,13 +43,33 @@ const HOT_MAPS = new Set([
   'sleepingAgentSessionsByPaneKey'
 ])
 const OWNER_ROOTS = [
-  ['store/terminals/terminal-parking-input-owner.ts', 'acceptTerminalParkingInputs', []],
-  ['store/terminals/terminal-parking-input-owner.ts', 'publishAcceptedTerminalParkingInputs', []],
-  ['store/terminals/terminal-parking-input-owner.ts', 'invalidateTerminalParkingPtyInputs', []],
-  ['store/terminals/terminal-tab-owner-index.ts', 'update', ['tabsByWorktree']],
-  ['store/terminals/sleeping-agent-record-index.ts', 'update', ['records']],
-  ['store/terminals/sleeping-agent-record-index.ts', 'acceptTransition', ['previous', 'next']],
-  ['lib/worktree-tab-bucket-projection.ts', 'project', ['source']]
+  {
+    rel: 'store/terminals/terminal-parking-input-owner.ts',
+    name: 'acceptTerminalParkingInputs',
+    inputs: []
+  },
+  {
+    rel: 'store/terminals/terminal-parking-input-owner.ts',
+    name: 'publishAcceptedTerminalParkingInputs',
+    inputs: []
+  },
+  {
+    rel: 'store/terminals/terminal-parking-input-owner.ts',
+    name: 'invalidateTerminalParkingPtyInputs',
+    inputs: []
+  },
+  {
+    rel: 'store/terminals/terminal-tab-owner-index.ts',
+    name: 'update',
+    inputs: ['tabsByWorktree']
+  },
+  { rel: 'store/terminals/sleeping-agent-record-index.ts', name: 'update', inputs: ['records'] },
+  {
+    rel: 'store/terminals/sleeping-agent-record-index.ts',
+    name: 'acceptTransition',
+    inputs: ['previous', 'next']
+  },
+  { rel: 'lib/worktree-tab-bucket-projection.ts', name: 'project', inputs: ['source'] }
 ]
 const KEY_DIFFS = new Set([
   `${RENDERER}store/terminals/terminal-parking-input-owner.ts#diffUnknownParkingRecordKeys`,
@@ -261,8 +281,8 @@ export function collectParkingOwnershipViolations(root = process.cwd()) {
   const pending = [...ROOTS].flatMap(([rel, names]) =>
     names.map((name) => ({ rel, name, tainted: new Set() }))
   )
-  for (const [rel, name, tainted] of OWNER_ROOTS) {
-    pending.push({ rel: RENDERER + rel, name, tainted: new Set(tainted) })
+  for (const { rel, name, inputs } of OWNER_ROOTS) {
+    pending.push({ rel: RENDERER + rel, name, tainted: new Set(inputs) })
   }
   const visited = new Set()
   const violations = new Set()
