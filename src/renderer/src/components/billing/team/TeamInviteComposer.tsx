@@ -97,8 +97,8 @@ function impactCopy(
           : ''
       return (
         t(
-          'auto.components.billing.team.inviteAddsMany2',
-          '{{value0}} of these add a seat each when accepted: about {{value1}} prorated, then {{value2}} each.',
+          'auto.components.billing.team.inviteAddsMany3',
+          '{{value0}} of these add a seat each when accepted: about {{value1}} each now (prorated), then {{value2}} each.',
           { value0: String(impact.addedSeats), value1: prorated, value2: then }
         ) + covered
       )
@@ -238,9 +238,8 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
             spellCheck={false}
             aria-describedby={hintId}
             aria-invalid={invalidCount > 0 || undefined}
-            readOnly={sending}
+            readOnly={sending || candidates.length >= MAX_INVITES_PER_BATCH}
             aria-disabled={sending || undefined}
-            disabled={candidates.length >= MAX_INVITES_PER_BATCH}
             placeholder={
               candidates.length === 0
                 ? t(
@@ -268,7 +267,7 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
               }
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Backspace' && draft === '' && candidates.length > 0) {
+              if (event.key === 'Backspace' && draft === '' && candidates.length > 0 && !sending) {
                 remove(candidates.at(-1)!.email)
               }
             }}

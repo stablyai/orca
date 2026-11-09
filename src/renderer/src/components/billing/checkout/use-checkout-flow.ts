@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaBillingOpenResult } from '../../../../../shared/orca-billing'
-import { recordBillingStatus } from '../billing-summary-store'
+import { getBillingGeneration, recordBillingStatusIfCurrent } from '../billing-summary-store'
 import {
   CHECKOUT_POLL_MS,
   CHECKOUT_SLOW_POLL_MS,
+  CHECKOUT_SLOW_WATCH_MS,
   CHECKOUT_WATCH_MS,
   checkoutPollVerdict,
   nextPhaseAfterOpen,
@@ -74,11 +75,17 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
     const order = watching.order
     let disposed = false
     let inFlight = false
+    // A cancel link that lands mid-poll waits for that poll's answer instead of being dropped.
+    let pendingUnpaid: (() => void) | undefined
     const check = (onUnpaid?: () => void): void => {
+      if (onUnpaid) {
+        pendingUnpaid = onUnpaid
+      }
       if (inFlight) {
         return
       }
       inFlight = true
+      const startedGeneration = getBillingGeneration()
       void window.api.orcaProfiles
         .billingStatus()
         .catch(() => null)
@@ -87,14 +94,16 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
           if (disposed || result?.status !== 'ok') {
             return
           }
-          recordBillingStatus(result)
+          recordBillingStatusIfCurrent(startedGeneration, result)
+          const unpaid = pendingUnpaid
+          pendingUnpaid = undefined
           const verdict = checkoutPollVerdict(result.entitlement)
           if (verdict === 'paid') {
             setPhase({ kind: 'paid', order, seats: result.entitlement.seats })
           } else if (verdict === 'needs-attention' && watching.kind !== 'needs-attention') {
             setPhase({ kind: 'needs-attention', order })
           } else {
-            onUnpaid?.()
+            unpaid?.()
           }
         })
     }
@@ -109,7 +118,8 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
             () => setPhase({ kind: 'timed-out', order }),
             Math.max(0, watching.since + CHECKOUT_WATCH_MS - Date.now())
           )
-        : undefined
+        : // Slow watch ends after a while; window focus and the return link still check.
+          window.setTimeout(() => window.clearInterval(timer), CHECKOUT_SLOW_WATCH_MS)
     window.addEventListener('focus', poll)
     const disposeReturn = window.api.orcaProfiles.onBillingReturn?.((event) => {
       // Any local app can open an orca:// link, so "canceled" is shown only after billing

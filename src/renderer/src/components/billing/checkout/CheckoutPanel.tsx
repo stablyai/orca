@@ -52,10 +52,18 @@ function OrderSummary({
         <dd className="text-muted-foreground tabular-nums">
           {perSeat === null
             ? null
-            : t('auto.components.billing.checkout.seatsTimes', '{{value0}} × {{value1}}', {
-                value0: seatCountLabel(seats, t),
-                value1: formatCents(perSeat, locale)
-              })}
+            : t(
+                'auto.components.billing.checkout.seatsTimes2',
+                '{{value0}} × {{value1}}{{value2}}',
+                {
+                  value0: seatCountLabel(seats, t),
+                  value1: formatCents(perSeat, locale),
+                  value2:
+                    interval === 'year'
+                      ? t('auto.components.billing.checkout.perYr', '/yr')
+                      : t('auto.components.billing.checkout.perMo', '/mo')
+                }
+              )}
         </dd>
       </div>
       <div className="flex items-baseline justify-between gap-3 border-t border-border/60 pt-2">
@@ -165,7 +173,7 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
       )
       break
     case 'needs-attention':
-      title = t('auto.components.billing.checkout.attention', 'Your payment needs one more step')
+      title = t('auto.components.billing.checkout.attention2', 'Stripe needs one more step')
       body = t(
         'auto.components.billing.checkout.attentionBody',
         'Your bank asked for verification or declined the card. Reopen checkout to finish, or use another card.'
@@ -232,12 +240,12 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
 
       {phase.kind === 'paid' ? null : (
         <div className="flex flex-wrap items-center justify-center gap-2">
+          {phase.kind === 'opening' ? null : reopen}
           {phase.kind === 'timed-out' ? (
             <Button type="button" variant="outline" onClick={props.onKeepWaiting}>
               {t('auto.components.billing.checkout.keepWaiting', 'Keep waiting')}
             </Button>
           ) : null}
-          {phase.kind === 'opening' ? null : reopen}
           {back}
         </div>
       )}

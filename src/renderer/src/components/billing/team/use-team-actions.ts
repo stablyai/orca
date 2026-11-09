@@ -18,6 +18,11 @@ import { currentRosterReadSeq } from './use-org-roster'
 
 type Overlay = (roster: OrcaOrgMembersRoster) => OrcaOrgMembersRoster
 
+function focusMembersHeading(): void {
+  // After the menu closes, so Radix's focus return doesn't win.
+  window.requestAnimationFrame(() => document.getElementById('team-members-title')?.focus())
+}
+
 const memberKey = (member: OrcaOrgMember): string =>
   `member:${member.userId ?? member.email.toLowerCase()}`
 const inviteKey = (email: string): string => `invite:${email.toLowerCase()}`
@@ -170,6 +175,7 @@ export function useTeamActions({
   }
 
   const revoke = (email: string, role: OrcaOrgRole): void => {
+    focusMembersHeading()
     void optimistic(
       inviteKey(email),
       (roster) => ({
@@ -229,14 +235,14 @@ export function useTeamActions({
       if (!accepted) {
         return
       }
+      // The row (and the menu trigger focus would return to) disappears now; land on the list.
+      focusMembersHeading()
       void optimistic(
         memberKey(member),
         (roster) => ({ ...roster, members: roster.members.filter((m) => m.userId !== userId) }),
         () => api.orgMemberRemove({ orgId, userId })
       ).then((outcome) => {
         if (outcome.status === 'ok') {
-          // The row (and the menu that had focus) is gone; land on the list heading.
-          document.getElementById('team-members-title')?.focus()
           toast.success(
             t('auto.components.billing.team.removedToast', '{{value0}} removed', { value0: name })
           )

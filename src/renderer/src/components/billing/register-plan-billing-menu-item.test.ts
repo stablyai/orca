@@ -55,7 +55,7 @@ describe('account menu billing items', () => {
       status: 'ok',
       entitlement: { ...sampleTeam, plan: null, planLabel: null, status: 'none' }
     })
-    expect(visible()).toEqual(['orca.upgrade', 'orca.team', 'orca.plan-billing'])
+    expect(visible()).toEqual(['orca.upgrade', 'orca.team'])
     expect(getRegisteredAccountMenuItems().find((item) => item.id === 'orca.upgrade')?.tone).toBe(
       'accent'
     )

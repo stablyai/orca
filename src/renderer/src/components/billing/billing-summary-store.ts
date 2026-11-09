@@ -44,6 +44,20 @@ export function recordBillingStatus(result: OrcaBillingStatusResult): void {
 /** Bumped on every account/org switch; answers from an older account are ignored. */
 let generation = 0
 
+export function getBillingGeneration(): number {
+  return generation
+}
+
+/** Records a status read that started in `startedGeneration`; reads from a previous account are dropped. */
+export function recordBillingStatusIfCurrent(
+  startedGeneration: number,
+  result: OrcaBillingStatusResult
+): void {
+  if (startedGeneration === generation) {
+    recordBillingStatus(result)
+  }
+}
+
 /** Forget the previous account's plan at once (sign-out, account or org switch). */
 export function resetBillingSummary(): void {
   generation++

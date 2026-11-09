@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { BillingCaller } from './auth'
 import type { Env } from './env'
 import { BILLING_INTERVALS, PLAN_IDS, priceForPlan, type BillingInterval, type PlanId } from './plans'
-import type { StripeClient } from './stripe'
+import { StripeError, type StripeClient } from './stripe'
 import { currentSubscription, customerFor, ensureAccount, linkCustomer } from './store'
 import { orgIdOf, type MembershipSource } from './membership'
 
@@ -70,8 +70,12 @@ export async function createCheckout(
   for (const session of open.data) {
     try {
       await stripe.expireCheckoutSession(session.id)
-    } catch {
-      return { ok: false, status: 409, error: 'already_subscribed' }
+    } catch (error) {
+      // Only "no longer open" means it's completing; outages stay errors (503, try again).
+      if (error instanceof StripeError && error.status === 400) {
+        return { ok: false, status: 409, error: 'already_subscribed' }
+      }
+      throw error
     }
   }
   const metadata = { account_id: caller.accountId, plan: request.plan, interval: request.interval }

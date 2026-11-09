@@ -88,6 +88,7 @@ function RoleControl({
       <SelectTrigger
         size="sm"
         className="w-28 shrink-0"
+        aria-disabled={busy || undefined}
         aria-label={t('auto.components.billing.team.roleFor', 'Role for {{value0}}', {
           value0: member.displayName ?? member.email
         })}

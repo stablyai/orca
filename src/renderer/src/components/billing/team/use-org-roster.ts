@@ -65,7 +65,7 @@ export function loadOrgRoster(orgId: string): Promise<void> {
     const current = entries.get(orgId)
     const previous = current?.result ?? null
     // Keep the last good roster through a transient failure so the list doesn't vanish.
-    const keep = result.status !== 'ok' && previous?.status === 'ok'
+    const keep = result.status === 'failed' && previous?.status === 'ok'
     const rerun = current?.dirty === true
     put(orgId, {
       result: keep ? previous : result,

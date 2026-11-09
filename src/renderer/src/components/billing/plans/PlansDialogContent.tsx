@@ -23,7 +23,7 @@ export function PlansDialogContent(
         event.preventDefault()
         if (event.currentTarget instanceof HTMLElement) {
           const primary = event.currentTarget.querySelector<HTMLElement>('[data-plans-primary]')
-          ;(primary ?? event.currentTarget).focus()
+          ;(primary ?? event.currentTarget).focus({ focusVisible: false } as FocusOptions)
         }
       }}
     >
