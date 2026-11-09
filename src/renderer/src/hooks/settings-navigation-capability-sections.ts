@@ -1,6 +1,7 @@
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts/accounts-search'
 import { getAgentsPaneSearchEntries } from '@/components/settings/agents/agents-search'
+import { getAgentApiKeysSearchEntries } from '@/components/settings/agent-api-keys/agent-api-keys-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use/computer-use-search'
 import { getGeneralPaneSearchEntries } from '@/components/settings/general/general-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations/integrations-search'
@@ -17,6 +18,7 @@ import {
   Blocks,
   Bot,
   CircleUserRound,
+  KeyRound,
   Mic,
   MousePointerClick,
   Network,
@@ -61,6 +63,23 @@ export function buildCapabilitySettingsSections(
       group: 'capabilities',
       badge: t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
     },
+    // Desktop-owned vault: a web client can neither read nor fill it.
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'agent-api-keys',
+            title: t('auto.components.settings.agentApiKeys.title', 'Agent API Keys'),
+            description: t(
+              'auto.components.settings.agentApiKeys.description',
+              'Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine.'
+            ),
+            icon: KeyRound,
+            searchEntries: getAgentApiKeysSearchEntries(),
+            group: 'capabilities' as const,
+            badge: t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
+          }
+        ]
+      : []),
     {
       id: 'orchestration',
       title: t('auto.hooks.useSettingsNavigationMetadata.58a868e8e4', 'Orchestration'),

@@ -14,6 +14,7 @@ import {
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { RESTORE_SPAWN_INTENTS } from '../terminal/pty/admission/spawn-admission-contract'
 import { AgentLaunchAccountEnv } from '../agent-launch/startup/agent-launch-account-env'
+import { AgentKeyLaunchEnv } from '../agent-api-keys/agent-key-launch-env'
 
 export const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
 
@@ -143,7 +144,9 @@ export const ExplicitEnsure = z
     placement: Placement.optional(),
     spawnIntent: SpawnIntentParam.optional(),
     /** Sent only to hosts advertising `agent-session.account-env.v1`; outside replay identity. */
-    accountEnv: AgentLaunchAccountEnv.optional()
+    accountEnv: AgentLaunchAccountEnv.optional(),
+    /** Sent only to hosts advertising `agent-session.key-env.v1`; outside replay identity, never persisted. */
+    keyEnv: AgentKeyLaunchEnv.optional()
   })
   .strict()
   .superRefine((value, context) => {
@@ -195,7 +198,9 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     placement: Placement.optional(),
     viewMode: z.enum(['terminal', 'chat']).optional(),
     /** Sent only to hosts advertising `agent-session.account-env.v1`; outside the fingerprint. */
-    accountEnv: AgentLaunchAccountEnv.optional()
+    accountEnv: AgentLaunchAccountEnv.optional(),
+    /** Sent only to hosts advertising `agent-session.key-env.v1`; outside the fingerprint, never persisted. */
+    keyEnv: AgentKeyLaunchEnv.optional()
   })
   .strict()
   .superRefine((value, context) => {

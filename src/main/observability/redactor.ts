@@ -12,6 +12,7 @@ const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
   { tag: 'openai-key', re: /sk-(?:proj-)?[a-zA-Z0-9_-]{32,}/g },
   { tag: 'github-token', re: /gh[pousr]_[A-Za-z0-9]{36,}/g },
   { tag: 'aws-access-key-id', re: /AKIA[0-9A-Z]{16}/g },
+  { tag: 'google-api-key', re: /AIza[0-9A-Za-z_-]{35}/g },
   {
     tag: 'aws-secret-access-key',
     re: /aws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}/gi
@@ -89,11 +90,31 @@ function shouldDropAttributeKey(key: string, mode: RedactorMode): boolean {
 }
 
 /** Idempotent so sink, bundle and server passes can safely repeat. */
+// Exact values Orca itself handed to a process (stored agent API keys) whose shape no pattern knows.
+const MIN_REGISTERED_SECRET_LENGTH = 8
+const MAX_REGISTERED_SECRETS = 256
+const registeredSecretValues = new Set<string>()
+
+export function registerRedactedSecretValue(value: string): void {
+  if (value.length < MIN_REGISTERED_SECRET_LENGTH || registeredSecretValues.has(value)) {
+    return
+  }
+  if (registeredSecretValues.size >= MAX_REGISTERED_SECRETS) {
+    registeredSecretValues.delete(registeredSecretValues.values().next().value!)
+  }
+  registeredSecretValues.add(value)
+}
+
 export function redactString(input: string): string {
   if (typeof input !== 'string' || input.length === 0) {
     return input
   }
   let out = input
+  for (const value of registeredSecretValues) {
+    if (out.includes(value)) {
+      out = out.split(value).join('[redacted:stored-key]')
+    }
+  }
 
   out = out.replace(LABELED_KV, '[redacted:labeled-kv]')
 
