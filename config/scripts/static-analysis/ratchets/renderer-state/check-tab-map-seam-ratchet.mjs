@@ -20,7 +20,7 @@ export const CONSUMERS = new Map([
     `${STATUS}structured-agent-session-tabs.ts`,
     {
       coldPaths: new Set(['rebuildFromSnapshot']),
-      helpers: { rebuildFromSnapshot: ['project'] },
+      helpers: { rebuildFromSnapshot: ['advance'] },
       imports: new Set(['structuredAgentSessionPaneKey', 'isStructuredTab', 'readTabMapChanges'])
     }
   ],
@@ -144,20 +144,6 @@ function enclosingFunctionNames(node) {
   return names
 }
 
-function calleeName(call) {
-  const callee = call.expression
-  if (ts.isIdentifier(callee)) {
-    return { object: null, name: callee.text }
-  }
-  if (ts.isPropertyAccessExpression(callee)) {
-    return {
-      object: ts.isIdentifier(callee.expression) ? callee.expression.text : null,
-      name: callee.name.text
-    }
-  }
-  return { object: null, name: null }
-}
-
 function valueImports(source) {
   const imported = []
   for (const statement of source.statements) {
@@ -180,6 +166,20 @@ function valueImports(source) {
   return imported
 }
 
+function isHelperReference(node, helpers) {
+  if (!ts.isIdentifier(node) || !Object.hasOwn(helpers, node.text)) {
+    return false
+  }
+  const parent = node.parent
+  const declares =
+    ((ts.isVariableDeclaration(parent) || ts.isFunctionDeclaration(parent)) &&
+      parent.name === node) ||
+    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node) ||
+    ts.isImportSpecifier(parent)
+  return !declares
+}
+
 export function consumerViolations(file, text, { coldPaths, helpers, imports }) {
   const source = parse(file, text)
   const violations = []
@@ -193,14 +193,18 @@ export function consumerViolations(file, text, { coldPaths, helpers, imports }) 
   const visit = (node) => {
     let what = null
     let allowed = coldPaths
-    if (ts.isCallExpression(node)) {
-      const { object, name } = calleeName(node)
-      if (object === 'Object' && ENUMERATING_CALLS.has(name)) {
-        what = `Object.${name}`
-      } else if (object === null && Object.hasOwn(helpers, name)) {
-        what = `${name}()`
-        allowed = new Set(helpers[name])
-      }
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'Object' &&
+      ENUMERATING_CALLS.has(node.name.text)
+    ) {
+      // Any reference, called or aliased (`const keys = Object.keys`).
+      what = `Object.${node.name.text}`
+    } else if (isHelperReference(node, helpers)) {
+      // Calls, aliases (`const resync = reconcileFromSnapshot`) and callbacks alike.
+      what = `${node.text}()`
+      allowed = new Set(helpers[node.text])
     } else if (ts.isForInStatement(node)) {
       what = 'for…in'
     }
@@ -248,35 +252,58 @@ function enclosingScope(node) {
   return current
 }
 
-/** Raw values a local binding receives in `scope`, and whether a seam helper annotates it there. */
-function localBinding(name, scope) {
-  const raw = []
-  let annotated = false
+/** The value a local name holds at `use`: its declaration's initializer, followed through aliases. */
+function bindingSource(name, scope, use, seen = new Set()) {
+  if (seen.has(name)) {
+    return null
+  }
+  seen.add(name)
+  let found = null
   const visit = (node) => {
+    if (node.pos >= use.pos) {
+      return
+    }
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) {
-      if (node.initializer && isRawRecord(node.initializer)) {
-        raw.push(node)
-      }
+      found = node.initializer ?? null
     } else if (
       ts.isBinaryExpression(node) &&
       node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
       ts.isIdentifier(node.left) &&
-      node.left.text === name &&
-      isRawRecord(node.right)
+      node.left.text === name
     ) {
-      raw.push(node)
-    } else if (
+      found = node.right
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(scope)
+  if (found && ts.isIdentifier(found)) {
+    const aliased = bindingSource(found.text, scope, use, seen)
+    return aliased && { ...aliased, names: [name, ...aliased.names] }
+  }
+  return found && { value: found, names: [name] }
+}
+
+/** Whether a seam helper annotates one of `names` in place before `use` publishes it. */
+function annotatedBefore(names, scope, use) {
+  let annotated = false
+  const visit = (node) => {
+    if (node.pos >= use.pos) {
+      return
+    }
+    if (
+      node.end <= use.pos &&
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
       Object.hasOwn(ANNOTATED_ARGUMENT, node.expression.text)
     ) {
       const argument = node.arguments[ANNOTATED_ARGUMENT[node.expression.text]]
-      annotated ||= argument !== undefined && ts.isIdentifier(argument) && argument.text === name
+      annotated ||=
+        argument !== undefined && ts.isIdentifier(argument) && names.includes(argument.text)
     }
     ts.forEachChild(node, visit)
   }
   visit(scope)
-  return { raw, annotated }
+  return annotated
 }
 
 function rawValue(node) {
@@ -287,11 +314,11 @@ function rawValue(node) {
   if (!ts.isIdentifier(initializer)) {
     return false
   }
-  // Follow the local binding through enclosing scopes; an annotated binding is fine.
+  // Follow the local binding and its aliases; the record must be annotated before it is published.
   for (let scope = enclosingScope(node); scope; scope = scope.parent && enclosingScope(scope)) {
-    const binding = localBinding(initializer.text, scope)
-    if (binding.raw.length || binding.annotated) {
-      return binding.raw.length > 0 && !binding.annotated
+    const binding = bindingSource(initializer.text, scope, node)
+    if (binding) {
+      return isRawRecord(binding.value) && !annotatedBefore(binding.names, scope, node)
     }
     if (ts.isSourceFile(scope)) {
       break
