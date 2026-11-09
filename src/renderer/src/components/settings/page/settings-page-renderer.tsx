@@ -59,6 +59,7 @@ import {
   renderPluginsSettingsSection
 } from './settings-advanced-section-renderers'
 import { renderProjectSettingsSections } from './settings-project-section-renderer'
+import { renderCloudApiSettingsSections } from './settings-cloud-api-section-renderers'
 import {
   SettingsHostScopePicker,
   shouldShowSettingsHostScopePicker
@@ -147,6 +148,7 @@ export function renderSettingsPage(
                   {renderLinearSettingsSection(context, t)}
                   {renderDesktopCapabilitySettingsSections(context, t)}
                   {renderOrcaAccountSettingsSection(context, t)}
+                  {renderCloudApiSettingsSections(context, t)}
                   {renderSetupGuideSettingsSection(context, t)}
                   {renderGeneralSettingsSection(context, t)}
                   {renderIntegrationsSettingsSection(context, t)}

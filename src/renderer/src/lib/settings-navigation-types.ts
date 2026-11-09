@@ -46,6 +46,8 @@ const SETTINGS_NAV_TARGETS = [
   'share-skills',
   'automations',
   'orca-account',
+  'cloud-api-keys',
+  'cloud-routines',
   'linear',
   'setup-guide',
   'servers',
