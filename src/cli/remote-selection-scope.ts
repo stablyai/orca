@@ -11,6 +11,8 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     commandPath[0] === 'serve' ||
     (commandPath[0] === 'agent' && commandPath[1] !== 'launch') ||
     commandPath[0] === 'vm' ||
+    // Providers belong to this computer's Orca app; an ambient --environment must not retarget them.
+    commandPath[0] === 'provider' ||
     commandPath[0] === 'agent-context' ||
     commandPath[0] === 'profile' ||
     // Authoring works on local files; the handler refuses explicit remote flags.

@@ -84,5 +84,15 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
     const params = request.params as { wait?: unknown } | undefined
     return params?.wait === true ? 'wait' : null
   }
+  if (
+    request.method === 'worktree.create' &&
+    typeof request.params === 'object' &&
+    request.params !== null &&
+    'target' in request.params &&
+    typeof request.params.target === 'object' &&
+    request.params.target !== null
+  ) {
+    return 'wait'
+  }
   return null
 }

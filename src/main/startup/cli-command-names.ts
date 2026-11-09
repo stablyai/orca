@@ -58,6 +58,7 @@ export const CLI_COMMAND_NAMES = [
   'ports',
   'profile',
   'project',
+  'provider',
   'reference',
   'reload',
   'repo',

@@ -20,6 +20,23 @@ import {
 } from '../../shared/ephemeral-vm-recipe-runner'
 import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 
+/** `provider doctor recipe:<id>`: the same local check as `vm recipe doctor <id>`. */
+export const PROVIDER_DOCTOR_HANDLERS: Record<string, CommandHandler> = {
+  'provider doctor': async (context) => {
+    const raw = getStringFlag(context.flags, 'target') ?? ''
+    if (!raw.startsWith('recipe:')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'provider doctor checks orca.yaml recipes (recipe:<id>); plugin recipes are checked when the plugin is approved.',
+        { field: 'target' }
+      )
+    }
+    const flags = new Map(context.flags)
+    flags.set('recipe-id', raw.slice('recipe:'.length))
+    await VM_HANDLERS['vm recipe doctor']!({ ...context, flags })
+  }
+}
+
 export const VM_HANDLERS: Record<string, CommandHandler> = {
   'vm recipe doctor': async ({ flags, cwd, json }) => {
     const recipeId = getStringFlag(flags, 'recipe-id')

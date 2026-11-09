@@ -36,6 +36,7 @@ export const WorktreeAdoptProvisionedRoot = z.object({
   parentWorkspaceOrigin: create.parentWorkspaceOrigin,
   crossStoreParent: create.crossStoreParent,
   crossStoreParentInferredFrom: create.crossStoreParentInferredFrom,
+  cliProvenanceRequest: create.cliProvenanceRequest,
   name: z.string().min(1, 'Missing workspace name'),
   expectedPath: z.string().min(1, 'Missing provisioned project root'),
   expectedRefHead: OptionalString

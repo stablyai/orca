@@ -1,3 +1,4 @@
+import { ORCA_VM_RECIPE_ID_PATTERN } from './orca-vm-recipe-id'
 import { parseDocument } from 'yaml'
 import { isOrcaYamlConversionWithinLimit } from './orca-yaml-merge-expansion'
 import type {
@@ -29,7 +30,7 @@ function asTrimmedString(value: unknown): string | undefined {
 }
 
 const DEFAULT_TAB_COLOR_RE = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/
-export const ORCA_VM_RECIPE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/
+export { ORCA_VM_RECIPE_ID_PATTERN }
 export const ORCA_VM_RECIPE_ID_RULE =
   'Use 1-64 lowercase letters, numbers, dots, underscores, or hyphens, starting with a letter or number.'
 

@@ -35,6 +35,7 @@ import {
 } from '../../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
+import { createWorkspaceOnProvider } from './provider-list-method'
 import { waitsForWorktreeRemoval } from '../../worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
@@ -119,6 +120,8 @@ export const WORKTREE_METHODS = [
     permission: 'workspace',
     params: WorktreeCreate,
     handler: async (params, context) =>
+      // A provider target (`--on recipe:<id>`) creates a new host first; it dedupes on its own key.
+      createWorkspaceOnProvider(params, context) ??
       // Mobile retries after migration share clientMutationId; return the same pending/created worktree. Desktop/CLI without keys run plainly.
       context.runtime.dedupeWorktreeCreate(params, params.clientMutationId, async () => {
         const { runtime } = context
