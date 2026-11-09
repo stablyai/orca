@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/focus-keeping-press'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { Check, Loader2, X } from 'lucide-react'
@@ -40,12 +41,15 @@ function useElapsedSeconds(running: boolean): number {
     if (!running) {
       return
     }
-    const startedAt = (startedAtRef.current ??= performance.now())
-    const id = window.setInterval(
-      () => setSeconds(Math.floor((performance.now() - startedAt) / 1000)),
-      250
-    )
-    return () => window.clearInterval(id)
+    if (startedAtRef.current === null) {
+      startedAtRef.current = performance.now()
+    }
+    const startedAt = startedAtRef.current
+    // Measured from the start, so ticks skipped while the window is hidden don't drift it.
+    return installWindowVisibilityInterval({
+      run: () => setSeconds(Math.floor((performance.now() - startedAt) / 1000)),
+      intervalMs: 250
+    })
   }, [running])
   return seconds
 }
