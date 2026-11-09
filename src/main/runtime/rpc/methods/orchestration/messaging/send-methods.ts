@@ -38,6 +38,7 @@ import {
   settledDispatchId
 } from './settled-worker-follow-through'
 
+// `send --on <server>` is carried by withPeerMailSend (peer-mail-send.ts) before this handler runs.
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',
