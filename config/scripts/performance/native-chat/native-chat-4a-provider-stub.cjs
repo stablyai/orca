@@ -196,8 +196,10 @@ async function startTurn(frame) {
   const controller = new AbortController()
   current = controller
   // The CLI's --replay-user-messages echo, which opens the turn.
-  remember({ type: 'user', uuid: frame.uuid ?? randomUUID(), message: frame.message })
-  await write({ ...frame, isReplay: true })
+  // One uuid for the echo and the transcript row, so fork and rewind can find this prompt.
+  const echo = { ...frame, uuid: frame.uuid ?? randomUUID(), session_id: sessionId, isReplay: true }
+  remember({ type: 'user', uuid: echo.uuid, message: frame.message })
+  await write(echo)
   const content = frame.message?.content ?? frame.message
   const prompt = Array.isArray(content)
     ? content.map((block) => block?.text ?? '').join('\n')
