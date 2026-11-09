@@ -40,6 +40,14 @@ export type Deps = {
   egressKeysForIssuer?: Parameters<typeof handleEgressProxy>[1]['keysForIssuer']
 }
 
+function devCredentials(env: Env): CredentialBroker {
+  const value = env.EGRESS_DEV_STATIC_AUTHORIZATION
+  if (!value || env.SANDBOX_ENV === 'prod') {
+    return NO_CREDENTIALS
+  }
+  return { authorizationFor: async (_row, host) => (host === 'api.github.com' ? value : null) }
+}
+
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
 }
@@ -96,7 +104,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         projectId: env.VERCEL_PROJECT_ID,
         findSandbox: (name) => getSandboxByProviderName(env.SANDBOX_DB, name),
         placeholdersFor: githubPlaceholderHeaders,
-        credentials: deps.credentials ?? NO_CREDENTIALS,
+        credentials: deps.credentials ?? devCredentials(env),
         fetch: deps.egressFetch,
         keysForIssuer: deps.egressKeysForIssuer
       })

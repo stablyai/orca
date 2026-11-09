@@ -178,7 +178,13 @@ driver/scheduler. Base OS is Amazon Linux 2023 (dnf), not Ubuntu.
   attacker token and placeholder-less git → 403 `orca-egress-denied`. Node fetch under a transform rule still hangs
   on Pro; `orca-egress-probe` reports `egress_framing_hang` (npm, untransformed: ok). No real GitHub token was used,
   so a successful authenticated push is still unverified.
-- Not covered live: forwardURL egress proxy (needs a deployed Worker URL), agent auto-resume with a real chat.
+- Not covered live: agent auto-resume with a real chat (needs a real Claude/Codex sign-in).
+
+Dev deployment (2026-11-09): Worker https://orca-sandbox-control-dev.lovecast.workers.dev, D1
+`orca-sandbox-control-dev`, config `wrangler.dev.jsonc`, billing stubbed (no billing dev Worker yet). Through it:
+create 5.1s, rollover 12.2s (same host key), destroy 1.0s, no snapshots left. Egress proxy end to end from a real
+sandbox: Bearer and gh `token` placeholders forwarded and re-injected (GitHub answers the injected fake: 401), Node
+fetch completes in 450 ms with chunked framing (the transform-rule hang is gone), attacker token / no auth → 403.
 
 ## What needs live access (not done)
 
