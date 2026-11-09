@@ -114,5 +114,46 @@ describe('OrchestrationDb', () => {
       expect(d.getTask(task.id)?.status).toBe('dispatched')
       expect(d.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
     })
+
+    it('keeps the first resolution when another answer arrives later', () => {
+      const d = createDb()
+      const task = d.createTask({ runId, spec: 'needs a single decision' })
+      const gate = d.createGate({ taskId: task.id, question: 'Proceed?' })
+
+      expect(d.resolveGate(gate.id, 'yes')).toMatchObject({
+        status: 'resolved',
+        resolution: 'yes'
+      })
+      expect(d.getTask(task.id)?.status).toBe('ready')
+
+      expect(d.resolveGate(gate.id, 'yes')).toMatchObject({
+        status: 'resolved',
+        resolution: 'yes'
+      })
+      expect(() => d.resolveGate(gate.id, 'no')).toThrowError(
+        expect.objectContaining({
+          code: 'gate_already_resolved',
+          message: expect.stringContaining('yes')
+        })
+      )
+      expect(d.getGate(gate.id)).toMatchObject({ status: 'resolved', resolution: 'yes' })
+      expect(d.getTask(task.id)?.status).toBe('ready')
+    })
+
+    it('does not let a late resolution overwrite a timed-out gate', () => {
+      const d = createDb()
+      const task = d.createTask({ runId, spec: 'already timed out' })
+      const gate = d.createGate({ taskId: task.id, question: 'Proceed?' })
+      expect(d.timeoutGate(gate.id)?.status).toBe('timeout')
+
+      expect(() => d.resolveGate(gate.id, 'yes')).toThrowError(
+        expect.objectContaining({
+          code: 'gate_already_resolved',
+          message: expect.stringContaining('timeout')
+        })
+      )
+      expect(d.getGate(gate.id)).toMatchObject({ status: 'timeout', resolution: null })
+      expect(d.getTask(task.id)?.status).toBe('blocked')
+    })
   })
 })

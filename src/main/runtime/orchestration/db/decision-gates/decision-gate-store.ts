@@ -100,26 +100,50 @@ export function resolveGate(
   gateId: string,
   resolution: string
 ): DecisionGateRow | undefined {
-  const gate = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
-    | DecisionGateRow
-    | undefined
-  if (!gate) {
-    return undefined
-  }
-
   this.db.exec('SAVEPOINT resolve_gate')
   try {
-    this.db
+    // Only a pending row can take an answer. The same answer may be replayed.
+    const claimed = this.db
       .prepare(
-        "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ?"
+        "UPDATE decision_gates SET status = 'resolved', resolution = ?, resolved_at = datetime('now') WHERE id = ? AND status = 'pending'"
       )
       .run(resolution, gateId)
-    this.updateTaskStatus(gate.task_id, 'ready')
-    const resolved = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
+    if (claimed.changes === 1) {
+      const gate = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
+        | DecisionGateRow
+        | undefined
+      if (!gate) {
+        this.db.exec('RELEASE resolve_gate')
+        return undefined
+      }
+      this.updateTaskStatus(gate.task_id, 'ready')
+      const resolved = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
+        | DecisionGateRow
+        | undefined
+      this.db.exec('RELEASE resolve_gate')
+      return resolved
+    }
+
+    const current = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
       | DecisionGateRow
       | undefined
-    this.db.exec('RELEASE resolve_gate')
-    return resolved
+    if (!current) {
+      this.db.exec('RELEASE resolve_gate')
+      return undefined
+    }
+    if (current.status === 'resolved' && current.resolution === resolution) {
+      this.db.exec('RELEASE resolve_gate')
+      return current
+    }
+    const named =
+      current.resolution == null
+        ? current.status
+        : `${current.status} with resolution ${current.resolution}`
+    throw new OrchestrationError('gate_already_resolved', `Gate ${gateId} is already ${named}.`, {
+      gateId,
+      status: current.status,
+      resolution: current.resolution
+    })
   } catch (error) {
     this.db.exec('ROLLBACK TO resolve_gate')
     this.db.exec('RELEASE resolve_gate')
