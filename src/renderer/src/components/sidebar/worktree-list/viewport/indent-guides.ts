@@ -1,71 +1,80 @@
-import type {
-  GroupHeaderRow,
-  WorktreeGroupBy
-} from '../../../../../../shared/sidebar-list/row-types'
+import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 
-export type IndentGuideSegment = { level: number; top: number; bottom: number }
+export type IndentGuideSegment = {
+  key: string
+  level: number
+  top: number
+  bottom: number
+  active: boolean
+}
 
 type MeasuredRow = { index: number; start: number; end: number }
 
-function isProjectHierarchyHeader(row: RenderRow, groupBy: WorktreeGroupBy): row is GroupHeaderRow {
-  return (
-    groupBy === 'repo' &&
-    row.type === 'header' &&
-    (row.repo !== undefined || row.projectGroup !== undefined)
-  )
-}
+// Why: notices keep their own fixed padding, so a guide would cross their text.
+const ROWS_WITHOUT_GUIDES = new Set<RenderRow['type']>([
+  'pending-creation',
+  'imported-worktrees-card',
+  'new-external-worktrees-inbox'
+])
 
 /**
- * How many ancestor levels each row sits under, one guide per level. A header sits at its own depth.
- * Folder workspaces under a group sit one level below it; a project's cards keep the project's depth
- * because their surface already starts left of the project's icon.
+ * The headers each row sits under, outermost first; one guide per entry. Only project grouping
+ * is a tree: there every header (group, project, Pinned) parents the rows up to the next header at
+ * its depth or shallower.
  */
-export function getIndentGuideLevels(
+export function getIndentGuideAncestors(
   rows: readonly RenderRow[],
   groupBy: WorktreeGroupBy
-): number[] {
-  let ownedRowLevels = 0
+): string[][] {
+  if (groupBy !== 'repo') {
+    return rows.map(() => [])
+  }
+  let open: { key: string; depth: number }[] = []
   return rows.map((row) => {
-    if (row.type !== 'host-header' && row.type !== 'header') {
-      return ownedRowLevels
+    if (row.type === 'host-header') {
+      open = []
+      return []
     }
-    if (!isProjectHierarchyHeader(row, groupBy)) {
-      ownedRowLevels = 0
-      return 0
+    if (row.type === 'header') {
+      const depth = row.projectGroupDepth ?? 0
+      open = open.filter((header) => header.depth < depth)
+      const ancestors = open.map((header) => header.key)
+      open = [...open, { key: `${row.hostId ?? ''}:${row.key}`, depth }]
+      return ancestors
     }
-    const depth = row.projectGroupDepth ?? 0
-    ownedRowLevels = row.repo === undefined ? depth + 1 : depth
-    return depth
+    return ROWS_WITHOUT_GUIDES.has(row.type) ? [] : open.map((header) => header.key)
   })
 }
 
-/** Vertical runs to draw for the measured rows: one per level per unbroken stretch of nested rows. */
+/** Vertical runs for the measured rows: one per header per unbroken stretch of rows under it. */
 export function getIndentGuideSegments(
-  levels: readonly number[],
-  measuredRows: readonly MeasuredRow[]
+  ancestorsByIndex: readonly (readonly string[])[],
+  measuredRows: readonly MeasuredRow[],
+  activeAncestors: ReadonlySet<string>
 ): IndentGuideSegment[] {
   const segments: IndentGuideSegment[] = []
   const open = new Map<number, IndentGuideSegment>()
   let previousIndex: number | null = null
   for (const row of measuredRows) {
-    const rowLevels = levels[row.index] ?? 0
-    // Why: virtual items skip nothing in order, but a gap means unmeasured rows; never bridge it.
+    const ancestors = ancestorsByIndex[row.index] ?? []
+    // Why: a gap in indices means unmeasured rows between; never bridge it.
     const contiguous = previousIndex !== null && row.index === previousIndex + 1
     for (const [level, segment] of open) {
-      if (level >= rowLevels || !contiguous) {
+      if (!contiguous || ancestors[level] !== segment.key) {
         segments.push(segment)
         open.delete(level)
       }
     }
-    for (let level = 0; level < rowLevels; level++) {
+    ancestors.forEach((key, level) => {
       const segment = open.get(level)
       if (segment) {
         segment.bottom = row.end
       } else {
-        open.set(level, { level, top: row.start, bottom: row.end })
+        const active = activeAncestors.has(key)
+        open.set(level, { key, level, top: row.start, bottom: row.end, active })
       }
-    }
+    })
     previousIndex = row.index
   }
   segments.push(...open.values())

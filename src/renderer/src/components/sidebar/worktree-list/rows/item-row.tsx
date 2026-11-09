@@ -12,8 +12,8 @@ import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-ke
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getLineageChildrenInlineStyle,
-  getWorktreeCardContentIndent,
-  getWorktreeCardSurfaceInset,
+  getProjectTreeCardDepth,
+  getWorktreeCardGeometry,
   LINEAGE_CHILDREN_INLINE_OFFSET,
   LINEAGE_NESTED_ROW_SURFACE_INSET
 } from './indentation'
@@ -71,17 +71,14 @@ function getWorktreeItemRowGeometry(
     return { surfaceInset: LINEAGE_NESTED_ROW_SURFACE_INSET, cardContentIndent: 0 }
   }
 
-  const isGrouped = ctx.groupBy !== 'none'
-  const paddingLeft = getWorktreeCardContentIndent({
-    isGrouped,
-    groupDepth: itemRow.groupDepth,
+  return getWorktreeCardGeometry({
+    isGrouped: ctx.groupBy !== 'none',
+    groupDepth: getProjectTreeCardDepth({
+      isProjectTree: ctx.groupBy === 'repo',
+      groupDepth: itemRow.groupDepth
+    }),
     lineageDepth: itemRow.depth
   })
-  const surfaceInset = getWorktreeCardSurfaceInset({ isGrouped, groupDepth: itemRow.groupDepth })
-  return {
-    surfaceInset,
-    cardContentIndent: Math.max(0, paddingLeft - surfaceInset)
-  }
 }
 
 export function renderWorktreeItemRow(

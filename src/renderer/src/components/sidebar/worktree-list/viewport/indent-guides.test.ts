@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { RenderRow } from '../listing/render-row'
-import { getIndentGuideLevels, getIndentGuideSegments } from './indent-guides'
+import { makeRepo, makeWorktree } from '../listing/worktree-list-lineage-card-test-fixtures'
+import { getIndentGuideAncestors, getIndentGuideSegments } from './indent-guides'
 
 const group = (key: string, depth: number): RenderRow => {
   const projectGroup: ProjectGroup = {
@@ -45,6 +46,17 @@ const project = (key: string, depth: number): RenderRow => {
   }
 }
 const card = (key: string): RenderRow => ({
+  type: 'item',
+  rowKey: key,
+  sectionKey: 'section',
+  worktree: makeWorktree({ id: key, displayName: key, branch: key, sortOrder: 0, instanceId: key }),
+  repo: makeRepo(),
+  depth: 0,
+  groupDepth: 0,
+  isLastLineageChild: false,
+  lineageChildCount: 0
+})
+const pending = (key: string): RenderRow => ({
   type: 'pending-creation',
   key,
   creationId: key,
@@ -52,23 +64,30 @@ const card = (key: string): RenderRow => ({
 })
 
 // work/            group, depth 0
+//   folder-card    folder workspace of the group
 //   audio/         group, depth 1
 //     asr          project, depth 2
-//       card
-//   data-ana       project, depth 1
-//     card
+//       asr-card
+//   ana            project, depth 1
+//     ana-card
 // solo             ungrouped project
-//   card
+//   solo-card
 const rows = [
   group('work', 0),
+  card('folder-card'),
   group('audio', 1),
   project('asr', 2),
   card('asr-card'),
-  project('data-ana', 1),
+  project('ana', 1),
   card('ana-card'),
   project('solo', 0),
   card('solo-card')
 ]
+
+const spans = (segments: ReturnType<typeof getIndentGuideSegments>): [string, number, number][] =>
+  segments
+    .map(({ key, top, bottom }): [string, number, number] => [key, top, bottom])
+    .sort((left, right) => left[1] - right[1] || left[0].localeCompare(right[0]))
 
 const measured = (from: number, to: number): { index: number; start: number; end: number }[] =>
   Array.from({ length: to - from + 1 }, (_, offset) => ({
@@ -77,37 +96,65 @@ const measured = (from: number, to: number): { index: number; start: number; end
     end: (from + offset + 1) * 10
   }))
 
-describe('getIndentGuideLevels', () => {
-  it('gives each row the depth of the group header that owns it', () => {
-    expect(getIndentGuideLevels(rows, 'repo')).toEqual([0, 1, 2, 2, 1, 1, 0, 0])
+describe('getIndentGuideAncestors', () => {
+  it('lists the headers each row sits under, outermost first', () => {
+    expect(getIndentGuideAncestors(rows, 'repo')).toEqual([
+      [],
+      [':work'],
+      [':work'],
+      [':work', ':audio'],
+      [':work', ':audio', ':asr'],
+      [':work'],
+      [':work', ':ana'],
+      [],
+      [':solo']
+    ])
   })
 
-  it('puts rows right under a group, such as folder workspaces, one level below it', () => {
-    const folderRows = [group('work', 0), card('folder'), project('api', 1), card('api-card')]
-    expect(getIndentGuideLevels(folderRows, 'repo')).toEqual([0, 1, 1, 1])
+  it('leaves notices without guides', () => {
+    expect(getIndentGuideAncestors([project('api', 0), pending('new')], 'repo')).toEqual([[], []])
   })
 
   it('draws no guides outside project grouping', () => {
-    expect(getIndentGuideLevels(rows, 'workspace-status')).toEqual([0, 0, 0, 0, 0, 0, 0, 0])
+    expect(getIndentGuideAncestors(rows, 'workspace-status').flat()).toEqual([])
   })
 })
 
 describe('getIndentGuideSegments', () => {
-  it('runs each group guide from below its header to its last nested row', () => {
-    const segments = getIndentGuideSegments(getIndentGuideLevels(rows, 'repo'), measured(0, 7))
-    expect(segments).toEqual([
-      { level: 1, top: 20, bottom: 40 },
-      { level: 0, top: 10, bottom: 60 }
+  const ancestors = getIndentGuideAncestors(rows, 'repo')
+
+  it('runs one guide per header, from below it to its last row', () => {
+    const segments = getIndentGuideSegments(ancestors, measured(0, 8), new Set())
+    expect(spans(segments)).toEqual([
+      [':work', 10, 70],
+      [':audio', 30, 50],
+      [':asr', 40, 50],
+      [':ana', 60, 70],
+      [':solo', 80, 90]
     ])
   })
 
+  it('marks the guides above the active row', () => {
+    const active = new Set(ancestors[4])
+    const segments = getIndentGuideSegments(ancestors, measured(0, 8), active)
+    expect(
+      segments
+        .filter((segment) => segment.active)
+        .map((segment) => segment.key)
+        .sort()
+    ).toEqual([':asr', ':audio', ':work'])
+  })
+
   it('never bridges rows that are not measured', () => {
-    const levels = getIndentGuideLevels(rows, 'repo')
-    const segments = getIndentGuideSegments(levels, [...measured(1, 2), ...measured(4, 5)])
-    expect(segments).toEqual([
-      { level: 0, top: 10, bottom: 30 },
-      { level: 1, top: 20, bottom: 30 },
-      { level: 0, top: 40, bottom: 60 }
+    const segments = getIndentGuideSegments(
+      ancestors,
+      [...measured(1, 2), ...measured(5, 6)],
+      new Set()
+    )
+    expect(spans(segments)).toEqual([
+      [':work', 10, 30],
+      [':work', 50, 70],
+      [':ana', 60, 70]
     ])
   })
 })

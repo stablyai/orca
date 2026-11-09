@@ -345,7 +345,6 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     measureVirtualRowElement,
     settings,
     projectActions,
-    newCardStyle,
     projectGroups,
     session,
     runtime,
@@ -404,6 +403,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
             renderRows={renderRows}
             groupBy={groupBy}
             virtualItems={virtualItems}
+            activeWorktreeId={rowProps.activeWorktreeId}
+            activeWorkspaceExecutionHostId={rowProps.activeWorkspaceExecutionHostId ?? null}
             hidden={runtime.worktreeDragState.draggingWorktreeId !== null}
           />
           {renderWorktreeSidebarDropIndicators({

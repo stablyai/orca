@@ -19,7 +19,7 @@ import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import {
-  getFolderWorkspaceRowGeometry,
+  getWorktreeCardGeometry,
   getLineageChildrenInlineStyle,
   LINEAGE_CHILDREN_INLINE_OFFSET
 } from './indentation'
@@ -32,7 +32,6 @@ import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-d
 
 export type FolderWorkspaceRowContext = {
   groupBy: WorktreeGroupBy
-  newCardStyle: boolean
   settings: AppState['settings']
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: AppState['activeWorkspaceExecutionHostId']
@@ -113,10 +112,8 @@ export function renderFolderWorkspaceOption(args: {
     prCache: ctx.prCache,
     settings: ctx.settings
   })
-  const { surfaceInset, cardContentIndent } = getFolderWorkspaceRowGeometry({
-    experimentalNewWorktreeCardStyle: ctx.newCardStyle,
-    isFolderBackedWorkspaceChild:
-      ctx.groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
+  // Folder workspaces already sit one level below their group, beside its projects.
+  const { surfaceInset, cardContentIndent } = getWorktreeCardGeometry({
     isGrouped: ctx.groupBy !== 'none',
     groupDepth: row.groupDepth,
     lineageDepth: row.depth
