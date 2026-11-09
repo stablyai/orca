@@ -15,7 +15,7 @@ import { canMoveSshHostAnyway, SshHostMoveAnywayDialog } from './SshHostMoveAnyw
 import { canRestartSshHostServer, SshHostRestartServerDialog } from './SshHostRestartServerAction'
 import { canRecoverSshHostServer, SshHostRecoverServerDialog } from './SshHostRecoverServerAction'
 import { Button } from '../../../ui/button'
-import { isSshTargetConnecting } from '../targets/ssh-target-action-state'
+import { isConnectingSshStatus } from '../../../../ssh/ssh-connection-recoverability'
 import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
 
 export type SshTargetServerDialog =
@@ -61,7 +61,7 @@ export function SshTargetServerStatusLine({
           size="xs"
           variant="default"
           // A connect in flight may clear the refusal; a click would start a second one.
-          disabled={state ? isSshTargetConnecting(state.status) : false}
+          disabled={state ? isConnectingSshStatus(state.status) : false}
           onClick={() => onOpenDialog('move-anyway')}
         >
           {t('auto.components.settings.moveAnyway.action', 'Move anyway…')}
