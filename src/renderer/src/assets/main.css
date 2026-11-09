@@ -1038,14 +1038,16 @@ body[data-modal-overlay-open]
 }
 
 /* Sidebar Opacity (app-shell/appearance/sidebar-glass.ts) thins both sidebars so the window material shows through. */
-:root[data-window-material][data-sidebar-glass] [data-glass-surface='worktree-sidebar'] {
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='worktree-sidebar'] {
   background-color: color-mix(
     in srgb,
     var(--worktree-sidebar) var(--orca-sidebar-opacity, 100%),
     transparent
   );
 }
-:root[data-window-material][data-sidebar-glass] [data-glass-surface='sidebar'] {
+:root[data-window-material][data-sidebar-glass]:not([data-reduce-effects])
+  [data-glass-surface='sidebar'] {
   background-color: color-mix(
     in srgb,
     var(--sidebar) var(--orca-sidebar-opacity, 100%),

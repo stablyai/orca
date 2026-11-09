@@ -93,7 +93,7 @@ export function TerminalWindowSection({
               label={t('settings.sidebarOpacity.title', 'Sidebar opacity')}
               description={t(
                 'settings.sidebarOpacity.fieldDescription',
-                'Needs a Window Material other than Opaque. 1 is fully opaque, 0 is fully transparent.'
+                'Needs Background opacity below 1 and a Window material other than Opaque. 1 is fully opaque, 0 is fully transparent.'
               )}
               value={settings.sidebarBackgroundOpacity ?? 1}
               defaultValue={1}
