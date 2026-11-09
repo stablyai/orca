@@ -648,7 +648,8 @@ export type GrantRow = {
 export async function listGrants(db: D1Database, accountId: string, now: number, createdBy?: string): Promise<GrantRow[]> {
   const { results } = await db
     .prepare(
-      `SELECT r.family_id, r.client_id, c.client_name, r.created_by, r.scopes, r.family_expires_at,
+      `SELECT r.family_id, r.client_id, c.client_name, r.created_by, r.scopes,
+         COALESCE(r.family_expires_at, r.created_at + ${GRANT_TTL_MS}) AS family_expires_at,
          (SELECT MIN(f.created_at) FROM api_keys f WHERE f.family_id = r.family_id) AS granted_at,
          (SELECT MAX(f.last_used_at) FROM api_keys f WHERE f.family_id = r.family_id) AS last_used_at,
          (SELECT k.prefix FROM api_keys k WHERE k.id = r.grantor_key_id) AS via_key
