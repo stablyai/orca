@@ -85,10 +85,10 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
           <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
             {visibilityLabel}
             {selection.partialKeys.length > 0 && (
-              <> · {translate('projects.partiallySelected', 'Partially selected')}</>
+              <> · {t('projects.partiallySelected', 'Partially selected')}</>
             )}
             {selection.unresolved.length > 0 && (
-              <> · {translate('projects.unavailable', 'Unavailable projects')}</>
+              <> · {t('projects.unavailable', 'Unavailable projects')}</>
             )}
           </span>
         </span>

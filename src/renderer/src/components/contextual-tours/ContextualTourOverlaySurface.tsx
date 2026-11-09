@@ -1,5 +1,5 @@
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
 import { createPortal } from 'react-dom'
 import {
   useLayoutEffect,
@@ -226,7 +226,7 @@ export function ContextualTourOverlaySurface({
           <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
             <Trans
               i18n={i18n}
-              defaults={translate(
+              defaults={t(
                 'settings.projectGrouping.upgrade.link',
                 'You can change this grouping in <settings>Settings</settings>.'
               )}

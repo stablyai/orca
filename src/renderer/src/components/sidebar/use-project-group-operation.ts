@@ -151,9 +151,11 @@ function useOwnedProjectGroupOperation() {
             return false
           }
           if (!attempt.createdGroup) {
-            attempt.creation ??= useAppStore
-              .getState()
-              .createProjectGroup(name, attempt.operation.catalogHostId)
+            if (attempt.creation === undefined) {
+              attempt.creation = useAppStore
+                .getState()
+                .createProjectGroup(name, attempt.operation.catalogHostId)
+            }
             const group = await attempt.creation
             if (!group) {
               if (current.current === attempt) {

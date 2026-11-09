@@ -121,7 +121,6 @@ export function ProjectGroupingSetting({
                 }
               }}
               aria-label={title}
-              className="space-y-2"
             >
               {options.map((option) => (
                 <label
