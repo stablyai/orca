@@ -14,6 +14,12 @@ export type Env = {
   VERCEL_API_BASE?: string
   /** Golden image (orcad + agent CLIs) every new sandbox boots from; see image/. */
   GOLDEN_SNAPSHOT_ID?: string
+  /** `release:latest` | `release:v1.2.3`: build golden images from Orca's released orca-server tarball. */
+  GOLDEN_IMAGE_SOURCE?: string
+  /** TTL for Worker-built golden images; unset/0 keeps them until rotated out. */
+  GOLDEN_SNAPSHOT_EXPIRATION_DAYS?: string
+  /** Refresh lead time before the active image expires (hours, default 24). */
+  GOLDEN_REFRESH_BEFORE_HOURS?: string
 
   // Desktop tokens: short-lived ES256 JWTs from Orca Cloud auth, aud=SANDBOX_JWT_AUDIENCE.
   // SANDBOX_JWKS (inline set) is for local dev and tests only.
