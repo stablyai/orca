@@ -22,7 +22,8 @@
     "entry/src/main/ets/vendor/agent-list.js": "85d63d7df4a1c5abe2235614014615cfe0e2becbab3fbdf227fb0cb24a961de3",
     "entry/src/main/ets/vendor/connection-diagnostics.js": "178a047ae96377fe16f7b1ace1b6d3c13eba81487954cd0440175939fc2d4ab1",
     "entry/src/main/ets/vendor/terminal-rail.js": "172f7f933854c677cdcdc2fd00c373a79b07973ba51777c10d205d5c4160e5b7",
-    "entry/src/main/ets/vendor/bundle-compat.js": "7ad72dd427a2f052a164eccc08e587b02a27413be1a404084a9357a3987d4162"
+    "entry/src/main/ets/vendor/bundle-compat.js": "7ad72dd427a2f052a164eccc08e587b02a27413be1a404084a9357a3987d4162",
+    "entry/src/main/ets/vendor/host-machine.js": "f79bd3087ce9537ac4ffa7d3dab1d46ea0fe9d0bffe139cf89d7ae6b19b7b4eb"
   },
   "orcaAgentList": {
     "revision": "cba8f0efcc3588a4f6606d9834555a8b3860a39c",
@@ -82,6 +83,16 @@
       "mobile/src/transport/connection/protocol-version.ts",
       "mobile/src/transport/web-bundle/mobile-web-bundle-compat.ts",
       "src/shared/mobile-web-bundle/mobile-web-bundle-capability.ts"
+    ]
+  },
+  "orcaHostMachine": {
+    "revision": "353f4c5e281734a3cea1306d76f471f0523143ab",
+    "esbuild": "0.28.2",
+    "sources": [
+      "mobile/src/transport/connection/mobile-runtime-host-platform.ts",
+      "src/shared/host-machine-line.ts",
+      "src/shared/host-platform-label.ts",
+      "src/shared/zod-salvage.ts"
     ]
   }
 }

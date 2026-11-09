@@ -43,6 +43,14 @@ const models = [
     `
   },
   {
+    file: 'host-machine',
+    provenance: 'orcaHostMachine',
+    contents: `
+      export { formatHostMachineLine } from './src/shared/host-machine-line'
+      export { readMobileRuntimeHostPlatform } from './mobile/src/transport/connection/mobile-runtime-host-platform'
+    `
+  },
+  {
     file: 'connection-diagnostics',
     provenance: 'orcaConnectionDiagnostics',
     contents: `

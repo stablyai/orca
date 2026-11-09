@@ -20,6 +20,7 @@ import { AgentActivityWrites } from '../home/AgentActivityWrites';
 import { AgentActions } from '../home/AgentActions';
 import { AgentsTab } from '../home/AgentsTab';
 import { DesktopActions } from '../home/DesktopActions';
+import { DesktopMachine, readDesktopMachine } from '../home/DesktopMachine';
 import { endpointLabel } from '../diagnostics/ConnectionDiagnostics';
 import { appendLog, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
 import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, readHomeUsage, readHomeAutomations,
@@ -143,6 +144,8 @@ struct Home {
   @State agentRows: AgentListRow[] = [];
   @State agentDesktops: AgentDesktop[] = [];
   @State summaries: Record<string, string> = {};
+  @State desktopMachines: Record<string, DesktopMachine> = {};
+  @State needsYouByDesktop: Record<string, number> = {};
   @State loadError: string = '';
   @State tabHostPicker: string = '';
   @State tabHostPickerOpen: boolean = false;
@@ -462,6 +465,7 @@ struct Home {
   private clearLiveDesktopData(hostId: string, removed: boolean = false): void {
     this.agentActivityWrites.forget(hostId);
     if (removed) {
+      this.desktopMachines = withoutDesktop(this.desktopMachines, hostId);
       this.usageByHost = withoutDesktop(this.usageByHost, hostId);
       this.automationsByHost = withoutDesktop(this.automationsByHost, hostId);
       this.automationRunsByHost = withoutDesktop(this.automationRunsByHost, hostId);
@@ -492,7 +496,7 @@ struct Home {
         runtime.client = client;
         if (client && runtime.online) {
           this.subscribeUsage(client, hostId, epoch);
-          this.fetchQuotaCapability(client, hostId, epoch);
+          this.fetchDesktopStatus(client, hostId, epoch);
           if (this.visible) {
             this.fetchCatalog(client, hostId, epoch);
             this.fetchStats(client, hostId, epoch);
@@ -528,7 +532,7 @@ struct Home {
     }).catch(() => {});
   }
 
-  private fetchQuotaCapability(client: SpikeRpcClient, hostId: string, epoch: number): void {
+  private fetchDesktopStatus(client: SpikeRpcClient, hostId: string, epoch: number): void {
     client.request('status.get', null, 8000).then((response: RpcResponse): void => {
       if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
       let allowed = false;
@@ -537,6 +541,9 @@ struct Home {
           let value = JSON.parse(response.result) as Record<string, Object>;
           let caps = value['capabilities'];
           allowed = Array.isArray(caps) && (caps as Array<Object>).includes('accounts.codex-reset-credit.v1');
+          let machines = withoutDesktop(this.desktopMachines, hostId);
+          machines[hostId] = readDesktopMachine(value);
+          this.desktopMachines = machines;
         } catch (e) {}
       }
       let next: Record<string, boolean> = {};
@@ -774,6 +781,9 @@ struct Home {
     });
     this.agentDesktops = desktops;
     this.agentRows = agentsNeedingYou(desktops);
+    let counts: Record<string, number> = {};
+    this.agentRows.forEach((row: AgentListRow): void => { counts[row.hostId] = (counts[row.hostId] ?? 0) + 1; });
+    this.needsYouByDesktop = counts;
     this.refreshSummaries();
   }
 
@@ -1027,11 +1037,11 @@ struct Home {
           .height(30)
           .borderRadius(10)
           .backgroundColor(this.pal().bgRaised)
-        Image($r('app.media.lucide_monitor')).supportSvg2(true)
+        Image(this.desktopIcon(host.id)).supportSvg2(true)
           .width(17).height(17)
           .colorFilter(lucideColorFilter(this.pal().textPrimary))
         Circle({ width: 14, height: 14 })
-          .fill(this.online[host.id] === true ? this.pal().statusGreen : this.pal().textMuted)
+          .fill(this.desktopDotColor(host.id))
           .stroke(this.pal().bgPanel)
           .strokeWidth(2)
           .position({ x: 21, y: 21 })
@@ -1050,12 +1060,10 @@ struct Home {
         Row() {
           Text(uiText(this.hostStatusLine(host), this.uiLocale))
             .fontFamily('Geist').fontSize(14)
-            .fontColor(this.online[host.id] === true
-              ? this.pal().textSecondary
-              : (this.desktopIsLive(host.id) ? this.pal().statusAmber : this.pal().textSecondary))
+            .fontColor(this.hostPhases[host.id] === 'auth-failed' ? this.pal().statusRed : this.pal().textMuted)
             .maxLines(1)
-          if (host.machineName && host.machineName !== host.name) {
-            Text(` · ${host.machineName}`).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary)
+          if (this.desktopMachines[host.id]?.line) {
+            Text(` · ${this.desktopMachines[host.id].line}`).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary)
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           }
         }
@@ -1066,7 +1074,15 @@ struct Home {
       .padding({ top: 9, bottom: 9 })
       .layoutWeight(1)
 
-      Row() {
+      Row({ space: 6 }) {
+        if ((this.needsYouByDesktop[host.id] ?? 0) > 0) {
+          Text(String(this.needsYouByDesktop[host.id])).fontFamily('Geist').fontSize(12).fontWeight(FontWeight.Bold)
+            .fontColor(Color.Black).backgroundColor(this.pal().statusAmber).borderRadius(10)
+            .constraintSize({ minWidth: 20 }).height(20).padding({ left: 6, right: 6 }).textAlign(TextAlign.Center)
+            .accessibilityText(uiText(this.needsYouByDesktop[host.id] === 1
+              ? '{{count}} 个需要处理（单数）' : '{{count}} 个需要处理', this.uiLocale)
+              .replace('{{count}}', String(this.needsYouByDesktop[host.id])))
+        }
         Image($r('app.media.lucide_chevron_right')).supportSvg2(true)
           .width(16).height(16)
           .colorFilter(lucideColorFilter(this.pal().textMuted))
@@ -1081,8 +1097,22 @@ struct Home {
       this.openHostDetail(host.id);
     })
     .gesture(LongPressGesture().onAction(() => {
+      playHapticFeedback('mediumImpact').catch(() => {});
       this.openDesktopActions(host);
     }))
+  }
+
+  private desktopIcon(hostId: string): Resource {
+    let kind = this.desktopMachines[hostId]?.kind;
+    if (kind === 'laptop') { return $r('app.media.lucide_laptop'); }
+    if (kind === 'server') { return $r('app.media.lucide_server'); }
+    return $r('app.media.lucide_monitor');
+  }
+
+  private desktopDotColor(hostId: string): string {
+    if (this.online[hostId] === true) { return this.pal().statusGreen; }
+    if (this.hostPhases[hostId] === 'auth-failed') { return this.pal().statusRed; }
+    return this.desktopIsLive(hostId) ? this.pal().statusAmber : this.pal().textMuted;
   }
 
   @Builder
@@ -1170,21 +1200,27 @@ struct Home {
             .backgroundColor(this.pal().bgPanel)
             .clip(true)
             .margin({ bottom: 8 })
-            Row({ space: 12 }) {
-              Image($r('app.media.lucide_list')).supportSvg2(true).width(18).height(18)
-                .colorFilter(lucideColorFilter(this.pal().textSecondary))
-              Column({ space: 3 }) {
+            Row() {
+              Stack() {
+                Image($r('app.media.lucide_list_todo')).supportSvg2(true).width(17).height(17)
+                  .colorFilter(lucideColorFilter(this.pal().textPrimary))
+              }.width(30).height(30).borderRadius(10).backgroundColor(this.pal().bgRaised)
+                .margin({ top: 9, right: 11 })
+              Column({ space: 1 }) {
                 Text(uiText('任务', this.uiLocale)).fontFamily('Geist').fontSize(16).fontColor(this.pal().textPrimary)
                 Text(uiText('浏览问题和评审', this.uiLocale)).fontFamily('Geist').fontSize(14)
                   .fontColor(this.pal().textSecondary)
-              }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-              Image($r('app.media.lucide_chevron_right')).supportSvg2(true).width(14).height(14)
-                .colorFilter(lucideColorFilter(this.pal().textMuted))
-            }.padding(16).width('100%').borderRadius(16).backgroundColor(this.pal().bgPanel)
-              .opacity(this.onlineCount() > 0 ? 1 : 0.5).enabled(this.onlineCount() > 0)
+              }.alignItems(HorizontalAlign.Start).layoutWeight(1).padding({ top: 9, bottom: 9 })
+              Row() {
+                Image($r('app.media.lucide_chevron_right')).supportSvg2(true).width(16).height(16)
+                  .colorFilter(lucideColorFilter(this.pal().textMuted))
+              }.padding({ left: 10, right: 14 }).alignSelf(ItemAlign.Center)
+            }.padding({ left: 16 }).alignItems(VerticalAlign.Top).width('100%')
+              .borderRadius(16).backgroundColor(this.pal().bgPanel)
+              .opacity(this.onlineCount() > 0 ? 1 : 0.45).enabled(this.onlineCount() > 0)
               .accessibilityGroup(true).accessibilityText(uiText('任务', this.uiLocale))
               .onClick(() => this.openOnConnectedHost('/tasks'))
-              .margin({ top: 8, bottom: TAB_BAR_HEIGHT + 24 })
+              .margin({ top: 12, bottom: TAB_BAR_HEIGHT + 24 })
           }
           .width('100%')
           .padding({ left: 16, right: 16 })

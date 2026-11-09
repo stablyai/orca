@@ -251,6 +251,27 @@
       "package": "lucide-static",
       "version": "0.577.0",
       "source": "package/icons/trash-2.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_laptop.svg",
+      "sha256": "425c69c24822854100604c57b96f247078190b6d0a409f7dee06dc8620844e20",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/laptop.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_server.svg",
+      "sha256": "78af76fa952efcfc78d268fd115d1ee945a208da32cdc58ffe904459290e87fd",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/server.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_list_todo.svg",
+      "sha256": "e2c2e46cdbad6c040c4bf39a13af276a4fd7633ec24737a87a0ec97e2725c49c",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/list-todo.svg"
     }
   ]
 }
