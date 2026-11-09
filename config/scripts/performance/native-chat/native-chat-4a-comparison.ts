@@ -100,7 +100,6 @@ async function runArm(input: {
   largeSource?: { seedDir: string; manifest: Manifest }
 }): Promise<ArmResult> {
   const { copyProfile, launchArm, stopArm } = await import('./native-chat-4a-arm')
-  const { installVisibilityProbe } = await import('./native-chat-4a-probes')
   const { resetTags } = await import('./native-chat-4a-run-context')
   const lifecycle = await import('./native-chat-4a-ops-lifecycle')
   const queue = await import('./native-chat-4a-ops-queue')
@@ -121,11 +120,7 @@ async function runArm(input: {
     }
     copyProfile(seedDir, profileDir)
     resetTags()
-    const open = async () => {
-      const launch = await launchArm(input.arm, profileDir, input.stubCommand)
-      await installVisibilityProbe(launch.page)
-      return launch
-    }
+    const open = () => launchArm(input.arm, profileDir, input.stubCommand)
     const ctx = {
       arm: input.arm,
       launch: await open(),

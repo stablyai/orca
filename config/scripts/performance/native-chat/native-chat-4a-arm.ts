@@ -20,6 +20,7 @@ import { getOrcaElectronLaunchArgs } from '../../../../tests/e2e/helpers/electro
 import { closeElectronAppForE2E } from '../../../../tests/e2e/helpers/electron-process-shutdown'
 import { getE2ECompletedOnboardingProfile } from '../../../../tests/e2e/helpers/e2e-completed-onboarding-profile'
 import { buildFakeAgentCommandOverride } from '../../../../tests/e2e/helpers/fake-agent-command-override'
+import { installVisibilityProbe } from './native-chat-4a-probes'
 
 const HARNESS_ROOT = path.resolve(import.meta.dirname, '../../../..')
 const SYSTEM_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
@@ -160,6 +161,10 @@ export async function launchArm(
       isolation
     )
     const page = await app.firstWindow({ timeout: 120_000 })
+    // tsx keeps function names by wrapping them in __name(), which page.evaluate callbacks carry into the renderer.
+    const nameShim = 'globalThis.__name ??= (fn) => fn'
+    await page.addInitScript(nameShim)
+    await page.evaluate(nameShim)
     // Only an e2e-mode build exposes the store; a desktop build would otherwise wait out the full budget.
     await page
       .waitForFunction(() => Boolean(window.__store), null, { timeout: 60_000 })
@@ -173,6 +178,7 @@ export async function launchArm(
       null,
       { timeout: 600_000, polling: 16 }
     )
+    await installVisibilityProbe(page)
     return { app, page, pid, startedAt, userDataDir, launchedAtEpochMs, readyEpochMs: Date.now() }
   } catch (error) {
     await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
