@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { useTranslate } from '@/i18n/use-translate'
+import { createUploadProgressPanel } from '@/components/transfer-progress/upload-progress-panel'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import {
@@ -94,6 +95,7 @@ export function useFileExplorerImport({
         clearNativeDragState()
         return
       }
+      const panel = createUploadProgressPanel()
       try {
         if ('error' in destination) {
           throw destination.error
@@ -112,7 +114,7 @@ export function useFileExplorerImport({
           },
           prepared.paths,
           destinationDir,
-          { assertCurrent: guard.assertCurrent }
+          { assertCurrent: guard.assertCurrent, progress: panel.progress }
         )
 
         await refreshDir(destinationDir)
@@ -120,7 +122,10 @@ export function useFileExplorerImport({
         // Select the first import without full reveal; watcher refreshes could otherwise move the viewport away from the drop.
         const imported = results.filter((r) => r.status === 'imported')
         const skipped = results.filter((r) => r.status === 'skipped')
-        const failed = results.filter((r) => r.status === 'failed')
+        // Why: a cancel is the user's own decision, not a failure to report back.
+        const failed = results
+          .filter((r) => r.status === 'failed')
+          .filter((r) => r.cancelled !== true)
 
         const shown = shownRef.current
         if (
@@ -151,6 +156,7 @@ export function useFileExplorerImport({
           )
         }
       } catch (err) {
+        panel.close()
         toast.error(
           extractIpcErrorMessage(
             err,

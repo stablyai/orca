@@ -1,5 +1,6 @@
 import type { EditorFileDropDestination } from './editor-file-drop-destination'
 import { toast } from 'sonner'
+import { createUploadProgressPanel } from '@/components/transfer-progress/upload-progress-panel'
 import { detectLanguage } from '@/lib/language-detect'
 import {
   isPathInsideWorktree,
@@ -14,7 +15,7 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
-import { describeSharedDropFailureReason } from '@/lib/drop-skip-reason-copy'
+import { reportEditorDropUploadRejections } from './editor-drop-upload-report'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -207,6 +208,7 @@ async function openEditorFileDropPaths(
       )
       return
     }
+    const panel = createUploadProgressPanel()
     try {
       // OS drops supply client paths; upload before opening them in remote/SSH workspaces.
       const destinationDir = joinPath(worktreePath, DROP_STAGING_RELATIVE_DIR)
@@ -214,7 +216,7 @@ async function openEditorFileDropPaths(
         fileContext,
         [...paths],
         destinationDir,
-        { ensureDestinationDir: true, nameExtensionlessImages: true }
+        { ensureDestinationDir: true, nameExtensionlessImages: true, progress: panel.progress }
       )
       // Rechecked per result, so it also covers the wait for the upload itself.
       for (const result of results) {
@@ -238,17 +240,9 @@ async function openEditorFileDropPaths(
           { suppressActiveRuntimeFallback: runtimeEnvironmentId === null, ...groupOptions }
         )
       }
-      const rejected = results.filter((result) => result.status !== 'imported')
-      if (rejected.length > 0) {
-        toast.error(
-          translate(
-            'auto.hooks.useGlobalFileDrop.d720e2f855',
-            'Some dropped files could not be uploaded.'
-          ),
-          { description: describeSharedDropFailureReason(rejected) }
-        )
-      }
+      reportEditorDropUploadRejections(results)
     } catch {
+      panel.close()
       toast.error(
         translate('auto.hooks.useGlobalFileDrop.38c9f034ff', 'Failed to upload dropped files.')
       )

@@ -31,6 +31,12 @@ import {
 import { streamExternalFileToRuntime } from '../runtime-upload-file-stream'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from '../runtime-upload-temp-sweep'
+import {
+  RUNTIME_UPLOAD_PROGRESS_CHANNEL,
+  throttleRuntimeUploadProgress
+} from '../runtime-upload-progress'
+import { registerRuntimeUploadCancelHandlers } from '../runtime-upload-cancel-ipc'
+import { registerCancellableUpload, scopeRuntimeUploadId } from '../runtime-upload-cancellation'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 
@@ -226,11 +232,30 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       }
       // Main-owned uploads must abort when the requesting renderer reloads or closes.
       const lifetime = abortWhenRendererGone(event.sender)
+      const uploadId = args.uploadId
+      // Why: replies to the frame that asked, so a second window's drop cannot
+      // move this one's progress bar.
+      const emit = uploadId
+        ? throttleRuntimeUploadProgress((progress) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send(RUNTIME_UPLOAD_PROGRESS_CHANNEL, progress)
+            }
+          })
+        : null
+      const cancellation = uploadId
+        ? registerCancellableUpload(scopeRuntimeUploadId(event.sender.id, uploadId))
+        : null
       try {
         return await streamExternalFileToRuntime({
           ...request,
           userDataPath,
-          signal: lifetime.signal
+          signal: lifetime.signal,
+          cancelSignal: cancellation?.signal,
+          onProgress:
+            emit && uploadId
+              ? ({ sentBytes, totalBytes }) =>
+                  emit({ uploadId, sentBytes, totalBytes, fileSequence: args.fileSequence })
+              : undefined
         })
       } catch (error) {
         if (lifetime.signal.aborted) {
@@ -239,10 +264,13 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         }
         throw error
       } finally {
+        cancellation?.release()
         lifetime.dispose()
       }
     }
   )
+
+  registerRuntimeUploadCancelHandlers()
 
   // Terminal drops reference local paths in place; explorer imports copy into a picked destination.
   ipcMain.handle(

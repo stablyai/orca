@@ -168,7 +168,6 @@ describe('handleTerminalFileDrop', () => {
     expect(sendInput).not.toHaveBeenCalled()
     expect(focus).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
-    expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
   })
 
   it('does not paste local WSL resolved paths when the target PTY changed', async () => {

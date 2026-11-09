@@ -47,6 +47,12 @@ await import('./runtime-environments/runtime-environment-manual-disconnect')
 
 let workDir: string
 
+function chunkCalls(): ChunkCall[] {
+  return callRuntimeEnvironment.mock.calls
+    .filter(([, , method]) => method === 'files.writeBase64Chunk')
+    .map(([, , , params]) => params)
+}
+
 /** Measure the same source identity as production staging. */
 async function stagedIdentity(filePath: string): Promise<StagedRuntimeUploadFileIdentity> {
   const stat = await lstat(filePath)
@@ -113,6 +119,124 @@ describe('streamExternalFileToRuntime', () => {
 
     await expect(streamExternalFileToRuntime(args)).rejects.toThrow('File changed during upload')
   })
+
+  it('reports monotonic progress that ends on the file size', async () => {
+    const size = RUNTIME_UPLOAD_SLICE_BYTES * 2 + 500
+    const filePath = join(workDir, 'tracked.bin')
+    await writeFile(filePath, Buffer.alloc(size))
+    const seen: { sentBytes: number; totalBytes: number }[] = []
+
+    await streamExternalFileToRuntime({
+      ...(await baseArgs(filePath)),
+      onProgress: (progress) => seen.push(progress)
+    })
+
+    expect(seen).toHaveLength(3)
+    expect(seen.every((p) => p.totalBytes === size)).toBe(true)
+    expect(seen.map((p) => p.sentBytes)).toEqual([
+      RUNTIME_UPLOAD_SLICE_BYTES,
+      RUNTIME_UPLOAD_SLICE_BYTES * 2,
+      size
+    ])
+  })
+
+  it('reports a zero-byte file as complete rather than never reporting', async () => {
+    const filePath = join(workDir, 'nothing.txt')
+    await writeFile(filePath, '')
+    const seen: { sentBytes: number; totalBytes: number }[] = []
+
+    await streamExternalFileToRuntime({
+      ...(await baseArgs(filePath)),
+      onProgress: (progress) => seen.push(progress)
+    })
+
+    expect(seen).toEqual([{ sentBytes: 0, totalBytes: 0 }])
+  })
+
+  it('stops reporting progress at the chunk that failed', async () => {
+    const filePath = join(workDir, 'halts.bin')
+    await writeFile(filePath, Buffer.alloc(RUNTIME_UPLOAD_SLICE_BYTES * 3))
+    const seen: number[] = []
+    callRuntimeEnvironment.mockResolvedValueOnce({ id: 'x', ok: true, result: {}, _meta: {} })
+    callRuntimeEnvironment.mockResolvedValueOnce({
+      id: 'x',
+      ok: false,
+      error: { code: 'write_failed', message: 'disk full' }
+    })
+
+    await expect(
+      streamExternalFileToRuntime({
+        ...(await baseArgs(filePath)),
+        onProgress: (progress) => seen.push(progress.sentBytes)
+      })
+    ).rejects.toThrow('disk full')
+
+    expect(seen).toEqual([RUNTIME_UPLOAD_SLICE_BYTES])
+  })
+
+  // An empty file never reaches the slice loop, so only the pre-open check keeps it unwritten.
+  it('writes nothing for an empty file whose cancel signal is already aborted', async () => {
+    const filePath = join(workDir, 'aborted.bin')
+    await writeFile(filePath, '')
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      streamExternalFileToRuntime({
+        ...(await baseArgs(filePath)),
+        cancelSignal: controller.signal
+      })
+    ).rejects.toThrow('Upload cancelled')
+    expect(chunkCalls()).toHaveLength(0)
+  })
+
+  it('stops mid-file when the cancel signal aborts after the first slice', async () => {
+    const filePath = join(workDir, 'midway.bin')
+    await writeFile(filePath, Buffer.alloc(RUNTIME_UPLOAD_SLICE_BYTES * 4))
+    const controller = new AbortController()
+    callRuntimeEnvironment.mockImplementation(async () => {
+      controller.abort()
+      return { id: 'x', ok: true, result: {}, _meta: {} }
+    })
+
+    await expect(
+      streamExternalFileToRuntime({
+        ...(await baseArgs(filePath)),
+        cancelSignal: controller.signal
+      })
+    ).rejects.toThrow('Upload cancelled')
+    // The first slice was already in flight; the loop stops before the second.
+    expect(chunkCalls()).toHaveLength(1)
+    // A cancel must let the in-flight append land before the renderer deletes the temp path.
+    const [, , , , , , , options] = callRuntimeEnvironment.mock.calls[0]!
+    expect(options?.signal).not.toBe(controller.signal)
+  })
+
+  it.each([
+    ['the last slice', RUNTIME_UPLOAD_SLICE_BYTES * 2, 2],
+    ['an empty file', 0, 1]
+  ])(
+    'rejects when the cancel lands during %s so the renderer never commits',
+    async (_label, byteLength, chunkCount) => {
+      const filePath = join(workDir, 'final-write.bin')
+      await writeFile(filePath, Buffer.alloc(byteLength))
+      const controller = new AbortController()
+      callRuntimeEnvironment.mockImplementation(async () => {
+        if (chunkCalls().length === chunkCount) {
+          controller.abort()
+        }
+        return { id: 'x', ok: true, result: {}, _meta: {} }
+      })
+
+      await expect(
+        streamExternalFileToRuntime({
+          ...(await baseArgs(filePath)),
+          cancelSignal: controller.signal
+        })
+      ).rejects.toThrow('Upload cancelled')
+      expect(chunkCalls()).toHaveLength(chunkCount)
+    }
+  )
 
   // symlink() needs privileges or Developer Mode on Windows.
 })

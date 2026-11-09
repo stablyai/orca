@@ -35,7 +35,11 @@ export async function uploadRuntimeFileWithoutClobber(
   source: RuntimeUploadSource,
   expectedSshConnectionGeneration?: number,
   expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
+  expectedExecutionHostId?: 'local' | `ssh:${string}`,
+  uploadId?: string,
+  fileSequence?: number,
+  /** Throws once the user cancelled; commit is the point of no return. */
+  throwIfCancelled?: () => void
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
@@ -49,6 +53,8 @@ export async function uploadRuntimeFileWithoutClobber(
         expected: source.expected,
         worktree: toRuntimeWorktreeSelector(worktreeId),
         relativePath: tempRelativePath,
+        uploadId,
+        fileSequence,
         expectedSshTargetId,
         expectedSshConnectionGeneration,
         expectedExecutionHostId,
@@ -70,7 +76,10 @@ export async function uploadRuntimeFileWithoutClobber(
         expectedSshConnectionGeneration,
         expectedExecutionHostId
       },
-      30_000
+      30_000,
+      // Why: main stops cancels through the last slice; this one catches a cancel after the stream
+      // resolved, checked as the commit is sent so one during its status probe counts too.
+      throwIfCancelled
     )
   } finally {
     await callRuntimeFileImportMutation(

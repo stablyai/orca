@@ -144,11 +144,13 @@ export function callRuntimeFileImportMutation<TResult>(
   session: RuntimeFileImportSession,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  beforeSend?: () => void
 ): Promise<TResult> {
   session.assertCurrent()
   return callRuntimeRpc<TResult>(session.target, method, params, {
     timeoutMs,
+    beforeSend,
     expectedEnvironmentPairingRevision: session.expectedEnvironmentPairingRevision,
     expectedEnvironmentRuntimeId: session.expectedEnvironmentRuntimeId
   })
