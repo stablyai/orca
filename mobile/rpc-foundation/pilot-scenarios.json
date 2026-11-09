@@ -21685,6 +21685,144 @@
       ]
     },
     {
+      "id": "event-router-failed-read-floor",
+      "operation": "query.event-router-catalog",
+      "family": "query.event-router-catalog",
+      "sites": ["mobile/src/query/host-event-router.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "ready",
+              "subscriptionId": "sub-1"
+            }
+          }
+        },
+        {
+          "checkpoint": "listening"
+        },
+        {
+          "complete": "worktree.ps#1",
+          "params": {
+            "limit": 10000,
+            "supportsWorktreeVisibilitySourceDefaults": true,
+            "afterSnapshotId": null,
+            "acceptRowDelta": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "runtime_error",
+              "message": "worktree list unavailable"
+            }
+          }
+        },
+        {
+          "checkpoint": "read-refused"
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "frame": "runtime.clientEvents.subscribe#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "worktreesChanged",
+              "repoId": "repo-1"
+            }
+          }
+        },
+        {
+          "advance": 150
+        },
+        {
+          "checkpoint": "five-notices-inside-the-floor"
+        },
+        {
+          "advance": 3000
+        },
+        {
+          "checkpoint": "floor-passed"
+        },
+        {
+          "action": "unmount",
+          "id": "unmount"
+        },
+        {
+          "checkpoint": "unmounted"
+        }
+      ]
+    },
+    {
       "id": "sc-changes-loaded",
       "operation": "source-control.changes-load",
       "family": "git.changes-load",
