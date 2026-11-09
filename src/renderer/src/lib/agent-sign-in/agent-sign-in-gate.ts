@@ -27,6 +27,8 @@ import {
   type AgentSignInGateView,
   type GateEntry
 } from './agent-sign-in-gate-store'
+import { differentAccountEmail, readDesktopAgentEmail } from './desktop-agent-account'
+import { warnHostAgentOtherAccount } from './host-agent-sign-out'
 
 export {
   isAgentSignedOutOnHost,
@@ -38,6 +40,8 @@ export {
 } from './agent-sign-in-gate-store'
 
 const SIGNED_IN_HOLD_MS = 600
+// Long enough to read the account line; the launch still goes ahead on its own.
+const OTHER_ACCOUNT_HOLD_MS = 1_800
 
 /** Sign-in pages open in the person's own browser, where they are already signed in. */
 export function openSignInPage(url: string): void {
@@ -81,6 +85,7 @@ function newestHostAccount(state: HostAccounts | undefined): { id: string; email
 async function finishSignedIn(entry: GateEntry, status: HostAccountSignInStatus): Promise<void> {
   const owner = { kind: 'environment', environmentId: entry.environmentId } as const
   const account = newestHostAccount(entry.agent === 'claude' ? status.claude : status.codex)
+  const desktopEmail = readDesktopAgentEmail(entry.agent)
   // Launches use the host's selected account; the one just signed in is the one wanted there.
   if (account) {
     await (
@@ -90,8 +95,25 @@ async function finishSignedIn(entry: GateEntry, status: HostAccountSignInStatus)
     ).catch(() => {})
   }
   void refreshHostAgentSignInReport(entry.environmentId, { force: true })
-  setAgentSignInGateView(entry, { step: 'signed', email: account?.email ?? null })
-  setTimeout(() => settleAgentSignInGate(entry, 'proceed'), SIGNED_IN_HOLD_MS)
+  const email = account?.email ?? null
+  const expectedEmail = differentAccountEmail(email, await desktopEmail)
+  if (!isCurrentAgentSignInGate(entry)) {
+    return
+  }
+  setAgentSignInGateView(entry, {
+    step: 'signed',
+    email,
+    ...(expectedEmail ? { expectedEmail } : {})
+  })
+  // The build sheet shows it inline with its own Switch account; a pane's card is gone in a moment.
+  const launching = [...entry.waiters.keys()].some((key) => !entry.backgroundWaiters.has(key))
+  if (email && expectedEmail && launching) {
+    warnHostAgentOtherAccount(entry, email, expectedEmail)
+  }
+  setTimeout(
+    () => settleAgentSignInGate(entry, 'proceed'),
+    expectedEmail ? OTHER_ACCOUNT_HOLD_MS : SIGNED_IN_HOLD_MS
+  )
 }
 
 /** Follows the host's sign-in and turns its prompts into card steps until it settles. */

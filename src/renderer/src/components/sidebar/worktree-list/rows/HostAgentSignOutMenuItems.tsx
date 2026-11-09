@@ -1,6 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { LogOut } from 'lucide-react'
-import { toast } from 'sonner'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -17,53 +16,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
-import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   readHostAgentSignInReport,
   refreshHostAgentSignInReport,
-  rememberHostAgentSignInReport,
   subscribeHostAgentSignInReports
 } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
-import type {
-  HostAgentSignInAgent,
-  HostAgentSignInReport
+import { signOutAgentOnHost } from '@/lib/agent-sign-in/host-agent-sign-out'
+import {
+  HOST_AGENT_SIGN_IN_AGENT_NAME,
+  type HostAgentSignInAgent
 } from '../../../../../../shared/host-agent-sign-in-status'
 
-const AGENT_NAME: Record<HostAgentSignInAgent, string> = { claude: 'Claude', codex: 'Codex' }
-
-async function signOut(
-  environmentId: string,
-  hostLabel: string,
-  agent: HostAgentSignInAgent
-): Promise<boolean> {
-  const name = AGENT_NAME[agent]
-  try {
-    const report = await callRuntimeRpc<HostAgentSignInReport>(
-      { kind: 'environment', environmentId },
-      'accounts.agentSignOut',
-      { agent },
-      { timeoutMs: 30_000 }
-    )
-    rememberHostAgentSignInReport(environmentId, report)
-    toast.success(
-      translate('agentSignIn.signedOutToast', 'Signed out of {{agent}} on {{host}}', {
-        agent: name,
-        host: hostLabel
-      })
-    )
-    return true
-  } catch (error) {
-    toast.error(
-      error instanceof Error
-        ? error.message
-        : translate('agentSignIn.signOutFailed', 'Could not sign out on {{host}}.', {
-            host: hostLabel
-          })
-    )
-    return false
-  }
-}
+const AGENT_NAME = HOST_AGENT_SIGN_IN_AGENT_NAME
 
 /** "Sign out of Claude/Codex" for agents the host reports signed in; nothing otherwise. */
 export function HostAgentSignOutMenuItems({
@@ -155,7 +119,7 @@ export function HostAgentSignOutDialog({
                 return
               }
               setBusy(true)
-              void signOut(environmentId, hostLabel, agent).finally(() => {
+              void signOutAgentOnHost(environmentId, hostLabel, agent).finally(() => {
                 setBusy(false)
                 onClose()
               })
