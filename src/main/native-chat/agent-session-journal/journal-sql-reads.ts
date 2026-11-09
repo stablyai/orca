@@ -1,4 +1,5 @@
 import type { JournalRequestMark } from './journal-request-failure'
+import type { JournalRewindCut, JournalRewindSelection } from './journal-domain-rewind-cut'
 import type { JournalForkBoundary, JournalSavedContent } from './journal-domain-fork-reads'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
@@ -33,6 +34,7 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   requestFailure(kind: JournalRequestMark['kind'], id: string): Promise<AgentJournalSnapshot>
   runningRequest(stopSettle?: JournalStopSettleFact): Promise<JournalRequestMark | null>
   rewindTarget(itemId: string): Promise<JournalRewindTarget>
+  rewindCut(target: JournalRewindSelection): Promise<JournalRewindCut | null>
   namingPrompt(hostStartedAt?: number): Promise<string>
   automationRun(messageId: string, inputIds: readonly string[]): Promise<AgentJournalSnapshot>
   historySourceItems(clientMessageIds: readonly string[]): Promise<AgentJournalRenderItem[]>
@@ -109,6 +111,7 @@ export function journalSqlReads(
     runningRequest: async (stopSettle) =>
       (await read({ kind: 'running-request', stopSettle })).request,
     rewindTarget: async (itemId) => (await read({ kind: 'rewind-target', itemId })).target,
+    rewindCut: async (target) => (await read({ kind: 'rewind-cut', target })).cut,
     namingPrompt: async (hostStartedAt) =>
       (await read({ kind: 'naming-prompt', hostStartedAt })).prompt,
     automationRun: async (messageId, inputIds) =>

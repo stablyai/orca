@@ -38,6 +38,8 @@ import { claimJournalAutomaticSubmission } from './journal-sql-automatic-submiss
 import type { JournalAutomaticSelection } from './journal-automatic-submission'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
+import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { JournalRewindCut } from './journal-domain-rewind-cut'
 
 /**
  * The in-memory journal's append surface, each method one writer command with the same answer.
@@ -51,6 +53,17 @@ export abstract class SqlJournalAppends {
     operation: JournalSqlStoreOperation,
     prepare?: JournalSqlStorePrepare
   ): Promise<JournalWriterCommit>
+
+  completeRewind(
+    rewind: AgentSessionRewindRecord,
+    fence: number,
+    expectedCut: JournalRewindCut | null,
+    receipt: JournalOperationReceipt
+  ): Promise<AgentJournalCursor> {
+    return this.answerOf(
+      this.write({ kind: 'rewind-cut', rewind, fence, expectedCut }, receipted(receipt))
+    )
+  }
 
   appendItem(
     identity: AgentJournalItemIdentity,

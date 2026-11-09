@@ -38,6 +38,8 @@ import type { JournalWriterEffect } from './journal-writer-effects'
 import type { JournalWriterHostFacts } from './journal-writer-host-facts'
 import type { JournalWriterStep } from './writing/journal-writer-step'
 import type { JournalDomainEditLeaseOperation } from './journal-domain-edit-leases'
+import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { JournalRewindCut } from './journal-domain-rewind-cut'
 
 /** The writer chooses the projection epoch; callers identify only their live open handle. */
 export type JournalWriterTarget = { sessionId: string; epoch: string; ownerToken: string }
@@ -140,6 +142,12 @@ export type JournalWriterInputOperation =
   | JournalWriterSettlementOperation
 
 export type JournalWriterContextOperation =
+  | {
+      kind: 'rewind-cut'
+      rewind: AgentSessionRewindRecord
+      fence: number
+      expectedCut: JournalRewindCut | null
+    }
   | { kind: 'context-clear'; boundary: AgentSessionProviderContextBoundary }
   | {
       kind: 'context-rewind'

@@ -1,4 +1,3 @@
-import { expectAtomicRewindCompletion } from './structured-agent-session-rewind-replay.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,9 +8,12 @@ import {
   agentJournalSubmissionKey
 } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { expectUsageLimitCompletionRollback } from './structured-agent-session-rewind-usage-limit.test-fixture'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase,
+  closeTestAgentSessionRecordStores
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import type {
   StructuredAgentSessionAdapter,
@@ -28,10 +30,6 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
@@ -103,7 +101,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestAgentSessionDatabase(directory),
     claimKeyId: 'key',
     now: () => clock,
     probeOwner: async () => ({ outcome: 'exit-observed' })
@@ -111,7 +109,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await host.flushAllStreamedEvents()
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -161,8 +159,11 @@ async function seed(acceptedSubmissions = false) {
       ).toMatchObject({ ok: true })
       await vi.waitFor(async () =>
         expect(
-          (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
-            (entry) => entry.clientMessageId === clientOperationId
+          (
+            await host
+              .collaboratorsForTests()
+              .sessions.get(HOST_TEST_SESSION)!
+              .journal.reads.submission(clientOperationId)
           )?.dispatchState
         ).toBe('accepted')
       )
@@ -177,7 +178,10 @@ async function seed(acceptedSubmissions = false) {
   return selectedItemId
 }
 async function params(itemId: string, epoch?: string) {
-  const expectedEpoch = epoch ?? (await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch
+  const expectedEpoch =
+    epoch ??
+    (await host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal.reads.cursor())
+      .epoch
   return {
     itemId,
     expectedEpoch,
@@ -195,23 +199,40 @@ async function params(itemId: string, epoch?: string) {
 }
 
 describe('host rewind', () => {
-  it('commits context and completion atomically before a post-commit crash', async () => {
-    await expectAtomicRewindCompletion({ host, store, seed, params, attachAndStart })
+  it('replays the saved result while retaining only the provider prefix', async () => {
+    const target = await seed()
+    const request = await params(target)
+    const completed = await host.rewind(caller, request)
+    expect(completed).toMatchObject({ ok: true })
+    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    expect(
+      await journal.reads.itemBody(
+        agentJournalItemKey({
+          provider: 'codex',
+          threadId: HOST_TEST_THREAD,
+          turnId: 'kept',
+          ordinal: 0
+        })
+      )
+    ).toEqual(hostTestMessage('0'))
+    expect(await journal.reads.itemBody(target)).toBeNull()
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+    expect(await host.rewind(caller, request)).toMatchObject({ ...completed, replayed: true })
   })
 
-  it('rolls back a failed logical rewind completion and recovers usage-limit cancellation once', async () => {
-    ;({ host, store } = await expectUsageLimitCompletionRollback({
-      host,
-      store,
-      seed,
-      params,
-      attachAndStart,
-      directory,
-      rewind,
-      now: () => clock,
-      advanceClock: () => {
-        clock += 75_000
-      }
-    }))
+  it('recovers an uncertain provider revert from evidence and preserves its replay result', async () => {
+    const target = await seed()
+    const request = await params(target)
+    rewind.mockRejectedValueOnce(new Error('lost provider response'))
+    await expect(host.rewind(caller, request)).rejects.toThrow('lost provider response')
+    const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+    expect(await journal.reads.itemBody(target)).not.toBeNull()
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('prepared')
+    expect(
+      await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
+    ).toMatchObject({ ok: true })
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+    expect(await journal.reads.itemBody(target)).toBeNull()
+    expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
   })
 })

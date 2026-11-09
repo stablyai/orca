@@ -1,6 +1,5 @@
 import { beginJournalRequestEvents } from './journal-writer-request-events'
 import { applyJournalDomainControlCommand } from './journal-domain-control-command'
-import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type Database from '../../sqlite/sync-database'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit } from './journal-writer-changes'
@@ -11,7 +10,7 @@ import { applyJournalDomainDispatchCommand } from './journal-domain-dispatch-com
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
 import { applyJournalDomainInputRecovery } from './journal-domain-input-recovery'
 import { applyJournalDomainCommandTurn } from './journal-domain-command-turn'
-import { applyJournalDomainContextCommand } from './journal-domain-context-command'
+import { applyJournalSqlContextCommand } from './journal-sql-context-command'
 import { applyJournalSqlTombstoneCommand } from './journal-sql-tombstone-command'
 import { applyJournalDomainGenerationSettlement } from './journal-domain-generation-settlement'
 import { applyJournalDomainLifecycleOperation } from './journal-domain-taken-stop'
@@ -19,6 +18,7 @@ import { applyJournalDomainPromptMutation } from './journal-domain-prompt-mutati
 import { applyJournalSqlStepCommand } from './journal-sql-step-command'
 import { applyJournalSqlEditLeaseCommand } from './journal-sql-edit-lease-command'
 import { applyJournalSqlAutomaticSubmissionCommand } from './journal-sql-automatic-submission-command'
+import { applyJournalSqlRewindCommand } from './journal-sql-rewind-command'
 
 /** Every command decides against current rows at its position on the sole writer. */
 export class JournalSqlCommand {
@@ -35,7 +35,9 @@ export class JournalSqlCommand {
       return {
         ...commit,
         requestEvents:
-          command.operation.kind === 'epoch-replace' || command.operation.kind === 'context-rewind'
+          command.operation.kind === 'epoch-replace' ||
+          command.operation.kind === 'context-rewind' ||
+          command.operation.kind === 'rewind-cut'
             ? []
             : requestEvents
       }
@@ -50,6 +52,8 @@ export class JournalSqlCommand {
     command = { ...command, savedAt }
     const { operation, target } = command
     switch (operation.kind) {
+      case 'rewind-cut':
+        return applyJournalSqlRewindCommand(db, stateDirectory, { ...command, operation }, savedAt)
       case 'automatic-submission':
         return applyJournalSqlAutomaticSubmissionCommand(
           db,
@@ -142,41 +146,8 @@ export class JournalSqlCommand {
       }
       case 'context-clear':
       case 'context-rewind':
-      case 'epoch-replace': {
-        if (operation.kind === 'epoch-replace' && !operation.providerHandle && !command.facts) {
-          throw new Error('journal context replacement omitted its identity facts')
-        }
-        const result = applyJournalDomainContextCommand(
-          db,
-          target,
-          operation.kind === 'epoch-replace'
-            ? {
-                ...operation,
-                providerHandle:
-                  operation.providerHandle ??
-                  agentSessionJournalProviderHandle(command.facts!.identity)
-              }
-            : operation,
-          savedAt,
-          command.facts?.stopSettle
-        )
-        return finishJournalSqlCommand(
-          db,
-          stateDirectory,
-          command,
-          result,
-          result.cursor,
-          result.coordinates.map((position) => ({
-            kind:
-              position.kind === 'context-item' || position.kind === 'replacement-item'
-                ? 'item'
-                : 'tombstone',
-            epoch: position.cursor.epoch,
-            seq: position.cursor.sequence
-          })),
-          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
-        )
-      }
+      case 'epoch-replace':
+        return applyJournalSqlContextCommand(db, stateDirectory, { ...command, operation }, savedAt)
       case 'tombstone':
       case 'goal-withdraw':
         return applyJournalSqlTombstoneCommand(

@@ -20,16 +20,15 @@ export function retainedFailures(
   boundary: number
 ): RetainedFailure[] {
   const prefix = [target.sessionId, target.epoch] as const
-  const failed = db.prepare(`SELECT payload_json, queue_failed_at, queue_failure_witnessed_through
-    FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND queue_failed_at>0`)
-  return itemIds.flatMap((itemId) => {
-    const row = failed.get(...prefix, itemId)
-    if (!row) {
-      return []
-    }
-    const failedAt = Number(row.queue_failed_at)
-    return [
-      {
+  return db
+    .prepare(`SELECT item.item_id,item.payload_json,item.queue_failed_at,
+      item.queue_failure_witnessed_through FROM json_each(?) wanted CROSS JOIN journal_items item
+    WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.queue_failed_at>0`)
+    .all(JSON.stringify(itemIds), ...prefix)
+    .map((row) => {
+      const itemId = String(row.item_id)
+      const failedAt = Number(row.queue_failed_at)
+      return {
         itemId,
         item: JSON.parse(String(row.payload_json)),
         at: Math.max(
@@ -38,8 +37,7 @@ export function retainedFailures(
         ),
         reports: reportCount(db, target, itemId)
       }
-    ]
-  })
+    })
 }
 
 export function restoreRetainedFailures(

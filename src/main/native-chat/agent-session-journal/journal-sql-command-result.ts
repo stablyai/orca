@@ -114,6 +114,7 @@ function publicJournalSqlValue(
     operation === 'goal-withdraw' ||
     operation === 'context-clear' ||
     operation === 'context-rewind' ||
+    operation === 'rewind-cut' ||
     operation === 'epoch-replace' ||
     operation === 'stop' ||
     operation === 'queue-resume' ||

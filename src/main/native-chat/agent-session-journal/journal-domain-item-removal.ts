@@ -33,7 +33,8 @@ export function removeJournalDomainItem(
   target: Target,
   key: string,
   sequence: number,
-  revisions?: Map<string, number>
+  revisions?: Map<string, number>,
+  includeBody = true
 ): JournalDomainItemRemoval {
   if (!db.isTransaction) {
     throw new Error('journal item removal requires its writer transaction')
@@ -45,9 +46,10 @@ export function removeJournalDomainItem(
     .get(...prefix, key)
   const itemId = alias ? String(alias.item_id) : key
   const row = db
-    .prepare(`SELECT payload_json, revision, sequence, sequence_index, turn_marker,prompt,command_entry,
+    .prepare(`SELECT CASE WHEN ? OR turn_id IS NOT NULL THEN payload_json END AS payload_json,
+      revision, sequence, sequence_index, turn_marker,prompt,command_entry,
       queue_failure_report_turn_item_id FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
-    .get(...prefix, itemId)
+    .get(Number(includeBody), ...prefix, itemId)
   if (row?.turn_marker) {
     beforeJournalRequestWrite(db, target, 'turn', itemId)
   }
@@ -69,7 +71,8 @@ export function removeJournalDomainItem(
   if (!row) {
     return { itemId, revision, removed: null, items: [] }
   }
-  const removed: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
+  const removed: AgentJournalRenderItem | null =
+    row.payload_json === null ? null : JSON.parse(String(row.payload_json))
   if (
     row.turn_marker ||
     row.prompt ||
@@ -94,8 +97,8 @@ export function removeJournalDomainItem(
   db.prepare(
     'DELETE FROM journal_item_subagent_names WHERE session_id=? AND epoch=? AND item_id=?'
   ).run(...prefix, itemId)
-  observeJournalDomainTurnScope(db, target, itemId, removed, undefined)
-  const turn = readAgentJournalTurn(removed.body)
+  observeJournalDomainTurnScope(db, target, itemId, removed ?? undefined, undefined)
+  const turn = readAgentJournalTurn(removed?.body)
   if (turn) {
     db.prepare(`INSERT OR IGNORE INTO journal_removed_turns(session_id,epoch,turn_id)
       VALUES(?,?,?)`).run(...prefix, turn.turnId)

@@ -16,6 +16,7 @@ import type { StructuredAgentSessionAttachContext } from '../acquisition/structu
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import { admitAndRunAgentSessionMutation } from '../operations/structured-agent-session-mutation-admission'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
+import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { conversationCommandBlocked } from '../operations/structured-conversation-command-admission'
 import { completedStructuredRewind } from './structured-rewind-replay'
 import { rewindRefusal, rewindRefusalBehindClear } from './structured-rewind-refusal'
@@ -66,6 +67,12 @@ export async function rewindStructuredAgentSession(
       journal: () => context.sessions.get(sessionId)?.journal,
       currentWork: () =>
         hostStructuredAgentSessionCurrentWork({ store, sessions: context.sessions }, sessionId),
+      readWork: (operation) =>
+        readHostStructuredAgentSessionWork(
+          { store, sessions: context.sessions },
+          sessionId,
+          operation
+        ),
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,
       plan: {
@@ -79,8 +86,12 @@ export async function rewindStructuredAgentSession(
         }),
         settlesWithWrite: true,
         successReceipt: () => ({
-          write: (db) => completionReceipt!.write(db),
-          committed: () => completionReceipt!.committed()
+          stage: (stage) => {
+            if (!completionReceipt?.stage) {
+              throw new Error('rewind completion requires writer staging')
+            }
+            return completionReceipt.stage(stage)
+          }
         }),
         replay: (_ctx, outcome) => {
           if (outcome.status === 'succeeded' && outcome.rewind) {
@@ -103,7 +114,7 @@ export async function rewindStructuredAgentSession(
             return rewindRefusal('outcome-unknown')
           }
           const childWork = { views: readChildWork(sessionId), open: childWorkOpen(sessionId) }
-          if (conversationCommandBlocked(ctx, record, childWork, 'handover')) {
+          if (await conversationCommandBlocked(ctx, record, childWork, 'handover')) {
             return rewindRefusal('busy')
           }
           if (ctx.journal.cursor().epoch !== params.expectedEpoch) {
@@ -114,7 +125,7 @@ export async function rewindStructuredAgentSession(
           }
           const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
           const cut = head
-            ? structuredRewindCut(ctx.journal, {
+            ? await structuredRewindCut(ctx.journal, {
                 itemId: params.itemId,
                 provider: record.provider,
                 nativeId: head.nativeId
@@ -134,7 +145,7 @@ export async function rewindStructuredAgentSession(
           if (fork && !fork.ok) {
             return rewindRefusal(fork.reason)
           }
-          const contextFloor = ctx.journal.context.floor()
+          const contextFloor = (await ctx.journal.reads.rewindTarget(params.itemId)).floor
           const prepared: AgentSessionRewindRecord = {
             operationId: clientOperationId,
             callerKey: caller.callerKey,
@@ -189,15 +200,8 @@ export async function rewindStructuredAgentSession(
             journal,
             fence,
             undefined,
-            (rewind, currentFence, cursor, cancel, childBoundary) => {
-              completionReceipt = store.conversationReceipts.rewind(
-                sessionId,
-                currentFence,
-                rewind,
-                cursor,
-                cancel,
-                childBoundary
-              )
+            (rewind, currentFence) => {
+              completionReceipt = store.conversationReceipts.rewind(sessionId, currentFence, rewind)
               return ctx.operationReceipt!
             }
           )
