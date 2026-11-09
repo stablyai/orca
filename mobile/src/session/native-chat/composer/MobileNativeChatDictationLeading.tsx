@@ -1,4 +1,4 @@
-import { useContext, type ReactNode } from 'react'
+import { useContext, type ReactNode, type RefObject } from 'react'
 import { View } from 'react-native'
 import { MobileDictationLiveContext } from '../../../dictation/mobile-dictation-live-context'
 import {
@@ -13,11 +13,13 @@ export function MobileNativeChatDictationLeading({
   micActive,
   micStarting = false,
   micProcessing = false,
+  cancelRef,
   children
 }: {
   micActive: boolean
   micStarting?: boolean
   micProcessing?: boolean
+  cancelRef: RefObject<View | null>
   children: ReactNode
 }): React.JSX.Element {
   const live = useContext(MobileDictationLiveContext)
@@ -26,7 +28,7 @@ export function MobileNativeChatDictationLeading({
   }
   return (
     <View style={styles.leadingControls}>
-      <MobileDictationCancelButton onCancel={live.cancel} targetRef={live.cancelRef} />
+      <MobileDictationCancelButton onCancel={live.cancel} targetRef={cancelRef} />
       {micProcessing ? (
         <MobileDictationFinishingNote engine={live.engine} computerName={live.computerName} />
       ) : micStarting ? null : (

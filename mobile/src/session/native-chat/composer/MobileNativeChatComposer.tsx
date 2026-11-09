@@ -152,6 +152,8 @@ export function MobileNativeChatComposer({
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef
   const groupRef = useRef<View>(null)
+  // This composer's ✕, which its own held mic may be released over.
+  const cancelRef = useRef<View>(null)
   const [focused, setFocused] = useState(false)
   const [picker, setPicker] = useMobileNativeChatPickerPresentation(
     sessionOptions?.controller.optionPickerRequest
@@ -342,7 +344,9 @@ export function MobileNativeChatComposer({
             textAlignVertical="top"
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
-            <MobileNativeChatDictationLeading {...{ micActive, micStarting, micProcessing }}>
+            <MobileNativeChatDictationLeading
+              {...{ micActive, micStarting, micProcessing, cancelRef }}
+            >
               <MobileNativeChatComposerAttachButton
                 onAttachImage={onAttachImage}
                 onAttachFiles={structured?.onAttachFiles}
@@ -373,7 +377,7 @@ export function MobileNativeChatComposer({
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 {...{ onMicPress, micActive, micStarting, micProcessing, dictationMode }}
-                {...{ onMicPressIn, onMicPressOut }}
+                {...{ onMicPressIn, onMicPressOut, cancelRef }}
                 disabled={disabled || offline}
               />
             ) : null}

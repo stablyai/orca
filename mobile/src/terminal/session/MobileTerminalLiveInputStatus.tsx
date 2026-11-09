@@ -1,3 +1,4 @@
+import type { RefObject } from 'react'
 import { Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -18,6 +19,7 @@ import {
 type MobileTerminalLiveInputStatusProps = {
   readonly dictation: MobileDictationStatusFlags
   readonly live: MobileDictationLive | null
+  readonly cancelRef: RefObject<View | null>
   readonly dictationMode: string | undefined
   readonly isAttaching: boolean
   // Words heard so far that will be typed into this terminal.
@@ -28,6 +30,7 @@ type MobileTerminalLiveInputStatusProps = {
 export function MobileTerminalLiveInputStatus({
   dictation,
   live,
+  cancelRef,
   dictationMode,
   isAttaching,
   heard
@@ -62,7 +65,7 @@ export function MobileTerminalLiveInputStatus({
   return (
     <View style={[styles.status, styles.dictating]} pointerEvents="box-none">
       {live ? (
-        <MobileDictationCancelButton onCancel={live.cancel} targetRef={live.cancelRef} compact />
+        <MobileDictationCancelButton onCancel={live.cancel} targetRef={cancelRef} compact />
       ) : null}
       <View style={styles.dictationLine} pointerEvents="none">
         <View style={styles.detailLine}>

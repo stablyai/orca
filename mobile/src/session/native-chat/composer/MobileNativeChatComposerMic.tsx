@@ -1,6 +1,6 @@
-import { ActivityIndicator, Pressable } from 'react-native'
+import { ActivityIndicator, Pressable, type View } from 'react-native'
 import { Mic, Square } from 'lucide-react-native'
-import { useContext } from 'react'
+import { useContext, type RefObject } from 'react'
 import { colors } from '../../../theme/mobile-theme'
 import { MobileDictationLiveContext } from '../../../dictation/mobile-dictation-live-context'
 import { dictationControlsCopy } from '../../../dictation/mobile-dictation-controls-copy'
@@ -34,11 +34,16 @@ export function MobileNativeChatComposerMic({
   dictationMode = 'toggle',
   onMicPressIn,
   onMicPressOut,
+  cancelRef,
   disabled
-}: MobileNativeChatMicProps & { disabled: boolean }): React.JSX.Element {
+}: MobileNativeChatMicProps & {
+  disabled: boolean
+  // The composer's ✕ that a held mic may be released over.
+  cancelRef?: RefObject<View | null>
+}): React.JSX.Element {
   useMobileTranslation()
   const live = useContext(MobileDictationLiveContext)
-  const release = useMobileDictationCancelDrop(live?.cancelRef, live?.cancel, onMicPressOut)
+  const release = useMobileDictationCancelDrop(cancelRef, live?.cancel, onMicPressOut)
   return (
     <Pressable
       accessibilityRole="button"

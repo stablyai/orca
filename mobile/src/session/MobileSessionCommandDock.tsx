@@ -1,4 +1,4 @@
-import { useContext, type ReactNode } from 'react'
+import { useContext, useRef, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
@@ -24,6 +24,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   const rail = useSessionTerminalKeyRail(controller)
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   const dictationLive = useContext(MobileDictationLiveContext)
+  // The field's ✕, which the held mic may be released over.
+  const dictationCancelRef = useRef<View>(null)
   const {
     insets,
     dictationMode,
@@ -65,6 +67,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             <MobileTerminalLiveInputStatus
               dictation={dictation}
               live={dictationLive}
+              cancelRef={dictationCancelRef}
               dictationMode={dictationMode}
               heard={liveDictationText}
               isAttaching={isAttaching}
@@ -78,7 +81,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           dictationMode={dictationMode}
           dictationEnabled={dictationEnabled}
           buttonStyle={inputStyles.controlButton}
-          dictationCancelRef={dictationLive?.cancelRef}
+          dictationCancelRef={dictationCancelRef}
           disabledButtonStyle={inputStyles.disabled}
           onAttachImage={() => void attachImage('library')}
           onAttachFile={() => void attachImage('files')}
