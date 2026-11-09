@@ -21,7 +21,7 @@ import {
   heldStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkHost
 } from '../observations/structured-agent-session-host-current-work'
-import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
+import { captureHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { journalSubmissionIsPersonal } from '../../agent-session-journal/submissions/journal-submission-fold'
 
@@ -56,9 +56,9 @@ export function structuredQueueSendGate(
       ))
     return {
       record: host.store.getRecord(sessionId),
+      authority: captureHostStructuredAgentSessionWork(host, sessionId, journal),
       work,
-      state: work.queueState(),
-      readWork: (operation) => readHostStructuredAgentSessionWork(host, sessionId, operation)
+      state: work.queueState()
     }
   }
 }
@@ -187,8 +187,7 @@ export async function readQueuePublication(
         ? { reason: pause.reason }
         : null
     const nextQueuedMessageId =
-      (await nextStructuredQueuedMessage({ journal, ...input, working, cards: cardRows }))
-        ?.messageId ?? null
+      (await nextStructuredQueuedMessage({ journal, ...input, cards: cardRows }))?.messageId ?? null
     const previous = publications.get(journal)
     if (
       previous &&

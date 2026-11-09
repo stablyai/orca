@@ -1,3 +1,4 @@
+import { applyJournalSqlSendAdmission } from './journal-sql-send-admission'
 import { beginJournalRequestEvents } from './journal-writer-request-events'
 import { applyJournalDomainControlCommand } from './journal-domain-control-command'
 import type Database from '../../sqlite/sync-database'
@@ -52,6 +53,8 @@ export class JournalSqlCommand {
     command = { ...command, savedAt }
     const { operation, target } = command
     switch (operation.kind) {
+      case 'send-admission':
+        return applyJournalSqlSendAdmission(db, stateDirectory, { ...command, operation }, savedAt)
       case 'rewind-cut':
         return applyJournalSqlRewindCommand(db, stateDirectory, { ...command, operation }, savedAt)
       case 'automatic-submission':

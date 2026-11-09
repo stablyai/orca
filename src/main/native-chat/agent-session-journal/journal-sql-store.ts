@@ -163,7 +163,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           ...(staged ? { effects: staged.effects } : {})
         }
         commit =
-          operation.kind === 'automatic-submission'
+          operation.kind === 'automatic-submission' || operation.kind === 'send-admission'
             ? await writeJournalAutomaticSubmission(writer, command, preparation.custody)
             : await writer.write(command)
       } catch (error) {
@@ -298,6 +298,7 @@ function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptStage['r
       return 'dispatch'
     case 'submission':
     case 'automatic-submission':
+    case 'send-admission':
       return 'submission'
     default:
       return undefined

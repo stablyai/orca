@@ -1,7 +1,6 @@
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
-import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -10,9 +9,6 @@ import type {
   AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
-import { readContextStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
-import { shouldQueueStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-gate'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionThreadGoalChange,
@@ -39,7 +35,7 @@ import {
 } from './structured-agent-session-mutation-plans'
 import { promptPlan } from './structured-agent-session-prompt-plan'
 import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
-import { runQueueableStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-send'
+import { admitStructuredAgentSessionSend } from '../delivery/structured-agent-session-send-admission'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop } from './structured-agent-session-chat-stop'
 import {
@@ -88,29 +84,8 @@ export function sendStructuredAgentSessionTurn(
           if (blocked) {
             return blocked
           }
-          if (params.usageLimitContinuationOfTurnItemId !== undefined) {
-            const cut = await ctx.journal.reads.usageLimitCut()
-            if (
-              cut?.turnItemId !== params.usageLimitContinuationOfTurnItemId ||
-              (await shouldQueueStructuredAgentSessionSend({
-                record,
-                journal: ctx.journal,
-                work: await contextStructuredAgentSessionCurrentWork(ctx),
-                readWork: (operation) => readContextStructuredAgentSessionWork(ctx, operation)
-              }))
-            ) {
-              return {
-                ok: false as const,
-                refusal: refuse(
-                  'agent_session_operation_invalid',
-                  { reason: 'continuationSuperseded' },
-                  'This chat has moved on. Check the latest messages before continuing.'
-                )
-              }
-            }
-          }
           await params.beforeRun?.()
-          return runQueueableStructuredAgentSessionSend(context, ctx, params, () => plan.run(ctx))
+          return admitStructuredAgentSessionSend(context, ctx, params)
         }
       },
       sendPreparation(context, params.envelope, arrival, selection)

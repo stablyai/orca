@@ -1,3 +1,4 @@
+import type { JournalSendAdmissionResult } from './journal-send-admission'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { copyJournalCurrentWorkAuthority } from './journal-observer-read'
 import type {
@@ -52,7 +53,7 @@ export async function writeJournalAutomaticSubmission(
   for (;;) {
     const commit = await writer.write(command)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: automatic-submission returns its named outcome.
-    const result = commit.value as JournalAutomaticSubmissionResult
+    const result = commit.value as JournalAutomaticSubmissionResult | JournalSendAdmissionResult
     if (result.kind !== 'needs-custody') {
       return commit
     }

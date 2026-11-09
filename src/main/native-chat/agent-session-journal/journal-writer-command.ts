@@ -1,3 +1,4 @@
+import type { JournalSendAdmission } from './journal-send-admission'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -78,6 +79,7 @@ export type JournalWriterCommand = {
 }
 
 export type JournalWriterInputOperation =
+  | ({ kind: 'send-admission' } & JournalSendAdmission)
   | { kind: 'automatic-submission'; clientMessageId: string; fence: number }
   | { kind: 'edit-lease'; operation: JournalDomainEditLeaseOperation }
   | {

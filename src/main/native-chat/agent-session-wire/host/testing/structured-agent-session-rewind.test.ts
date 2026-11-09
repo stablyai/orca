@@ -200,19 +200,21 @@ async function params(itemId: string, epoch?: string) {
 
 describe('host rewind', () => {
   it('replays the saved result while retaining only the provider prefix', async () => {
-    const target = await seed()
+    const target = await seed(true)
     const request = await params(target)
     const completed = await host.rewind(caller, request)
     expect(completed).toMatchObject({ ok: true })
     const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
     expect(
       await journal.reads.itemBody(
-        agentJournalItemKey({
-          provider: 'codex',
-          threadId: HOST_TEST_THREAD,
-          turnId: 'kept',
-          ordinal: 0
-        })
+        await journal.reads.canonicalItemId(
+          agentJournalItemKey({
+            provider: 'codex',
+            threadId: HOST_TEST_THREAD,
+            turnId: 'kept',
+            ordinal: 0
+          })
+        )
       )
     ).toEqual(hostTestMessage('0'))
     expect(await journal.reads.itemBody(target)).toBeNull()

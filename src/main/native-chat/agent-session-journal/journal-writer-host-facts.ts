@@ -1,3 +1,4 @@
+import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
@@ -18,6 +19,7 @@ export type JournalWriterStoreEffect = Extract<JournalWriterEffect, { kind: 'sto
 export type JournalWriterHostFacts = {
   identity: AgentSessionJournalIdentity
   automatic?: JournalAutomaticSubmissionFacts
+  send?: JournalCurrentWorkAuthority
   /** Physical admission boundary captured after ready and before this opening's recovery. */
   openedThrough?: AgentJournalCursor
   /** This handle's unmarked reopen boundary. */
