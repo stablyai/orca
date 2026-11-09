@@ -36,10 +36,20 @@ function owedStopReason(serverName: string): string {
   return `${serverName} did not answer, so Orca cannot tell whether the stop reached the worker. Orca asks again when ${serverName} is back; worker-show shows when it lands.`
 }
 
-/** A resend keeps one request across attempts, so a stop the server applied but whose answer was lost is
- *  replayed by the server rather than run again. */
-function owedStopRequestId(dispatchId: string): string {
-  return `owed-stop:${dispatchId}`
+/** One request per owed cycle: a resend the server applied but whose answer was lost is replayed by the
+ *  server, not run again. A later explicit stop that goes unanswered starts a new cycle, and a new request. */
+function owedStopRequestId(dispatchId: string, owedSince: string): string {
+  return `owed-stop:${dispatchId}:${owedSince}`
+}
+
+/** This runtime replaced its database or relay mid-stop: nothing more is sent or written. */
+class StopFenceError extends OrchestrationError {
+  constructor(dispatchId: string) {
+    super(
+      'operation_unknown',
+      `The orchestration database changed while Dispatch ${dispatchId} was stopping.`
+    )
+  }
 }
 
 // One stop at a time per Dispatch, manual or resent: a manual stop waits out a resend in flight.
@@ -85,7 +95,11 @@ export async function stopFederatedWorker(
   const server = resolvePinnedFederatedServer(runtime, federated)
   // Without the host's answer nothing is stopped: the user may have kept this worker open there.
   await refuseFederatedStopWhileKeptOpen(runtime, federated)
+  const current = () => runtime.getOrchestrationDb() === db
   return inStopFlight(db, dispatchId, async () => {
+    if (!current()) {
+      throw new StopFenceError(dispatchId)
+    }
     // A stop already recorded as unknown is retried as it stands: it is never begun twice.
     if (db.getWorkerDispatch(dispatchId)?.state !== 'stop_unknown') {
       const begun = db.beginWorkerStop(dispatchId, runtime.getRuntimeId())
@@ -95,20 +109,27 @@ export async function stopFederatedWorker(
           server,
           dispatchId,
           begun.worker.state,
-          orchestrationMutation.requestId
+          orchestrationMutation.requestId,
+          current
         )
       }
     }
-    return sendFederatedStop(runtime, db, server, dispatchId, orchestrationMutation.requestId)
+    return sendFederatedStop(runtime, db, server, dispatchId, {
+      requestId: orchestrationMutation.requestId,
+      current
+    })
   })
 }
 
 /** The relay calls this once the server answers again; only a stop the server never answered is sent. */
 export async function resendOwedFederatedStop(
   runtime: Omit<FederatedStopRuntime, 'getRuntimeId'>,
-  dispatchId: string
+  dispatchId: string,
+  /** The relay generation that asked; a stopped or reset relay sends nothing more. */
+  relayCurrent: () => boolean
 ): Promise<void> {
   const db = runtime.getOrchestrationDb()
+  const current = () => relayCurrent() && runtime.getOrchestrationDb() === db
   if (stopFlights.get(db)?.has(dispatchId) || !isStopOwed(db, dispatchId)) {
     return
   }
@@ -121,11 +142,7 @@ export async function resendOwedFederatedStop(
     try {
       await refuseFederatedStopWhileKeptOpen(runtime, federated)
     } catch (error) {
-      if (
-        !isServerUnreachable(error) &&
-        runtime.getOrchestrationDb() === db &&
-        isStopOwed(db, dispatchId)
-      ) {
+      if (!isServerUnreachable(error) && current() && isStopOwed(db, dispatchId)) {
         // Kept open on the server since: the stop is not sent, and it is no longer owed.
         db.markWorkerStopUnknown(
           dispatchId,
@@ -136,8 +153,13 @@ export async function resendOwedFederatedStop(
       return
     }
     // Re-read after the wait: a manual stop or a profile switch may have settled or replaced it.
-    if (runtime.getOrchestrationDb() === db && isStopOwed(db, dispatchId)) {
-      await sendFederatedStop(runtime, db, server, dispatchId, owedStopRequestId(dispatchId))
+    const owed = db.getWorkerDispatch(dispatchId)
+    if (current() && owed && isStopOwed(db, dispatchId)) {
+      await sendFederatedStop(runtime, db, server, dispatchId, {
+        requestId: owedStopRequestId(dispatchId, owed.updated_at),
+        current,
+        resend: true
+      })
     }
   })
 }
@@ -152,26 +174,30 @@ async function sendFederatedStop(
   db: OrchestrationDb,
   server: ReturnType<typeof resolvePinnedFederatedServer>,
   dispatchId: string,
-  requestId: string
+  attempt: {
+    requestId: string
+    /** False once this runtime replaced its database or relay: nothing more is sent or written. */
+    current: () => boolean
+    /** A relay resend of an owed stop: unanswered again, it stays in the same owed cycle. */
+    resend?: boolean
+  }
 ): Promise<WorkerStopReceipt> {
   const call = federatedStopCall(runtime, server)
-  // Every write after a wait goes to the database the stop began in, and only while it is still current.
   const fenced = <T>(write: () => T): T => {
-    if (runtime.getOrchestrationDb() !== db) {
-      throw new OrchestrationError(
-        'operation_unknown',
-        `The orchestration database changed while Dispatch ${dispatchId} was stopping.`
-      )
+    if (!attempt.current()) {
+      throw new StopFenceError(dispatchId)
     }
     return write()
   }
-  // A concurrent path may have settled it meanwhile; that settlement stands.
+  // A concurrent path may have settled it meanwhile, and a resend unanswered again keeps its cycle.
   const stillUnknown = (reason: string, stage?: 'stop_owed' | 'stop_outcome_unknown') =>
-    fenced(() =>
-      db.getWorkerDispatch(dispatchId)?.state === 'stopped'
-        ? (db.getWorkerDispatch(dispatchId) as { state: string; last_error: string | null })
+    fenced(() => {
+      const now = db.getWorkerDispatch(dispatchId)
+      return now?.state === 'stopped' ||
+        (attempt.resend && stage === 'stop_owed' && now?.stage === 'stop_owed')
+        ? (now as { state: string; last_error: string | null })
         : db.markWorkerStopUnknown(dispatchId, reason, stage)
-    )
+    })
   try {
     const status = RemoteCapabilities.parse(await call('status.get'))
     if (!status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY)) {
@@ -181,8 +207,10 @@ async function sendFederatedStop(
         'none'
       )
     }
+    // Checked before the only call with an effect on the server.
+    fenced(() => undefined)
     const remote = RemoteStopReceipt.parse(
-      await call('orchestration.federationStop', { dispatchId }, requestId)
+      await call('orchestration.federationStop', { dispatchId }, attempt.requestId)
     )
     if (remote.state === 'stopped') {
       const worker = fenced(() => db.reconcileFederatedWorkerStop(dispatchId))
@@ -217,10 +245,11 @@ async function sendFederatedStop(
       ...remoteHelpers(remote, status, server.name)
     }
   } catch (error) {
-    if (error instanceof OrchestrationError && error.code === 'operation_unknown') {
+    if (error instanceof StopFenceError) {
       throw error
     }
-    // No answer leaves the stop owed and asked again; an answer Orca could not read leaves it unknown.
+    // No answer leaves the stop owed and asked again; any other answer, the server's own
+    // operation_unknown included, leaves it unknown for an explicit retry.
     const unanswered = isServerUnreachable(error)
     const reason = unanswered
       ? owedStopReason(server.name)
@@ -241,7 +270,8 @@ async function stopSettledFederatedHelpers(
   server: ReturnType<typeof resolvePinnedFederatedServer>,
   dispatchId: string,
   state: string,
-  requestId: string
+  requestId: string,
+  current: () => boolean
 ): Promise<WorkerStopReceipt> {
   const settled = settledReceipt(dispatchId, state)
   const call = federatedStopCall(runtime, server)
@@ -249,6 +279,9 @@ async function stopSettledFederatedHelpers(
     const status = RemoteCapabilities.parse(await call('status.get'))
     if (!status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_HELPERS_RUNTIME_CAPABILITY)) {
       return settled
+    }
+    if (!current()) {
+      throw new StopFenceError(dispatchId)
     }
     const remote = await call('orchestration.federationStop', { dispatchId }, requestId)
     return { ...settled, ...remoteHelpers(RemoteStopReceipt.parse(remote), status, server.name) }
