@@ -11,7 +11,7 @@ import {
   linearReadAccountRejections,
   withoutLinearAccountWorkspaces
 } from '@/store/slices/linear/linear-cache'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext

@@ -40,11 +40,7 @@ import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { DropdownMenuItem } from '../../../ui/dropdown-menu'
 import { managedServerOutcomeLabel } from '../../runtime-environments/managed-servers/managed-server-copy'
-import {
-  ServerListRow,
-  ServerRowChip,
-  type ServerRowStatus
-} from '../../runtime-environments/server-rows/runtime-server-list-row'
+import { ServerListRow, ServerRowChip, type ServerRowStatus } from '../../host-rows/ServerListRow'
 import { WslMoveOrchestratorStatusLine } from '../../../wsl-move/WslMoveOrchestratorStatusLine'
 import { wslMoveOrchestratorLine } from '../../../wsl-move/wsl-move-orchestrator-copy'
 import {

@@ -1,4 +1,4 @@
-import { AgentHookServer } from '../../../agent-hooks/server'
+import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   makeStructuredAgentStatusSubject,

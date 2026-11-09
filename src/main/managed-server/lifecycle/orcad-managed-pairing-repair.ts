@@ -11,8 +11,8 @@ import {
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import type { OrcadHostTarget, OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
+import type { OrcadHostTarget, OrcadHostTransport } from '../install/orcad-host-transport'
+import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 import {
   getSshConnectionManager,
   getSshTargetRegistryStore

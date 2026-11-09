@@ -22,7 +22,7 @@ import {
   DialogTitle
 } from '../../../ui/dialog'
 import { Label } from '../../../ui/label'
-import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
+import { getManagedOrcadApi } from '../../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 /** Offered only when the slot's own refusal named the command, so that build supports it. */
 export function canRecoverSshHostServer(status: SshManagedServerStatus | undefined): boolean {

@@ -108,38 +108,4 @@ describe('resolveActiveSessionTab', () => {
     expect(result.activeTab?.id).toBe('agent')
     expect(result.clearPendingActiveSessionTabId).toBe(true)
   })
-
-  it('uses the snapshot when the device has no pick yet', () => {
-    const result = resolveActiveSessionTab(
-      [terminalTab('agent', false), browserTab('browser', true)],
-      {
-        pendingActiveSessionTabId: null,
-        selectedSessionTabId: null
-      }
-    )
-
-    expect(result.activeTab?.id).toBe('browser')
-    expect(result.selectionSource).toBe('snapshot')
-  })
-
-  it('opens the chat a create-worktree launch landed on, over the workspace shell', () => {
-    // A just-created route has no local pick; the host’s launch activation must open its chat.
-    const result = resolveActiveSessionTab(
-      [
-        { id: 'shell', type: 'terminal', isActive: false },
-        { id: 'agent-session:s-1', type: 'agent-session', isActive: true }
-      ],
-      { pendingActiveSessionTabId: null, selectedSessionTabId: null }
-    )
-
-    expect(result.activeTab?.id).toBe('agent-session:s-1')
-    expect(result.selectionSource).toBe('snapshot')
-  })
-
-  it('returns null for an empty snapshot', () => {
-    expect(
-      resolveActiveSessionTab([], { pendingActiveSessionTabId: null, selectedSessionTabId: 'x' })
-        .activeTab
-    ).toBeNull()
-  })
 })

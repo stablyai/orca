@@ -7,7 +7,7 @@ import { getLocalPreflightContext } from '@/lib/local-preflight-context'
 import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import { useRef } from 'react'
 import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'

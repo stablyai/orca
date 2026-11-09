@@ -40,16 +40,3 @@ export function requestTimeout(value: number | null | undefined): number | null 
   }
   return value
 }
-
-// Bound startup steps separately; prompts remain unbounded.
-const ACP_START_STEP_TIMEOUT_MS: Readonly<Partial<Record<string, number>>> = {
-  initialize: 60_000,
-  'session/new': 300_000,
-  'session/load': 300_000,
-  'session/resume': 300_000,
-  'session/fork': 300_000
-}
-
-export function acpStepBound(method: string): { timeoutMs: number | null } {
-  return { timeoutMs: ACP_START_STEP_TIMEOUT_MS[method] ?? null }
-}

@@ -16,6 +16,7 @@ import {
   resolveParkedTerminalPaneCandidates,
   type ParkableTerminalTabModel
 } from './terminal-parked-watcher-reconciliation'
+import { launchAgentTabIds, sleepingRecordTabIds } from './parked-tab-agent-owner-index'
 import { collapseParkedExitedLeaf, startParkedPtyWatcher } from './terminal-parked-pty-watcher'
 import {
   capturedPanesByTabId,
@@ -84,10 +85,8 @@ function goneSessionsKeepTabMounted(
   }
   return (
     goneCount < panes.length ||
-    state.tabsByWorktree[worktreeId]?.some((t) => t.id === tab.id && t.launchAgent) === true ||
-    Object.entries(state.sleepingAgentSessionsByPaneKey).some(
-      ([paneKey, record]) => record.tabId === tab.id || paneKey.startsWith(`${tab.id}:`)
-    )
+    launchAgentTabIds(state.tabsByWorktree[worktreeId]).has(tab.id) ||
+    sleepingRecordTabIds(state.sleepingAgentSessionsByPaneKey).has(tab.id)
   )
 }
 
