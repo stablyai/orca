@@ -27,6 +27,10 @@ import {
   renderLiveReadLines,
   renderStoreReadLines
 } from './react-compiler-hazards.mjs'
+import {
+  UNCOMPILED_LIST,
+  readListedFiles
+} from '../../../../build-plugins/react-compiler-uncompiled-files.mjs'
 
 // Runs React Compiler (analysis only, nothing is written) over the renderer so code that compiles
 // today keeps compiling, and code that would change behavior once compiled can't be added.
@@ -34,8 +38,6 @@ import {
 const SCAN_ROOT = 'src/renderer/src'
 const BAILOUT_BASELINE = 'config/react-compiler-bailout-baseline.txt'
 const HAZARD_BASELINE = 'config/react-compiler-hazard-baseline.txt'
-// The build leaves these files uncompiled, so their hazards cannot run.
-const UNCOMPILED_LIST = 'config/react-compiler-uncompiled-files.txt'
 const COMMAND = 'pnpm check:react-compiler-compat-ratchet'
 const NOT_SHIPPED =
   /(?:^|\/)__(?:mocks|fixtures|tests)__\/|\.(?:test|spec|bench)\.[cm]?tsx?$|[.-]test-|[.-]fixtures?\.tsx?$/
@@ -101,18 +103,16 @@ function addTo(map, key, value) {
   map.set(key, [...(map.get(key) ?? []), value])
 }
 
+// The build leaves these files uncompiled, so their hazards cannot run.
 function readUncompiledFiles(root) {
-  const file = path.join(root, UNCOMPILED_LIST)
-  if (!fs.existsSync(file)) {
-    return new Set()
-  }
-  return new Set(
-    fs
-      .readFileSync(file, 'utf8')
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith('#'))
-  )
+  return fs.existsSync(path.join(root, UNCOMPILED_LIST))
+    ? new Set(readListedFiles(UNCOMPILED_LIST, root))
+    : new Set()
+}
+
+/** Listed paths that name no shipped renderer source; a renamed file would silently compile. */
+export function findStaleUncompiledFiles(uncompiled, sources) {
+  return [...uncompiled].filter((rel) => !sources.has(rel))
 }
 
 /** Virtualizer hooks plus every hook that returns one, followed through wrappers of wrappers. */
@@ -209,13 +209,16 @@ async function scanFile(rel, text, result) {
 }
 
 export async function scanRenderer(root = process.cwd()) {
-  const sources = [...readTrackedSources(root, [SCAN_ROOT], isScannedPath)]
+  const tracked = readTrackedSources(root, [SCAN_ROOT], isScannedPath)
+  const sources = [...tracked]
+  const uncompiled = readUncompiledFiles(root)
   const result = {
     files: 0,
     compiled: 0,
     diagnostics: new Map(),
     hazards: new Map(),
-    uncompiled: readUncompiledFiles(root),
+    uncompiled,
+    staleUncompiled: findStaleUncompiledFiles(uncompiled, tracked),
     virtualizerHooks: collectVirtualizerHooks(sources),
     liveReaders: collectLiveReaders(sources)
   }
@@ -341,8 +344,15 @@ export async function main(root = process.cwd(), arg = undefined) {
     )
     return 0
   }
+  for (const rel of scan.staleUncompiled) {
+    console.error(
+      `::error::${UNCOMPILED_LIST}: ${rel} is not a shipped renderer source. ` +
+        'Point it at the renamed file, or remove it once the file is gone.'
+    )
+  }
   const touched = listTouchedFiles(root)
   const ok = [
+    scan.staleUncompiled.length === 0,
     check(root, 'bailout(s)', BAILOUT_BASELINE, bailouts, scan.diagnostics, touched),
     check(root, 'hazard(s)', HAZARD_BASELINE, hazards, scan.hazards, touched)
   ].every(Boolean)
