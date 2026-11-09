@@ -7,7 +7,7 @@ import { agentSessionRemoteSignInCommand } from '../../../../../shared/agent-ses
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { createWebRuntimeSessionTerminalOnHost } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { notifyWebRuntimeTerminalCreateFailure } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-failure-notice'
-import { startStoppedWslHostForUserAct } from '@/lib/wsl-host-user-start'
+import { startStoppedWslHostForUserAct } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import { toast } from 'sonner'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 

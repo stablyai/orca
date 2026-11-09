@@ -3,6 +3,7 @@ import {
   type StructuredAgentResolutionOperation
 } from '../../../native-chat/structured-agent-command-resolution'
 import { codexStructuredLaunchArgs } from '../launch/codex-structured-launch-args'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 import { envWithPathRelativeTo } from '../../../../shared/node-cli-command-resolution'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
@@ -57,13 +58,14 @@ export function createCodexModelCatalogProbe(
   ) => {
     assertStructuredAgentResolutionCurrent(operation)
     const accountHomePath = requireLegacyAgentSessionAccountHome(accountHome).path
-    const overlay = { ...deps.resolveEnv?.() }
+    const overlay = overlayEnvironmentVariables({}, deps.resolveEnv?.(), process.platform)
     const readEnvironment =
       lookup === 'saved' ? deps.resolveSavedEnvironment : deps.resolveEnvironment
     const { command, prefixArgs, environment } = await resolveCodexStructuredInvocation({
       ...deps,
       operation,
-      resolveEnvironment: async () => ({ ...(await readEnvironment?.()), ...overlay }),
+      resolveEnvironment: async () =>
+        overlayEnvironmentVariables((await readEnvironment?.()) ?? {}, overlay, process.platform),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
       ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     })

@@ -507,15 +507,13 @@
       "modelDescriptions": {
         "parakeetV3": "Máxima precisión para 25 idiomas europeos. Puntuación, mayúsculas y minúsculas y marcas de tiempo por palabra.",
         "parakeetV2": "Solo inglés. Más rápido que v3 con una precisión similar. Puntuación y mayúsculas y minúsculas.",
-        "zipformerBilingual": "Chino + inglés con alternancia de idiomas. Streaming en tiempo real de baja latencia.",
-        "paraformerBilingual": "Chino (mandarín + dialectos) + inglés. Buen rendimiento con acentos y variantes regionales del chino.",
         "zipformerStreamingEnRetired": "Ya no se ofrece: omite el comienzo de las frases. Elimínalo para liberar espacio.",
-        "zipformerStreamingZh": "Solo chino. Modelo ultraligero de 14 millones de parámetros, ideal para dispositivos con pocos recursos.",
-        "zipformerStreamingKo": "Solo coreano. Streaming en tiempo real de baja latencia.",
-        "parakeetJa": "Solo japonés. Entrenado con más de 35 000 horas de habla natural. Incluye puntuación.",
         "whisperTiny": "Más de 90 idiomas. Menor precisión que Parakeet, pero con la mayor cobertura de idiomas.",
         "senseVoice": "Chino, inglés, japonés, coreano y cantonés con detección automática de idioma.",
-        "gptTranscribe": "Transcripción en la nube con alta precisión. Requiere una clave API de OpenAI."
+        "gptTranscribe": "Transcripción en la nube con alta precisión. Requiere una clave API de OpenAI.",
+        "whisperLargeV3Turbo": "La mejor precisión en japonés, coreano y chino, y más de 90 idiomas. Más lento que Parakeet.",
+        "retiredForEngine": "Ya no se ofrece: el motor de voz ya no puede ejecutarlo. Elimínelo para liberar espacio.",
+        "nemotron": "Inglés, español, alemán y muchos idiomas más, con detección automática del idioma."
       }
     },
     "diagnostics": {
@@ -3248,7 +3246,6 @@
             "a3346fc6ed": "Cancelar creación del worktree",
             "532aea14ce": "Cancelar",
             "767951265d": "Algo salió mal al crear el worktree.",
-            "vmProvisioningTitle": "Provisionando VM",
             "cancelProvisioning": "Cancelar",
             "vmProvisioningLogEmpty": "Esperando output de la receta..."
           }
@@ -4610,6 +4607,9 @@
             "accounts": "Cuentas de Antigravity guardadas",
             "readAgo": "Consultado {{time}}",
             "notRead": "Uso desconocido: aún no consultado"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Se restablece a las {{when}}"
           }
         }
       },
@@ -9064,7 +9064,10 @@
           "openAiKeyName": "Su clave de transcripción OpenAI",
           "dictationShortcutDescription": "Pulsa {{shortcut}} para dictar texto en cualquier panel con foco.",
           "dictationModeAuto": "Automático",
-          "dictationModesWithAutoDescription": "Automático: mantén {{shortcut}} para dictar hasta que lo sueltes, o tócalo para empezar y parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado. Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar."
+          "dictationModesWithAutoDescription": "Automático: mantén {{shortcut}} para dictar hasta que lo sueltes, o tócalo para empezar y parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado. Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar.",
+          "speechGpuLabel": "Usar GPU",
+          "speechGpuDescription": "Reconoce la voz en la tarjeta gráfica cuando funciona y en la CPU cuando falla. Desactívelo si el dictado congela o reinicia su equipo.",
+          "updateToFasterVersion": "Actualizar a la versión más rápida ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
@@ -16693,12 +16696,14 @@
           "noModel": "No hay ningún modelo de voz seleccionado. Descargue uno en Configuración > Voz.",
           "disabled": "El dictado por voz está desactivado. Actívelo en Configuración > Voz.",
           "notReady": "El modelo de voz no está listo. Descárguelo en Configuración > Voz.",
+          "modelNeedsUpdate": "Su modelo de voz necesita una actualización para seguir funcionando. Actualícelo a la versión más rápida en Configuración > Voz.",
           "unknownModel": "El modelo seleccionado ya no está disponible. Elija otro en Configuración > Voz.",
           "5d2c3e7ae3": "No se detectó ninguna voz.",
           "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
           "micDisconnected": "Micrófono desconectado. Dictado detenido.",
           "cloudLimitReached": "Dictado detenido al llegar al límite de 10 minutos en la nube.",
-          "stoppedAfterSilence": "Se detuvo tras un minuto de silencio"
+          "stoppedAfterSilence": "Se detuvo tras un minuto de silencio",
+          "retryUnmatched": "Al reintentar no se pudo saber qué palabras ya estaban escritas, así que se insertaron todas."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "No se pudo insertar el dictado, así que se copió al portapapeles.",
@@ -16706,7 +16711,21 @@
           "lost": "No se pudo insertar ni copiar el dictado."
         },
         "DictationIndicator": {
-          "4977162383": "Volumen demasiado alto"
+          "4977162383": "Volumen demasiado alto",
+          "finishing": "Terminando…",
+          "listening": "Escuchando…",
+          "cancel": "Cancelar",
+          "finish": "Terminar",
+          "oneMinuteLeft": "Queda un minuto.",
+          "sendsWhenLanded": "Se enviará cuando llegue el texto",
+          "entersWhenLanded": "Pulsará Enter cuando llegue el texto"
+        },
+        "DictationPillFailure": {
+          "discard": "Descartar grabación",
+          "modelFailed": "El modelo no cargó.",
+          "transcribeFailed": "No se transcribió. Grabación guardada.",
+          "openSettings": "Configuración",
+          "retry": "Reintentar"
         }
       },
       "dashboard": {
@@ -19489,7 +19508,8 @@
       "contextUsage": {
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
         "title": "Contexto",
-        "estimated": "Estimado a partir de la última respuesta."
+        "estimated": "Estimado a partir de la última respuesta.",
+        "deferredNote": "Se cargan cuando se necesitan. No cuentan en el total usado."
       },
       "dismissDeliveryNotice": "Descartar",
       "addSelectionToChat": "Añadir al chat",
@@ -19695,6 +19715,7 @@
         "orcaStopCanContinue": "Puedes continuar en esta conversación.",
         "orcaStopUnnamedServer": "el servidor remoto",
         "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
+        "safetyReviewApproved": "{{agent}} aprobó esta acción. Ver detalles.",
         "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
         "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
         "forkedFrom": "Rama creada desde"
@@ -20803,6 +20824,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Aviso para guardar contraseña",
+        "updateTitle": "¿Actualizar contraseña?",
+        "saveTitle": "¿Guardar contraseña?",
+        "username": "Nombre de usuario",
+        "password": "Contraseña",
+        "never": "Nunca para este sitio",
+        "notNow": "Ahora no",
+        "update": "Actualizar",
+        "save": "Guardar"
+      },
+      "fill": {
+        "noUsername": "(sin nombre de usuario)",
+        "title": "Inicios de sesión guardados",
+        "otherLogins": "Otros inicios de sesión en este sitio"
+      }
+    },
     "newTab": {
       "emptyHint": "Busca o introduce una dirección arriba. Aquí aparecerán los sitios que visites, los servidores de desarrollo que se ejecuten en este espacio de trabajo, y su PR e incidencia.",
       "openServerFailed": "No se pudo abrir {{address}}",
@@ -23977,5 +24016,31 @@
     "branchName": "Nombre de la rama",
     "invalidBranchName": "Este nombre de rama no es válido. Elige otro nombre.",
     "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Actualiza tu modelo de voz",
+    "updateDescription": "El dictado ahora usa un motor más rápido. {{model}} necesita una descarga única ({{size}} MB) antes de que puedas volver a dictar.",
+    "update": "Actualizar",
+    "replacedTitle": "Tu modelo de voz se ha sustituido",
+    "replacedDescription": "{{old}} no funciona con el nuevo motor de voz. {{model}} lo sustituye ({{size}} MB).",
+    "downloadReplacement": "Descargar {{model}}",
+    "later": "Más tarde",
+    "dismiss": "Cerrar",
+    "updatingTitle": "Actualizando {{model}}",
+    "downloadingTitle": "Descargando {{model}}",
+    "downloadingDescription": "Puedes seguir trabajando. El dictado vuelve cuando termine.",
+    "progress": "{{done}} de {{total}} MB",
+    "cancel": "Cancelar",
+    "doneTitle": "El dictado está listo",
+    "doneDescription": "{{model}} está actualizado. Se eliminaron los archivos antiguos.",
+    "doneRetiredDescription": "{{model}} está listo. Los archivos antiguos de {{old}} siguen en el disco.",
+    "keep": "Conservar",
+    "deleteOld": "Eliminar modelo antiguo",
+    "deleteFailed": "No se pudo eliminar {{model}}.",
+    "updateFailedTitle": "No se pudo actualizar {{model}}",
+    "downloadFailedTitle": "No se pudo descargar {{model}}",
+    "failedAtDescription": "La descarga se detuvo en {{mb}} MB. Comprueba tu conexión e inténtalo de nuevo.",
+    "failedDescription": "La descarga se detuvo. Comprueba tu conexión e inténtalo de nuevo.",
+    "tryAgain": "Reintentar"
   }
 }

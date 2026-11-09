@@ -18,12 +18,10 @@ import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/t
 
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
-import {
-  requireExecutionHostPlatform,
-  type ExecutionHostPlatformFact
-} from '@/lib/execution-host-facts'
+import { requireExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 
 export type QuickComposerStartupInput = {
   agent: TuiAgent | null

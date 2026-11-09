@@ -1,6 +1,7 @@
 import {
   DICTATION_SAMPLE_RATE,
-  MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES
+  MOBILE_DICTATION_MAX_PENDING_AUDIO_BYTES,
+  PCM_BYTES_PER_SAMPLE
 } from '../../../src/shared/rpc-contract/speech-params'
 
 export const MOBILE_DICTATION_PCM_SAMPLE_RATE = DICTATION_SAMPLE_RATE
@@ -15,6 +16,7 @@ export class MobileDictationPendingAudioBudget {
   // Backlog not yet taken into a request; it sits at the front of the held audio.
   private untakenBacklogBytes = 0
   private sentChunks = 0
+  private sentBytes = 0
   // Set at each start: a host that feeds each chunk seq once can take audio a drop left unanswered again.
   hostDedupesResends = false
 
@@ -24,8 +26,14 @@ export class MobileDictationPendingAudioBudget {
     return this.pendingBytes
   }
 
-  nextSeq(): number {
+  // Numbers a request and counts its audio, which sets how long finish waits.
+  nextSeq(byteLength: number): number {
+    this.sentBytes += normalizeByteLength(byteLength)
     return this.sentChunks++
+  }
+
+  get sentAudioSeconds(): number {
+    return this.sentBytes / (PCM_BYTES_PER_SAMPLE * MOBILE_DICTATION_PCM_SAMPLE_RATE)
   }
 
   reserveBacklog(byteLength: number): void {
@@ -62,6 +70,7 @@ export class MobileDictationPendingAudioBudget {
     this.backlogBytes = 0
     this.untakenBacklogBytes = 0
     this.sentChunks = 0
+    this.sentBytes = 0
     this.hostDedupesResends = hostDedupesResends
   }
 }

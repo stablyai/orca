@@ -15,7 +15,7 @@ import {
   recheckSurfacesAfterAgentSkillInstall,
   syncSurfacesAfterAgentSkillRecheck
 } from '../../../hooks/agent-skill-recheck-surface-sync'
-import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
+import { isOrcaCliAvailableOnPath } from '@/lib/skills/installation/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 

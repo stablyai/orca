@@ -1721,15 +1721,13 @@
       "modelDescriptions": {
         "parakeetV3": "Máxima precisão para 25 idiomas europeus. Pontuação, maiúsculas e minúsculas e marcas de tempo por palavra.",
         "parakeetV2": "Somente inglês. Mais rápido que v3 com precisão semelhante. Pontuação e maiúsculas e minúsculas.",
-        "zipformerBilingual": "Chinês + inglês com alternância de idiomas. Streaming em tempo real com baixa latência.",
-        "paraformerBilingual": "Chinês (mandarim + dialetos) + inglês. Bom desempenho com sotaques e variantes regionais do chinês.",
         "zipformerStreamingEnRetired": "Não é mais oferecido: ele perde o início das frases. Exclua-o para liberar espaço.",
-        "zipformerStreamingZh": "Somente chinês. Modelo ultraleve de 14 milhões de parâmetros, ideal para dispositivos com poucos recursos.",
-        "zipformerStreamingKo": "Somente coreano. Streaming em tempo real com baixa latência.",
-        "parakeetJa": "Somente japonês. Treinado com mais de 35 mil horas de fala natural. Inclui pontuação.",
         "whisperTiny": "Mais de 90 idiomas. Menor precisão que Parakeet, mas com a maior cobertura de idiomas.",
         "senseVoice": "Chinês, inglês, japonês, coreano e cantonês com detecção automática de idioma.",
-        "gptTranscribe": "Transcrição na nuvem com alta precisão. Exige uma chave de API da OpenAI."
+        "gptTranscribe": "Transcrição na nuvem com alta precisão. Exige uma chave de API da OpenAI.",
+        "whisperLargeV3Turbo": "A melhor precisão em japonês, coreano e chinês, e mais de 90 idiomas. Mais lento que o Parakeet.",
+        "retiredForEngine": "Não é mais oferecido: o mecanismo de fala não consegue mais executá-lo. Exclua-o para liberar espaço.",
+        "nemotron": "Inglês, espanhol, alemão e muitos outros idiomas, com detecção automática de idioma."
       }
     },
     "diagnostics": {
@@ -3629,6 +3627,9 @@
             "accounts": "Contas Antigravity salvas",
             "readAgo": "Lido {{time}}",
             "notRead": "Uso desconhecido: ainda não consultado"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Redefinição em {{when}}"
           }
         }
       },
@@ -6503,7 +6504,10 @@
           "openAiKeyName": "Sua chave de transcrição da OpenAI",
           "dictationShortcutDescription": "Pressione {{shortcut}} para ditar texto em qualquer painel com foco.",
           "dictationModeAuto": "Automático",
-          "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar."
+          "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar.",
+          "speechGpuLabel": "Usar GPU",
+          "speechGpuDescription": "Reconhece a fala na placa de vídeo quando ela funciona e na CPU quando falha. Desative se o ditado travar ou reiniciar o computador.",
+          "updateToFasterVersion": "Atualizar para a versão mais rápida ({{value0}} MB)"
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar Notificação de Teste",
@@ -19251,12 +19255,14 @@
           "noModel": "Nenhum modelo de fala selecionado. Baixe um em Configurações > Voz.",
           "disabled": "O ditado por voz está desativado. Ative-o em Configurações > Voz.",
           "notReady": "O modelo de fala não está pronto. Baixe-o em Configurações > Voz.",
+          "modelNeedsUpdate": "Seu modelo de voz precisa de uma atualização para continuar funcionando. Atualize para a versão mais rápida em Configurações > Voz.",
           "unknownModel": "O modelo selecionado não está mais disponível. Escolha outro em Configurações > Voz.",
           "5d2c3e7ae3": "Nenhuma fala detectada.",
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
           "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
-          "stoppedAfterSilence": "Parou após um minuto de silêncio"
+          "stoppedAfterSilence": "Parou após um minuto de silêncio",
+          "retryUnmatched": "Ao tentar de novo, não foi possível saber quais palavras já estavam digitadas, então todas foram inseridas."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência.",
@@ -19264,7 +19270,21 @@
           "lost": "Não foi possível inserir nem copiar o ditado."
         },
         "DictationIndicator": {
-          "4977162383": "Muito alto"
+          "4977162383": "Muito alto",
+          "finishing": "Finalizando…",
+          "listening": "Ouvindo…",
+          "cancel": "Cancelar",
+          "finish": "Concluir",
+          "oneMinuteLeft": "Falta um minuto.",
+          "sendsWhenLanded": "Envia quando o texto chegar",
+          "entersWhenLanded": "Pressiona Enter quando o texto chegar"
+        },
+        "DictationPillFailure": {
+          "discard": "Descartar gravação",
+          "modelFailed": "Modelo não carregou.",
+          "transcribeFailed": "Não transcrito. Gravação mantida.",
+          "openSettings": "Configurações",
+          "retry": "Repetir"
         }
       },
       "link": {
@@ -19499,7 +19519,6 @@
             "a3346fc6ed": "Cancelar criação da worktree",
             "532aea14ce": "Cancelar",
             "767951265d": "Algo deu errado ao criar a worktree.",
-            "vmProvisioningTitle": "Provisionando VM",
             "cancelProvisioning": "Cancelar",
             "vmProvisioningLogEmpty": "Esperando a saída da receita…"
           }
@@ -20190,6 +20209,7 @@
         "orcaStopCanContinue": "Você pode continuar nesta conversa.",
         "orcaStopUnnamedServer": "o servidor remoto",
         "permissionDenied": "{{agent}} negou a permissão. Ver detalhes.",
+        "safetyReviewApproved": "{{agent}} aprovou esta ação. Ver detalhes.",
         "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
         "forkedFrom": "Ramificado de"
@@ -20912,7 +20932,8 @@
       "contextUsage": {
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
         "title": "Contexto",
-        "estimated": "Estimado a partir da última resposta."
+        "estimated": "Estimado a partir da última resposta.",
+        "deferredNote": "Carregado sob demanda. Não conta no total usado."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Copiar ID de sessão do Orca",
@@ -23950,5 +23971,31 @@
     "branchName": "Nome da branch",
     "invalidBranchName": "Este nome de branch é inválido. Escolha outro nome.",
     "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Atualize seu modelo de voz",
+    "updateDescription": "O ditado agora usa um mecanismo mais rápido. {{model}} precisa de um download único ({{size}} MB) antes que você possa ditar novamente.",
+    "update": "Atualizar",
+    "replacedTitle": "Seu modelo de voz foi substituído",
+    "replacedDescription": "{{old}} não funciona no novo mecanismo de voz. {{model}} o substitui ({{size}} MB).",
+    "downloadReplacement": "Baixar {{model}}",
+    "later": "Mais tarde",
+    "dismiss": "Fechar",
+    "updatingTitle": "Atualizando {{model}}",
+    "downloadingTitle": "Baixando {{model}}",
+    "downloadingDescription": "Você pode continuar trabalhando. O ditado volta quando isso terminar.",
+    "progress": "{{done}} de {{total}} MB",
+    "cancel": "Cancelar",
+    "doneTitle": "O ditado está pronto",
+    "doneDescription": "{{model}} foi atualizado. Os arquivos antigos foram removidos.",
+    "doneRetiredDescription": "{{model}} está pronto. Os arquivos antigos de {{old}} ainda estão no disco.",
+    "keep": "Manter",
+    "deleteOld": "Excluir modelo antigo",
+    "deleteFailed": "Não foi possível excluir {{model}}.",
+    "updateFailedTitle": "Não foi possível atualizar {{model}}",
+    "downloadFailedTitle": "Não foi possível baixar {{model}}",
+    "failedAtDescription": "O download parou em {{mb}} MB. Verifique sua conexão e tente novamente.",
+    "failedDescription": "O download parou. Verifique sua conexão e tente novamente.",
+    "tryAgain": "Tentar novamente"
   }
 }

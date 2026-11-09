@@ -374,6 +374,12 @@ Run it as a loop: read the `provisionTranscript` in the failed result, fix the s
 `ok` is `true`. Do not wait for the user to paste errors. How to read the transcript is in
 `references/failure-modes.md`.
 
+Once a workspace runs on the environment, check the environment itself from a terminal inside it:
+`ORCA vm env doctor --json` reports required CLIs (git plus what the repo manifests imply), agent
+CLIs and their sign-in, Git fetch and a dry-run push, the `orca.yaml` setup script, and free disk.
+Add `--run-setup` to re-run `scripts.setup` and gate on its exit code. Loop on it the same way: fix
+`orca.yaml` or the image, re-run, until no check fails and every `warn` is resolved or explained.
+
 The self-test sees only what the scripts print, so confirm separately that state holds an
 **authenticated** `snapshotId` and that `destroy` is implemented and tested. With `destroy: none`
 the self-test tears nothing down and you must clean up by hand.

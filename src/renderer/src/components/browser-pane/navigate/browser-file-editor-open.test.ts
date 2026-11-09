@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type * as ConnectionOwnerModule from '@/lib/connection-owner-resolution'
+import type * as ConnectionOwnerModule from '@/lib/workspace/ownership/connection-owner-resolution'
 
 // A workspace this computer owns.
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionOwnerModule>()),
   getConnectionIdFromState: () => null,
   getConnectionIdForFileFromState: () => null

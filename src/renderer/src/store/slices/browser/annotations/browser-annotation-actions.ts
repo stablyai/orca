@@ -1,4 +1,4 @@
-import { isBrowserAnnotationPageFull } from '../../../../../../shared/browser-grab-types'
+import { isBrowserAnnotationPageFull } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import type { BrowserSlice, BrowserSliceSet } from '../browser-slice-contract'
 
 import {

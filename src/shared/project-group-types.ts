@@ -22,6 +22,8 @@ export type ProjectGroupUpdate = Partial<
   Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>
 > & { rootProjectOrder?: number | null }
 
+export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }
+
 export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number

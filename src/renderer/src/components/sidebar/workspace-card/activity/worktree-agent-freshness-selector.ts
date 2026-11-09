@@ -1,6 +1,9 @@
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AppState } from '@/store/types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+
 import { selectLiveAgentStatusEntriesForWorktree } from './worktree-agent-row-selectors'
 
 export const EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE = ''
@@ -25,7 +28,7 @@ function buildWorktreeAgentFreshnessSignature(
       continue
     }
     signature += `${entry.paneKey}\0${
-      isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) ? '1' : '0'
+      isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) ? '1' : '0'
     }\0`
   }
   return signature

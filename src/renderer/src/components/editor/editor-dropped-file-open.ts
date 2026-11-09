@@ -1,12 +1,12 @@
 import type { EditorFileDropDestination } from './editor-file-drop-destination'
 import { toast } from 'sonner'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import {
   isPathInsideWorktree,
   toWorktreeRelativePath
 } from '../../../../shared/terminal/links/terminal-links'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { basename, joinPath } from '@/lib/path'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'

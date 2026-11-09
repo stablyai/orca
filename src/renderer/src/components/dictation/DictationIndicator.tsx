@@ -8,8 +8,9 @@ import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/focus-keeping-press'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { Check, Loader2 } from 'lucide-react'
+import { ArrowUp, Check, CornerDownLeft, Loader2 } from 'lucide-react'
 import { isDictationPillShown } from '../../../../shared/dictation-session-machine'
+import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
 import { CLOUD_DICTATION_MAX_SECONDS } from '../../../../shared/rpc-contract/speech-params'
 import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import { dispatchDictationControl } from './dictation-control-events'
@@ -18,6 +19,7 @@ import { useDictationMeter } from './dictation-meter-store'
 import { useDictationPillBox, type DictationPillAnchor } from './dictation-pill-anchor'
 import { DictationPillCloseButton, DictationPillFailure } from './DictationPillFailure'
 import type { DictationFailureKind } from './dictation-toasts'
+import type { DictationQueuedSendKind } from './use-dictation-queued-send'
 
 // The finish button turns into a spinner only when finishing is slow enough to notice.
 const FINISH_SPINNER_DELAY_MS = 200
@@ -30,6 +32,8 @@ type DictationIndicatorProps = {
   anchor: DictationPillAnchor | null
   /** Set while the error pill shows a failed recording that can be retried. */
   failure: DictationFailureKind | null
+  /** A send waiting for this dictation's words to land. */
+  queued: DictationQueuedSendKind | null
 }
 
 export function DictationIndicator(props: DictationIndicatorProps) {
@@ -72,12 +76,13 @@ function useIsCloudModel(): boolean {
     let current = true
     if (!catalogRequest) {
       catalogRequest = Promise.resolve()
-        .then(() => window.api.speech.getCatalog())
+        // The paired web client's fallback resolves with nothing rather than a list.
+        .then(async () => (await window.api.speech.getCatalog()) ?? [])
         .catch(() => [])
     }
     void catalogRequest.then((catalog) => {
       if (current) {
-        setCloud(catalog.some((model) => model.id === modelId && model.provider === 'openai'))
+        setCloud(catalog.some((model) => model.id === modelId && model.provider !== 'local'))
       }
     })
     return () => {
@@ -125,10 +130,10 @@ function DictationPillMeter({ recording, status }: { recording: boolean; status:
 const keepFocus = (event: React.MouseEvent): void => event.preventDefault()
 const keepFocusProps = { [KEEPS_FOCUS_ATTRIBUTE]: '', onMouseDown: keepFocus }
 
-function DictationPill({ captureLive, anchor, failure }: DictationIndicatorProps) {
+function DictationPill({ captureLive, anchor, failure, queued }: DictationIndicatorProps) {
   const t = useTranslate()
   const dictationState = useAppStore((state) => state.dictationState)
-  const partialTranscript = useAppStore((state) => state.partialTranscript)
+  const liveText = useAppStore((state) => state.liveText)
   const isHoldMode = useAppStore((state) => state.settings?.voice?.dictationMode === 'hold')
   const shortcut = useShortcutKeyDetails('voice.dictation')
   const box = useDictationPillBox(anchor)
@@ -141,13 +146,26 @@ function DictationPill({ captureLive, anchor, failure }: DictationIndicatorProps
   const showSpinner = useDelayedFlag(finishing, FINISH_SPINNER_DELAY_MS)
   const nearCloudLimit = cloudModel && seconds >= CLOUD_LIMIT_WARNING_SECONDS
   const failedKind = dictationState === 'error' ? failure : null
-  const transcript = partialTranscript.trim()
+  const committed = liveText.committed
+  const tentative = liveText.tentative.trim()
+  const queuedStatus =
+    queued === 'chat'
+      ? t(
+          'auto.components.dictation.DictationIndicator.sendsWhenLanded',
+          'Sends when the text lands'
+        )
+      : queued === 'terminal'
+        ? t(
+            'auto.components.dictation.DictationIndicator.entersWhenLanded',
+            'Presses Enter when the text lands'
+          )
+        : null
   const status = finishing
     ? t('auto.components.dictation.DictationIndicator.finishing', 'Finishing…')
     : t('auto.components.dictation.DictationIndicator.listening', 'Listening…')
   const announced = nearCloudLimit
     ? `${status} ${t('auto.components.dictation.DictationIndicator.oneMinuteLeft', 'One minute left.')}`
-    : status
+    : (queuedStatus ?? status)
   const cancelLabel = t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')
   const finishLabel = t('auto.components.dictation.DictationIndicator.finish', 'Finish')
 
@@ -170,12 +188,29 @@ function DictationPill({ captureLive, anchor, failure }: DictationIndicatorProps
         <>
           <DictationPillCloseButton label={cancelLabel} />
           <DictationPillMeter recording={recording} status={announced} />
-          {transcript ? (
+          {queuedStatus ? (
             <span
               aria-hidden
-              className="flex h-6 min-w-0 flex-1 items-center justify-end overflow-hidden whitespace-nowrap text-muted-foreground [mask-image:linear-gradient(to_right,transparent,black_24px)]"
+              className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-foreground"
             >
-              <span className="shrink-0">{transcript}</span>
+              {queued === 'chat' ? (
+                <ArrowUp className="size-3.5 shrink-0" />
+              ) : (
+                <CornerDownLeft className="size-3.5 shrink-0" />
+              )}
+              <span className="truncate">{queuedStatus}</span>
+            </span>
+          ) : committed || tentative ? (
+            // Right-aligned so the newest words stay in view; older ones fade off the left edge.
+            <span
+              aria-hidden
+              className="flex h-6 min-w-0 flex-1 items-center justify-end overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,transparent,black_24px)]"
+            >
+              <span className="shrink-0">
+                {committed}
+                {dictationSeparators(committed, tentative, '').leading}
+                <span className="text-muted-foreground">{tentative}</span>
+              </span>
             </span>
           ) : (
             <span aria-hidden className="min-w-0 flex-1 truncate text-muted-foreground">

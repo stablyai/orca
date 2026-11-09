@@ -1,5 +1,5 @@
 import { useAppStore } from '../../../../store/index'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { resolveTerminalPasteRuntimeEnvironmentId } from './terminal-paste-runtime'
 import '../../../../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'

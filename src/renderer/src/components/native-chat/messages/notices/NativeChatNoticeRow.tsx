@@ -24,7 +24,8 @@ import {
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
-  nativeChatNoticeLook
+  nativeChatNoticeLook,
+  type NativeChatNoticeTone
 } from '../../../../../../shared/native-chat/native-chat-notice'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
@@ -63,6 +64,14 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
       'components.native-chat.notices.continuedOutsideRewound',
       HOST_STATUS_COPY['continued-outside-rewound']
     )
+}
+
+function toneClass(tone: NativeChatNoticeTone): string {
+  return tone === 'warning'
+    ? 'text-chat-warning'
+    : tone === 'error'
+      ? 'text-destructive'
+      : 'text-chat-foreground-faint'
 }
 
 export function NativeChatNoticeRow({
@@ -176,23 +185,26 @@ export function NativeChatNoticeRow({
   if (look.kind === 'settled-permission') {
     const agent = agentName ?? look.agent
     const summary =
-      look.decision === 'denied'
+      look.decision === 'approved'
         ? t(
-            'components.native-chat.notices.permissionDenied',
-            '{{agent}} denied permission. View details.',
+            'components.native-chat.notices.safetyReviewApproved',
+            '{{agent}} approved this action. View details.',
             { agent }
           )
-        : t(
-            'components.native-chat.notices.safetyReview',
-            '{{agent}} reported a safety review warning. View details.',
-            { agent }
-          )
+        : look.decision === 'denied'
+          ? t(
+              'components.native-chat.notices.permissionDenied',
+              '{{agent}} denied permission. View details.',
+              { agent }
+            )
+          : t(
+              'components.native-chat.notices.safetyReview',
+              '{{agent}} reported a safety review warning. View details.',
+              { agent }
+            )
     const payload = block.providerFrame?.payload
     return (
-      <NativeChatDetailsDisclosure
-        summary={summary}
-        bodyClassName={look.tone === 'error' ? 'text-destructive' : 'text-chat-warning'}
-      >
+      <NativeChatDetailsDisclosure summary={summary} bodyClassName={toneClass(look.tone)}>
         {block.text}
         {payload ? '\n\n' : ''}
         {payload?.truncated
@@ -289,9 +301,7 @@ export function NativeChatNoticeRow({
       className={cn(
         'space-y-2 text-sm text-chat-foreground',
         Icon && 'rounded-md border border-border bg-muted/20 p-3',
-        tone === 'warning' && 'text-chat-warning',
-        tone === 'error' && 'text-destructive',
-        tone === 'notice' && 'text-chat-foreground-faint'
+        tone && toneClass(tone)
       )}
     >
       <div className="flex items-start gap-2">

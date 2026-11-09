@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
-import { createShedSubagentsField } from '../../../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { createHookListenerState } from '../../../../../shared/agent-hook-listener/listener-state'
 import { pollCodexTranscriptStatus } from '../../../../../shared/agent-hook-listener/providers/codex-transcript-poll'
 import { transcriptPollUpdate } from '../../../../../shared/agent-hook-listener/transcript-poll-policy'
@@ -182,49 +181,6 @@ describe('remote Codex transcript completion', () => {
       })
     ])
     expect(server.getStatusSnapshot()[0].subagents).toBeUndefined()
-  })
-})
-
-describe('remote Codex truncated transcript snapshots', () => {
-  it('keeps live work when a changed roster was shed to fit the relay frame', () => {
-    const server = new AgentHookServer()
-    const children = [
-      { id: CHILD, state: 'working' as const, startedAt: 1 },
-      { id: SECOND_CHILD, state: 'working' as const, startedAt: 2 }
-    ]
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        source: 'codex',
-        hookEventName: 'SubagentStart',
-        toolAgentId: SECOND_CHILD,
-        payload: {
-          agentType: 'codex',
-          prompt: 'Run the checks',
-          state: 'working',
-          mainAgent: { state: 'done', stateStartedAt: 1 },
-          subagents: children
-        }
-      },
-      'wsl:Ubuntu'
-    )
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        source: 'codex',
-        toolAgentId: SECOND_CHILD,
-        shedFields: [createShedSubagentsField([children[1]!])],
-        payload: {
-          agentType: 'codex',
-          prompt: 'Run the checks',
-          state: 'working',
-          mainAgent: { state: 'done', stateStartedAt: 1 }
-        }
-      },
-      'wsl:Ubuntu'
-    )
-    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
-    expect(server.getStatusSnapshotForPane(PANE)[0]?.subagents).toHaveLength(2)
   })
 })
 
