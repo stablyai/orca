@@ -128,7 +128,7 @@ function dialog(
         <CloudAgentSetupView
           readiness={options.readiness ?? NONE}
           canShare={options.canShare ?? false}
-          includeSignIn
+          steadyHeight
           onSave={options.pendingSave ? () => new Promise(() => {}) : async () => null}
           onSaved={noop}
           onCancel={noop}

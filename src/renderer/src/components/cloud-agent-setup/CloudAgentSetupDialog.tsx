@@ -36,7 +36,7 @@ function DialogBody({
     <CloudAgentSetupView
       readiness={model.readiness}
       canShare={model.canShare}
-      includeSignIn
+      steadyHeight
       onSave={save}
       onSaved={(next) => {
         setSaved(next)

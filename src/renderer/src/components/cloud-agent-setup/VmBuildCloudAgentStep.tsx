@@ -117,7 +117,7 @@ export function VmBuildCloudAgentStepView({
             <Button
               type="button"
               variant="ghost"
-              size="xs"
+              size="sm"
               onClick={() => {
                 actions.onCancelSignIn()
                 setMode(OFFER)
@@ -148,7 +148,7 @@ export function VmBuildCloudAgentStepView({
             <Button
               type="button"
               variant="ghost"
-              size="xs"
+              size="sm"
               onClick={() => setMode({ kind: 'keys' })}
             >
               {t('cloudAgentSetup.change', 'Change')}
@@ -198,7 +198,7 @@ export function VmBuildCloudAgentStepView({
               >
                 {t('cloudAgentSetup.useKey', 'Use a key')}
               </Button>
-              <Button type="button" variant="ghost" size="xs" onClick={actions.onLater}>
+              <Button type="button" variant="ghost" size="sm" onClick={actions.onLater}>
                 {t('cloudAgentSetup.later', 'Later')}
               </Button>
             </>
@@ -210,8 +210,8 @@ export function VmBuildCloudAgentStepView({
           <CloudAgentSetupView
             readiness={null}
             canShare={model.canShare}
-            includeSignIn={false}
             focusOnOpen
+            initialOption="api-key"
             onSave={actions.onSave}
             onSaved={(saved) => {
               actions.onDone()
@@ -221,7 +221,7 @@ export function VmBuildCloudAgentStepView({
               setMode({ kind: 'offer' })
               requestAnimationFrame(() => offerRef.current?.focus())
             }}
-            onSignInInstead={signIn}
+            onSignIn={signIn}
           />
         </div>
       ) : null}

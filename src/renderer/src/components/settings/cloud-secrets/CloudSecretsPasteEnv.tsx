@@ -1,6 +1,11 @@
-import { useId, useMemo, useState } from 'react'
-import { AlertCircle, CircleCheck, Eye, EyeOff, Loader2, RefreshCcw } from 'lucide-react'
+import { useId, useMemo, useRef, useState } from 'react'
+import { AlertCircle, CircleCheck, Loader2, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  cloudSecretKind,
+  cloudSecretNameError,
+  cloudSecretValueError
+} from '../../../../../shared/cloud-secrets/cloud-secret-rules'
 import {
   MAX_CLOUD_SECRET_BATCH,
   cloudSecretsErrorCode,
@@ -8,66 +13,127 @@ import {
   type CloudSecretsErrorCode
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import {
-  dotenvPasteToBatch,
   parseDotenvPaste,
-  type DotenvPasteEntry
+  type DotenvPasteIssue
 } from '../../../../../shared/cloud-secrets/dotenv-paste'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
+import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { Textarea } from '../../ui/textarea'
-import { cn } from '@/lib/utils'
 import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
+import { isOwnKeyEvent } from './CloudSecretEditor'
+import { SecretValueInput } from './SecretValueInput'
 
-function PreviewLine({
-  entry,
-  replaces,
-  serverError
-}: {
-  entry: DotenvPasteEntry
-  replaces: boolean
+type PasteRow = {
+  id: number
+  line: number
+  name: string
+  value: string
+  /** A problem only the parser can see (an unreadable line, a missing closing quote). */
+  parseIssue: DotenvPasteIssue | null
   serverError: CloudSecretsErrorCode | null
+}
+
+function rowIssue(row: PasteRow, overridden: boolean): DotenvPasteIssue | null {
+  return (
+    row.serverError ??
+    (row.parseIssue && row.parseIssue !== 'overridden' ? row.parseIssue : null) ??
+    cloudSecretNameError(row.name) ??
+    cloudSecretValueError(row.name, row.value) ??
+    (overridden ? 'overridden' : null)
+  )
+}
+
+function RowEditor({
+  row,
+  issue,
+  replaces,
+  onChange,
+  onRemove
+}: {
+  row: PasteRow
+  issue: DotenvPasteIssue | null
+  replaces: boolean
+  onChange: (patch: Partial<PasteRow>) => void
+  onRemove: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const issue = serverError ?? entry.issue
-  const skipped = entry.issue === 'overridden'
+  const id = useId()
+  const blocking = issue !== null && issue !== 'overridden'
   return (
-    <li className="flex items-start gap-2.5 px-3 py-1.5 text-xs">
-      <span className="w-8 shrink-0 text-right font-mono text-muted-foreground tabular-nums">
-        {entry.line}
-      </span>
-      {issue && !skipped ? (
-        <AlertCircle aria-hidden className="mt-px size-3.5 shrink-0 text-destructive" />
-      ) : (
-        <CircleCheck aria-hidden className="mt-px size-3.5 shrink-0 text-muted-foreground" />
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <code className="truncate font-mono">
-            {entry.name || t('cloudSecrets.paste.unreadable', 'Unreadable line')}
-          </code>
-          {entry.kind === 'agent_key' && entry.name ? (
-            <Badge variant="referenceLabel">{cloudSecretKindLabel(entry.name, t)}</Badge>
-          ) : null}
+    <li className="space-y-1 px-3 py-2">
+      <div className="flex items-center gap-2">
+        {blocking ? (
+          <AlertCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />
+        ) : (
+          <CircleCheck aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+        )}
+        <Input
+          id={`${id}-name`}
+          variant="code"
+          density="compact"
+          value={row.name}
+          onChange={(event) =>
+            onChange({
+              name: event.target.value.toUpperCase(),
+              parseIssue: null,
+              serverError: null
+            })
+          }
+          aria-label={t('cloudSecrets.paste.nameLabel', 'Name, line {{line}}', {
+            line: String(row.line)
+          })}
+          aria-invalid={blocking || undefined}
+          aria-describedby={issue ? `${id}-issue` : undefined}
+          spellCheck={false}
+          autoComplete="off"
+          className="w-56 shrink-0"
+        />
+        <div className="min-w-0 flex-1">
+          <SecretValueInput
+            id={`${id}-value`}
+            value={row.value}
+            onChange={(value) => onChange({ value, parseIssue: null, serverError: null })}
+            invalid={blocking}
+            describedBy={issue ? `${id}-issue` : undefined}
+          />
         </div>
-        {issue ? (
-          <p className={skipped ? 'text-muted-foreground' : 'text-destructive'}>
-            {cloudSecretsErrorCopy(issue, t)}
-          </p>
+        {row.name && cloudSecretKind(row.name) === 'agent_key' ? (
+          <Badge variant="referenceLabel">{cloudSecretKindLabel(row.name, t)}</Badge>
         ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          onClick={onRemove}
+          aria-label={t('cloudSecrets.paste.remove', 'Leave out {{name}}', {
+            name: row.name || String(row.line)
+          })}
+        >
+          <X />
+        </Button>
       </div>
-      {!issue ? (
-        <span className="shrink-0 text-muted-foreground">
-          {replaces
-            ? t('cloudSecrets.paste.replaces', 'Replaces saved value')
+      <p
+        id={`${id}-issue`}
+        className={
+          blocking ? 'pl-5.5 text-2xs text-destructive' : 'pl-5.5 text-2xs text-muted-foreground'
+        }
+      >
+        {issue
+          ? cloudSecretsErrorCopy(issue, t)
+          : replaces
+            ? t('cloudSecrets.paste.replaces', 'Replaces the saved value')
             : t('cloudSecrets.paste.adds', 'New')}
-        </span>
-      ) : null}
+      </p>
     </li>
   )
 }
 
-/** Paste a .env file, check every line, then save the clean ones in one batch. */
+/**
+ * Paste a .env file: it is read into rows at once (names visible, values masked) and the raw text is
+ * dropped, so the file is never left on screen or in reach of a screen reader. Clean rows save in one batch.
+ */
 export function CloudSecretsPasteEnv({
   existingNames,
   onSave,
@@ -77,25 +143,53 @@ export function CloudSecretsPasteEnv({
   existingNames: readonly string[]
   onSave: (set: Record<string, string>) => Promise<CloudSecretBatchResult | CloudSecretsErrorCode>
   onCancel: () => void
-  /** Fixtures only. */
+  /** Fixtures only: as if this text had been pasted. */
   initialText?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const formId = useId()
-  const [text, setText] = useState(initialText)
-  const [revealed, setRevealed] = useState(false)
+  const nextId = useRef(0)
+  const toRows = (text: string): PasteRow[] =>
+    parseDotenvPaste(text).map((entry) => ({
+      id: nextId.current++,
+      line: entry.line,
+      name: entry.name,
+      value: entry.value,
+      parseIssue: entry.issue,
+      serverError: null
+    }))
+  const [rows, setRows] = useState<PasteRow[]>(() => (initialText ? toRows(initialText) : []))
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<CloudSecretsErrorCode | null>(null)
-  const [serverErrors, setServerErrors] = useState<ReadonlyMap<string, CloudSecretsErrorCode>>(
-    new Map()
-  )
-  const entries = useMemo(() => parseDotenvPaste(text), [text])
-  const batch = useMemo(() => dotenvPasteToBatch(entries), [entries])
-  const count = Object.keys(batch).length
-  const blocked = entries.filter((entry) => entry.issue && entry.issue !== 'overridden').length
-  const duplicates = entries.filter((entry) => entry.issue === 'overridden').length
   const existing = useMemo(() => new Set(existingNames), [existingNames])
+
+  const issues = useMemo(() => {
+    const lastIndex = new Map(rows.map((row, index) => [row.name, index]))
+    return rows.map((row, index) => rowIssue(row, lastIndex.get(row.name) !== index))
+  }, [rows])
+  const batch: Record<string, string> = {}
+  rows.forEach((row, index) => {
+    if (issues[index] === null) {
+      batch[row.name] = row.value
+    }
+  })
+  const count = Object.keys(batch).length
+  const blocked = issues.filter((issue) => issue !== null && issue !== 'overridden').length
+  const duplicates = issues.filter((issue) => issue === 'overridden').length
   const tooMany = count > MAX_CLOUD_SECRET_BATCH
+  // Rows that need a fix first, so they can be checked without scrolling.
+  const order = rows
+    .map((row, index) => ({ row, issue: issues[index] }))
+    .sort(
+      (a, b) =>
+        Number(a.issue === null || a.issue === 'overridden') -
+        Number(b.issue === null || b.issue === 'overridden')
+    )
+
+  const update = (id: number, patch: Partial<PasteRow>): void => {
+    setFailure(null)
+    setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)))
+  }
 
   const save = async (): Promise<void> => {
     if (saving || count === 0 || tooMany) {
@@ -112,99 +206,96 @@ export function CloudSecretsPasteEnv({
     const errors = new Map(
       result.errors.map((entry) => [entry.name, cloudSecretsErrorCode(entry.reason)])
     )
-    setServerErrors(errors)
-    // Keep only the lines that still need attention; saved values leave the form at once.
-    setText(
-      entries
-        .filter(
-          (entry) =>
-            errors.has(entry.name) || (entry.issue !== null && entry.issue !== 'overridden')
-        )
-        .map((entry) => entry.raw)
-        .join('\n')
+    // Saved values leave the form at once; only rows that still need attention stay.
+    setRows((current) =>
+      current.flatMap((row, index) =>
+        errors.has(row.name)
+          ? [{ ...row, serverError: errors.get(row.name) ?? null }]
+          : issues[index] !== null && issues[index] !== 'overridden'
+            ? [row]
+            : []
+      )
     )
   }
+
+  const summary = failure
+    ? cloudSecretsErrorCopy(failure, t)
+    : tooMany
+      ? t('cloudSecrets.paste.tooMany', 'Paste at most {{max}} variables at a time.', {
+          max: String(MAX_CLOUD_SECRET_BATCH)
+        })
+      : rows.length === 0
+        ? null
+        : [
+            t('cloudSecrets.paste.ready', '{{count}} ready', { count }),
+            blocked > 0
+              ? t('cloudSecrets.paste.blocked', '{{blocked}} need a fix and will be skipped', {
+                  blocked: String(blocked)
+                })
+              : null,
+            duplicates > 0
+              ? t('cloudSecrets.paste.duplicates', '{{duplicates}} duplicate ignored', {
+                  duplicates: String(duplicates)
+                })
+              : null
+          ]
+            .filter(Boolean)
+            .join(' · ')
 
   return (
     <div
       className="space-y-3 rounded-lg border border-border bg-background/60 p-3"
       onKeyDown={(event) => {
-        // Escape from a portaled Select or menu bubbles here too; let it close only that.
-        if (!event.currentTarget.contains(event.target as Node)) {
-          return
-        }
-        // A big paste is not thrown away by a stray Escape; Cancel still discards it.
-        if (event.key === 'Escape' && !saving && text.trim() === '') {
+        // Rows already read are not thrown away by a stray Escape; Cancel still discards them.
+        if (event.key === 'Escape' && !saving && rows.length === 0 && isOwnKeyEvent(event)) {
           event.stopPropagation()
           onCancel()
         }
       }}
     >
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor={`${formId}-text`} variant="settings">
-            {t('cloudSecrets.paste.label', 'Paste a .env file')}
-          </Label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-pressed={revealed}
-            onClick={() => setRevealed((shown) => !shown)}
-          >
-            {revealed ? <EyeOff /> : <Eye />}
-            {revealed
-              ? t('cloudSecrets.paste.hide', 'Hide values')
-              : t('cloudSecrets.paste.show', 'Show values')}
-          </Button>
-        </div>
+        <Label htmlFor={`${formId}-text`} variant="settings">
+          {t('cloudSecrets.paste.label', 'Paste a .env file')}
+        </Label>
         <Textarea
           id={`${formId}-text`}
-          value={text}
+          value=""
           autoFocus
-          onChange={(event) => {
-            setText(event.target.value)
-            setServerErrors(new Map())
-            setFailure(null)
+          // Paste-only: the text becomes rows below and never stays in this field.
+          onChange={() => undefined}
+          onPaste={(event) => {
+            event.preventDefault()
+            const pasted = toRows(event.clipboardData.getData('text'))
+            if (pasted.length > 0) {
+              setFailure(null)
+              setRows((current) => [...current, ...pasted])
+            }
           }}
-          placeholder={
-            '# Comments and blank lines are ignored\nDATABASE_URL=postgres://…\nexport STRIPE_KEY="sk_test_…"'
-          }
-          spellCheck={false}
-          autoComplete="off"
-          data-1p-ignore=""
+          placeholder={t(
+            'cloudSecrets.paste.placeholder',
+            'Paste here. Comments, blank lines, export and quoted or multi-line values are understood.'
+          )}
           variant="code"
-          className={cn('min-h-28', !revealed && '[-webkit-text-security:disc]')}
+          className="min-h-16"
           aria-describedby={`${formId}-summary`}
         />
-        <p className="text-2xs text-muted-foreground">
-          {t(
-            'cloudSecrets.paste.masked',
-            'Values stay masked here and are hidden once saved. Quotes, export and multi-line values work.'
-          )}
-        </p>
       </div>
 
-      {entries.length > 0 ? (
+      {rows.length > 0 ? (
         <ul
-          aria-label={t('cloudSecrets.paste.preview', 'Preview')}
-          className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/60 scrollbar-sleek"
+          aria-label={t('cloudSecrets.paste.preview', 'Variables to save')}
+          className="max-h-80 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/60 scrollbar-sleek"
         >
-          {/* Lines that need a fix first, so they can be checked without scrolling. */}
-          {[...entries]
-            .sort(
-              (a, b) =>
-                Number(a.issue === null || a.issue === 'overridden') -
-                Number(b.issue === null || b.issue === 'overridden')
-            )
-            .map((entry) => (
-              <PreviewLine
-                key={`${entry.line}:${entry.name}`}
-                entry={entry}
-                replaces={existing.has(entry.name)}
-                serverError={serverErrors.get(entry.name) ?? null}
-              />
-            ))}
+          {order.map(({ row, issue }) => (
+            <RowEditor
+              key={row.id}
+              row={row}
+              issue={issue}
+              replaces={existing.has(row.name)}
+              onChange={(patch) => update(row.id, patch)}
+              onRemove={() => setRows((current) => current.filter((entry) => entry.id !== row.id))}
+            />
+          ))}
         </ul>
       ) : null}
 
@@ -216,59 +307,24 @@ export function CloudSecretsPasteEnv({
             failure || tooMany ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'
           }
         >
-          {failure
-            ? cloudSecretsErrorCopy(failure, t)
-            : tooMany
-              ? t('cloudSecrets.paste.tooMany', 'Paste at most {{max}} variables at a time.', {
-                  max: String(MAX_CLOUD_SECRET_BATCH)
-                })
-              : serverErrors.size > 0
-                ? t(
-                    'cloudSecrets.paste.partial',
-                    'Saved the rest. Fix the lines above and save again.'
-                  )
-                : entries.length === 0
-                  ? null
-                  : [
-                      t('cloudSecrets.paste.ready', '{{count}} ready', { count }),
-                      blocked > 0
-                        ? t(
-                            'cloudSecrets.paste.blocked',
-                            '{{blocked}} need a fix and will be skipped',
-                            {
-                              blocked: String(blocked)
-                            }
-                          )
-                        : null,
-                      duplicates > 0
-                        ? t('cloudSecrets.paste.duplicates', '{{duplicates}} duplicate ignored', {
-                            duplicates: String(duplicates)
-                          })
-                        : null
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
+          {summary}
         </p>
         <div className="flex shrink-0 gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => !saving && onCancel()}>
             {t('cloudSecrets.cancel', 'Cancel')}
           </Button>
           <Button
             type="button"
             size="sm"
-            disabled={saving || count === 0 || tooMany}
+            disabled={count === 0 || tooMany}
+            aria-disabled={saving || undefined}
+            aria-busy={saving || undefined}
             onClick={() => void save()}
           >
-            {saving ? (
-              <Loader2 className="animate-spin" />
-            ) : serverErrors.size > 0 ? (
-              <RefreshCcw />
-            ) : null}
+            {saving ? <Loader2 className="animate-spin" /> : null}
             {count === 1
               ? t('cloudSecrets.paste.saveOne', 'Save 1 secret')
-              : t('cloudSecrets.paste.saveMany', 'Save {{count}} secrets', {
-                  count
-                })}
+              : t('cloudSecrets.paste.saveMany', 'Save {{count}} secrets', { count })}
           </Button>
         </div>
       </div>

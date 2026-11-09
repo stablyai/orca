@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Info, Sparkles } from 'lucide-react'
+import { useId, useState } from 'react'
+import { Info } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { CloudSecretScope } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Button } from '../../ui/button'
@@ -36,20 +36,17 @@ function RepoPicker({
   allowNone: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const id = useId()
   return (
     <div className="flex items-center gap-2">
-      <Label variant="settings" className="shrink-0">
+      <Label htmlFor={id} variant="settings" className="shrink-0">
         {t('cloudSecrets.repo.label', 'Repository')}
       </Label>
       <Select
         value={value ?? NO_REPO}
         onValueChange={(next) => onChange(next === NO_REPO ? null : next)}
       >
-        <SelectTrigger
-          size="sm"
-          className="w-64"
-          aria-label={t('cloudSecrets.repo.label', 'Repository')}
-        >
+        <SelectTrigger id={id} size="sm" className="w-64">
           <SelectValue placeholder={t('cloudSecrets.repo.choose', 'Choose a repository')} />
         </SelectTrigger>
         <SelectContent>
@@ -86,7 +83,8 @@ function ScopeTab({
   description,
   emptyTitle,
   emptyDetail,
-  onSetUpAgent
+  onSetUpAgent,
+  emptyAction
 }: {
   api: CloudSecretsApi
   scope: CloudSecretScope
@@ -98,11 +96,11 @@ function ScopeTab({
   emptyTitle: string
   emptyDetail: string
   onSetUpAgent?: () => void
+  emptyAction?: React.ReactNode
 }): React.JSX.Element {
   const model = useCloudSecretList(api, scope, repo)
   return (
     <div className="space-y-3">
-      <p className="text-xs leading-5 text-muted-foreground">{description}</p>
       {!canWrite && readOnlyNotice ? <ReadOnlyNotice text={readOnlyNotice} /> : null}
       <CloudSecretList
         // A different repo is a different list: drop any half-typed form with it.
@@ -112,6 +110,8 @@ function ScopeTab({
         people={people}
         emptyTitle={emptyTitle}
         emptyDetail={emptyDetail}
+        description={description}
+        emptyAction={emptyAction}
         onSetUpAgent={onSetUpAgent}
       />
     </div>
@@ -161,24 +161,14 @@ export function CloudSecretsPane({
 
   return (
     <div className="space-y-4 border-t border-border/60 pt-5" data-settings-section="cloud-secrets">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-2xs font-semibold tracking-wider text-muted-foreground uppercase">
-            {t('cloudSecrets.title', 'Cloud secrets')}
-          </p>
-          <p className="max-w-xl text-xs leading-5 text-muted-foreground">
-            {t(
-              'cloudSecrets.description',
-              'Environment variables and agent keys for Orca Cloud workspaces.'
-            )}
-          </p>
-        </div>
-        {onSetUpAgent ? (
-          <Button variant="outline" size="sm" className="shrink-0" onClick={onSetUpAgent}>
-            <Sparkles />
-            {t('cloudSecrets.setUpAgent', 'Set up an agent')}
-          </Button>
-        ) : null}
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium">{t('cloudSecrets.title', 'Cloud secrets')}</h3>
+        <p className="max-w-xl text-xs leading-5 text-muted-foreground">
+          {t(
+            'cloudSecrets.description',
+            'API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.'
+          )}
+        </p>
       </div>
 
       <Tabs
@@ -194,7 +184,7 @@ export function CloudSecretsPane({
           {inTeam ? <TabsTrigger value="org">{cloudSecretScopeLabel('org', t)}</TabsTrigger> : null}
           <TabsTrigger value="repo">{cloudSecretScopeLabel('repo', t)}</TabsTrigger>
           <TabsTrigger value="effective">
-            {t('cloudSecrets.tab.effective', 'Effective')}
+            {t('cloudSecrets.tab.effective', 'What workspaces get')}
           </TabsTrigger>
         </TabsList>
 
@@ -208,6 +198,13 @@ export function CloudSecretsPane({
               people={withViewer}
               readOnlyNotice={null}
               onSetUpAgent={onSetUpAgent}
+              emptyAction={
+                onSetUpAgent ? (
+                  <Button variant="outline" size="sm" onClick={onSetUpAgent}>
+                    {t('cloudSecrets.setUpAgent', 'Set up an agent')}
+                  </Button>
+                ) : null
+              }
               description={t(
                 'cloudSecrets.personal.description',
                 'Only you get these, in every Orca Cloud workspace you start.'
@@ -232,6 +229,13 @@ export function CloudSecretsPane({
                 people={withViewer}
                 readOnlyNotice={adminNotice}
                 onSetUpAgent={onSetUpAgent}
+                emptyAction={
+                  caller?.canWrite.org && onSetUpAgent ? (
+                    <Button variant="outline" size="sm" onClick={onSetUpAgent}>
+                      {t('cloudSecrets.setUpAgent', 'Set up an agent')}
+                    </Button>
+                  ) : null
+                }
                 description={t(
                   'cloudSecrets.org.description',
                   'Everyone on your team gets these in their Orca Cloud workspaces.'

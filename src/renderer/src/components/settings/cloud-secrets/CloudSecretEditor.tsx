@@ -13,6 +13,13 @@ import { Label } from '../../ui/label'
 import { cloudSecretsErrorCopy } from './cloud-secrets-copy'
 import { SecretValueInput } from './SecretValueInput'
 
+const NAME_EXAMPLE = 'DATABASE_URL'
+
+/** Keys from portaled menus bubble through React; only act on ones that started inside this form. */
+export function isOwnKeyEvent(event: React.KeyboardEvent<HTMLElement>): boolean {
+  return event.target instanceof Node && event.currentTarget.contains(event.target)
+}
+
 export type CloudSecretEditorTarget =
   | { kind: 'add' }
   | { kind: 'replace'; name: string; hint: string | null }
@@ -42,6 +49,12 @@ export function CloudSecretEditor({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<CloudSecretsErrorCode | null>(initialError)
   const errorIsName = error !== null && error === cloudSecretNameError(name)
+  // Errors move focus to the field they belong to, so they are read out and fixable at once.
+  const fail = (code: CloudSecretsErrorCode): void => {
+    setError(code)
+    const field = code === cloudSecretNameError(name) ? 'name' : 'value'
+    requestAnimationFrame(() => document.getElementById(`${formId}-${field}`)?.focus())
+  }
 
   const submit = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault()
@@ -50,14 +63,14 @@ export function CloudSecretEditor({
     }
     const local = cloudSecretNameError(name) ?? cloudSecretValueError(name, value)
     if (local) {
-      setError(local)
+      fail(local)
       return
     }
     setSaving(true)
     const failure = await onSave(name, value)
     setSaving(false)
     if (failure) {
-      setError(failure)
+      fail(failure)
     } else {
       setValue('')
     }
@@ -68,10 +81,7 @@ export function CloudSecretEditor({
       onSubmit={(event) => void submit(event)}
       onKeyDown={(event) => {
         // Escape from a portaled Select or menu bubbles here too; let it close only that.
-        if (!event.currentTarget.contains(event.target as Node)) {
-          return
-        }
-        if (event.key === 'Escape' && !saving) {
+        if (event.key === 'Escape' && !saving && isOwnKeyEvent(event)) {
           event.stopPropagation()
           onCancel()
         }
@@ -92,7 +102,7 @@ export function CloudSecretEditor({
             id={`${formId}-name`}
             variant="code"
             value={name}
-            disabled={target.kind === 'replace'}
+            readOnly={target.kind === 'replace'}
             autoFocus={target.kind === 'add'}
             onChange={(event) => {
               const input = event.target
@@ -102,7 +112,7 @@ export function CloudSecretEditor({
               // The rewrite keeps length, so the caret can go back where it was.
               requestAnimationFrame(() => input.setSelectionRange(caret, caret))
             }}
-            placeholder="DATABASE_URL"
+            placeholder={NAME_EXAMPLE}
             aria-invalid={errorIsName || undefined}
             aria-describedby={errorIsName ? `${formId}-status` : undefined}
             spellCheck={false}
@@ -145,32 +155,31 @@ export function CloudSecretEditor({
               {error === 'subscription_token_refused' && onSetUpAgent ? (
                 <>
                   {' '}
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2 hover:no-underline"
-                    onClick={onSetUpAgent}
-                  >
+                  <Button type="button" variant="outline" size="xs" onClick={onSetUpAgent}>
                     {t('cloudSecrets.editor.signInInstead', 'Sign in instead')}
-                  </button>
+                  </Button>
                 </>
               ) : null}
             </p>
           ) : (
             <p id={`${formId}-help`} className="text-2xs text-muted-foreground">
-              {t(
-                'cloudSecrets.editor.help',
-                'Hidden once saved. New terminals and agents get it within seconds, no rebuild.'
-              )}
+              {t('cloudSecrets.editor.help', 'Write-only. You won’t see it again after saving.')}
             </p>
           )}
         </div>
       </div>
       <div className="flex items-center justify-end gap-3">
         <div className="flex shrink-0 gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => !saving && onCancel()}>
             {t('cloudSecrets.cancel', 'Cancel')}
           </Button>
-          <Button type="submit" size="sm" disabled={saving || !name || !value}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!name || !value}
+            aria-disabled={saving || undefined}
+            aria-busy={saving || undefined}
+          >
             {saving ? <Loader2 className="animate-spin" /> : null}
             {target.kind === 'replace'
               ? t('cloudSecrets.editor.replace', 'Replace')

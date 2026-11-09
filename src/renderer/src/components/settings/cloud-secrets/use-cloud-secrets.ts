@@ -10,6 +10,9 @@ import type {
 
 export type CloudSecretsApi = NonNullable<PreloadApi['cloudSecrets']>
 
+// Codes, not copy: the view turns them into words.
+const UNKNOWN: CloudSecretsErrorCode = 'unknown'
+
 export type Loadable<T> =
   | { status: 'loading' }
   | { status: 'ready'; value: T }
@@ -44,7 +47,7 @@ function useLoad<T>(
       },
       () => {
         if (!cancelled) {
-          setState({ key, loaded: { status: 'failed', error: 'unknown' } })
+          setState({ key, loaded: { status: 'failed', error: UNKNOWN } })
         }
       }
     )

@@ -113,7 +113,9 @@ export function cloudSecretsFailureCode(error: unknown): CloudSecretsErrorCode {
     case 'invalid_request':
     case 'conflict':
       return cloudSecretsErrorCode(error.reason)
-    default:
+    case 'unavailable':
+    case 'aborted':
+    case 'invalid_response':
       return 'unavailable'
   }
 }

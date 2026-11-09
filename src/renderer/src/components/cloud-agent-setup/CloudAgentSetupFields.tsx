@@ -1,5 +1,7 @@
 import { ExternalLink } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -24,6 +26,9 @@ export const EMPTY_DRAFT: CloudAgentSetupDraft = {
   baseUrl: ''
 }
 
+/** Product names; never translated. */
+const PROVIDER_NAME = { anthropic: 'Anthropic', openai: 'OpenAI' } as const
+
 const KEY_PAGES = {
   anthropic: 'https://console.anthropic.com/settings/keys',
   openai: 'https://platform.openai.com/api-keys',
@@ -36,7 +41,7 @@ function GetKeyLink({ url }: { url: string }): React.JSX.Element {
     <button
       type="button"
       className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline [&_svg]:size-3"
-      onClick={() => void window.api.shell.openUrl(url).catch(() => undefined)}
+      onClick={() => openAppHttpLink(url)}
     >
       {t('cloudAgentSetup.getKey', 'Get a key')}
       <ExternalLink aria-hidden />
@@ -114,13 +119,9 @@ export function CloudAgentSetupFields({
         {failure.error === 'subscription_token_refused' && onSignInInstead ? (
           <>
             {' '}
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2 hover:no-underline"
-              onClick={onSignInInstead}
-            >
+            <Button type="button" variant="outline" size="xs" onClick={onSignInInstead}>
               {t('cloudSecrets.editor.signInInstead', 'Sign in instead')}
-            </button>
+            </Button>
           </>
         ) : null}
       </>
@@ -156,7 +157,7 @@ export function CloudAgentSetupFields({
       placeholder={placeholder}
     />
   )
-  const keyHelp = t('cloudAgentSetup.keyHelp', 'Hidden once saved.')
+  const keyHelp = t('cloudAgentSetup.keyHelp', 'Write-only. You won’t see it again after saving.')
 
   return (
     <div className="space-y-3">
@@ -176,8 +177,8 @@ export function CloudAgentSetupFields({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="anthropic">Anthropic</SelectItem>
-                <SelectItem value="openai">OpenAI</SelectItem>
+                <SelectItem value="anthropic">{PROVIDER_NAME.anthropic}</SelectItem>
+                <SelectItem value="openai">{PROVIDER_NAME.openai}</SelectItem>
               </SelectContent>
             </Select>
           </div>

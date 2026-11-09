@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ClipboardPaste, KeyRound, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Check, ClipboardPaste, KeyRound, Plus, RefreshCw } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import type {
@@ -8,7 +8,6 @@ import type {
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
 import { CloudSecretEditor, type CloudSecretEditorTarget } from './CloudSecretEditor'
 import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
@@ -94,12 +93,9 @@ function SecretRow({
               : t('cloudSecrets.list.hiddenLabel', 'Value hidden')}
           </span>
         </span>
-        <span className="hidden w-40 shrink-0 truncate text-xs text-muted-foreground md:inline">
+        <span className="w-40 shrink-0 truncate text-xs text-muted-foreground">
           {saved ? (
-            <span
-              role="status"
-              className="inline-flex items-center gap-1 text-foreground motion-safe:animate-in motion-safe:fade-in-0"
-            >
+            <span className="inline-flex items-center gap-1 text-foreground motion-safe:animate-in motion-safe:fade-in-0">
               <Check className="size-3.5" />
               {t('cloudSecrets.list.saved', 'Saved')}
             </span>
@@ -113,19 +109,14 @@ function SecretRow({
             confirming ? (
               <>
                 <Button
-                  variant="ghost"
-                  size="xs"
-                  disabled={removing}
-                  onClick={() => setConfirming(false)}
-                >
-                  {t('cloudSecrets.list.keep', 'Keep')}
-                </Button>
-                <Button
                   variant="destructive-chip"
                   size="xs"
-                  disabled={removing}
-                  autoFocus
+                  aria-disabled={removing || undefined}
+                  aria-busy={removing || undefined}
                   onClick={() => {
+                    if (removing) {
+                      return
+                    }
                     setRemoving(true)
                     void onRemove().then((failure) => {
                       setRemoving(false)
@@ -138,29 +129,38 @@ function SecretRow({
                 >
                   {t('cloudSecrets.list.confirmDelete', 'Delete')}
                 </Button>
+                {/* Keep takes focus and sits where Delete was, so a double click cannot delete. */}
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  autoFocus
+                  data-keep={secret.name}
+                  onClick={() => {
+                    setConfirming(false)
+                    requestAnimationFrame(() =>
+                      document.querySelector<HTMLElement>(`[data-delete="${secret.name}"]`)?.focus()
+                    )
+                  }}
+                >
+                  {t('cloudSecrets.list.keep', 'Keep')}
+                </Button>
               </>
             ) : (
               <>
                 <Button variant="ghost" size="xs" data-replace={secret.name} onClick={onReplace}>
                   {t('cloudSecrets.list.replace', 'Replace')}
                 </Button>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => setConfirming(true)}
-                      aria-label={t('cloudSecrets.list.delete', 'Delete {{name}}', {
-                        name: secret.name
-                      })}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={4}>
-                    {t('cloudSecrets.list.deleteTooltip', 'Delete')}
-                  </TooltipContent>
-                </Tooltip>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  data-delete={secret.name}
+                  onClick={() => setConfirming(true)}
+                  aria-label={t('cloudSecrets.list.delete', 'Delete {{name}}', {
+                    name: secret.name
+                  })}
+                >
+                  {t('cloudSecrets.list.deleteTooltip', 'Delete')}
+                </Button>
               </>
             )
           ) : null}
@@ -182,6 +182,8 @@ export function CloudSecretList({
   people,
   emptyTitle,
   emptyDetail,
+  description,
+  emptyAction,
   initialMode = IDLE,
   initialSaved = NONE_SAVED,
   onSetUpAgent
@@ -193,6 +195,10 @@ export function CloudSecretList({
   people: CloudSecretPeople
   emptyTitle: string
   emptyDetail: string
+  /** One line about who gets this scope, beside the Add / Paste actions. */
+  description?: string
+  /** An extra way to fill an empty scope, such as "Set up an agent". */
+  emptyAction?: React.ReactNode
   /** Fixtures only. */
   initialMode?: CloudSecretListMode
   /** Fixtures only. */
@@ -259,7 +265,6 @@ export function CloudSecretList({
     canWrite && mode.kind === 'idle' ? (
       <>
         <Button
-          variant="outline"
           size="sm"
           data-action="add"
           onClick={() => setMode({ kind: 'edit', target: { kind: 'add' } })}
@@ -268,7 +273,7 @@ export function CloudSecretList({
           {t('cloudSecrets.list.add', 'Add secret')}
         </Button>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           data-action="paste"
           onClick={() => setMode({ kind: 'paste' })}
@@ -282,19 +287,33 @@ export function CloudSecretList({
 
   return (
     <div ref={rootRef} className="space-y-3">
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        {description ? (
+          <p className="text-xs leading-5 text-muted-foreground">{description}</p>
+        ) : (
+          <span />
+        )}
+        {actions ? <div className="flex shrink-0 gap-2">{actions}</div> : null}
+      </div>
+      {/* One status region that is always mounted, so saves are announced reliably. */}
+      <p role="status" className="sr-only">
+        {saved.size > 0
+          ? t('cloudSecrets.list.savedAnnounce', 'Saved {{names}}', {
+              names: [...saved].join(', ')
+            })
+          : ''}
+      </p>
       {secrets.length === 0 && mode.kind === 'idle' ? (
         <div className="rounded-md border border-dashed border-border/60 px-4 py-5 text-center">
           <p className="text-sm font-medium">{emptyTitle}</p>
           <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
             {emptyDetail}
           </p>
-          {actions ? (
-            <div className="mt-3 flex flex-wrap justify-center gap-2">{actions}</div>
-          ) : null}
+          {emptyAction ? <div className="mt-3 flex justify-center">{emptyAction}</div> : null}
         </div>
       ) : secrets.length > 0 ? (
         <ul className="divide-y divide-border/60 rounded-md border border-border/60">
-          {secrets.map((secret) =>
+          {secrets.map((secret, index) =>
             replacing === secret.name ? (
               <li key={secret.name} className="px-3 py-2.5">
                 <CloudSecretEditor
@@ -329,7 +348,11 @@ export function CloudSecretList({
                 onRemove={async () => {
                   const failure = await model.remove(secret.name)
                   if (!failure) {
-                    focusLater('[data-replace], [data-action="add"]')
+                    // The next row takes its place; else the previous one; else Add.
+                    const neighbour = secrets[index + 1] ?? secrets[index - 1]
+                    focusLater(
+                      neighbour ? `[data-replace="${neighbour.name}"]` : '[data-action="add"]'
+                    )
                   }
                   return failure
                 }}
@@ -371,8 +394,6 @@ export function CloudSecretList({
           onCancel={() => closeTo('[data-action="paste"]')}
         />
       ) : null}
-
-      {secrets.length > 0 && actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
     </div>
   )
 }

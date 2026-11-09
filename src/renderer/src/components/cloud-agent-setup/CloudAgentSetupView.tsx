@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { CircleCheck, Loader2 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { HOST_AGENT_SIGN_IN_AGENT_NAME as AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
+import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { cloudSecretsErrorCopy } from '../settings/cloud-secrets/cloud-secrets-copy'
@@ -22,12 +23,34 @@ import {
   EMPTY_DRAFT,
   type CloudAgentSetupDraft
 } from './CloudAgentSetupFields'
+import { isOwnKeyEvent } from '../settings/cloud-secrets/CloudSecretEditor'
 
 export type { CloudAgentSetupFailure, CloudAgentSetupOption, CloudAgentSetupScope }
 export type CloudAgentSetupSaved = { agents: CloudSetupAgent[]; scope: CloudAgentSetupScope }
 type KeyOption = Exclude<CloudAgentSetupOption, 'sign-in'>
 
 const KEY_OPTIONS: readonly KeyOption[] = ['api-key', 'gateway', 'custom']
+const EMPTY_DRAFTS: Record<KeyOption, CloudAgentSetupDraft> = {
+  'api-key': EMPTY_DRAFT,
+  gateway: EMPTY_DRAFT,
+  custom: EMPTY_DRAFT
+}
+
+/** "Claude: provided by your team · Codex: not set up", for the Subscription tab. */
+function agentStatusLine(readiness: CloudAgentReadiness, t: Translate): string {
+  return CLOUD_SETUP_AGENTS.map((agent) => {
+    const source = readiness[agent]
+    const state =
+      source === 'team'
+        ? t('cloudAgentSetup.status.team', 'provided by your team')
+        : source === 'desktop-key'
+          ? t('cloudAgentSetup.status.desktopKey', 'API key from Orca on this computer')
+          : source === 'cloud-secret'
+            ? t('cloudAgentSetup.status.cloudSecret', 'your cloud secret')
+            : t('cloudAgentSetup.status.none', 'not set up')
+    return `${AGENT_NAME[agent]}: ${state}`
+  }).join(' · ')
+}
 
 /** "Your team provides Claude and Codex access · …": one clause per source, agents grouped. */
 export function cloudAgentReadinessSummary(readiness: CloudAgentReadiness, t: Translate): string {
@@ -45,7 +68,13 @@ export function cloudAgentReadinessSummary(readiness: CloudAgentReadiness, t: Tr
       switch (source) {
         case 'desktop-key':
           return [
-            t('cloudAgentSetup.source.desktopKey', '{{agent}} uses your desktop API key', { agent })
+            t(
+              'cloudAgentSetup.source.desktopKey',
+              '{{agent}} uses the API key from Orca on this computer',
+              {
+                agent
+              }
+            )
           ]
         case 'team':
           return [
@@ -93,8 +122,8 @@ export type CloudAgentSetupViewProps = {
   /** Shown above the choices in the dialog: what already works. */
   readiness: CloudAgentReadiness | null
   canShare: boolean
-  /** The dialog also offers subscription sign-in, which there is only an explanation. */
-  includeSignIn: boolean
+  /** Build sheet: start in-VM sign-in. Without it (Settings) the Subscription tab explains and closes. */
+  onSignIn?: () => void
   onSave: (
     choice: CloudAgentSetupChoice,
     scope: CloudAgentSetupScope
@@ -103,8 +132,8 @@ export type CloudAgentSetupViewProps = {
   onCancel: () => void
   /** Build sheet: the form opens from a button that unmounts, so focus moves into it. */
   focusOnOpen?: boolean
-  /** Build sheet: a refused subscription token points back at in-VM sign-in. */
-  onSignInInstead?: () => void
+  /** Dialog: tabs of different heights keep one floor so the centred dialog does not jump. */
+  steadyHeight?: boolean
   /** Fixtures only. */
   initialOption?: CloudAgentSetupOption
   initialFailure?: CloudAgentSetupFailure | null
@@ -114,22 +143,22 @@ export type CloudAgentSetupViewProps = {
 export function CloudAgentSetupView({
   readiness,
   canShare,
-  includeSignIn,
+  onSignIn,
   onSave,
   onSaved,
   onCancel,
-  onSignInInstead,
   focusOnOpen = false,
+  steadyHeight = false,
   initialOption,
   initialFailure = null
 }: CloudAgentSetupViewProps): React.JSX.Element {
   const t = useTranslate()
   const formId = useId()
-  const options: readonly CloudAgentSetupOption[] = includeSignIn
-    ? ['sign-in', ...KEY_OPTIONS]
-    : KEY_OPTIONS
+  const options: readonly CloudAgentSetupOption[] = ['sign-in', ...KEY_OPTIONS]
   const [option, setOption] = useState<CloudAgentSetupOption>(initialOption ?? options[0])
-  const [draft, setDraft] = useState<CloudAgentSetupDraft>(EMPTY_DRAFT)
+  // One draft per way in, so moving between tabs never loses what was typed.
+  const [drafts, setDrafts] = useState<Record<KeyOption, CloudAgentSetupDraft>>(EMPTY_DRAFTS)
+  const draft = option === 'sign-in' ? EMPTY_DRAFT : drafts[option]
   const [share, setShare] = useState(false)
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<CloudAgentSetupFailure | null>(initialFailure)
@@ -140,7 +169,7 @@ export function CloudAgentSetupView({
       tab: t('cloudAgentSetup.option.signIn', 'Subscription'),
       detail: t(
         'cloudAgentSetup.option.signInDialog',
-        'Claude Pro or Max, or ChatGPT: start Claude or Codex in a cloud workspace and sign in when it asks. The sign-in stays in that VM.'
+        'Sign in once inside a cloud workspace. The sign-in stays on that sandbox’s disk, including through sleep.'
       )
     },
     'api-key': {
@@ -181,7 +210,7 @@ export function CloudAgentSetupView({
       setFailure(result)
       return
     }
-    setDraft(EMPTY_DRAFT)
+    setDrafts(EMPTY_DRAFTS)
     onSaved({ agents: agentsFor(choice), scope })
   }
 
@@ -191,17 +220,23 @@ export function CloudAgentSetupView({
     (option !== 'custom' || draft.baseUrl.trim() !== '')
   // Field problems sit under their field; only ones without a field land in the footer.
   const footerError =
-    failure && failure.field === undefined ? cloudSecretsErrorCopy(failure.error, t) : null
+    failure && failure.field === undefined
+      ? failure.error === 'unavailable' ||
+        failure.error === 'timeout' ||
+        failure.error === 'unknown'
+        ? t(
+            'cloudAgentSetup.notSaved',
+            'Couldn’t reach Orca Cloud. Your key wasn’t saved. Try again.'
+          )
+        : cloudSecretsErrorCopy(failure.error, t)
+      : null
 
   return (
     <form
       onSubmit={(event) => void submit(event)}
       onKeyDown={(event) => {
         // Escape from a portaled Select or menu bubbles here too; let it close only that.
-        if (!event.currentTarget.contains(event.target as Node)) {
-          return
-        }
-        if (event.key === 'Escape' && !saving) {
+        if (event.key === 'Escape' && !saving && isOwnKeyEvent(event)) {
           event.stopPropagation()
           onCancel()
         }
@@ -210,18 +245,19 @@ export function CloudAgentSetupView({
       aria-label={t('cloudAgentSetup.title', 'Add an agent')}
     >
       {summary ? (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <CircleCheck aria-hidden className="size-3.5 shrink-0" />
-          {summary}
-        </p>
+        <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs">
+          <CircleCheck aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+          <span>{summary}</span>
+        </div>
       ) : null}
       <Tabs
         value={option}
+        // Arrow keys move focus only; a tab opens on Enter or Space, so nothing jumps while browsing.
+        activationMode="manual"
         onValueChange={(next) => {
           const match = options.find((entry) => entry === next)
           if (match) {
             setOption(match)
-            setDraft(EMPTY_DRAFT)
             setFailure(null)
           }
         }}
@@ -235,22 +271,30 @@ export function CloudAgentSetupView({
         </TabsList>
         {options.map((entry) => (
           <TabsContent key={entry} value={entry}>
-            <div className="space-y-3 pt-1">
+            {/* A fixed floor keeps the footer still while tabs of different heights swap. */}
+            <div className={cn('space-y-3 pt-1', steadyHeight && 'min-h-56')}>
               <p className="text-xs leading-5 text-muted-foreground">{labels[entry].detail}</p>
-              {entry === 'sign-in' ? null : (
+              {entry === 'sign-in' ? (
+                readiness ? (
+                  <p className="text-xs text-muted-foreground">{agentStatusLine(readiness, t)}</p>
+                ) : null
+              ) : (
                 <CloudAgentSetupFields
                   option={entry}
                   formId={formId}
-                  draft={draft}
+                  draft={drafts[entry]}
                   onDraft={(patch) => {
-                    setDraft((current) => ({ ...current, ...patch }))
+                    setDrafts((current) => ({
+                      ...current,
+                      [entry]: { ...current[entry], ...patch }
+                    }))
                     setFailure(null)
                   }}
                   failure={failure}
                   canShare={canShare}
                   share={share}
                   onShare={setShare}
-                  onSignInInstead={includeSignIn ? () => setOption('sign-in') : onSignInInstead}
+                  onSignInInstead={() => setOption('sign-in')}
                 />
               )}
             </div>
@@ -263,13 +307,23 @@ export function CloudAgentSetupView({
           {footerError}
         </p>
         <div className="flex shrink-0 gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
-            {option === 'sign-in'
-              ? t('cloudAgentSetup.close', 'Close')
-              : t('cloudSecrets.cancel', 'Cancel')}
+          <Button type="button" variant="ghost" size="sm" onClick={() => !saving && onCancel()}>
+            {t('cloudSecrets.cancel', 'Cancel')}
           </Button>
-          {option === 'sign-in' ? null : (
-            <Button type="submit" size="sm" disabled={saving || !canSubmit}>
+          {option === 'sign-in' ? (
+            <Button type="button" size="sm" onClick={onSignIn ?? onCancel}>
+              {onSignIn
+                ? t('cloudAgentSetup.signIn.action', 'Sign in when ready')
+                : t('cloudAgentSetup.gotIt', 'Got it')}
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!canSubmit}
+              aria-disabled={saving || undefined}
+              aria-busy={saving || undefined}
+            >
               {saving ? <Loader2 className="animate-spin" /> : null}
               {t('cloudAgentSetup.save', 'Save')}
             </Button>

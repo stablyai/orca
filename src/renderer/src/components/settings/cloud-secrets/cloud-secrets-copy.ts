@@ -12,7 +12,7 @@ export function cloudSecretScopeLabel(scope: CloudSecretScope, t: Translate): st
     case 'org':
       return t('cloudSecrets.scope.org', 'Shared')
     case 'repo':
-      return t('cloudSecrets.scope.repo', 'Repo')
+      return t('cloudSecrets.scope.repo', 'Repository')
   }
 }
 

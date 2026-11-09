@@ -1,6 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { CloudSecretView } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { CloudSecretList, type CloudSecretListMode } from './CloudSecretList'
+import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
 import { CloudSecretsPane, type CloudSecretRepoChoice } from './CloudSecretsPane'
 import {
   FIXTURE_MEMBER,
@@ -182,6 +183,7 @@ function list(
         initialMode={mode}
         initialSaved={options.saved}
         onSetUpAgent={noop}
+        description="Only you get these, in every Orca Cloud workspace you start."
       />
     </Frame>
   )
@@ -282,21 +284,12 @@ export const pastePreview = defineFixture({
   width: 760,
   render: () => (
     <Frame>
-      <CloudSecretList
-        model={listModel(FIXTURE_SECRETS.repo)}
-        canWrite
-        people={{ ...people, viewerUserId: 'u_me' }}
-        emptyTitle=""
-        emptyDetail=""
-        initialMode={{ kind: 'paste' }}
+      <CloudSecretsPasteEnv
+        existingNames={FIXTURE_SECRETS.repo.map((secret) => secret.name)}
+        onSave={async () => ({ secrets: [], deleted: [], errors: [] })}
+        onCancel={noop}
+        initialText={PASTE}
       />
     </Frame>
-  ),
-  interact: async (frame) => {
-    const area = frame.querySelector('textarea')
-    if (area) {
-      typeInto(area, PASTE)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
+  )
 })

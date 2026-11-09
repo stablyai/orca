@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { cloudSecretsErrorCode } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
+import {
+  cloudSecretsErrorCode,
+  type CloudSecretsErrorCode
+} from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { deriveCloudAgentReadiness, type CloudAgentReadiness } from './cloud-agent-readiness'
 import {
   cloudAgentSetupProblem,
@@ -7,6 +10,10 @@ import {
   type CloudAgentSetupChoice
 } from './cloud-agent-setup-choices'
 import type { CloudAgentSetupFailure, CloudAgentSetupScope } from './CloudAgentSetupView'
+
+// Codes, not copy: the view turns them into words.
+const UNKNOWN: CloudSecretsErrorCode = 'unknown'
+const NOT_CONFIGURED: CloudSecretsErrorCode = 'not_configured'
 
 export type CloudAgentSetupModel =
   | { status: 'loading' }
@@ -62,7 +69,7 @@ export function useCloudAgentSetup(args: {
     ): Promise<CloudAgentSetupFailure | null> => {
       const api = window.api.cloudSecrets
       if (!api) {
-        return { error: 'not_configured' }
+        return { error: NOT_CONFIGURED }
       }
       const write = cloudAgentSetupWrite(choice)
       const problem = cloudAgentSetupProblem(write)
@@ -71,7 +78,7 @@ export function useCloudAgentSetup(args: {
       }
       const result = await api.batch({ target: { scope }, set: write.set }).catch(() => null)
       if (!result) {
-        return { error: 'unknown' }
+        return { error: UNKNOWN }
       }
       if (!result.ok) {
         return { error: result.error }

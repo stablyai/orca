@@ -1,5 +1,4 @@
-import { ChevronRight, KeyRound, RefreshCw } from 'lucide-react'
-import { Fragment } from 'react'
+import { KeyRound, RefreshCw } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   CloudSecretScope,
@@ -20,26 +19,16 @@ const DEFAULT_PRECEDENCE: CloudSecretsEffective['precedence'] = {
   agent_key: ['org', 'repo', 'personal']
 }
 
-function Order({
-  scopes,
-  t
-}: {
-  scopes: readonly CloudSecretScope[]
-  t: Translate
-}): React.JSX.Element {
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      {scopes.map((scope, index) => (
-        <Fragment key={scope}>
-          {index > 0 ? <ChevronRight aria-hidden className="size-3 text-muted-foreground" /> : null}
-          <Badge variant="outline">{cloudSecretScopeLabel(scope, t)}</Badge>
-        </Fragment>
-      ))}
-    </span>
-  )
+function chain(scopes: readonly CloudSecretScope[], t: Translate): Record<string, string> {
+  const [first = 'repo', second = 'personal', third = 'org'] = scopes
+  return {
+    first: cloudSecretScopeLabel(first, t),
+    second: cloudSecretScopeLabel(second, t),
+    third: cloudSecretScopeLabel(third, t)
+  }
 }
 
-/** How a name set in several scopes resolves; first scope listed wins. */
+/** How a name set in several scopes resolves, one sentence per kind. */
 export function CloudSecretsPrecedence({
   precedence = DEFAULT_PRECEDENCE
 }: {
@@ -47,21 +36,22 @@ export function CloudSecretsPrecedence({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="space-y-2 rounded-md bg-muted/40 px-3 py-2.5 text-xs">
-      <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
-        <span className="text-muted-foreground">
-          {t('cloudSecrets.precedence.env', 'Environment')}
-        </span>
-        <Order scopes={precedence.env} t={t} />
-        <span className="text-muted-foreground">
-          {t('cloudSecrets.precedence.agentKeys', 'Agent keys')}
-        </span>
-        <Order scopes={precedence.agent_key} t={t} />
-      </div>
-      <p className="leading-5 text-muted-foreground">
-        {t('cloudSecrets.precedence.detail', 'Leftmost wins.')}
-      </p>
-    </div>
+    <ul className="space-y-1 rounded-md bg-muted/40 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+      <li>
+        {t(
+          'cloudSecrets.precedence.envSentence',
+          'Variables set in more than one place: {{first}} wins over {{second}}, which wins over {{third}}.',
+          chain(precedence.env, t)
+        )}
+      </li>
+      <li>
+        {t(
+          'cloudSecrets.precedence.agentSentence',
+          'Agent keys: {{first}} wins over {{second}}, which wins over {{third}}, so a team key covers everyone.',
+          chain(precedence.agent_key, t)
+        )}
+      </li>
+    </ul>
   )
 }
 
@@ -127,7 +117,7 @@ export function CloudSecretsEffectiveView({
             <thead className="sr-only">
               <tr>
                 <th>{t('cloudSecrets.effective.name', 'Name')}</th>
-                <th>{t('cloudSecrets.effective.winner', 'Used from')}</th>
+                <th>{t('cloudSecrets.effective.winner', 'From')}</th>
                 <th>{t('cloudSecrets.effective.shadowed', 'Overrides')}</th>
               </tr>
             </thead>
