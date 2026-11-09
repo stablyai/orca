@@ -2146,44 +2146,44 @@ html.native-shell .app-layout {
   }
 }
 
-.settings-view-shell {
+.settings-view-shell > :not(aside) {
   animation: settings-shell-enter 180ms ease-out;
 }
 
 /* Shared row primitives also render outside Settings; their density stays local to this page. */
-.settings-view-shell [data-slot='label'],
-.settings-view-shell [data-source-title] {
+.settings-view-shell > :not(aside) [data-slot='label'],
+.settings-view-shell > :not(aside) [data-source-title] {
   font-size: var(--text-sm);
   line-height: 1.4;
 }
 
-.settings-view-shell p.text-xs,
-.settings-view-shell p.text-2xs,
-.settings-view-shell p[class~='text-[10px]'],
-.settings-view-shell p[class~='text-[11px]'],
-.settings-view-shell p[class~='text-[12px]'],
-.settings-view-shell p[class~='text-[13px]'],
-.settings-view-shell [data-source-path] {
+.settings-view-shell > :not(aside) p.text-xs,
+.settings-view-shell > :not(aside) p.text-2xs,
+.settings-view-shell > :not(aside) p[class~='text-[10px]'],
+.settings-view-shell > :not(aside) p[class~='text-[11px]'],
+.settings-view-shell > :not(aside) p[class~='text-[12px]'],
+.settings-view-shell > :not(aside) p[class~='text-[13px]'],
+.settings-view-shell > :not(aside) [data-source-path] {
   font-size: var(--text-settings-detail);
   line-height: 1.35;
 }
 
-.settings-view-shell [data-slot='select-trigger'],
-.settings-view-shell button[role='combobox'] {
+.settings-view-shell > :not(aside) [data-slot='select-trigger'],
+.settings-view-shell > :not(aside) button[role='combobox'] {
   min-height: 28px;
   height: 28px;
 }
 
-.settings-view-shell [data-settings-row]:not(:has([data-settings-row])) {
+.settings-view-shell > :not(aside) [data-settings-row]:not(:has([data-settings-row])) {
   padding-block: 9px;
   min-height: 44px;
 }
 
-.settings-view-shell [data-settings-group-heading] {
+.settings-view-shell > :not(aside) [data-settings-group-heading] {
   font-size: var(--text-settings-heading);
 }
 
-.settings-view-shell [data-settings-group-description] {
+.settings-view-shell > :not(aside) [data-settings-group-description] {
   font-size: var(--text-settings-detail);
 }
 

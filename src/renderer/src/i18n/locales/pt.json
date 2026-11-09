@@ -907,7 +907,7 @@
       "openInSidebarCopy": "Digite o que você lembra, ou peça a um agente: “encontre a sessão em que corrigimos o timeout de login.”",
       "open": "Abrir",
       "enableOnAll": "Ativar em todos os computadores",
-      "4f87f1dd17": "Busca de Sessões de Agente"
+      "title": "Busca de Sessões de Agente"
     },
     "dialog": {
       "select": "Selecionar",
@@ -2285,20 +2285,21 @@
         "automationsDescription": "Agende o trabalho dos agentes e escolha se Automações aparece na barra lateral.",
         "shareSkillsDescription": "Compartilhe suas skills com um link não listado. Qualquer pessoa que o tiver pode instalá-las.",
         "floatingWorkspaceWebDescription": "Abas globais de terminal e markdown.",
-        "597921ad92": "Contas de Provedores de IA",
-        "ef8fac05ea": "Uso do Computador",
-        "19f6f97e1e": "Entrada e Edição",
-        "6318b87ae3": "Estatísticas e Uso",
-        "9b8c94d338": "Hosts SSH",
-        "f5d7f03cb3": "Servidores Orca Remotos",
-        "ad5ed245ff": "Privacidade e Telemetria",
-        "9867e8c5f8": "Ferramentas de Dev",
-        "9861b1455d": "Compartilhar Skills",
-        "dd27f49eba": "Git e Controle de Versão",
-        "006ce6d734": "Origens de Tarefas",
-        "db3e9bce57": "Comandos Rápidos",
-        "1e6405f955": "Emulador Mobile",
-        "9d66ac1c2b": "Espaço de Trabalho Flutuante"
+        "dev": "Ferramentas de Dev",
+        "1e761cff2b": "Emulador Mobile",
+        "3fc3db144f": "Comandos Rápidos",
+        "b35e92364b": "Uso do Computador",
+        "0c6ee88a5f": "Entrada e Edição",
+        "85f4fd7710": "Origens de Tarefas",
+        "f70ac54d38": "Contas de Provedores de IA",
+        "09607cb0fe": "Git e Controle de Versão",
+        "7c79d3b7bf": "Opcional",
+        "d72a58b5b9": "Estatísticas e Uso",
+        "shareSkillsTitle": "Compartilhar Skills",
+        "de0c2907a1": "Servidores Orca Remotos",
+        "65b19f5bde": "Espaço de Trabalho Flutuante",
+        "3618579df6": "Privacidade e Telemetria",
+        "94a5afe910": "Hosts SSH"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "A colagem é muito grande."
@@ -5164,10 +5165,10 @@
           "022effa46f": "Servidores Orca Remotos",
           "045db77e21": "Hosts SSH",
           "742ca66ea6": "Privacidade e Telemetria",
-          "75f01ece60": "Capacidades de IA",
-          "4da10f1fbb": "Configurar",
-          "7078ceae15": "Hosts Remotos",
-          "f38d325999": "Privacidade e Segurança"
+          "084d8fac5b": "Privacidade e Segurança",
+          "9abb9be3bc": "Configurar",
+          "23c6874fdf": "Capacidades de IA",
+          "23931df7e8": "Hosts Remotos"
         },
         "experimental": {
           "search": {
@@ -7051,7 +7052,7 @@
           "keywordSignOut": "sair",
           "keywordRelay": "relay",
           "keywordCloud": "nuvem",
-          "80f0478ea1": "Conta do Orca"
+          "title": "Conta do Orca"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Notas de versão",

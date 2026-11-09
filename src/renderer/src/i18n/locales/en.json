@@ -2362,20 +2362,21 @@
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
         "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
-        "597921ad92": "AI provider accounts",
-        "ef8fac05ea": "Computer use",
-        "19f6f97e1e": "Input & editing",
-        "6318b87ae3": "Stats & usage",
-        "9b8c94d338": "SSH hosts",
-        "f5d7f03cb3": "Remote Orca servers",
-        "ad5ed245ff": "Privacy & telemetry",
-        "9867e8c5f8": "Dev tools",
-        "9861b1455d": "Share skills",
-        "dd27f49eba": "Git & source control",
-        "006ce6d734": "Task sources",
-        "db3e9bce57": "Quick commands",
-        "1e6405f955": "Mobile emulator",
-        "9d66ac1c2b": "Floating workspace"
+        "dev": "Dev Tools",
+        "1e761cff2b": "Mobile Emulator",
+        "3fc3db144f": "Quick Commands",
+        "b35e92364b": "Computer Use",
+        "0c6ee88a5f": "Input & Editing",
+        "85f4fd7710": "Task Sources",
+        "f70ac54d38": "AI Provider Accounts",
+        "09607cb0fe": "Git & Source Control",
+        "7c79d3b7bf": "Optional",
+        "d72a58b5b9": "Stats & Usage",
+        "shareSkillsTitle": "Share Skills",
+        "de0c2907a1": "Remote Orca Servers",
+        "65b19f5bde": "Floating Workspace",
+        "3618579df6": "Privacy & Telemetry",
+        "94a5afe910": "SSH Hosts"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -9366,10 +9367,10 @@
           "022effa46f": "Remote Orca servers",
           "045db77e21": "SSH hosts",
           "742ca66ea6": "Privacy & telemetry",
-          "75f01ece60": "AI capabilities",
-          "4da10f1fbb": "Set up",
-          "7078ceae15": "Remote hosts",
-          "f38d325999": "Privacy & security"
+          "084d8fac5b": "Privacy & Security",
+          "9abb9be3bc": "Set Up",
+          "23c6874fdf": "AI Capabilities",
+          "23931df7e8": "Remote Hosts"
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -12767,7 +12768,7 @@
           "keywordSignOut": "sign out",
           "keywordRelay": "relay",
           "keywordCloud": "cloud",
-          "80f0478ea1": "Orca account"
+          "title": "Orca Account"
         },
         "automations": {
           "showButtonDescription": "Show the Automations shortcut in the sidebar.",
@@ -22331,7 +22332,7 @@
       "openInSidebarCopy": "Type what you remember, or ask an agent: “find the session where we fixed the login timeout.”",
       "open": "Open",
       "enableOnAll": "Enable on all computers",
-      "4f87f1dd17": "Agent session search"
+      "title": "Agent Session Search"
     },
     "dialog": {
       "select": "Select",

@@ -46,7 +46,7 @@ export function buildRemoteSettingsSections(
       ? [
           {
             id: 'ssh',
-            title: t('auto.hooks.useSettingsNavigationMetadata.9b8c94d338', 'SSH hosts'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
               'Use existing machines over SSH for files, terminals, Git, and workspaces.'
@@ -59,7 +59,7 @@ export function buildRemoteSettingsSections(
       : []),
     {
       id: 'servers',
-      title: t('auto.hooks.useSettingsNavigationMetadata.f5d7f03cb3', 'Remote Orca servers'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.de0c2907a1', 'Remote Orca Servers'),
       description: isWebClient
         ? 'Connect this browser to a saved Orca server.'
         : 'Run Orca on another machine and work on it from here.',
@@ -84,7 +84,7 @@ export function buildRemoteSettingsSections(
       : []),
     {
       id: 'privacy',
-      title: t('auto.hooks.useSettingsNavigationMetadata.ad5ed245ff', 'Privacy & telemetry'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.3618579df6', 'Privacy & Telemetry'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.8400cfe1c1',
         'Anonymous usage data and telemetry controls.'
@@ -113,7 +113,7 @@ export function buildRemoteSettingsSections(
       ? [
           {
             id: 'dev',
-            title: t('auto.hooks.useSettingsNavigationMetadata.9867e8c5f8', 'Dev tools'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev Tools'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.devDescription',
               'Dev-only tools for exercising UI states.'

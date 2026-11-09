@@ -1788,20 +1788,21 @@
         "automationsDescription": "Planifiez le travail des agents et choisissez si Automatisations apparaît dans la barre latérale.",
         "shareSkillsDescription": "Partagez vos skills avec un lien non répertorié. Toute personne qui l'a peut les installer.",
         "floatingWorkspaceWebDescription": "Onglets globaux de terminal et de markdown.",
-        "597921ad92": "Comptes de fournisseurs d'IA",
-        "ef8fac05ea": "Computer Use",
-        "19f6f97e1e": "Saisie & édition",
-        "6318b87ae3": "Statistiques & usage",
-        "9b8c94d338": "Hôtes SSH",
-        "f5d7f03cb3": "Serveurs Orca distants",
-        "ad5ed245ff": "Confidentialité & télémétrie",
-        "9867e8c5f8": "Outils dev",
-        "9861b1455d": "Partage de skills",
-        "dd27f49eba": "Git & gestion de code source",
-        "006ce6d734": "Sources de tâches",
-        "db3e9bce57": "Commandes rapides",
-        "1e6405f955": "Émulateur mobile",
-        "9d66ac1c2b": "Espace de travail flottant"
+        "dev": "Outils dev",
+        "1e761cff2b": "Émulateur mobile",
+        "3fc3db144f": "Commandes rapides",
+        "b35e92364b": "Computer Use",
+        "0c6ee88a5f": "Saisie & édition",
+        "85f4fd7710": "Sources de tâches",
+        "f70ac54d38": "Comptes de fournisseurs d'IA",
+        "09607cb0fe": "Git & gestion de code source",
+        "7c79d3b7bf": "Facultatif",
+        "d72a58b5b9": "Statistiques & usage",
+        "shareSkillsTitle": "Partage de skills",
+        "de0c2907a1": "Serveurs Orca distants",
+        "65b19f5bde": "Espace de travail flottant",
+        "3618579df6": "Confidentialité & télémétrie",
+        "94a5afe910": "Hôtes SSH"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Le collage est trop volumineux."
@@ -8798,10 +8799,10 @@
           "022effa46f": "Serveurs Orca distants",
           "045db77e21": "Hôtes SSH",
           "742ca66ea6": "Confidentialité & télémétrie",
-          "75f01ece60": "Capacités IA",
-          "4da10f1fbb": "Configurer",
-          "7078ceae15": "Hôtes distants",
-          "f38d325999": "Confidentialité et sécurité"
+          "084d8fac5b": "Confidentialité et sécurité",
+          "9abb9be3bc": "Configurer",
+          "23c6874fdf": "Capacités IA",
+          "23931df7e8": "Hôtes distants"
         },
         "SettingsFormControls": {
           "42a4d15a30": "Aucune police correspondante.",
@@ -12221,7 +12222,7 @@
           "keywordSignOut": "se déconnecter",
           "keywordRelay": "relais",
           "keywordCloud": "nuage",
-          "80f0478ea1": "Compte Orca"
+          "title": "Compte Orca"
         },
         "automations": {
           "showButtonDescription": "Afficher le raccourci Automations dans la barre latérale.",
@@ -21779,7 +21780,7 @@
       "openInSidebarCopy": "Tapez ce dont vous vous souvenez ou demandez à un agent : « recherchez la session où nous avons corrigé le délai d'expiration de la connexion ».",
       "open": "Ouvrir",
       "enableOnAll": "Activer sur tous les ordinateurs",
-      "4f87f1dd17": "Recherche de session d'agent"
+      "title": "Recherche de session d'agent"
     },
     "dialog": {
       "select": "Sélectionner",

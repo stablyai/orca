@@ -1567,20 +1567,21 @@
         "automationsDescription": "Programa el trabajo del agente y elige si Automatizaciones aparece en la barra lateral.",
         "shareSkillsDescription": "Comparte tus skills con un enlace no listado. Cualquiera que lo tenga puede instalarlos.",
         "floatingWorkspaceWebDescription": "Pestañas globales de terminal y markdown.",
-        "597921ad92": "Cuentas de proveedores de IA",
-        "ef8fac05ea": "Computer Use",
-        "19f6f97e1e": "Entrada y edición",
-        "6318b87ae3": "Estadísticas y uso",
-        "9b8c94d338": "Hosts SSH",
-        "f5d7f03cb3": "Servidores remotos de Orca",
-        "ad5ed245ff": "Privacidad y telemetría",
-        "9867e8c5f8": "Herramientas de desarrollo",
-        "9861b1455d": "Compartir skills",
-        "dd27f49eba": "Git y Source Control",
-        "006ce6d734": "Fuentes de tareas",
-        "db3e9bce57": "Comandos rápidos",
-        "1e6405f955": "Emulador móvil",
-        "9d66ac1c2b": "Espacio de trabajo flotante"
+        "dev": "Herramientas de desarrollo",
+        "1e761cff2b": "Emulador móvil",
+        "3fc3db144f": "Comandos rápidos",
+        "b35e92364b": "Computer Use",
+        "0c6ee88a5f": "Entrada y edición",
+        "85f4fd7710": "Fuentes de tareas",
+        "f70ac54d38": "Cuentas de proveedores de IA",
+        "09607cb0fe": "Git y Source Control",
+        "7c79d3b7bf": "Opcional",
+        "d72a58b5b9": "Estadísticas y uso",
+        "shareSkillsTitle": "Compartir skills",
+        "de0c2907a1": "Servidores remotos de Orca",
+        "65b19f5bde": "Espacio de trabajo flotante",
+        "3618579df6": "Privacidad y telemetría",
+        "94a5afe910": "Hosts SSH"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -8531,10 +8532,10 @@
           "022effa46f": "Servidores remotos de Orca",
           "045db77e21": "Hosts SSH",
           "742ca66ea6": "Privacidad y telemetría",
-          "75f01ece60": "Capacidades de IA",
-          "4da10f1fbb": "Configuración inicial",
-          "7078ceae15": "Hosts remotos",
-          "f38d325999": "Privacidad y seguridad"
+          "084d8fac5b": "Privacidad y seguridad",
+          "9abb9be3bc": "Configuración inicial",
+          "23c6874fdf": "Capacidades de IA",
+          "23931df7e8": "Hosts remotos"
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",
@@ -12015,7 +12016,7 @@
           "keywordSignIn": "iniciar sesión",
           "keywordSignOut": "desconectar",
           "keywordRelay": "relé",
-          "80f0478ea1": "Cuenta Orca"
+          "title": "Cuenta Orca"
         },
         "automations": {
           "title": "Automatizaciones",
@@ -21689,7 +21690,7 @@
       "openInSidebar": "Abrir en la barra lateral",
       "openInSidebarCopy": "Escribe lo que recuerdes o pídele a un agente: «encuentra la sesión donde arreglamos el tiempo de espera de inicio de sesión».",
       "enableOnAll": "Activar en todas las computadoras",
-      "4f87f1dd17": "Búsqueda de sesiones de agente"
+      "title": "Búsqueda de sesiones de agente"
     },
     "dialog": {
       "select": "Seleccionar",

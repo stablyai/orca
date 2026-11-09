@@ -51,14 +51,15 @@ export function buildCapabilitySettingsSections(
     },
     {
       id: 'accounts',
-      title: t('auto.hooks.useSettingsNavigationMetadata.597921ad92', 'AI provider accounts'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.f70ac54d38', 'AI Provider Accounts'),
       description: t(
         'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
         'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
       ),
       icon: UserCog,
       searchEntries: getAccountsPaneSearchEntries(),
-      group: 'capabilities'
+      group: 'capabilities',
+      badge: t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
     },
     {
       id: 'orchestration',
@@ -93,7 +94,7 @@ export function buildCapabilitySettingsSections(
       ? [
           {
             id: 'computer-use',
-            title: t('auto.hooks.useSettingsNavigationMetadata.ef8fac05ea', 'Computer use'),
+            title: t('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer Use'),
             description: t(
               'auto.hooks.useSettingsNavigationMetadata.0059bd17f3',
               'Enable agents to control any app on your computer.'
@@ -128,7 +129,7 @@ export function buildSetupSettingsSections(
       ? [
           {
             id: 'orca-account',
-            title: t('auto.components.settings.orcaAccount.80f0478ea1', 'Orca account'),
+            title: t('auto.components.settings.orcaAccount.title', 'Orca Account'),
             description: t(
               'auto.components.settings.orcaAccount.description',
               'Share work instantly and reach your desktop from Orca Mobile wherever you are.'

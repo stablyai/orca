@@ -2015,20 +2015,21 @@
         "automationsDescription": "Agentenaufgaben planen und festlegen, ob Automatisierungen in der Seitenleiste angezeigt werden.",
         "shareSkillsDescription": "Skills über einen nicht gelisteten Link teilen. Alle, die den Link haben, können sie installieren.",
         "floatingWorkspaceWebDescription": "Globale Terminal- und Markdown-Tabs.",
-        "597921ad92": "Konten bei KI-Anbietern",
-        "ef8fac05ea": "Computersteuerung",
-        "19f6f97e1e": "Eingabe & Bearbeitung",
-        "6318b87ae3": "Statistiken & Nutzung",
-        "9b8c94d338": "SSH-Hosts",
-        "f5d7f03cb3": "Entfernte Orca-Server",
-        "ad5ed245ff": "Datenschutz & Telemetrie",
-        "9867e8c5f8": "Entwicklerwerkzeuge",
-        "9861b1455d": "Skills teilen",
-        "dd27f49eba": "Git & Quellcodeverwaltung",
-        "006ce6d734": "Aufgabenquellen",
-        "db3e9bce57": "Schnellbefehle",
-        "1e6405f955": "Mobilgeräte-Emulator",
-        "9d66ac1c2b": "Schwebender Arbeitsbereich"
+        "dev": "Entwicklerwerkzeuge",
+        "1e761cff2b": "Mobilgeräte-Emulator",
+        "3fc3db144f": "Schnellbefehle",
+        "b35e92364b": "Computersteuerung",
+        "0c6ee88a5f": "Eingabe & Bearbeitung",
+        "85f4fd7710": "Aufgabenquellen",
+        "f70ac54d38": "Konten bei KI-Anbietern",
+        "09607cb0fe": "Git & Quellcodeverwaltung",
+        "7c79d3b7bf": "Optional",
+        "d72a58b5b9": "Statistiken & Nutzung",
+        "shareSkillsTitle": "Skills teilen",
+        "de0c2907a1": "Entfernte Orca-Server",
+        "65b19f5bde": "Schwebender Arbeitsbereich",
+        "3618579df6": "Datenschutz & Telemetrie",
+        "94a5afe910": "SSH-Hosts"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Der einzufügende Inhalt ist zu groß."
@@ -8930,10 +8931,10 @@
           "022effa46f": "Entfernte Orca-Server",
           "045db77e21": "SSH-Hosts",
           "742ca66ea6": "Datenschutz & Telemetrie",
-          "75f01ece60": "KI-Funktionen",
-          "4da10f1fbb": "Einrichtung",
-          "7078ceae15": "Remote-Hosts",
-          "f38d325999": "Datenschutz & Sicherheit"
+          "084d8fac5b": "Datenschutz & Sicherheit",
+          "9abb9be3bc": "Einrichtung",
+          "23c6874fdf": "KI-Funktionen",
+          "23931df7e8": "Remote-Hosts"
         },
         "SettingsFormControls": {
           "42a4d15a30": "Keine passenden Schriftarten.",
@@ -12301,7 +12302,7 @@
           "keywordSignOut": "abmelden",
           "keywordRelay": "Relay",
           "keywordCloud": "Cloud",
-          "80f0478ea1": "Orca-Konto"
+          "title": "Orca-Konto"
         },
         "automations": {
           "showButtonDescription": "Die Verknüpfung zu Automatisierungen in der Seitenleiste anzeigen.",
@@ -21459,7 +21460,7 @@
       "openInSidebarCopy": "Das eingeben, was in Erinnerung geblieben ist, oder einen Agenten bitten: „Finde die Sitzung, in der wir den Anmelde-Timeout behoben haben.“",
       "open": "Öffnen",
       "enableOnAll": "Auf allen Computern aktivieren",
-      "4f87f1dd17": "Suche in Agentensitzungen"
+      "title": "Suche in Agentensitzungen"
     },
     "dialog": {
       "select": "Auswählen",

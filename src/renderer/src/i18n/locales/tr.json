@@ -1991,20 +1991,21 @@
         "automationsDescription": "Ajan işini zamanlayın ve Otomasyonlar'ın kenar çubuğunda görünüp görünmeyeceğini seçin.",
         "shareSkillsDescription": "Becerilerinizi listelenmemiş bir bağlantıyla paylaşın. Bağlantıya sahip olan herkes onları yükleyebilir.",
         "floatingWorkspaceWebDescription": "Genel terminal ve markdown sekmeleri.",
-        "597921ad92": "AI Sağlayıcı Hesapları",
-        "ef8fac05ea": "Bilgisayar Kullanımı",
-        "19f6f97e1e": "Giriş ve Düzenleme",
-        "6318b87ae3": "İstatistikler ve Kullanım",
-        "9b8c94d338": "SSH Sunucuları",
-        "f5d7f03cb3": "Uzak Orca Sunucuları",
-        "ad5ed245ff": "Gizlilik ve Telemetri",
-        "9867e8c5f8": "Geliştirici Araçları",
-        "9861b1455d": "Becerileri paylaş",
-        "dd27f49eba": "Git ve Kaynak Kontrolü",
-        "006ce6d734": "Görev Kaynakları",
-        "db3e9bce57": "Hızlı Komutlar",
-        "1e6405f955": "Mobil Emülatör",
-        "9d66ac1c2b": "Yüzen Çalışma Alanı"
+        "dev": "Geliştirici Araçları",
+        "1e761cff2b": "Mobil Emülatör",
+        "3fc3db144f": "Hızlı Komutlar",
+        "b35e92364b": "Bilgisayar Kullanımı",
+        "0c6ee88a5f": "Giriş ve Düzenleme",
+        "85f4fd7710": "Görev Kaynakları",
+        "f70ac54d38": "AI Sağlayıcı Hesapları",
+        "09607cb0fe": "Git ve Kaynak Kontrolü",
+        "7c79d3b7bf": "Opsiyonel",
+        "d72a58b5b9": "İstatistikler ve Kullanım",
+        "shareSkillsTitle": "Becerileri paylaş",
+        "de0c2907a1": "Uzak Orca Sunucuları",
+        "65b19f5bde": "Yüzen Çalışma Alanı",
+        "3618579df6": "Gizlilik ve Telemetri",
+        "94a5afe910": "SSH Sunucuları"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Yapıştırılan içerik çok büyük."
@@ -8914,10 +8915,10 @@
           "022effa46f": "Uzak Orca Sunucuları",
           "045db77e21": "SSH Sunucuları",
           "742ca66ea6": "Gizlilik ve Telemetri",
-          "75f01ece60": "AI Özellikleri",
-          "4da10f1fbb": "Kurulum",
-          "7078ceae15": "Uzak Sunucular",
-          "f38d325999": "Gizlilik ve Güvenlik"
+          "084d8fac5b": "Gizlilik ve Güvenlik",
+          "9abb9be3bc": "Kurulum",
+          "23c6874fdf": "AI Özellikleri",
+          "23931df7e8": "Uzak Sunucular"
         },
         "SettingsFormControls": {
           "42a4d15a30": "Eşleşen yazı tipi yok.",
@@ -12285,7 +12286,7 @@
           "keywordSignOut": "oturumu kapat",
           "keywordRelay": "relay",
           "keywordCloud": "bulut",
-          "80f0478ea1": "Orca Hesabı"
+          "title": "Orca Hesabı"
         },
         "automations": {
           "showButtonDescription": "Otomasyonlar kısayolunu kenar çubuğunda gösterin.",
@@ -21440,7 +21441,7 @@
       "openInSidebarCopy": "Hatırladığınızı yazın veya bir ajana sorun: “giriş zaman aşımını düzelttiğimiz oturumu bul.”",
       "open": "Aç",
       "enableOnAll": "Tüm bilgisayarlarda etkinleştir",
-      "4f87f1dd17": "Ajan Oturumu Arama"
+      "title": "Ajan Oturumu Arama"
     },
     "dialog": {
       "select": "Seç",

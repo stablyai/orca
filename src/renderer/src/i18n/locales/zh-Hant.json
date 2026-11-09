@@ -1963,20 +1963,21 @@
         "automationsDescription": "設定代理程式工作的排程，並選擇是否在側邊欄顯示「自動化」。",
         "shareSkillsDescription": "透過未公開列出的連結分享技能。任何取得連結的人都能安裝。",
         "floatingWorkspaceWebDescription": "全域終端機和 Markdown 分頁。",
-        "597921ad92": "AI 供應商帳戶",
-        "ef8fac05ea": "電腦控制",
-        "19f6f97e1e": "輸入與編輯",
-        "6318b87ae3": "統計與用量",
-        "9b8c94d338": "SSH 主機",
-        "f5d7f03cb3": "遠端 Orca 伺服器",
-        "ad5ed245ff": "隱私與遙測",
-        "9867e8c5f8": "開發工具",
-        "9861b1455d": "分享技能",
-        "dd27f49eba": "Git 和原始碼控制",
-        "006ce6d734": "任務來源",
-        "db3e9bce57": "快速命令",
-        "1e6405f955": "手機模擬器",
-        "9d66ac1c2b": "浮動工作區"
+        "dev": "開發工具",
+        "1e761cff2b": "手機模擬器",
+        "3fc3db144f": "快速命令",
+        "b35e92364b": "電腦控制",
+        "0c6ee88a5f": "輸入與編輯",
+        "85f4fd7710": "任務來源",
+        "f70ac54d38": "AI 供應商帳戶",
+        "09607cb0fe": "Git 和原始碼控制",
+        "7c79d3b7bf": "可選",
+        "d72a58b5b9": "統計與用量",
+        "shareSkillsTitle": "分享技能",
+        "de0c2907a1": "遠端 Orca 伺服器",
+        "65b19f5bde": "浮動工作區",
+        "3618579df6": "隱私與遙測",
+        "94a5afe910": "SSH 主機"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼上內容過大。"
@@ -8751,10 +8752,10 @@
           "022effa46f": "遠端 Orca 伺服器",
           "045db77e21": "SSH 遠端主機",
           "742ca66ea6": "隱私與遙測",
-          "75f01ece60": "AI 能力",
-          "4da10f1fbb": "初始設定",
-          "7078ceae15": "遠端主機",
-          "f38d325999": "隱私與安全"
+          "084d8fac5b": "隱私與安全",
+          "9abb9be3bc": "初始設定",
+          "23c6874fdf": "AI 能力",
+          "23931df7e8": "遠端主機"
         },
         "SettingsFormControls": {
           "42a4d15a30": "沒有符合的字型。",
@@ -12122,7 +12123,7 @@
           "keywordSignOut": "登出",
           "keywordRelay": "中繼",
           "keywordCloud": "雲",
-          "80f0478ea1": "Orca 帳戶"
+          "title": "Orca 帳戶"
         },
         "automations": {
           "showButtonDescription": "在側邊欄顯示自動化捷徑。",
@@ -21137,7 +21138,7 @@
       "openInSidebarCopy": "輸入你記得的內容，或請代理程式「找出我們修正登入逾時的那個工作階段」。",
       "open": "開啟",
       "enableOnAll": "在所有電腦啟用",
-      "4f87f1dd17": "代理程式工作階段搜尋"
+      "title": "代理程式工作階段搜尋"
     },
     "dialog": {
       "select": "選取",

@@ -1557,20 +1557,21 @@
         "automationsDescription": "安排智能体工作并选择自动化是否显示在侧栏中。",
         "shareSkillsDescription": "通过未列出的链接分享您的技能。任何拥有它的人都可以安装它们。",
         "floatingWorkspaceWebDescription": "全局终端和 Markdown 选项卡。",
-        "597921ad92": "AI 提供商账户",
-        "ef8fac05ea": "计算机控制",
-        "19f6f97e1e": "输入与编辑",
-        "6318b87ae3": "统计和使用情况",
-        "9b8c94d338": "SSH 主机",
-        "f5d7f03cb3": "远程 Orca 服务器",
-        "ad5ed245ff": "隐私与遥测",
-        "9867e8c5f8": "开发工具",
-        "9861b1455d": "分享技能",
-        "dd27f49eba": "Git 和源代码控制",
-        "006ce6d734": "任务来源",
-        "db3e9bce57": "快捷命令",
-        "1e6405f955": "手机模拟器",
-        "9d66ac1c2b": "浮动工作区"
+        "dev": "开发工具",
+        "1e761cff2b": "手机模拟器",
+        "3fc3db144f": "快捷命令",
+        "b35e92364b": "计算机控制",
+        "0c6ee88a5f": "输入与编辑",
+        "85f4fd7710": "任务来源",
+        "f70ac54d38": "AI 提供商账户",
+        "09607cb0fe": "Git 和源代码控制",
+        "7c79d3b7bf": "可选",
+        "d72a58b5b9": "统计和使用情况",
+        "shareSkillsTitle": "分享技能",
+        "de0c2907a1": "远程 Orca 服务器",
+        "65b19f5bde": "浮动工作区",
+        "3618579df6": "隐私与遥测",
+        "94a5afe910": "SSH 主机"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -8238,10 +8239,10 @@
           "022effa46f": "远程 Orca 服务器",
           "045db77e21": "SSH 远程主机",
           "742ca66ea6": "隐私与遥测",
-          "75f01ece60": "AI 能力",
-          "4da10f1fbb": "初始设置",
-          "7078ceae15": "远程主机",
-          "f38d325999": "隐私与安全"
+          "084d8fac5b": "隐私与安全",
+          "9abb9be3bc": "初始设置",
+          "23c6874fdf": "AI 能力",
+          "23931df7e8": "远程主机"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -11750,7 +11751,7 @@
           "keywordSignOut": "登出",
           "keywordRelay": "中继",
           "keywordCloud": "云",
-          "80f0478ea1": "Orca 账户"
+          "title": "Orca 账户"
         },
         "automations": {
           "showButtonDescription": "在侧边栏中显示自动化快捷方式。",
@@ -21127,7 +21128,7 @@
       "openInSidebarCopy": "输入您记得的内容，或询问智能体：“找到我们修复登录超时的会话。”",
       "open": "打开",
       "enableOnAll": "在所有计算机上启用",
-      "4f87f1dd17": "智能体会话搜索"
+      "title": "智能体会话搜索"
     },
     "dialog": {
       "select": "选择",

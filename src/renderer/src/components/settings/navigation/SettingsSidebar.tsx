@@ -166,9 +166,9 @@ export function SettingsSidebar({
     setupGuideProgress.ready && setupGuideProgress.doneCount < setupGuideProgress.total
   const navItemClassName = (isActive: boolean): string =>
     cn(
-      'flex w-full items-center gap-2 rounded-lg h-[26px] px-3 py-0 text-left text-sm outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
+      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
       isActive
-        ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
+        ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground ring-1 ring-worktree-sidebar-ring/25'
         : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-accent/60 hover:text-worktree-sidebar-foreground'
     )
   const installStatusLabel = (status: VisibleInstallStatus): string => {
@@ -214,14 +214,14 @@ export function SettingsSidebar({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-2">
-        <div className="space-y-3">
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
+        <div className="space-y-5">
           {generalGroups.map((group) => (
-            <div key={group.id} className="space-y-1">
-              <p className="px-3 pt-1 text-settings-detail font-medium text-muted-foreground">
+            <div key={group.id} className="space-y-2">
+              <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                 {group.title}
               </p>
-              <div className="space-y-0">
+              <div className="space-y-1">
                 {group.sections
                   .filter((section) => section.id !== 'setup-guide')
                   .map((section) => {
@@ -243,7 +243,7 @@ export function SettingsSidebar({
                             {installStatusLabel(section.installStatus)}
                           </span>
                         ) : section.badge ? (
-                          <span className="ml-auto text-2xs text-muted-foreground">
+                          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
                             {section.badge}
                           </span>
                         ) : null}
@@ -254,8 +254,8 @@ export function SettingsSidebar({
             </div>
           ))}
 
-          <div className="space-y-1">
-            <p className="px-3 pt-1 text-settings-detail font-medium text-muted-foreground">
+          <div className="space-y-2">
+            <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
               {t('auto.components.settings.SettingsSidebar.5c9669ff9c', 'Projects')}
             </p>
 
