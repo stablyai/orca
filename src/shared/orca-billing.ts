@@ -22,6 +22,11 @@ export type OrcaBillingOffers = {
     /** Display only, e.g. "$50/seat/mo"; Stripe charges the configured price. */
     monthlyPriceLabel: string
     annualPriceLabel: string
+    /** Per-seat prices in cents for totals and the annual saving; null from older services. */
+    monthlyPriceCentsPerSeat: number | null
+    annualPriceCentsPerSeat: number | null
+    /** How many Standard hours one Large hour uses. */
+    largeMachineWeight: number
     includedHoursPerSeat: number
     concurrentSandboxesPerSeat: number
     idleSleepMinutes: number

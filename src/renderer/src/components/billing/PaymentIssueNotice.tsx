@@ -23,7 +23,14 @@ export function PaymentIssueNotice({
     return null
   }
   const when = (ms: number): string =>
-    new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(ms)
+    new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    }).format(ms)
   return (
     <div
       role="alert"

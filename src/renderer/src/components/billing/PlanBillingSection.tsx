@@ -1,17 +1,17 @@
 import { useState } from 'react'
-import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
+import { CreditCard, ExternalLink, RefreshCw, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { formatCents } from './plans/plans-pricing'
 import { cn } from '@/lib/utils'
 import type {
-  OrcaBillingInterval,
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
-import { EnterpriseOffer, TeamOffer } from './PlanBillingOffers'
+import { openPlansPage } from './plans/plans-page-store'
 import { PaymentIssueNotice } from './PaymentIssueNotice'
 import { OverageControls, UsageSummary } from './PlanBillingUsage'
 import {
@@ -71,14 +71,9 @@ export function PlanBillingSection(): React.JSX.Element | null {
       busy={busy}
       notice={notice}
       onRefresh={refresh}
-      onCheckout={({ interval, seats }) =>
-        void run(() =>
-          window.api.orcaProfiles.billingOpenCheckout({ plan: 'team', interval, seats })
-        )
-      }
       onPortal={() => void run(() => window.api.orcaProfiles.billingOpenPortal())}
       onSetOverage={(args) => void setOverage(args)}
-      onContactSales={(url) => void window.api.shell.openUrl(url)}
+      onSeePlans={() => openPlansPage('settings')}
     />
   )
 }
@@ -89,10 +84,10 @@ export type PlanBillingViewProps = {
   busy: boolean
   notice: string | null
   onRefresh: () => void
-  onCheckout: (args: { interval: OrcaBillingInterval; seats: number }) => void
   onPortal: () => void
   onSetOverage: (args: OrcaBillingOverageArgs) => void
-  onContactSales: (url: string) => void
+  /** Opens the plans page (pricing, Checkout, Enterprise contact). */
+  onSeePlans: () => void
 }
 
 export function PlanBillingView({
@@ -101,12 +96,12 @@ export function PlanBillingView({
   busy,
   notice,
   onRefresh,
-  onCheckout,
   onPortal,
   onSetOverage,
-  onContactSales
+  onSeePlans
 }: PlanBillingViewProps): React.JSX.Element | null {
   const t = useTranslate()
+  const locale = useIntlLocale()
   if (!result || result.status === 'unconfigured' || result.status === 'signed-out') {
     // The pane above already handles sign-in; billing stays out of builds without a service.
     return null
@@ -144,7 +139,8 @@ export function PlanBillingView({
   const entitlement = result.entitlement
   const tone = planBillingTone(entitlement)
   const hasPlan = entitlement.plan !== null && entitlement.status !== 'canceled'
-  const offers = entitlement.offers
+  const annualCents = entitlement.offers?.team.annualPriceCentsPerSeat ?? null
+  const teamFrom = annualCents === null ? null : formatCents(Math.round(annualCents / 12), locale)
 
   return (
     <div className="space-y-4 border-t border-border/60 pt-5">
@@ -188,21 +184,37 @@ export function PlanBillingView({
         <p className="text-xs text-muted-foreground">{denyReasonCopy(entitlement.reason, t)}</p>
       ) : null}
 
-      {!hasPlan && offers ? (
-        <div className="grid gap-3 md:grid-cols-2">
-          {entitlement.canManageBilling ? (
-            <TeamOffer offers={offers} busy={busy} onCheckout={onCheckout} />
-          ) : null}
-          <EnterpriseOffer offers={offers} onContactSales={onContactSales} />
-        </div>
+      {!hasPlan && teamFrom ? (
+        <p className="text-xs text-muted-foreground">
+          {t(
+            'auto.components.billing.teamFrom',
+            'Team starts at {{value0}} per seat per month, billed annually.',
+            {
+              value0: teamFrom
+            }
+          )}
+        </p>
       ) : null}
 
-      {hasPlan && entitlement.canManageBilling ? (
-        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onPortal}>
-          {t('auto.components.billing.manageBilling', 'Manage billing')}
-          <ExternalLink />
-        </Button>
-      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {hasPlan ? null : (
+          <Button type="button" size="sm" onClick={onSeePlans}>
+            <Sparkles />
+            {t('auto.components.billing.choosePlan', 'Choose a plan')}
+          </Button>
+        )}
+        {hasPlan && entitlement.canManageBilling && entitlement.payment.pastDueSince === null ? (
+          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onPortal}>
+            {t('auto.components.billing.manageBilling', 'Manage billing')}
+            <ExternalLink />
+          </Button>
+        ) : null}
+        {hasPlan ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onSeePlans}>
+            {t('auto.components.billing.comparePlans', 'Compare plans')}
+          </Button>
+        ) : null}
+      </div>
 
       {!entitlement.canManageBilling ? (
         <p className="text-xs text-muted-foreground">

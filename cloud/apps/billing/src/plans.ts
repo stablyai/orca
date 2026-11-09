@@ -23,6 +23,9 @@ const TeamSchema = z
     // Display only; Stripe's prices are what is charged.
     monthlyPriceLabel: z.string().max(40),
     annualPriceLabel: z.string().max(40),
+    // Display only, for totals and the annual saving on the plans page; must match Stripe's prices.
+    monthlyPriceCentsPerSeat: z.number().int().nonnegative(),
+    annualPriceCentsPerSeat: z.number().int().nonnegative(),
     includedHoursPerSeat: z.number().nonnegative(),
     concurrentSandboxesPerSeat: z.number().int().nonnegative(),
     machineSizes: z.array(z.enum(MACHINE_SIZES)).min(1),
@@ -55,6 +58,8 @@ export const DEFAULT_PLANS: PlanCatalog = {
     label: 'Team',
     monthlyPriceLabel: '$50/seat/mo',
     annualPriceLabel: '$480/seat/yr',
+    monthlyPriceCentsPerSeat: 5000,
+    annualPriceCentsPerSeat: 48000,
     includedHoursPerSeat: 60,
     concurrentSandboxesPerSeat: 3,
     machineSizes: ['standard', 'large'],
@@ -114,6 +119,9 @@ export function publicOffers(catalog: PlanCatalog) {
       label: team.label,
       monthlyPriceLabel: team.monthlyPriceLabel,
       annualPriceLabel: team.annualPriceLabel,
+      monthlyPriceCentsPerSeat: team.monthlyPriceCentsPerSeat,
+      annualPriceCentsPerSeat: team.annualPriceCentsPerSeat,
+      largeMachineWeight: MACHINE_SIZE_WEIGHT.large,
       includedHoursPerSeat: team.includedHoursPerSeat,
       concurrentSandboxesPerSeat: team.concurrentSandboxesPerSeat,
       idleSleepMinutes: team.idleSleepMinutes,

@@ -11,6 +11,7 @@ import {
   selectVisibleAccountMenuItems
 } from '../sidebar/account-menu/account-menu-items'
 import { BILLING_CAPABILITY, registerPlanBillingMenuItem } from './register-plan-billing-menu-item'
+import { getPlansPageState } from './plans/plans-page-store'
 
 describe('Plan & billing and Team account menu items', () => {
   it('register behind the billing capability and open Orca account settings', () => {
@@ -20,6 +21,8 @@ describe('Plan & billing and Team account menu items', () => {
       ['orca.plan-billing', 'Plan & billing', BILLING_CAPABILITY],
       ['orca.team', 'Team', BILLING_CAPABILITY]
     ])
+    items[0]?.onSelect()
+    expect(getPlansPageState()).toEqual({ open: true, source: 'account-menu' })
     items[1]?.onSelect()
     expect(openSettingsTarget).toHaveBeenCalledWith({ pane: 'orca-account', repoId: null })
     expect(openSettingsPage).toHaveBeenCalled()

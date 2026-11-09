@@ -9,10 +9,9 @@ const handlers = {
   busy: false,
   notice: null,
   onRefresh: () => {},
-  onCheckout: () => {},
   onPortal: () => {},
   onSetOverage: () => {},
-  onContactSales: () => {}
+  onSeePlans: () => {}
 }
 
 export const activeTeam = defineFixture({
