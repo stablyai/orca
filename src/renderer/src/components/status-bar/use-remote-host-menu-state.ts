@@ -61,7 +61,11 @@ export function useRemoteHostMenuState(open: boolean, hostExists: (id: string) =
     [mounted]
   )
   const cancel = useCallback((id: string) => {
-    controllers.current.get(id)?.abort()
+    const controller = controllers.current.get(id)
+    if (!controller) {
+      return
+    }
+    controller.abort()
     controllers.current.delete(id)
     setPending(new Set(controllers.current.keys()))
   }, [])

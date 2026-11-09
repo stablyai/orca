@@ -4357,7 +4357,7 @@
             "access_revoked_explanation": "サーバーで発行した新規ペアリングリンクで再度ペアリングし、接続し直してください。",
             "managed_access_revoked_explanation": "Orca は SSH 経由で再ペアリングできなかったため、接続して再試行してください。",
             "connect_access_revoked_explanation": "接続してもう一度お試しください。",
-            "server_replaced_explanation": "設定 › リモート Orca サーバーでこのサーバーの「削除…」を選択し、SSH ホストに接続して現在のサーバーとペアリングしてください。",
+            "server_replaced_explanation": "設定 › リモート Orca サーバーでこのサーバーの「登録を解除…」を選択し、SSH ホストに接続して現在のサーバーとペアリングしてください。",
             "update_required_explanation": "このコンピュータまたはサーバーの Orca を更新してから、再度接続してください。"
           },
           "NativeChatResumeStatusSegment": {

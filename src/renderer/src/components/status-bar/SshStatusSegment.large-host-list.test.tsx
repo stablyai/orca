@@ -110,6 +110,37 @@ function connectionState(targetId: string, status: SshConnectionStatus): SshConn
   return { targetId, status, error: null, reconnectAttempt: 0 }
 }
 
+function addStoppedServer() {
+  state.runtimeEnvironments = [
+    {
+      id: 'server',
+      name: 'Server',
+      createdAt: 0,
+      updatedAt: 0,
+      lastUsedAt: null,
+      runtimeId: null,
+      source: 'manual',
+      preferredEndpointId: 'direct',
+      endpoints: [
+        { id: 'direct', kind: 'websocket', label: 'Direct', endpoint: 'ws://127.0.0.1:1' }
+      ]
+    }
+  ]
+  state.runtimeStatusByEnvironmentId.set('server', {
+    status: null,
+    checkedAt: 0,
+    remoteControl: {
+      state: 'closed',
+      reconnectAttempt: 7,
+      pendingRequestCount: 0,
+      subscriptionCount: 0,
+      lastConnectedAt: null,
+      lastClose: null,
+      lastError: null
+    }
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   state.runtimeEnvironments = []
@@ -188,6 +219,80 @@ describe('the status menu with a very large imported SSH host list', () => {
         split: count * 4 + 1,
         overall: count * 4 + 1
       })
+    }
+  )
+
+  it.each([13_692, 136_920])(
+    'splits %i SSH hosts only when SSH inputs change during actions',
+    async (count) => {
+      state.sshTargetLabels = new Map(
+        Array.from({ length: count }, (_, index) => [`ssh-${index}`, `node-${index}`])
+      )
+      const retryId = `ssh-${count - 1}`
+      state.sshConnectionStates = new Map([
+        ['ssh-0', connectionState('ssh-0', 'connected')],
+        [retryId, { ...connectionState(retryId, 'reconnecting'), reconnectAttempt: 2 }]
+      ])
+      addStoppedServer()
+      let settleDisconnect: () => void = () => undefined
+      let settleSsh: () => void = () => undefined
+      let settleRuntime: (value: boolean) => void = () => undefined
+      const disconnectRequest = new Promise<void>((resolve) => {
+        settleDisconnect = resolve
+      })
+      const sshRequest = new Promise<void>((resolve) => {
+        settleSsh = resolve
+      })
+      const runtimeRequest = new Promise<boolean>((resolve) => {
+        settleRuntime = resolve
+      })
+      const disconnect = vi.fn(() => disconnectRequest)
+      vi.stubGlobal('api', { ssh: { connect: vi.fn(() => sshRequest), disconnect } })
+      vi.mocked(connectRuntimeHostAndReloadProjects).mockImplementationOnce(() => runtimeRequest)
+      inventoryVisits.registry = inventoryVisits.split = inventoryVisits.overall = 0
+      const view = render(
+        <TooltipProvider>
+          <SshStatusSegment compact={false} iconOnly={false} />
+        </TooltipProvider>
+      )
+      expect(inventoryVisits).toEqual({ registry: count, split: count, overall: count })
+
+      await act(async () =>
+        fireEvent.click(screen.getByRole('button', { name: 'Disconnect node-0' }))
+      )
+      expect(disconnect).toHaveBeenCalledWith({ targetId: 'ssh-0' })
+      expect(inventoryVisits).toEqual({ registry: count, split: count, overall: count })
+      await act(async () => settleDisconnect())
+      expect(inventoryVisits).toEqual({ registry: count, split: count, overall: count })
+
+      // A real SSH pending input changes the cap projection once, without rebuilding its inventory.
+      await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Retry now' })))
+      expect(screen.getByRole('button', { name: `Stop node-${count - 1}` })).toBeTruthy()
+      expect(inventoryVisits).toEqual({ registry: count, split: count * 2, overall: count })
+      // Runtime start and settlement leave this nonempty SSH selection unchanged.
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Connect Server' })))
+      expect(screen.getByRole('button', { name: 'Stop Server' })).toBeTruthy()
+      expect(inventoryVisits).toEqual({ registry: count, split: count * 2, overall: count })
+      await act(async () => settleRuntime(true))
+      expect(screen.getByRole('button', { name: 'Connect Server' })).toBeTruthy()
+      expect(inventoryVisits).toEqual({ registry: count, split: count * 2, overall: count })
+
+      // A separate backend publication legitimately changes inventory, but cannot drop the pending row.
+      state.sshConnectionStates = new Map(state.sshConnectionStates).set(
+        retryId,
+        connectionState(retryId, 'disconnected')
+      )
+      view.rerender(
+        <TooltipProvider>
+          <SshStatusSegment compact={false} iconOnly={false} />
+        </TooltipProvider>
+      )
+      expect(screen.getByRole('button', { name: `Stop node-${count - 1}` })).toBeTruthy()
+      expect(inventoryVisits).toEqual({ registry: count * 2, split: count * 3, overall: count * 2 })
+      await act(async () => settleSsh())
+      expect(screen.queryByText(`node-${count - 1}`)).toBeNull()
+      expect(inventoryVisits).toEqual({ registry: count * 2, split: count * 4, overall: count * 2 })
+      vi.unstubAllGlobals()
     }
   )
 
@@ -277,34 +382,7 @@ describe('the status menu with a very large imported SSH host list', () => {
     )
     state.sshTargetLabels = new Map()
     state.sshConnectionStates = new Map()
-    state.runtimeEnvironments = [
-      {
-        id: 'server',
-        name: 'Server',
-        createdAt: 0,
-        updatedAt: 0,
-        lastUsedAt: null,
-        runtimeId: null,
-        source: 'manual',
-        preferredEndpointId: 'direct',
-        endpoints: [
-          { id: 'direct', kind: 'websocket', label: 'Direct', endpoint: 'ws://127.0.0.1:1' }
-        ]
-      }
-    ]
-    state.runtimeStatusByEnvironmentId.set('server', {
-      status: null,
-      checkedAt: 0,
-      remoteControl: {
-        state: 'closed',
-        reconnectAttempt: 7,
-        pendingRequestCount: 0,
-        subscriptionCount: 0,
-        lastConnectedAt: null,
-        lastClose: null,
-        lastError: null
-      }
-    })
+    addStoppedServer()
     render(
       <TooltipProvider>
         <SshStatusSegment compact={false} iconOnly={false} />

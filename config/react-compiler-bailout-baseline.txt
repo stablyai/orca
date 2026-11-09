@@ -558,8 +558,6 @@
 1 src/renderer/src/components/stats/ShareUsageButton.tsx
 2 src/renderer/src/components/status-bar/ClaudeSwitcherForOwner.tsx
 1 src/renderer/src/components/status-bar/PortsStatusSegment.tsx
-1 src/renderer/src/components/status-bar/RuntimeHostStatusRow.tsx
-2 src/renderer/src/components/status-bar/SshTargetStatusRow.tsx
 1 src/renderer/src/components/status-bar/icons.tsx
 3 src/renderer/src/components/status-bar/status-bar-density.ts
 2 src/renderer/src/components/status-bar/use-codex-switcher-controller.ts

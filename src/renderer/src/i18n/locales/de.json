@@ -4910,7 +4910,7 @@
             "access_revoked_explanation": "Mit einem neuen Kopplungslink vom Server erneut koppeln, um die Verbindung wiederherzustellen.",
             "managed_access_revoked_explanation": "Orca konnte sich über SSH nicht erneut koppeln; verbinde dich, um es noch einmal zu versuchen.",
             "connect_access_revoked_explanation": "Verbinden, um es erneut zu versuchen.",
-            "server_replaced_explanation": "Wähle in Einstellungen › Remote-Orca-Server für diesen Server Vergessen… und verbinde dann den SSH-Host, um ihn mit seinem aktuellen Server zu koppeln.",
+            "server_replaced_explanation": "Wähle in Einstellungen › Entfernte Orca-Server für diesen Server Vergessen… und verbinde dann den SSH-Host, um ihn mit seinem aktuellen Server zu koppeln.",
             "update_required_explanation": "Orca auf diesem Computer oder auf dem Server aktualisieren und anschließend erneut verbinden."
           },
           "NativeChatResumeStatusSegment": {

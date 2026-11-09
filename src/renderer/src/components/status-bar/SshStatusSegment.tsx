@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { MonitorSmartphone, Server } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -104,20 +105,25 @@ export function SshStatusSegment({
   )
   const menu = useRemoteHostMenuState(menuOpen, hostExists)
   const { connect: trackConnect, cancel: cancelConnect } = menu
+  const selectPendingSshTargets = useShallow((pending: ReadonlySet<string>) => {
+    const targetIds = new Set<string>()
+    for (const id of pending) {
+      const host = parseExecutionHostId(id)
+      if (host?.kind === 'ssh') {
+        targetIds.add(host.targetId)
+      }
+    }
+    return targetIds
+  })
+  const pendingTargetIds = selectPendingSshTargets(menu.pending)
   const {
     connected: connectedTargets,
     inactive: disconnectedTargets,
     hiddenIdleCount
-  } = useMemo(() => {
-    const pendingTargetIds = new Set<string>()
-    for (const id of menu.pending) {
-      const host = parseExecutionHostId(id)
-      if (host?.kind === 'ssh') {
-        pendingTargetIds.add(host.targetId)
-      }
-    }
-    return splitSshStatusMenuRows(targets, { projectHostIds, pendingTargetIds })
-  }, [targets, projectHostIds, menu.pending])
+  } = useMemo(
+    () => splitSshStatusMenuRows(targets, { projectHostIds, pendingTargetIds }),
+    [targets, projectHostIds, pendingTargetIds]
+  )
   const displayedTargets = [...connectedTargets, ...disconnectedTargets]
   const displayedHosts = [...connectedRuntimeHosts, ...inactiveRuntimeHosts]
   menu.observe([
