@@ -21,7 +21,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
 // orca-connection-diagnostics-entry.ts
 var orca_connection_diagnostics_entry_exports = {};
 __export(orca_connection_diagnostics_entry_exports, {
-  boundConnectionDiagnosticsReport: () => boundConnectionDiagnosticsReport,
+  CONNECTION_DIAGNOSTICS_ENDPOINT: () => CONNECTION_DIAGNOSTICS_ENDPOINT,
   buildConnectionDiagnosticsReport: () => buildConnectionDiagnosticsReport,
   createRelayHostReachability: () => createRelayHostReachability,
   describeDesktopConnection: () => describeDesktopConnection,
@@ -36,7 +36,8 @@ __export(orca_connection_diagnostics_entry_exports, {
   redactConnectionLogText: () => redactConnectionLogText,
   relayHostCloseReasonFrom: () => relayHostCloseReasonFrom,
   relayHostReachabilityForCloseCode: () => relayHostReachabilityForCloseCode,
-  resolveHostEndpointEdit: () => resolveHostEndpointEdit
+  resolveHostEndpointEdit: () => resolveHostEndpointEdit,
+  serializeConnectionDiagnosticsSubmission: () => serializeConnectionDiagnosticsSubmission
 });
 module.exports = __toCommonJS(orca_connection_diagnostics_entry_exports);
 
@@ -490,7 +491,20 @@ function formatAgo(ms) {
 }
 
 // mobile/src/diagnostics/connection-diagnostics-submission.ts
+var CONNECTION_DIAGNOSTICS_ENDPOINT = "https://www.onorca.dev/v1/feedback";
 var MAX_SUBMISSION_BYTES = 64 * 1024;
+function serializeConnectionDiagnosticsSubmission(submission) {
+  return JSON.stringify({
+    feedback: boundConnectionDiagnosticsReport(submission.report),
+    submissionType: "connection_diagnostics",
+    githubLogin: null,
+    githubEmail: null,
+    appVersion: submission.appVersion,
+    platform: `mobile-${submission.platform}`,
+    osRelease: "unknown",
+    arch: "unknown"
+  });
+}
 function boundConnectionDiagnosticsReport(report, maxBytes = MAX_SUBMISSION_BYTES) {
   if (utf8Bytes(report) <= maxBytes) {
     return report;

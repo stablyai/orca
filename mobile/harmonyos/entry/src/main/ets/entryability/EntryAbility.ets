@@ -13,6 +13,7 @@ export default class EntryAbility extends UIAbility {
   private launchNavigationPending: boolean = false;
   private observedStage: window.WindowStage | null = null;
   private inactiveNotified: boolean = false;
+  private backgrounded: boolean = false;
   private mainWindow: window.Window | null = null;
   private windowRegions: ShellWindowRegions | null = null;
   private appliedColorMode: number = -99;
@@ -132,10 +133,12 @@ export default class EntryAbility extends UIAbility {
   }
   onForeground(): void {
     if (!this.observedStage) { this.inactiveNotified = false; }
-    reviveDesktopConnections(); this.refreshKeyboardArea(); this.windowRegions?.refresh();
+    let resumed = this.backgrounded; this.backgrounded = false;
+    reviveDesktopConnections(resumed); this.refreshKeyboardArea(); this.windowRegions?.refresh();
     this.context.eventHub.emit('orcaForeground'); this.styleSystemBars();
   }
   onBackground(): void {
+    this.backgrounded = true;
     this.notifyAppInactive();
     closeIdleDesktopConnections(); dropHomePrewarm(); this.context.eventHub.emit('orcaBackground'); this.publishKeyboardArea();
   }

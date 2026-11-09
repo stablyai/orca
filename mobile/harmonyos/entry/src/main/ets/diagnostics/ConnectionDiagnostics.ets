@@ -128,33 +128,19 @@ export function connectionReport(report: ConnectionReport | null, entries: Conne
   return `Orca Mobile connection diagnostics\nApp: Orca Mobile ${appVersion()} · ${platformVersion()}\nNo paired hosts.\n\n${history}`;
 }
 
-interface FeedbackPayload {
-  feedback: string;
-  submissionType: string;
-  githubLogin: string | null;
-  githubEmail: string | null;
-  appVersion: string;
-  platform: string;
-  osRelease: string;
-  arch: string;
-}
-
 export async function sendConnectionReport(report: string, version: string, platform: string): Promise<boolean> {
-  let payload: FeedbackPayload = {
-    feedback: model.boundConnectionDiagnosticsReport(report) as string, submissionType: 'connection_diagnostics',
-    githubLogin: null, githubEmail: null, appVersion: version, platform: `mobile-${platform}`, osRelease: 'unknown', arch: 'unknown'
-  };
+  let body = model.serializeConnectionDiagnosticsSubmission({ report: report, appVersion: version, platform: platform }) as string;
   let request = http.createHttp();
   let released = false;
   let release = (): void => {
     if (released) { return; }
     released = true;
-    request.destroy();
+    try { request.destroy(); } catch (e) {}
   };
   let timeout = setTimeout(release, 10000);
   try {
-    let response = await request.request('https://www.onorca.dev/v1/feedback', {
-      method: http.RequestMethod.POST, header: { 'Content-Type': 'application/json' }, extraData: JSON.stringify(payload),
+    let response = await request.request(model.CONNECTION_DIAGNOSTICS_ENDPOINT as string, {
+      method: http.RequestMethod.POST, header: { 'Content-Type': 'application/json' }, extraData: body,
       connectTimeout: 10000, readTimeout: 10000, usingCache: false
     });
     return response.responseCode >= 200 && response.responseCode < 300;

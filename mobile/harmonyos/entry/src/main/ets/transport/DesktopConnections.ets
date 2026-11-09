@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { appendLog, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
 import { DesktopNotifications } from '../notifications/DesktopNotifications';
 import { getDeviceToken, getRelayCredential, HostMeta, listHosts } from '../storage/HostStore';
 import { HostSession, SessionPhase } from './HostSession';
@@ -64,8 +65,8 @@ export function forgetDesktopConnection(hostId: string): void {
   connection?.forget();
 }
 
-export function reviveDesktopConnections(): void {
-  desktops.forEach((connection: DesktopConnection): void => connection.revive());
+export function reviveDesktopConnections(resumed: boolean = false): void {
+  desktops.forEach((connection: DesktopConnection): void => connection.revive(resumed));
 }
 
 export class DesktopConnection {
@@ -239,8 +240,9 @@ export class DesktopConnection {
     else { this.publish('stopped', '已断开'); }
   }
 
-  revive(): void {
+  revive(resumed: boolean = false): void {
     if (this.removed || this.paused || !this.wanted) { return; }
+    if (resumed) { appendLog(this.context, LOG_LEVEL_INFO, 'App resumed', '', this.hostId, 'app-resumed').catch(() => {}); }
     if (this.session) { this.session.revive(); }
     else { this.connect(); }
   }
