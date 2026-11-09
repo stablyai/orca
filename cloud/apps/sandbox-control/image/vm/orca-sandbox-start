@@ -68,20 +68,21 @@ if [ ! -d "$PROJECT" ]; then
   fi
 fi
 
-workspace_name="$(basename "$(git -C "$PROJECT" remote get-url origin 2>/dev/null || echo "$PROJECT")" .git)"
-default_branch="$(git -C "$PROJECT" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-default_branch="${default_branch#origin/}"
-if [ -z "$default_branch" ]; then
-  default_branch="$(git -C "$PROJECT" branch --show-current 2>/dev/null || true)"
+# The clone may still be running here, so the name comes from the URL; the default branch is
+# filled in lazily by the session-env shell hook once the clone exists.
+if [ -n "${ORCA_REPO_URL:-}" ]; then
+  workspace_name="$(basename "${ORCA_REPO_URL%/}" .git)"
+else
+  workspace_name="$(basename "$(git -C "$PROJECT" remote get-url origin 2>/dev/null || echo "$PROJECT")" .git)"
 fi
 # One workspace per VM: its preview ports start at 3000 (Conductor allots CONDUCTOR_PORT..+9).
 managed_env=(
   ORCA_IS_CLOUD=1
   ORCA_ROOT_PATH="$PROJECT" ORCA_WORKTREE_PATH="$PROJECT" ORCA_WORKSPACE_PATH="$PROJECT"
-  ORCA_WORKSPACE_NAME="$workspace_name" ORCA_DEFAULT_BRANCH="${default_branch:-main}" ORCA_PORT=3000
+  ORCA_WORKSPACE_NAME="$workspace_name" ORCA_PORT=3000
   CONDUCTOR_IS_CLOUD=1
   CONDUCTOR_ROOT_PATH="$PROJECT" CONDUCTOR_WORKSPACE_PATH="$PROJECT"
-  CONDUCTOR_WORKSPACE_NAME="$workspace_name" CONDUCTOR_DEFAULT_BRANCH="${default_branch:-main}" CONDUCTOR_PORT=3000
+  CONDUCTOR_WORKSPACE_NAME="$workspace_name" CONDUCTOR_PORT=3000
 )
 
 agent_env=()
@@ -111,8 +112,11 @@ fi
 unset ORCA_SECRET_ENV
 
 node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
+# Agent CLIs installed with the image's npm (codex, gemini, ...) are `#!/usr/bin/env node` scripts:
+# terminals need that node on PATH, not only orcad's bundled runtime.
+system_node="$(command -v node 2>/dev/null || echo "$node")"
 env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
-  PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:/usr/local/bin:/usr/bin:/bin" \
+  PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:$(dirname "$system_node"):/usr/local/bin:/usr/bin:/bin" \
   ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${managed_env[@]}" \
   NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" \
   ORCA_SESSION_ENV_NAMES="${secret_names[*]}" "${agent_env[@]}" \
