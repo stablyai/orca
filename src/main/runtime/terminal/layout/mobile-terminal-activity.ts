@@ -5,6 +5,7 @@ import { clampTerminalViewport } from '../../../../shared/terminal/viewport/term
 
 export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivenessUnverifiable {
   abstract applyMobileDisplayMode(ptyId: string): Promise<boolean>
+  abstract setMobileDisplayMode(ptyId: string, mode: 'auto' | 'desktop'): void
 
   // Mobile gestures reclaim desktop take-back and fit the active viewport; mobile-to-mobile handoffs preserve resize.
   async mobileTookFloor(
@@ -29,11 +30,11 @@ export abstract class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMark
       sub.lastActedAt = Date.now()
     }
     const prev = previousFloor ?? this.getDriver(ptyId)
-    const currentMode = this.mobileDisplayModes.get(ptyId)
+    const currentMode = this.getMobileDisplayMode(ptyId)
     // A deliberate mobile gesture clears desktop mode so phone-fit can reclaim the PTY (docs/mobile-presence-lock.md).
     if (prev.kind === 'desktop' || currentMode === 'desktop') {
       if (currentMode === 'desktop') {
-        this.mobileDisplayModes.delete(ptyId)
+        this.setMobileDisplayMode(ptyId, 'auto')
       }
       await this.applyMobileDisplayMode(ptyId)
     }

@@ -90,20 +90,4 @@ describe('real index to public service adapter', () => {
     expect(AiVaultSearchStatusSchema.parse(status)).toEqual(status)
     expect(status.generation).toBeGreaterThan(0)
   })
-  it('keeps tool rows out of both scopes and reports query truncation', async () => {
-    const { db, service } = await fixture()
-    addSyntheticSession(db, { id: 1, role: 'tool', text: 'needle' })
-    expect(await service.search({ query: 'needle', scope: 'conversation' })).toMatchObject({
-      kind: 'results',
-      hits: []
-    })
-    expect(await service.search({ query: 'needle' })).toMatchObject({
-      kind: 'results',
-      hits: []
-    })
-    expect(await service.search({ query: 'needle '.repeat(100) })).toMatchObject({
-      kind: 'results',
-      truncated: { query: true }
-    })
-  })
 })

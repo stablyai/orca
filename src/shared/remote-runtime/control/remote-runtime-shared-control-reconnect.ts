@@ -1,4 +1,4 @@
-import { scheduleSharedControlReconnect } from './remote-runtime-shared-control-state'
+import { withReconnectJitter } from '../../reconnect-jitter'
 
 const ACTIVE_RECONNECT_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000]
 const IDLE_RECONNECT_DELAYS_MS = [...ACTIVE_RECONNECT_DELAYS_MS, 60_000, 120_000, 300_000]
@@ -99,4 +99,24 @@ export class SharedControlReconnectScheduler {
   resetAttempt(): void {
     this.attempt = 0
   }
+}
+
+function scheduleSharedControlReconnect(args: {
+  current: ReturnType<typeof setTimeout> | null
+  intentionallyClosed: boolean
+  reconnectAttempt: number
+  delaysMs: readonly number[]
+  open: () => void
+}): { timer: ReturnType<typeof setTimeout> | null; reconnectAttempt: number } {
+  if (args.current || args.intentionallyClosed) {
+    return { timer: args.current, reconnectAttempt: args.reconnectAttempt }
+  }
+  const delay = withReconnectJitter(
+    args.delaysMs[Math.min(args.reconnectAttempt, args.delaysMs.length - 1)]
+  )
+  const timer = setTimeout(args.open, delay)
+  if (typeof timer.unref === 'function') {
+    timer.unref()
+  }
+  return { timer, reconnectAttempt: args.reconnectAttempt + 1 }
 }

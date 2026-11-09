@@ -9,7 +9,7 @@ import {
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   type BrowserNetworkTunnelSocket
 } from '../tunnels/browser-network-tunnel-stream-state'
-import type { BrowserNetworkExecutionRoute } from './browser-network-execution-route'
+import type { BrowserNetworkExecutionRoute } from './browser-network-execution-route-contract'
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
   BrowserNetworkTunnelStreamFrameWriter

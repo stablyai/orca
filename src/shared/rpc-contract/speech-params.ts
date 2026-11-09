@@ -5,6 +5,9 @@ export const AUDIO_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
 export const DICTATION_SAMPLE_RATE = 16_000
 
+/** Cloud transcription takes at most this much audio per dictation. */
+export const CLOUD_DICTATION_MAX_SECONDS = 10 * 60
+
 export const PCM_BYTES_PER_SAMPLE = 2
 
 export const MAX_DICTATION_AUDIO_SECONDS = 5

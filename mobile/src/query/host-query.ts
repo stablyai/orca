@@ -141,6 +141,28 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   return data
 }
 
+// A cached read through the screen's `read`: reuses a fresh answer and joins a read already out. An answer
+// an event marked stale as it landed predates that change, so it is read again.
+export async function fetchHostQuery<TInput extends HostQueryParams, TData>(
+  queryClient: QueryClient,
+  query: HostQuery<TInput, TData>,
+  host: { hostId: string; client: RpcClient },
+  target: HostQueryTarget,
+  input: TInput,
+  read: () => Promise<TData>
+): Promise<TData> {
+  const options = {
+    ...hostQueryOptions(query, host.client, host.hostId, target, input),
+    queryFn: read
+  }
+  let data = await queryClient.fetchQuery(options)
+  // Each pass needs a newer event, so this ends with the event burst.
+  while (queryClient.getQueryState(options.queryKey)?.isInvalidated) {
+    data = await queryClient.fetchQuery(options)
+  }
+  return data
+}
+
 // A read ahead of the user: skipped while the key holds current data, joins a read already out.
 export function prefetchHostQuery<TInput extends HostQueryParams, TData>(
   queryClient: QueryClient,

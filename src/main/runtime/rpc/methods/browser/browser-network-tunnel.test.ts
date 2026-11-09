@@ -9,11 +9,12 @@ import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browse
 import type { BrowserHostLease } from '../../../browser-host/leases/browser-host-lease-records'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from '../../../../browser/network/tunnels/browser-network-tunnel-outbound-memory-budget'
-import {
-  browserNetworkExecutionHostKey,
-  type BrowserNetworkExecutionRoute,
-  type BrowserNetworkExecutionRouteResolver
-} from '../../../../browser/network/execution-routes/browser-network-execution-route'
+import '../../../../browser/network/execution-routes/browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type {
+  BrowserNetworkExecutionRoute,
+  BrowserNetworkExecutionRouteResolver
+} from '../../../../browser/network/execution-routes/browser-network-execution-route-contract'
 import { RpcDispatcher } from '../../dispatcher'
 import {
   BROWSER_NETWORK_TUNNEL_METHODS,

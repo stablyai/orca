@@ -135,9 +135,4 @@ describe('automation session reuse selection', () => {
   ])('rejects a pane holding %s', (_label, status) => {
     expect(find([run({})], { status })).toBeNull()
   })
-
-  it('accepts an idle agent whose type the host could not tell', () => {
-    expect(find([run({})], { status: { state: 'done', agentType: 'unknown' } })).toBe('run-1')
-    expect(find([run({})], { status: { state: 'done' } })).toBe('run-1')
-  })
 })

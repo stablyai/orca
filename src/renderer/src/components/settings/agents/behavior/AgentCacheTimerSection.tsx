@@ -6,7 +6,7 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { getAgentCacheTimerSearchEntries } from './agent-cache-timer-search'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
@@ -55,10 +55,13 @@ export function AgentCacheTimerSection({
             )}
           </p>
         </div>
-        <SettingsSwitch
-          ariaLabel={t('auto.components.settings.AgentCacheTimerSection.b4e7302944', 'Cache Timer')}
+        <Switch
+          aria-label={t(
+            'auto.components.settings.AgentCacheTimerSection.b4e7302944',
+            'Cache Timer'
+          )}
           checked={settings.promptCacheTimerEnabled}
-          onChange={() => {
+          onCheckedChange={() => {
             const enabling = !settings.promptCacheTimerEnabled
             updateSettings({ promptCacheTimerEnabled: enabling })
             if (enabling) {

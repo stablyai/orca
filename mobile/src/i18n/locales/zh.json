@@ -2189,8 +2189,7 @@
       "copyPathLabel": "复制 Markdown 文件路径",
       "copySource": "复制 Markdown 源码",
       "discard": "放弃",
-      "dismissKeyboard": "关闭键盘",
-      "dismissKeyboardHint": "隐藏软键盘，并保持 Markdown 编辑器打开。",
+      "previewTruncated": "预览已截断。",
       "readOnly": "只读"
     },
     "nativeChatAttachActions": {

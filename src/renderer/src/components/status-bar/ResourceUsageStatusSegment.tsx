@@ -160,19 +160,22 @@ export function ResourceUsageStatusSegment({
             )}
             {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions }, t)}
             {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner(t)}
-            {resourceSnapshot &&
-              renderResourceUsageSummary(
-                {
-                  totalCpu,
-                  totalMemory,
-                  memoryMetricCopy,
-                  commitBadgeLabel,
-                  commitMetricCopy,
-                  commitToneClass,
-                  orphanCount
-                },
-                t
-              )}
+            {resourceSnapshot && (
+              <div className="min-h-0 max-h-[40%] overflow-y-auto scrollbar-sleek">
+                {renderResourceUsageSummary(
+                  {
+                    totalCpu,
+                    totalMemory,
+                    memoryMetricCopy,
+                    commitBadgeLabel,
+                    commitMetricCopy,
+                    commitToneClass,
+                    orphanCount
+                  },
+                  t
+                )}
+              </div>
+            )}
             {renderResourceUsagePopoverBody(
               {
                 setPopoverBodyNode,
