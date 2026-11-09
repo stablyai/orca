@@ -54,11 +54,12 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       resolveBaseEnvironment: async () => ({
         CLAUDE_CODE_MESSAGING_SOCKET: 'shell-parent',
         CLAUDE_EFFORT: 'shell-effort',
-        CLAUDE_CODE_HTTP_PROXY: 'http://shell-proxy'
+        CLAUDE_CODE_HTTP_PROXY: 'http://shell-proxy',
+        ANTHROPIC_AUTH_TOKEN: 'chosen-token'
       }),
       prepareForClaudeLaunch: async () => ({
         configDir: '/chosen/claude',
-        envPatch: { CLAUDE_EFFORT: 'chosen-effort', ANTHROPIC_AUTH_TOKEN: 'chosen-token' },
+        envPatch: { CLAUDE_CONFIG_DIR: '/chosen/claude' },
         provenance: 'profile:test'
       })
     })
@@ -66,7 +67,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
       ok: true,
       env: {
         CLAUDE_CODE_HTTP_PROXY: 'http://shell-proxy',
-        CLAUDE_EFFORT: 'chosen-effort',
+        CLAUDE_CONFIG_DIR: '/chosen/claude',
         ANTHROPIC_AUTH_TOKEN: 'chosen-token'
       }
     })
