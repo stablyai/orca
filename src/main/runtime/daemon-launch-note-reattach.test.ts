@@ -42,6 +42,39 @@ function holdLaunch(runtime: OrcaRuntimeService) {
   })
 }
 
+// Some hosts register a spawn before they report its incarnation.
+async function launchedBeforeItsIncarnation(foreground: 'agent' | 'unknown') {
+  const runtime = new OrcaRuntimeService(null)
+  Object.assign(runtime, {
+    resolveTerminalWorkspaceLaunchScope: async () => ({
+      id: 'worktree-1',
+      path: '/tmp/worktree-1',
+      connectionId: null
+    })
+  })
+  runtime.setPtyController({
+    write: vi.fn(() => true),
+    kill: vi.fn(),
+    getForegroundProcess: async () => null,
+    setLaunchNote: vi.fn(),
+    spawn: async () => {
+      runtime.registerPty(PTY_ID, 'worktree-1', null, { tabId: TAB_ID, leafId: LEAF_ID })
+      return { id: PTY_ID }
+    }
+  })
+  vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue(foreground)
+  await runtime.createTerminal('id:worktree-1', {
+    tabId: TAB_ID,
+    leafId: LEAF_ID,
+    command: 'claude',
+    launchAgent: 'claude',
+    launchConfig: LAUNCH_CONFIG,
+    presentation: 'background'
+  })
+  expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toEqual(LAUNCH_CONFIG)
+  return runtime
+}
+
 function makeRuntime() {
   const runtime = new OrcaRuntimeService(null)
   const setLaunchNote = vi.fn()
@@ -181,6 +214,34 @@ describe('a daemon reattach after a main restart', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toEqual(LAUNCH_CONFIG)
   })
+
+  // Learning the process's first incarnation is no replacement: what main knew still holds.
+  it.each([
+    ['keeps no notes', undefined],
+    ['still has the note', NOTE]
+  ] as const)(
+    'keeps a launch that finished before its first incarnation gone when a host that %s attaches',
+    async (_, launchNote) => {
+      const runtime = await launchedBeforeItsIncarnation('agent')
+      runtime.emitDaemonPtyTransientFact(PTY_ID, { kind: 'command-finished', exitCode: 0 })
+      attach(runtime, launchNote)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toBeNull()
+    }
+  )
+
+  it.each([
+    ['keeps no notes', undefined],
+    ['sends the note late', NOTE]
+  ] as const)(
+    'keeps a running launch when its first incarnation arrives from a host that %s',
+    async (_, launchNote) => {
+      const runtime = await launchedBeforeItsIncarnation('unknown')
+      attach(runtime, launchNote)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toEqual(LAUNCH_CONFIG)
+    }
+  )
 
   // The renderer attaches a pane the CLI launched before its agent has started.
   it('leaves a launch main already holds when the attach still sees its shell', async () => {

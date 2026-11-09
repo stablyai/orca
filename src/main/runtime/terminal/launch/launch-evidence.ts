@@ -60,7 +60,7 @@ export function holdLaunch(
 }
 
 /** A freshly started process: its own launch is held, and any other process runs none. */
-export function recordFreshLaunch(pty: PtyLaunchFacts, launch: Partial<HeldLaunch>): void {
+export function recordFreshLaunch(pty: PtyLaunchFacts, launch: Partial<HeldLaunch> = {}): void {
   const { agent, token, config } = launch
   pty.launchEvidence =
     agent && token && config
@@ -77,18 +77,22 @@ export function retireLaunch(
   pty.launchConfig = null
 }
 
-/** A new process can't still run its predecessor's launch; the newcomer establishes its own. */
+/** Learning the first id of the same process binds its evidence; a new process can't still run its
+ *  predecessor's launch, and the newcomer establishes its own. */
 export function retireReplacedLaunch(pty: PtyLaunchFacts, next: PtyIncarnationId | null): void {
   const previous = pty.incarnationId
   const evidence = pty.launchEvidence
-  if (
-    evidence &&
-    previous &&
-    next &&
-    previous !== next &&
-    (evidence.kind === 'unknown' || evidence.incarnationId !== next)
-  ) {
-    pty.launchEvidence = { kind: 'gone', incarnationId: previous }
+  if (!evidence || !next || previous === next) {
+    return
+  }
+  if (!previous) {
+    if (evidence.kind !== 'unknown' && evidence.incarnationId === null) {
+      pty.launchEvidence = { ...evidence, incarnationId: next }
+    }
+    return
+  }
+  if (evidence.kind === 'unknown' || evidence.incarnationId !== next) {
+    retireLaunch(pty, previous)
   }
 }
 

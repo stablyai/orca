@@ -81,6 +81,7 @@ function makeRuntime(saved: SleepingAgentSessionRecord) {
   return {
     runtime,
     binding,
+    getSession,
     savedAfterStatus: async () => {
       runtime.recordHookStatusResume(claudeRow())
       await runtime['hookStatusResumeWrites']
@@ -98,13 +99,17 @@ describe('a pane saved recipe and the launch running in it', () => {
     expect(saved?.launchConfig).toBeUndefined()
   })
 
-  it('keeps a deliberate sleep snapshot recipe after the launch it captured finishes', async () => {
-    const { runtime, binding, savedAfterStatus } = makeRuntime(savedRecord('worktree-sleep'))
+  it('keeps a sleep snapshot for its wake without lending its recipe to a typed resume', async () => {
+    const { runtime, binding, getSession, savedAfterStatus } = makeRuntime(
+      savedRecord('worktree-sleep')
+    )
     runtime.registerPty(PTY_ID, TEST_WORKTREE_ID, null, {
       ...binding,
       agentLaunchAuthority: { launchToken: 'launch-1', launchAgent: 'claude', launchConfig: RECIPE }
     })
     runtime.emitDaemonPtyTransientFact(PTY_ID, { kind: 'command-finished', exitCode: 0 })
-    expect(await savedAfterStatus()).toMatchObject({ state: 'working', launchConfig: RECIPE })
+    expect(await savedAfterStatus()).toEqual(savedRecord('worktree-sleep'))
+    Object.assign(runtime, { getAgentProviderSessionSnapshotFn: () => [claudeRow()] })
+    expect(runtime.quitResumeRecordsFor(getSession())).toEqual([])
   })
 })
