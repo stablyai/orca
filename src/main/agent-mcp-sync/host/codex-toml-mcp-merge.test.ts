@@ -24,9 +24,8 @@ describe('mergeCodexMcpServers', () => {
     const host = '[mcp_servers.linear]\nurl = "https://host.example/mcp"\n'
     const merged = mergeCodexMcpServers(host, { linear, fs }, null)
     expect(merged.outcomes).toEqual({ linear: 'kept-host', fs: 'added' })
-    expect((parse(merged.text!) as { mcp_servers: unknown }).mcp_servers).toEqual({
-      linear: { url: 'https://host.example/mcp' },
-      fs
+    expect(parse(merged.text!)).toEqual({
+      mcp_servers: { linear: { url: 'https://host.example/mcp' }, fs }
     })
   })
 
@@ -51,8 +50,9 @@ describe('mergeCodexMcpServers', () => {
     const edited = first.text!.replace('https://mcp.linear.app/mcp', 'https://edited.example/mcp')
     const merged = mergeCodexMcpServers(edited, { linear, fs }, first.blockPrint)
     expect(merged.outcomes).toEqual({ linear: 'kept-host', fs: 'added' })
-    const parsed = parse(merged.text!) as { mcp_servers: Record<string, unknown> }
-    expect(parsed.mcp_servers.linear).toEqual({ url: 'https://edited.example/mcp' })
+    expect(parse(merged.text!)).toEqual({
+      mcp_servers: { linear: { url: 'https://edited.example/mcp' }, fs }
+    })
     expect(merged.text!.split(CODEX_MCP_BLOCK_START)).toHaveLength(2)
   })
 

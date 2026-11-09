@@ -130,6 +130,10 @@ export type RuntimeApi = {
     setMcpSyncPreferences?: (
       preferences: Partial<CloudMcpSyncPreferences>
     ) => Promise<CloudMcpSyncPreferences | null>
+    setMcpServerIncluded?: (
+      key: string,
+      included: boolean
+    ) => Promise<CloudMcpSyncPreferences | null>
     onMcpSyncChanged?: (callback: (status: McpSyncStatus) => void) => () => void
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void

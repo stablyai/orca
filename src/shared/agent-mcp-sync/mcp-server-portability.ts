@@ -33,7 +33,8 @@ const LOCAL_ONLY_PATH =
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1', '0.0.0.0'])
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+/** A JSON/TOML table: MCP configs are only ever read through this guard. */
+export function isMcpRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -61,7 +62,7 @@ function stringValues(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.filter((item): item is string => typeof item === 'string')
   }
-  if (isRecord(value)) {
+  if (isMcpRecord(value)) {
     return Object.values(value).filter((item): item is string => typeof item === 'string')
   }
   return []
@@ -104,7 +105,7 @@ export function portMcpServer(
   entry: unknown,
   homeDir: string | null
 ): PortedMcpServer {
-  if (!isRecord(entry)) {
+  if (!isMcpRecord(entry)) {
     return { ok: false, reason: 'invalid', transport: null, target: null }
   }
   const transport = transportOf(agent, entry)

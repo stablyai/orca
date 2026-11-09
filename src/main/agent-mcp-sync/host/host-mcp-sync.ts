@@ -7,6 +7,7 @@ import type {
   AgentMcpSyncResult,
   McpSyncHostOutcome
 } from '../../../shared/agent-mcp-sync/mcp-sync-contract'
+import { errnoCodeOrUnknown } from '../../../shared/errno-code'
 import { writeFileAtomicallyIfUnchanged } from '../../filesystem/atomic-file-publication'
 import { isCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { hostShellEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
@@ -45,7 +46,7 @@ async function readText(path: string): Promise<string | null> {
   try {
     return await readFile(path, 'utf8')
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
       return null
     }
     throw error

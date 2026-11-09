@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import { isMcpRecord } from '../../../shared/agent-mcp-sync/mcp-server-portability'
 import type { McpSyncStatus } from '../../../shared/agent-mcp-sync/mcp-sync-contract'
 import { CLOUD_MCP_SYNC_CHANGED_CHANNEL } from '../../../shared/agent-mcp-sync/mcp-sync-preferences'
 import {
@@ -16,10 +17,10 @@ function environmentIdOf(value: unknown): string | null {
 }
 
 function preferencesOf(value: unknown): Partial<CloudMcpSyncPreferences> {
-  if (typeof value !== 'object' || value === null) {
+  if (!isMcpRecord(value)) {
     return {}
   }
-  const raw = value as Record<string, unknown>
+  const raw = value
   return {
     ...(typeof raw.autoSync === 'boolean' ? { autoSync: raw.autoSync } : {}),
     ...(Array.isArray(raw.excluded)
@@ -55,7 +56,8 @@ const CHANNELS = [
   'cloudMcpSync:getStatus',
   'cloudMcpSync:syncNow',
   'cloudMcpSync:setPreferences',
-  'cloudMcpSync:getPreferences'
+  'cloudMcpSync:getPreferences',
+  'cloudMcpSync:setServerIncluded'
 ] as const
 
 export function registerCloudMcpSyncHandlers(): void {
@@ -74,4 +76,9 @@ export function registerCloudMcpSyncHandlers(): void {
     instance ? instance.setPreferences(preferencesOf(value)) : null
   )
   ipcMain.handle('cloudMcpSync:getPreferences', () => instance?.getPreferences() ?? null)
+  ipcMain.handle('cloudMcpSync:setServerIncluded', (_event, key: unknown, included: unknown) =>
+    instance && typeof key === 'string' && key.length <= 200 && typeof included === 'boolean'
+      ? instance.setServerIncluded(key, included)
+      : null
+  )
 }

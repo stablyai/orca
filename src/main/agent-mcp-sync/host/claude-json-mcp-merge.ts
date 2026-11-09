@@ -1,15 +1,12 @@
 import type { McpSyncHostOutcome } from '../../../shared/agent-mcp-sync/mcp-sync-contract'
 import { fingerprintMcpValue } from './mcp-sync-ledger'
+import { isMcpRecord } from '../../../shared/agent-mcp-sync/mcp-server-portability'
 
 export type ClaudeMcpMergeResult = {
   /** New file text, or null when the file needs no write. */
   text: string | null
   ledger: Record<string, string>
   outcomes: Record<string, McpSyncHostOutcome>
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** Merge the desktop's servers into the host's `~/.claude.json` `mcpServers`.
@@ -23,12 +20,12 @@ export function mergeClaudeMcpServers(
   let root: Record<string, unknown> = {}
   if (text !== null && text.trim()) {
     const parsed: unknown = JSON.parse(text)
-    if (!isRecord(parsed)) {
+    if (!isMcpRecord(parsed)) {
       throw new Error('claude_config_not_object')
     }
     root = parsed
   }
-  const current = isRecord(root.mcpServers) ? root.mcpServers : {}
+  const current = isMcpRecord(root.mcpServers) ? root.mcpServers : {}
   const servers: Record<string, unknown> = { ...current }
   const nextLedger: Record<string, string> = {}
   const outcomes: Record<string, McpSyncHostOutcome> = {}

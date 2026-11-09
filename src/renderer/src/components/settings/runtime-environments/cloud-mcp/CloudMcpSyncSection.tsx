@@ -5,7 +5,7 @@ import {
   syncCloudMcpServersNow,
   useCloudMcpSyncStatus
 } from '@/lib/cloud-mcp-sync/cloud-mcp-sync-client'
-import { CloudMcpSyncPanel } from './CloudMcpSyncPanel'
+import { CloudMcpSyncPanel, CloudMcpSyncSkeleton } from './CloudMcpSyncPanel'
 
 /** Renders only for Orca Cloud workspaces; main answers null for every other host. */
 export function CloudMcpSyncSection({
@@ -16,14 +16,19 @@ export function CloudMcpSyncSection({
   const t = useTranslate()
   const status = useCloudMcpSyncStatus(environmentId, true)
   const [expanded, setExpanded] = useState(false)
+  if (status === undefined) {
+    return <CloudMcpSyncSkeleton />
+  }
   if (!status) {
     return null
   }
-  const syncNow = (): void => {
-    void syncCloudMcpServersNow(environmentId).catch(() =>
-      toast.error(t('cloudMcpSync.error.failed', 'The last sync didn’t finish.'))
-    )
+  const failed = (): void => {
+    toast.error(t('cloudMcpSync.error.failed', 'The last sync didn’t finish.'))
   }
+  const syncNow = (): void => {
+    void syncCloudMcpServersNow(environmentId).catch(failed)
+  }
+  const api = window.api.runtimeEnvironments
   return (
     <CloudMcpSyncPanel
       status={status}
@@ -31,24 +36,14 @@ export function CloudMcpSyncSection({
       onToggleExpanded={() => setExpanded((value) => !value)}
       onSyncNow={syncNow}
       onToggleServer={(key, included) => {
-        const preferences = window.api.runtimeEnvironments
-        void preferences
-          .getMcpSyncPreferences?.()
-          .then((current) => {
-            const excluded = new Set(current?.excluded ?? [])
-            if (included) {
-              excluded.delete(key)
-            } else {
-              excluded.add(key)
-            }
-            return preferences.setMcpSyncPreferences?.({ excluded: [...excluded] })
-          })
-          // Turning a server off removes it from the workspace too, so apply right away.
-          .then(syncNow)
+        // Main flips the switch everywhere at once; turning one off also removes it from the workspace.
+        void Promise.resolve(api.setMcpServerIncluded?.(key, included))
+          .then(() => syncCloudMcpServersNow(environmentId))
+          .catch(failed)
       }}
-      onToggleAutoSync={(autoSync) =>
-        void window.api.runtimeEnvironments.setMcpSyncPreferences?.({ autoSync })
-      }
+      onToggleAutoSync={(autoSync) => {
+        void Promise.resolve(api.setMcpSyncPreferences?.({ autoSync })).catch(failed)
+      }}
     />
   )
 }

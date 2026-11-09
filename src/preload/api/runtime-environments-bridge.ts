@@ -81,6 +81,8 @@ export const runtimeEnvironmentsApi = {
     preferences: Partial<CloudMcpSyncPreferences>
   ): Promise<CloudMcpSyncPreferences | null> =>
     ipcRenderer.invoke('cloudMcpSync:setPreferences', preferences),
+  setMcpServerIncluded: (key: string, included: boolean): Promise<CloudMcpSyncPreferences | null> =>
+    ipcRenderer.invoke('cloudMcpSync:setServerIncluded', key, included),
   onMcpSyncChanged: (callback: (status: McpSyncStatus) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, status: McpSyncStatus): void =>
       callback(status)

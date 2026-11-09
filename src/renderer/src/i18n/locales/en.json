@@ -26203,35 +26203,39 @@
     }
   },
   "cloudMcpSync": {
-    "toggleServer": "Sync {{name}} ({{agent}}) to cloud workspaces",
-    "title": "MCP servers",
-    "syncNow": "Sync now",
-    "autoSync": "Sync each time a cloud workspace connects. Servers you add in the workspace are never changed.",
-    "lastSynced": "Last synced at {{time}}",
+    "autoSync": "Sync on connect",
+    "autoSyncHint": "Applies to all cloud workspaces. Servers added inside a workspace are left alone.",
+    "egressNote": "Orca lets the sandbox reach each remote server’s host. Other hosts stay blocked.",
     "error": {
       "failed": "The last sync didn’t finish.",
-      "hostOutdated": "This workspace runs an older Orca server that can’t receive MCP servers yet.",
-      "hostUnreachable": "Orca couldn’t reach this workspace."
+      "hostOutdated": "This sandbox runs an older version of Orca that can’t receive MCP servers. New workspaces have it.",
+      "hostUnreachable": "Couldn’t reach the sandbox. Make sure it’s running, then sync again."
     },
-    "summary": {
-      "syncing": "Syncing…",
-      "none": "None on this computer",
-      "notSynced": "{{count}} found, not synced yet",
-      "synced": "{{synced}} synced",
-      "syncedSkipped": "{{synced}} synced, {{skipped}} skipped"
-    },
+    "lastSynced": "Last synced {{time}}",
+    "loading": "Loading MCP servers…",
     "row": {
-      "unreachable": "Synced, but the workspace can’t reach this host. Its network may block it.",
-      "turnedOff": "Off for cloud workspaces",
+      "commandMissing": "Will sync once {{command}} is installed in the sandbox",
+      "configUnreadable": "Couldn’t update the agent’s config in the sandbox",
       "inRepo": "Comes from the repo’s .mcp.json",
-      "localCommand": "Its command only exists on this computer",
+      "invalid": "Invalid server entry",
+      "keptHost": "The sandbox already has its own",
+      "localCommand": "Command exists only on this computer",
       "localPath": "Uses files on this computer",
       "localUrl": "Runs on this computer’s localhost",
-      "commandMissing": "{{command}} isn’t installed in the workspace",
-      "keptHost": "Already set up in the workspace; left as is",
-      "configUnreadable": "The agent’s config in the workspace couldn’t be updated",
-      "invalid": "Invalid server entry",
-      "pending": "Not synced yet"
-    }
+      "unreachable": "Synced, but the sandbox can’t reach it"
+    },
+    "summary": {
+      "none": "None found in Claude Code or Codex on this computer",
+      "notSynced": "{{count}} found, not synced yet",
+      "synced": "{{count}} synced",
+      "syncedSkipped": "{{synced}} synced, {{skipped}} skipped",
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet"
+    },
+    "syncAgain": "Sync again",
+    "syncNow": "Sync now",
+    "syncing": "Syncing MCP servers…",
+    "title": "MCP servers",
+    "toggleServer": "Sync {{name}} ({{agent}}) to cloud workspaces"
   }
 }

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { parse as parseToml } from 'smol-toml'
 import type { LocalMcpServer } from '../../../shared/agent-mcp-sync/mcp-sync-plan'
 import { getSystemCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
+import { isMcpRecord } from '../../../shared/agent-mcp-sync/mcp-server-portability'
 
 // ~/.claude.json also holds chat history per project; refuse anything absurd rather than buffer it.
 const MAX_CONFIG_BYTES = 32 * 1024 * 1024
@@ -32,12 +33,8 @@ async function readBounded(path: string): Promise<string | null> {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function entries(value: unknown): [string, unknown][] {
-  return isRecord(value) ? Object.entries(value) : []
+  return isMcpRecord(value) ? Object.entries(value) : []
 }
 
 function parseJson(text: string | null): unknown {
@@ -53,7 +50,7 @@ function parseJson(text: string | null): unknown {
 
 // Claude keys projects by the path it was started in; Windows paths may be stored either way.
 function projectEntry(projects: unknown, repoPath: string): unknown {
-  if (!isRecord(projects)) {
+  if (!isMcpRecord(projects)) {
     return undefined
   }
   const wanted = repoPath.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -78,20 +75,20 @@ export async function readLocalMcpConfig(
 ): Promise<LocalMcpConfig> {
   const servers: LocalMcpServer[] = []
   const claude = parseJson(await readBounded(paths.claudeConfig))
-  if (isRecord(claude)) {
+  if (isMcpRecord(claude)) {
     for (const [name, config] of entries(claude.mcpServers)) {
       servers.push({ agent: 'claude', name, source: 'claude-user', config })
     }
     const project = repoPath ? projectEntry(claude.projects, repoPath) : undefined
-    for (const [name, config] of entries(isRecord(project) ? project.mcpServers : null)) {
+    for (const [name, config] of entries(isMcpRecord(project) ? project.mcpServers : null)) {
       servers.push({ agent: 'claude', name, source: 'claude-project', config })
     }
   }
   const codexText = await readBounded(paths.codexConfig)
   if (codexText !== null) {
     try {
-      const codex = parseToml(codexText) as Record<string, unknown>
-      for (const [name, config] of entries(codex.mcp_servers)) {
+      const codex: unknown = parseToml(codexText)
+      for (const [name, config] of entries(isMcpRecord(codex) ? codex.mcp_servers : null)) {
         servers.push({ agent: 'codex', name, source: 'codex', config })
       }
     } catch {
@@ -100,7 +97,7 @@ export async function readLocalMcpConfig(
   }
   const repoMcp = repoPath ? parseJson(await readBounded(join(repoPath, '.mcp.json'))) : null
   const repoServerNames = new Set(
-    entries(isRecord(repoMcp) ? repoMcp.mcpServers : null).map(([name]) => name)
+    entries(isMcpRecord(repoMcp) ? repoMcp.mcpServers : null).map(([name]) => name)
   )
   return { servers, repoServerNames }
 }

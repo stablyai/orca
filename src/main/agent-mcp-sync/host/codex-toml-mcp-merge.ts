@@ -1,5 +1,6 @@
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import type { McpSyncHostOutcome } from '../../../shared/agent-mcp-sync/mcp-sync-contract'
+import { isMcpRecord } from '../../../shared/agent-mcp-sync/mcp-server-portability'
 import { readMcpServerTomlOwnership } from '../../codex/configuration/toml/config-toml-mcp-servers'
 import { fingerprintMcpValue } from './mcp-sync-ledger'
 
@@ -34,8 +35,8 @@ function findBlock(text: string): Block | null {
 }
 
 function blockServers(body: string): Record<string, unknown> {
-  const parsed = parseToml(body) as { mcp_servers?: Record<string, unknown> }
-  return parsed.mcp_servers ?? {}
+  const parsed = parseToml(body)
+  return isMcpRecord(parsed.mcp_servers) ? parsed.mcp_servers : {}
 }
 
 // Blank lines at the seams are normalized so repeated syncs leave the file byte-identical.

@@ -6,6 +6,7 @@ import {
   AgentMcpSyncResult,
   type McpSyncStatus
 } from '../../../shared/agent-mcp-sync/mcp-sync-contract'
+import { isMcpRecord } from '../../../shared/agent-mcp-sync/mcp-server-portability'
 import { applyMcpSyncResult, planMcpSync } from '../../../shared/agent-mcp-sync/mcp-sync-plan'
 import { listEphemeralVmRuntimes } from '../../../shared/ephemeral-vm-runtime-store'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
@@ -39,6 +40,8 @@ export type CloudMcpSync = {
   sync(environmentId: string, trigger: 'connect' | 'manual'): Promise<McpSyncStatus | null>
   getPreferences(): CloudMcpSyncPreferences
   setPreferences(next: Partial<CloudMcpSyncPreferences>): CloudMcpSyncPreferences
+  /** Changes one server in main so concurrent toggles from the renderer never overwrite each other. */
+  setServerIncluded(key: string, included: boolean): CloudMcpSyncPreferences
 }
 
 class RuntimeCallError extends Error {
@@ -86,13 +89,12 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
   function getPreferences(): CloudMcpSyncPreferences {
     if (!preferences) {
       try {
-        const parsed = JSON.parse(
-          readFileSync(preferencesPath, 'utf8')
-        ) as Partial<CloudMcpSyncPreferences>
+        const parsed: unknown = JSON.parse(readFileSync(preferencesPath, 'utf8'))
+        const excluded = isMcpRecord(parsed) ? parsed.excluded : undefined
         preferences = {
-          autoSync: parsed.autoSync !== false,
-          excluded: Array.isArray(parsed.excluded)
-            ? parsed.excluded.filter((key): key is string => typeof key === 'string')
+          autoSync: !isMcpRecord(parsed) || parsed.autoSync !== false,
+          excluded: Array.isArray(excluded)
+            ? excluded.filter((key): key is string => typeof key === 'string')
             : []
         }
       } catch {
@@ -150,6 +152,12 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
   }
 
   function publish(status: McpSyncStatus): McpSyncStatus {
+    // A toggle made while this sync was planning must not flip back when it lands.
+    const excluded = new Set(getPreferences().excluded)
+    status = {
+      ...status,
+      rows: status.rows.map((row) => ({ ...row, included: !excluded.has(row.key) }))
+    }
     statuses.set(status.environmentId, status)
     deps.broadcast(status)
     return status
@@ -215,7 +223,16 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
       if (!cloudRuntime(environmentId)) {
         return null
       }
-      return statuses.get(environmentId) ?? preview(environmentId)
+      const known = statuses.get(environmentId)
+      if (known) {
+        return known
+      }
+      // Cached so preference changes republish it like any synced workspace.
+      const fresh = await preview(environmentId)
+      if (!statuses.has(environmentId)) {
+        statuses.set(environmentId, fresh)
+      }
+      return statuses.get(environmentId) ?? fresh
     },
     sync(environmentId, trigger) {
       if (!cloudRuntime(environmentId)) {
@@ -232,17 +249,34 @@ export function createCloudMcpSync(deps: CloudMcpSyncDeps): CloudMcpSync {
       return next
     },
     getPreferences,
-    setPreferences(next) {
-      const merged: CloudMcpSyncPreferences = {
-        autoSync: next.autoSync ?? getPreferences().autoSync,
-        excluded: [...new Set(next.excluded ?? getPreferences().excluded)].sort()
+    setPreferences,
+    setServerIncluded(key, included) {
+      const excluded = new Set(getPreferences().excluded)
+      if (included) {
+        excluded.delete(key)
+      } else {
+        excluded.add(key)
       }
-      writeFileAtomically(preferencesPath, `${JSON.stringify(merged, null, 2)}\n`)
-      preferences = merged
-      for (const status of statuses.values()) {
-        publish({ ...status, autoSync: merged.autoSync })
-      }
-      return merged
+      return setPreferences({ excluded: [...excluded] })
     }
+  }
+
+  function setPreferences(next: Partial<CloudMcpSyncPreferences>): CloudMcpSyncPreferences {
+    const merged: CloudMcpSyncPreferences = {
+      autoSync: next.autoSync ?? getPreferences().autoSync,
+      excluded: [...new Set(next.excluded ?? getPreferences().excluded)].sort()
+    }
+    writeFileAtomically(preferencesPath, `${JSON.stringify(merged, null, 2)}\n`)
+    preferences = merged
+    const excluded = new Set(merged.excluded)
+    // Exclusions apply to every cloud workspace: switches move everywhere at once, before any sync.
+    for (const status of statuses.values()) {
+      publish({
+        ...status,
+        autoSync: merged.autoSync,
+        rows: status.rows.map((row) => ({ ...row, included: !excluded.has(row.key) }))
+      })
+    }
+    return merged
   }
 }
