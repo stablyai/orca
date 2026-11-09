@@ -57,6 +57,22 @@ describe('ensureCodexWindowsTarShimDirectory', () => {
       warn.mockRestore()
     }
   })
+
+  it('retries creation after a failure once the directory is writable again', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const blocked = await mkdtemp(join(tmpdir(), 'orca-codex-blocked-'))
+      created.push(blocked)
+      await writeFile(join(blocked, 'codex-tar-shim'), '')
+      expect(await ensureCodexWindowsTarShimDirectory(blocked, 'win32')).toBe(null)
+      await rm(join(blocked, 'codex-tar-shim'))
+      const directory = await ensureCodexWindowsTarShimDirectory(blocked, 'win32')
+      expect(directory).toBe(join(blocked, 'codex-tar-shim'))
+      expect(await readFile(join(directory!, 'tar.cmd'), 'utf8')).toBe(SHIM_CONTENT)
+    } finally {
+      warn.mockRestore()
+    }
+  })
 })
 
 describe('frontCodexWindowsTarShimPath', () => {
@@ -81,6 +97,18 @@ describe('frontCodexWindowsTarShimPath', () => {
       'win32'
     )
     expect(fronted).toEqual({ Path: `${shim};${GIT_USR_BIN}` })
+  })
+
+  it('collapses Path/PATH duplicates onto the spelling the child receives, shim in front', () => {
+    // Node passes the lexicographically first key (PATH, the overlay) to Windows children;
+    // fronting onto Path alone would leave the child's PATH without the shim.
+    const fronted = frontCodexWindowsTarShimPath(
+      { Path: `${GIT_USR_BIN};${SYSTEM32}`, PATH: SYSTEM32 },
+      'D:\\userData\\codex-tar-shim',
+      'win32'
+    )
+    expect(Object.keys(fronted).filter((key) => key.toLowerCase() === 'path')).toEqual(['PATH'])
+    expect(fronted).toEqual({ PATH: `D:\\userData\\codex-tar-shim;${SYSTEM32}` })
   })
 
   it('changes nothing without a shim directory, without PATH, or off Windows', () => {

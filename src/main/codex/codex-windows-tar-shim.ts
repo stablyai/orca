@@ -5,7 +5,6 @@
 // own tar on Codex launch environments only; the user's terminal PATH is untouched.
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 import type { createStructuredAgentEnvironmentResolvers } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 
 const SHIM_DIRECTORY_NAME = 'codex-tar-shim'
@@ -14,7 +13,7 @@ const TAR_SHIM = '@"%SystemRoot%\\System32\\tar.exe" %*\r\n'
 
 const ensuredByDirectory = new Map<string, Promise<string | null>>()
 
-/** Create (once per directory) the shim directory a Codex launch puts first on PATH; null leaves PATH as-is. */
+/** Create (cached per directory; a failed attempt retries on the next launch) the shim directory a Codex launch puts first on PATH; null leaves PATH as-is. */
 export function ensureCodexWindowsTarShimDirectory(
   dataDirectory: string,
   platform: NodeJS.Platform = process.platform
@@ -29,6 +28,8 @@ export function ensureCodexWindowsTarShimDirectory(
         '[codex] Windows tar shim could not be created; Codex PATH left unchanged:',
         error
       )
+      // A transient failure must not pin null for every later launch.
+      ensuredByDirectory.delete(dataDirectory)
       return null
     })
     ensuredByDirectory.set(dataDirectory, ensured)
@@ -54,14 +55,22 @@ export function frontCodexWindowsTarShimPath(
   if (platform !== 'win32' || !shimDirectory) {
     return env
   }
-  const pathKey = resolvePathEnvKey(env, platform)
-  if (env[pathKey] === undefined) {
+  // Node passes the lexicographically first case-insensitive PATH key to Windows children.
+  const pathKeys = Object.keys(env)
+    .filter((key) => key.toLowerCase() === 'path' && env[key] !== undefined)
+    .sort()
+  if (pathKeys.length === 0) {
     return env
   }
-  const remaining = env[pathKey]
+  const [pathKey] = pathKeys
+  const normalizedEnv = { ...env }
+  for (const key of pathKeys.slice(1)) {
+    delete normalizedEnv[key]
+  }
+  const remaining = normalizedEnv[pathKey]
     .split(';')
     .filter((entry) => entry.length > 0 && !samePathEntry(entry, shimDirectory))
-  return { ...env, [pathKey]: [shimDirectory, ...remaining].join(';') }
+  return { ...normalizedEnv, [pathKey]: [shimDirectory, ...remaining].join(';') }
 }
 
 function samePathEntry(entry: string, directory: string): boolean {
