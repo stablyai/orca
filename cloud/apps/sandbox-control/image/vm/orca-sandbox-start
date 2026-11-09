@@ -4,6 +4,11 @@
 # Env from the control plane: ORCA_SANDBOX_ID, ORCA_PUBLIC_WSS, optional ORCA_REPO_URL/ORCA_REPO_REF,
 # ORCA_GITHUB_PLACEHOLDER, ORCA_SECRET_ENV (`NAME=<base64>` lines: org/personal/repo secrets for
 # orcad and its agents). Never prints anything else on stdout's last line.
+# With ORCA_READY_VIA=file it prints {"schemaVersion":1,"readyFile":"<path>"} instead and the control
+# plane reads the offer with the files API: the provider keeps command stdout as logs, not files.
+# Managed env for every process orcad starts: ORCA_IS_CLOUD=1, ORCA_SANDBOX_ID, ORCA_ROOT_PATH,
+# ORCA_WORKTREE_PATH, ORCA_WORKSPACE_PATH, ORCA_WORKSPACE_NAME, ORCA_DEFAULT_BRANCH, ORCA_PORT and the
+# CONDUCTOR_* names imported Conductor scripts read.
 set -euo pipefail
 umask 077
 ORCA_HOME=/opt/orca
@@ -15,10 +20,34 @@ flock -w 60 9
 # Background children close fd 9 (`9>&-`): an orcad that inherited it would hold the lock for its whole
 # life and every later start (resume of a running sandbox, a retried create) would wait out the 60 s.
 
+print_ready() {
+  if [ "${ORCA_READY_VIA:-}" = file ]; then
+    printf '{"schemaVersion":1,"readyFile":"%s"}\n' "$STATE/ready.json"
+  else
+    tail -n 1 "$STATE/ready.json"
+  fi
+}
+# Command stderr is kept by the provider: strip injected values and credential shapes from log tails.
+redact_log() {
+  local text kv value
+  text="$(cat)"
+  for kv in ${agent_env[@]+"${agent_env[@]}"}; do
+    value="${kv#*=}"
+    if [ "${#value}" -ge 8 ]; then
+      text="${text//"$value"/[REDACTED]}"
+    fi
+  done
+  printf '%s\n' "$text" | sed -E \
+    -e 's#orca://[^[:space:]]+#[REDACTED_PAIRING]#g' \
+    -e 's#(gh[pousr]_|github_pat_|sk-|vc[kpiar]_)[A-Za-z0-9._-]{16,}#[REDACTED_TOKEN]#g' \
+    -e 's#eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}#[REDACTED_JWT]#g' \
+    -e 's#(Authorization|authorization):[[:space:]]*[A-Za-z]+[[:space:]]+[^[:space:]]+#\1: [REDACTED]#g'
+}
+
 boot_id="$(cat /proc/sys/kernel/random/boot_id)"
 if [ "$(cat "$STATE/boot-id" 2>/dev/null || true)" = "$boot_id" ] && [ -s "$STATE/ready.json" ] \
   && kill -0 "$(cat "$STATE/orcad.pid" 2>/dev/null || echo 0)" 2>/dev/null; then
-  tail -n 1 "$STATE/ready.json"
+  print_ready
   exit 0
 fi
 # Resume = reboot from disk: locks and pids from the previous session name dead processes.
@@ -39,28 +68,50 @@ if [ ! -d "$PROJECT" ]; then
   fi
 fi
 
+workspace_name="$(basename "$(git -C "$PROJECT" remote get-url origin 2>/dev/null || echo "$PROJECT")" .git)"
+default_branch="$(git -C "$PROJECT" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+default_branch="${default_branch#origin/}"
+if [ -z "$default_branch" ]; then
+  default_branch="$(git -C "$PROJECT" branch --show-current 2>/dev/null || true)"
+fi
+# One workspace per VM: its preview ports start at 3000 (Conductor allots CONDUCTOR_PORT..+9).
+managed_env=(
+  ORCA_IS_CLOUD=1
+  ORCA_ROOT_PATH="$PROJECT" ORCA_WORKTREE_PATH="$PROJECT" ORCA_WORKSPACE_PATH="$PROJECT"
+  ORCA_WORKSPACE_NAME="$workspace_name" ORCA_DEFAULT_BRANCH="${default_branch:-main}" ORCA_PORT=3000
+  CONDUCTOR_IS_CLOUD=1
+  CONDUCTOR_ROOT_PATH="$PROJECT" CONDUCTOR_WORKSPACE_PATH="$PROJECT"
+  CONDUCTOR_WORKSPACE_NAME="$workspace_name" CONDUCTOR_DEFAULT_BRANCH="${default_branch:-main}" CONDUCTOR_PORT=3000
+)
+
 agent_env=()
 if [ -n "${ORCA_GITHUB_PLACEHOLDER:-}" ]; then
   # The egress layer swaps the placeholder for a short-lived GitHub token; none lives in the VM.
   agent_env+=("GH_TOKEN=$ORCA_GITHUB_PLACEHOLDER" "GITHUB_TOKEN=$ORCA_GITHUB_PLACEHOLDER")
 fi
 
+secret_names=()
 if [ -n "${ORCA_SECRET_ENV:-}" ]; then
-  # Secrets live only in orcad's process env (memory): nothing under $HOME or the project, so the
-  # stop snapshot never carries them. Resolved per start by the control plane: no image rebuild.
+  # Secrets live only in memory: orcad's process env and a tmpfs file new shells re-read
+  # (orca-sandbox-env), never under $HOME or the project, so the stop snapshot never carries them.
+  # Resolved per start (and per edit) by the control plane: no image rebuild, no restart.
   while IFS= read -r line; do
     name="${line%%=*}" b64="${line#*=}" # not IFS='=': read would strip base64 padding
     case "$name" in '' | *[!A-Z0-9_]* | [0-9]* | ORCA_* | PATH | HOME | LD_* | DYLD_*) continue ;; esac
     agent_env+=("$name=$(printf '%s' "$b64" | base64 -d)")
+    secret_names+=("$name")
   done < <(printf '%s\n' "$ORCA_SECRET_ENV") # a pipe, not a here-string temp file
-  unset ORCA_SECRET_ENV
 fi
+# Always rewrite the file, so a resume with fewer secrets drops the old names too.
+"$ORCA_HOME/bin/orca-sandbox-env" >/dev/null || echo 'session env file unavailable; secrets apply at boot only' >&2
+unset ORCA_SECRET_ENV
 
 node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
 env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
   PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:/usr/local/bin:/usr/bin:/bin" \
-  ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" \
-  NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" "${agent_env[@]}" \
+  ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${managed_env[@]}" \
+  NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" \
+  ORCA_SESSION_ENV_NAMES="${secret_names[*]}" "${agent_env[@]}" \
   setsid nohup "$node" "$ORCA_HOME/runtime/orcad/orcad-server.js" \
   --port 6768 --bind 0.0.0.0 --pairing-address "$ORCA_PUBLIC_WSS" \
   --recipe-json --project-root "$PROJECT" \
@@ -71,15 +122,15 @@ for _ in $(seq 1 1200); do
   if grep -q '"pairingCode"' "$STATE/ready.json" 2>/dev/null; then
     if [ -n "$clone_pid" ] && ! wait "$clone_pid"; then
       echo 'repository clone failed' >&2
-      tail -n 5 "$STATE/clone.log" >&2
+      tail -n 5 "$STATE/clone.log" | redact_log >&2
       exit 1
     fi
-    tail -n 1 "$STATE/ready.json"
+    print_ready
     exit 0
   fi
   if ! kill -0 "$(cat "$STATE/orcad.pid")" 2>/dev/null; then
     echo 'orcad exited before ready' >&2
-    tail -n 40 "$STATE/orcad.log" | sed -E 's#orca://[^[:space:]]+#[REDACTED_PAIRING]#g' >&2
+    tail -n 40 "$STATE/orcad.log" | redact_log >&2
     exit 1
   fi
   sleep 0.05

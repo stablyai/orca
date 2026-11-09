@@ -1,11 +1,14 @@
 // Commands the golden image installs in /opt/orca/bin (see image/provision-golden.sh). The control
 // plane only ever runs these fixed entry points in a VM, never user-supplied command lines.
 import { z } from 'zod'
+import { READY_VIA_FILE_ENV, resolveOrcadReadyLine } from './orcad-ready'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 
 export const ORCAD_PORT = 6768
 export const START_COMMAND = '/opt/orca/bin/orca-sandbox-start'
 export const DRAIN_COMMAND = '/opt/orca/bin/orca-sandbox-drain'
+export const ENV_COMMAND = '/opt/orca/bin/orca-sandbox-env'
+const ENV_TIMEOUT_MS = 30_000
 const START_TIMEOUT_MS = 120_000
 /** Matches the parity plan: in-flight turns get up to 5 min to become durable restart offers. */
 export const DRAIN_TIMEOUT_MS = 5 * 60_000
@@ -63,6 +66,7 @@ export async function startOrcad(
     throw new VmCommandError('route_missing')
   }
   const env: Record<string, string> = {
+    ...READY_VIA_FILE_ENV,
     ORCA_SANDBOX_ID: inputs.sandboxId,
     ORCA_PUBLIC_WSS: route.url.replace(/^https:/, 'wss:')
   }
@@ -91,7 +95,7 @@ export async function startOrcad(
   }
   const lastLine = result.stdout.trim().split('\n').at(-1) ?? ''
   try {
-    return ReadySchema.parse(JSON.parse(lastLine))
+    return ReadySchema.parse(await resolveOrcadReadyLine(provider, state.session.id, lastLine))
   } catch {
     throw new VmCommandError('orcad_ready_invalid')
   }
@@ -107,20 +111,38 @@ export async function runningOrcad(provider: SandboxProviderApi, sessionId: stri
     '[ "$(cat "$S/boot-id" 2>/dev/null)" = "$(cat /proc/sys/kernel/random/boot_id)" ] || exit 3',
     'kill -0 "$(cat "$S/orcad.pid" 2>/dev/null || echo 0)" 2>/dev/null || exit 3',
     'grep -q \'"pairingCode"\' "$S/ready.json" 2>/dev/null || exit 3',
-    'tail -n 1 "$S/ready.json"'
+    // A pointer, not the offer: command stdout is retained by the provider (see orcad-ready.ts).
+    'printf \'{"schemaVersion":1,"readyFile":"%s"}\\n\' "$S/ready.json"'
   ].join('\n')
   try {
     const result = await provider.runCommand(sessionId, { command: 'bash', args: ['-c', script], timeoutMs: 15_000 })
     if (result.exitCode !== 0) {
       return null
     }
-    return ReadySchema.parse(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? ''))
+    return ReadySchema.parse(await resolveOrcadReadyLine(provider, sessionId, result.stdout.trim().split('\n').at(-1) ?? ''))
   } catch (error) {
     if (error instanceof ProviderError || error instanceof SyntaxError || error instanceof z.ZodError) {
       return null
     }
     throw error
   }
+}
+
+/**
+ * Replaces the session's memory-only env file in the VM; new shells and agent launches read it.
+ * False when the image predates the command (older golden image): the next boot applies it.
+ */
+export async function refreshSessionEnv(
+  provider: SandboxProviderApi,
+  sessionId: string,
+  secretEnv: Record<string, string>
+): Promise<boolean> {
+  const result = await provider.runCommand(sessionId, {
+    command: ENV_COMMAND,
+    env: { ORCA_SECRET_ENV: encodeSecretEnv(secretEnv) },
+    timeoutMs: ENV_TIMEOUT_MS
+  })
+  return result.exitCode === 0
 }
 
 /** Best effort: orcad turns working chats into durable restart offers before the VM stops. */

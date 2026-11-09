@@ -1,7 +1,7 @@
 // Sandbox lifecycle: one persistent provider sandbox per Orca workspace, with an Orca-owned lease,
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
 import type { EntitlementClient, MachineSize } from './entitlements'
-import type { GitHubAppMinter } from './github-app'
+import { parseGitHubRepo, type GitHubAppMinter } from './github-app'
 import {
   DEFAULT_GUARDRAILS,
   GuardrailError,
@@ -10,15 +10,14 @@ import {
   killSwitchOn,
   type GuardrailConfig
 } from './guardrails'
-import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
+import { DEFAULT_EGRESS_ALLOWLIST, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
 import type { RetentionConfig } from './retention'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
-import { applySecretPlaceholders, egressSecretHosts, secretPlaceholder } from './secret-egress'
-import { resolveSandboxSecrets } from './secrets'
+import { egressSecretHosts, secretPlaceholder } from './secret-egress'
+import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
 import { ORCAD_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
 import { claimPooledVm, deletePooledVm, maintainPool, type PoolConfig, type PooledVm } from './pool'
-import { parseGitHubRepo } from './github-app'
 import {
   NO_SESSION,
   countActiveSandboxes,
@@ -52,7 +51,8 @@ export type LifecycleDeps = {
   /** GitHub App installation tokens for the workspace repo; absent until the app is configured. */
   github?: GitHubAppMinter
   /** Secret store; absent (no SECRETS_KEK) means sessions start without injected secrets. */
-  secrets?: { keyring: Keyring; egressPlaceholders: boolean }
+  /** egressPlaceholders: every account (`true`) or only the listed account ids (staged rollout). */
+  secrets?: { keyring: Keyring; egressPlaceholders: boolean | ReadonlySet<string> }
   now: () => number
   /** Orphan/retention policy for the cron; defaults in retention.ts. */
   retention?: RetentionConfig
@@ -107,21 +107,21 @@ export function phaseTimer(now: () => number = Date.now) {
 }
 
 type BootPrep = {
-  secrets: { env: Record<string, string>; hosts: string[] }
+  secrets: SessionSecrets
   minted: { token: string; expiresAt: number } | null
 }
 
 /** Everything a boot needs that does not depend on the VM: resolved concurrently with the VM work. */
 async function prepareBoot(deps: LifecycleDeps, row: SandboxRow): Promise<BootPrep> {
   const [secrets, minted] = await Promise.all([
-    sessionSecrets(deps, row),
+    sessionSecretEnv(deps, row),
     deps.github && row.repo_url ? deps.github.tokenForRepo(row.repo_url, row.account_id) : Promise.resolve(null)
   ])
   return { secrets, minted }
 }
 
 function routedRow(row: SandboxRow, prep: BootPrep): SandboxRow {
-  return { ...row, egress_secret_hosts: prep.secrets.hosts.join(',') || null }
+  return { ...row, egress_secret_hosts: prep.secrets.egressSecretHosts, egress_allow_hosts: prep.secrets.egressAllowHosts }
 }
 
 function randomId(): string {
@@ -168,7 +168,7 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
             ([header, format]): CredentialRoute => ({
               host: entry.host,
               header,
-              placeholders: [format(secretPlaceholder(row, entry.slug))],
+              placeholders: [format(secretPlaceholder(row, entry.secret))],
               via: 'forward',
               forwardURL: proxyUrl
             })
@@ -176,7 +176,9 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         )
       ]
     : []
-  return compileNetworkPolicy({ mode: 'allowlist', credentials: [...git, ...credentials] })
+  // Custom model-provider hosts (ANTHROPIC_BASE_URL / OPENAI_BASE_URL secrets) recorded at boot.
+  const allowlist = [...new Set([...DEFAULT_EGRESS_ALLOWLIST, ...egressAllowHosts(row)])]
+  return compileNetworkPolicy({ mode: 'allowlist', allowlist, credentials: [...git, ...credentials] })
 }
 
 export function sessionFields(deps: LifecycleDeps, state: ProviderSandboxState): SessionFields {
@@ -248,7 +250,9 @@ async function boot(
   const git = prep.minted ? { expiresAt: prep.minted.expiresAt } : null
   // A resumed session keeps its last policy (an expired repo token); swap it in while orcad boots.
   // Nothing in the VM uses git or model keys before orcad answers and the desktop attaches.
-  const needsPolicy = !options.policyApplied && (git || routed.egress_secret_hosts || row.egress_secret_hosts)
+  const needsPolicy =
+    !options.policyApplied &&
+    (git || routed.egress_secret_hosts || row.egress_secret_hosts || routed.egress_allow_hosts || row.egress_allow_hosts)
   const [, connection] = await Promise.all([
     needsPolicy
       ? options.timer.time('policy', () =>
@@ -259,7 +263,8 @@ async function boot(
       startOrcad(deps.provider, state, {
         sandboxId: row.id,
         repo: options.repo,
-        githubPlaceholder: deps.config.egressProxyUrl ? githubPlaceholderToken(row) : undefined,
+        // Repos hosted outside github.com get no GitHub credential, not even the placeholder.
+        githubPlaceholder: deps.config.egressProxyUrl && parseGitHubRepo(row.repo_url ?? '') ? githubPlaceholderToken(row) : undefined,
         gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined,
         secretEnv: prep.secrets.env
       })
@@ -271,27 +276,11 @@ async function boot(
     retention_warned_at: null,
     github_token_expires_at: git?.expiresAt ?? null,
     egress_secret_hosts: routed.egress_secret_hosts,
+    egress_allow_hosts: routed.egress_allow_hosts,
     ...sessionFields(deps, state),
     ...(options.billFrom !== undefined ? { usage_settled_at: options.billFrom } : {})
   })
   return { row: running, connection, timings: options.timer.timings }
-}
-
-/**
- * Secrets this session starts with (resolved now, so edits apply on the next start or resume with
- * no image rebuild). With egress placeholders on, model API keys become placeholders.
- */
-async function sessionSecrets(deps: LifecycleDeps, row: SandboxRow): Promise<{ env: Record<string, string>; hosts: string[] }> {
-  if (!deps.secrets) {
-    return { env: {}, hosts: [] }
-  }
-  const { env, skipped } = await resolveSandboxSecrets(deps.db, deps.secrets.keyring, row)
-  // Counts only.
-  console.log(JSON.stringify({ event: 'session_secrets', sandboxId: row.id, injected: Object.keys(env).length, skipped }))
-  if (!deps.secrets.egressPlaceholders || !deps.config.egressProxyUrl) {
-    return { env, hosts: [] }
-  }
-  return applySecretPlaceholders(row, env)
 }
 
 /** Mints a fresh repo token and swaps it into the live policy; null when the repo has no app install. */

@@ -6,8 +6,9 @@ import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTVerifyGetKey } from '
 import type { SandboxRow } from './store'
 
 const VERCEL_OIDC_HOSTNAME = 'oidc.vercel.com'
-/** Hosts whose clients are Node (undici); git/curl hosts use transform rules instead. */
-export const PROXIED_HOSTS: ReadonlySet<string> = new Set(['api.github.com', 'api.anthropic.com', 'api.openai.com'])
+/** Hosts whose clients are Node (undici); git/curl hosts use transform rules instead. Model hosts are per session. */
+export const PROXIED_HOSTS: ReadonlySet<string> = new Set(['api.github.com'])
+const PROXY_HOST = /^([a-z0-9-]+\.)+[a-z]{2,63}$/
 const DROP_HEADERS = [
   'vercel-forwarded-host',
   'vercel-forwarded-scheme',
@@ -82,7 +83,8 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   if (!host || !scheme || !port || !path || !token || !path.startsWith('/')) {
     return deny('missing_proxy_headers')
   }
-  if (!PROXIED_HOSTS.has(host) || scheme !== 'https' || port !== '443') {
+  // Model-provider hosts vary per session (custom base URLs); the row's routes decide below.
+  if (scheme !== 'https' || port !== '443' || !PROXY_HOST.test(host)) {
     return deny('host_not_proxied')
   }
   let claims: Record<string, unknown>
@@ -111,6 +113,9 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
     return deny('sandbox_not_running')
   }
   const routes = deps.routesFor(row, host)
+  if (routes.length === 0) {
+    return deny('host_not_proxied')
+  }
   const route = routes
     .find((candidate) => candidate.placeholders.includes(request.headers.get(candidate.header) ?? ''))
   if (!route) {

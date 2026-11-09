@@ -1,59 +1,62 @@
-// Phase-2 model API keys: the VM's env carries a placeholder, and the egress proxy swaps in the real
-// key only on the provider's own API host. Node clients (Claude Code, Codex) hang under Vercel
-// transform rules, so these hosts always take the forwardURL path through /v1/egress/proxy, the
-// same path api.github.com uses. Placeholders are not secrets: the proxy authenticates the
-// sandbox by Vercel's OIDC token, the placeholder only marks which header to swap.
+// Model API keys kept out of the VM: the session env carries a placeholder, and the egress proxy
+// swaps in the real key only on the host that credential is for (api.anthropic.com,
+// api.openai.com, ai-gateway.vercel.sh or a custom provider base URL). Node clients (Claude Code,
+// Codex) hang under Vercel transform rules, so these hosts always take the forwardURL path through
+// /v1/egress/proxy, the same path api.github.com uses. Placeholders are not secrets: the proxy
+// authenticates the sandbox by Vercel's OIDC token, the placeholder only marks which header to swap.
+import { credentialTargets, type CredentialTarget } from './provider-env'
 import type { SandboxRow } from './store'
 
-export type SecretEgressHost = {
-  host: string
-  /** Secret whose value is swapped in. */
-  secret: string
-  slug: string
-  /** Header shapes the provider's clients send the key in, keyed by lowercase header name. */
-  headers: Record<string, (value: string) => string>
+export type SecretEgressHost = CredentialTarget
+
+/** Rows written before credentials were host-scoped stored bare hosts. */
+const LEGACY_HOSTS: Record<string, string> = { 'api.anthropic.com': 'ANTHROPIC_API_KEY', 'api.openai.com': 'OPENAI_API_KEY' }
+
+export function secretPlaceholder(row: Pick<SandboxRow, 'id'>, secret: string): string {
+  return `orca-ph-${secret.toLowerCase().replaceAll('_', '-')}-${row.id}`
 }
 
-export const SECRET_EGRESS_HOSTS: readonly SecretEgressHost[] = [
-  {
-    host: 'api.anthropic.com',
-    secret: 'ANTHROPIC_API_KEY',
-    slug: 'anthropic',
-    headers: { 'x-api-key': (value) => value, authorization: (value) => `Bearer ${value}` }
-  },
-  {
-    host: 'api.openai.com',
-    secret: 'OPENAI_API_KEY',
-    slug: 'openai',
-    headers: { authorization: (value) => `Bearer ${value}` }
-  }
-]
-
-export function secretPlaceholder(row: Pick<SandboxRow, 'id'>, slug: string): string {
-  return `orca-ph-${slug}-${row.id}`
+/** `SECRET@host` entries recorded on the row at boot (or refresh) as placeholder-routed. */
+export function encodeEgressSecretHosts(targets: readonly CredentialTarget[]): string | null {
+  return targets.map((target) => `${target.secret}@${target.host}`).join(',') || null
 }
 
-/** Hosts recorded on the row at boot as placeholder-routed for this session. */
+/** Credential routes recorded on the row for this session. */
 export function egressSecretHosts(row: Pick<SandboxRow, 'egress_secret_hosts'>): SecretEgressHost[] {
-  const hosts = new Set((row.egress_secret_hosts ?? '').split(',').filter(Boolean))
-  return SECRET_EGRESS_HOSTS.filter((entry) => hosts.has(entry.host))
+  const recorded: Record<string, string> = {}
+  for (const entry of (row.egress_secret_hosts ?? '').split(',').filter(Boolean)) {
+    const at = entry.indexOf('@')
+    const [secret, host] = at === -1 ? [LEGACY_HOSTS[entry], entry] : [entry.slice(0, at), entry.slice(at + 1)]
+    if (secret && host) {
+      recorded[secret] = host
+    }
+  }
+  // Header shapes come from the code, never from the row. The base URL value is only used to
+  // pick the default-vs-custom host, and the recorded host is what was allowlisted at boot.
+  const shapes = credentialTargets({
+    ANTHROPIC_API_KEY: 'x',
+    ANTHROPIC_AUTH_TOKEN: 'x',
+    AI_GATEWAY_API_KEY: 'x',
+    OPENAI_API_KEY: 'x'
+  })
+  return shapes.flatMap((shape) => {
+    const host = recorded[shape.secret]
+    return host ? [{ ...shape, host }] : []
+  })
 }
 
 /**
- * Replaces model API keys with placeholders in a session's env. Returns the hosts the policy and
- * proxy must now route (and deny without the placeholder).
+ * Replaces model API keys with placeholders in a session's env. Returns the credential routes the
+ * policy and proxy must now serve (and deny without the placeholder).
  */
 export function applySecretPlaceholders(
   row: Pick<SandboxRow, 'id'>,
   env: Record<string, string>
-): { env: Record<string, string>; hosts: string[] } {
+): { env: Record<string, string>; targets: CredentialTarget[] } {
   const next = { ...env }
-  const hosts: string[] = []
-  for (const entry of SECRET_EGRESS_HOSTS) {
-    if (next[entry.secret]) {
-      next[entry.secret] = secretPlaceholder(row, entry.slug)
-      hosts.push(entry.host)
-    }
+  const targets = credentialTargets(env)
+  for (const target of targets) {
+    next[target.secret] = secretPlaceholder(row, target.secret)
   }
-  return { env: next, hosts }
+  return { env: next, targets }
 }

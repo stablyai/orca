@@ -9,6 +9,7 @@ import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import type { Env } from './env'
 import { createKeyring, type Keyring, type SecretBinding } from './secrets-crypto'
+import { BASE_URL_NAMES, baseUrlHost } from './provider-env'
 import type { SandboxRow } from './store'
 
 export type SecretScope = 'org' | 'personal' | 'repo'
@@ -38,7 +39,14 @@ export const AGENT_KEY_NAMES: ReadonlySet<string> = new Set([
   'CLAUDE_CODE_USE_VERTEX',
   'ANTHROPIC_VERTEX_PROJECT_ID',
   'CLOUD_ML_REGION',
-  'GOOGLE_CLOUD_PROJECT'
+  'GOOGLE_CLOUD_PROJECT',
+  // Provider presets and custom endpoints travel with their key, so an org-shared pair wins as a pair.
+  'AI_GATEWAY_API_KEY',
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
+  'OPENAI_BASE_URL',
+  'OPENAI_MODEL'
 ])
 
 /** Names that would break or hijack the VM's own processes, or that Orca manages itself. */
@@ -92,6 +100,10 @@ export function checkValue(name: string, value: string): void {
     throw new SecretError(400, 'invalid_request', 'value_too_large')
   }
   const trimmed = value.trim()
+  if (BASE_URL_NAMES.has(name) && !baseUrlHost(trimmed)) {
+    // The VM's egress allowlist opens this host, so only public https endpoints are accepted.
+    throw new SecretError(400, 'invalid_request', 'invalid_base_url')
+  }
   if (trimmed.startsWith('sk-ant-oat')) {
     throw new SecretError(400, 'invalid_request', 'subscription_token_refused')
   }
@@ -329,6 +341,58 @@ export async function resolveSandboxSecrets(
   return { env, skipped }
 }
 
+export type EffectiveSecret = {
+  name: string
+  kind: SecretKind
+  /** The scope whose value a session gets. */
+  scope: SecretScope
+  hint: string | null
+  updatedAt: number
+  /** Same-name values that lose to `scope`, highest rank first. */
+  shadowed: { scope: SecretScope; hint: string | null }[]
+}
+
+export const PRECEDENCE: Record<SecretKind, SecretScope[]> = {
+  env: ['repo', 'personal', 'org'],
+  agent_key: ['org', 'repo', 'personal']
+}
+
+/** What a session of this caller (in `repo`) would receive, by name and winning scope; no values. */
+export async function effectiveSecrets(db: D1Database, caller: SandboxCaller, repoParam: string | null): Promise<EffectiveSecret[]> {
+  const pairs: [SecretScope, string][] = [['personal', personalOwner(caller.userId, caller.dev === true)]]
+  if (caller.orgId) {
+    pairs.push(['org', caller.accountId])
+  }
+  const repo = normalizeRepo(repoParam)
+  if (repo) {
+    pairs.push(['repo', repoOwner(caller.accountId, repo)])
+  }
+  const where = pairs.map(() => '(scope = ? AND owner_id = ?)').join(' OR ')
+  const { results } = await db
+    .prepare(`SELECT scope, owner_id, name, hint, updated_at, updated_by FROM secrets WHERE ${where}`)
+    .bind(...pairs.flat())
+    .all<SecretRecord>()
+  const byName = new Map<string, SecretRecord[]>()
+  for (const record of results) {
+    byName.set(record.name, [...(byName.get(record.name) ?? []), record])
+  }
+  return [...byName.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, records]) => {
+      const kind = kindOf(name)
+      const rank = RANK[kind]
+      const [winner, ...rest] = records.sort((a, b) => rank[b.scope] - rank[a.scope])
+      return {
+        name,
+        kind,
+        scope: winner!.scope,
+        hint: winner!.hint,
+        updatedAt: winner!.updated_at,
+        shadowed: rest.map((record) => ({ scope: record.scope, hint: record.hint }))
+      }
+    })
+}
+
 let cachedKeyring: { source: string; keyring: Promise<Keyring> } | null = null
 
 /** The Worker's keyring, or null when SECRETS_KEK is not configured. */
@@ -349,6 +413,16 @@ export function keyringFor(env: Env): Promise<Keyring> | null {
 
 const ScopeSchema = z.enum(['org', 'personal', 'repo'])
 const PutSchema = z.object({ value: z.string() }).strict()
+const MAX_BATCH = 100
+const BatchSchema = z
+  .object({
+    set: z.record(z.string().max(MAX_NAME_LENGTH), z.string()).optional(),
+    delete: z.array(z.string().max(MAX_NAME_LENGTH)).max(MAX_BATCH).optional()
+  })
+  .strict()
+  .refine((body) => Object.keys(body.set ?? {}).length + (body.delete?.length ?? 0) <= MAX_BATCH)
+
+export type SecretChange = { scope: SecretScope; ownerId: string }
 
 /** Routes under /v1/secrets for an authenticated desktop caller. */
 export async function handleSecretsRoute(
@@ -358,15 +432,78 @@ export async function handleSecretsRoute(
   keyring: Keyring,
   caller: SandboxCaller,
   now: number,
-  readJson: (request: Request) => Promise<unknown>
+  readJson: (request: Request) => Promise<unknown>,
+  /** Called after a write lands, so running sessions of that owner can pick it up. */
+  onChange: (change: SecretChange) => void = () => {}
 ): Promise<Response> {
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
+  const repoQuery = url.searchParams.get('repo')
+  if (url.pathname === '/v1/secrets/effective') {
+    if (request.method !== 'GET') {
+      return json({ error: 'not_found' }, 404)
+    }
+    const admin = isOrgAdmin(caller)
+    return json({
+      caller: {
+        userId: caller.userId,
+        orgId: caller.orgId ?? null,
+        orgRole: caller.orgRole ?? null,
+        canWrite: { personal: true, org: Boolean(caller.orgId) && admin, repo: !caller.orgId || admin }
+      },
+      precedence: PRECEDENCE,
+      secrets: await effectiveSecrets(db, caller, repoQuery)
+    })
+  }
+  const batchMatch = /^\/v1\/secrets\/([a-z]+)\/batch$/.exec(url.pathname)
+  if (batchMatch) {
+    const scope = ScopeSchema.safeParse(batchMatch[1])
+    if (!scope.success || request.method !== 'POST') {
+      return json({ error: 'not_found' }, 404)
+    }
+    const owner = ownerFor(caller, scope.data, repoQuery, true)
+    const body = BatchSchema.safeParse(await readJson(request))
+    if (!body.success) {
+      return json({ error: 'invalid_request' }, 400)
+    }
+    const written: SecretView[] = []
+    const deleted: string[] = []
+    const errors: { name: string; error: string; reason?: string }[] = []
+    const attempt = async (name: string, run: () => Promise<void>) => {
+      try {
+        await run()
+      } catch (error) {
+        if (!(error instanceof SecretError)) {
+          throw error
+        }
+        errors.push({ name: name.slice(0, MAX_NAME_LENGTH), error: error.code, ...(error.reason ? { reason: error.reason } : {}) })
+      }
+    }
+    for (const [name, value] of Object.entries(body.data.set ?? {})) {
+      await attempt(name, async () => {
+        written.push(await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value, updatedBy: caller.userId }, now))
+      })
+    }
+    for (const name of body.data.delete ?? []) {
+      await attempt(name, async () => {
+        checkName(name)
+        if (await deleteSecret(db, scope.data, owner, name)) {
+          deleted.push(name)
+        }
+      })
+    }
+    // Names only.
+    console.log(JSON.stringify({ event: 'secrets_batch', scope: scope.data, written: written.map((s) => s.name), deleted, failed: errors.length, by: caller.userId }))
+    if (written.length > 0 || deleted.length > 0) {
+      onChange({ scope: scope.data, ownerId: owner })
+    }
+    return json({ secrets: written, deleted, errors })
+  }
   const match = /^\/v1\/secrets(?:\/([a-z]+)\/([^/]+))?$/.exec(url.pathname)
   if (!match) {
     return json({ error: 'not_found' }, 404)
   }
   const [, scopeSegment, name] = match
-  const repoParam = url.searchParams.get('repo')
+  const repoParam = repoQuery
   if (!scopeSegment) {
     if (request.method !== 'GET') {
       return json({ error: 'not_found' }, 404)
@@ -390,6 +527,7 @@ export async function handleSecretsRoute(
     }
     const secret = await putSecret(db, keyring, { scope: scope.data, ownerId: owner, name, value: body.data.value, updatedBy: caller.userId }, now)
     console.log(JSON.stringify({ event: 'secret_written', scope: scope.data, name, by: caller.userId }))
+    onChange({ scope: scope.data, ownerId: owner })
     return json({ secret })
   }
   if (request.method === 'DELETE') {
@@ -399,6 +537,7 @@ export async function handleSecretsRoute(
       return json({ error: 'not_found' }, 404)
     }
     console.log(JSON.stringify({ event: 'secret_deleted', scope: scope.data, name, by: caller.userId }))
+    onChange({ scope: scope.data, ownerId: owner })
     return json({ deleted: true })
   }
   return json({ error: 'not_found' }, 404)

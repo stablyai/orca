@@ -51,7 +51,9 @@ import { handleOperator, isOperator } from './operator'
 import { DEFAULT_RETENTION, type RetentionConfig } from './retention'
 import { reconcile } from './reconcile'
 import { egressSecretHosts, secretPlaceholder } from './secret-egress'
-import { SecretError, handleSecretsRoute, keyringFor, resolveSandboxSecrets } from './secrets'
+import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
+import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
+import { resolvedProviderEnv } from './session-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { VmCommandError } from './sandbox-vm-commands'
@@ -60,6 +62,8 @@ import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { CreateRequestSchema, LeaseRequestSchema, readyView, sandboxView } from './wire'
 
 const MAX_JSON_BYTES = 16 * 1024
+/** A pasted .env file: up to 100 values. */
+const MAX_BATCH_JSON_BYTES = 160 * 1024
 
 export type Deps = {
   provider?: SandboxProviderApi
@@ -94,7 +98,7 @@ function sessionSecretEnv(db: D1Database, keyring: Keyring, row: SandboxRow, now
       secretCache.delete(cached)
     }
   }
-  const env = resolveSandboxSecrets(db, keyring, row).then((resolved) => resolved.env)
+  const env = resolvedProviderEnv(db, keyring, row)
   secretCache.set(key, { at: now, env })
   env.catch(() => secretCache.delete(key))
   return env
@@ -106,19 +110,21 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
     if (host === 'api.github.com') {
       return [{ header: 'authorization', placeholders: githubPlaceholderHeaders(row), credential: () => broker.authorizationFor(row, host) }]
     }
-    const entry = egressSecretHosts(row).find((candidate) => candidate.host === host)
+    const entries = egressSecretHosts(row).filter((candidate) => candidate.host === host)
     const keyring = keyringFor(env)
-    if (!entry || !keyring) {
+    if (entries.length === 0 || !keyring) {
       return []
     }
-    return Object.entries(entry.headers).map(([header, format]) => ({
-      header,
-      placeholders: [format(secretPlaceholder(row, entry.slug))],
-      credential: async () => {
-        const value = (await sessionSecretEnv(env.SANDBOX_DB, await keyring, row, (deps.now ?? Date.now)()))[entry.secret]
-        return value ? format(value) : null
-      }
-    }))
+    return entries.flatMap((entry) =>
+      Object.entries(entry.headers).map(([header, format]) => ({
+        header,
+        placeholders: [format(secretPlaceholder(row, entry.secret))],
+        credential: async () => {
+          const value = (await sessionSecretEnv(env.SANDBOX_DB, await keyring, row, (deps.now ?? Date.now)()))[entry.secret]
+          return value ? format(value) : null
+        }
+      }))
+    )
   }
 }
 
@@ -271,9 +277,9 @@ function fail(error: string, status: number, reason?: string): Response {
   return json(reason ? { error, reason } : { error }, status)
 }
 
-async function readJson(request: Request): Promise<unknown> {
+async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<unknown> {
   const text = await request.text()
-  if (text.length > MAX_JSON_BYTES) {
+  if (text.length > maxBytes) {
     throw new SyntaxError('too_large')
   }
   return text ? JSON.parse(text) : {}
@@ -373,13 +379,24 @@ async function advanceGoldenImagesFromEnv(env: Env): Promise<void> {
   }
 }
 
+/** `on` = every account; `accounts:<id>,<id>` = staged rollout to those accounts; else off. */
+export function egressPlaceholderMode(value: string | undefined): boolean | ReadonlySet<string> {
+  if (value === 'on') {
+    return true
+  }
+  if (value?.startsWith('accounts:')) {
+    return new Set(value.slice('accounts:'.length).split(',').map((id) => id.trim()).filter(Boolean))
+  }
+  return false
+}
+
 async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
   const keyring = keyringFor(env)
   if (!keyring) {
     return undefined
   }
   try {
-    return { keyring: await keyring, egressPlaceholders: env.SECRETS_EGRESS_PLACEHOLDERS === 'on' }
+    return { keyring: await keyring, egressPlaceholders: egressPlaceholderMode(env.SECRETS_EGRESS_PLACEHOLDERS) }
   } catch {
     // A malformed KEK must not block sandbox starts; the secrets routes surface it as 503.
     console.log(JSON.stringify({ event: 'secrets_kek_invalid' }))
@@ -469,9 +486,29 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       if (!secrets) {
         return fail('not_configured', 503)
       }
-      return await handleSecretsRoute(request, url, env.SANDBOX_DB, secrets.keyring, caller, (deps.now ?? Date.now)(), readJson)
+      const changes: SecretChange[] = []
+      const response = await handleSecretsRoute(
+        request,
+        url,
+        env.SANDBOX_DB,
+        secrets.keyring,
+        caller,
+        (deps.now ?? Date.now)(),
+        (body) => readJson(body, url.pathname.endsWith('/batch') ? MAX_BATCH_JSON_BYTES : MAX_JSON_BYTES),
+        (change) => changes.push(change)
+      )
+      if (changes.length > 0) {
+        // Running sessions of this owner get the edit in new shells within seconds; no restart.
+        const work = lifecycleDeps(env, deps).then((life) => (life ? refreshAfterSecretChange(life, changes) : 0))
+        if (deps.waitUntil) {
+          deps.waitUntil(work.catch(() => undefined))
+        } else {
+          await work
+        }
+      }
+      return response
     }
-    const match = /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover))?)?$/.exec(url.pathname)
+    const match = /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|env\/refresh))?)?$/.exec(url.pathname)
     if (!match) {
       return fail('not_found', 404)
     }
@@ -521,6 +558,8 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         const ready = await rolloverSandbox(life, row)
         return readyResponse(ready)
       }
+      case 'POST env/refresh':
+        return json({ applied: await refreshSandboxEnv(life, row) })
       case 'POST lease': {
         const body = LeaseRequestSchema.safeParse(await readJson(request))
         if (!body.success) {

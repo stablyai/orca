@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Writes this session's secret env where new shells and agent launches read it (orca-session-env.sh).
+# Input: ORCA_SECRET_ENV (`NAME=<base64>` lines) from the control plane, at boot (orca-sandbox-start)
+# and whenever a secret changes (POST /v1/sandboxes/:id/env/refresh). The file lives on tmpfs only:
+# never on the sandbox disk, so the stop snapshot never carries it. Prints {"names":N} on success.
+# Also keeps Codex pointed at a configured OpenAI-compatible provider (OPENAI_BASE_URL), since Codex
+# does not read that variable: a managed block in ~/.codex/config.toml naming only the env var.
+set -euo pipefail
+umask 077
+dir="/dev/shm/orca-env-$(id -u)"
+if [ "$(stat -f -c %T /dev/shm 2>/dev/null || true)" != tmpfs ]; then
+  # No memory-only place to keep it: refuse rather than write secrets to disk.
+  echo 'no tmpfs for the session env' >&2
+  exit 3
+fi
+mkdir -p "$dir"
+chmod 700 "$dir"
+tmp="$(mktemp "$dir/.session.env.XXXXXX")"
+count=0
+openai_base_url=''
+openai_model=''
+while IFS= read -r line; do
+  name="${line%%=*}" b64="${line#*=}"
+  case "$name" in '' | *[!A-Z0-9_]* | [0-9]* | ORCA_* | PATH | HOME | LD_* | DYLD_*) continue ;; esac
+  # Values stay base64 in the file; the shell hook decodes them.
+  printf '%s=%s\n' "$name" "$b64" >>"$tmp"
+  count=$((count + 1))
+  case "$name" in
+    OPENAI_BASE_URL) openai_base_url="$(printf '%s' "$b64" | base64 -d)" ;;
+    OPENAI_MODEL) openai_model="$(printf '%s' "$b64" | base64 -d)" ;;
+  esac
+done < <(printf '%s\n' "${ORCA_SECRET_ENV:-}")
+mv -f "$tmp" "$dir/session.env"
+
+# ---- Codex provider block (no secret values: env_key names the variable) ----
+codex_config="$HOME/.codex/config.toml"
+toml_string() { # TOML basic string; the control plane only accepts https URLs and plain model ids
+  local value="${1//\\/\\\\}"
+  printf '"%s"' "${value//\"/\\\"}"
+}
+strip_managed() { # drop both managed blocks
+  awk '/^# >>> orca-cloud managed/{skip=1} !skip{print} /^# <<< orca-cloud managed/{skip=0}' "$1"
+}
+if [ -n "$openai_base_url" ] || grep -q '^# >>> orca-cloud managed' "$codex_config" 2>/dev/null; then
+  mkdir -p "$HOME/.codex"
+  user_part="$(mktemp "$HOME/.codex/.config.XXXXXX")"
+  if [ -f "$codex_config" ]; then strip_managed "$codex_config" >"$user_part"; fi
+  next="$(mktemp "$HOME/.codex/.config.XXXXXX")"
+  if [ -n "$openai_base_url" ] && [ "${openai_base_url#https://api.openai.com}" = "$openai_base_url" ]; then
+    # Top-level keys must precede every table; skip ours if the user already chose a provider/model.
+    head_keys="$(awk '/^\[/{exit} {print}' "$user_part")"
+    {
+      printf '# >>> orca-cloud managed (Orca Cloud provider; edit in Orca settings)\n'
+      if ! grep -Eq '^[[:space:]]*model_provider[[:space:]]*=' <<<"$head_keys"; then
+        printf 'model_provider = "orca_cloud"\n'
+      fi
+      if [ -n "$openai_model" ] && ! grep -Eq '^[[:space:]]*model[[:space:]]*=' <<<"$head_keys"; then
+        printf 'model = %s\n' "$(toml_string "$openai_model")"
+      fi
+      printf '# <<< orca-cloud managed\n'
+      cat "$user_part"
+      printf '\n# >>> orca-cloud managed provider\n[model_providers.orca_cloud]\nname = "Orca Cloud"\n'
+      printf 'base_url = %s\nenv_key = "OPENAI_API_KEY"\nwire_api = "responses"\n' "$(toml_string "$openai_base_url")"
+      printf '# <<< orca-cloud managed\n'
+    } >"$next"
+  else
+    cat "$user_part" >"$next"
+  fi
+  chmod 600 "$next"
+  mv -f "$next" "$codex_config"
+  rm -f "$user_part"
+fi
+printf '{"names":%d}\n' "$count"
