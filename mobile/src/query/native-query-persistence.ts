@@ -56,6 +56,11 @@ export function keepNativeHostQueries(
   })
 }
 
+/** Whether this world's writes can reach disk now: false on web, or while the store's key can't load. */
+export async function nativeQueryStoreReady(): Promise<boolean> {
+  return Platform.OS !== 'web' && (await processDeviceStore().open()) === 'ready'
+}
+
 /** Drops a removed host's queries from this world and stops storing them; the store wipe follows. */
 export function forgetNativeHostQueries(queryClient: QueryClient, hostId: string): void {
   keptHosts.get(queryClient)?.delete(hostId)

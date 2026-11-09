@@ -4,7 +4,7 @@ import * as z from 'zod'
 import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from '../host-screen/host-list-queries'
 import { hostObserverOptions } from '../query/host-query'
 import { persistedHostQueryKey } from '../query/host-query-persistence'
-import { keepNativeHostQueries } from '../query/native-query-persistence'
+import { keepNativeHostQueries, nativeQueryStoreReady } from '../query/native-query-persistence'
 import { homeStatsKey, homeStatsQuery } from '../stats/home-stats-summary-read'
 import { loadStoredHostProfiles } from '../transport/hosts/host-metadata-store'
 import {
@@ -86,7 +86,10 @@ async function seedFromLegacySnapshot(
     queryClient.setQueryData(key, counts, { updatedAt: info.countsProvenAt ?? snapshot.savedAt })
   }
   await Promise.all(hostIds.map((hostId) => keepNativeHostQueries(queryClient, hostId)?.flush()))
-  await AsyncStorage.removeItem(LEGACY_SNAPSHOT_KEY).catch(() => undefined)
+  // A store that can't write keeps the old key, so the next launch seeds from it again.
+  if (await nativeQueryStoreReady()) {
+    await AsyncStorage.removeItem(LEGACY_SNAPSHOT_KEY).catch(() => undefined)
+  }
 }
 
 /** Restores each paired desktop's stored counts and totals; resolves once each is applied or missed. */

@@ -24,6 +24,7 @@ vi.mock('../transport/hosts/host-metadata-store', () => ({
 }))
 vi.mock('../device-store/device-store', () => ({
   processDeviceStore: () => ({
+    open: async () => 'ready',
     read: async (hostId: string, _table: string, keys: readonly string[]) => ({
       status: 'ok',
       values: keys.map((key) => storeRows.get(`${hostId}/${key}`) ?? null)

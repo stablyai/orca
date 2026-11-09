@@ -1,9 +1,8 @@
 import * as z from 'zod'
-import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from '../host-screen/host-list-queries'
+// Type only: the host list's module reads these counts' rows, so a value import would be a cycle.
+import type { NO_HOST_LIST_INPUT } from '../host-screen/host-list-queries'
 import { defineHostQuery } from '../query/host-query'
 import { hostQueryKey } from '../query/host-query-key'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { readViewBase } from '../query/host-read-client'
 import {
   homeAgentEntries,
   type HomeAgentEntry,
@@ -23,20 +22,17 @@ export type HomeWorktreeCounts = {
   totalWorktrees: number
   activeCount: number
   agents: readonly HomeAgentEntry[]
+  // The rows this launch read: the next read's delta base, and the wide layout's host list seed. Never stored.
+  catalog?: WorktreeCatalogSnapshot
 }
-
-// The rows behind each host's counts, as the base for its next delta read; the counts keep no rows.
-const heldCatalogs = new WeakMap<RpcClient, WorktreeCatalogSnapshot>()
 
 export const homeWorktreeCountsQuery = defineHostQuery<
   typeof NO_HOST_LIST_INPUT,
   HomeWorktreeCounts
 >({
   family: 'worktree.homeCounts',
-  fetch: async (client) => {
-    const base = readViewBase(client)
-    const catalog = await readWorktreeCatalogSnapshot(client, heldCatalogs.get(base))
-    heldCatalogs.set(base, catalog)
+  fetch: async (client, _target, _input, previous) => {
+    const catalog = await readWorktreeCatalogSnapshot(client, previous?.catalog)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque because three screens project a row differently. Home reads `status`, `sidebarStatus` and its counts through their own guards, plus the host-typed `agents` the Agents list shows, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
     const worktrees = catalog.worktrees as HomeWorktreeSummary[]
     // Count what the list shows: archived rows are hidden, and active is the sleeping filter's rule.
@@ -44,7 +40,8 @@ export const homeWorktreeCountsQuery = defineHostQuery<
     return {
       totalWorktrees: listed.length,
       activeCount: listed.filter(isWorktreeActive).length,
-      agents: homeAgentEntries(listed)
+      agents: homeAgentEntries(listed),
+      catalog
     }
   },
   staleTime: HOME_WORKTREE_REFRESH_FLOOR_MS,
@@ -72,9 +69,10 @@ export const homeWorktreeCountsQuery = defineHostQuery<
       activeCount: z.number().int().nonnegative(),
       agents: z.tuple([])
     }),
-    strip: (data) => ({ ...data, agents: [] })
+    strip: ({ totalWorktrees, activeCount }) => ({ totalWorktrees, activeCount, agents: [] })
   }
 })
 
+// The host list's target and input (HOST_LIST_TARGET, NO_HOST_LIST_INPUT), spelled out to keep the import type-only.
 export const homeWorktreeCountsKey = (hostId: string) =>
-  hostQueryKey(hostId, homeWorktreeCountsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+  hostQueryKey(hostId, homeWorktreeCountsQuery.family, { exec: 'local' }, {})

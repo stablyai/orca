@@ -23,6 +23,10 @@ import {
 } from '../worktree/worktree-catalog-snapshot-client'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
+  homeWorktreeCountsKey,
+  type HomeWorktreeCounts
+} from '../worktree/home-host-worktree-fetch'
+import {
   hostRepoCatalogRepos,
   hostSshTargetSummarySchema,
   type HostRepoCatalogRow
@@ -118,7 +122,10 @@ export function cachedHostWorktrees(
   if (!hostId) {
     return null
   }
-  const cached = queryClient.getQueryData<WorktreeCatalogSnapshot>(hostWorktreeCatalogKey(hostId))
+  const cached =
+    queryClient.getQueryData<WorktreeCatalogSnapshot>(hostWorktreeCatalogKey(hostId)) ??
+    // Native Home's last read, for the wide layout's host list beside it; shown only, never a delta base.
+    queryClient.getQueryData<HomeWorktreeCounts>(homeWorktreeCountsKey(hostId))?.catalog
   return cached ? [...cached.worktrees] : null
 }
 
