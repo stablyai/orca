@@ -3,9 +3,11 @@
 import { z } from 'zod'
 import type { Env } from './env'
 
-export type MachineSize = 'standard' | 'large' | 'xlarge'
+/** What billing sells; anything else is refused there. */
+export type MachineSize = 'standard' | 'large'
 
-export type StartDecision = { allow: boolean; reason: string | null }
+/** `suspendRunning`: payment grace ran out, so the account's running sandboxes must stop too. */
+export type StartDecision = { allow: boolean; reason: string | null; suspendRunning: boolean }
 
 export type UsageSegment = {
   usageId: string
@@ -16,7 +18,7 @@ export type UsageSegment = {
   endedAt: number
 }
 
-export type UsageAnswer = { canStartSandbox: boolean; reason: string | null }
+export type UsageAnswer = { canStartSandbox: boolean; reason: string | null; suspendRunning: boolean }
 
 export type EntitlementClient = {
   checkStart(request: {
@@ -25,6 +27,8 @@ export type EntitlementClient = {
     runningSandboxes: number
   }): Promise<StartDecision>
   reportUsage(segment: UsageSegment): Promise<UsageAnswer>
+  /** Accounts whose payment grace expired; polled by the cron. */
+  listSuspensions(): Promise<string[]>
 }
 
 export class BillingUnavailableError extends Error {
@@ -34,39 +38,55 @@ export class BillingUnavailableError extends Error {
   }
 }
 
-const StartAnswer = z.looseObject({ allow: z.boolean(), reason: z.string().nullable() })
-const UsageResponse = z.looseObject({ canStartSandbox: z.boolean(), reason: z.string().nullable() })
+const StartAnswer = z.looseObject({
+  allow: z.boolean(),
+  reason: z.string().nullable(),
+  suspendRunning: z.boolean().default(false)
+})
+const UsageResponse = z.looseObject({
+  canStartSandbox: z.boolean(),
+  reason: z.string().nullable(),
+  suspendRunning: z.boolean().default(false)
+})
+const SuspensionsResponse = z.looseObject({
+  accounts: z.array(z.looseObject({ accountId: z.string() })).max(10_000)
+})
 
 /** Reasons that mean running sandboxes must stop, not just that new starts wait. */
 export const STOP_RUNNING_REASONS: ReadonlySet<string> = new Set([
   'included_hours_exhausted',
   'overage_cap_reached',
   'subscription_inactive',
-  'no_subscription'
+  'no_subscription',
+  'payment_grace_expired'
 ])
 
-export function createEntitlementClient(env: Env, doFetch: typeof fetch = fetch): EntitlementClient {
+export function createEntitlementClient(
+  env: Env,
+  doFetch: typeof fetch = env.BILLING ? (input, init) => env.BILLING!.fetch(input, init) : fetch
+): EntitlementClient {
   if (env.ENTITLEMENTS_MODE === 'stub') {
     if (env.SANDBOX_ENV === 'prod') {
       throw new BillingUnavailableError('stub entitlements refused in prod')
     }
     return {
-      checkStart: async () => ({ allow: true, reason: null }),
-      reportUsage: async () => ({ canStartSandbox: true, reason: null })
+      checkStart: async () => ({ allow: true, reason: null, suspendRunning: false }),
+      reportUsage: async () => ({ canStartSandbox: true, reason: null, suspendRunning: false }),
+      listSuspensions: async () => []
     }
   }
   const base = env.BILLING_URL
   const token = env.CONTROL_PLANE_TOKEN
-  async function post<T>(path: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
+  async function send<T>(method: 'GET' | 'POST', path: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
     if (!base || !token) {
       throw new BillingUnavailableError('billing not configured')
     }
     let response: Response
     try {
       response = await doFetch(new URL(path, base), {
-        method: 'POST',
+        method,
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-        body: JSON.stringify(body),
+        body: body === undefined ? undefined : JSON.stringify(body),
         redirect: 'manual',
         signal: AbortSignal.timeout(10_000)
       })
@@ -83,7 +103,9 @@ export function createEntitlementClient(env: Env, doFetch: typeof fetch = fetch)
     return parsed.data
   }
   return {
-    checkStart: (request) => post('/v1/internal/entitlements/check', request, StartAnswer),
-    reportUsage: (segment) => post('/v1/internal/usage', segment, UsageResponse)
+    checkStart: (request) => send('POST', '/v1/internal/entitlements/check', request, StartAnswer),
+    reportUsage: (segment) => send('POST', '/v1/internal/usage', segment, UsageResponse),
+    listSuspensions: async () =>
+      (await send('GET', '/v1/internal/suspensions', undefined, SuspensionsResponse)).accounts.map((a) => a.accountId)
   }
 }

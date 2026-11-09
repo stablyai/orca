@@ -16,8 +16,9 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
   const clock = () => now
   const vercel = createFakeVercel(clock)
   const billing = {
-    decision: { allow: true, reason: null } as StartDecision,
-    usageAnswer: { canStartSandbox: true, reason: null } as UsageAnswer,
+    decision: { allow: true, reason: null, suspendRunning: false } as StartDecision,
+    usageAnswer: { canStartSandbox: true, reason: null, suspendRunning: false } as UsageAnswer,
+    suspensions: [] as string[],
     down: false,
     checks: [] as { accountId: string; runningSandboxes: number }[],
     usage: [] as UsageSegment[]
@@ -33,6 +34,9 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
       }
       billing.usage.push(segment)
       return billing.usageAnswer
+    },
+    async listSuspensions() {
+      return billing.suspensions
     }
   }
   const env: Env = {
@@ -91,6 +95,7 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
         db,
         provider: vercel,
         entitlements,
+        github: extraDeps.github,
         now: clock,
         config: { environment: 'test', goldenSnapshotId: GOLDEN, defaultRegion: 'iad1' }
       })

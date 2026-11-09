@@ -5,6 +5,8 @@ import {
   destroySandbox,
   failAndRelease,
   markProviderStopped,
+  refreshGitCredentials,
+  suspendAccountRunning,
   sessionFields,
   suspendSandbox,
   type LifecycleDeps
@@ -17,7 +19,13 @@ const STUCK_MS = 15 * 60_000
 const FORCED_STOP_GRACE_MS = 5 * 60_000
 
 export type ReconcileSummary = Record<
-  'settled' | 'suspendedForDeadline' | 'suspendedForBilling' | 'leaseLapsed' | 'released' | 'repaired',
+  | 'settled'
+  | 'suspendedForDeadline'
+  | 'suspendedForBilling'
+  | 'leaseLapsed'
+  | 'released'
+  | 'repaired'
+  | 'billingErrors',
   number
 >
 
@@ -28,7 +36,16 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
     suspendedForBilling: 0,
     leaseLapsed: 0,
     released: 0,
-    repaired: 0
+    repaired: 0,
+    billingErrors: 0
+  }
+  const polled = await guard(async () => {
+    for (const accountId of await deps.entitlements.listSuspensions()) {
+      summary.suspendedForBilling += await suspendAccountRunning(deps, accountId)
+    }
+  })
+  if (!polled) {
+    summary.billingErrors++
   }
   for (const row of await listByStatus(deps.db, ['running'])) {
     await guard(() => reconcileRunning(deps, row, summary))
@@ -71,11 +88,18 @@ async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: R
       return
     }
   }
+  if (row.github_token_expires_at !== null && row.session_id && row.github_token_expires_at - now < 15 * 60_000) {
+    const git = await refreshGitCredentials(deps, row, row.session_id)
+    const refreshed = await transition(deps.db, row, { github_token_expires_at: git?.expiresAt ?? null }, now)
+    row = refreshed ?? row
+  }
   const settled = await queueUsage(deps.db, row, now)
   const current = settled === row.usage_settled_at ? row : await transition(deps.db, row, { usage_settled_at: settled }, now)
   summary.settled++
   const answer = await flushUsage(deps.db, deps.entitlements, now, row.id)
-  if (current && answer && !answer.canStartSandbox && STOP_RUNNING_REASONS.has(answer.reason ?? '')) {
+  if (answer?.suspendRunning) {
+    summary.suspendedForBilling += await suspendAccountRunning(deps, row.account_id)
+  } else if (current && answer && !answer.canStartSandbox && STOP_RUNNING_REASONS.has(answer.reason ?? '')) {
     await suspendSandbox(deps, current)
     summary.suspendedForBilling++
   }
@@ -91,10 +115,12 @@ async function repairTransition(deps: LifecycleDeps, row: SandboxRow): Promise<v
   await markProviderStopped(deps, row)
 }
 
-async function guard(step: () => Promise<void>): Promise<void> {
+async function guard(step: () => Promise<void>): Promise<boolean> {
   try {
     await step()
+    return true
   } catch {
     // One bad row must not stall the pass; it is retried next tick.
+    return false
   }
 }

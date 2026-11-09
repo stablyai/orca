@@ -22,6 +22,7 @@ import {
   suspendSandbox,
   type LifecycleDeps
 } from './lifecycle'
+import { createGitHubAppMinter, type GitHubAppMinter } from './github-app'
 import { reconcile } from './reconcile'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { VmCommandError } from './sandbox-vm-commands'
@@ -35,9 +36,89 @@ export type Deps = {
   provider?: SandboxProviderApi
   entitlements?: EntitlementClient
   credentials?: CredentialBroker
+  github?: GitHubAppMinter
   now?: () => number
   egressFetch?: typeof fetch
   egressKeysForIssuer?: Parameters<typeof handleEgressProxy>[1]['keysForIssuer']
+}
+
+const minters = new Map<string, GitHubAppMinter>()
+function githubMinter(env: Env): GitHubAppMinter | undefined {
+  if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY) {
+    return undefined
+  }
+  let minter = minters.get(env.GITHUB_APP_ID)
+  if (!minter) {
+    minter = createGitHubAppMinter({ appId: env.GITHUB_APP_ID, privateKeyPkcs8: env.GITHUB_APP_PRIVATE_KEY })
+    minters.set(env.GITHUB_APP_ID, minter)
+  }
+  return minter
+}
+
+function egressCredentials(env: Env): CredentialBroker {
+  const minter = githubMinter(env)
+  if (!minter) {
+    return devCredentials(env)
+  }
+  return {
+    authorizationFor: async (row, host) => {
+      if (host !== 'api.github.com' || !row.repo_url) {
+        return null
+      }
+      const minted = await minter.tokenForRepo(row.repo_url)
+      return minted ? `Bearer ${minted.token}` : null
+    }
+  }
+}
+
+function html(body: string): Response {
+  return new Response(`<!doctype html><meta charset=utf-8><body style="font:16px system-ui;margin:3em">${body}`, {
+    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }
+  })
+}
+
+/**
+ * One-click GitHub App creation (manifest flow). Permissions are the minimum for sandbox git:
+ * contents write (clone, fetch, push), pull_requests write (open/update PRs from the workspace),
+ * metadata read (required by GitHub for any repo access). No webhook: tokens are minted on demand.
+ */
+function githubManifestStart(url: URL): Response {
+  const origin = url.origin
+  const manifest = {
+    name: 'Orca Cloud (dev)',
+    url: origin,
+    redirect_url: `${origin}/v1/github/manifest-callback`,
+    setup_url: `${origin}/v1/github/setup`,
+    setup_on_update: false,
+    // Installable on personal accounts too; installing grants nothing until a repo is selected.
+    public: true,
+    hook_attributes: { url: `${origin}/v1/github/webhook-unused`, active: false },
+    default_permissions: { contents: 'write', metadata: 'read', pull_requests: 'write' },
+    default_events: [],
+    request_oauth_on_install: false
+  }
+  const state = crypto.randomUUID()
+  const escaped = JSON.stringify(manifest).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;')
+  return html(
+    `<form id=f method=post action="https://github.com/organizations/stablyai/settings/apps/new?state=${state}">` +
+      `<input type=hidden name=manifest value="${escaped}"><button>Create “Orca Cloud (dev)” on stablyai</button></form>` +
+      '<script>document.getElementById("f").submit()</script>'
+  )
+}
+
+/** GitHub App manifest flow redirect: the operator's exchange script reads the one-time code from logs. */
+function githubManifestCallback(env: Env, url: URL): Response {
+  if (env.SANDBOX_ENV === 'prod') {
+    return fail('not_found', 404)
+  }
+  const code = url.searchParams.get('code') ?? ''
+  if (!/^[A-Za-z0-9_-]{8,128}$/.test(code)) {
+    return html('Missing code.')
+  }
+  console.log(JSON.stringify({ event: 'github_manifest_code', code, state: url.searchParams.get('state') }))
+  return html(
+    'GitHub App created. The Orca agent is finishing setup.<p>Next: <a href="https://github.com/apps/orca-cloud-dev/installations/new">install it</a> on <b>nwparker</b> → Only select repositories → <b>orca-sandbox-push-test</b>.'
+  )
 }
 
 function devCredentials(env: Env): CredentialBroker {
@@ -80,6 +161,7 @@ function lifecycleDeps(env: Env, deps: Deps): LifecycleDeps | null {
         baseUrl: env.VERCEL_API_BASE
       }),
     entitlements: deps.entitlements ?? createEntitlementClient(env),
+    github: deps.github ?? githubMinter(env),
     now: deps.now ?? Date.now,
     config: {
       environment: env.SANDBOX_ENV,
@@ -104,10 +186,19 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         projectId: env.VERCEL_PROJECT_ID,
         findSandbox: (name) => getSandboxByProviderName(env.SANDBOX_DB, name),
         placeholdersFor: githubPlaceholderHeaders,
-        credentials: deps.credentials ?? devCredentials(env),
+        credentials: deps.credentials ?? egressCredentials(env),
         fetch: deps.egressFetch,
         keysForIssuer: deps.egressKeysForIssuer
       })
+    }
+    if (url.pathname === '/v1/github/manifest-callback') {
+      return githubManifestCallback(env, url)
+    }
+    if (url.pathname === '/v1/github/manifest-start' && env.SANDBOX_ENV !== 'prod') {
+      return githubManifestStart(url)
+    }
+    if (url.pathname === '/v1/github/setup') {
+      return html('Orca Cloud (dev) is installed. You can close this tab.')
     }
     const match = /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover))?)?$/.exec(url.pathname)
     if (!match) {
@@ -198,7 +289,8 @@ export default {
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const life = lifecycleDeps(env, {})
     if (life) {
-      ctx.waitUntil(reconcile(life).then(() => undefined))
+      // Counts only; no ids, tokens or pairing material.
+      ctx.waitUntil(reconcile(life).then((summary) => console.log(JSON.stringify({ event: 'reconcile', ...summary }))))
     }
   }
 } satisfies ExportedHandler<Env>

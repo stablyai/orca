@@ -33,6 +33,8 @@ export type StartInputs = {
   repo?: { url: string; ref?: string }
   /** Token the VM's GitHub clients send; the egress layer swaps it for a real short-lived one. */
   githubPlaceholder?: string
+  /** git `http.https://github.com/.extraheader` carrying the placeholder, so every git request is claimable. */
+  gitExtraHeader?: string
 }
 
 /** Starts orcad (idempotent per boot) and returns its pairing offer; pairing codes are never logged. */
@@ -54,6 +56,9 @@ export async function startOrcad(
     if (inputs.repo.ref) {
       env.ORCA_REPO_REF = inputs.repo.ref
     }
+  }
+  if (inputs.gitExtraHeader) {
+    env.ORCA_GIT_EXTRAHEADER = inputs.gitExtraHeader
   }
   if (inputs.githubPlaceholder) {
     env.ORCA_GITHUB_PLACEHOLDER = inputs.githubPlaceholder

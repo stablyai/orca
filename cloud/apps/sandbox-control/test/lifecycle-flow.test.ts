@@ -37,7 +37,7 @@ describe('sandbox control plane lifecycle', () => {
 
   it('refuses a start billing denies without touching the provider', async () => {
     const h = await createHarness()
-    h.billing.decision = { allow: false, reason: 'concurrency_limit' }
+    h.billing.decision = { allow: false, reason: 'concurrency_limit', suspendRunning: false }
     const res = await h.call('POST', '/v1/sandboxes', { body: create })
     expect(res).toEqual({ status: 403, body: { error: 'entitlement_denied', reason: 'concurrency_limit' } })
     expect(h.vercel.boxes.size).toBe(0)
@@ -163,7 +163,7 @@ describe('sandbox control plane cron', () => {
   it('stops running sandboxes once billing says the included hours are gone', async () => {
     const h = await createHarness()
     const { body } = await h.call('POST', '/v1/sandboxes', { body: create })
-    h.billing.usageAnswer = { canStartSandbox: false, reason: 'included_hours_exhausted' }
+    h.billing.usageAnswer = { canStartSandbox: false, reason: 'included_hours_exhausted', suspendRunning: false }
     h.advance(10 * MIN)
     expect((await h.reconcile()).suspendedForBilling).toBe(1)
     expect((await h.call('GET', `/v1/sandboxes/${body.sandbox.id}`)).body.sandbox.status).toBe('suspended')
@@ -188,5 +188,41 @@ describe('sandbox control plane cron', () => {
     h.advance(16 * MIN)
     expect((await h.reconcile()).released).toBe(1)
     expect(h.vercel.boxes.size).toBe(0)
+  })
+
+  it('suspends an account whose payment grace expired, keeps its disk, and resumes only after payment', async () => {
+    const h = await createHarness()
+    const a = (await h.call('POST', '/v1/sandboxes', { body: create })).body.sandbox.id
+    const b = (await h.call('POST', '/v1/sandboxes', { body: { ...create, workspaceId: 'ws-2' } })).body.sandbox.id
+    const other = (await h.call('POST', '/v1/sandboxes', { body: create, as: 'bob' })).body.sandbox.id
+    h.billing.suspensions = ['user:alice']
+    expect((await h.reconcile()).suspendedForBilling).toBe(2)
+    expect((await h.call('GET', `/v1/sandboxes/${a}`)).body.sandbox.status).toBe('suspended')
+    expect((await h.call('GET', `/v1/sandboxes/${b}`)).body.sandbox.status).toBe('suspended')
+    expect((await h.call('GET', `/v1/sandboxes/${other}`, { as: 'bob' })).body.sandbox.status).toBe('running')
+    expect(h.vercel.boxes.size).toBe(3)
+
+    h.billing.decision = { allow: false, reason: 'payment_grace_expired', suspendRunning: true }
+    expect(await h.call('POST', `/v1/sandboxes/${a}/resume`)).toEqual({
+      status: 403,
+      body: { error: 'entitlement_denied', reason: 'payment_grace_expired' }
+    })
+    h.billing.suspensions = []
+    h.billing.decision = { allow: true, reason: null, suspendRunning: false }
+    expect((await h.call('POST', `/v1/sandboxes/${a}/resume`)).body.sandbox.status).toBe('running')
+  })
+
+  it('suspends the whole account when a usage report says grace expired', async () => {
+    const h = await createHarness()
+    const a = (await h.call('POST', '/v1/sandboxes', { body: create })).body.sandbox.id
+    h.billing.usageAnswer = { canStartSandbox: false, reason: 'payment_grace_expired', suspendRunning: true }
+    h.advance(10 * MIN)
+    expect((await h.reconcile()).suspendedForBilling).toBe(1)
+    expect((await h.call('GET', `/v1/sandboxes/${a}`)).body.sandbox.status).toBe('suspended')
+  })
+
+  it('refuses machine sizes billing does not sell', async () => {
+    const h = await createHarness()
+    expect((await h.call('POST', '/v1/sandboxes', { body: { ...create, machineSize: 'xlarge' } })).status).toBe(400)
   })
 })

@@ -2,7 +2,8 @@
 // The Worker's tests parse its responses with these schemas, so either side drifting fails a test.
 import { z } from 'zod'
 
-export const HOSTED_SANDBOX_MACHINE_SIZES = ['standard', 'large', 'xlarge'] as const
+// Billing sells exactly these; larger boxes need a Vercel Enterprise plan.
+export const HOSTED_SANDBOX_MACHINE_SIZES = ['standard', 'large'] as const
 export type HostedSandboxMachineSize = (typeof HOSTED_SANDBOX_MACHINE_SIZES)[number]
 
 export const HOSTED_SANDBOX_STATUSES = [

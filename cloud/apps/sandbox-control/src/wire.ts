@@ -13,7 +13,7 @@ const Id = z
 export const CreateRequestSchema = z
   .object({
     workspaceId: Id,
-    machineSize: z.enum(['standard', 'large', 'xlarge']),
+    machineSize: z.enum(['standard', 'large']),
     region: z
       .string()
       .regex(/^[a-z]{3}[0-9]$/)
