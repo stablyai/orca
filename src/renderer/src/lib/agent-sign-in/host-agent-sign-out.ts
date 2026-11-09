@@ -2,12 +2,13 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { rememberHostAgentSignInReport } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
-import type {
-  HostAgentSignInAgent,
-  HostAgentSignInReport
+import {
+  HOST_AGENT_SIGN_IN_AGENT_NAME,
+  type HostAgentSignInAgent,
+  type HostAgentSignInReport
 } from '../../../../shared/host-agent-sign-in-status'
 
-const AGENT_NAME: Record<HostAgentSignInAgent, string> = { claude: 'Claude', codex: 'Codex' }
+const AGENT_NAME = HOST_AGENT_SIGN_IN_AGENT_NAME
 
 /** Runs the agent's own logout on the host; resolves whether it worked. */
 export async function signOutAgentOnHost(

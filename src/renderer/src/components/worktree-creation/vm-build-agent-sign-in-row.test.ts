@@ -14,6 +14,7 @@ const report = (claude: string, codex: string): HostAgentSignInReport =>
 
 const run = (patch = {}) => ({
   environmentId: 'env-vm',
+  gateKey: 'sheet',
   running: false,
   current: null,
   next: [],

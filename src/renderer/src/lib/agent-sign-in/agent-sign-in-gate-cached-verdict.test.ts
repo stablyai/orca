@@ -59,15 +59,14 @@ describe('agent sign-in gate with a connect-time verdict', () => {
     expect(readAgentSignInGate('pane-b')).toBeNull()
   })
 
-  it('a waiter without a launch never keeps the sign-in alive for itself', async () => {
+  it('a sign-in the build sheet started keeps going when a pane leaves it', async () => {
     status.refresh.mockResolvedValue(signedOut)
     const sheet = requireAgentSignIn(request('sheet', true))
     await vi.waitFor(() => expect(readAgentSignInGate('sheet')).not.toBeNull())
     const pane = requireAgentSignIn(request('pane-c'))
     await vi.waitFor(() => expect(readAgentSignInGate('pane-c')).not.toBeNull())
 
-    // The launching pane leaves: nothing that would start an agent still waits.
-    expect(releaseAgentSignInPane('pane-c', 'cancel')).toBe(true)
+    expect(releaseAgentSignInPane('pane-c', 'cancel')).toBe(false)
     await expect(pane).resolves.toBe('cancel')
     settleAgentSignInGate(agentSignInGateEntry('sheet')!, 'cancel')
     await expect(sheet).resolves.toBe('cancel')
