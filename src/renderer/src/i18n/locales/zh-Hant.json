@@ -3950,6 +3950,8 @@
             "15dd899676": "新增至 {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "終端機問題",
+            "errorTitle": "終端機錯誤",
             "e4aa243f8c": "重新啟動守護行程",
             "retry": "重試",
             "retrying": "正在重試...",

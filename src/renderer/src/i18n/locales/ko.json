@@ -3458,6 +3458,8 @@
             "15dd899676": "{{value0}}에 추가…"
           },
           "TerminalErrorToast": {
+            "title": "터미널 문제",
+            "errorTitle": "터미널 오류",
             "e4aa243f8c": "데몬 재시작",
             "a7e2fd2699": "이슈 등록",
             "5c8ce20be6": "문제가 계속되면",

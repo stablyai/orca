@@ -16828,6 +16828,8 @@
             "3a9c5f7e12": "Minimizar"
           },
           "TerminalErrorToast": {
+            "title": "Problema no terminal",
+            "errorTitle": "Erro no terminal",
             "e4aa243f8c": "Reiniciar daemon",
             "retry": "Tentar novamente",
             "retrying": "Tentando novamente…",
