@@ -255,12 +255,12 @@ describe('wake recovery', () => {
     // Simulate a wake that booted the VM, then lost its Worker before orcad/claim.
     await h.vercel.getSandbox(`orca-test-${id}`, { resume: true })
     h.raw.prepare(`UPDATE sandboxes SET status = 'resuming', updated_at = ? WHERE id = ?`).run(h.now(), id)
-    expect((await h.call('POST', '/v1/workspaces/ws-1/wake')).body.state).toBe('waking')
+    expect((await h.call('POST', `/v1/sandboxes/${id}/wake`)).body.state).toBe('waking')
     // A live inline boot can take minutes: not adopted yet.
     h.advance(3 * 60_000)
-    expect((await h.call('POST', '/v1/workspaces/ws-1/wake')).body.state).toBe('waking')
+    expect((await h.call('POST', `/v1/sandboxes/${id}/wake`)).body.state).toBe('waking')
     h.advance(61_000)
-    const answer = HostedWakeResponseSchema.parse((await h.call('POST', '/v1/workspaces/ws-1/wake')).body)
+    const answer = HostedWakeResponseSchema.parse((await h.call('POST', `/v1/sandboxes/${id}/wake`)).body)
     expect(answer.state).toBe('ready')
     expect(answer.endpoint).toMatch(/^wss:/)
   })
@@ -270,20 +270,20 @@ describe('wake recovery', () => {
     await h.call('POST', `/v1/sandboxes/${id}/suspend`)
     h.raw.prepare(`UPDATE sandboxes SET status = 'resuming', updated_at = ? WHERE id = ?`).run(h.now(), id)
     h.advance(4 * 60_000 + 1000)
-    expect((await h.call('POST', '/v1/workspaces/ws-1/wake?wait=30s')).body.state).toBe('ready')
+    expect((await h.call('POST', `/v1/sandboxes/${id}/wake?wait=30s`)).body.state).toBe('ready')
   })
 
   it('answers failed after a failed wake instead of booting on every poll', async () => {
     const { h, id } = await running()
     await h.call('POST', `/v1/sandboxes/${id}/suspend`)
     h.vercel.failStart = true
-    expect((await h.call('POST', '/v1/workspaces/ws-1/wake?wait=30s')).body.state).toBe('failed')
+    expect((await h.call('POST', `/v1/sandboxes/${id}/wake?wait=30s`)).body.state).toBe('failed')
     const starts = h.vercel.commands.filter((c) => c.command === START_COMMAND).length
-    expect((await h.call('POST', '/v1/workspaces/ws-1/wake?wait=30s')).body.state).toBe('failed')
+    expect((await h.call('POST', `/v1/sandboxes/${id}/wake?wait=30s`)).body.state).toBe('failed')
     expect(h.vercel.commands.filter((c) => c.command === START_COMMAND)).toHaveLength(starts)
     h.vercel.failStart = false
     h.advance(61_000)
-    expect((await h.call('POST', '/v1/workspaces/ws-1/wake?wait=30s')).body.state).toBe('ready')
+    expect((await h.call('POST', `/v1/sandboxes/${id}/wake?wait=30s`)).body.state).toBe('ready')
   })
 
   it('reports a provider-stopped VM as sleeping, not unresponsive', async () => {
@@ -305,7 +305,7 @@ describe('adopted wakes boot like real wakes', () => {
     h.raw.prepare(`UPDATE sandboxes SET status = 'resuming', updated_at = ? WHERE id = ?`).run(h.now(), id)
     const before = h.vercel.commands.length
     h.advance(4 * 60_000 + 1000)
-    expect((await h.call('POST', '/v1/workspaces/ws-1/wake')).body.state).toBe('ready')
+    expect((await h.call('POST', `/v1/sandboxes/${id}/wake`)).body.state).toBe('ready')
     const start = h.vercel.commands.slice(before).find((c) => c.command === START_COMMAND)!
     expect(start.env.ORCA_SECRET_ENV).toContain('OPENAI_API_KEY=')
     expect(start.env.ORCA_PUBLIC_WSS).toMatch(/^wss:/)
@@ -320,7 +320,7 @@ describe('adopted wakes boot like real wakes', () => {
     const cursor = (h.raw.prepare('SELECT usage_settled_at FROM sandboxes WHERE id = ?').get(id) as any).usage_settled_at
     h.raw.prepare('UPDATE sandboxes SET orcad_endpoint = NULL WHERE id = ?').run(id)
     const before = h.vercel.commands.filter((c) => c.command === START_COMMAND).length
-    expect((await h.call('POST', '/v1/workspaces/ws-1/wake')).body.state).toBe('ready')
+    expect((await h.call('POST', `/v1/sandboxes/${id}/wake`)).body.state).toBe('ready')
     expect(h.vercel.commands.filter((c) => c.command === START_COMMAND)).toHaveLength(before + 1)
     expect((h.raw.prepare('SELECT usage_settled_at FROM sandboxes WHERE id = ?').get(id) as any).usage_settled_at).toBe(cursor)
   })
