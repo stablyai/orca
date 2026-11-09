@@ -8,7 +8,11 @@ import {
   measureTextControlPasteByteLengthWithYield,
   pasteTextIntoTextControl
 } from '@/lib/text-control-paste'
-import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
+import {
+  DICTATION_TEXT_BLOCK_SELECTOR,
+  dictationSeparators
+} from '../../../../shared/dictation-transcript-spacing'
+import { focusedBrowserPageId } from '@/hooks/resolve-zoom-target'
 import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
 /** Each returns whether the text landed. */
@@ -18,6 +22,7 @@ type TerminalInsert = (text: string, paneId: number) => Promise<boolean>
 export type DictationInsertionTarget =
   | { kind: 'composer'; insert: ComposerInsert; root: HTMLElement }
   | { kind: 'terminal'; tabId: string; paneId: number; pane: HTMLElement }
+  | { kind: 'browser'; browserPageId: string }
   | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
   | { kind: 'contentEditable'; element: HTMLElement }
 
@@ -81,6 +86,15 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
     return null
   }
 
+  if (activeElement.tagName === 'WEBVIEW') {
+    const browserPageId =
+      focusedBrowserPageId(activeElement) ??
+      activeElement
+        .closest('[data-browser-client-page-id]')
+        ?.getAttribute('data-browser-client-page-id')
+    return browserPageId ? { kind: 'browser', browserPageId } : null
+  }
+
   if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
     return { kind: 'text', element: activeElement }
   }
@@ -103,9 +117,6 @@ function readSelectionRangeIn(element: HTMLElement): Range | null {
   return range && element.contains(range.commonAncestorContainer) ? range : null
 }
 
-const CONTENT_EDITABLE_BLOCK_SELECTOR =
-  'p, li, h1, h2, h3, h4, h5, h6, pre, blockquote, td, th, div'
-
 /** The selection's neighbours within its own block, so a new paragraph's start has none. */
 function readContentEditableNeighbours(element: HTMLElement): { before: string; after: string } {
   const range = readSelectionRangeIn(element)
@@ -114,7 +125,7 @@ function readContentEditableNeighbours(element: HTMLElement): { before: string; 
   }
   const blockOf = (node: Node): Node => {
     const block = (node instanceof Element ? node : node.parentElement)?.closest(
-      CONTENT_EDITABLE_BLOCK_SELECTOR
+      DICTATION_TEXT_BLOCK_SELECTOR
     )
     return block && element.contains(block) ? block : element
   }
@@ -142,6 +153,13 @@ export async function insertText(
   if (target.kind === 'terminal') {
     const insert = terminalTargets.get(target.tabId)
     return insert ? insert(spaced(text, previousText, ''), target.paneId) : false
+  }
+  if (target.kind === 'browser') {
+    // The page spaces the text from its own field.
+    return (
+      window.api.browser?.insertDictationText({ browserPageId: target.browserPageId, text }) ??
+      false
+    )
   }
   if (target.kind === 'text') {
     const element = target.element
