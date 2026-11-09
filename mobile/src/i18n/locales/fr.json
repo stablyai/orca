@@ -2175,6 +2175,7 @@
       "emptyMessage": "Ce message est vide, il n'a donc pas été envoyé.",
       "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
       "historyInOtherAccount": "L'historique de ce chat se trouve dans un autre compte Claude. Revenez à ce compte pour le poursuivre.",
+      "codexHistoryNotShared": "Le compte Codex sélectionné n'a pas l'historique de ce chat, et « Partager l'historique Codex entre les comptes » est désactivé. Activez-le dans Paramètres → Agents d'Orca sur l'ordinateur qui exécute ce chat, ou revenez au compte sur lequel ce chat s'exécutait.",
       "historyTooLarge": "L'historique de cette conversation est trop volumineux pour être restauré ici.",
       "hostFault": "Orca a rencontré un problème, l'opération n'a donc pas abouti.",
       "hostFaultTryAgain": "Orca a rencontré un problème, l'opération n'a donc pas abouti. Réessayez.",

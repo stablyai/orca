@@ -40,6 +40,7 @@ import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
+import { nativeChatCodexHistorySharingContent } from '../../host-access/native-chat-codex-history-sharing'
 import { formatUsageLimitResetClock } from '../../../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
@@ -216,12 +217,9 @@ export function NativeChatNoticeRow({
   const continueOffered =
     orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
-  const antigravitySignInContent = nativeChatAntigravitySignInContent(
-    failure?.kind,
-    agentName,
-    failure?.account,
-    t
-  )
+  const antigravitySignInContent =
+    nativeChatAntigravitySignInContent(failure?.kind, agentName, failure?.account, t) ??
+    nativeChatCodexHistorySharingContent(failure?.kind, t)
   const usageLimitContinue =
     block.usageLimitTurnItemId !== undefined &&
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId

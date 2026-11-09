@@ -16,12 +16,16 @@ import {
 
 import {
   agentSessionAccountHome,
-  agentSessionAccountHomesEqual,
   requireLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { moveCodexThreadIntoAccountHome } from '../../history/resume/codex-thread-account-move'
+import {
+  CodexHistoryNotSharedError,
+  prepareLatestCodexThreadCopy,
+  readConfiguredCodexThreadHistory
+} from '../../history/resume/codex-thread-latest-copy'
+import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { resolveCodexCommand } from '../../../codex-cli/command'
 import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
@@ -145,15 +149,17 @@ export function codexStructuredLaunchPart(
     const accountHome = selectedHome
       ? requireLegacyAgentSessionAccountHome(selectedHome)
       : recordHome
-    if (
-      resumeThreadId &&
-      selectedHome &&
-      !agentSessionAccountHomesEqual(selectedHome, record.accountHome)
-    ) {
-      await moveCodexThreadIntoAccountHome({
+    const history = readConfiguredCodexThreadHistory()
+    // Every resume checks: a return to the founding account can find an older copy there.
+    if (resumeThreadId && history && accountHome.path) {
+      await prepareLatestCodexThreadCopy({
         threadId: resumeThreadId,
-        fromHome: recordHome.path,
-        toHome: accountHome.path
+        targetHome: accountHome.path,
+        ...history
+      }).catch((error: unknown) => {
+        throw error instanceof CodexHistoryNotSharedError
+          ? new AgentSessionPreSpawnError(error, { reason: 'codexHistoryNotShared' })
+          : error
       })
     }
     return {

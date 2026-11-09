@@ -18588,6 +18588,7 @@
         "managedAccountUnsupported": "WSL에 Claude 계정이 추가되어 있는 동안에는 Claude 채팅에 Windows Claude 계정이 필요합니다.",
         "launchFolderMissing": "이 채팅이 실행되던 폴더가 더 이상 존재하지 않습니다. 이 채팅을 계속하려면 폴더를 복원하세요.",
         "historyInOtherAccount": "이 채팅의 기록은 다른 Claude 계정에 있습니다. 계속하려면 해당 계정으로 다시 전환하세요.",
+        "codexHistoryNotShared": "선택한 Codex 계정에 이 채팅의 기록이 없고 계정 간 Codex 기록 공유가 꺼져 있습니다. 설정 → 에이전트에서 켜거나 이 채팅을 실행했던 계정으로 다시 전환하세요.",
         "claudeAccountFolderMissing": "선택한 Claude 계정의 폴더가 없습니다. 다시 로그인하거나 다른 계정을 선택하세요.",
         "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "설정 → 에이전트에서 {{agent}}의 명령은 Orca가 찾을 수 있는 프로그램으로 시작해야 합니다. 변수, 파이프 및 기타 셸 구문은 지원되지 않습니다. 변수는 환경 설정을 사용하세요. 명령을 변경하거나 초기화하세요.",
@@ -19533,7 +19534,10 @@
         "many_other": "풀 리퀘스트 {{count}}개 열림"
       },
       "splitRight": "오른쪽으로 분할",
-      "splitDown": "아래로 분할"
+      "splitDown": "아래로 분할",
+      "codexHistorySharing": {
+        "sentence": "선택한 Codex 계정에 이 채팅의 기록이 없고 계정 간 Codex 기록 공유가 꺼져 있습니다. <settings>설정 → 에이전트</settings>에서 켜거나 이 채팅을 실행했던 계정으로 다시 전환하세요."
+      }
     },
     "tab": {
       "bar": {

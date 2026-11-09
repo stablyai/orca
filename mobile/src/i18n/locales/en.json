@@ -2682,6 +2682,7 @@
       "managedAccountUnsupported": "While a Claude account is added in WSL, Claude chats need a Windows Claude account.",
       "launchFolderMissing": "The folder this chat ran in no longer exists. Restore it to continue this chat.",
       "historyInOtherAccount": "This chat's history is in another Claude account. Switch back to that account to continue it.",
+      "codexHistoryNotShared": "The selected Codex account doesn't have this chat's history, and Share Codex history across accounts is off. Turn it on in Orca's Settings → Agents on the computer running this chat, or switch back to the account this chat ran on.",
       "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
       "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
       "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",

@@ -22,6 +22,7 @@ import {
   getCodexPaneAccount
 } from '../codex/configuration/homes/codex-pane-account-registry'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type { CodexRateLimitHomeResolution } from './runtime-home-service-types'
@@ -39,6 +40,38 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
       homes.push(perAccountHome)
     }
     return homes.filter((home, index) => homes.indexOf(home) === index)
+  }
+
+  /** Every host home that can hold a chat's thread: unlike discovery, an unreadable account is
+   *  reported, since skipping it could make an older copy look like the newest. */
+  getHostCodexHomesForThreadCopies(): { homes: string[]; unreadable: boolean } {
+    const settings = this.store.getSettings()
+    const homes = [getSystemCodexHomePath(), resolveOrcaManagedCodexHomePath()]
+    const sourceHome = resolveHostCodexSessionSourceHome(settings)
+    if (sourceHome && parseWslUncPath(sourceHome) === null) {
+      homes.push(sourceHome)
+    }
+    let unreadable = false
+    const accountsRootMissing = this.isManagedAccountsRootDefinitivelyAbsent()
+    for (const account of settings.codexManagedAccounts) {
+      if (accountsRootMissing || this.getWslManagedHomePath(account)) {
+        continue
+      }
+      const resolved = this.resolveSelfContainedManagedHome(account)
+      if (resolved.kind === 'owned') {
+        homes.push(resolved.homePath)
+      } else if (resolved.kind === 'indeterminate') {
+        unreadable = true
+      }
+    }
+    const seen = new Set<string>()
+    return {
+      homes: homes.filter((home) => {
+        const key = normalizeRuntimePathForComparison(home)
+        return !seen.has(key) && Boolean(seen.add(key))
+      }),
+      unreadable
+    }
   }
 
   /** Read-only host-account home for session discovery; null means no trusted host-account home. */

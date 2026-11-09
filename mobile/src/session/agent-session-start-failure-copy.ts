@@ -205,6 +205,13 @@ export const START_FAILURE_COPY = {
       "This chat's history is in another Claude account. Switch back to that account to continue it.",
       values
     ),
+  // The setting lives on the computer running the chat; the phone names it.
+  codexHistoryNotShared: (values) =>
+    translate(
+      'session.failure.codexHistoryNotShared',
+      "The selected Codex account doesn't have this chat's history, and Share Codex history across accounts is off. Turn it on in Orca's Settings → Agents on the computer running this chat, or switch back to the account this chat ran on.",
+      values
+    ),
   claudeAccountFolderMissing: (values) =>
     translate(
       'session.failure.claudeAccountFolderMissing',

@@ -2102,6 +2102,7 @@
       "emptyMessage": "이 메시지가 비어 있어 전송되지 않았습니다.",
       "fullAccessAsRoot": "{{agent}}은(는) root로 실행되는 동안 전체 액세스를 사용하지 않습니다. 이 채팅을 실행하는 컴퓨터의 설정 → 에이전트에서 {{agent}}에 다른 권한을 선택한 다음 새 채팅을 시작하세요.",
       "historyInOtherAccount": "이 채팅의 기록은 다른 Claude 계정에 있습니다. 계속하려면 해당 계정으로 다시 전환하세요.",
+      "codexHistoryNotShared": "선택한 Codex 계정에 이 채팅의 기록이 없고 계정 간 Codex 기록 공유가 꺼져 있습니다. 이 채팅을 실행하는 컴퓨터의 Orca 설정 → 에이전트에서 켜거나 이 채팅을 실행했던 계정으로 다시 전환하세요.",
       "historyTooLarge": "이 대화의 기록이 너무 커서 여기에서 복원할 수 없습니다.",
       "hostFault": "Orca에 문제가 발생하여 이 작업이 완료되지 않았습니다.",
       "hostFaultTryAgain": "Orca에 문제가 발생하여 이 작업이 완료되지 않았습니다. 다시 시도하세요.",

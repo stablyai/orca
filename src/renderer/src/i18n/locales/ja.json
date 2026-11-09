@@ -18588,6 +18588,7 @@
         "managedAccountUnsupported": "WSL に Claude アカウントが追加されている間、Claude チャットには Windows の Claude アカウントが必要です。",
         "launchFolderMissing": "このチャットが実行されていたフォルダーは存在しなくなりました。このチャットを続けるには、フォルダーを復元してください。",
         "historyInOtherAccount": "このチャットの履歴は別の Claude アカウントにあります。続けるには、そのアカウントに切り替えてください。",
+        "codexHistoryNotShared": "選択した Codex アカウントにはこのチャットの履歴がなく、[アカウント間で Codex の履歴を共有する] がオフです。[設定 → Agent] でオンにするか、このチャットを実行していたアカウントに戻してください。",
         "claudeAccountFolderMissing": "選択した Claude アカウントのフォルダーが見つかりません。もう一度サインインするか、別のアカウントを選択してください。",
         "claudeAccountSetupFailed": "選択した Claude アカウントを設定できませんでした。もう一度試すか、別のアカウントを選択してください。",
         "agentCommandNotRunnable": "設定 → Agent にある {{agent}} の「コマンド」は、Orca が見つけられるプログラムで始める必要があります。変数、パイプなどのシェル構文には対応していません。変数には「環境」設定を使用してください。コマンドを変更するかリセットしてください。",
@@ -19533,7 +19534,10 @@
         "many_other": "{{count}} 件のプルリクエストを開きました"
       },
       "splitRight": "右に分割",
-      "splitDown": "下に分割"
+      "splitDown": "下に分割",
+      "codexHistorySharing": {
+        "sentence": "選択した Codex アカウントにはこのチャットの履歴がなく、[アカウント間で Codex の履歴を共有する] がオフです。<settings>[設定 → Agent]</settings> でオンにするか、このチャットを実行していたアカウントに戻してください。"
+      }
     },
     "tab": {
       "bar": {

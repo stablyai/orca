@@ -42,6 +42,7 @@ const TYPED_START_REFUSALS = [
   'managedAccountUnsupported',
   'launchFolderMissing',
   'historyInOtherAccount',
+  'codexHistoryNotShared',
   'claudeAccountFolderMissing',
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',

@@ -2106,6 +2106,7 @@
       "emptyMessage": "Bu mesaj boş olduğu için gönderilmedi.",
       "fullAccessAsRoot": "{{agent}}, root olarak çalışırken Tam erişim iznini kullanmaz. Bu sohbeti çalıştıran bilgisayarda Ayarlar → Ajanlar bölümünden {{agent}} için başka bir izin seçin, ardından yeni bir sohbet başlatın.",
       "historyInOtherAccount": "Bu sohbetin geçmişi başka bir Claude hesabında. Devam etmek için o hesaba geri dönün.",
+      "codexHistoryNotShared": "Seçili Codex hesabında bu sohbetin geçmişi yok ve Codex geçmişini hesaplar arasında paylaş kapalı. Bu sohbeti çalıştıran bilgisayarda Orca'nın Ayarlar → Ajanlar bölümünden açın veya bu sohbetin çalıştığı hesaba geri dönün.",
       "historyTooLarge": "Bu konuşmanın geçmişi burada geri yüklenemeyecek kadar büyük.",
       "hostFault": "Orca bir sorunla karşılaştığı için bu işlem gerçekleşmedi.",
       "hostFaultTryAgain": "Orca bir sorunla karşılaştığı için bu işlem gerçekleşmedi. Tekrar deneyin.",

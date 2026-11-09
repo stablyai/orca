@@ -18528,6 +18528,7 @@
         "managedAccountUnsupported": "当 WSL 中添加了 Claude 账户时，Claude 聊天需要 Windows Claude 账户。",
         "launchFolderMissing": "此聊天运行所在的文件夹已不存在。请恢复该文件夹以继续此聊天。",
         "historyInOtherAccount": "此聊天的历史记录位于另一个 Claude 账户中。请切换回该账户以继续此聊天。",
+        "codexHistoryNotShared": "所选 Codex 账户没有此聊天的历史记录，且“在账户之间共享 Codex 历史记录”已关闭。请在“设置”→“智能体”中开启，或切换回此聊天运行时使用的账户。",
         "claudeAccountFolderMissing": "所选 Claude 账户的文件夹不存在。请重新登录该账户或选择其他账户。",
         "claudeAccountSetupFailed": "无法设置所选 Claude 账户。请重试或选择其他账户。",
         "agentCommandNotRunnable": "设置 → 智能体中{{agent}}的“命令”必须以 Orca 能找到的程序开头。不支持变量、管道或其他 shell 语法；请在“环境”设置中配置变量。请修改或重置命令。",
@@ -19474,7 +19475,10 @@
         "many_other": "已创建 {{count}} 个拉取请求"
       },
       "splitRight": "向右拆分",
-      "splitDown": "向下拆分"
+      "splitDown": "向下拆分",
+      "codexHistorySharing": {
+        "sentence": "所选 Codex 账户没有此聊天的历史记录，且“在账户之间共享 Codex 历史记录”已关闭。请在<settings>“设置”→“智能体”</settings>中开启，或切换回此聊天运行时使用的账户。"
+      }
     },
     "tab": {
       "bar": {

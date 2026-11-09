@@ -19253,6 +19253,7 @@
         "managedAccountUnsupported": "Auch wenn in WSL ein Claude-Konto hinzugefügt wurde, benötigen Claude-Chats ein Claude-Konto unter Windows.",
         "launchFolderMissing": "Der Ordner, in dem dieser Chat lief, existiert nicht mehr. Den Ordner wiederherstellen, um diesen Chat fortzusetzen.",
         "historyInOtherAccount": "Der Verlauf dieses Chats befindet sich in einem anderen Claude-Konto. Zu diesem Konto zurückwechseln, um den Chat fortzusetzen.",
+        "codexHistoryNotShared": "Das ausgewählte Codex-Konto hat den Verlauf dieses Chats nicht, und „Codex-Verlauf zwischen Konten teilen“ ist aus. Unter Einstellungen → Agenten einschalten oder zum Konto zurückwechseln, in dem dieser Chat lief.",
         "claudeAccountFolderMissing": "Der Ordner des ausgewählten Claude-Kontos fehlt. Erneut bei diesem Konto anmelden oder ein anderes Konto auswählen.",
         "claudeAccountSetupFailed": "Das ausgewählte Claude-Konto konnte nicht eingerichtet werden. Erneut versuchen oder ein anderes Konto auswählen.",
         "agentCommandNotRunnable": "Der Befehl für {{agent}} unter Einstellungen → Agenten muss ein Programmpfad oder -name sein, den Orca finden kann, ohne Argumente oder Variablen. Den Befehl ändern oder zurücksetzen.",
@@ -20239,7 +20240,10 @@
         "many_other": "{{count}} Pull Requests erstellt"
       },
       "splitRight": "Rechts teilen",
-      "splitDown": "Unten teilen"
+      "splitDown": "Unten teilen",
+      "codexHistorySharing": {
+        "sentence": "Das ausgewählte Codex-Konto hat den Verlauf dieses Chats nicht, und „Codex-Verlauf zwischen Konten teilen“ ist aus. Unter <settings>Einstellungen → Agenten</settings> einschalten oder zum Konto zurückwechseln, in dem dieser Chat lief."
+      }
     },
     "tab": {
       "bar": {

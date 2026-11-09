@@ -4,6 +4,7 @@ import {
   type SubmissionRejectionKind
 } from '../failures/agent-session-failure'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type { AgentSessionFailureWordsContext } from '../failures/agent-session-failure-words'
 // Rejected proves non-delivery. The host writes printable legacy reason plus typed rejection via agentSessionFailureWords;
 // classifyDispatchRejection owns interpretation. Rejected is terminal: Retry rotates message ID because the old ID never redelivers.
 
@@ -25,6 +26,23 @@ export const DISPATCH_REJECTED_PROVIDER_CLOSED = 'provider_closed_before_deliver
 
 /** Read-only legacy restart guess: message absent from provider history. */
 export const DISPATCH_REJECTED_NOT_DELIVERED = 'not_delivered'
+
+/** Preserve markers released clients hide. A write failure keeps the bare marker; its error stays in the log. */
+export const LEGACY_REJECTION_MARKERS: Partial<
+  Record<
+    SubmissionRejectionKind,
+    (context: Pick<AgentSessionFailureWordsContext, 'provider'>) => string | undefined
+  >
+> = {
+  cancelled: () => DISPATCH_REJECTED_CANCELLED,
+  writeFailed: () => DISPATCH_REJECTED_WRITE_FAILED,
+  queueFull: ({ provider }) =>
+    provider === 'codex'
+      ? DISPATCH_REJECTED_CODEX_QUEUE_FULL
+      : provider === 'claude'
+        ? DISPATCH_REJECTED_QUEUE_FULL
+        : undefined
+}
 
 /** Legacy transport-marker reader; use isWriteFailureSubmission or the classifier, not provider prose. */
 function dispatchRejectionWasTransportWriteFailure(reason: string | null | undefined): boolean {
@@ -78,6 +96,7 @@ const KIND_CATEGORY = {
   managedAccountUnsupported: 'startFailed',
   launchFolderMissing: 'startFailed',
   historyInOtherAccount: 'startFailed',
+  codexHistoryNotShared: 'startFailed',
   claudeAccountFolderMissing: 'startFailed',
   claudeAccountSetupFailed: 'startFailed',
   agentCommandNotRunnable: 'startFailed',
@@ -121,6 +140,7 @@ const KIND_VERDICT = {
   managedAccountUnsupported: 'failure',
   launchFolderMissing: 'failure',
   historyInOtherAccount: 'failure',
+  codexHistoryNotShared: 'failure',
   claudeAccountFolderMissing: 'failure',
   claudeAccountSetupFailed: 'failure',
   agentCommandNotRunnable: 'failure',

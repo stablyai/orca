@@ -2102,6 +2102,7 @@
       "emptyMessage": "此消息为空，因此未发送。",
       "fullAccessAsRoot": "{{agent}} 以 root 身份运行时不会使用完全访问。请在运行此聊天的计算机的“设置”→“智能体”中为 {{agent}} 选择其他权限，然后开始新的聊天。",
       "historyInOtherAccount": "此聊天的历史记录位于另一个 Claude 账户中。请切换回该账户以继续此聊天。",
+      "codexHistoryNotShared": "所选 Codex 账户没有此聊天的历史记录，且“在账户之间共享 Codex 历史记录”已关闭。请在运行此聊天的计算机上的 Orca“设置”→“智能体”中开启，或切换回此聊天运行时使用的账户。",
       "historyTooLarge": "此对话的历史记录过大，无法在此恢复。",
       "hostFault": "Orca 遇到问题，因此此操作未完成。",
       "hostFaultTryAgain": "Orca 遇到问题，因此此操作未完成。请重试。",

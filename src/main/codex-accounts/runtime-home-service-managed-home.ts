@@ -72,7 +72,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     return homes
   }
 
-  private isManagedAccountsRootDefinitivelyAbsent(): boolean {
+  protected isManagedAccountsRootDefinitivelyAbsent(): boolean {
     try {
       statSync(this.getManagedAccountsRoot())
       return false
