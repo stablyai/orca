@@ -90,4 +90,19 @@ describe('run target host identity', () => {
     const field = screen.getByRole('combobox', { name: 'Run on' })
     expect(field.parentElement?.parentElement?.textContent).toContain('Builder')
   })
+
+  it('never labels an unlisted selection with another host (#38669)', () => {
+    render(
+      <RunTargetCombobox
+        hostOptions={[localOption]}
+        hostValue="vm-setup"
+        hostExecutionHostId="runtime:vm-1"
+        recipes={[]}
+        recipeValue={null}
+      />
+    )
+
+    const field = screen.getByRole('combobox', { name: 'Run on' })
+    expect(field.parentElement?.parentElement?.textContent).not.toContain('Local')
+  })
 })

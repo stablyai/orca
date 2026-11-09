@@ -77,6 +77,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  plugin dev unload         Remove a development folder',
   '',
   'Environment Recipes:',
+  '  vm recipe list            List environment recipes for worktree create --recipe',
   '  vm recipe doctor          Validate a per-workspace environment recipe',
   '',
   'Automations:',

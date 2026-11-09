@@ -3,10 +3,7 @@ import { installBrowserRoutePartitionPolicies } from './browser-session-route-po
 import { session, webContents } from 'electron'
 import { setBrowserClientRouteWebContentsProbe } from '../../client-hosts/file-transfers/browser-client-download-routing'
 import type { BrowserRoutePartitionBindingStore } from '../partitions/browser-route-partition-binding-store'
-import {
-  configureBrowserRoutePartitionBindingsForOrcaProfile,
-  currentBrowserRoutePartitionBindingStore
-} from '../partitions/browser-route-partition-binding-runtime'
+import { currentBrowserRoutePartitionBindingStore } from '../partitions/browser-route-partition-binding-runtime'
 import { releaseEvictedBrowserRoutePartitionStorage } from '../partitions/browser-route-partition-storage-dependencies'
 import { isBrowserRouteGuestPopup } from '../guest-authority/browser-route-guest-popup-ownership'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
@@ -107,10 +104,3 @@ setBrowserClientRouteWebContentsProbe((webContentsId) => {
     browserRouteSessionRegistry.getPartitionForSession(contents.session) !== null
   )
 })
-
-export function configureRouteSessionsForOrcaProfile(options: {
-  orcaProfileId: string
-  profileDirectory: string
-}): void {
-  configureBrowserRoutePartitionBindingsForOrcaProfile(options)
-}

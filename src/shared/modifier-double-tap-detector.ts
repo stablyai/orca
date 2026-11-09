@@ -1,4 +1,4 @@
-import type { PhysicalModifierToken } from './keybindings'
+import type { PhysicalModifierToken } from './keybindings/types'
 
 // Internal release-to-press window; short enough to avoid normal typing gestures.
 const DOUBLE_TAP_WINDOW_MS = 300

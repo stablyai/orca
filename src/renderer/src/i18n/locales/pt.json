@@ -1729,8 +1729,7 @@
         "parakeetJa": "Somente japonês. Treinado com mais de 35 mil horas de fala natural. Inclui pontuação.",
         "whisperTiny": "Mais de 90 idiomas. Menor precisão que Parakeet, mas com a maior cobertura de idiomas.",
         "senseVoice": "Chinês, inglês, japonês, coreano e cantonês com detecção automática de idioma.",
-        "gpt4oMiniTranscribe": "Transcrição na nuvem com alta precisão e baixo custo. Exige uma chave de API da OpenAI.",
-        "gpt4oTranscribe": "Transcrição na nuvem com maior precisão. Exige uma chave de API da OpenAI."
+        "gptTranscribe": "Transcrição na nuvem com alta precisão. Exige uma chave de API da OpenAI."
       }
     },
     "diagnostics": {
@@ -4974,7 +4973,6 @@
           "f828e1de19": "- compartilhado com sua equipe",
           "673a7fd10e": "Verificando...",
           "5426ecbdcb": "Scripts locais não serão executados",
-          "b2b06c7ce8": "Variáveis de ambiente disponíveis (passe o mouse para detalhes):",
           "95a0411b3e": "modelo",
           "175daba180": "Exemplo",
           "b20c5df6ca": "Adicione um arquivo `orca.yaml` para habilitar padrões compartilhados de configuração, arquivamento ou automação de issue para este repositório. Modelo de exemplo:",
@@ -6504,7 +6502,8 @@
           "cd9fe37556": "Permissão do microfone concedida",
           "openAiKeyName": "Sua chave de transcrição da OpenAI",
           "dictationShortcutDescription": "Pressione {{shortcut}} para ditar texto em qualquer painel com foco.",
-          "dictationModesDescription": "Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado."
+          "dictationModeAuto": "Automático",
+          "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar."
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar Notificação de Teste",
@@ -6611,7 +6610,10 @@
               "modelUnloadTitle": "Descarregar modelo de voz",
               "modelUnloadDescription": "Escolha quando o modelo de voz local é descarregado da memória.",
               "modelUnloadKeyword": "descarregar",
-              "modelMemoryKeyword": "memória"
+              "modelMemoryKeyword": "memória",
+              "fillerWordsTitle": "Remover hesitações",
+              "fillerWordsDescription": "Remove “hã”, “hum” e sons parecidos do texto ditado.",
+              "fillerWordsKeyword": "hesitações"
             }
           }
         },
@@ -17172,7 +17174,6 @@
             "4f327c8b3d": "Abrir Markdown...",
             "3d5d6c960d": "Novo Markdown",
             "fd2b42aaa3": "Novo Emulador Móvel",
-            "aea43b5748": "Abra a aba do emulador existente.",
             "b426bb2615": "Ir para o Emulador Móvel",
             "4833fb2cbe": "Nova Aba do Navegador",
             "d364f3c8d4": "Novo Terminal",
@@ -21176,6 +21177,7 @@
       "composerWorkspace": {
         "copyFailed": "Falha ao copiar",
         "copyIdentity": "Copiar {{value0}}",
+        "detachedCommit": "Commit {{head}} (não é uma branch)",
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
@@ -21653,7 +21655,14 @@
           "cloud": "Modelos na nuvem rodam nos servidores do provedor, então nada fica carregado aqui.",
           "never": "Nunca",
           "immediately": "Imediatamente"
+        },
+        "fillerWords": {
+          "title": "Remover hesitações",
+          "description": "Remove sons como “hã” e “hum” do texto ditado, conforme o idioma do ditado."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Variáveis de ambiente disponíveis"
       }
     },
     "jiraIssueAssigneeField": {
@@ -22223,11 +22232,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Não foi possível salvar a preferência de exclusão",
     "alwaysForceDelete": "Sempre forçar exclusão",
+    "alwaysForceDeleteDescription": "Aplica-se a todas as futuras exclusões de espaços de trabalho.",
     "moreActions": "Mais opções de exclusão forçada",
-    "alwaysForceDeleteTooltip": "Aplica-se a todas as futuras exclusões de espaços de trabalho.",
     "moreBranchActions": "Mais opções de exclusão de branches",
     "alwaysForceDeleteBranches": "Sempre excluir branches preservadas",
-    "alwaysForceDeleteBranchesTooltip": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho.",
+    "alwaysForceDeleteBranchesDescription": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho.",
     "moreDeleteOptions": "Mais opções de exclusão",
     "alwaysDelete": "Sempre excluir",
     "alwaysDeleteTooltip": "Pular esta confirmação em futuras exclusões."
@@ -22774,7 +22783,8 @@
     "openToObserve": "Abra Recursos para observar as sessões de terminal.",
     "killAllLocal": "Encerrar todas as sessões locais",
     "ptys": "PTYs",
-    "restartLocal": "Reiniciar daemon local"
+    "restartLocal": "Reiniciar daemon local",
+    "metricDetails": "Detalhes das métricas"
   },
   "browserTab": {
     "agentDriving": "Um agente está usando esta página",

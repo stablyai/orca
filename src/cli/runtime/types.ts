@@ -1,7 +1,8 @@
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRequestSelection,
-  RuntimeRpcFailure
+  RuntimeRpcFailure,
+  RuntimeRpcProgress
 } from '../../shared/runtime-rpc-envelope'
 import { redactOrchestrationCompatibilitySecrets } from '../../shared/orchestration/orchestration-compatibility-evidence'
 
@@ -16,6 +17,8 @@ export type RuntimeCallOptions = {
   legacyTerminalPrompt?: true
   terminalPromptPreflight?: { runtimeId: string | null }
   requestSelection?: RuntimeRequestSelection
+  /** Local socket only: named steps a long-running request reports while it runs. */
+  onProgress?: (progress: RuntimeRpcProgress) => void
 } & RuntimeOrchestrationEnvelope
 
 export class RuntimeClientError extends Error {

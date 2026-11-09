@@ -8,7 +8,7 @@ import {
   createSharedControlTestServer,
   closeSharedControlTestServers
 } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
-import type { sendRemoteRuntimeRequestWithStatusPreflight as StatusPreflight } from '../../../shared/remote-runtime/remote-runtime-client'
+import type { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -17,19 +17,14 @@ import {
   markEnvironmentUsed
 } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
-const {
-  sendRemoteRuntimeRequestMock,
-  sendRemoteRuntimeRequestWithStatusPreflightMock,
-  sendRemoteRuntimeSharedControlRequestMock
-} = vi.hoisted(() => ({
-  sendRemoteRuntimeRequestMock: vi.fn(),
-  sendRemoteRuntimeRequestWithStatusPreflightMock: vi.fn(),
-  sendRemoteRuntimeSharedControlRequestMock: vi.fn()
-}))
+const { sendRemoteRuntimeRequestOnSocketMock, sendRemoteRuntimeSharedControlRequestMock } =
+  vi.hoisted(() => ({
+    sendRemoteRuntimeRequestOnSocketMock: vi.fn(),
+    sendRemoteRuntimeSharedControlRequestMock: vi.fn()
+  }))
 
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock,
-  sendRemoteRuntimeRequestWithStatusPreflight: sendRemoteRuntimeRequestWithStatusPreflightMock
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: sendRemoteRuntimeRequestOnSocketMock
 }))
 
 vi.mock('./runtime-environment-request-connections', async () => {
@@ -47,8 +42,8 @@ import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 
 const actual = await vi.importActual<{
-  sendRemoteRuntimeRequestWithStatusPreflight: typeof StatusPreflight
-}>('../../../shared/remote-runtime/remote-runtime-client')
+  sendRemoteRuntimeRequestOnSocket: typeof sendRemoteRuntimeRequestOnSocket
+}>('../../../shared/remote-runtime/requests/remote-runtime-request-socket')
 
 describe('federated read RPC transport routing', () => {
   let userDataPath: string
@@ -66,8 +61,7 @@ describe('federated read RPC transport routing', () => {
       })
     }).id
     resetSharedControlSupport()
-    sendRemoteRuntimeRequestMock.mockReset()
-    sendRemoteRuntimeRequestWithStatusPreflightMock.mockReset()
+    sendRemoteRuntimeRequestOnSocketMock.mockReset()
     sendRemoteRuntimeSharedControlRequestMock.mockReset()
   })
 
@@ -89,7 +83,7 @@ describe('federated read RPC transport routing', () => {
         launchToken: 'launch-1'
       }
     }
-    sendRemoteRuntimeRequestMock.mockResolvedValue({
+    sendRemoteRuntimeRequestOnSocketMock.mockResolvedValue({
       id: 'status',
       ok: true,
       result: { capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY] },
@@ -114,7 +108,9 @@ describe('federated read RPC transport routing', () => {
       )
     ).resolves.toMatchObject({ ok: true })
 
-    expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual(['status.get'])
+    expect(sendRemoteRuntimeRequestOnSocketMock.mock.calls.map((call) => call[1])).toEqual([
+      'status.get'
+    ])
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledWith(
       environmentId,
       expect.any(Object),
@@ -132,7 +128,7 @@ describe('federated read RPC transport routing', () => {
     'routes enveloped %s over shared control with its authority intact',
     async (method, params) => {
       const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'relay-1' }
-      sendRemoteRuntimeRequestMock.mockResolvedValue({
+      sendRemoteRuntimeRequestOnSocketMock.mockResolvedValue({
         id: 'status',
         ok: true,
         result: { capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY] },
@@ -155,7 +151,9 @@ describe('federated read RPC transport routing', () => {
         envelope
       )
 
-      expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual(['status.get'])
+      expect(sendRemoteRuntimeRequestOnSocketMock.mock.calls.map((call) => call[1])).toEqual([
+        'status.get'
+      ])
       expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledWith(
         environmentId,
         expect.any(Object),
@@ -172,7 +170,7 @@ describe('federated read RPC transport routing', () => {
     ['orchestration.federationImport', { dispatchId: 'dispatch-1', items: [] }]
   ])('falls back to one-shot for %s when the host lacks shared control', async (method, params) => {
     const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'relay-1' }
-    sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, calledMethod) => ({
+    sendRemoteRuntimeRequestOnSocketMock.mockImplementation(async (_pairing, calledMethod) => ({
       id: calledMethod,
       ok: true,
       result: calledMethod === 'status.get' ? { capabilities: [] } : { acknowledgedThrough: 4 },
@@ -189,18 +187,21 @@ describe('federated read RPC transport routing', () => {
       envelope
     )
 
-    expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual([
+    expect(sendRemoteRuntimeRequestOnSocketMock.mock.calls.map((call) => call[1])).toEqual([
       'status.get',
       method
     ])
-    expect(sendRemoteRuntimeRequestMock).toHaveBeenLastCalledWith(
+    expect(sendRemoteRuntimeRequestOnSocketMock).toHaveBeenLastCalledWith(
       expect.any(Object),
       method,
       params,
       15_000,
       envelope,
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined,
+      undefined
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
@@ -215,9 +216,7 @@ describe('federated read RPC transport routing', () => {
       pairingCode: encodePairingOffer(server.offer)
     })
     markEnvironmentUsed(userDataPath, paired.id, { runtimeId: 'runtime-proven' })
-    sendRemoteRuntimeRequestWithStatusPreflightMock.mockImplementation(
-      actual.sendRemoteRuntimeRequestWithStatusPreflight
-    )
+    sendRemoteRuntimeRequestOnSocketMock.mockImplementation(actual.sendRemoteRuntimeRequestOnSocket)
     await expect(
       callRuntimeEnvironment(
         userDataPath,
@@ -237,7 +236,7 @@ describe('federated read RPC transport routing', () => {
 
   it('falls back to one-shot with the envelope when shared control is unavailable', async () => {
     const envelope = { orchestrationContractVersion: 1 }
-    sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) =>
+    sendRemoteRuntimeRequestOnSocketMock.mockImplementation(async (_pairing, method) =>
       method === 'status.get'
         ? {
             id: 'status',
@@ -263,18 +262,21 @@ describe('federated read RPC transport routing', () => {
       envelope
     )
 
-    expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual([
+    expect(sendRemoteRuntimeRequestOnSocketMock.mock.calls.map((call) => call[1])).toEqual([
       'status.get',
       'orchestration.federationPull'
     ])
-    expect(sendRemoteRuntimeRequestMock).toHaveBeenLastCalledWith(
+    expect(sendRemoteRuntimeRequestOnSocketMock).toHaveBeenLastCalledWith(
       expect.any(Object),
       'orchestration.federationPull',
       { dispatchId: 'dispatch-1', afterSequence: 0, limit: 50 },
       15_000,
       envelope,
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined,
+      undefined
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })

@@ -509,8 +509,7 @@
         "parakeetJa": "仅限日语。使用超过 3.5 万小时的自然语音训练。支持标点。",
         "whisperTiny": "支持 90 多种语言。准确度低于 Parakeet，但语言覆盖最广。",
         "senseVoice": "支持中文、英语、日语、韩语和粤语，并自动检测语言。",
-        "gpt4oMiniTranscribe": "准确度高、成本低的云端转录。需要 OpenAI API 密钥。",
-        "gpt4oTranscribe": "准确度更高的云端转录。需要 OpenAI API 密钥。"
+        "gptTranscribe": "准确度高的云端转录。需要 OpenAI API 密钥。"
       }
     },
     "diagnostics": {
@@ -3773,7 +3772,6 @@
             "4f327c8b3d": "打开 Markdown...",
             "3d5d6c960d": "新 Markdown",
             "fd2b42aaa3": "新的手机模拟器",
-            "aea43b5748": "打开现有的模拟器选项卡。",
             "b426bb2615": "转到手机模拟器",
             "4833fb2cbe": "新浏览器选项卡",
             "d364f3c8d4": "新终端",
@@ -7888,7 +7886,6 @@
           "f828e1de19": "- 与您的团队分享",
           "673a7fd10e": "检查中...",
           "5426ecbdcb": "本地脚本将不会运行",
-          "b2b06c7ce8": "可用的环境变量（将鼠标悬停以查看详细信息）：",
           "95a0411b3e": "模板",
           "175daba180": "例子",
           "b20c5df6ca": "添加“orca.yaml”文件以启用此仓库的共享设置、存档或议题自动化默认值。示例模板：",
@@ -8776,7 +8773,8 @@
           "6fa734ed95": "删除 {{value0}}",
           "openAiKeyName": "您的 OpenAI 转录密钥",
           "dictationShortcutDescription": "按 {{shortcut}} 可将文本听写到当前聚焦的任意窗格中。",
-          "dictationModesDescription": "切换：按一次 {{shortcut}} 开始，再按一次停止。按住：按住 {{shortcut}} 期间进行听写。"
+          "dictationModeAuto": "自动",
+          "dictationModesWithAutoDescription": "自动：按住 {{shortcut}} 听写，松开即停止；轻按则开始或停止。按住：按住 {{shortcut}} 期间进行听写。切换：按一次 {{shortcut}} 开始，再按一次停止。"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
@@ -10608,7 +10606,10 @@
               "modelUnloadTitle": "卸载语音模型",
               "modelUnloadDescription": "选择何时从内存中卸载本地语音模型。",
               "modelUnloadKeyword": "卸载",
-              "modelMemoryKeyword": "内存"
+              "modelMemoryKeyword": "内存",
+              "fillerWordsTitle": "移除语气词",
+              "fillerWordsDescription": "从听写文本中去掉“嗯”“呃”之类的语气词。",
+              "fillerWordsKeyword": "语气词"
             }
           }
         },
@@ -19433,6 +19434,7 @@
       "composerWorkspace": {
         "copyFailed": "复制失败",
         "copyIdentity": "复制 {{value0}}",
+        "detachedCommit": "提交 {{head}}（非分支）",
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
         "turnWorking": "此聊天的代理正在工作。请在其回合结束后再切换分支。",
@@ -19963,7 +19965,14 @@
           "cloud": "云端模型在服务商的服务器上运行，因此这里不会加载任何内容。",
           "never": "从不",
           "immediately": "立即"
+        },
+        "fillerWords": {
+          "title": "移除语气词",
+          "description": "按听写语言，从听写文本中去掉“嗯”“呃”之类的语气词。"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "可用的环境变量"
       }
     },
     "agentChildRow": {
@@ -21697,9 +21706,9 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "无法保存删除偏好设置",
     "alwaysForceDelete": "始终强制删除",
+    "alwaysForceDeleteDescription": "适用于今后所有工作区删除操作。",
     "moreActions": "更多强制删除选项",
-    "alwaysForceDeleteTooltip": "适用于今后所有工作区删除操作。",
-    "alwaysForceDeleteBranchesTooltip": "适用于将来删除工作区后保留的分支。",
+    "alwaysForceDeleteBranchesDescription": "适用于将来删除工作区后保留的分支。",
     "moreBranchActions": "更多分支删除选项",
     "alwaysForceDeleteBranches": "始终删除保留的分支",
     "moreDeleteOptions": "更多删除选项",
@@ -22062,7 +22071,8 @@
     "refresh": "刷新",
     "restartLocal": "重启本地守护进程",
     "killAllLocal": "结束所有本地会话",
-    "killFailed": "无法结束终端。将保留上次观察到的会话。"
+    "killFailed": "无法结束终端。将保留上次观察到的会话。",
+    "metricDetails": "指标详情"
   },
   "browserExtensions": {
     "permission": {

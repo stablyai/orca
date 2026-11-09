@@ -461,11 +461,11 @@
 6 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 2 src/main/pty/shell-startup/zsh-wrapper-dir-ownership.ts
 1 src/main/qoder/workspace-trust.ts
-4 src/main/rate-limits/cursor-auth.ts
-2 src/main/rate-limits/grok-auth.ts
-3 src/main/rate-limits/hidden-probe-cwd.ts
-2 src/main/rate-limits/opencode-go-api-key-source.ts
-1 src/main/rate-limits/zcode-usage-credentials.ts
+4 src/main/rate-limits/providers/cursor/cursor-auth.ts
+2 src/main/rate-limits/providers/grok/grok-auth.ts
+3 src/main/lib/hidden-probe-cwd.ts
+2 src/main/rate-limits/providers/opencode-go/opencode-go-api-key-source.ts
+1 src/main/rate-limits/providers/zcode/zcode-usage-credentials.ts
 3 src/main/ripgrep/bundled-ripgrep-path.ts
 8 src/main/runtime/agent-session/ownership/agent-session-claim-identity.ts
 1 src/main/runtime/agent-session/records/agent-session-record-store-slot.ts

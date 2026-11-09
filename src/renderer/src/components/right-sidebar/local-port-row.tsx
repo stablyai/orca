@@ -133,7 +133,7 @@ export function LocalPortRow({
             </div>
           </div>
         </ContextMenuTrigger>
-        <TooltipProvider delayDuration={400}>
+        <TooltipProvider>
           <div className="flex items-center gap-0.5 can-hover:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
             {onOpenInBrowser && (
               <Tooltip>

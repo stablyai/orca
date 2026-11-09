@@ -2,7 +2,7 @@ import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-hands
 import type WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import { remoteRuntimeClientCapabilities } from '../remote-runtime-client-capabilities'
-import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
+import { isRetryHeld, openRefusal } from './remote-runtime-shared-control-hold'
 import { openSharedControlSocket } from './remote-runtime-shared-control-open'
 import { closeSharedControlAfterError } from './remote-runtime-shared-control-refusal'
 import * as sharedControlReady from './remote-runtime-shared-control-ready'
@@ -168,11 +168,9 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private open(): void {
-    if (this.intentionallyClosed) {
-      sharedControlState.rejectSharedControlReadyWaiters(
-        this.readyWaiters,
-        remoteRuntimeUnavailableError()
-      )
+    const refusal = openRefusal(this.intentionallyClosed, this.options)
+    if (refusal) {
+      sharedControlState.rejectSharedControlReadyWaiters(this.readyWaiters, refusal)
       return
     }
     this.reconnect.clear()
@@ -280,7 +278,7 @@ export class RemoteRuntimeSharedControlConnection {
       retry: () =>
         this.reconnect.scheduleAfterSocketClose({
           intentionallyClosed: this.intentionallyClosed,
-          manuallyDisconnected: this.options.isManuallyDisconnected?.() ?? false,
+          manuallyDisconnected: isRetryHeld(this.options),
           capabilityPaused: this.options.isCapabilityPaused?.() ?? false,
           subscriptionCount: this.subscriptions.size,
           open: () => this.open()
