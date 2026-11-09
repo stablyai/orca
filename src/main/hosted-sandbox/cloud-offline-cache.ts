@@ -23,6 +23,7 @@ import {
   type EnvironmentFile,
   type OfflineCacheCodec,
   type OfflineCacheEntry,
+  type OfflineCacheLimits,
   type StoredEntry
 } from './cloud-offline-cache-types'
 
