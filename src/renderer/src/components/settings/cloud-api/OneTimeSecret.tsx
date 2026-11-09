@@ -76,17 +76,21 @@ export function OneTimeSecret({
 /** "I've saved it" until something was copied, then "Done" — the only way out of a secret step. */
 export function OneTimeSecretDoneButton({
   copied,
-  onDone
+  onDone,
+  uncopiedLabel
 }: {
   copied: boolean
   onDone: () => void
+  /** Before anything was copied; defaults to "I've saved it". */
+  uncopiedLabel?: string
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <Button type="button" size="sm" variant="outline" onClick={onDone}>
       {copied
         ? t('auto.components.settings.cloudApi.secret.done', 'Done')
-        : t('auto.components.settings.cloudApi.secret.doneUncopied', 'I’ve saved it')}
+        : (uncopiedLabel ??
+          t('auto.components.settings.cloudApi.secret.doneUncopied', 'I’ve saved it'))}
     </Button>
   )
 }

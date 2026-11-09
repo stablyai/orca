@@ -20,8 +20,9 @@ import type {
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { cloudApiErrorCopy } from './cloud-api-copy'
 import { formatCountdown, scopesForPreset } from './cloud-api-format'
-import { CloudApiErrorNotice, ScopeChip } from './cloud-api-parts'
+import { CloudApiErrorNotice } from './cloud-api-parts'
 import { OneTimeSecret, OneTimeSecretDoneButton } from './OneTimeSecret'
+import { ScopeSummary } from './ScopeSummary'
 
 /** "Approve an app": a one-time code an MCP client's consent page accepts instead of an API key. */
 export function ApproveAppDialog({
@@ -162,9 +163,7 @@ export function ApproveAppDialog({
               <span className="mr-1 text-xs text-muted-foreground">
                 {t('auto.components.settings.cloudApi.approve.grants', 'The app may use')}
               </span>
-              {approval.scopes.map((scope) => (
-                <ScopeChip key={scope} scope={scope} />
-              ))}
+              <ScopeSummary scopes={approval.scopes} />
             </div>
           </div>
         ) : (
@@ -207,7 +206,11 @@ export function ApproveAppDialog({
 
         <DialogFooter>
           {approval && !expired ? (
-            <OneTimeSecretDoneButton copied={copied} onDone={() => change(false)} />
+            <OneTimeSecretDoneButton
+              copied={copied}
+              onDone={() => change(false)}
+              uncopiedLabel={t('auto.components.settings.cloudApi.approve.close', 'Close')}
+            />
           ) : (
             <>
               <Button

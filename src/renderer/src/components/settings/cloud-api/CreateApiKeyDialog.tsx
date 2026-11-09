@@ -26,7 +26,7 @@ import {
   type CreateCloudApiKeyInput
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
-import { cloudApiErrorCopy } from './cloud-api-copy'
+import { cloudApiErrorCopy, cloudApiScopeDescription } from './cloud-api-copy'
 import { scopesForPreset, type ScopePreset } from './cloud-api-format'
 import { CloudApiErrorNotice, FormField, ScopeChip } from './cloud-api-parts'
 import { OneTimeSecret, OneTimeSecretDoneButton } from './OneTimeSecret'
@@ -236,8 +236,12 @@ function FormStep({
             <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             {t(
               'auto.components.settings.cloudApi.create.restricted',
-              'Only team owners and admins can grant {{value0}}. Ask one of them if a script needs it.',
-              { value0: restricted.join(', ') }
+              'Only team owners and admins can grant access to: {{value0}}. Ask one of them if a script needs it.',
+              {
+                value0: restricted
+                  .map((scope) => cloudApiScopeDescription(scope, t).toLowerCase())
+                  .join(', ')
+              }
             )}
           </p>
         ) : null}

@@ -173,6 +173,7 @@ export function WebhookUrlStep({
           </code>
           <CopyValueButton
             value={curl}
+            onCopied={() => setCopied(true)}
             label={t(
               'auto.components.settings.cloudRoutines.webhook.copyCurl',
               'Copy curl command'

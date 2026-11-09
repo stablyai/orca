@@ -25,7 +25,7 @@ import { getUiWeekdayNames } from '@/i18n/weekday-names'
 import { cn } from '@/lib/utils'
 import { isValidAutomationCronSchedule } from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
 import { ROUTINE_GITHUB_EVENTS } from '../../../../../shared/cloud-api/cloud-api-types'
-import { githubEventLabel, timeZoneOptions } from './cloud-api-format'
+import { githubEventLabel, shortTimeZoneName, timeZoneOptions } from './cloud-api-format'
 import { FormField } from './cloud-api-parts'
 import {
   routineDraftCron,
@@ -104,6 +104,9 @@ export function RoutineScheduleFields({
               {zones.map((zone) => (
                 <SelectItem key={zone} value={zone}>
                   {zone}
+                  <span className="ml-1.5 text-muted-foreground">
+                    ({shortTimeZoneName(zone, locale)})
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -195,10 +198,10 @@ export function RoutineScheduleFields({
         <p className="text-xs text-muted-foreground" aria-live="polite">
           {t(
             'auto.components.settings.cloudRoutines.editor.schedulePreview',
-            'Schedule: {{value0}}, {{value1}} time',
+            'Schedule: {{value0}} {{value1}}',
             {
               value0: formatUiAutomationSchedule(cron, t, locale),
-              value1: draft.timezone
+              value1: shortTimeZoneName(draft.timezone, locale)
             }
           )}
         </p>

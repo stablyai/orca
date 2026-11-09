@@ -186,7 +186,7 @@ export function RoutineRow({
             variant="ghost"
             size="xs"
             aria-disabled={running || active}
-            aria-busy={running}
+            aria-busy={running || active}
             onClick={() => void runNow()}
             aria-label={t(
               'auto.components.settings.cloudRoutines.runNowLabel',
@@ -202,8 +202,14 @@ export function RoutineRow({
                 : undefined
             }
           >
-            {running ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <Play />}
-            {t('auto.components.settings.cloudRoutines.runNow', 'Run now')}
+            {running || active ? (
+              <Loader2 className="animate-spin motion-reduce:animate-none" />
+            ) : (
+              <Play />
+            )}
+            {active
+              ? t('auto.components.settings.cloudRoutines.runningNow', 'Running…')
+              : t('auto.components.settings.cloudRoutines.runNow', 'Run now')}
           </Button>
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>

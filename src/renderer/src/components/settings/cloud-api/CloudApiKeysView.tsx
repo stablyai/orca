@@ -79,6 +79,14 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
       : null
   )
   const [revokeOpen, setRevokeOpen] = useState(revoking !== null)
+  const revokingApps =
+    revoking && props.grants.status === 'ok'
+      ? props.grants.data.filter(
+          (grant) =>
+            'apiKeyPrefix' in grant.approvedWith &&
+            grant.approvedWith.apiKeyPrefix === revoking.prefix
+        ).length
+      : 0
   const [approveOpen, setApproveOpen] = useState(Boolean(initial?.approve || initial?.approval))
   const listRef = useRef<HTMLUListElement>(null)
   const createRef = useRef<HTMLButtonElement>(null)
@@ -237,13 +245,32 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
           value0: revoking?.name ?? ''
         })}
         description={
-          <p>
-            {t(
-              'auto.components.settings.cloudApi.revoke.body',
-              'Anything using {{value0}} stops working immediately. This cannot be undone.',
-              { value0: revoking ? formatKeyPrefix(revoking.prefix) : '' }
-            )}
-          </p>
+          <>
+            <p>
+              {t(
+                'auto.components.settings.cloudApi.revoke.body',
+                'Anything using {{value0}} stops working immediately. This cannot be undone.',
+                { value0: revoking ? formatKeyPrefix(revoking.prefix) : '' }
+              )}
+            </p>
+            {revoking && viewer && revoking.createdBy !== viewer.userId ? (
+              <p>
+                {t(
+                  'auto.components.settings.cloudApi.revoke.teammate',
+                  'A teammate created this key; they may still be using it.'
+                )}
+              </p>
+            ) : null}
+            {revokingApps > 0 ? (
+              <p>
+                {t(
+                  'auto.components.settings.cloudApi.revoke.apps',
+                  'Apps approved with this key are disconnected too ({{value0}}).',
+                  { value0: String(revokingApps) }
+                )}
+              </p>
+            ) : null}
+          </>
         }
         confirmLabel={t('auto.components.settings.cloudApi.revoke.confirm', 'Revoke key')}
         returnFocusTo={focusAfterRevoke}
