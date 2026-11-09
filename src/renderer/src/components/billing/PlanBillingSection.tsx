@@ -186,7 +186,11 @@ export function PlanBillingView({
         </div>
       ) : null}
 
-      {hasPlan && entitlement.reason && entitlement.payment.pastDueSince === null ? (
+      {/* The overage card carries the cap-reached hint for admins; don't repeat it here. */}
+      {hasPlan &&
+      entitlement.reason &&
+      entitlement.payment.pastDueSince === null &&
+      !(entitlement.reason === 'overage_cap_reached' && entitlement.canManageBilling) ? (
         <p className="text-xs text-muted-foreground">
           {denyReasonCopy(entitlement.reason, t, entitlement.canManageBilling)}
         </p>
@@ -220,7 +224,7 @@ export function PlanBillingView({
           </Button>
         ) : null}
         {hasPlan ? (
-          <Button type="button" variant="link" size="inline" onClick={onSeePlans}>
+          <Button type="button" variant="ghost" size="sm" onClick={onSeePlans}>
             {t('auto.components.billing.comparePlans', 'Compare plans')}
           </Button>
         ) : null}

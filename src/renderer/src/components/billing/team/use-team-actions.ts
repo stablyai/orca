@@ -53,6 +53,8 @@ export function useTeamActions({
     { id: number; apply: Overlay; settledAfterSeq: number | null }[]
   >([])
   const nextOverlayId = useRef(0)
+  /** Revokes waiting out their Undo window, by lowercased email → cancel. */
+  const pendingRevokes = useRef(new Map<string, () => void>())
   const [rowStates, setRowStates] = useState<Record<string, TeamRowState>>({})
 
   const setRow = useCallback((key: string, state: TeamRowState | null) => {
@@ -131,6 +133,9 @@ export function useTeamActions({
 
   const invite = async (emails: string[], role: OrcaOrgRole): Promise<InviteBatchOutcome> => {
     const now = Date.now()
+    for (const email of emails) {
+      pendingRevokes.current.get(email.toLowerCase())?.()
+    }
     const failed: InviteBatchOutcome['failed'] = []
     // Sequential: auth rate-limits member changes per actor, and order keeps errors readable.
     for (const email of emails) {
@@ -177,7 +182,7 @@ export function useTeamActions({
     return { failed }
   }
 
-  const revoke = (email: string, _role: OrcaOrgRole): void => {
+  const revoke = (email: string, role: OrcaOrgRole): void => {
     focusMembersHeading()
     const key = inviteKey(email)
     const id = ++nextOverlayId.current
@@ -188,11 +193,18 @@ export function useTeamActions({
       )
     })
     setOverlays((list) => [...list, { id, apply: hide, settledAfterSeq: null }])
-    let undone = false
+    // Sonner pauses its timer on hover and in background windows; ours doesn't. Once the revoke
+    // is sent the toast is dismissed, and a late Undo re-invites instead of pretending.
+    let sent = false
+    const cancel = (): void => {
+      window.clearTimeout(timer)
+      pendingRevokes.current.delete(email.toLowerCase())
+      setOverlays((list) => list.filter((entry) => entry.id !== id))
+    }
     const timer = window.setTimeout(() => {
-      if (undone) {
-        return
-      }
+      sent = true
+      pendingRevokes.current.delete(email.toLowerCase())
+      toast.dismiss(toastId)
       void settle(() => api.orgInviteRevoke({ orgId, email })).then((outcome) => {
         if (outcome.status === 'ok') {
           const settledAfterSeq = currentRosterReadSeq()
@@ -206,7 +218,9 @@ export function useTeamActions({
         }
       })
     }, REVOKE_UNDO_MS)
-    toast.success(
+    // Inviting the same address again before the revoke goes out cancels it (see invite()).
+    pendingRevokes.current.set(email.toLowerCase(), cancel)
+    const toastId = toast.success(
       t('auto.components.billing.team.revokedToast', 'Invite to {{value0}} revoked', {
         value0: email
       }),
@@ -215,9 +229,11 @@ export function useTeamActions({
         action: {
           label: t('auto.components.billing.team.undo', 'Undo'),
           onClick: () => {
-            undone = true
-            window.clearTimeout(timer)
-            setOverlays((list) => list.filter((entry) => entry.id !== id))
+            if (sent) {
+              void invite([email], role)
+            } else {
+              cancel()
+            }
           }
         }
       }

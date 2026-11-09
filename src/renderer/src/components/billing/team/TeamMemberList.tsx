@@ -242,7 +242,9 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
                   ) : null}
                   {row.status === 'active' ? null : (
                     <Badge variant="outline" className="shrink-0">
-                      {memberStatusLabel(row.status, t)}
+                      <span className="text-muted-foreground">
+                        {memberStatusLabel(row.status, t)}
+                      </span>
                     </Badge>
                   )}
                 </p>

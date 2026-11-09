@@ -162,8 +162,8 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
     case 'paid':
       title = t('auto.components.billing.checkout.paid', 'Payment confirmed')
       body = t(
-        'auto.components.billing.checkout.paidBody',
-        'You’re on {{value0}}. Opening your team…',
+        'auto.components.billing.checkout.paidBody2',
+        '{{value0}} plan is active. Opening your team…',
         { value0: props.team.label }
       )
       break

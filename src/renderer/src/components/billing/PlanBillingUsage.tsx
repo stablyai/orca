@@ -88,18 +88,12 @@ export function UsageSummary({
       ) : null}
       {entitlement.overageSeconds > 0 ? (
         <p className="text-xs text-muted-foreground tabular-nums">
-          {t(
-            'auto.components.billing.overageHours',
-            '{{value0}} overage hours · {{value1}} of {{value2}} cap',
-            {
-              value0: formatHours(entitlement.overageSeconds),
-              value1: formatCents(entitlement.overage.spentCents, locale),
-              value2: formatCents(entitlement.overage.spendCapCents, locale)
-            }
-          )}
+          {t('auto.components.billing.overageHoursOnly', '{{value0}} overage hours this month', {
+            value0: formatHours(entitlement.overageSeconds)
+          })}
         </p>
       ) : null}
-      {entitlement.usageWarningPercent !== null ? (
+      {entitlement.usageWarningPercent !== null && entitlement.usageWarningPercent < 100 ? (
         <p className="text-xs font-medium">
           {entitlement.usageWarningPercent >= 100
             ? t('auto.components.billing.warn100b', 'All of this month’s sandbox hours are used.')
@@ -153,8 +147,8 @@ export function OverageControls({
   const largeWeight = entitlement.offers?.team.largeMachineWeight ?? 2
   const paymentFailed = entitlement.payment.pastDueSince !== null
   const description = t(
-    'auto.components.billing.overageDescription3',
-    'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), capped at a monthly spend cap you set ({{value2}} by default).',
+    'auto.components.billing.overageDescription4',
+    'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set ({{value2}} by default).',
     {
       value0: formatCents(overage.centsPerHour, locale),
       value1: formatCents(Math.round(overage.centsPerHour * largeWeight), locale),
@@ -277,6 +271,14 @@ export function OverageControls({
                     }}
                   />
                 </div>
+                {capValid && entitlement.reason === 'overage_cap_reached' ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      'auto.components.billing.capReachedHint',
+                      'Raise the cap to keep starting sandboxes. Your files are safe.'
+                    )}
+                  </p>
+                ) : null}
                 {capValid ? null : (
                   <p id={capErrorId} className="text-xs text-destructive">
                     {t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
