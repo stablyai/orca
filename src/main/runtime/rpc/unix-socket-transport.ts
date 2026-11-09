@@ -3,6 +3,7 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from './transport'
+import type { RuntimeRpcProgress } from '../../../shared/runtime-rpc-envelope'
 import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../shared/local-runtime-rpc-limits'
 
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
@@ -214,9 +215,17 @@ export class UnixSocketTransport implements RpcTransport {
       }
     }
 
+    const reportProgress = (progress: RuntimeRpcProgress): void => {
+      if (replied || socket.destroyed || !socket.writable) {
+        return
+      }
+      socket.write(`${JSON.stringify({ _keepalive: true, progress })}\n`)
+    }
+
     this.messageHandler?.(rawMessage, reply, {
       signal: abortController.signal,
-      startKeepalive
+      startKeepalive,
+      reportProgress
     })
   }
 }

@@ -40,6 +40,7 @@ import { PLUGIN_CLI_ERROR_CODES } from '../../../shared/plugins/approval/plugin-
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git/diff/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automations/ownership/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
+import { RECIPE_WORKSPACE_CREATE_FAILED_CODE } from '../../../shared/recipe-workspace-create-progress'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/orchestration/workers/nested-worker-depth'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../shared/project-runtime-repair-message'
 import {
@@ -175,6 +176,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'invalid_argument',
   // Preserve archive-hook failure so callers can retry, waive or skip it (#19334).
   ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
+  // The failed step, the recipe failure code and whether the new VM was destroyed ride in data.
+  RECIPE_WORKSPACE_CREATE_FAILED_CODE,
   // Paired-only method refusal must match the mobile transport allowlist's forbidden code.
   'forbidden',
   NESTED_WORKER_DEPTH_EXCEEDED_CODE,
@@ -239,21 +242,8 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     error instanceof Error &&
     'code' in error &&
     typeof (error as { code: unknown }).code === 'string' &&
-    LINEAR_PASSTHROUGH_CODES.has((error as { code: string }).code)
-  ) {
-    return errorResponse(
-      id,
-      meta,
-      (error as { code: string }).code,
-      message,
-      (error as { data?: unknown }).data
-    )
-  }
-  if (
-    error instanceof Error &&
-    'code' in error &&
-    typeof (error as { code: unknown }).code === 'string' &&
-    STRUCTURED_RUNTIME_PASSTHROUGH_CODES.has((error as { code: string }).code)
+    (LINEAR_PASSTHROUGH_CODES.has((error as { code: string }).code) ||
+      STRUCTURED_RUNTIME_PASSTHROUGH_CODES.has((error as { code: string }).code))
   ) {
     return errorResponse(
       id,

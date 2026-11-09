@@ -915,8 +915,7 @@
         "parakeetJa": "僅限日文。使用超過 3.5 萬小時的自然語音訓練。支援標點符號。",
         "whisperTiny": "支援 90 多種語言。準確度低於 Parakeet，但語言涵蓋範圍最廣。",
         "senseVoice": "支援中文、英文、日文、韓文及粵語，並自動偵測語言。",
-        "gpt4oMiniTranscribe": "準確度高、成本低的雲端轉錄。需要 OpenAI API 金鑰。",
-        "gpt4oTranscribe": "準確度更高的雲端轉錄。需要 OpenAI API 金鑰。"
+        "gptTranscribe": "準確度高的雲端轉錄。需要 OpenAI API 金鑰。"
       }
     },
     "diagnostics": {
@@ -9295,7 +9294,8 @@
           "cd9fe37556": "已授予麥克風權限",
           "openAiKeyName": "您的 OpenAI 轉錄金鑰",
           "dictationShortcutDescription": "按 {{shortcut}} 可將文字聽寫到目前取得焦點的任意窗格中。",
-          "dictationModesDescription": "切換：按一次 {{shortcut}} 開始，再按一次停止。按住：按住 {{shortcut}} 期間進行聽寫。"
+          "dictationModeAuto": "自動",
+          "dictationModesWithAutoDescription": "自動：按住 {{shortcut}} 聽寫，放開即停止；輕按則開始或停止。按住：按住 {{shortcut}} 期間進行聽寫。切換：按一次 {{shortcut}} 開始，再按一次停止。"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "刪除 {{value0}}",
@@ -16760,13 +16760,7 @@
           "lost": "無法插入或複製聽寫內容。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "停止聽寫",
-          "7f3660a7ba": "啟動麥克風...",
-          "f082d0cb9d": "正在處理…",
-          "3de5a129e7": "正在聆聽",
-          "4977162383": "聲音太大",
-          "25f2b7a6a5": "正在說話",
-          "loadingModel": "正在載入語音模型…"
+          "4977162383": "聲音太大"
         }
       },
       "dashboard": {

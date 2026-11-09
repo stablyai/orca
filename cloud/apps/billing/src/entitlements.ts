@@ -12,11 +12,13 @@ import {
   type PlanId
 } from './plans'
 import { accountSettings, currentSubscription, meteredSeconds, periodUsage, type SubscriptionRow } from './store'
+import { PAYMENT_FAILED_STATUSES } from './webhook'
 
 export type DenyReason =
   | 'no_subscription'
   | 'subscription_inactive'
   | 'payment_past_due'
+  | 'payment_grace_expired'
   | 'included_hours_exhausted'
   | 'overage_cap_reached'
   | 'machine_size_not_in_plan'
@@ -49,6 +51,8 @@ export type Entitlement = {
     centsPerHour: number
   }
   limits: { maxConcurrentSandboxes: number; machineSizes: readonly MachineSize[]; idleSleepMinutes: number }
+  /** Failed payment: new starts stop at once; running sandboxes must be suspended after the grace. */
+  payment: { pastDueSince: number | null; graceEndsAt: number | null; suspendRunning: boolean }
   canStartSandbox: boolean
   reason: DenyReason | null
 }
@@ -87,6 +91,7 @@ export async function computeEntitlement(
       overageSeconds: 0,
       overage: { ...overageBase, active: false, spentCents: 0 },
       limits: { maxConcurrentSandboxes: 0, machineSizes: [], idleSleepMinutes: team.idleSleepMinutes },
+      payment: { pastDueSince: null, graceEndsAt: null, suspendRunning: false },
       canStartSandbox: false,
       reason: 'no_subscription'
     }
@@ -102,9 +107,15 @@ export async function computeEntitlement(
   const usedPercent = included > 0 ? (usage.usedSeconds / included) * 100 : 0
   const warnings = team.warnAtPercent.filter((level) => usedPercent >= level)
 
+  const pastDueSince = PAYMENT_FAILED_STATUSES.has(subscription.status) ? (subscription.past_due_since ?? now) : null
+  const graceEndsAt = pastDueSince === null ? null : pastDueSince + team.paymentGraceHours * 3600_000
+  const graceExpired = graceEndsAt !== null && now >= graceEndsAt
+
   let reason: DenyReason | null = null
-  if (subscription.status === 'past_due') {
-    // Stripe is retrying the card; running sandboxes are left to the control plane, new starts wait.
+  if (graceExpired) {
+    reason = 'payment_grace_expired'
+  } else if (pastDueSince !== null) {
+    // Stripe is retrying the card (Smart Retries + dunning emails): no new starts, running ones keep going.
     reason = 'payment_past_due'
   } else if (!LIVE_STATUSES.has(subscription.status)) {
     reason = 'subscription_inactive'
@@ -139,6 +150,7 @@ export async function computeEntitlement(
       machineSizes: team.machineSizes,
       idleSleepMinutes: team.idleSleepMinutes
     },
+    payment: { pastDueSince, graceEndsAt, suspendRunning: graceExpired },
     canStartSandbox: reason === null,
     reason
   }
@@ -152,15 +164,16 @@ export function isMachineSize(value: unknown): value is MachineSize {
 export function checkStart(
   entitlement: Entitlement,
   request: { machineSize: MachineSize; runningSandboxes: number }
-): { allow: boolean; reason: DenyReason | null } {
+): { allow: boolean; reason: DenyReason | null; suspendRunning: boolean } {
+  const suspendRunning = entitlement.payment.suspendRunning
   if (!entitlement.canStartSandbox) {
-    return { allow: false, reason: entitlement.reason }
+    return { allow: false, reason: entitlement.reason, suspendRunning }
   }
   if (!entitlement.limits.machineSizes.includes(request.machineSize)) {
-    return { allow: false, reason: 'machine_size_not_in_plan' }
+    return { allow: false, reason: 'machine_size_not_in_plan', suspendRunning }
   }
   if (request.runningSandboxes >= entitlement.limits.maxConcurrentSandboxes) {
-    return { allow: false, reason: 'concurrency_limit' }
+    return { allow: false, reason: 'concurrency_limit', suspendRunning }
   }
-  return { allow: true, reason: null }
+  return { allow: true, reason: null, suspendRunning }
 }

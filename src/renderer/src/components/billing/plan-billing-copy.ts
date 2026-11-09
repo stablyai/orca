@@ -15,6 +15,11 @@ export function denyReasonCopy(reason: OrcaBillingDenyReason, t: Translate): str
         'auto.components.billing.reasonInactive',
         'Your plan is not active. Choose a plan to start sandboxes.'
       )
+    case 'payment_grace_expired':
+      return t(
+        'auto.components.billing.reasonGraceExpired',
+        'Your payment is overdue, so sandboxes are suspended. Update your payment method to resume.'
+      )
     case 'payment_past_due':
       return t(
         'auto.components.billing.reasonPastDue',

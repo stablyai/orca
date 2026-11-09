@@ -515,8 +515,7 @@
         "parakeetJa": "Solo japonés. Entrenado con más de 35 000 horas de habla natural. Incluye puntuación.",
         "whisperTiny": "Más de 90 idiomas. Menor precisión que Parakeet, pero con la mayor cobertura de idiomas.",
         "senseVoice": "Chino, inglés, japonés, coreano y cantonés con detección automática de idioma.",
-        "gpt4oMiniTranscribe": "Transcripción en la nube con alta precisión y bajo coste. Requiere una clave API de OpenAI.",
-        "gpt4oTranscribe": "Transcripción en la nube con mayor precisión. Requiere una clave API de OpenAI."
+        "gptTranscribe": "Transcripción en la nube con alta precisión. Requiere una clave API de OpenAI."
       }
     },
     "diagnostics": {
@@ -9072,7 +9071,8 @@
           "6fa734ed95": "Eliminar {{value0}}",
           "openAiKeyName": "Su clave de transcripción OpenAI",
           "dictationShortcutDescription": "Pulsa {{shortcut}} para dictar texto en cualquier panel con foco.",
-          "dictationModesDescription": "Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado."
+          "dictationModeAuto": "Automático",
+          "dictationModesWithAutoDescription": "Automático: mantén {{shortcut}} para dictar hasta que lo sueltes, o tócalo para empezar y parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado. Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
@@ -16714,13 +16714,7 @@
           "lost": "No se pudo insertar ni copiar el dictado."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Detener dictado",
-          "7f3660a7ba": "Iniciando micrófono…",
-          "f082d0cb9d": "Procesando…",
-          "3de5a129e7": "Escuchando",
-          "4977162383": "Volumen demasiado alto",
-          "25f2b7a6a5": "Hablando",
-          "loadingModel": "Cargando modelo de voz…"
+          "4977162383": "Volumen demasiado alto"
         }
       },
       "dashboard": {

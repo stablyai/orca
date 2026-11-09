@@ -30,6 +30,8 @@ export async function createHarness(overrides: Partial<Env> = {}) {
     ...overrides
   }
   let now = Date.now()
+  // Live org member counts from auth; null = not configured (the default).
+  let membership: (orgId: string) => Promise<number | null> = async () => null
   const waits: Promise<unknown>[] = []
   const ctx = { waitUntil: (promise: Promise<unknown>) => waits.push(promise), passThroughOnException() {} } as unknown as ExecutionContext
 
@@ -39,7 +41,11 @@ export async function createHarness(overrides: Partial<Env> = {}) {
       headers: { 'content-type': 'application/json', ...init.headers },
       body: init.rawBody ?? (init.body === undefined ? undefined : JSON.stringify(init.body))
     })
-    const response = await handleRequest(request, env, ctx, { stripe: createStripeClient(env, stripe.fetchImpl), now: () => now })
+    const response = await handleRequest(request, env, ctx, {
+      stripe: createStripeClient(env, stripe.fetchImpl),
+      now: () => now,
+      membership: (orgId) => membership(orgId)
+    })
     await Promise.all(waits.splice(0))
     return { status: response.status, body: (await response.json()) as Record<string, any> }
   }
@@ -52,14 +58,17 @@ export async function createHarness(overrides: Partial<Env> = {}) {
     setNow(value: number) {
       now = value
     },
-    async desktopToken(claims: { sub: string; org?: string; orgRole?: string; email?: string }, options: { audience?: string; purpose?: string; ageSeconds?: number } = {}) {
+    setMembership(source: (orgId: string) => Promise<number | null>) {
+      membership = source
+    },
+    async desktopToken(claims: { sub: string; org?: string; orgRole?: string; email?: string; orgMembers?: number }, options: { audience?: string; purpose?: string; ageSeconds?: number } = {}) {
       const iat = Math.floor(now / 1000) - (options.ageSeconds ?? 0)
       return new SignJWT({ ...claims, purpose: options.purpose ?? 'billing' })
         .setProtectedHeader({ alg: 'ES256', kid: jwk.kid })
         .setIssuer('https://login.onorca.dev')
         .setAudience(options.audience ?? 'orca-billing')
         .setIssuedAt(iat)
-        .setExpirationTime(iat + 300)
+        .setExpirationTime(iat + 900)
         .sign(privateKey)
     },
     async webhook(event: unknown, secret = WEBHOOK_SECRET) {

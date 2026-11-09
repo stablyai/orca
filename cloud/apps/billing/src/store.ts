@@ -16,6 +16,7 @@ export type SubscriptionRow = {
   updated_at: number
   billing_interval: BillingInterval
   overage_item_id: string | null
+  past_due_since: number | null
 }
 
 export type AccountSettings = { overage_opt_in: number; spend_cap_cents: number | null }
@@ -80,14 +81,17 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
     .prepare(
       `INSERT INTO subscriptions (stripe_subscription_id, account_id, stripe_customer_id, status, plan, seats,
          overage_enabled, current_period_start, current_period_end, cancel_at_period_end, updated_at,
-         billing_interval, overage_item_id)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+         billing_interval, overage_item_id, past_due_since)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
        ON CONFLICT (stripe_subscription_id) DO UPDATE SET
          status = excluded.status, plan = excluded.plan, seats = excluded.seats,
          overage_enabled = excluded.overage_enabled, current_period_start = excluded.current_period_start,
          current_period_end = excluded.current_period_end, cancel_at_period_end = excluded.cancel_at_period_end,
          updated_at = excluded.updated_at, billing_interval = excluded.billing_interval,
-         overage_item_id = excluded.overage_item_id`
+         overage_item_id = excluded.overage_item_id,
+         -- Keep the first time it went past due; clear it once paid.
+         past_due_since = CASE WHEN excluded.past_due_since IS NULL THEN NULL
+                               ELSE COALESCE(subscriptions.past_due_since, excluded.past_due_since) END`
     )
     .bind(
       row.stripe_subscription_id,
@@ -102,7 +106,8 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
       row.cancel_at_period_end,
       row.updated_at,
       row.billing_interval,
-      row.overage_item_id
+      row.overage_item_id,
+      row.past_due_since
     )
     .run()
 }
@@ -220,6 +225,34 @@ export async function meteredSeconds(db: D1Database, accountId: string, windowSt
     .bind(accountId, windowStart)
     .first<{ metered: number }>()
   return row?.metered ?? 0
+}
+
+/** Accounts whose payment grace has run out: the control plane suspends their running sandboxes. */
+export async function graceExpiredAccounts(db: D1Database, cutoff: number): Promise<Array<{ account_id: string; past_due_since: number }>> {
+  return (
+    await db
+      .prepare(
+        `SELECT account_id, MIN(past_due_since) AS past_due_since FROM subscriptions
+         WHERE status IN ('past_due', 'unpaid') AND past_due_since IS NOT NULL AND past_due_since <= ?1
+         GROUP BY account_id ORDER BY past_due_since LIMIT 1000`
+      )
+      .bind(cutoff)
+      .all<{ account_id: string; past_due_since: number }>()
+  ).results
+}
+
+/** Org accounts with an open subscription, for the seat reconcile cron. */
+export async function openOrgAccounts(db: D1Database, limit: number): Promise<string[]> {
+  return (
+    await db
+      .prepare(
+        `SELECT DISTINCT account_id FROM subscriptions
+         WHERE account_id LIKE 'org:%' AND status IN ('active', 'trialing', 'past_due', 'unpaid')
+         ORDER BY updated_at LIMIT ?1`
+      )
+      .bind(limit)
+      .all<{ account_id: string }>()
+  ).results.map((row) => row.account_id)
 }
 
 export async function usageOverage(db: D1Database, usageId: string): Promise<number> {

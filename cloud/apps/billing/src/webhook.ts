@@ -52,6 +52,9 @@ export function subscriptionIdFor(event: StripeEvent): string | null {
 
 class IgnoredSubscription extends Error {}
 
+/** Stripe statuses after a failed renewal: past_due while retrying, unpaid once retries are exhausted. */
+export const PAYMENT_FAILED_STATUSES = new Set(['past_due', 'unpaid'])
+
 export async function syncSubscription(env: Env, stripe: StripeClient, subscriptionId: string, now: number) {
   const subscription: StripeSubscription = await stripe.retrieveSubscription(subscriptionId)
   if (subscription.livemode && !allowsLiveMode(env)) {
@@ -103,7 +106,9 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     cancel_at_period_end: subscription.cancel_at_period_end ? 1 : 0,
     updated_at: now,
     billing_interval: match.interval,
-    overage_item_id: overageItemId
+    overage_item_id: overageItemId,
+    // The upsert keeps the earliest value while it stays unpaid and clears it once paid.
+    past_due_since: PAYMENT_FAILED_STATUSES.has(subscription.status) ? now : null
   })
 }
 

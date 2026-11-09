@@ -1156,8 +1156,7 @@
         "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
         "whisperTiny": "90+ languages. Lower accuracy than Parakeet but broadest language coverage.",
         "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
-        "gpt4oMiniTranscribe": "Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.",
-        "gpt4oTranscribe": "Cloud transcription with higher accuracy. Requires an OpenAI API key."
+        "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key."
       }
     },
     "diagnostics": {
@@ -9775,7 +9774,8 @@
           "cd9fe37556": "Microphone permission granted",
           "openAiKeyName": "Your OpenAI transcription key",
           "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
-          "dictationModesDescription": "Toggle: press {{shortcut}} once to start, again to stop. Hold: dictate while {{shortcut}} is held."
+          "dictationModeAuto": "Auto",
+          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -17407,13 +17407,11 @@
           "lost": "Dictation couldn't be inserted or copied."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Stop dictation",
-          "7f3660a7ba": "Starting mic…",
-          "f082d0cb9d": "Processing…",
-          "3de5a129e7": "Listening",
           "4977162383": "Too loud",
-          "25f2b7a6a5": "Speaking",
-          "loadingModel": "Loading speech model…"
+          "finishing": "Finishing…",
+          "listening": "Listening…",
+          "cancel": "Cancel",
+          "finish": "Finish"
         }
       },
       "dashboard": {
@@ -19535,7 +19533,49 @@
         "enterpriseDescription": "Run sandboxes in your own cloud, with SSO, audit logs and custom terms.",
         "contactUs": "Contact us",
         "seatsInterval": "{{value0}} seats · {{value1}}",
-        "manageSeats": "Manage seats & billing"
+        "paymentSuspended": "Sandboxes suspended: payment overdue",
+        "paymentFailed": "Payment failed",
+        "paymentSuspendedBody": "Running sandboxes were suspended and new ones cannot start. Update your payment method; everything resumes once the invoice is paid.",
+        "paymentGraceBody": "New sandboxes are paused. Running sandboxes will be suspended on {{value0}} unless the payment goes through. Stripe will retry the card and email your billing contact.",
+        "updatePayment": "Update payment method",
+        "reasonGraceExpired": "Your payment is overdue, so sandboxes are suspended. Update your payment method to resume.",
+        "team": {
+          "menuItem": "Team",
+          "invited": "Invite sent to {{value0}}. They join (and become a billed seat) when they accept.",
+          "revoked": "Invite revoked.",
+          "roleChanged": "Role updated.",
+          "removeTitle": "Remove {{value0}}?",
+          "removeDescription": "They lose access to the org right away. Their seat is removed and the unused time is credited on your next invoice.",
+          "removeConfirm": "Remove member",
+          "removed": "Member removed.",
+          "title": "Team",
+          "refresh": "Refresh team",
+          "loading": "Loading your team…",
+          "loadFailed": "Could not load your team. Try again.",
+          "memberCount": "{{value0}} members",
+          "memberSeats": "{{value0}} members · {{value1}} seats billed. Seats follow membership; pending invites are free until accepted.",
+          "you": "(you)",
+          "roleFor": "Role for {{value0}}",
+          "remove": "Remove {{value0}}",
+          "pending": "Pending invites",
+          "revoke": "Revoke",
+          "invitePlaceholder": "teammate@company.com",
+          "inviteEmail": "Email to invite",
+          "inviteRole": "Role for the invite",
+          "invite": "Invite",
+          "askAdmin": "Only owners and admins can invite or remove members.",
+          "roleOwner": "Owner",
+          "roleAdmin": "Admin",
+          "roleMember": "Member",
+          "alreadyMember": "That person is already a member.",
+          "alreadyInvited": "That person already has an invite.",
+          "cannotRemoveSelf": "You cannot remove yourself.",
+          "cannotChangeOwnRole": "You cannot change your own role.",
+          "forbidden": "Only owners and admins can manage members, and only owners can manage owners.",
+          "notFound": "That member or invite no longer exists.",
+          "failed": "Could not update the team. Try again."
+        },
+        "manageBilling": "Manage billing"
       }
     },
     "i18n": {

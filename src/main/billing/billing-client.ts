@@ -145,12 +145,20 @@ const EntitlementSchema = z.object({
       centsPerHour: seconds
     })
     .catch({ optedIn: false, active: false, spendCapCents: 0, spentCents: 0, centsPerHour: 0 }),
+  payment: z
+    .object({
+      pastDueSince: z.number().nullable().catch(null),
+      graceEndsAt: z.number().nullable().catch(null),
+      suspendRunning: z.boolean().catch(false)
+    })
+    .catch({ pastDueSince: null, graceEndsAt: null, suspendRunning: false }),
   canStartSandbox: z.boolean().catch(false),
   reason: z
     .enum([
       'no_subscription',
       'subscription_inactive',
       'payment_past_due',
+      'payment_grace_expired',
       'included_hours_exhausted',
       'overage_cap_reached'
     ])

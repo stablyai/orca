@@ -137,6 +137,19 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
         `overage-item:${args.subscription}:${args.price}`
       )
     },
+    setSubscriptionItemQuantity(args: {
+      item: string
+      quantity: number
+      prorationBehavior: 'always_invoice' | 'create_prorations'
+      idempotencyKey: string
+    }) {
+      return request<{ id: string; quantity: number }>(
+        'POST',
+        `/v1/subscription_items/${encodeURIComponent(args.item)}`,
+        { quantity: args.quantity, proration_behavior: args.prorationBehavior },
+        args.idempotencyKey
+      )
+    },
     retrieveSubscription(id: string) {
       return request<StripeSubscription>('GET', `/v1/subscriptions/${encodeURIComponent(id)}`)
     },
