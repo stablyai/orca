@@ -1,6 +1,9 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
 import SidebarToolbar from './SidebarToolbar'
+import { registerPlanBillingMenuItem } from '../billing/register-plan-billing-menu-item'
+import { recordBillingStatus } from '../billing/billing-summary-store'
+import { sampleTeam } from '../billing/plan-billing-fixtures'
 
 const settle = (ms = 300): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -35,6 +38,26 @@ const signedIn: OrcaProfileAuthStatus = {
   }
 }
 
+const signedInWithBilling: OrcaProfileAuthStatus = {
+  ...signedIn,
+  cloud: { ...signedIn.cloud!, activeOrgId: 'org-acme', activeOrgName: 'Acme' },
+  capabilities: { flags: { billing: true }, refreshedAt: 0 }
+}
+
+/** Registers the billing items as main.tsx does, with a known plan state. */
+const withBilling = (subscribed: boolean) => (): void => {
+  const result = {
+    status: 'ok' as const,
+    entitlement: subscribed
+      ? sampleTeam
+      : { ...sampleTeam, plan: null, planLabel: null, status: 'none' }
+  }
+  // The registration re-reads billing when the account changes; answer like the service would.
+  window.api.orcaProfiles.billingStatus = async () => result
+  registerPlanBillingMenuItem()
+  recordBillingStatus(result)
+}
+
 const signedOut: OrcaProfileAuthStatus = {
   activeProfileId: 'local-default',
   configured: true,
@@ -46,17 +69,20 @@ const footer = ({
   width = 303,
   height = 96,
   authStatus = signedOut,
-  interact
+  interact,
+  setup
 }: {
   width?: number
   height?: number
   authStatus?: OrcaProfileAuthStatus
   interact?: (frame: HTMLElement) => Promise<void>
+  setup?: () => void
 }) =>
   defineFixture({
     width,
     store: { persistedUIReady: true, orcaProfileAuthStatus: authStatus },
     interact,
+    setup,
     render: () => (
       <div
         style={{ height }}
@@ -77,4 +103,16 @@ export const helpSubmenu = footer({
   height: 480,
   authStatus: signedIn,
   interact: openHelpSubmenu
+})
+export const signedInMenuNoPlan = footer({
+  height: 340,
+  authStatus: signedInWithBilling,
+  setup: withBilling(false),
+  interact: openAccountMenu
+})
+export const signedInMenuOnTeam = footer({
+  height: 320,
+  authStatus: signedInWithBilling,
+  setup: withBilling(true),
+  interact: openAccountMenu
 })

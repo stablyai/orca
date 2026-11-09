@@ -1,5 +1,6 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { isRoutedOrcaDeepLink } from './startup/orca-deep-link-url'
+import { findOrcaBillingReturnLink, ORCA_BILLING_RETURN_CHANNEL } from '../shared/orca-billing'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
 import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
@@ -79,6 +80,11 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
     state.mainWindow?.webContents.send('ui:openCloudWorkspaceLink', link)
   })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
+  // Back from Stripe Checkout or the Portal: focus Orca and let the open billing view re-read.
+  const billingReturn = findOrcaBillingReturnLink(argv)
+  if (billingReturn) {
+    state.mainWindow?.webContents.send(ORCA_BILLING_RETURN_CHANNEL, billingReturn)
+  }
   // Duplicate serve launches must not activate a desktop on a headless server (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return

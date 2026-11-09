@@ -298,15 +298,12 @@ export type OrcaProfileOrgMembersListResult =
   | { status: 'unconfigured' | 'reconnect-required' }
   | { status: 'failed'; error: string }
 
-export type OrcaOrgInviteConflictReason = 'already_member' | 'already_invited'
-export type OrcaOrgMutationInvalidReason = 'cannot_change_own_role' | 'cannot_remove_self'
-
-export type OrcaProfileOrgMemberMutationResult =
-  | { status: 'ok' }
-  | { status: 'unconfigured' | 'reconnect-required' | 'forbidden' | 'not-found' }
-  | { status: 'conflict'; reason: OrcaOrgInviteConflictReason }
-  | { status: 'invalid'; reason: OrcaOrgMutationInvalidReason }
-  | { status: 'failed'; error: string }
+// Mutation results live with the other team actions; re-exported for existing imports.
+export type {
+  OrcaOrgInviteConflictReason,
+  OrcaOrgMutationInvalidReason,
+  OrcaProfileOrgMemberMutationResult
+} from './orca-org-management'
 
 export function createDefaultLocalOrcaProfile(now: number): OrcaProfileSummary {
   return {

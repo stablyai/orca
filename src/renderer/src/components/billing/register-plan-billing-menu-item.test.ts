@@ -1,44 +1,75 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const openSettingsTarget = vi.fn()
-const openSettingsPage = vi.fn()
 vi.mock('@/store/index', () => ({
-  useAppStore: { getState: () => ({ openSettingsTarget, openSettingsPage }) }
+  useAppStore: { getState: () => ({ orcaProfileAuthStatus: null }), subscribe: () => () => {} }
 }))
 
 import {
   getRegisteredAccountMenuItems,
   selectVisibleAccountMenuItems
 } from '../sidebar/account-menu/account-menu-items'
+import { recordBillingStatus } from './billing-summary-store'
+import { sampleTeam } from './plan-billing-fixtures'
 import { BILLING_CAPABILITY, registerPlanBillingMenuItem } from './register-plan-billing-menu-item'
 import { getPlansPageState } from './plans/plans-page-store'
+import { closeTeamPage, getTeamPageState } from './team/team-page-store'
 
-describe('Plan & billing and Team account menu items', () => {
-  it('register behind the billing capability and open Orca account settings', () => {
+const visible = (): string[] =>
+  selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), {
+    activeProfileId: 'p1',
+    configured: true,
+    state: 'connected',
+    persistence: 'encrypted',
+    capabilities: { flags: { [BILLING_CAPABILITY]: true }, refreshedAt: 0 }
+  }).map((entry) => entry.id)
+
+afterEach(() => {
+  recordBillingStatus({ status: 'signed-out' })
+  closeTeamPage()
+})
+
+describe('account menu billing items', () => {
+  it('registers Team and Plan & billing behind the billing capability', () => {
     const dispose = registerPlanBillingMenuItem()
-    const items = getRegisteredAccountMenuItems()
-    expect(items.map((item) => [item.id, item.label(), item.requiredCapability])).toEqual([
-      ['orca.plan-billing', 'Plan & billing', BILLING_CAPABILITY],
-      ['orca.team', 'Team', BILLING_CAPABILITY]
-    ])
-    items[0]?.onSelect()
-    expect(getPlansPageState()).toEqual({ open: true, source: 'account-menu' })
-    items[1]?.onSelect()
-    expect(openSettingsTarget).toHaveBeenCalledWith({ pane: 'orca-account', repoId: null })
-    expect(openSettingsPage).toHaveBeenCalled()
-
-    const visible = (flags: Record<string, boolean>): string[] =>
+    expect(
       selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), {
         activeProfileId: 'p1',
         configured: true,
         state: 'connected',
         persistence: 'encrypted',
-        capabilities: { flags, refreshedAt: 0 }
-      }).map((entry) => entry.id)
-    expect(visible({})).toEqual([])
-    expect(visible({ [BILLING_CAPABILITY]: true })).toEqual(['orca.plan-billing', 'orca.team'])
-
+        capabilities: { flags: {}, refreshedAt: 0 }
+      })
+    ).toEqual([])
+    expect(visible()).toEqual(['orca.team', 'orca.plan-billing'])
+    const plans = getRegisteredAccountMenuItems().find((item) => item.id === 'orca.plan-billing')
+    plans?.onSelect()
+    expect(getPlansPageState()).toEqual({ open: true, source: 'account-menu' })
     dispose()
     expect(getRegisteredAccountMenuItems()).toHaveLength(0)
+  })
+
+  it('adds an accent upgrade item only once billing says there is no plan', () => {
+    const dispose = registerPlanBillingMenuItem()
+    expect(visible()).not.toContain('orca.upgrade')
+    recordBillingStatus({
+      status: 'ok',
+      entitlement: { ...sampleTeam, plan: null, planLabel: null, status: 'none' }
+    })
+    expect(visible()).toEqual(['orca.upgrade', 'orca.team'])
+    expect(getRegisteredAccountMenuItems().find((item) => item.id === 'orca.upgrade')?.tone).toBe(
+      'accent'
+    )
+    recordBillingStatus({ status: 'ok', entitlement: sampleTeam })
+    expect(visible()).not.toContain('orca.upgrade')
+    dispose()
+  })
+
+  it('opens the Team page from the Team item', () => {
+    const dispose = registerPlanBillingMenuItem()
+    getRegisteredAccountMenuItems()
+      .find((item) => item.id === 'orca.team')
+      ?.onSelect()
+    expect(getTeamPageState()).toEqual({ open: true, arrival: null })
+    dispose()
   })
 })

@@ -1,4 +1,9 @@
 import type {
+  OrcaProfileOrgCreateArgs,
+  OrcaProfileOrgCreateResult,
+  OrcaProfileOrgLeaveArgs
+} from '../../shared/orca-org-management'
+import type {
   OrcaProfileOrgInviteRevokeArgs,
   OrcaProfileOrgMemberChangeRoleArgs,
   OrcaProfileOrgMemberInviteArgs,
@@ -15,14 +20,18 @@ import { OrcaCloudRequestError } from './profile-cloud-client'
 import { runWithFreshOrcaCloudSession } from './profile-cloud-session-refresh'
 import {
   changeOrcaCloudOrgMemberRole,
+  createOrcaCloudOrg,
   inviteOrcaCloudOrgMember,
+  leaveOrcaCloudOrg,
   listOrcaCloudOrgMembers,
   removeOrcaCloudOrgMember,
   revokeOrcaCloudOrgInvite
 } from './profile-cloud-org-members-client'
 import {
   changeDevOrcaCloudOrgMemberRole,
+  createDevOrcaCloudOrg,
   inviteDevOrcaCloudOrgMember,
+  leaveDevOrcaCloudOrg,
   listDevOrcaCloudOrgMembers,
   removeDevOrcaCloudOrgMember,
   revokeDevOrcaCloudOrgInvite
@@ -74,7 +83,10 @@ function mapMutationRequestError(error: OrcaCloudRequestError): OrcaProfileOrgMe
     case 403:
       return { status: 'forbidden' }
     case 404:
-      return { status: 'not-found' }
+      // An unknown route (no JSON error code) means this auth deployment predates the action.
+      return error.errorCode ? { status: 'not-found' } : { status: 'unsupported' }
+    case 429:
+      return { status: 'rate-limited' }
     case 409:
       return {
         status: 'conflict',
@@ -84,7 +96,11 @@ function mapMutationRequestError(error: OrcaCloudRequestError): OrcaProfileOrgMe
       return {
         status: 'invalid',
         reason:
-          error.errorCode === 'cannot_remove_self' ? 'cannot_remove_self' : 'cannot_change_own_role'
+          error.errorCode === 'cannot_remove_self'
+            ? 'cannot_remove_self'
+            : error.errorCode === 'last_owner'
+              ? 'last_owner'
+              : 'cannot_change_own_role'
       }
     default:
       return { status: 'failed', error: error.message }
@@ -205,4 +221,74 @@ export async function removeOrcaProfileOrgMember(
       removeOrcaCloudOrgMember(configState.config, session, args)
     )
   )
+}
+
+/** Revoke then re-send so the provider emails a fresh link; the role is kept. */
+export async function resendOrcaProfileOrgInvite(
+  userDataPath: string,
+  args: OrcaProfileOrgMemberInviteArgs
+): Promise<OrcaProfileOrgMemberMutationResult> {
+  const revoked = await revokeOrcaProfileOrgInvite(userDataPath, {
+    orgId: args.orgId,
+    email: args.email
+  })
+  // A missing invite (accepted or revoked elsewhere) still gets a fresh one.
+  if (revoked.status !== 'ok' && revoked.status !== 'not-found') {
+    return revoked
+  }
+  return inviteOrcaProfileOrgMember(userDataPath, args)
+}
+
+export async function leaveOrcaProfileOrg(
+  userDataPath: string,
+  args: OrcaProfileOrgLeaveArgs
+): Promise<OrcaProfileOrgMemberMutationResult> {
+  const active = ensureActiveOrcaProfile(userDataPath)
+  if (isOrcaCloudDevAuthEnabled()) {
+    return leaveDevOrcaCloudOrg(args.orgId)
+  }
+  const configState = getOrcaCloudAuthConfig()
+  if (!configState.configured) {
+    return { status: 'unconfigured' }
+  }
+  return mapMutationResult(
+    await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
+      leaveOrcaCloudOrg(configState.config, session, args.orgId)
+    )
+  )
+}
+
+export async function createOrcaProfileOrg(
+  userDataPath: string,
+  args: OrcaProfileOrgCreateArgs
+): Promise<OrcaProfileOrgCreateResult> {
+  const active = ensureActiveOrcaProfile(userDataPath)
+  if (isOrcaCloudDevAuthEnabled()) {
+    return createDevOrcaCloudOrg(args.name)
+  }
+  const configState = getOrcaCloudAuthConfig()
+  if (!configState.configured) {
+    return { status: 'unconfigured' }
+  }
+  const result = await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
+    createOrcaCloudOrg(configState.config, session, args.name)
+  )
+  switch (result.status) {
+    case 'ok':
+      return { status: 'created', orgId: result.value.orgId, name: result.value.name }
+    case 'reconnect-required':
+      return { status: 'reconnect-required' }
+    case 'request-error':
+      if (result.error.statusCode === 404 || result.error.statusCode === 405) {
+        return { status: 'unsupported' }
+      }
+      if (result.error.statusCode === 429) {
+        return { status: 'rate-limited' }
+      }
+      return result.error.statusCode === 400
+        ? { status: 'invalid' }
+        : { status: 'failed', error: result.error.message }
+    case 'failed':
+      return { status: 'failed', error: result.error }
+  }
 }

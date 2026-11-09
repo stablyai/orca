@@ -203,3 +203,36 @@ export async function removeOrcaCloudOrgMember(
     () => undefined
   )
 }
+
+/** Leaves the org as the signed-in user. Auth refuses the last owner (`last_owner`). */
+export async function leaveOrcaCloudOrg(
+  config: OrcaCloudAuthConfig,
+  session: OrcaCloudSession,
+  orgId: string
+): Promise<void> {
+  await requestOrgMembers(
+    orgMembersUrl(config, orgId, '/members/leave'),
+    requestInit('POST', session.accessToken, {}),
+    () => undefined
+  )
+}
+
+/** Creates an org owned by the signed-in user. */
+export async function createOrcaCloudOrg(
+  config: OrcaCloudAuthConfig,
+  session: OrcaCloudSession,
+  name: string
+): Promise<{ orgId: string; name: string }> {
+  return requestOrgMembers(
+    `${config.apiBaseUrl}/v1/desktop/orgs`,
+    requestInit('POST', session.accessToken, { name }),
+    (value) => {
+      const record = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+      const orgId = typeof record.orgId === 'string' ? record.orgId.trim() : ''
+      if (!orgId) {
+        throw new Error('invalid_org_create_response')
+      }
+      return { orgId, name: typeof record.name === 'string' ? record.name : name }
+    }
+  )
+}

@@ -114,3 +114,38 @@ export function isOrcaBillingPlanId(value: unknown): value is OrcaBillingPlanId 
 export function isOrcaBillingInterval(value: unknown): value is OrcaBillingInterval {
   return ORCA_BILLING_INTERVALS.some((interval) => interval === value)
 }
+
+/** Where Stripe's hosted pages send the browser back: the Worker's return page opens this link. */
+export const ORCA_BILLING_RETURN_CHANNEL = 'billing:return'
+export type OrcaBillingReturn = { kind: 'checkout-success' | 'checkout-cancel' | 'portal' }
+
+/** Parses `orca://billing/return?checkout=success|cancel` or `?portal=return`; anything else is null. */
+export function parseOrcaBillingReturnLink(raw: string): OrcaBillingReturn | null {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'orca:' || url.hostname !== 'billing' || url.pathname !== '/return') {
+    return null
+  }
+  const checkout = url.searchParams.get('checkout')
+  if (checkout === 'success') {
+    return { kind: 'checkout-success' }
+  }
+  if (checkout === 'cancel') {
+    return { kind: 'checkout-cancel' }
+  }
+  return url.searchParams.get('portal') === 'return' ? { kind: 'portal' } : null
+}
+
+export function findOrcaBillingReturnLink(argv: readonly string[]): OrcaBillingReturn | null {
+  for (const arg of argv) {
+    const parsed = parseOrcaBillingReturnLink(arg)
+    if (parsed) {
+      return parsed
+    }
+  }
+  return null
+}
