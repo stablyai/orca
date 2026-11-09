@@ -116,6 +116,14 @@ describe('IosEmulatorBackend', () => {
     expect(sendEmulatorGestureSequenceMock).not.toHaveBeenCalled()
   })
 
+  it('sends taps in raw panel coordinates so serve-sim does not remap landscape twice', async () => {
+    const backend = new IosEmulatorBackend()
+    await backend.tap('device-1', 0.2, 0.3)
+    const args = execServeSimCommandMock.mock.calls.at(-1)?.[1]
+    expect(args?.slice(0, 3)).toEqual(['tap', '0.2', '0.3'])
+    expect(args).toContain('--raw')
+  })
+
   it('does not recycle the device for unrelated helper start failures', async () => {
     execServeSimCommandMock.mockRejectedValueOnce(
       new EmulatorError('emulator_error', 'Helper failed:\n[main] Port 3100 already in use')

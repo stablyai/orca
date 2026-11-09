@@ -243,7 +243,7 @@
 1 src/main/emulator/emulator-probe.ts
 2 src/main/emulator/serve-sim-detached-session.ts
 7 src/main/emulator/serve-sim-execution.ts
-17 src/main/emulator/serve-sim-runtime-materializer.ts
+19 src/main/emulator/serve-sim-runtime-materializer.ts
 12 src/main/external-editors/external-editor-launch.ts
 17 src/main/filesystem/atomic-file-publication.ts
 9 src/main/filesystem/durable-file-write.ts

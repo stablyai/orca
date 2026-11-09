@@ -129,7 +129,8 @@ export class IosEmulatorBackend implements EmulatorBackend {
   async tap(deviceId: string, x: number, y: number): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
     await assertSimulatorInputNotShadowedByDeviceHub(udid)
-    await this.execServeSim(['tap', x.toString(), y.toString(), '-d', udid])
+    // Callers already map to the raw portrait panel; serve-sim >= 0.1.49 would remap landscape again.
+    await this.execServeSim(['tap', x.toString(), y.toString(), '-d', udid, '--raw'])
   }
 
   async gesture(
