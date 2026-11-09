@@ -206,5 +206,21 @@
       "mobile/src/i18n/locales/zh-Hant.json": "29d49187d72057548c83d45422440c390127ccd2556cc73937d4549786be9676",
       "mobile/src/i18n/locales/zh.json": "17647e5df97a1e5a563954694cb16dc812307aee78fcb54f6aa2faaf2e18e36f"
     }
+  },
+  "notificationSettingsSources": {
+    "revision": "3acd6ede7c275000604d72319b9e7ee358173ea9",
+    "catalogs": {
+      "mobile/src/i18n/locales/de.json": "bab28f26d9ebd75a80699e78740e5e3d31e95db2c76f965ad98bf5b3f658d319",
+      "mobile/src/i18n/locales/en.json": "d7122daf5cabafe152224d0aaf0072b6821f7d7872392329e87f93ec2c833b53",
+      "mobile/src/i18n/locales/es.json": "9a8929c55bf6d9f3d0fd0a818bb0459c70162a6ee2967b4d1e0f25e63a614365",
+      "mobile/src/i18n/locales/fr.json": "bbe9a95b241f1c61c6b0b52df51c80f22bd766b68667bf86821368d398ecb08d",
+      "mobile/src/i18n/locales/ja.json": "806bbb0983b994ec8543ad787c1995f5937536d4770dc471ac9de08677c1bca2",
+      "mobile/src/i18n/locales/ko.json": "d1b2d2305079e62f7dfb818521864ccfa640396307e592129cfc95700bbb766a",
+      "mobile/src/i18n/locales/pt.json": "06510679a23cb9b8064ad33730df56c258e1dff5601c61c8b29c2c6ee4ec7034",
+      "mobile/src/i18n/locales/ru.json": "113331f5363d61f0ca4e59d18afea8d30c3a77b4d29dcf0ce6de0dd947ee396a",
+      "mobile/src/i18n/locales/tr.json": "d883adf501f219d9329fc1c4ae8b54e22a5767deb5e5aad9ff6abf3fbceb7f12",
+      "mobile/src/i18n/locales/zh-Hant.json": "29d49187d72057548c83d45422440c390127ccd2556cc73937d4549786be9676",
+      "mobile/src/i18n/locales/zh.json": "17647e5df97a1e5a563954694cb16dc812307aee78fcb54f6aa2faaf2e18e36f"
+    }
   }
 }

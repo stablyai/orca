@@ -3,7 +3,7 @@ import { curves, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { accessibility } from '@kit.AccessibilityKit';
 import { uiText } from '../settings/NativeUi';
-import { LocalNotifier } from '../notifications/LocalNotifier';
+import { requestNotificationPermission } from '../notifications/NotificationPermission';
 import { loadMobileOnboardingSteps, parseMobileOnboardingSteps, saveOnboardingSessionView,
   saveOnboardingOnlineNotifications } from '../onboarding/MobileOnboardingPlan';
 import { MobileOnboardingPanel } from '../onboarding/MobileOnboardingPanel';
@@ -103,11 +103,8 @@ struct MobileOnboarding {
     if (this.busyChoice || this.disposed || !this.visible || this.step !== 'online-notifications') { return; }
     this.busyChoice = enable ? 'enable' : 'skip'; this.error = '';
     try {
-      let granted = false;
-      if (enable) {
-        let notifier = new LocalNotifier();
-        granted = await notifier.requestEnable(getContext(this) as common.UIAbilityContext);
-      }
+      let granted = enable && await requestNotificationPermission(getContext(this) as common.UIAbilityContext)
+        .then((permission): boolean => permission === 'granted').catch((): boolean => false);
       if (this.disposed) { return; }
       await saveOnboardingOnlineNotifications(getContext(this), granted);
       if (!this.disposed) { this.advance(); }

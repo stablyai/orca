@@ -21,6 +21,7 @@ export const KEY_TERMINAL_SHOW_KEY_RAIL = 'terminal.showKeyRail';
 export const KEY_DICTATION_ENGINE = 'orca:dictationEngine';
 export const KEY_NOTIFICATIONS_LOCAL_ENABLED = 'notifications.localEnabled';
 export const KEY_NOTIFICATIONS_DND_ENABLED = 'notifications.dndEnabled';
+export const KEY_NOTIFICATIONS_PERMISSION_DECIDED = 'notifications.permissionDecided';
 
 // ---------- 枚举值（字符串常量） ----------
 export const THEME_MODE_SYSTEM = 'system';

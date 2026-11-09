@@ -16,6 +16,47 @@ const deferred = () => {
   return { promise, resolve }
 }
 
+test('notification permission keeps first request, system refusal and settings recovery distinct', async () => {
+  let authorized = false
+  let rememberedChoice = false
+  let requestError = 1600003
+  const settingsClosed = deferred()
+  const permission = loadArkts(
+    'notifications/NotificationPermission.ets',
+    [
+      'readNotificationPermission',
+      'requestNotificationPermission',
+      'openNotificationPermissionSettings'
+    ],
+    {
+      KEY_NOTIFICATIONS_PERMISSION_DECIDED: 'notifications.permissionDecided',
+      getBool: async () => rememberedChoice,
+      setBool: async (_context, _key, value) => {
+        rememberedChoice = value
+      },
+      notificationManager: {
+        isNotificationEnabled: async () => authorized,
+        requestEnableNotification: async () => {
+          throw Object.assign(new Error('Notification request failed'), { code: requestError })
+        },
+        openNotificationSettingsWithResult: () => settingsClosed.promise
+      }
+    }
+  )
+  assert.equal(await permission.readNotificationPermission({}), 'undetermined')
+  await assert.rejects(permission.requestNotificationPermission({}), /Notification request failed/)
+  assert.equal(await permission.readNotificationPermission({}), 'undetermined')
+  requestError = 1600004
+  assert.equal(await permission.requestNotificationPermission({}), 'denied')
+  assert.equal(await permission.readNotificationPermission({}), 'denied')
+  const recovering = permission.openNotificationPermissionSettings({})
+  authorized = true
+  settingsClosed.resolve({ notificationEnabled: true })
+  assert.equal(await recovering, 'granted')
+  authorized = false
+  assert.equal(await permission.readNotificationPermission({}), 'denied')
+})
+
 function speechHarness(createEngine) {
   return loadArkts('webshell/NativeSpeech.ets', ['NativeSpeech'], {
     speechRecognizer: { createEngine },

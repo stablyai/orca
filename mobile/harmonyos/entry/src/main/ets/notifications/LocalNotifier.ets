@@ -106,9 +106,9 @@ export class LocalNotifier {
     return true;
   }
 
-  async displayTest(context: common.UIAbilityContext): Promise<boolean> {
+  async displayTest(context: common.UIAbilityContext, title: string, body: string): Promise<boolean> {
     this.context = context;
-    return this.publishChecked('Orca 通知测试', '这是一条本机展示测试通知。', '', '', '', '', null, true);
+    return this.publishChecked(title, body, '', '', '', '', null, true);
   }
 
   setContext(context: common.UIAbilityContext): void { this.context = context; }
@@ -138,23 +138,6 @@ export class LocalNotifier {
       return true;
     } catch (e) {
       this.log(`ensureSlot 失败（可能无通知权限）: ${(e as Error).message}`);
-      return false;
-    }
-  }
-
-  /**
-   * One-time enable prompt for the app's notifications. Failures are non-fatal:
-   * publish() may still work for local notifications on some builds.
-   */
-  async requestEnable(context: common.UIAbilityContext): Promise<boolean> {
-    this.context = context;
-    try {
-      await notificationManager.requestEnableNotification(context);
-      let enabled = await notificationManager.isNotificationEnabled();
-      this.log(enabled ? 'notification enabled' : 'notification permission not enabled');
-      return enabled;
-    } catch (e) {
-      this.log(`requestEnableNotification 失败: ${(e as Error).message}`);
       return false;
     }
   }
