@@ -3,6 +3,7 @@ import type { OrcadFeature } from '../../orcad-feature-readiness'
 import { rpcCallerOperationKey } from '../../rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { agentSignInMethods } from './agent-sign-in-methods'
 import {
   AddDataAccountParams,
   SelectDataAccountParams,
@@ -222,9 +223,10 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.hostSignInStart',
     permission: 'accounts-admin',
     params: HostAccountSignInStartParams,
-    handler: async ({ provider }, ctx) =>
-      hostSignInFlows(ctx.runtime).start(signInOwner(ctx), provider)
+    handler: async ({ provider, callback }, ctx) =>
+      hostSignInFlows(ctx.runtime).start(signInOwner(ctx), provider, { callback })
   }),
+  ...agentSignInMethods(hostSignInFlows, signInOwner),
   defineMethod({
     name: 'accounts.hostSignInWait',
     permission: 'accounts-admin',
