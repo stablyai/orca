@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useImperativeHandle, useRef, useState } from 'react'
 import { CircleCheck, Loader2 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { HOST_AGENT_SIGN_IN_AGENT_NAME as AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
@@ -134,6 +134,11 @@ export type CloudAgentSetupViewProps = {
   focusOnOpen?: boolean
   /** Dialog: tabs of different heights keep one floor so the centred dialog does not jump. */
   steadyHeight?: boolean
+  /**
+   * Dialog: its Escape runs before the form sees the key. Returns true when Escape was held back to
+   * ask before a typed key is thrown away.
+   */
+  escapeGuardRef?: React.Ref<() => boolean>
   /** Fixtures only. */
   initialOption?: CloudAgentSetupOption
   initialFailure?: CloudAgentSetupFailure | null
@@ -149,6 +154,7 @@ export function CloudAgentSetupView({
   onCancel,
   focusOnOpen = false,
   steadyHeight = false,
+  escapeGuardRef,
   initialOption,
   initialFailure = null
 }: CloudAgentSetupViewProps): React.JSX.Element {
@@ -163,6 +169,25 @@ export function CloudAgentSetupView({
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<CloudAgentSetupFailure | null>(initialFailure)
   const summary = readiness ? cloudAgentReadinessSummary(readiness, t) : ''
+  // A stray Escape must not throw away a key that was typed or pasted: ask first.
+  const typedKey = KEY_OPTIONS.some((entry) => drafts[entry].key.trim() !== '')
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const returnFocus = useRef<HTMLElement | null>(null)
+  const holdEscape = (): boolean => {
+    if (saving || !typedKey || confirmDiscard) {
+      return false
+    }
+    returnFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setConfirmDiscard(true)
+    return true
+  }
+  useImperativeHandle(escapeGuardRef, () => holdEscape)
+  const keepEditing = (): void => {
+    setConfirmDiscard(false)
+    const target = returnFocus.current
+    requestAnimationFrame(() => target?.isConnected && target.focus())
+  }
 
   const labels: Record<CloudAgentSetupOption, { tab: string; detail: string }> = {
     'sign-in': {
@@ -238,7 +263,9 @@ export function CloudAgentSetupView({
         // Escape from a portaled Select or menu bubbles here too; let it close only that.
         if (event.key === 'Escape' && !saving && isOwnKeyEvent(event)) {
           event.stopPropagation()
-          onCancel()
+          if (!holdEscape()) {
+            onCancel()
+          }
         }
       }}
       className="space-y-3"
@@ -303,35 +330,51 @@ export function CloudAgentSetupView({
       </Tabs>
 
       <div className="flex items-center justify-between gap-3">
-        <p role="alert" className="min-h-4 text-xs text-destructive">
-          {footerError}
+        <p
+          role="alert"
+          className={cn('min-h-4 text-xs', confirmDiscard ? 'text-foreground' : 'text-destructive')}
+        >
+          {confirmDiscard
+            ? t('cloudAgentSetup.discardQuestion', 'Discard the key you typed?')
+            : footerError}
         </p>
-        <div className="flex shrink-0 gap-2">
-          {/* Settings' Subscription tab has nothing to cancel: Got it is the only way out. */}
-          {option === 'sign-in' && !onSignIn ? null : (
-            <Button type="button" variant="ghost" size="sm" onClick={() => !saving && onCancel()}>
-              {t('cloudSecrets.cancel', 'Cancel')}
+        {confirmDiscard ? (
+          <div className="flex shrink-0 gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+              {t('cloudAgentSetup.discard', 'Discard')}
             </Button>
-          )}
-          {option === 'sign-in' ? (
-            <Button type="button" size="sm" onClick={onSignIn ?? onCancel}>
-              {onSignIn
-                ? t('cloudAgentSetup.signIn.action', 'Sign in when ready')
-                : t('cloudAgentSetup.gotIt', 'Got it')}
+            <Button type="button" size="sm" autoFocus onClick={keepEditing}>
+              {t('cloudAgentSetup.keepEditing', 'Keep editing')}
             </Button>
-          ) : (
-            <Button
-              type="submit"
-              size="sm"
-              disabled={!canSubmit}
-              aria-disabled={saving || undefined}
-              aria-busy={saving || undefined}
-            >
-              {saving ? <Loader2 className="animate-spin" /> : null}
-              {t('cloudAgentSetup.save', 'Save')}
-            </Button>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="flex shrink-0 gap-2">
+            {/* Settings' Subscription tab has nothing to cancel: Got it is the only way out. */}
+            {option === 'sign-in' && !onSignIn ? null : (
+              <Button type="button" variant="ghost" size="sm" onClick={() => !saving && onCancel()}>
+                {t('cloudSecrets.cancel', 'Cancel')}
+              </Button>
+            )}
+            {option === 'sign-in' ? (
+              <Button type="button" size="sm" onClick={onSignIn ?? onCancel}>
+                {onSignIn
+                  ? t('cloudAgentSetup.signIn.action', 'Sign in when ready')
+                  : t('cloudAgentSetup.gotIt', 'Got it')}
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!canSubmit}
+                aria-disabled={saving || undefined}
+                aria-busy={saving || undefined}
+              >
+                {saving ? <Loader2 className="animate-spin" /> : null}
+                {t('cloudAgentSetup.save', 'Save')}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </form>
   )

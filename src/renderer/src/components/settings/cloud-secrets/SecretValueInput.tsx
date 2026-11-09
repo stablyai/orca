@@ -35,6 +35,13 @@ export function SecretValueInput({
   const [pastedMultiline, setPastedMultiline] = useState(false)
   const multiline = value.includes('\n')
   const lines = multiline ? value.split('\n').length : 1
+  // A revealed value goes back under the mask once focus leaves the field and its buttons, wherever
+  // it was last (the field, Show, or Clear).
+  const remaskOnLeave = (event: React.FocusEvent<HTMLDivElement>): void => {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setRevealed(false)
+    }
+  }
   const toggle = (
     <Button
       type="button"
@@ -56,7 +63,7 @@ export function SecretValueInput({
 
   if (multiline) {
     return (
-      <div className="flex items-start gap-1">
+      <div className="flex items-start gap-1" onBlur={remaskOnLeave}>
         {revealed ? (
           <Textarea
             id={id}
@@ -70,11 +77,6 @@ export function SecretValueInput({
             autoComplete="off"
             data-1p-ignore=""
             autoFocus
-            onBlur={(event) => {
-              if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) {
-                setRevealed(false)
-              }
-            }}
             className="max-h-48 min-h-20"
           />
         ) : (
@@ -112,7 +114,7 @@ export function SecretValueInput({
   }
 
   return (
-    <div className="relative">
+    <div className="relative" onBlur={remaskOnLeave}>
       <Input
         id={id}
         type={revealed ? 'text' : 'password'}
@@ -127,12 +129,6 @@ export function SecretValueInput({
             event.preventDefault()
             setPastedMultiline(true)
             onChange(pasted.replace(/\r\n?/g, '\n').replace(/\n+$/, ''))
-          }
-        }}
-        // A revealed value goes back under the mask once focus leaves the field.
-        onBlur={(event) => {
-          if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) {
-            setRevealed(false)
           }
         }}
         placeholder={placeholder}

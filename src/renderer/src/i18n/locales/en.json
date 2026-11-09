@@ -26339,7 +26339,11 @@
     "change": "Change",
     "signInQueued": "Agent sign-in will open when the sandbox is ready",
     "subtitleBuild": "Give Claude Code or Codex access in Orca Cloud.",
-    "useKey": "Use a key"
+    "useKey": "Use a key",
+    "discardQuestion": "Discard the key you typed?",
+    "discard": "Discard",
+    "keepEditing": "Keep editing",
+    "signInHandedOff": "Continues in the Agent sign-in row below."
   },
   "cloudSecrets": {
     "editor": {
@@ -26406,7 +26410,8 @@
       "noReposDetail": "Repository secrets follow a GitHub repository. Add a project with a GitHub remote to set them.",
       "description": "Cloud workspaces of this repository get these, for whoever starts them.",
       "emptyTitle": "No secrets for this repository",
-      "emptyDetail": "Add the variables this project needs to run, such as DATABASE_URL, or paste its .env file."
+      "emptyDetail": "Add the variables this project needs to run, such as DATABASE_URL, or paste its .env file.",
+      "addProject": "Add project"
     },
     "readOnly": {
       "shared": "Ask an owner or admin to change shared secrets.",
@@ -26446,7 +26451,14 @@
       "duplicates_one": "{{count}} duplicate ignored",
       "duplicates_other": "{{count}} duplicates ignored",
       "save_one": "Save {{count}} secret",
-      "save_other": "Save {{count}} secrets"
+      "save_other": "Save {{count}} secrets",
+      "unreadable_one": "{{count}} unreadable line skipped",
+      "unreadable_other": "{{count}} unreadable lines skipped",
+      "pasteOnly": "Paste only: typing here does nothing. Edit names and values in the rows below.",
+      "lineName": "line {{line}}",
+      "skippedLine": "Line {{line}} · skipped",
+      "renamed": "Renamed from {{name}}",
+      "normalized": "Spaces and dashes become underscores"
     },
     "value": {
       "hide": "Hide value",

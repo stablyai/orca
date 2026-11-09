@@ -105,6 +105,7 @@ export const repoNone = defineFixture({
         repos={[]}
         people={people}
         onSetUpAgent={noop}
+        onAddProject={noop}
         initialTab="repo"
       />
     </Frame>
@@ -117,6 +118,21 @@ export const effective = defineFixture({
     <Frame>
       <CloudSecretsPane
         api={fixtureCloudSecretsApi({})}
+        repos={REPOS}
+        people={people}
+        onSetUpAgent={noop}
+        initialTab="effective"
+      />
+    </Frame>
+  )
+})
+
+export const effectiveEmpty = defineFixture({
+  width: 760,
+  render: () => (
+    <Frame>
+      <CloudSecretsPane
+        api={fixtureCloudSecretsApi({ caller: FIXTURE_SOLO, secrets: {} })}
         repos={REPOS}
         people={people}
         onSetUpAgent={noop}
@@ -277,6 +293,7 @@ const PASTE = [
   'CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-abc',
   'NEXT_PUBLIC_URL=http://localhost:3000',
   'NEXT_PUBLIC_URL=https://acme.dev',
+  'sentry-auth-token=sntrys_abc',
   'oops this is not a line'
 ].join('\n')
 

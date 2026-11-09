@@ -33,6 +33,7 @@ export function CloudSecretsSection({ orgId }: { orgId: string | null }): React.
   const [setupOpen, setSetupOpen] = useState(false)
   const [revision, setRevision] = useState(0)
   const repos = useAppStore((s) => s.repos)
+  const openModal = useAppStore((s) => s.openModal)
   const choices = useMemo(() => cloudSecretRepoChoices(repos), [repos])
 
   useEffect(() => {
@@ -55,7 +56,8 @@ export function CloudSecretsSection({ orgId }: { orgId: string | null }): React.
   const common = {
     api,
     repos: choices,
-    onSetUpAgent: () => setSetupOpen(true)
+    onSetUpAgent: () => setSetupOpen(true),
+    onAddProject: () => openModal('add-repo')
   }
   return (
     <>
