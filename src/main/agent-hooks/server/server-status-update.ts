@@ -6,10 +6,8 @@ import {
   needsHookRootEvidence,
   readHookProcessVerdict
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
-import {
-  reconcileCodexStatusEvent,
-  markCodexLeadTurnInterrupted
-} from '../../../shared/agent-hook-listener/providers/codex-state'
+import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
+import { reconcileCodexStatusEvent } from '../../../shared/agent-hook-listener/providers/codex-session-start'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
@@ -194,9 +192,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     const stateReconciledPayload = reconcileCodexStatusEvent(
       this.state,
       terminalOwnedPayload,
-      previous?.payload,
+      previous,
       codexRosterAuthority
     )
+    if (!stateReconciledPayload) {
+      return undefined
+    }
     // Relay restart loses root context; child hooks must not erase persisted resume/model identity.
     const rootContextPreservingPayload = retainHookRootContext(
       stateReconciledPayload,

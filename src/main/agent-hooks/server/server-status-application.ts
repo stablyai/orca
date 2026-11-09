@@ -33,7 +33,12 @@ function resolveTurnStartedAt(
     payload.toolAgentId === undefined &&
     payload.isReplay !== true &&
     payload.providerSessionOnly !== true &&
-    isNewTurnEvent(payload.source, payload.hookEventName)
+    isNewTurnEvent(payload.source, payload.hookEventName) &&
+    !(
+      payload.source === 'codex' &&
+      payload.hookEventName === 'SessionStart' &&
+      !payload.hasExplicitPrompt
+    )
   ) {
     return payload.payload.sessionBoundary === true ? undefined : at
   }
