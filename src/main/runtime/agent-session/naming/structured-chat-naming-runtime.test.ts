@@ -673,7 +673,7 @@ it('retires the selected first-handover source without adopting a replacement ch
   }
 })
 
-it('finishes naming admitted during delivery even if recording its failure cannot commit', async () => {
+it('finishes Send now naming during delivery even if recording its failure cannot commit', async () => {
   const { chat, title, done, seeded } = await atRestNaming()
   const release = chat.holdNextStart()
   chat.failNextStart(new Error('Startup refused'))
@@ -685,7 +685,17 @@ it('finishes naming admitted during delivery even if recording its failure canno
   try {
     await vi.waitFor(() => expect(chat.starts).toHaveBeenCalledOnce())
     const sent = chat.send('Repair login')
-    expect(await sent.result).toMatchObject({ ok: true })
+    const queued = await sent.result
+    if (!queued.ok || !('queued' in queued.value)) {
+      throw new Error('expected a queued receipt')
+    }
+    const messageId = queued.value.queued.messageId
+    expect(await chat.submission(sent.id)).toBeUndefined()
+    expect(await chat.sendNow(messageId)).toMatchObject({ ok: true })
+    expect(await chat.handoff(messageId)).toMatchObject({
+      queuedMessageId: messageId,
+      dispatchState: 'pending'
+    })
     await seeded()
     const journal = chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
     const failure = vi
@@ -694,7 +704,7 @@ it('finishes naming admitted during delivery even if recording its failure canno
     release()
     await done()
     expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Login repair')
-    expect((await chat.submission(sent.id))?.dispatchState).toBe('pending')
+    expect((await chat.handoff(messageId))?.dispatchState).toBe('pending')
     expect(title).not.toHaveBeenCalled()
     failure.mockRestore()
   } finally {
