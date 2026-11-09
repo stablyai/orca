@@ -24,6 +24,10 @@ import {
   RelayHostListAnnouncer,
   type RelayHostListAnnouncerSources
 } from './mobile-relay-host-list-announcer'
+import {
+  isPendingVmCheckout,
+  type PendingVmCheckoutIndex
+} from '../../../shared/pending-vm-checkouts'
 
 export type MobileRelayRecipeEnvironmentLookup = (
   hostId: string
@@ -60,6 +64,8 @@ export class MobileRelayHostCatalog {
       hostLabelOverrides: () => ReadonlyMap<ExecutionHostId, string>
       getWorkspaceSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null
       recipeEnvironmentsFor?: MobileRelayRecipeEnvironmentLookup
+      /** VM checkouts a desktop create has not adopted yet; the phone must not list them. */
+      pendingVmCheckouts?: () => PendingVmCheckoutIndex
       now?: () => number
     }
   ) {}
@@ -128,8 +134,9 @@ export class MobileRelayHostCatalog {
       return undefined
     }
     const key = worktreeIdentityKey(worktreeId)
+    const pending = this.options.pendingVmCheckouts?.()
     for (const raw of rows) {
-      if (raw.removing === true) {
+      if (raw.removing === true || (pending && isPendingVmCheckout(pending, raw))) {
         continue
       }
       const row = normalizePairedServerRow(hostId, raw)
@@ -235,10 +242,11 @@ export class MobileRelayHostCatalog {
       // The tag only decorates rows; an unreadable VM store must not blank the phone's list.
       recipeEnvironments = undefined
     }
+    const pending = this.options.pendingVmCheckouts?.()
     // Only desktop reads request background-removal support.
     return {
       worktrees: rows
-        .filter((row) => row.removing !== true)
+        .filter((row) => row.removing !== true && !(pending && isPendingVmCheckout(pending, row)))
         .map((row) =>
           stampRecipeEnvironment(
             stampDesktopSidebarView(row, host.environmentId, desktopDeviceIds, sessionActivity),

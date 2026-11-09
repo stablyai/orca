@@ -14,6 +14,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from './mobile-relay-host-catalog'
 import { PairedServerRowsProducer } from '../sidebar-inputs/paired-server-rows-producer'
+import { indexPendingVmCheckouts } from '../../../shared/pending-vm-checkouts'
 
 function answer(capable: boolean): RuntimeStatus {
   return {
@@ -137,6 +138,7 @@ function catalog(
     recipeEnvironmentsFor?: (
       hostId: string
     ) => ReadonlyMap<string, { name: string; destroys: boolean }>
+    pendingVmCheckouts?: { repoId: string; path: string }[]
   } = {}
 ) {
   const serverRows = new PairedServerRowsProducer({
@@ -155,6 +157,9 @@ function catalog(
       },
       ...(desktop.recipeEnvironmentsFor
         ? { recipeEnvironmentsFor: desktop.recipeEnvironmentsFor }
+        : {}),
+      ...(desktop.pendingVmCheckouts
+        ? { pendingVmCheckouts: () => indexPendingVmCheckouts(desktop.pendingVmCheckouts ?? []) }
         : {})
     })
   }
@@ -190,6 +195,27 @@ describe('mobile relay host catalog', () => {
     })
     // One store read per poll, not one per row.
     expect(lookups).toEqual(['runtime:env'])
+  })
+
+  it("leaves out a VM checkout a desktop create has not adopted yet, but not the VM's other rows", async () => {
+    const { hosts, call } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+    ])
+    call.mockResolvedValueOnce(
+      psReply([
+        { worktreeId: 'vm::/srv/repo', repoId: 'vm', path: '/srv/repo', isMainWorktree: true },
+        { worktreeId: 'vm::/srv/wt', repoId: 'vm', path: '/srv/wt', isMainWorktree: false },
+        { worktreeId: 'other::/srv/repo', repoId: 'other', path: '/srv/repo', isMainWorktree: true }
+      ])
+    )
+    const { catalog: hostCatalog } = catalog(hosts, new Map(), {
+      pendingVmCheckouts: [{ repoId: 'vm', path: '/srv/repo' }]
+    })
+    const result = await hostCatalog.worktrees('runtime:env')
+    expect(result.worktrees?.map((row) => row.worktreeId)).toEqual([
+      'vm::/srv/wt',
+      'other::/srv/repo'
+    ])
   })
 
   it("drops a server's own recipe-environment claim and survives an unreadable VM store", async () => {
