@@ -24059,6 +24059,13 @@
     "openDefault": "Open in Default App"
   },
   "workspace": {
+    "lowDisk": {
+      "warningTitle": "Low disk space on this cloud workspace: {{free}} free of {{total}}",
+      "warningBody": "Clean build outputs or caches (e.g. rm -rf node_modules/.cache), or remove unused worktrees.",
+      "criticalTitle": "Cloud workspace disk is almost full: {{free}} free of {{total}}",
+      "criticalBody": "Builds, installs and git operations may fail soon. Clean build outputs or caches (e.g. rm -rf node_modules/.cache), or remove unused worktrees.",
+      "dismiss": "Dismiss"
+    },
     "branchChoice": {
       "title": "Branch for this worktree",
       "existing": "Existing branch",
@@ -25833,6 +25840,199 @@
     "starting": "{{agent}}: starting sign-in…",
     "title": "Agent sign-in",
     "otherAccount": "{{agent}} signed in as {{email}}."
+  },
+  "cloudEnvironment": {
+    "history": {
+      "empty": "No builds yet.",
+      "aria": "Build history",
+      "active": "Active",
+      "cannotCancel": "The snapshot is being saved; the build can no longer be canceled.",
+      "cancel": "Cancel",
+      "use": "Use this build",
+      "pruned": "Snapshot removed: only the newest 5 successful builds keep theirs.",
+      "title": "Builds"
+    },
+    "log": {
+      "lineCountTitle": "Lines of output",
+      "loading": "Loading log…",
+      "bootDone": "Sandbox started.",
+      "booting": "Starting a fresh sandbox…",
+      "snapshotDone": "Snapshot saved.",
+      "snapshotting": "Saving the snapshot…",
+      "noOutput": "No output.",
+      "showError": "Show error",
+      "lostStatic": "Lost connection to the build log.",
+      "reconnectingDetail": "Reconnecting… The build keeps running.",
+      "keepsRunning": "The build keeps running in Orca Cloud.",
+      "reconnect": "Reconnect",
+      "truncatedShort": "Log truncated at its size limit.",
+      "title": "Build #{{number}}",
+      "reconnectingShort": "Reconnecting…",
+      "disconnectedShort": "{{status}} · log disconnected",
+      "copyAria": "Copy build log",
+      "copiedAnnounce": "Build log copied",
+      "copied": "Copied",
+      "copy": "Copy logs",
+      "aria": "Build #{{number}} log",
+      "jumpWithCount": "Jump to latest ({{total}} new)",
+      "jump": "Jump to latest"
+    },
+    "stepStatus": {
+      "running": "running",
+      "succeeded": "done",
+      "failed": "failed",
+      "canceled": "canceled",
+      "skipped": "skipped",
+      "pending": "waiting"
+    },
+    "announce": {
+      "failed": "{{headline}} {{consequence}}",
+      "succeeded": "Build #{{number}} succeeded.",
+      "canceled": "Build #{{number}} was canceled.",
+      "step": "Build #{{number}}: {{step}}…"
+    },
+    "header": {
+      "active": "New workspaces start from build #{{number}}",
+      "noActive": "No build yet: workspaces start from a fresh sandbox",
+      "large": "Large",
+      "standard": "Standard"
+    },
+    "agent": {
+      "hint": "Starts your default agent in a local checkout. It writes the install script and builds until it succeeds.",
+      "noRepo": "Add a local project for one of these repositories first.",
+      "button": "Configure with an agent"
+    },
+    "buildNow": "Build now",
+    "rebuild": "Rebuild",
+    "config": {
+      "hide": "Hide",
+      "edit": "Edit",
+      "show": "Show",
+      "title": "Configuration"
+    },
+    "empty": {
+      "title": "Create your environment",
+      "description": "Install your repos’ dependencies once, snapshot the sandbox, and every new cloud workspace starts ready to run in seconds.",
+      "cta": "Create environment",
+      "memberAsk": "Ask an owner or admin to set it up."
+    },
+    "loading": "Loading environment…",
+    "title": "Cloud environment",
+    "descriptionTeam": "Your team’s repos and install script, built once into a snapshot so every cloud workspace starts with dependencies installed.",
+    "you": "You",
+    "loadFailed": "Couldn’t load the cloud environment",
+    "retry": "Try again",
+    "activate": {
+      "title": "Use build #{{number}}?",
+      "description": "New workspaces will start from build #{{number}}. Existing workspaces keep theirs.",
+      "confirm": "Use this build"
+    },
+    "form": {
+      "script": "Install script",
+      "import": "Import from repo",
+      "importHint": "Reads Conductor and dev container setup from a local project.",
+      "create": "Create and build",
+      "save": "Save changes",
+      "discard": "Discard",
+      "cancel": "Cancel",
+      "unsavedChanges": "Unsaved changes. Saving doesn’t rebuild; start a build when you’re ready.",
+      "needRepo": "Add at least one repository.",
+      "saveFailed": "Your changes weren’t saved.",
+      "repos": "Repositories",
+      "defaultBranch": "default branch",
+      "conflictNamed": "{{editor}} saved changes to this environment while you were editing. Reload to see them; your edits here will be discarded.",
+      "conflict": "Someone else saved changes to this environment. Reload to see them; your edits here will be discarded.",
+      "scriptCopied": "Copied",
+      "copyScript": "Copy my install script",
+      "reload": "Reload",
+      "repoInvalid": "Enter a GitHub repository as owner/repo or a github.com URL.",
+      "repoDuplicate": "{{repo}} is already listed.",
+      "reposHint": "Cloned into every workspace. The install script runs in the first one.",
+      "primaryRepo": "install script runs here",
+      "branchPlaceholder": "default branch",
+      "branchAria": "Branch for {{repo}}",
+      "removeRepo": "Remove {{repo}}",
+      "repoPlaceholder": "owner/repo or https://github.com/…",
+      "addRepo": "Add",
+      "fromProjects": "From your projects:",
+      "addSuggestion": "Add {{repo}}",
+      "scriptPlaceholder": "corepack enable\npnpm install --frozen-lockfile",
+      "scriptRuntimeStops": "Runs once per build in the first repository and stops at the first failing command. Passwordless sudo (Ubuntu, apt-get).",
+      "variablesHint": "Names only. Values come from Cloud secrets (Shared scope) with the same names and reach the install script at build time. They’re never stored in the environment.",
+      "variables": "Variables",
+      "removeEnvVar": "Remove {{name}}",
+      "noEnvVars": "None",
+      "envVarPlaceholder": "NPM_TOKEN, DATABASE_URL…",
+      "envVarInvalid": "Skipped {{names}}: names use A–Z, 0–9 and _, and cannot start with a digit.",
+      "scriptTabHint": "Tab inserts two spaces. Press Escape, then Tab, to leave the editor."
+    },
+    "import": {
+      "failed": "Couldn’t read that project’s setup.",
+      "title": "Import from {{project}}",
+      "sources": "Found in {{sources}}.",
+      "noSources": "No setup config was found in this project.",
+      "nothing": "Nothing new to import: the environment already has these settings.",
+      "addNames": "Add these variable names ({{total}})",
+      "useScript": "Use the suggested install script",
+      "replaceScript": "Replace the install script with the suggestion",
+      "diffAria": "Install script changes",
+      "added": "added: ",
+      "removed": "removed: ",
+      "cancel": "Cancel",
+      "apply": "Apply to draft"
+    },
+    "readOnlyAsk": "Ask an owner or admin to change the environment or start a build.",
+    "size": {
+      "label": "Sandbox size",
+      "large": "Large (8 vCPU · 16 GB)",
+      "standard": "Standard (4 vCPU · 8 GB)",
+      "rateNote": "Large uses sandbox hours at 2× the rate.",
+      "hint": "Used for builds and for cloud workspaces started from this environment. Large uses sandbox hours at 2× the rate."
+    },
+    "staleness": {
+      "rebuild": "Rebuild",
+      "depsChanged": "Dependencies changed in {{repo}} ({{files}}) since build #{{number}}",
+      "depsChangedGeneric": "Dependencies changed since build #{{number}}",
+      "configChanged": "You changed the environment since build #{{number}}",
+      "branchMovedInRepo_one": "{{branch}} in {{repo}} is {{count}} commit ahead of build #{{number}}",
+      "branchMovedInRepo_other": "{{branch}} in {{repo}} is {{count}} commits ahead of build #{{number}}",
+      "branchMoved_one": "{{branch}} is {{count}} commit ahead of build #{{number}}",
+      "branchMoved_other": "{{branch}} is {{count}} commits ahead of build #{{number}}",
+      "imageUpdated": "Orca’s base image was updated since build #{{number}} — rebuild to pick it up"
+    },
+    "step": {
+      "boot": "Start sandbox",
+      "clone": "Clone repositories",
+      "install": "Run install script",
+      "record": "Record environment",
+      "snapshot": "Save snapshot"
+    },
+    "status": {
+      "starting": "Starting",
+      "running": "Building",
+      "snapshotting": "Saving snapshot",
+      "succeeded": "Ready",
+      "failed": "Failed",
+      "canceled": "Canceled"
+    },
+    "error": {
+      "scriptFailed": "The install script stopped at a failing command.",
+      "provider": "Orca Cloud couldn’t start a sandbox. Try again in a few minutes.",
+      "cloneFailedPlain": "A repository couldn’t be cloned. Check that the Orca GitHub app can access it and the branch exists.",
+      "recordFailedPlain": "Orca couldn’t record the installed environment.",
+      "timeout": "The build ran past its time limit.",
+      "snapshotFailed": "Saving the snapshot failed.",
+      "runtimeRemoved": "The build sandbox was removed before it finished.",
+      "bootFailed": "The build sandbox failed to start.",
+      "bootTimeout": "The build sandbox took too long to start.",
+      "vmLost": "Orca lost contact with the build sandbox.",
+      "canceled": "The build was canceled.",
+      "unknownPlain": "Something went wrong during the build."
+    },
+    "failedAtStep": "Build #{{number}} failed at {{step}}.",
+    "failedPlain": "Build #{{number}} failed.",
+    "failedNoActive": "New workspaces start without a prebuilt environment until a build succeeds.",
+    "failedStillActive": "New workspaces still start from build #{{active}}."
   },
   "cloudShare": {
     "openFailed": {

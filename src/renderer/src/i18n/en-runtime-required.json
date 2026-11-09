@@ -1434,6 +1434,14 @@
       "manyOtherSites_other": "Read and change your data on {{hosts}} and {{count}} other sites"
     }
   },
+  "cloudEnvironment": {
+    "staleness": {
+      "branchMovedInRepo_one": "{{branch}} in {{repo}} is {{count}} commit ahead of build #{{number}}",
+      "branchMovedInRepo_other": "{{branch}} in {{repo}} is {{count}} commits ahead of build #{{number}}",
+      "branchMoved_one": "{{branch}} is {{count}} commit ahead of build #{{number}}",
+      "branchMoved_other": "{{branch}} is {{count}} commits ahead of build #{{number}}"
+    }
+  },
   "cloudSecrets": {
     "paste": {
       "blocked_one": "{{count}} needs a fix and will be skipped",

@@ -32,6 +32,8 @@ const STARTING_STUCK_MS = 5 * 60_000
 const SNAPSHOTTING_STUCK_MS = 3 * 60_000
 /** A secret value shorter than this is not redacted from logs (too likely to match ordinary text). */
 const MIN_REDACTED_SECRET = 6
+/** Event-stream keepalive; desktop watchers treat ~90 s of silence as a dead connection. */
+const HEARTBEAT_MS = 20_000
 /** Succeeded builds whose snapshot is kept (rollback window); older ones keep their record and log. */
 export const KEPT_BUILDS = 5
 const MAX_LOG_BYTES = 2 * 1024 * 1024
@@ -726,6 +728,11 @@ export function streamBuildEvents(
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
   const writer = writable.getWriter()
   const send = (event: unknown) => writer.write(encoder.encode(`${JSON.stringify(event)}\n`))
+  // A quiet step (snapshot, a long compile) prints nothing for minutes: a heartbeat tells watchers the
+  // stream is alive so they don't reconnect (and replay the whole log) for nothing.
+  const heartbeat = setInterval(() => {
+    send({ type: 'heartbeat', at: deps.now() }).catch(() => clearInterval(heartbeat))
+  }, HEARTBEAT_MS)
   const run = async () => {
     let row = initial
     await send({ type: 'build', build: await view(row) })
@@ -809,7 +816,10 @@ export function streamBuildEvents(
       log('environment_build_stream_failed', { buildId: initial.id, error: String(error).slice(0, 200) })
       return send({ type: 'error', error: 'stream_failed' }).catch(() => undefined)
     })
-    .finally(() => writer.close().catch(() => undefined))
+    .finally(() => {
+      clearInterval(heartbeat)
+      return writer.close().catch(() => undefined)
+    })
   return readable
 }
 

@@ -34,6 +34,7 @@ import {
 import { OrcadWorkVerdictParamsSchema } from '../hosted-sandbox/hosted-session-events'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { OrcaCloudEnrollDeviceParamsSchema } from '../orca-cloud-device-enrollment-contract'
+import { OrcadDiskUsageParamsSchema } from '../orcad-disk-usage'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
@@ -182,6 +183,12 @@ import {
   SaveImageAsTempFile,
   StartImageUpload
 } from './clipboard-params'
+import {
+  CloudEnvironmentFollowBuildParams,
+  CloudEnvironmentSelectParams,
+  CloudEnvironmentSetInstallScriptParams,
+  CloudEnvironmentShowParams
+} from './cloud-environment-params'
 import { CloudSshParams } from './cloud-ssh-params'
 import { ComputerCapabilitiesParams, ComputerPermissionsStatusParams } from './computer-params'
 import {
@@ -1004,6 +1011,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'clipboard.commitImageUpload': CommitImageUpload,
   'clipboard.saveImageAsTempFile': SaveImageAsTempFile,
   'clipboard.startImageUpload': StartImageUpload,
+  'cloudEnvironment.builds': CloudEnvironmentSelectParams,
+  'cloudEnvironment.followBuild': CloudEnvironmentFollowBuildParams,
+  'cloudEnvironment.setInstallScript': CloudEnvironmentSetInstallScriptParams,
+  'cloudEnvironment.show': CloudEnvironmentShowParams,
+  'cloudEnvironment.startBuild': CloudEnvironmentSelectParams,
   'cloudSsh.prepare': CloudSshParams,
   'cloudSsh.tunnel': CloudSshParams,
   'computer.capabilities': ComputerCapabilitiesParams,
@@ -1341,6 +1353,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
   'orcaCloud.enrollDevice': OrcaCloudEnrollDeviceParamsSchema,
+  'orcad.diskUsage': OrcadDiskUsageParamsSchema,
   'orcad.migration.abortCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.abortCatalogByReference': OrcadMigrationCatalogReferenceParams,
   'orcad.migration.catalogState': OrcadMigrationCatalogParams,

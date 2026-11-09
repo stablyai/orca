@@ -2,6 +2,7 @@ import { STATUS_METHODS } from './host-management/status'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
 import { ORCAD_WORK_VERDICT_METHODS } from './orcad/orcad-work-verdict-method'
+import { ORCAD_DISK_USAGE_METHODS } from './orcad/orcad-disk-usage-method'
 import { ORCAD_MIGRATION_METHODS } from './orcad/orcad-migration'
 import { SESSION_TERMINAL_SCROLLBACK_METHODS } from './terminal/session-terminal-scrollback'
 import { AI_VAULT_METHODS } from './history/ai-vault'
@@ -46,6 +47,7 @@ import { RECIPE_VM_WAKE_METHODS } from './host-management/recipe-vm-wake'
 import { ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS } from './orca-cloud/orca-cloud-device-enrollment'
 import { CLOUD_SSH_METHODS } from './cloud-ssh/cloud-ssh-methods'
 import { ENVIRONMENT_DOCTOR_METHODS } from './host-management/environment-doctor'
+import { CLOUD_ENVIRONMENT_METHODS_RPC } from './cloud-environments/cloud-environments'
 import { SPEECH_METHODS } from './speech/speech'
 import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
@@ -90,6 +92,7 @@ export const ALL_RPC_METHODS = [
   ...STATUS_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,
   ...ORCAD_WORK_VERDICT_METHODS,
+  ...ORCAD_DISK_USAGE_METHODS,
   ...ORCAD_MIGRATION_METHODS,
   ...SESSION_TERMINAL_SCROLLBACK_METHODS,
   ...AGENT_HOOK_METHODS,
@@ -147,6 +150,7 @@ export const ALL_RPC_METHODS = [
   ...ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS,
   ...CLOUD_SSH_METHODS,
   ...ENVIRONMENT_DOCTOR_METHODS,
+  ...CLOUD_ENVIRONMENT_METHODS_RPC,
   ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,
   ...LINK_PREVIEW_METHODS,

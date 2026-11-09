@@ -13,6 +13,7 @@ import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgr
 import { PlanBillingSection } from '../../../billing/PlanBillingSection'
 import { TeamSettingsLink } from '../../../billing/team/TeamSettingsLink'
 import { CloudSecretsSection } from '../../cloud-secrets/CloudSecretsSection'
+import { CloudEnvironmentSection } from '../../../cloud-environment/CloudEnvironmentSection'
 
 function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
@@ -140,6 +141,12 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           />
         ) : null}
         {connected ? <CloudSecretsSection orgId={authStatus?.cloud?.activeOrgId ?? null} /> : null}
+        {connected ? (
+          <CloudEnvironmentSection
+            orgId={authStatus?.cloud?.activeOrgId ?? null}
+            viewerUserId={authStatus?.cloud?.userId ?? null}
+          />
+        ) : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">
           <SettingsGroupHeader
