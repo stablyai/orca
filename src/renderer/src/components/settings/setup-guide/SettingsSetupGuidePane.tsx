@@ -10,6 +10,7 @@ import { FeatureWallSetupChecklist } from '../../feature-wall/FeatureWallSetupCh
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 import { Button } from '../../ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 async function saveChecklistDismissal(dismissed: boolean): Promise<boolean> {
   try {
@@ -29,6 +30,7 @@ async function saveChecklistDismissal(dismissed: boolean): Promise<boolean> {
 }
 
 export function SettingsSetupGuidePane(): React.JSX.Element {
+  const t = useTranslate()
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
@@ -92,7 +94,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
         <div className="flex max-w-md flex-col items-center gap-3 text-center">
           <EyeOff className="size-5 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.SettingsSetupGuidePane.checklistHiddenDescription',
               'The onboarding checklist is hidden. You can show it again whenever you need it.'
             )}
@@ -105,10 +107,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
             onClick={() => void handleChecklistDismissal(false)}
           >
             <RotateCcw />
-            {translate(
-              'auto.components.settings.SettingsSetupGuidePane.showChecklist',
-              'Show checklist'
-            )}
+            {t('auto.components.settings.SettingsSetupGuidePane.showChecklist', 'Show checklist')}
           </Button>
         </div>
       </div>
@@ -121,7 +120,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
         className="h-[min(740px,calc(100vh-14rem))] min-h-[540px]"
         role="status"
         aria-busy="true"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.settings.SettingsSetupGuidePane.loadingChecklist',
           'Loading onboarding checklist'
         )}
@@ -134,7 +133,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
       <div className="flex h-[min(740px,calc(100vh-14rem))] min-h-[540px] items-center justify-center px-7 py-6">
         <div className="flex max-w-md flex-col items-center gap-3 text-center">
           <p className="text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.SettingsSetupGuidePane.loadFailedDescription',
               'The onboarding checklist visibility could not be loaded.'
             )}
@@ -150,7 +149,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
             }}
           >
             <RefreshCw />
-            {translate('auto.components.settings.SettingsSetupGuidePane.retry', 'Retry')}
+            {t('auto.components.settings.SettingsSetupGuidePane.retry', 'Retry')}
           </Button>
         </div>
       </div>
@@ -168,10 +167,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
           onClick={() => void handleChecklistDismissal(true)}
         >
           <EyeOff />
-          {translate(
-            'auto.components.settings.SettingsSetupGuidePane.hideChecklist',
-            'Hide checklist'
-          )}
+          {t('auto.components.settings.SettingsSetupGuidePane.hideChecklist', 'Hide checklist')}
         </Button>
       </div>
       <div className="min-h-0 flex-1">
