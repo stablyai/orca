@@ -25,4 +25,15 @@ describe('resolveProviderChildEnv', () => {
 
     expect(childEnv).toEqual({ Path: 'C:\\shim;C:\\Windows\\System32' })
   })
+
+  it('selects the overlay PATH spelling Node will pass when the overlay has several', () => {
+    const childEnv = resolveProviderChildEnv(
+      { env: { Path: 'C:\\shim', PATH: 'C:\\configured;C:\\shim' }, envToDelete: [] },
+      { Path: 'C:\\inherited' },
+      'win32'
+    )
+
+    // Node sorts case variants, so PATH is the value the child actually receives.
+    expect(childEnv).toEqual({ PATH: 'C:\\configured;C:\\shim' })
+  })
 })
