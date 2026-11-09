@@ -7,10 +7,11 @@ import {
 } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import type { AppState } from '../types'
 import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import { readTabRowChanges } from '@/store/keyed-tab-row-changes'
 import {
   sameTerminalParkingTab,
   sameTerminalParkingTitleSlots,
-  sameTerminalParkingAssignments
+  sameTerminalParkingAssignmentChanges
 } from './terminal-parking-input-equality'
 import { sleepingAgentRecordIndex } from './sleeping-agent-record-index'
 import {
@@ -25,19 +26,10 @@ import {
   retireTerminalParkingInputs
 } from '@/components/terminal-pane/parking/terminal-parking-input-events'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-
-const SEAM_PARKING_TAB_FIELDS = [
-  'terminalLayoutsByTabId',
-  'ptyIdsByTabId',
-  'lastKnownRelayPtyIdByTabId',
-  'runtimePaneTitlesByTabId',
-  'pendingStartupByTabId'
-] as const
-const SEAM_PARKING_WORKSPACE_FIELDS = [
-  'layoutByWorktree',
-  'groupsByWorktree',
-  'activeGroupIdByWorktree'
-] as const
+import {
+  SEAM_PARKING_TAB_FIELDS,
+  SEAM_PARKING_WORKSPACE_FIELDS
+} from './terminal-parking-input-fields'
 const tabIdsByPtyId = new Map<string, Set<string>>()
 const ptyIdsByTabId = new Map<string, Set<string>>()
 const tabIdsByEnvironmentId = new Map<string, Set<string>>()
@@ -156,14 +148,18 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
   if (previous?.unifiedTabsByWorktree !== state.unifiedTabsByWorktree) {
     const before = previous?.unifiedTabsByWorktree
     const after = state.unifiedTabsByWorktree
-    for (const id of before ? diffUnknownParkingRecordKeys(before, after) : Object.keys(after)) {
+    const rows = before ? readTabRowChanges(after, before) : 'unknown'
+    const keys = rows === 'unknown' ? undefined : rows?.keys()
+    for (const id of keys ??
+      (before ? diffUnknownParkingRecordKeys(before, after) : Object.keys(after))) {
       if (
         !dirty.has(id) &&
         before?.[id] !== after[id] &&
-        !sameTerminalParkingAssignments(
+        !sameTerminalParkingAssignmentChanges(
           before?.[id] ?? [],
           after[id] ?? [],
-          state.groupsByWorktree[id] ?? []
+          state.groupsByWorktree[id] ?? [],
+          rows === 'unknown' ? 'unknown' : (rows?.get(id)?.values() ?? [])
         )
       ) {
         dirty.add(id)

@@ -1,6 +1,7 @@
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../types'
+import type { TabRowChange } from '../keyed-tab-row-changes'
 
 export function sameTerminalParkingTab(
   previous: TerminalTab | undefined,
@@ -28,6 +29,39 @@ export function sameTerminalParkingTitleSlots(
   const before = Object.keys(previous ?? {})
   const after = Object.keys(next ?? {})
   return before.length === after.length && before.every((key) => key in (next ?? {}))
+}
+
+function readTerminalParkingAssignmentChanges(
+  changes: Iterable<TabRowChange<Tab>>
+): 'unchanged' | 'unknown' {
+  for (const change of changes) {
+    const { before, after } = change
+    if (before?.contentType !== 'terminal' && after?.contentType !== 'terminal') {
+      continue
+    }
+    if (
+      before?.contentType !== after?.contentType ||
+      before?.entityId !== after?.entityId ||
+      before?.groupId !== after?.groupId ||
+      before?.id !== after?.id
+    ) {
+      // An unchanged duplicate entity may still own the effective assignment.
+      return 'unknown'
+    }
+  }
+  return 'unchanged'
+}
+
+export function sameTerminalParkingAssignmentChanges(
+  previous: readonly Tab[],
+  next: readonly Tab[],
+  groups: readonly TabGroup[],
+  changes: Iterable<TabRowChange<Tab>> | 'unknown'
+): boolean {
+  return (
+    (changes !== 'unknown' && readTerminalParkingAssignmentChanges(changes) === 'unchanged') ||
+    sameTerminalParkingAssignments(previous, next, groups)
+  )
 }
 
 export function sameTerminalParkingAssignments(
