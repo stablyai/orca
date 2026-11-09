@@ -114,6 +114,7 @@ async function handleStop(streamId: string): Promise<void> {
 // A cancel answers at once, even during Finish, and the stream's queued audio is skipped rather than decoded.
 function cancelStream(streamId: string): void {
   discarded.add(streamId)
+  recognizer?.cancel(streamId)
   const input = audioPorts.get(streamId)
   audioPorts.delete(streamId)
   input?.port.close()
