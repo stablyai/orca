@@ -12,7 +12,7 @@ export class NativeSpeech {
   private revision = 0;
   private committed = '';
   private tentative = '';
-  private failure: string | null = null;
+  private failure: string | null = 'failed';
   private pending = new Uint8Array(0);
   private starting: ((ready: boolean) => void) | null = null;
   private finishing: ((ready: boolean) => void) | null = null;
@@ -21,6 +21,10 @@ export class NativeSpeech {
   private startRequested = false;
 
   constructor(context: common.UIAbilityContext) { this.context = context; }
+
+  canCapture(): boolean {
+    return !this.closed && this.sessionId.length > 0 && !this.starting && !this.finishing && !this.failure;
+  }
 
   private async engineFor(locale: string): Promise<speechRecognizer.SpeechRecognitionEngine | null> {
     if (!/^zh(?:-Hans)?(?:-CN)?$/i.test(locale) || !canIUse('SystemCapability.AI.SpeechRecognizer')) { return null; }
@@ -107,8 +111,9 @@ export class NativeSpeech {
       } catch (e) { this.starting(false); this.starting = null; }
     });
     this.startRequested = false;
-    if (!ready && this.sessionId === id) { this.cancel(); }
-    return { started: ready, locale: 'zh-CN', reason: ready ? null : 'failed' };
+    let started = ready && requestGeneration === this.generation && this.sessionId === id;
+    if (!started && this.sessionId === id) { this.cancel(); }
+    return { started: started, locale: 'zh-CN', reason: started ? null : 'failed' };
   }
 
   feed(bytes: Uint8Array): void {
@@ -123,10 +128,12 @@ export class NativeSpeech {
   }
 
   private async finish(): Promise<ESObject> {
+    if (this.finishing) { return { text: null, failure: 'failed' }; }
     if (!this.engine || this.sessionId.length === 0) {
-      return { text: this.failure ? null : this.committed, failure: this.failure };
+      return this.takeTranscript();
     }
     let engine = this.engine; let id = this.sessionId;
+    let generation = this.generation;
     if (this.pending.length > 0) {
       let tail = new Uint8Array(640); tail.set(this.pending); this.pending = new Uint8Array(0);
       try { engine.writeAudio(id, tail); } catch (e) { this.failure = 'failed'; }
@@ -136,8 +143,19 @@ export class NativeSpeech {
       this.finishing = (success: boolean): void => { clearTimeout(timer); resolve(success); };
       try { engine.finish(id); } catch (e) { this.finishing(false); this.finishing = null; }
     });
-    if (!complete && this.sessionId === id) { this.failure = 'failed'; this.cancel(); }
-    return { text: this.failure ? null : this.committed, failure: this.failure };
+    if (generation !== this.generation) { return { text: null, failure: 'failed' }; }
+    if (!complete && this.sessionId === id) { this.cancel(); }
+    return this.takeTranscript();
+  }
+
+  private clearTranscript(): void {
+    this.committed = ''; this.tentative = ''; this.revision = 0; this.failure = 'failed';
+  }
+
+  private takeTranscript(): ESObject {
+    let result: ESObject = { text: this.failure ? null : this.committed, failure: this.failure };
+    this.clearTranscript();
+    return result;
   }
 
   cancel(): void {
@@ -145,6 +163,7 @@ export class NativeSpeech {
     let id = this.sessionId; this.sessionId = '';
     if (this.engine && id.length > 0) { try { this.engine.cancel(id); } catch (e) { } }
     this.pending = new Uint8Array(0);
+    this.clearTranscript();
     if (this.starting) { let done = this.starting; this.starting = null; done(false); }
     if (this.finishing) { let done = this.finishing; this.finishing = null; done(false); }
   }

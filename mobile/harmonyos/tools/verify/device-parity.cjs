@@ -86,6 +86,9 @@ test('speech finishes the captured PCM tail and returns the actual local transcr
   assert.equal(result.text, 'recognized locally')
   assert.equal(result.failure, null)
   assert.deepEqual(engine.samples[0].slice(0, 5), [1, 2, 3, 0, 0])
+  const repeated = await speech.serve({ action: 'finish' })
+  assert.equal(repeated.text, null)
+  assert.equal(repeated.failure, 'failed')
   speech.dispose()
 })
 
@@ -862,6 +865,7 @@ function microphoneBindings(capturer, recordingWindow) {
 
 test('phone-only audio reaches the local recognizer while the page receives no samples', async () => {
   let read
+  let armed = false
   const localAudio = []
   const device = deviceHarness({
     ...microphoneBindings(
@@ -883,13 +887,20 @@ test('phone-only audio reaches the local recognizer while the page receives no s
     ),
     readDictationEngine: async () => 'phone',
     NativeSpeech: class {
+      canCapture() {
+        return armed
+      }
       feed(samples) {
         localAudio.push(Array.from(samples))
       }
       dispose() {}
     }
   })
-  await device.serve('native.audio.start', { sampleRate: 16000 })
+  const unavailable = await device.serve('native.audio.start', { sampleRate: 16000 })
+  assert.equal(unavailable.started, false)
+  assert.equal(unavailable.permission, 'granted')
+  armed = true
+  assert.equal((await device.serve('native.audio.start', { sampleRate: 16000 })).started, true)
   read(Uint8Array.from([3, 1, 4, 1]).buffer)
   assert.deepEqual(localAudio, [[3, 1, 4, 1]])
   assert.equal((await device.serve('native.audio.read', { maxBytes: 128 })).base64, '')

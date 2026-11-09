@@ -204,12 +204,15 @@ export class NativeDevice {
     try {
       let phoneOnly = await readDictationEngine(this.context) === DICTATION_ENGINE_ONDEVICE;
       if (this.disposed || generation !== this.generation) { throw new Error('Capture cancelled'); }
+      let unavailable: Record<string, Object> = { 'started': false, 'sampleRate': 16000, 'permission': 'granted' };
+      if (phoneOnly && !this.speech.canCapture()) { return unavailable; }
       let permission = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(this.context, ['ohos.permission.MICROPHONE']);
       if (permission.authResults[0] !== 0) {
         this.speech.cancel();
         let denied: Record<string, Object> = { 'started': false, 'sampleRate': 16000, 'permission': 'denied' }; return denied;
       }
       if (this.disposed || generation !== this.generation) { throw new Error('Capture cancelled'); }
+      if (phoneOnly && !this.speech.canCapture()) { return unavailable; }
       let options: audio.AudioCapturerOptions = {
         streamInfo: { samplingRate: audio.AudioSamplingRate.SAMPLE_RATE_16000, channels: audio.AudioChannel.CHANNEL_1,
           sampleFormat: audio.AudioSampleFormat.SAMPLE_FORMAT_S16LE, encodingType: audio.AudioEncodingType.ENCODING_TYPE_RAW },
@@ -227,6 +230,7 @@ export class NativeDevice {
         try { await recordingWindow.setWindowKeepScreenOn(previousKeepScreenOn); } catch (e) { }
         await this.stopCapture(); throw new Error('Capture cancelled');
       }
+      if (phoneOnly && !this.speech.canCapture()) { await this.stopCapture(); return unavailable; }
       this.pcm = new Uint8Array(0); this.dropped = 0; this.interruption = null;
       this.recording = true;
       capturer.on('readData', (data: ArrayBuffer): void => {
