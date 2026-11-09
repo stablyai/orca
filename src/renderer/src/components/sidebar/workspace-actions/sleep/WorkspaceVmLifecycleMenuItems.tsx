@@ -44,9 +44,8 @@ export function getWorkspaceVmLifecycleAction(
 
 /**
  * How Suspend VM reaches the VM. It never suspends under live sessions: Sleep stops them and
- * then suspends the VM. With only children active and this workspace idle, the subtree Sleep
- * leaves the VM up (the VM is suspended through its own workspace), so a second Suspend VM,
- * with nothing left open, suspends it directly.
+ * then suspends the VM. With active children, this workspace sleeps with them (even idle), so
+ * its VM suspends once their sessions have stopped.
  */
 export function getVmSuspendRoute(args: {
   hasActiveDescendants: boolean

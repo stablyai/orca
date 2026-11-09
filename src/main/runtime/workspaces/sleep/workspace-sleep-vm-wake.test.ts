@@ -179,6 +179,21 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     expect(order).toEqual(['resume'])
   })
 
+  it('runs one suspend for a Suspend VM chosen twice before the first finishes', async () => {
+    const suspending = gate()
+    const suspendVm = vi.fn(async () => {
+      await suspending.opened
+    })
+    const workspaceSleep = coordinator({ suspendVm, resumeVm: async () => null })
+
+    const first = workspaceSleep.suspendVm(WORKTREE_ID)
+    const second = workspaceSleep.suspendVm(WORKTREE_ID)
+    suspending.open()
+    await Promise.all([first, second])
+
+    expect(suspendVm).toHaveBeenCalledTimes(1)
+  })
+
   it('skips Suspend VM for a workspace without a VM', async () => {
     const suspendVm = vi.fn(async () => {})
     const workspaceSleep = coordinator({ suspendVm, resumeVm: async () => null })

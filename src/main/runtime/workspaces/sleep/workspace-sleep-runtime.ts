@@ -217,6 +217,12 @@ export class WorkspaceSleepCoordinator {
     if (!platform?.ownsVm(worktreeId)) {
       return Promise.resolve()
     }
+    // A second Suspend VM while one is queued or running would rerun the recipe's suspend on a
+    // VM already going to sleep.
+    const pending = (this.pendingVmOperations.get(worktreeId) ?? []).at(-1)
+    if (pending?.kind === 'suspend') {
+      return Promise.resolve()
+    }
     // Opening the workspace while this waits its turn keeps the VM up, as it does for a Sleep.
     const at = this.reopenings.get(worktreeId) ?? 0
     return this.queueVmSuspend(

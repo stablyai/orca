@@ -48,6 +48,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleRemoveParentLink,
     handleRename,
     handleSleepSubtree,
+    handleSleepSubtreeWithVm,
     handleTogglePin,
     handleToggleRead,
     hasAnyContextLineage,
@@ -157,7 +158,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               hasActiveDescendants={subtreeSleepableWorktrees.some(
                 (target) => target.id !== worktree.id
               )}
-              onSleepSubtree={handleSleepSubtree}
+              onSleepSubtree={handleSleepSubtreeWithVm}
               sleepItems={sleepItems}
               replacesSleep={lineageDescendantCount === 0}
             />

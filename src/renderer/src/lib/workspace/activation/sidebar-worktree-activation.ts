@@ -8,6 +8,7 @@ import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { EphemeralVmWorkspaceLifecycleResult } from '../../../../../shared/ephemeral-vm-runtimes'
 import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { ephemeralVmFailureFromError } from '../../../../../shared/ephemeral-vm-failure-copy'
 
 /** Coded failures render through the catalog; a thrown IPC error only has its message. */
 async function settleLifecycleCall(
@@ -16,7 +17,7 @@ async function settleLifecycleCall(
   try {
     return await call
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    return { ok: false, ...ephemeralVmFailureFromError(error) }
   }
 }
 
@@ -111,4 +112,13 @@ export async function suspendEphemeralVmWorkspace(worktreeId: string): Promise<v
     .getState()
     .refreshEphemeralVmRuntimes()
     .catch(() => undefined)
+  // The host's last status still reads reachable; re-probe so the header shows Suspended.
+  const environmentId =
+    store.getState().ephemeralVmRuntimesByWorkspaceId[worktreeId]?.runtimeEnvironmentId
+  if (environmentId) {
+    await store
+      .getState()
+      .refreshRuntimeEnvironmentStatus(environmentId)
+      .catch(() => undefined)
+  }
 }

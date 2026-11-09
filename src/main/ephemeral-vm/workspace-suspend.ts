@@ -15,9 +15,7 @@ export async function suspendEphemeralVmWorkspace(
 ): Promise<void> {
   const userDataPath = app.getPath('userData')
   const runtime = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
-  // A second Suspend VM queued behind the first finds the VM asleep; rerunning the recipe's
-  // suspend on it would fail and mark a sleeping VM suspend_failed.
-  if (!runtime || runtime.status === 'suspended') {
+  if (!runtime) {
     return
   }
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)

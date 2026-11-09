@@ -472,10 +472,6 @@ describe('registerEphemeralVmHandlers', () => {
     expect(await suspend()).toEqual({ ok: true, runtime: null })
     // A successful suspend clears the earlier suspend failure from the record.
     expect(listEphemeralVmRuntimes(userDataPath)[0]?.lifecycleLastErrorCode).toBeUndefined()
-    // A second Suspend VM queued behind the first finds the VM asleep and runs no recipe step.
-    writeFileSync(join(repoPath, 'fail-suspend.txt'), '')
-    expect(await suspend()).toEqual({ ok: true, runtime: null })
-    expect(listEphemeralVmRuntimes(userDataPath)[0]?.status).toBe('suspended')
 
     const resumeFailed = await toWorkspaceLifecycleResult(() =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume reads only getRepo and getRepos, which makeStore provides.
