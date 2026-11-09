@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { GuardrailError, consumeCreateToken } from '../guardrails'
 import type { LifecycleDeps } from '../lifecycle'
 import { AGENTS } from './vm-agent'
+import { allowed, authorize, canSee, isOrgAdmin, isWorkspaceOwner } from './access'
 import { ApiError, actorOf, authenticateApi, isAdmin, requireAdmin, requireScope, scopesForRole, type ApiCaller } from './caller'
 import { auditCaller, auditView, consumeRate, listAudit, rateHeaders, RateLimitedError, type RateLimit } from './audit'
 import { API_SCOPES, ADMIN_SCOPES, apiKeyView, getApiKey, listApiKeys, mintApiKey, revokeApiKey, type ApiScope } from './keys'
@@ -108,12 +109,6 @@ function requireLife(ctx: ApiContext): LifecycleDeps {
   return ctx.life
 }
 
-/** Workspace tokens see their own VM and the siblings it created; everyone else sees the account. */
-function assertVisible(caller: ApiCaller, row: WorkspaceRow): void {
-  if (caller.via === 'workspace' && row.id !== caller.sandboxId && row.origin_ref !== caller.sandboxId) {
-    throw new ApiError(404, 'not_found')
-  }
-}
 
 function originFor(caller: ApiCaller): { origin: WorkspaceOrigin; originRef: string | null } {
   if (caller.via === 'workspace') {
@@ -351,9 +346,15 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         includeArchived: include.has('archived'),
         projectId: url.searchParams.get('projectId') ?? undefined,
         ...(caller.via === 'workspace' ? { originRef: caller.sandboxId } : {}),
-        limit: 200
+        limit: 500
       })
-      return json({ workspaces: rows.map(workspaceView) })
+      // Default: yours plus team-visible ones. `scope=all` (owners/admins): every workspace's metadata.
+      const scopeAll = url.searchParams.get('scope') === 'all'
+      if (scopeAll && !isOrgAdmin(caller)) {
+        throw new ApiError(403, 'forbidden', 'admin_required')
+      }
+      const visible = rows.filter((row) => (scopeAll ? allowed(caller, row, 'read') : canSee(caller, row)))
+      return json({ workspaces: visible.slice(0, 200).map(workspaceView) })
     }
     if (!id && method === 'POST') {
       requireScope(caller, 'workspaces:write')
@@ -388,10 +389,11 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
     }
     if (id) {
       const row = await getWorkspace(ctx.db, caller.accountId, id)
-      assertVisible(caller, row)
+      authorize(caller, row, 'read')
       const life = () => requireLife(ctx)
       const mutate = async (action: string, run: () => Promise<WorkspaceRow>) => {
         requireScope(caller, 'workspaces:write')
+        authorize(caller, row, action === 'wake' ? 'owner' : 'manage')
         if (caller.via === 'workspace' && row.id === caller.sandboxId) {
           // An agent must not put its own VM to sleep or delete it from under itself.
           throw new ApiError(403, 'forbidden', 'own_workspace')
@@ -418,6 +420,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         }
         // Every wake source shares W2's single-flight wake: idempotent, `?wait=30s` long-polls.
         requireScope(caller, 'workspaces:write')
+        authorize(caller, row, 'open')
         const started = performance.now()
         const answer = await wakeSandbox(life(), row, {
           // API callers expect the VM up when wake answers: wait the full 30 s unless `?wait=` says otherwise.
@@ -426,13 +429,15 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         })
         await auditCaller(ctx.db, caller, { action: 'workspace.wake', targetType: 'workspace', targetId: row.id, detail: { ms: Math.round(performance.now() - started), state: answer.state } }, ctx.now())
         const fresh = (await getWorkspace(ctx.db, caller.accountId, id)) ?? row
-        return json({ workspace: workspaceView(fresh), ...answer })
+        // A teammate may wake a team workspace but never gets its connection endpoint.
+        return json({ workspace: workspaceView(fresh), ...answer, ...(isWorkspaceOwner(caller, row) ? {} : { endpoint: null }) })
       }
       if (sub === 'archive' && method === 'POST') {
         return mutate('archive', () => archiveWorkspace(life(), row))
       }
       if (sub === 'sessions' && !subId && method === 'GET') {
         requireScope(caller, 'workspaces:read')
+        authorize(caller, row, 'open')
         if (row.status !== 'running' || !row.session_id) {
           return json({ workspaceStatus: workspaceView(row).status, sessions: [] })
         }
@@ -440,6 +445,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       }
       if (sub === 'sessions' && subId && method === 'GET') {
         requireScope(caller, 'workspaces:read')
+        authorize(caller, row, 'owner')
         if (!/^term_[A-Za-z0-9-]{1,80}$/.test(subId)) {
           throw new ApiError(404, 'not_found')
         }
@@ -450,10 +456,12 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       }
       if (sub === 'messages' && !subId && method === 'GET') {
         requireScope(caller, 'workspaces:read')
+        authorize(caller, row, 'open')
         return json({ messages: (await listMessages(ctx.db, row.id, 50)).map(messageView) })
       }
       if (sub === 'messages' && subId && method === 'GET') {
         requireScope(caller, 'workspaces:read')
+        authorize(caller, row, 'open')
         const message = await getMessage(ctx.db, subId)
         if (!message || message.sandbox_id !== row.id) {
           throw new ApiError(404, 'not_found')
@@ -462,6 +470,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       }
       if (sub === 'messages' && !subId && method === 'POST') {
         requireScope(caller, 'messages:write')
+        authorize(caller, row, 'open')
         const life = requireLife(ctx)
         await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
         const body = parse(MessageBody, await ctx.readJson())
