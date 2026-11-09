@@ -64,7 +64,7 @@ Affected tests follow Vitest's static import graph, so run suites explicitly for
 
 ## Pull Requests
 
-Fill in every section of [`.github/pull_request_template.md`](./pull_request_template.md): an ELI5, what changed and why, a linked issue (required for outside contributors), before/after screenshots or videos for UI changes (or `N/A` with a reason), how you tested it, the risk, and under Review a short summary from your AI coding agent covering cross-platform, SSH/remote, agent and integration compatibility, performance, UI quality, and security. Keep each PR small and focused on one topic.
+Fill in every section of [`.github/pull_request_template.md`](./pull_request_template.md): an ELI5, what changed and why, a linked issue (required for outside contributors), a before and after (screenshots or videos) for any UI or behavior change (only if there is truly no visual or interaction change, write exactly `N/A` and briefly say why), how you tested it, the risk, and under Review a short summary from your AI coding agent covering cross-platform, SSH/remote, agent and integration compatibility, performance, UI quality, and security. Keep each PR small and focused on one topic.
 
 Version bumps, tags, and releases are maintainer-managed. Do not include release version changes unless a maintainer asks. Maintainers: see [`docs/releasing.md`](../docs/releasing.md).
 
