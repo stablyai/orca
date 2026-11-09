@@ -11,6 +11,7 @@ import {
 } from '../listing/visible-worktrees'
 import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
+import { publishSidebarSelection } from './published-sidebar-selection'
 
 const getSidebarContainer = (): Element | null =>
   document.querySelector('[data-worktree-sidebar-container]')
@@ -43,6 +44,11 @@ export function useSidebarWorktreeSelection(args: {
       selectItemForContextMenu(worktree),
     [selectItemForContextMenu]
   )
+
+  useLayoutEffect(() => {
+    publishSidebarSelection(selection.selectedItems)
+    return () => publishSidebarSelection([])
+  }, [selection.selectedItems])
 
   // Why layout effect: the Cmd/Ctrl+1–9 handler can fire right after commit; publishing after paint would leave the shortcut cache stale.
   useLayoutEffect(() => {

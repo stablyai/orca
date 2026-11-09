@@ -8,10 +8,12 @@ import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-quali
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { collectHostTwinPurgeScopes } from '@/store/slices/worktrees/teardown/host-twin-purge-scopes'
 
+type SleepWorktreeRef = Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+
 /** Sleeping a workspace ID also sleeps its host twins; collect the additional hosts for confirmation. */
-export function collectTwinHostsAlsoSlept(
+function collectTwinHostsAlsoSlept(
   state: AppState,
-  worktrees: readonly Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>[]
+  worktrees: readonly SleepWorktreeRef[]
 ): ExecutionHostId[] {
   // Why: an unstamped row is this app's copy, as the listing and the purge read it.
   const targets = worktrees.map((worktree) =>
@@ -33,4 +35,21 @@ export function collectTwinHostsAlsoSlept(
     }
   }
   return [...alsoSlept]
+}
+
+/** Sleep now, or confirm first when host twins the user didn't pick would sleep too. */
+export function requestWorkspaceSleep(args: {
+  state: AppState
+  openModal: AppState['openModal']
+  worktrees: readonly SleepWorktreeRef[]
+  sleep: (worktreeIds: string[]) => void
+}): void {
+  const worktreeIds = args.worktrees.map((worktree) => worktree.id)
+  // Why confirm: a twin's copies share one id, so this also sleeps copies the user didn't pick.
+  const hostIds = collectTwinHostsAlsoSlept(args.state, args.worktrees)
+  if (hostIds.length > 0) {
+    args.openModal('confirm-sleep-twin', { worktreeIds, hostIds })
+    return
+  }
+  args.sleep(worktreeIds)
 }
