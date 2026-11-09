@@ -1,17 +1,18 @@
 import { getMainHttpClient } from '../network/http-client'
 import { resampleToRate } from './stt-audio-resample'
 import { replaceRetiredSpeechModelId } from './model-catalog'
+import {
+  CLOUD_TRANSCRIPTION_SAMPLE_RATE,
+  MAX_CLOUD_TRANSCRIPTION_SECONDS,
+  cloudTranscriptionTimeoutMs
+} from '../../shared/dictation-finish-deadlines'
 
 export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'openai-gpt-transcribe': 'gpt-transcribe'
 }
 
 export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
-const CLOUD_TRANSCRIPTION_SAMPLE_RATE = 16000
-const MAX_CLOUD_AUDIO_SAMPLES = 10 * 60 * CLOUD_TRANSCRIPTION_SAMPLE_RATE
-// Room to answer plus the upload time of the WAV at 1 Mbit/s (125 bytes per ms).
-const TRANSCRIPTION_RESPONSE_ALLOWANCE_MS = 30_000
-const UPLOAD_BYTES_PER_MS = 125
+const MAX_CLOUD_AUDIO_SAMPLES = MAX_CLOUD_TRANSCRIPTION_SECONDS * CLOUD_TRANSCRIPTION_SAMPLE_RATE
 
 export type OpenAiTranscriptionResponse = {
   text?: unknown
@@ -154,9 +155,7 @@ export class OpenAiTranscriptionSession {
     // A named WAV blob satisfies multipart uploads without temporary files.
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'dictation.wav')
 
-    const timeout = AbortSignal.timeout(
-      TRANSCRIPTION_RESPONSE_ALLOWANCE_MS + Math.ceil(wav.byteLength / UPLOAD_BYTES_PER_MS)
-    )
+    const timeout = AbortSignal.timeout(cloudTranscriptionTimeoutMs(this.audioSamples))
     try {
       return await this.upload(form, AbortSignal.any([this.abortController.signal, timeout]))
     } catch (error) {

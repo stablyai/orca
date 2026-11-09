@@ -8,7 +8,6 @@
     "../tests/e2e/terminal-agent-pane-launch.unit.test.ts",
     "../src/renderer/src/runtime/observed-provider-accounts.test.tsx",
     "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.observation.test.tsx",
-    "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
     "../src/renderer/src/env.d.ts",
     "../src/types/build-constants.d.ts",

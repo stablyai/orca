@@ -25,7 +25,6 @@
     "../src/renderer/src/runtime/project-grouping-owner-publication.test.tsx",
     "../src/renderer/src/store/repos/repo-removal.test.ts",
     "../src/renderer/src/web/project-grouping-authenticated-peers.test.ts",
-    "../src/renderer/src/components/status-bar/ClaudeSwitcherMenu.owner-lifetime.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts"
   ],
   "compilerOptions": {
