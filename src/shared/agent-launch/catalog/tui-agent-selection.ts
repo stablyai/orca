@@ -103,6 +103,16 @@ export function isTuiAgentEnabled(agent: TuiAgent, disabled?: Iterable<unknown> 
   return !normalizeDisabledTuiAgents(disabled).includes(agent)
 }
 
+// A disabled default resolves to null, never to another agent.
+export function resolveEnabledDefaultTuiAgent(
+  settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>
+): TuiAgent | null {
+  const preferred = settings.defaultTuiAgent
+  return isTuiAgent(preferred) && isTuiAgentEnabled(preferred, settings.disabledTuiAgents)
+    ? preferred
+    : null
+}
+
 export function buildAgentAvailabilitySettingsUpdate(
   settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>,
   id: TuiAgent,

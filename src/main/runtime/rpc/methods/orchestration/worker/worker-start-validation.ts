@@ -1,5 +1,6 @@
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { resolveEnabledDefaultTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { FederationAttachStartInput } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
@@ -180,6 +181,7 @@ function resolveNamedWorkerAgent(runtime: OrcaRuntimeService, name: string): Tui
   return name ? runtime.resolveOrchestrationAgentLauncher?.(name) : undefined
 }
 
+// Matches the new-workspace picker: a disabled default is never swapped for another agent.
 function resolveDefaultWorkerAgent(runtime: OrcaRuntimeService): TuiAgent | undefined {
-  return runtime.resolveDefaultOrchestrationAgent() ?? undefined
+  return resolveEnabledDefaultTuiAgent(runtime.getClientAgentLaunchSettings()) ?? undefined
 }

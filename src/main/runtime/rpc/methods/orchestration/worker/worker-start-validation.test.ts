@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrcaRuntimeWithGetTerminalInteractiveWait } from '../../../../terminal/wait/terminal-interactive-wait'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   prepareLocalWorkerStart,
   validateFederatedWorkerStartPlacement
@@ -14,19 +14,18 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
-// Why the real prototype methods: the Settings resolution under test lives on the runtime.
 function fakeRuntime(
   defaultTuiAgent: TuiAgent | 'blank' | null,
   disabledTuiAgents: TuiAgent[] = []
 ): { runtime: OrcaRuntimeService; resolveDefault: ReturnType<typeof vi.fn> } {
-  const proto = OrcaRuntimeWithGetTerminalInteractiveWait.prototype
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: validation reads only store settings and the two orchestration methods the fixture supplies.
+  const resolveDefault = vi.fn(() => ({ defaultTuiAgent, disabledTuiAgents }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: validation reads only agent-launch settings and the real launcher validator.
   const runtime = {
     store: { getSettings: () => ({ defaultTuiAgent, disabledTuiAgents }) },
-    validateOrchestrationAgentLauncher: proto.validateOrchestrationAgentLauncher
-  } as unknown as OrcaRuntimeService & { resolveDefaultOrchestrationAgent: () => TuiAgent | null }
-  const resolveDefault = vi.fn(() => proto.resolveDefaultOrchestrationAgent.call(runtime))
-  runtime.resolveDefaultOrchestrationAgent = resolveDefault
+    getClientAgentLaunchSettings: resolveDefault,
+    validateOrchestrationAgentLauncher:
+      OrcaRuntimeWithGetTerminalInteractiveWait.prototype.validateOrchestrationAgentLauncher
+  } as unknown as OrcaRuntimeService
   return { runtime, resolveDefault }
 }
 

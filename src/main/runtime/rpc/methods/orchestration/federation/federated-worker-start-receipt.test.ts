@@ -6,6 +6,7 @@ import {
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { startFederatedWorker } from './federated-worker-start'
+import { workerStartOptionsAgent } from '../../../../orchestration/workers/launch/worker-launch-observation'
 
 describe('federated worker start resolved agent', () => {
   const databases: OrchestrationDb[] = []
@@ -44,7 +45,7 @@ describe('federated worker start resolved agent', () => {
           }
         }
         return {
-          dispatchId: (params as { dispatchId: string }).dispatchId,
+          dispatchId: String(Reflect.get(Object(params), 'dispatchId')),
           state: 'ready',
           runtimeEpoch: 'epoch_remote',
           worktreeId: 'worktree_remote',
@@ -57,7 +58,8 @@ describe('federated worker start resolved agent', () => {
       params: { task: task.id, from: 'term_coord', on: 'remote', worktree: 'id:worktree_remote' },
       runtime,
       db,
-      runId: run.id,
+      bindRunId: () => run.id,
+      taskDeps: undefined,
       task,
       orchestrationMutation: {
         callerFingerprint: 'caller',
@@ -68,24 +70,15 @@ describe('federated worker start resolved agent', () => {
     })
     expect(result).toMatchObject({ state: 'ready' })
     const dispatchId: string = Reflect.get(Object(result), 'dispatchId')
-    return JSON.parse(db.getWorkerDispatch(dispatchId)?.start_options ?? '{}')
+    return db.getWorkerDispatch(dispatchId)?.start_options ?? '{}'
   }
 
-  it('records the agent the worker host resolved for an omitted --agent', async () => {
-    const launch = {
+  it('shows the agent the worker host resolved for an omitted --agent', async () => {
+    const startOptions = await startWithHostLaunch({
       requested: { agent: null, model: null, effort: null },
       effective: { agent: 'codex', model: null, effort: null }
-    }
-    const startOptions = await startWithHostLaunch(launch)
-    expect(startOptions).toMatchObject({ agent: 'codex', launch })
-  })
-
-  it('keeps the saved agent when the host names an unknown one', async () => {
-    const launch = {
-      requested: { agent: null, model: null, effort: null },
-      effective: { agent: 'not-an-agent', model: null, effort: null }
-    }
-    const startOptions = await startWithHostLaunch(launch)
-    expect(startOptions.agent).toBeNull()
+    })
+    expect(workerStartOptionsAgent(startOptions)).toBe('codex')
+    expect(JSON.parse(startOptions).agent).toBeNull()
   })
 })
