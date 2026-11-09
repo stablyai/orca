@@ -4,7 +4,7 @@ export const DICTATION_TEXT_BLOCK_SELECTOR =
 
 // Chinese and Japanese don't space words or after their full-width punctuation; Korean does, so Hangul spaces like Latin text.
 const UNSPACED_SCRIPT_CHAR_RE =
-  /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3000-\u303f\u30fc\uff00-\uffef]$/u
+  /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3000-\u303f\u30fb\u30fc\uff00-\uff9f\uffe0-\uffef]$/u
 const NO_SPACE_BEFORE_CHAR_RE = /^[,.;:!?%。，、！？；：）)\]}”’»]$/u
 const NO_SPACE_AFTER_CHAR_RE = /^[([{（《「『“‘«„]$/u
 const STRAIGHT_QUOTE_RE = /["'`]/
