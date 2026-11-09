@@ -8,7 +8,7 @@ const MAX_KEPT_SAMPLES = 10 * 60 * DICTATION_SAMPLE_RATE
 /** A session's audio, in memory only, so a failed transcription can be retried into the same place. */
 export type DictationKeptRecording = {
   chunks: Float32Array[]
-  /** False once the recording outgrew what we keep; a retry would then lose words. */
+  /** False once audio past the cap was dropped; a retry would then lose words. */
   complete: boolean
   target: DictationInsertionTarget | null
   deliver: DictationTranscriptDelivery
@@ -17,8 +17,13 @@ export type DictationKeptRecording = {
 export function createDictationKeptRecording(
   target: DictationInsertionTarget | null,
   deliver: DictationTranscriptDelivery
-): DictationKeptRecording & { keep: (samples: Float32Array) => void } {
+): DictationKeptRecording & {
+  keep: (samples: Float32Array) => void
+  /** The host stopped accepting audio at its own cap, so the first ten minutes are all it would hear. */
+  reachedHostLimit: () => void
+} {
   let samples = 0
+  let hostLimited = false
   const chunks: Float32Array[] = []
   const recording = {
     chunks,
@@ -26,16 +31,21 @@ export function createDictationKeptRecording(
     target,
     deliver,
     keep: (frame: Float32Array): void => {
-      if (!recording.complete) {
+      const room = MAX_KEPT_SAMPLES - samples
+      if (room <= 0) {
+        recording.complete = hostLimited
         return
       }
-      if (samples + frame.length > MAX_KEPT_SAMPLES) {
-        recording.complete = false
-        recording.chunks = []
-        return
+      const kept = frame.length > room ? frame.subarray(0, room) : frame
+      samples += kept.length
+      chunks.push(kept)
+      if (kept !== frame) {
+        recording.complete = hostLimited
       }
-      samples += frame.length
-      recording.chunks.push(frame)
+    },
+    reachedHostLimit: (): void => {
+      hostLimited = true
+      recording.complete = true
     }
   }
   return recording
@@ -49,32 +59,25 @@ export function canRetryDictation(recording: DictationKeptRecording | null): boo
 // Ten-second blocks keep a retried recording to a few hundred feeds instead of one per 100 ms frame.
 const RETRY_BLOCK_SAMPLES = 10 * DICTATION_SAMPLE_RATE
 
-function joinIntoBlocks(chunks: Float32Array[]): Float32Array[] {
-  const blocks: Float32Array[] = []
-  let pending: Float32Array[] = []
-  let pendingSamples = 0
-  const flush = (): void => {
-    const block = new Float32Array(pendingSamples)
+/** Built one block at a time, so a retry never holds a second copy of the whole recording. */
+function* joinIntoBlocks(chunks: Float32Array[]): Generator<Float32Array> {
+  let start = 0
+  while (start < chunks.length) {
+    let end = start
+    let blockSamples = 0
+    while (end < chunks.length && blockSamples < RETRY_BLOCK_SAMPLES) {
+      blockSamples += chunks[end].length
+      end += 1
+    }
+    const block = new Float32Array(blockSamples)
     let offset = 0
-    for (const chunk of pending) {
+    for (const chunk of chunks.slice(start, end)) {
       block.set(chunk, offset)
       offset += chunk.length
     }
-    blocks.push(block)
-    pending = []
-    pendingSamples = 0
+    yield block
+    start = end
   }
-  for (const chunk of chunks) {
-    pending.push(chunk)
-    pendingSamples += chunk.length
-    if (pendingSamples >= RETRY_BLOCK_SAMPLES) {
-      flush()
-    }
-  }
-  if (pendingSamples > 0) {
-    flush()
-  }
-  return blocks
 }
 
 /** Runs a kept recording through a new speech session; `finish` stops it and waits for its words to land. */

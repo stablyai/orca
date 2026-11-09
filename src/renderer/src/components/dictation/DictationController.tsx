@@ -234,6 +234,7 @@ export function DictationController() {
           }
         },
         onAudioLimitReached: () => {
+          kept.reachedHostLimit()
           if (isCurrent()) {
             showCloudLimitToast()
             void stopDictation()
@@ -308,7 +309,7 @@ export function DictationController() {
   const retryDictation = useCallback(async () => {
     const kept = keptRef.current
     const modelId = settings?.voice?.sttModel
-    if (!modelId || !kept || !canRetryDictation(kept)) {
+    if (sessionRef.current.phase !== 'error' || !modelId || !kept || !canRetryDictation(kept)) {
       return
     }
     const { run, sessionId } = dispatch({ type: 'retry' })
@@ -343,7 +344,9 @@ export function DictationController() {
     cancel: cancelDictation,
     toggle: toggleDictation,
     retry: () => void retryDictation(),
-    pillShown: () => isDictationPillShown(sessionRef.current.phase)
+    // The error pill leaves Esc to Settings and dialogs; only its ✕ discards the recording.
+    escCancels: () =>
+      isDictationPillShown(sessionRef.current.phase) && sessionRef.current.phase !== 'error'
   })
 
   useDictationSilenceStop(

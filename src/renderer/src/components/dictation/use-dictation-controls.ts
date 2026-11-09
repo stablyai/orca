@@ -7,7 +7,7 @@ import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 type DictationControlHandlers = Record<DictationControlAction, () => void> & {
-  pillShown: () => boolean
+  escCancels: () => boolean
 }
 
 /** Routes the shortcut, the pill's buttons, the composer mic and Esc to the session controller. */
@@ -17,7 +17,7 @@ export function useDictationControls(
   handlers: DictationControlHandlers
 ): void {
   const run = useEffectEvent((action: DictationControlAction) => handlers[action]())
-  const pillShown = useEffectEvent(() => handlers.pillShown())
+  const escCancels = useEffectEvent(() => handlers.escCancels())
   // A failed recording stays retryable even after voice is turned off in Settings.
   const enabled = voice?.enabled === true || phase !== 'idle'
   const mainShortcut = voice?.enabled === true && (voice.dictationMode ?? 'auto') !== 'hold'
@@ -40,10 +40,10 @@ export function useDictationControls(
     return () => document.removeEventListener(DICTATION_CONTROL_EVENT, handleControl)
   }, [enabled])
 
-  // Esc cancels while the pill shows and goes no further, so it can't also interrupt the agent.
+  // Esc cancels a dictation and goes no further, so it can't also interrupt the agent.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (!isPlainEscapeKeyEvent(event) || isImeOwnedKeyboardEvent(event) || !pillShown()) {
+      if (!isPlainEscapeKeyEvent(event) || isImeOwnedKeyboardEvent(event) || !escCancels()) {
         return
       }
       event.preventDefault()
