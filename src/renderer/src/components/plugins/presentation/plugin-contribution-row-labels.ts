@@ -53,14 +53,3 @@ export function fontContributionRows(
     tone: 'default'
   }))
 }
-
-export function taskSourceContributionRows(titles: readonly string[]): PluginContribution[] {
-  const detail = translate('auto.components.settings.PluginDetailSections.taskSource', 'Task list')
-  return titles.map((title, index) => ({
-    key: `taskSources:${index}`,
-    kind: 'taskSources',
-    title,
-    detail,
-    tone: 'default'
-  }))
-}

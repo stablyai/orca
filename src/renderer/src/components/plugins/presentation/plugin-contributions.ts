@@ -15,7 +15,6 @@ import {
   fontContributionRows,
   statusBarContributionRows,
   statusBarItemTitles,
-  taskSourceContributionRows,
   withMode
 } from './plugin-contribution-row-labels'
 
@@ -62,7 +61,7 @@ export type PluginContributionSource = {
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
   statusBarItems: readonly string[]
-  taskSources: readonly string[]
+  taskSources?: readonly string[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
@@ -76,8 +75,7 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   customEditors: [],
   vmRecipes: [],
   newFiles: [],
-  statusBarItems: [],
-  taskSources: []
+  statusBarItems: []
 }
 
 /** "recipes/ubuntu-dev.json" → "Ubuntu dev"; manifests name these files by path only. */
@@ -270,7 +268,6 @@ export function describePluginContributions(
       tone: 'default'
     })
   }
-  rows.push(...taskSourceContributionRows(source.taskSources))
   for (const [index, editor] of source.customEditors.entries()) {
     const label = t('auto.components.settings.PluginDetailSections.customEditor', 'Editor')
     const files = fileList(editor.extensions, editor.filenames)
