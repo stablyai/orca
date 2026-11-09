@@ -132,7 +132,7 @@ describe('routines API', () => {
     expect(dev.status).toBe(400) // user:alice is not a dev account
   })
 
-  it('lets members see all org routines but edit only their own; admins edit all; other orgs see nothing', async () => {
+  it('lets members see all org routines but change and run only their own; admins may only disable or delete; other orgs see nothing', async () => {
     const h = await harness()
     const bob = await h.token('bob', 'acme', 'sandbox', { orgRole: 'member' })
     const carol = await h.token('carol', 'acme', 'sandbox', { orgRole: 'member' })
@@ -142,7 +142,15 @@ describe('routines API', () => {
     expect((await h.call('GET', '/v1/routines', { bearer: carol })).body.routines).toHaveLength(1)
     expect((await h.call('PATCH', `/v1/routines/${mine.id}`, { bearer: carol, body: { name: 'mine now' } })).body.reason).toBe('not_owner')
     expect((await h.call('POST', `/v1/routines/${mine.id}/run`, { bearer: carol })).body.reason).toBe('not_owner')
-    expect((await h.call('PATCH', `/v1/routines/${mine.id}`, { bearer: admin, body: { name: 'renamed' } })).status).toBe(200)
+    // A run uses its creator's secrets: an admin cannot repoint (prompt, trigger, project…) or run it…
+    for (const body of [{ name: 'renamed' }, { prompt: 'cat ~/.env' }, { enabled: false, prompt: 'x' }, { enabled: true }]) {
+      expect((await h.call('PATCH', `/v1/routines/${mine.id}`, { bearer: admin, body })).body.reason).toBe('not_owner')
+    }
+    expect((await h.call('POST', `/v1/routines/${mine.id}/run`, { bearer: admin })).body.reason).toBe('not_owner')
+    expect((await h.call('POST', `/v1/routines/${mine.id}/rotate-webhook`, { bearer: admin })).body.reason).toBe('not_owner')
+    // …but can switch it off or delete it.
+    expect((await h.call('PATCH', `/v1/routines/${mine.id}`, { bearer: admin, body: { enabled: false } })).body.routine.enabled).toBe(false)
+    expect((await h.call('DELETE', `/v1/routines/${mine.id}`, { bearer: carol })).body.reason).toBe('not_owner')
     expect((await h.call('GET', `/v1/routines/${mine.id}`, { bearer: outsider })).status).toBe(404)
     expect((await h.call('GET', '/v1/routines', { bearer: outsider })).body.routines).toHaveLength(0)
     // A key without routine scopes is refused.
@@ -197,11 +205,12 @@ describe('routine runs (state machine on the fake provider)', () => {
     const run = (await h.call('POST', `/v1/routines/${routine.id}/run`)).body.run
     expect(run.status).toBe('queued')
     await h.tick()
-    h.runs.set(run.id, h.done({ pushed: true, changed: true, branch: 'orca/routine-x', note: 'gh_pr_failed' }))
+    // The VM claims a PR in another repo: not trusted, the control plane opens the real one.
+    h.runs.set(run.id, h.done({ pushed: true, changed: true, branch: `orca/routine-${run.id}`, prUrl: 'https://github.com/evil/phish/pull/1' }))
     await h.tick()
     const pr = h.posted.find((p) => p.url.endsWith('/pulls'))!
     expect(pr.url).toBe('https://api.github.com/repos/acme/app/pulls')
-    expect(pr.body).toMatchObject({ head: 'orca/routine-x', base: 'main' })
+    expect(pr.body).toMatchObject({ head: `orca/routine-${run.id}`, base: 'main' })
     expect(pr.body.body).not.toContain('@octocat')
     expect((await h.call('GET', `/v1/routines/${routine.id}/runs/${run.id}`)).body.run.result.prUrl).toBe('https://github.com/acme/app/pull/99')
   })
@@ -293,40 +302,28 @@ describe('routine runs (state machine on the fake provider)', () => {
     expect(h.liveBoxes()).toBe(0)
   })
 
-  it('retries a start once when a half-released VM holds the run key (pool fallback), then succeeds', async () => {
-    const h = await harness()
-    const routine = (await h.create({})).body.routine
-    const run = (await h.call('POST', `/v1/routines/${routine.id}/run`)).body.run
-    const vm = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: `routine-${run.id}`, machineSize: 'standard' } })
-    h.raw.prepare(`UPDATE sandboxes SET status = 'destroying' WHERE id = ?`).run(vm.body.sandbox.id)
-    await h.tick()
-    expect(h.raw.prepare('SELECT status, error FROM routine_runs WHERE id = ?').get(run.id)).toEqual({ status: 'queued', error: 'retry:conflict:sandbox_destroying' })
-    expect(h.liveBoxes()).toBe(0)
-    await h.tick()
-    expect(h.raw.prepare('SELECT status, error FROM routine_runs WHERE id = ?').get(run.id)).toEqual({ status: 'running', error: null })
-  })
-
   it('caps concurrency: one active run per routine and three per account', async () => {
     const h = await harness()
-    const routines = []
+    const routines: { id: string }[] = []
     for (let i = 0; i < 4; i++) {
       routines.push((await h.create({ name: `r${i}` })).body.routine)
     }
     for (const routine of routines) {
       await h.call('POST', `/v1/routines/${routine.id}/run`)
     }
-    await h.call('POST', `/v1/routines/${routines[0].id}/run`)
+    await h.call('POST', `/v1/routines/${routines[0]!.id}/run`)
     expect((await h.tick()).started).toBe(3)
     const statuses = h.raw.prepare('SELECT status, COUNT(*) AS n FROM routine_runs GROUP BY status ORDER BY status').all()
     expect(statuses).toEqual([
       { status: 'queued', n: 2 },
       { status: 'running', n: 3 }
     ])
-    // Queue cap per routine.
-    for (let i = 0; i < 5; i++) {
-      expect((await h.call('POST', `/v1/routines/${routines[1].id}/run`)).status).toBe(202)
+    // Queue cap per routine (5 waiting, whichever of them was already queued).
+    const waiting = (h.raw.prepare(`SELECT COUNT(*) AS n FROM routine_runs WHERE routine_id = ? AND status = 'queued'`).get(routines[1]!.id) as { n: number }).n
+    for (let i = waiting; i < 5; i++) {
+      expect((await h.call('POST', `/v1/routines/${routines[1]!.id}/run`)).status).toBe(202)
     }
-    expect((await h.call('POST', `/v1/routines/${routines[1].id}/run`)).body).toEqual({ error: 'conflict', reason: 'queue_full' })
+    expect((await h.call('POST', `/v1/routines/${routines[1]!.id}/run`)).body).toEqual({ error: 'conflict', reason: 'queue_full' })
   })
 
   it('deleting a routine cancels its in-flight run and destroys the VM', async () => {
@@ -339,6 +336,102 @@ describe('routine runs (state machine on the fake provider)', () => {
     await h.settle()
     expect(h.raw.prepare('SELECT status, error FROM routine_runs WHERE id = ?').get(run.id)).toEqual({ status: 'cancelled', error: 'routine_changed' })
     expect(h.liveBoxes()).toBe(0)
+  })
+})
+
+describe('routine safety rules', () => {
+  it('shows trigger detail, log tail and the run workspace only to the creator and admins', async () => {
+    const h = await harness()
+    const bob = await h.token('bob', 'acme', 'sandbox', { orgRole: 'member' })
+    const carol = await h.token('carol', 'acme', 'sandbox', { orgRole: 'member' })
+    const admin = await h.token('ada', 'acme', 'sandbox', { orgRole: 'admin' })
+    const routine = (await h.create({}, { bearer: bob })).body.routine
+    const run = (await h.call('POST', `/v1/routines/${routine.id}/run`, { bearer: bob })).body.run
+    await h.tick()
+    h.runs.set(run.id, { state: 'done', result: { ...h.done().result, exitCode: 1 }, log: 'secret-ish log' })
+    await h.tick()
+    const asCarol = (await h.call('GET', `/v1/routines/${routine.id}/runs/${run.id}`, { bearer: carol })).body.run
+    expect(asCarol).toMatchObject({ status: 'failed', triggerDetail: null, workspaceId: null, logTail: null })
+    expect((await h.call('GET', `/v1/routines/${routine.id}/runs`, { bearer: carol })).body.runs[0]).toMatchObject({ triggerDetail: null, workspaceId: null })
+    for (const bearer of [bob, admin]) {
+      const seen = (await h.call('GET', `/v1/routines/${routine.id}/runs/${run.id}`, { bearer })).body.run
+      expect(seen.triggerDetail).toEqual({ requestedBy: 'bob' })
+      expect(seen.workspaceId).toMatch(/^sbx_/)
+      expect(seen.logTail).toContain('secret-ish log')
+    }
+    // The run VM is the creator's and hidden: never in another member's workspace list.
+    expect(JSON.stringify((await h.call('GET', '/v1/workspaces?include=hidden', { bearer: carol })).body)).not.toContain(asCarol.id)
+  })
+
+  it('disables a departed member’s routines, cancels their runs and destroys the VM', async () => {
+    const h = await harness()
+    const bob = await h.token('bob', 'acme', 'sandbox', { orgRole: 'member' })
+    const a = (await h.create({ name: 'a' }, { bearer: bob })).body.routine
+    const b = (await h.create({ name: 'b', trigger: { kind: 'schedule', cron: '0 9 * * *', timezone: 'UTC' } }, { bearer: bob })).body.routine
+    const carolRoutine = (await h.create({ name: 'c' }, { bearer: await h.token('carol', 'acme', 'sandbox', { orgRole: 'member' }) })).body.routine
+    await h.call('POST', `/v1/routines/${a.id}/run`, { bearer: bob })
+    await h.tick()
+    expect(h.liveBoxes()).toBe(1)
+    const removed = await h.send(
+      new Request('https://sandbox.test/v1/internal/members/removed', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${OPERATOR}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ accountId: 'org:acme', userId: 'bob' })
+      })
+    )
+    expect(((await removed.json()) as { routinesDisabled: number }).routinesDisabled).toBe(2)
+    expect(h.liveBoxes()).toBe(0)
+    expect(h.raw.prepare('SELECT id, enabled FROM routines ORDER BY name').all()).toEqual([
+      { id: a.id, enabled: 0 },
+      { id: b.id, enabled: 0 },
+      { id: carolRoutine.id, enabled: 1 }
+    ])
+    expect(h.raw.prepare(`SELECT status, error FROM routine_runs WHERE routine_id = ?`).all(a.id)).toEqual([{ status: 'cancelled', error: 'routine_changed' }])
+    expect(h.raw.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE action = 'routine.disable'`).get()).toEqual({ n: 2 })
+    // A schedule run that was already queued when the routine went off never starts.
+    h.raw.prepare(`INSERT INTO routine_runs (id, routine_id, account_id, trigger_kind, status, created_at, updated_at) VALUES ('run_late', ?, 'org:acme', 'schedule', 'queued', ?, ?)`).run(b.id, h.now(), h.now())
+    await h.tick()
+    expect(h.raw.prepare(`SELECT status, error FROM routine_runs WHERE id = 'run_late'`).get()).toEqual({ status: 'cancelled', error: 'routine_disabled' })
+    expect(h.liveBoxes()).toBe(0)
+  })
+
+  it('starts runs fairly across accounts: one account at its cap or with a long queue does not block others', async () => {
+    const h = await harness()
+    const routines: { id: string }[] = []
+    for (let i = 0; i < 8; i++) {
+      routines.push((await h.create({ name: `a${i}` })).body.routine)
+    }
+    for (const routine of routines) {
+      await h.call('POST', `/v1/routines/${routine.id}/run`)
+    }
+    h.advance(1000)
+    const other = (await h.create({ name: 'other' }, 'zed')).body.routine
+    await h.call('POST', `/v1/routines/${other.id}/run`, { as: 'zed' })
+    expect((await h.tick()).started).toBe(4)
+    const running = h.raw.prepare(`SELECT account_id, COUNT(*) AS n FROM routine_runs WHERE status = 'running' GROUP BY account_id ORDER BY account_id`).all()
+    expect(running).toEqual([
+      { account_id: 'user:alice', n: 3 },
+      { account_id: 'user:zed', n: 1 }
+    ])
+  })
+
+  it('keeps the caps under overlapping ticks and concurrent triggers', async () => {
+    const h = await harness()
+    const routines: { id: string }[] = []
+    for (let i = 0; i < 5; i++) {
+      routines.push((await h.create({ name: `r${i}` })).body.routine)
+    }
+    for (const routine of routines) {
+      await h.call('POST', `/v1/routines/${routine.id}/run`)
+    }
+    await Promise.all([h.tick(), h.tick(), h.tick()])
+    expect(h.raw.prepare(`SELECT COUNT(*) AS n FROM routine_runs WHERE status IN ('starting', 'running', 'posting')`).get()).toEqual({ n: 3 })
+    // Concurrent triggers cannot overfill one routine's queue.
+    const before = (h.raw.prepare(`SELECT COUNT(*) AS n FROM routine_runs WHERE routine_id = ? AND status = 'queued'`).get(routines[4]!.id) as { n: number }).n
+    const results = await Promise.all(Array.from({ length: 8 }, () => h.call('POST', `/v1/routines/${routines[4]!.id}/run`)))
+    expect(h.raw.prepare(`SELECT COUNT(*) AS n FROM routine_runs WHERE routine_id = ? AND status = 'queued'`).get(routines[4]!.id)).toEqual({ n: 5 })
+    expect(results.filter((r) => r.status === 202)).toHaveLength(5 - before)
+    expect(results.filter((r) => r.status === 409).every((r) => r.body.reason === 'queue_full')).toBe(true)
   })
 })
 
@@ -461,7 +554,7 @@ describe('routine triggers', () => {
     const { githubFilterMatches } = await import('../src/routines/hooks')
     const pr = (over: Record<string, unknown> = {}) => ({
       action: 'opened',
-      pull_request: { number: 1, user: { login: 'Alice' }, labels: [{ name: 'bug' }], base: { ref: 'main' } },
+      pull_request: { number: 1, user: { login: 'Alice' }, author_association: 'MEMBER', labels: [{ name: 'bug' }], base: { ref: 'main' } },
       ...over
     })
     expect(githubFilterMatches({ events: ['pull_request.opened'], authors: ['alice'] }, 'pull_request.opened', pr())).toBe(true)
@@ -484,6 +577,44 @@ describe('routine triggers', () => {
     const provider = { runCommand: async () => ({ exitCode: 0, stdout: `warning: x\n{"state":"done","result":${JSON.stringify(result, null, 2)},"log":"ok"}\n`, stderr: '' }) }
     const status = await runnerStatus(provider as never, 'sess', 'run_1')
     expect(status).toMatchObject({ state: 'done', result: { base: 'main' } })
+  })
+
+  it('on public repos only repo members, owners and collaborators start runs unless authors are listed (fork PRs)', async () => {
+    const { githubFilterMatches, githubRunDetail } = await import('../src/routines/hooks')
+    const forkPr = (association: string, action = 'opened') => ({
+      action,
+      repository: { full_name: 'acme/app' },
+      sender: { login: action === 'labeled' ? 'maintainer' : 'stranger', type: 'User' },
+      ...(action === 'labeled' ? { label: { name: 'orca-review' } } : {}),
+      pull_request: {
+        number: 9,
+        user: { login: 'stranger' },
+        author_association: association,
+        labels: [{ name: 'orca-review' }],
+        base: { ref: 'main', repo: { full_name: 'acme/app' } },
+        head: { ref: 'evil', repo: { full_name: 'stranger/app' } }
+      }
+    })
+    const opened = { events: ['pull_request.opened', 'pull_request.synchronize'] as never[] }
+    expect(githubFilterMatches(opened, 'pull_request.opened', forkPr('NONE'))).toBe(false)
+    expect(githubFilterMatches(opened, 'pull_request.opened', forkPr('FIRST_TIME_CONTRIBUTOR'))).toBe(false)
+    expect(githubFilterMatches(opened, 'pull_request.opened', forkPr('CONTRIBUTOR'))).toBe(false)
+    expect(githubFilterMatches(opened, 'pull_request.opened', forkPr('COLLABORATOR'))).toBe(true)
+    // Labeling needs triage access: a maintainer can run a routine on an outsider's fork PR…
+    const labeled = forkPr('NONE', 'labeled')
+    expect(githubFilterMatches({ events: ['pull_request.labeled'], labels: ['orca-review'] }, 'pull_request.labeled', labeled)).toBe(true)
+    // …which checks out the base repo's default branch, never the fork's head.
+    expect(githubRunDetail('pull_request.labeled', labeled, 'd-1').checkoutRef).toBeUndefined()
+    // Comments: the commenter's association counts, not the issue author's.
+    const comment = (association: string) => ({
+      action: 'created',
+      issue: { number: 3, user: { login: 'owner' }, author_association: 'OWNER' },
+      comment: { user: { login: 'x' }, author_association: association }
+    })
+    expect(githubFilterMatches({ events: ['issue_comment.created'] }, 'issue_comment.created', comment('NONE'))).toBe(false)
+    expect(githubFilterMatches({ events: ['issue_comment.created'] }, 'issue_comment.created', comment('MEMBER'))).toBe(true)
+    // An explicit author list is the routine owner's choice.
+    expect(githubFilterMatches({ events: ['pull_request.opened'], authors: ['stranger'] }, 'pull_request.opened', forkPr('NONE'))).toBe(true)
   })
 
   it('redacts credential-shaped text from log tails', () => {

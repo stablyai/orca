@@ -142,6 +142,7 @@ type GitHubItem = {
   body?: string | null
   html_url?: string
   user?: { login?: string; type?: string }
+  author_association?: string
   labels?: Labeled[]
   pull_request?: unknown
   base?: { ref?: string; repo?: { full_name?: string } }
@@ -155,8 +156,11 @@ export type GitHubPayload = {
   pull_request?: GitHubItem
   issue?: GitHubItem
   label?: Labeled
-  comment?: { body?: string; html_url?: string; user?: { login?: string } }
+  comment?: { body?: string; html_url?: string; user?: { login?: string }; author_association?: string }
 }
+
+/** Repo roles whose PRs, issues and comments may start a run on their own (public repos have anyone else). */
+const TRUSTED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
 
 const lower = (values: readonly string[] | undefined) => new Set((values ?? []).map((value) => value.toLowerCase()))
 
@@ -181,6 +185,16 @@ export function githubFilterMatches(config: GitHubConfig, event: GitHubEventKey,
     }
   }
   const authors = lower(config.authors)
+  if (authors.size === 0 && payload.action !== 'labeled') {
+    // Without an explicit author list, only people with a role on the repo can start a run: on a
+    // public repo anyone may open a PR/issue or comment. A label can only be added by someone with
+    // triage access, so labeled events (the way to run on an outsider's PR) need no author check;
+    // the outsider's text still reaches the agent only as untrusted context.
+    const association = event === 'issue_comment.created' ? payload.comment?.author_association : item.author_association
+    if (!TRUSTED_ASSOCIATIONS.has(association ?? '')) {
+      return false
+    }
+  }
   if (authors.size > 0) {
     const actor = event === 'issue_comment.created' ? payload.comment?.user?.login : item.user?.login
     if (!authors.has((actor ?? '').toLowerCase())) {

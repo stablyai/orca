@@ -89,8 +89,18 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   return result.data
 }
 
-function canEdit(caller: ApiCaller, routine: Pick<RoutineRecord, 'created_by'>): boolean {
-  return isAdmin(caller) || routine.created_by === caller.userId
+/**
+ * A run executes with its creator's personal secrets, so only the creator may change what runs
+ * (prompt, project, agent, trigger, posting) or start it. Owners/admins may switch a member's routine
+ * off or delete it, never repoint it.
+ */
+function isCreator(caller: ApiCaller, routine: Pick<RoutineRecord, 'created_by'>): boolean {
+  return routine.created_by === caller.userId
+}
+
+/** Who may see a run's private detail (trigger payload, log tail, the creator's run workspace). */
+function seesRunDetail(caller: ApiCaller, routine: Pick<RoutineRecord, 'created_by'>): boolean {
+  return isCreator(caller, routine) || isAdmin(caller)
 }
 
 function normalizeRepoUrl(url: string): string {
@@ -183,8 +193,14 @@ async function visibleRoutine(ctx: ApiContext, caller: ApiCaller, id: string): P
   return routine
 }
 
-function requireEditable(caller: ApiCaller, routine: RoutineRecord): void {
-  if (!canEdit(caller, routine)) {
+function requireCreator(caller: ApiCaller, routine: RoutineRecord): void {
+  if (!isCreator(caller, routine)) {
+    throw new ApiError(403, 'forbidden', 'not_owner')
+  }
+}
+
+function requireCreatorOrAdmin(caller: ApiCaller, routine: RoutineRecord): void {
+  if (!isCreator(caller, routine) && !isAdmin(caller)) {
     throw new ApiError(403, 'forbidden', 'not_owner')
   }
 }
@@ -253,8 +269,13 @@ export function createRoutinesApi(options: { publicUrl: string; deps: () => Rout
 
     if (!sub && method === 'PATCH') {
       requireScope(caller, 'routines:write')
-      requireEditable(caller, routine)
       const body = parse(PatchBody, await ctx.readJson())
+      if (!isCreator(caller, routine)) {
+        // Admins may only switch someone else's routine off (they can also delete it).
+        if (!isAdmin(caller) || Object.keys(body).some((key) => key !== 'enabled') || body.enabled !== false) {
+          throw new ApiError(403, 'forbidden', 'not_owner')
+        }
+      }
       if (body.projectId !== undefined && body.repo !== undefined) {
         throw new ApiError(400, 'invalid_request', 'body: at most one of projectId or repo')
       }
@@ -308,7 +329,7 @@ export function createRoutinesApi(options: { publicUrl: string; deps: () => Rout
 
     if (!sub && method === 'DELETE') {
       requireScope(caller, 'routines:write')
-      requireEditable(caller, routine)
+      requireCreatorOrAdmin(caller, routine)
       await softDeleteRoutine(ctx.db, routine.id, now)
       const deps = options.deps()
       if (deps) {
@@ -321,7 +342,7 @@ export function createRoutinesApi(options: { publicUrl: string; deps: () => Rout
 
     if (sub === 'run' && !subId && method === 'POST') {
       requireScope(caller, 'routines:write')
-      requireEditable(caller, routine)
+      requireCreator(caller, routine)
       await consumeRate(ctx.db, `routine-run:${routine.id}`, MANUAL_RUNS_PER_MINUTE, now)
       let run
       try {
@@ -333,12 +354,12 @@ export function createRoutinesApi(options: { publicUrl: string; deps: () => Rout
         throw error
       }
       await auditCaller(ctx.db, caller, { action: 'routine.run', targetType: 'routine', targetId: routine.id, detail: { runId: run.id } }, now)
-      return json({ run: runView(run) }, 202)
+      return json({ run: runView(run, { private: true }) }, 202)
     }
 
     if (sub === 'rotate-webhook' && !subId && method === 'POST') {
       requireScope(caller, 'routines:write')
-      requireEditable(caller, routine)
+      requireCreator(caller, routine)
       if (routine.trigger_kind !== 'webhook') {
         throw new ApiError(409, 'conflict', 'not_a_webhook_routine')
       }
@@ -355,13 +376,14 @@ export function createRoutinesApi(options: { publicUrl: string; deps: () => Rout
         const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? 20) || 20))
         const before = Number(url.searchParams.get('before')) || undefined
         const rows = await listRuns(ctx.db, routine.id, { before, limit })
-        return json({ runs: rows.map((row) => runView(row)), nextBefore: rows.length === limit ? rows.at(-1)!.created_at : null })
+        const detail = seesRunDetail(caller, routine)
+        return json({ runs: rows.map((row) => runView(row, { private: detail })), nextBefore: rows.length === limit ? rows.at(-1)!.created_at : null })
       }
       const run = await getRun(ctx.db, subId)
       if (!run || run.routine_id !== routine.id) {
         throw new ApiError(404, 'not_found')
       }
-      return json({ run: runView(run, { logTail: true }) })
+      return json({ run: runView(run, { private: seesRunDetail(caller, routine), logTail: true }) })
     }
 
     return null

@@ -13,18 +13,19 @@ import { audit } from '../api/audit'
 import { createWorkspace, getProject, type ProjectRow } from '../api/workspaces'
 import { parseGitHubRepo } from '../github-app'
 import { GuardrailError } from '../guardrails'
-import { LifecycleError, destroySandbox, renewLease, type LifecycleDeps } from '../lifecycle'
+import { destroySandbox, renewLease, type LifecycleDeps } from '../lifecycle'
 import { getSandbox, liveSandboxForWorkspace, type SandboxRow } from '../store'
 import { latestRunAtOrBefore, nextRunAfter, parseRoutineSchedule } from './schedule'
 import {
   ACTIVE_RUN_STATUSES,
   TERMINAL_RUN_STATUSES,
   claimRun,
-  countRuns,
+  claimStart,
   getRun,
   insertRun,
   listRunsByStatus,
   markRoutineRan,
+  startableRuns,
   triggerConfig,
   type RoutineRecord,
   type RoutineRow,
@@ -94,12 +95,13 @@ export async function enqueueRun(
   input: { trigger: RunTrigger; detail: RunDetail | null; dedupeKey: string | null },
   now: number
 ): Promise<RunRow> {
-  if ((await countRuns(db, { routineId: routine.id }, ['queued'])) >= MAX_QUEUED_PER_ROUTINE) {
-    throw new RunRefusedError('queue_full')
-  }
-  const run = await insertRun(db, { routine, trigger: input.trigger, detail: input.detail as Record<string, unknown> | null, dedupeKey: input.dedupeKey }, now)
-  if (!run) {
-    throw new RunRefusedError('duplicate')
+  const run = await insertRun(
+    db,
+    { routine, trigger: input.trigger, detail: input.detail as Record<string, unknown> | null, dedupeKey: input.dedupeKey, maxQueued: MAX_QUEUED_PER_ROUTINE },
+    now
+  )
+  if (typeof run === 'string') {
+    throw new RunRefusedError(run)
   }
   return run
 }
@@ -229,13 +231,17 @@ export async function endRun(
 /** queued → starting → running. Boots a hidden VM as the routine's creator and detaches the runner. */
 export async function startRun(deps: RoutineDeps, queued: RunRow): Promise<RunRow | null> {
   const { life } = deps
-  const run = await claimRun(life.db, queued, ['queued'], { status: 'starting', started_at: life.now() }, life.now())
+  const run = await claimStart(life.db, queued, ACCOUNT_RUN_CAP, life.now())
   if (!run) {
     return null
   }
   const routine = await loadRoutine(life.db, run.routine_id)
   if (!routine || routine.deleted_at !== null) {
     return endRun(deps, run, 'cancelled', { error: 'routine_deleted' })
+  }
+  if (routine.enabled !== 1 && run.trigger_kind !== 'manual') {
+    // Switched off after this run was queued (by its creator, an admin, or a member removal).
+    return endRun(deps, run, 'cancelled', { error: 'routine_disabled' })
   }
   const detail = detailOf(run)
   const startedMs = life.now()
@@ -289,16 +295,6 @@ export async function startRun(deps: RoutineDeps, queued: RunRow): Promise<RunRo
       if (requeued) {
         console.log(JSON.stringify({ event: 'routine_run_requeued', runId: run.id, reason: error.code }))
         return requeued
-      }
-    }
-    if (error instanceof LifecycleError && error.code === 'conflict' && !run.error?.startsWith('retry:')) {
-      // A boot that failed under this run's key (e.g. a pooled VM that would not adopt, whose
-      // fallback then collides with the half-released row): clear the leftover, retry once.
-      await destroyRunSandbox(life, run)
-      const retry = await claimRun(life.db, run, ['starting'], { status: 'queued', started_at: null, error: `retry:${errorCode(error)}` }, life.now())
-      if (retry) {
-        console.log(JSON.stringify({ event: 'routine_run_retry', runId: run.id, reason: errorCode(error) }))
-        return retry
       }
     }
     const current = (await getRun(life.db, run.id)) ?? run
@@ -372,7 +368,8 @@ async function completeRun(deps: RoutineDeps, run: RunRow, routine: RoutineRecor
       }
       if (out.pushed) {
         result.branch = out.branch
-        result.prUrl = out.prUrl || (await openPullRequest(deps, routine, run, out, summary))
+        // The VM (and so the agent) wrote out.prUrl: accept it only as a PR URL of this routine's repo.
+        result.prUrl = isRepoPullUrl(routine, out.prUrl) ? out.prUrl : await openPullRequest(deps, routine, run, out, summary)
       }
     } else if (routine.post_results === 'comment' && detail.target) {
       result.commentUrl = await postComment(deps, routine, run, detail.target, summary)
@@ -410,7 +407,7 @@ async function githubRequest(deps: RoutineDeps, routine: RoutineRecord, method: 
       'x-github-api-version': '2022-11-28',
       'user-agent': 'orca-sandbox-control'
     },
-    body: JSON.stringify(body)
+    ...(body === undefined ? {} : { body: JSON.stringify(body) })
   })
   if (!response.ok) {
     throw new GitHubPostError(`github_${response.status}`)
@@ -437,19 +434,43 @@ async function postComment(deps: RoutineDeps, routine: RoutineRecord, run: RunRo
   return String(created.html_url ?? '')
 }
 
-/** Fallback when the in-VM `gh pr create` did not report a URL but the branch was pushed. */
+export function isRepoPullUrl(routine: Pick<RoutineRecord, 'repo_url'>, url: string): boolean {
+  const repo = routine.repo_url ? parseGitHubRepo(routine.repo_url) : null
+  const match = /^https:\/\/github\.com\/([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)\/pull\/([1-9][0-9]{0,9})$/.exec(url)
+  return Boolean(repo && match && match[1]!.toLowerCase() === repo.owner.toLowerCase() && match[2]!.toLowerCase() === repo.repo.toLowerCase())
+}
+
+/**
+ * Fallback when the in-VM `gh pr create` did not report a usable URL but the branch was pushed: open
+ * the PR here, or find the one already open for the branch (gh may have made it and printed junk).
+ */
 async function openPullRequest(deps: RoutineDeps, routine: RoutineRecord, run: RunRow, out: RunnerResult, summary: string): Promise<string> {
   const repo = routine.repo_url ? parseGitHubRepo(routine.repo_url) : null
   if (!repo || !out.base) {
     throw new GitHubPostError('pr_target_unknown')
   }
-  const created = await githubRequest(deps, routine, 'POST', `/repos/${repo.owner}/${repo.repo}/pulls`, {
-    title: `${routine.name} (Orca routine)`.slice(0, 200),
-    head: out.branch,
-    base: out.base,
-    body: `${defangMentions(summary)}\n\n${footer(routine, run)}`.slice(0, 60_000)
-  })
-  return String(created.html_url ?? '')
+  if (!/^orca\/routine-run_[A-Za-z0-9]+$/.test(out.branch)) {
+    throw new GitHubPostError('pr_branch_unexpected')
+  }
+  try {
+    const created = await githubRequest(deps, routine, 'POST', `/repos/${repo.owner}/${repo.repo}/pulls`, {
+      title: `${routine.name} (Orca routine)`.slice(0, 200),
+      head: out.branch,
+      base: out.base,
+      body: `${defangMentions(summary)}\n\n${footer(routine, run)}`.slice(0, 60_000)
+    })
+    return String(created.html_url ?? '')
+  } catch (error) {
+    if (!(error instanceof GitHubPostError && error.code === 'github_422')) {
+      throw error
+    }
+    const open = await githubRequest(deps, routine, 'GET', `/repos/${repo.owner}/${repo.repo}/pulls?state=open&head=${encodeURIComponent(`${repo.owner}:${out.branch}`)}`, undefined)
+    const first = (open as unknown as { html_url?: string }[])[0]
+    if (!first?.html_url) {
+      throw error
+    }
+    return first.html_url
+  }
 }
 
 // Tick ----------------------------------------------------------------------------------------
@@ -530,28 +551,24 @@ async function sweep(deps: RoutineDeps, now: number, summary: TickSummary): Prom
 
 async function startQueued(deps: RoutineDeps, now: number, summary: TickSummary): Promise<void> {
   const { db } = deps.life
-  const active = await listRunsByStatus(db, ACTIVE_RUN_STATUSES, 500)
-  const byAccount = new Map<string, number>()
-  const busyRoutines = new Set<string>()
-  for (const run of active) {
-    byAccount.set(run.account_id, (byAccount.get(run.account_id) ?? 0) + 1)
-    busyRoutines.add(run.routine_id)
-  }
-  const starts: RunRow[] = []
-  for (const run of await listRunsByStatus(db, ['queued'], 100)) {
-    if (now - run.created_at > QUEUE_TTL_MS) {
-      if (await endRun(deps, run, 'cancelled', { error: 'queue_expired' }, ['queued'])) {
-        summary.cancelled++
-      }
-      continue
+  const expired = await db
+    .prepare(`SELECT * FROM routine_runs WHERE status = 'queued' AND created_at < ? LIMIT 100`)
+    .bind(now - QUEUE_TTL_MS)
+    .all<RunRow>()
+  for (const run of expired.results) {
+    if (await endRun(deps, run, 'cancelled', { error: 'queue_expired' }, ['queued'])) {
+      summary.cancelled++
     }
-    if (busyRoutines.has(run.routine_id) || (byAccount.get(run.account_id) ?? 0) >= ACCOUNT_RUN_CAP) {
-      continue
-    }
-    busyRoutines.add(run.routine_id)
-    byAccount.set(run.account_id, (byAccount.get(run.account_id) ?? 0) + 1)
-    starts.push(run)
   }
+  // Candidates are pre-filtered and fair per account; claimStart re-checks both caps atomically.
+  const seen = new Set<string>()
+  const starts = (await startableRuns(db, ACCOUNT_RUN_CAP, ACCOUNT_RUN_CAP, 100)).filter((run) => {
+    if (seen.has(run.routine_id)) {
+      return false
+    }
+    seen.add(run.routine_id)
+    return true
+  })
   // Boots run side by side: one slow VM must not hold the others back.
   const started = await Promise.allSettled(starts.map((run) => startRun(deps, run)))
   summary.started += started.filter((outcome) => outcome.status === 'fulfilled' && outcome.value?.status === 'running').length
@@ -572,6 +589,23 @@ export async function tickRoutines(deps: RoutineDeps, now = deps.life.now()): Pr
   await pollRunning(deps, summary)
   await startQueued(deps, now, summary)
   return summary
+}
+
+/** A member left the org: their routines are switched off (audited per routine) and every run of theirs ends. */
+export async function disableMemberRoutines(deps: RoutineDeps, accountId: string, userId: string): Promise<{ disabled: number; cancelled: number }> {
+  const { db } = deps.life
+  const now = deps.life.now()
+  const { results } = await db
+    .prepare('SELECT id, account_id, created_by FROM routines WHERE account_id = ? AND created_by = ? AND deleted_at IS NULL')
+    .bind(accountId, userId)
+    .all<Pick<RoutineRow, 'id' | 'account_id' | 'created_by'>>()
+  let cancelled = 0
+  for (const routine of results) {
+    await db.prepare('UPDATE routines SET enabled = 0, updated_at = ? WHERE id = ?').bind(now, routine.id).run()
+    await audit(db, { accountId, type: 'system', id: 'member_removed', userId }, { action: 'routine.disable', targetType: 'routine', targetId: routine.id, detail: { reason: 'member_removed' } }, now).catch(() => undefined)
+    cancelled += await cancelRoutineRuns(deps, routine.id, { active: true })
+  }
+  return { disabled: results.length, cancelled }
 }
 
 /** Routine deleted or disabled: queued runs are cancelled; with `active`, in-flight ones too (VMs destroyed). */

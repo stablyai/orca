@@ -129,15 +129,19 @@ export function runResult(row: Pick<RunRow, 'result'>): RunResult | null {
   return parseJson<RunResult>(row.result)
 }
 
-export function runView(row: RunRow, options: { logTail?: boolean } = {}) {
+/**
+ * `private`: the creator or an admin. Everyone else in the org sees status and results only, not
+ * the trigger payload, the log tail or the creator's run workspace.
+ */
+export function runView(row: RunRow, options: { private?: boolean; logTail?: boolean } = {}) {
   const result = runResult(row)
   return {
     id: row.id,
     routineId: row.routine_id,
     trigger: row.trigger_kind,
-    triggerDetail: parseJson<Record<string, unknown>>(row.trigger_detail),
+    triggerDetail: options.private ? parseJson<Record<string, unknown>>(row.trigger_detail) : null,
     status: row.status,
-    workspaceId: row.sandbox_id,
+    workspaceId: options.private ? row.sandbox_id : null,
     result: result
       ? {
           ...(result.summary ? { summary: result.summary } : {}),
@@ -150,7 +154,7 @@ export function runView(row: RunRow, options: { logTail?: boolean } = {}) {
     startedAt: row.started_at,
     finishedAt: row.finished_at,
     durationMs: row.started_at !== null && row.finished_at !== null ? row.finished_at - row.started_at : null,
-    ...(options.logTail ? { logTail: row.log_tail } : {})
+    ...(options.logTail ? { logTail: options.private ? row.log_tail : null } : {})
   }
 }
 
@@ -242,24 +246,76 @@ export function getRoutineByWebhookId(db: D1Database, webhookId: string): Promis
 
 // Runs ----------------------------------------------------------------------------------------
 
-/** Inserts a queued run; null when `dedupeKey` already produced one (same slot / delivery). */
+/**
+ * Inserts a queued run in one statement: the per-routine queue limit and the dedupe key are checked
+ * by SQLite itself, so concurrent triggers cannot overfill the queue. `duplicate`: `dedupeKey`
+ * already produced a run (same slot / delivery); `queue_full`: `maxQueued` runs are waiting.
+ */
 export async function insertRun(
   db: D1Database,
-  input: { routine: Pick<RoutineRow, 'id' | 'account_id'>; trigger: RunTrigger; detail: Record<string, unknown> | null; dedupeKey: string | null },
+  input: { routine: Pick<RoutineRow, 'id' | 'account_id'>; trigger: RunTrigger; detail: Record<string, unknown> | null; dedupeKey: string | null; maxQueued: number },
   now: number
-): Promise<RunRow | null> {
+): Promise<RunRow | 'duplicate' | 'queue_full'> {
   const id = randomId('run')
   const inserted = await db
     .prepare(
       `INSERT INTO routine_runs (id, routine_id, account_id, trigger_kind, trigger_detail, dedupe_key, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?) ON CONFLICT (dedupe_key) DO NOTHING`
+       SELECT ?, ?, ?, ?, ?, ?, 'queued', ?, ?
+       WHERE (SELECT COUNT(*) FROM routine_runs WHERE routine_id = ? AND status = 'queued') < ?
+       ON CONFLICT (dedupe_key) DO NOTHING`
     )
-    .bind(id, input.routine.id, input.routine.account_id, input.trigger, input.detail ? JSON.stringify(input.detail) : null, input.dedupeKey, now, now)
+    .bind(id, input.routine.id, input.routine.account_id, input.trigger, input.detail ? JSON.stringify(input.detail) : null, input.dedupeKey, now, now,
+      input.routine.id, input.maxQueued)
     .run()
   if ((inserted.meta?.changes ?? 0) === 0) {
-    return null
+    const duplicate = input.dedupeKey
+      ? await db.prepare('SELECT 1 AS hit FROM routine_runs WHERE dedupe_key = ?').bind(input.dedupeKey).first<{ hit: number }>()
+      : null
+    return duplicate ? 'duplicate' : 'queue_full'
   }
-  return getRun(db, id)
+  return (await getRun(db, id))!
+}
+
+/**
+ * queued → starting, only while the routine has no active run and the account is under `accountCap`
+ * active runs. One statement, so overlapping ticks cannot both start past a cap.
+ */
+export async function claimStart(db: D1Database, run: Pick<RunRow, 'id'>, accountCap: number, now: number): Promise<RunRow | null> {
+  const active = ACTIVE_RUN_STATUSES.map(() => '?').join(', ')
+  const result = await db
+    .prepare(
+      `UPDATE routine_runs SET status = 'starting', started_at = ?, updated_at = ?
+       WHERE id = ? AND status = 'queued'
+         AND NOT EXISTS (SELECT 1 FROM routine_runs a WHERE a.routine_id = routine_runs.routine_id AND a.status IN (${active}))
+         AND (SELECT COUNT(*) FROM routine_runs a WHERE a.account_id = routine_runs.account_id AND a.status IN (${active})) < ?`
+    )
+    .bind(now, now, run.id, ...ACTIVE_RUN_STATUSES, ...ACTIVE_RUN_STATUSES, accountCap)
+    .run()
+  return (result.meta?.changes ?? 0) === 0 ? null : getRun(db, run.id)
+}
+
+/**
+ * Queued runs that could start now, fairly: routines without an active run, accounts under their
+ * cap, and at most `perAccount` candidates per account so one busy account cannot crowd the rest out.
+ */
+export async function startableRuns(db: D1Database, accountCap: number, perAccount: number, limit: number): Promise<RunRow[]> {
+  const active = ACTIVE_RUN_STATUSES.map(() => '?').join(', ')
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM (
+         SELECT q.*, ROW_NUMBER() OVER (PARTITION BY q.account_id ORDER BY q.created_at, q.id) AS slot
+         FROM routine_runs q
+         WHERE q.status = 'queued'
+           -- Only each routine's oldest queued run (a routine runs one at a time anyway).
+           AND NOT EXISTS (SELECT 1 FROM routine_runs o WHERE o.routine_id = q.routine_id AND o.status = 'queued'
+                           AND (o.created_at < q.created_at OR (o.created_at = q.created_at AND o.id < q.id)))
+           AND NOT EXISTS (SELECT 1 FROM routine_runs a WHERE a.routine_id = q.routine_id AND a.status IN (${active}))
+           AND (SELECT COUNT(*) FROM routine_runs a WHERE a.account_id = q.account_id AND a.status IN (${active})) < ?
+       ) WHERE slot <= ? ORDER BY created_at, id LIMIT ?`
+    )
+    .bind(...ACTIVE_RUN_STATUSES, ...ACTIVE_RUN_STATUSES, accountCap, perAccount, limit)
+    .all<RunRow & { slot?: number }>()
+  return results.map(({ slot: _slot, ...run }) => run as RunRow)
 }
 
 export function getRun(db: D1Database, id: string): Promise<RunRow | null> {
