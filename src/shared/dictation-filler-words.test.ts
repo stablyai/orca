@@ -9,6 +9,7 @@ describe('removeFillerWords', () => {
     ['en', 'Yes. Uh. No.', 'Yes. No.'],
     ['en', 'We should ship it, hmm', 'We should ship it'],
     ['en', 'we should um.', 'we should.'],
+    ['en', 'We should ship, um.', 'We should ship.'],
     ['en', 'um so we ship', 'so we ship'],
     ['en', 'Um, iPhone builds first.', 'iPhone builds first.'],
     [
@@ -30,6 +31,7 @@ describe('removeFillerWords', () => {
     ['en', 'The umbrella is humming, uh-huh.'],
     ['en', 'Hmm? What did you say?'],
     ['en', 'Ask UM and HMM about it.'],
+    ['en', 'Open um.txt and set var_um to 3.'],
     ['ja', 'ええ、そうです。'],
     ['ko', '음이 너무 높아요.'],
     ['zh', '金额不对，那个文件也要改。']
@@ -50,12 +52,20 @@ describe('createDictationTextPipeline', () => {
     expect(clean?.('Äh, um, ship it.')).toBe('Äh, ship it.')
   })
 
-  it('reads the language from the setting for a multilingual model', () => {
+  it('reads the language from the setting for a multilingual model that takes it', () => {
     const clean = createDictationTextPipeline(
-      { language: 'multilingual' },
+      { language: 'multilingual', dictationLanguages: ['de', 'en'] },
       { dictationLanguage: 'de' }
     )
     expect(clean?.('Äh, um fünf Uhr.')).toBe('Um fünf Uhr.')
+  })
+
+  it('ignores a language setting the model ignores', () => {
+    const clean = createDictationTextPipeline(
+      { language: 'multilingual' },
+      { dictationLanguage: 'en' }
+    )
+    expect(clean?.('Er hat um zehn Uhr angerufen.')).toBe('Er hat um zehn Uhr angerufen.')
   })
 
   it('leaves text untouched when filler removal is off', () => {
