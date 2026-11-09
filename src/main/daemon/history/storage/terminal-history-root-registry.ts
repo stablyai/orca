@@ -44,7 +44,8 @@ export function cachedTerminalHistoryRoot(
     return known
   }
   try {
-    const canonical = realpathSync(path)
+    // Match asynchronous profile/claim identity, including Windows short-name aliases.
+    const canonical = realpathSync.native(path)
     const root = roots.get(canonical) ?? create(canonical)
     roots.set(canonical, root)
     knownPaths.set(path, root)

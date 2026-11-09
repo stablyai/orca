@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  realpathSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -21,6 +22,7 @@ import {
   type OrcadLockRecord
 } from './orcad-instance-lock'
 import { OrcadInstanceLockError } from './orcad-data-root-privacy'
+import { hasExclusiveOrcadInstanceLock } from './orcad-instance-lock-hold'
 
 // Inject a contender immediately after canonical-lock rename.
 const afterLockRename = vi.hoisted((): { next: (() => void) | null; failNext: boolean } => ({
@@ -89,6 +91,23 @@ afterEach(() => {
 })
 
 describe('acquireOrcadInstanceLock', () => {
+  it('keeps ordinary lock acquisition and release when optional native ownership proof is unavailable', () => {
+    const root = makeRoot()
+    const canonical = realpathSync.native(root)
+    const native = vi.spyOn(realpathSync, 'native').mockImplementation(() => {
+      throw new Error('Native root identity unavailable')
+    })
+    try {
+      const lock = acquireOrcadInstanceLock(root, hooks())
+      expect(hasExclusiveOrcadInstanceLock(canonical)).toBe(false)
+      expect(readOrcadInstanceLockRecord(lock.path)?.nonce).toBe(lock.record.nonce)
+      lock.release()
+      expect(readOrcadInstanceLockRecord(lock.path)).toBeNull()
+    } finally {
+      native.mockRestore()
+    }
+  })
+
   it('refuses a second instance while the holder is alive', () => {
     const root = makeRoot()
     acquireOrcadInstanceLock(root, hooks())

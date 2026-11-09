@@ -102,11 +102,19 @@ export function holdOrcadInstanceLock(
   }
 ): OrcadInstanceLock {
   let released = false
-  const root = realpathSync(dirname(lockPath))
+  let root: string | undefined
+  try {
+    // Match the native canonical root used by asynchronous profile ownership.
+    root = realpathSync.native(dirname(lockPath))
+  } catch {
+    // Optional migration proof must not prevent the published lock's normal lifecycle.
+  }
   const ownsRoot = () =>
     !released &&
     parseOrcadInstanceLockRecord(readBoundedLockFile(lockPath) ?? '')?.nonce === record.nonce
-  heldRoots.set(root, ownsRoot)
+  if (root !== undefined) {
+    heldRoots.set(root, ownsRoot)
+  }
   const stopHeartbeat = startOrcadLockHeartbeat(() => {
     if (beatOrcadInstanceLock(lockPath, record, publish) === 'lost') {
       stopHeartbeat()
@@ -122,7 +130,7 @@ export function holdOrcadInstanceLock(
         return
       }
       released = true
-      if (heldRoots.get(root) === ownsRoot) {
+      if (root !== undefined && heldRoots.get(root) === ownsRoot) {
         heldRoots.delete(root)
       }
       stopHeartbeat()

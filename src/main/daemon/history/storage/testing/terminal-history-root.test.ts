@@ -9,6 +9,7 @@ import {
   rmSync,
   readdirSync,
   statSync,
+  symlinkSync,
   writeFileSync,
   existsSync
 } from 'node:fs'
@@ -23,6 +24,12 @@ import { HistoryManager } from '../history-manager'
 import { DaemonHistoryRetirement } from '../../../providers/adapter/daemon-history-retirement'
 import type { TerminalHistoryCheckpointReceipt } from '../terminal-history-root'
 import type { TerminalSnapshot } from '../../../protocol/terminal-snapshot'
+import { hasExclusiveOrcadInstanceLock } from '../../../../orcad/orcad-instance-lock-hold'
+import {
+  markTerminalHistorySessionRecoveryFrozen,
+  unmarkTerminalHistorySessionRecoveryFrozen,
+  isTerminalHistorySessionDirRecoveryProtected
+} from '../terminal-history-recovery-quarantine'
 
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof asyncFs>())
@@ -82,6 +89,39 @@ describe('terminal history migration coordination', () => {
     lock.release()
     rmSync(dir, { recursive: true, force: true })
   })
+
+  it.runIf(process.platform === 'win32')(
+    'shares recovery ownership across native root aliases and retires the released lock',
+    async () => {
+      const physical = await asyncFs.realpath(dir)
+      const alias = join(dir, 'root-alias')
+      symlinkSync(physical, alias, 'junction')
+      const other = new HistoryManager(join(alias, 'history'))
+      const root = manager.identityRoot!
+      const frozen = join(dir, 'history/9')
+      try {
+        await root.profileReady()
+        expect(hasExclusiveOrcadInstanceLock(physical)).toBe(true)
+        expect(hasExclusiveOrcadInstanceLock(join(physical, 'runtime'))).toBe(false)
+        markTerminalHistorySessionRecoveryFrozen(frozen)
+        try {
+          expect(isTerminalHistorySessionDirRecoveryProtected(join(alias, 'history/9'))).toBe(true)
+        } finally {
+          unmarkTerminalHistorySessionRecoveryFrozen(frozen)
+        }
+        expect(isTerminalHistorySessionDirRecoveryProtected(join(alias, 'history/9'))).toBe(false)
+        lock.release()
+        expect(hasExclusiveOrcadInstanceLock(physical)).toBe(false)
+        expect(await root.beginMigration(['9', 'alias-copy'], () => true)).toBeNull()
+        lock = acquireOrcadInstanceLock(alias)
+        const lease = await root.beginMigration(['9', 'alias-copy'], () => true)
+        expect(lease?.current()).toBe(true)
+        lease!.release()
+      } finally {
+        await other.dispose()
+      }
+    }
+  )
 
   it('copies replay bytes into an independent committed identity and keeps the original cwd and history', async () => {
     await manager.checkpoint('9', {

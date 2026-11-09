@@ -184,6 +184,18 @@ describe('installed optional legacy catalog readiness', () => {
     const { store } = await open(input)
     const f = await restoreFixtureForStore(store, root)
     await expect(f.start(true)).rejects.toThrow('crash before bind')
+    expect(f.seen).toEqual([
+      { id: '9', attachOnly: true },
+      { id: canonical, attachOnly: false }
+    ])
+    expect(
+      JSON.parse(
+        readFileSync(
+          join(root, 'terminal-history', encodeURIComponent(canonical), 'meta.json'),
+          'utf8'
+        )
+      )
+    ).toMatchObject({ cwd: '/fixture/local', cols: 80, rows: 24 })
     store.invalidateLegacyTerminalProfileCatalog()
     const { runtime, create } = installedRestore(f)
     const created = await create()

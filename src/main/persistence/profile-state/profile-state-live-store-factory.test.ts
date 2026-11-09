@@ -1,5 +1,6 @@
 import { sharedPromiseSettlementWaiters } from '../../../shared/promise-settlement-waiters'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
@@ -12,8 +13,12 @@ import {
 import {
   restoreFixtureForStore,
   tabId,
-  leafId
+  leafId,
+  workspace,
+  paneKey
 } from '../loading-store/legacy-pty-restore-test-fixture'
+import { peekDaemonHistoryRoot } from '../../daemon/launch/daemon-launch-paths'
+import { hasExclusiveOrcadInstanceLock } from '../../orcad/orcad-instance-lock-hold'
 import { installedRestore } from '../loading-store/legacy-pty-runtime-restore-test-fixture'
 import {
   profileStateJsonExportPath,
@@ -57,6 +62,36 @@ describe('live profile authority admission', () => {
       }
       const f = await restoreFixtureForStore(store, root)
       const before = readFileSync(join(root, 'terminal-history/9/checkpoint.json'))
+      if (process.platform === 'win32' && factory === 'sync') {
+        const paths = {
+          raw: root,
+          sync: realpathSync(root),
+          native: realpathSync.native(root),
+          promise: await realpath(root)
+        }
+        const receipts = Object.fromEntries(
+          Object.entries(paths).map(([kind, path]) => [kind, hasExclusiveOrcadInstanceLock(path)])
+        )
+        const authority = peekDaemonHistoryRoot()!
+        const begin = authority.beginMigration.bind(authority)
+        vi.spyOn(authority, 'beginMigration').mockImplementation(async (...args) => {
+          const lease = await begin(...args)
+          console.info(
+            JSON.stringify({
+              contract: 'native-terminal-root',
+              paths,
+              receipts,
+              associated: authority.matchesProfile(
+                store.legacyTerminalIdentityAuthority.canonicalProfile
+              ),
+              unique: store.legacyTerminalIdentityAuthority.unique(workspace, paneKey, '9'),
+              complete: store.legacyTerminalIdentityAuthority.captureExternalCatalog().complete,
+              lease: lease?.current() ?? false
+            })
+          )
+          return lease
+        })
+      }
       const { runtime, create } = installedRestore(f)
       const created = await create()
       expect(created.ptyId).toBe('repo-local::/fixture/local@@e2fec859')
