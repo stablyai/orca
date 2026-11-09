@@ -10,7 +10,7 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
-import { launchStatement, type PtyLaunchFacts } from '../launch/attested-launch-config'
+import { launchStatement, type PtyLaunchFacts } from '../launch/launch-evidence'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
@@ -19,7 +19,7 @@ export type WorktreeSleepResumeCapture = Map<
     retiredPaneKeys: string[]
     records: SleepingAgentSessionRecord[]
     /** Main can't tell this PTY's launch, so a record keeps an earlier capture's same-session note. */
-    launchUndecided?: boolean
+    launchUnknown?: boolean
   }
 >
 
@@ -55,7 +55,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
     const records: SleepingAgentSessionRecord[] = []
     const retiredPaneKeys: string[] = []
     const launch = args.launchByPtyId.get(ptyId)
-    let launchUndecided = false
+    let launchUnknown = false
     for (const { paneKey, tabId } of panes) {
       // Why: the one holder rule — an agent the hook store proved exited left a plain shell.
       if ((await args.checkAgentPresence?.(paneKey, 0).catch(() => null)) === 'exited') {
@@ -74,7 +74,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
         continue
       }
       const statement = launchStatement(launch, agent)
-      launchUndecided ||= statement === undefined
+      launchUnknown ||= statement === undefined
       const launchConfig = statement ?? undefined
       records.push({
         paneKey,
@@ -97,7 +97,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
     capture.set(ptyId, {
       retiredPaneKeys,
       records,
-      ...(launchUndecided ? { launchUndecided } : {})
+      ...(launchUnknown ? { launchUnknown } : {})
     })
   }
   return capture
@@ -124,7 +124,7 @@ export function applyWorktreeSleepResumeRecords(
       // Only a terminal main can't tell about keeps an earlier capture's recipe for the same session.
       const previous = next[record.paneKey]
       const keptLaunchConfig =
-        entry?.launchUndecided &&
+        entry?.launchUnknown &&
         !record.launchConfig &&
         previous?.launchConfig &&
         previous.agent === record.agent &&

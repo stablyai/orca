@@ -35,24 +35,22 @@ export function admitRendererAgentLaunchAuthority(args: {
   }
 }
 
-/** A reattach whose host keeps no launch notes (an older daemon, SSH) leaves main unable to tell whose launch runs. */
-export function reattachLeavesLaunchUndecided(result: {
+/** A reattach's binding: its host's launch note, none when the host keeps no notes (an older daemon, SSH). */
+export function reattachLaunchBinding(result: {
   isReattach?: boolean
   launchNote?: DaemonLaunchNote | null
-}): boolean {
-  return result.isReattach === true && result.launchNote === undefined
+}): { reattach?: { launchNote?: DaemonLaunchNote | null } } {
+  if (!result.isReattach) {
+    return {}
+  }
+  return { reattach: result.launchNote !== undefined ? { launchNote: result.launchNote } : {} }
 }
 
 export function admitProviderReattachLaunchIdentity(args: {
   isReattach?: boolean
   launchAgent?: unknown
-  launchNote?: DaemonLaunchNote | null
   incarnationId?: unknown
-}): {
-  incarnationId: string
-  launchAgent: TuiAgent
-  launchNote?: DaemonLaunchNote | null
-} | null {
+}): { incarnationId: string; launchAgent: TuiAgent } | null {
   if (
     !args.isReattach ||
     !isTuiAgent(args.launchAgent) ||
@@ -60,11 +58,7 @@ export function admitProviderReattachLaunchIdentity(args: {
   ) {
     return null
   }
-  return {
-    incarnationId: args.incarnationId,
-    launchAgent: args.launchAgent,
-    ...(args.launchNote !== undefined ? { launchNote: args.launchNote } : {})
-  }
+  return { incarnationId: args.incarnationId, launchAgent: args.launchAgent }
 }
 
 export function shouldRefreshNativeClaudeAgentTeamsEnv(args: {

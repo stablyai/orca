@@ -6,6 +6,7 @@ import type { PtySpawnResult } from '../../../providers/pty-spawn-result'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { recordFreshLaunch, retireLaunch } from '../launch/launch-evidence'
 import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import { OrcaRuntimeWithDaemonLaunchNote } from './daemon-launch-note'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
@@ -54,10 +55,11 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
       providerReattachLaunchIdentity?: {
         incarnationId: PtyIncarnationId
         launchAgent: TuiAgent
-        launchNote?: DaemonLaunchNote | null
       }
-      /** The reattached host keeps no launch notes, so main can't tell whose launch runs here. */
-      launchUndecided?: boolean
+      /** A newly started process, which runs no launch but an admitted one. */
+      freshSpawn?: true
+      /** A reattach, with its host's launch note; none when the host keeps no notes (an older daemon, SSH). */
+      reattach?: { launchNote?: DaemonLaunchNote | null }
     },
     isWsl?: boolean
   ): void {
@@ -160,23 +162,20 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
       isTuiAgent(agentLaunchAuthority.launchAgent)
     ) {
       pty.launchToken = agentLaunchAuthority.launchToken
-      pty.launchUndecided = false
       pty.launchIncarnationId = binding.incarnationId
       pty.launchAgent = agentLaunchAuthority.launchAgent
-      // Why: a restart that runs in main (wake, worker reopen) replays the recipe; drop it and it comes back bare.
-      pty.launchConfig = agentLaunchAuthority.launchConfig ?? null
-      this.armDaemonLaunchNote(ptyId, pty)
+      recordFreshLaunch(pty, {
+        agent: agentLaunchAuthority.launchAgent,
+        token: agentLaunchAuthority.launchToken,
+        config: agentLaunchAuthority.launchConfig
+      })
+      this.armDaemonLaunchNote(pty)
+    } else if (binding?.freshSpawn && pty.incarnationId === (binding.incarnationId ?? null)) {
+      retireLaunch(pty)
     }
     this.watchLaunchComposer(ptyId, binding?.launchedAgent ?? null)
-    if (
-      binding?.launchUndecided &&
-      pty.launchToken === null &&
-      // An older relay reports no incarnation; that still can't prove the launch gone.
-      (pty.incarnationId ?? undefined) === binding.incarnationId
-    ) {
-      pty.launchUndecided = true
-    }
     const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
+    let reattachedAgent: TuiAgent | undefined
     if (
       providerReattachLaunchIdentity &&
       paneKey &&
@@ -186,8 +185,12 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
       isTuiAgent(providerReattachLaunchIdentity.launchAgent)
     ) {
       // Why: daemon metadata owns the surviving process; its incarnation fence restores identity without minting renderer launch authority.
-      pty.launchAgent = providerReattachLaunchIdentity.launchAgent
-      void this.rearmReattachedLaunch(ptyId, pty, providerReattachLaunchIdentity)
+      pty.launchAgent = reattachedAgent = providerReattachLaunchIdentity.launchAgent
+    }
+    // An older relay reports no incarnation; that still can't prove the launch gone.
+    if (binding?.reattach && (pty.incarnationId ?? undefined) === binding.incarnationId) {
+      const { launchNote } = binding.reattach
+      this.recordReattachedLaunch(pty, binding.incarnationId, launchNote, reattachedAgent)
     }
     const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)?.incarnationId
     if (

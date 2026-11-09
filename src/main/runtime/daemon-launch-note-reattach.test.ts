@@ -15,6 +15,33 @@ const NOTE = { launchToken: 'launch-1', launchConfig: LAUNCH_CONFIG }
 
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 
+function attach(
+  runtime: OrcaRuntimeService,
+  launchNote: typeof NOTE | null | undefined,
+  incarnationId = INCARNATION
+) {
+  runtime.registerPty(PTY_ID, 'worktree-1', null, {
+    tabId: TAB_ID,
+    leafId: LEAF_ID,
+    incarnationId,
+    providerReattachLaunchIdentity: { incarnationId, launchAgent: 'claude' },
+    reattach: launchNote === undefined ? {} : { launchNote }
+  })
+}
+
+function holdLaunch(runtime: OrcaRuntimeService) {
+  runtime.registerPty(PTY_ID, 'worktree-1', null, {
+    tabId: TAB_ID,
+    leafId: LEAF_ID,
+    incarnationId: INCARNATION,
+    agentLaunchAuthority: {
+      launchToken: 'launch-1',
+      launchAgent: 'claude',
+      launchConfig: LAUNCH_CONFIG
+    }
+  })
+}
+
 function makeRuntime() {
   const runtime = new OrcaRuntimeService(null)
   const setLaunchNote = vi.fn()
@@ -35,35 +62,13 @@ async function reattach(
 ) {
   const { runtime, setLaunchNote } = makeRuntime()
   vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue(foreground)
-  const binding = { tabId: TAB_ID, leafId: LEAF_ID, incarnationId: INCARNATION }
   if (mainHoldsLaunch) {
-    runtime.registerPty(PTY_ID, 'worktree-1', null, {
-      ...binding,
-      agentLaunchAuthority: {
-        launchToken: 'launch-1',
-        launchAgent: 'claude',
-        launchConfig: LAUNCH_CONFIG
-      }
-    })
+    holdLaunch(runtime)
   }
-  runtime.registerPty(PTY_ID, 'worktree-1', null, {
-    ...binding,
-    providerReattachLaunchIdentity: {
-      incarnationId: INCARNATION,
-      launchAgent: 'claude',
-      ...(launchNote !== 'omitted' ? { launchNote } : {})
-    }
-  })
+  attach(runtime, launchNote === 'omitted' ? undefined : launchNote)
   await new Promise((resolve) => setTimeout(resolve, 0))
   if (finishedOnReattach) {
-    runtime.registerPty(PTY_ID, 'worktree-1', null, {
-      ...binding,
-      providerReattachLaunchIdentity: {
-        incarnationId: INCARNATION,
-        launchAgent: 'claude',
-        launchNote: null
-      }
-    })
+    attach(runtime, null)
   }
   return {
     config: runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude'),
@@ -101,16 +106,7 @@ describe('a daemon reattach after a main restart', () => {
   it('settles an undecided pane once main sees its command finish', async () => {
     const { runtime } = makeRuntime()
     vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('unknown')
-    runtime.registerPty(PTY_ID, 'worktree-1', null, {
-      tabId: TAB_ID,
-      leafId: LEAF_ID,
-      incarnationId: INCARNATION,
-      providerReattachLaunchIdentity: {
-        incarnationId: INCARNATION,
-        launchAgent: 'claude',
-        launchNote: NOTE
-      }
-    })
+    attach(runtime, NOTE)
     await new Promise((resolve) => setTimeout(resolve, 0))
     runtime.emitDaemonPtyTransientFact(PTY_ID, { kind: 'command-finished', exitCode: 0 })
     expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toBeNull()
@@ -122,19 +118,8 @@ describe('a daemon reattach after a main restart', () => {
     vi.spyOn(runtime, 'readLaunchedAgentForeground').mockReturnValue(
       new Promise((resolve) => (answer = resolve))
     )
-    const attach = (launchNote: typeof NOTE | null) =>
-      runtime.registerPty(PTY_ID, 'worktree-1', null, {
-        tabId: TAB_ID,
-        leafId: LEAF_ID,
-        incarnationId: INCARNATION,
-        providerReattachLaunchIdentity: {
-          incarnationId: INCARNATION,
-          launchAgent: 'claude',
-          launchNote
-        }
-      })
-    attach(NOTE)
-    attach(null)
+    attach(runtime, NOTE)
+    attach(runtime, null)
     answer('agent')
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toBeNull()
@@ -145,7 +130,7 @@ describe('a daemon reattach after a main restart', () => {
     runtime.registerPty(PTY_ID, 'worktree-1', 'ssh-1', {
       tabId: TAB_ID,
       leafId: LEAF_ID,
-      launchUndecided: true
+      reattach: {}
     })
     expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toBeUndefined()
   })
@@ -153,11 +138,7 @@ describe('a daemon reattach after a main restart', () => {
   it('starts a replacement process decided even when its spawn is announced first', () => {
     const { runtime } = makeRuntime()
     const binding = { tabId: TAB_ID, leafId: LEAF_ID }
-    runtime.registerPty(PTY_ID, 'worktree-1', null, {
-      ...binding,
-      incarnationId: INCARNATION,
-      launchUndecided: true
-    })
+    attach(runtime, undefined)
     runtime.onPtySpawned(PTY_ID, 'next-incarnation')
     runtime.registerPty(PTY_ID, 'worktree-1', null, {
       ...binding,
@@ -169,21 +150,36 @@ describe('a daemon reattach after a main restart', () => {
   it('drops a held launch when a new process replaces it in the same terminal', () => {
     const { runtime } = makeRuntime()
     const binding = { tabId: TAB_ID, leafId: LEAF_ID }
-    runtime.registerPty(PTY_ID, 'worktree-1', null, {
-      ...binding,
-      incarnationId: INCARNATION,
-      agentLaunchAuthority: {
-        launchToken: 'launch-1',
-        launchAgent: 'claude',
-        launchConfig: LAUNCH_CONFIG
-      }
-    })
+    holdLaunch(runtime)
     runtime.onPtySpawned(PTY_ID, 'next-incarnation')
     runtime.registerPty(PTY_ID, 'worktree-1', null, {
       ...binding,
       incarnationId: 'next-incarnation'
     })
     expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toBeNull()
+  })
+
+  // A finished launch stays finished for its process; only a fresh launch supersedes it.
+  it.each([
+    ['a daemon that keeps no notes', undefined],
+    ['a note the daemon has not retired', NOTE]
+  ] as const)('keeps a finished launch gone when %s reattaches', async (_, launchNote) => {
+    const { runtime } = makeRuntime()
+    vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
+    holdLaunch(runtime)
+    runtime.emitDaemonPtyTransientFact(PTY_ID, { kind: 'command-finished', exitCode: 0 })
+    attach(runtime, launchNote)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toBeNull()
+  })
+
+  it('lets a replacement process prove its own launch through a reattach', async () => {
+    const { runtime } = makeRuntime()
+    vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
+    attach(runtime, undefined)
+    attach(runtime, NOTE, 'next-incarnation')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(runtime.getLaunchStatementForPaneKey(PANE_KEY, 'claude')).toEqual(LAUNCH_CONFIG)
   })
 
   // The renderer attaches a pane the CLI launched before its agent has started.

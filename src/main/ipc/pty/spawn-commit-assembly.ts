@@ -21,7 +21,7 @@ import { commitAttachedPtySize } from './delivery/attached-pty-size'
 import { seedTerminalRestoreRecordsFromSpawnResult } from './pane/agent-session-owners'
 import {
   admitProviderReattachLaunchIdentity,
-  reattachLeavesLaunchUndecided,
+  reattachLaunchBinding,
   type admitRendererAgentLaunchAuthority
 } from './pane/launch-authority'
 import type { ReplacedPaneOwner } from './pane/replaced-pane-owner'
@@ -97,6 +97,8 @@ export type PtySpawnCommitInput = {
     rendererLaunchAuthority: ReturnType<typeof admitRendererAgentLaunchAuthority>
     /** The agent a fresh spawn's launch command starts; null for reattaches, adoptions and shells. */
     launchedAgent: TuiAgent | null
+    /** Neither a reattach nor an adoption of a live pane's process. */
+    freshSpawn: boolean
   }
   preAllocatedHandle: string | null | undefined
   spawnTiming?: PtySpawnTiming
@@ -167,7 +169,8 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
               : {}),
             ...(registration.launchedAgent ? { launchedAgent: registration.launchedAgent } : {}),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {}),
-            ...(reattachLeavesLaunchUndecided(result) ? { launchUndecided: true } : {})
+            ...(registration.freshSpawn ? { freshSpawn: true as const } : {}),
+            ...reattachLaunchBinding(result)
           }
         : undefined,
       shouldSkipCodexHomeEnvForWindowsShell(registration.shellOverride, state.cwd)
@@ -229,7 +232,7 @@ async function commitAdoptedAgentSession(
       terminalHandle: surface.terminalHandle,
       ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
       ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {}),
-      ...(reattachLeavesLaunchUndecided(adoptedResult) ? { launchUndecided: true } : {})
+      ...reattachLaunchBinding(adoptedResult)
     }
   )
   if (rejectedRegistration) {

@@ -10,12 +10,7 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithResolveKnownWorkspaceFileTarget {
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
 
-  protected retirePredecessorPtyEvidence(pty: RuntimePtyWorktreeRecord): void {
-    // A new process can't still be running the predecessor's launch, undecided or held.
-    pty.launchUndecided = false
-    if (pty.launchToken && !pty.launchIncarnationId) {
-      pty.launchIncarnationId = pty.incarnationId
-    }
+  protected retirePredecessorPtyExitEvidence(pty: RuntimePtyWorktreeRecord): void {
     pty.lastExitCode = null
     pty.lastExitCause = null
     for (const leaf of this.getLeavesForPty(pty.ptyId)) {
@@ -167,7 +162,7 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
         true
       )
       if (incarnationId) {
-        this.retirePredecessorPtyEvidence(existingPty)
+        this.retirePredecessorPtyExitEvidence(existingPty)
       }
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)

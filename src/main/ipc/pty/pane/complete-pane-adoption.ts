@@ -20,10 +20,7 @@ import {
   seedTerminalRestoreRecordsFromSpawnResult
 } from './agent-session-owners'
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
-import {
-  admitProviderReattachLaunchIdentity,
-  reattachLeavesLaunchUndecided
-} from './launch-authority'
+import { admitProviderReattachLaunchIdentity, reattachLaunchBinding } from './launch-authority'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
 import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-relay/wsl-bridge-pty-presence'
 import '../spawn-outcome'
@@ -142,7 +139,7 @@ export async function completePaneAdoption(
         ...(terminalHandle ? { terminalHandle } : {}),
         ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
         providerReattachLaunchIdentity: admitProviderReattachLaunchIdentity(result) ?? undefined,
-        launchUndecided: reattachLeavesLaunchUndecided({ ...result, isReattach: true })
+        ...reattachLaunchBinding({ ...result, isReattach: true })
       }
     )
     const response = provenSpawnResponse(

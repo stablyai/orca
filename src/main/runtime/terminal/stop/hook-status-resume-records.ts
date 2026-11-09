@@ -9,6 +9,7 @@ import {
   type ResumeRecordTab
 } from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 import {
+  isPaneSleepRecord,
   normalizeAgentProviderSession,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
@@ -27,6 +28,21 @@ export type PaneLaunchConfigOf = (
   paneKey: string,
   agent: ResumeRecordStatus['agentType']
 ) => SleepingAgentLaunchConfig | null | undefined
+
+/** Main's word on the launch, else the pane's earlier record of this session when main can't tell.
+ *  A deliberate sleep's snapshot keeps its recipe past the launch it was captured from. */
+function statusLaunchConfig(
+  statement: SleepingAgentLaunchConfig | null | undefined,
+  existing: SleepingAgentSessionRecord | undefined,
+  status: ResumeRecordStatus,
+  keepsEarlier = true
+): SleepingAgentLaunchConfig | undefined {
+  const earlier =
+    statement === undefined
+      ? keepsEarlier
+      : statement === null && existing && isPaneSleepRecord(existing)
+  return earlier ? recordLaunchConfigForStatus(existing, status) : (statement ?? undefined)
+}
 
 /** A hook row as the window's status entry reads it; null for rows that are not a pane's status. */
 export function resumeStatusFromHookRow(
@@ -80,18 +96,18 @@ export function hookStatusResumeCommand(args: {
   }
   const existing = session.sleepingAgentSessionsByPaneKey?.[status.paneKey]
   const retainsResumableIdentity = statusRetainsResumableIdentity(status, status.providerSession)
-  // Main can't tell for a terminal that predates its launch proof, so it keeps the pane's earlier rule.
-  const statement = args.launchConfigOf(status.paneKey, status.agentType)
   const live = liveResumeRecord({
     entry: status,
     retainsResumableIdentity,
     worktreeIdOf: () => worktreeId,
     tabOf: () => tab,
     capturedAt: status.updatedAt,
-    launchConfig:
-      statement === undefined && (status.state !== 'done' || retainsResumableIdentity)
-        ? recordLaunchConfigForStatus(existing, status)
-        : (statement ?? undefined)
+    launchConfig: statusLaunchConfig(
+      args.launchConfigOf(status.paneKey, status.agentType),
+      existing,
+      status,
+      status.state !== 'done' || retainsResumableIdentity
+    )
   })
   const change = liveResumeRecordChange(existing, live)
   if (!change) {
@@ -121,12 +137,8 @@ export function quitResumeRecords(args: {
       capturedAt: args.capturedAt,
       worktreeIdOf: () => status.worktreeId ?? args.worktreeIdOf(status.paneKey),
       tabOf: tabFor,
-      launchConfigOf: () => {
-        const statement = args.launchConfigOf(status.paneKey, status.agentType)
-        return statement === undefined
-          ? recordLaunchConfigForStatus(existing, status)
-          : (statement ?? undefined)
-      }
+      launchConfigOf: () =>
+        statusLaunchConfig(args.launchConfigOf(status.paneKey, status.agentType), existing, status)
     })
     // Only a pane this partition holds keeps a record here.
     return record && tabFor(record.worktreeId) ? [record] : []
