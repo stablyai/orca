@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react'
 import { AlertTriangle, Cloud, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
@@ -39,11 +41,8 @@ function TerminalSkeleton({ still }: { still: boolean }): React.JSX.Element {
       {SKELETON.map((line, index) => (
         <span key={index} className="flex h-3 items-center gap-2">
           <span className="w-2 leading-none">{line.prompt ? '$' : ''}</span>
-          <span
-            className={cn(
-              'h-2 rounded-sm bg-muted-foreground/15',
-              !still && 'motion-safe:animate-pulse [animation-duration:2.4s]'
-            )}
+          <Skeleton
+            className={cn('h-2 rounded-sm', still ? 'animate-none' : '[animation-duration:2.4s]')}
             style={{ width: `${line.width}%`, animationDelay: `${index * 140}ms` }}
           />
         </span>
@@ -119,7 +118,9 @@ export function CloudWakingOverlay({
         leaving ? 'pointer-events-none opacity-0' : 'opacity-100'
       )}
       data-cloud-waking-overlay={wake.phase}
-      aria-label={failed ? undefined : t('orcaCloudWorkspace.overlay.label', '{{name}} is waking', { name })}
+      aria-label={
+        failed ? undefined : t('orcaCloudWorkspace.overlay.label', '{{name}} is waking', { name })
+      }
     >
       <TerminalSkeleton still={failed} />
       <div className="absolute inset-0 flex items-center justify-center p-4">
@@ -172,7 +173,7 @@ export function CloudWakingOverlay({
               <span className="font-medium">{title}</span>
               {/* Ticks every second; the surface's status region announces phases, not ticks. */}
               <span className="tabular-nums text-muted-foreground" aria-hidden="true">
-                {t('orcaCloudWorkspace.duration.seconds', '{{s}}s', { s: seconds })}
+                {formatElapsedTime(seconds * 1000)}
               </span>
             </div>
             <p className="text-xs text-muted-foreground">{hint}</p>

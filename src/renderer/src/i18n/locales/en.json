@@ -24913,13 +24913,6 @@
     },
     "dismiss": "Dismiss",
     "restartSandbox": "Restart sandbox",
-    "duration": {
-      "seconds": "{{s}}s",
-      "minutes": "{{m}}m",
-      "hoursMinutes": "{{h}}h {{m}}m",
-      "daysHours": "{{d}}d {{h}}h",
-      "hours": "{{value}} h"
-    },
     "markLabel": "Orca Cloud: {{state}}",
     "archive": "Archive",
     "oom": {
@@ -24934,7 +24927,7 @@
     "restarting": "Restarting…",
     "restart": "Restart",
     "detail": {
-      "restarting": "Restarting… Orca resumes your agents after the restart.",
+      "restarting": "Orca resumes your agents after the restart.",
       "asleep": "Files and chats are saved. Opening it wakes it.",
       "starting": "Starting…",
       "notResponding": "Not responding. Restart keeps your files.",
@@ -24990,6 +24983,13 @@
     "bytes": {
       "gb": "{{value}} GB",
       "mb": "{{value}} MB"
+    },
+    "duration": {
+      "seconds": "{{s}}s",
+      "minutes": "{{m}}m",
+      "hoursMinutes": "{{h}}h {{m}}m",
+      "daysHours": "{{d}}d {{h}}h",
+      "hours": "{{value}} h"
     },
     "idleSlept": "{{name}} slept after {{minutes}} min idle",
     "idleSleptNoTime": "{{name}} went to sleep while idle",

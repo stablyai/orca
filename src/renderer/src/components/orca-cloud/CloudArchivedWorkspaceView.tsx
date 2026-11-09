@@ -1,18 +1,20 @@
 import React, { useMemo, useState } from 'react'
 import {
-  AlertCircle,
   Archive,
   ArchiveRestore,
   ChevronRight,
   File,
   Folder,
   GitPullRequest,
-  Loader2,
-  RotateCw
+  Loader2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
+import { Skeleton } from '@/components/ui/skeleton'
+import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { getIntlLocale } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
   buildFileTree,
@@ -24,6 +26,7 @@ import type { CloudArchiveInfo } from '../../../../shared/hosted-sandbox/cloud-w
 import type { HostedArchivePullRequest } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { CloudGitChanges } from './CloudGitChanges'
 import { CloudWorkspaceHeader } from './CloudWorkspaceHeader'
+import { FOCUS_RING } from './cloud-focus'
 
 export type ArchiveLoad =
   | { status: 'loading' }
@@ -61,10 +64,18 @@ function Section({
 }): React.JSX.Element {
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="flex items-baseline gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        {title}
-        {count ? <span className="tabular-nums normal-case">{count}</span> : null}
-      </h3>
+      <SettingsGroupHeader
+        title={
+          <span className="flex items-baseline gap-1.5">
+            {title}
+            {count ? (
+              <span className="text-sm font-normal tabular-nums text-muted-foreground">
+                {new Intl.NumberFormat(getIntlLocale()).format(count)}
+              </span>
+            ) : null}
+          </span>
+        }
+      />
       {children}
     </section>
   )
@@ -99,7 +110,10 @@ function TreeItem({ node, depth }: { node: FileTreeNode; depth: number }): React
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex h-6 w-full items-center gap-1.5 rounded text-left text-xs hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className={cn(
+          'flex h-6 w-full items-center gap-1.5 rounded text-left text-xs hover:bg-accent/50',
+          FOCUS_RING
+        )}
         style={indent}
       >
         <ChevronRight
@@ -119,15 +133,14 @@ function TreeItem({ node, depth }: { node: FileTreeNode; depth: number }): React
 
 /** Shaped like the loaded sections, so nothing jumps when they arrive. */
 function ArchiveSkeleton(): React.JSX.Element {
-  const bar = 'rounded bg-muted motion-safe:animate-pulse'
   return (
     <div className="flex flex-col gap-6" aria-busy="true">
       {[2, 4, 5].map((rows, section) => (
         <div key={section} className="flex flex-col gap-2">
-          <span className={cn(bar, 'h-3 w-24')} />
+          <Skeleton className="mx-1 h-4 w-28" />
           <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
             {Array.from({ length: rows }, (_, row) => (
-              <span key={row} className={cn(bar, 'h-3')} style={{ width: `${55 + ((row * 17) % 40)}%` }} />
+              <Skeleton key={row} className="h-3" style={{ width: `${55 + ((row * 17) % 40)}%` }} />
             ))}
           </div>
         </div>
@@ -226,22 +239,20 @@ export function CloudArchivedWorkspaceView({
         {load.status === 'loading' ? (
           <ArchiveSkeleton />
         ) : load.status === 'error' ? (
-          <div
-            role="alert"
-            className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-xs"
-          >
-            <span className="flex items-center gap-2 text-muted-foreground">
-              <AlertCircle className="size-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
-              {t('orcaCloudWorkspace.archived.loadFailed', 'Couldn’t load the archive details.')}
-            </span>
-            <Button size="sm" variant="outline" onClick={onRetry}>
-              <RotateCw />
-              {t('orcaCloudWorkspace.retry', 'Retry')}
-            </Button>
-          </div>
+          <InlineError
+            title={t(
+              'orcaCloudWorkspace.archived.loadFailed',
+              'Couldn’t load the archive details.'
+            )}
+            retryLabel={t('orcaCloudWorkspace.retry', 'Retry')}
+            onRetry={onRetry}
+          />
         ) : nothing ? (
           <p className="max-w-[60ch] text-sm text-muted-foreground">
-            {t('orcaCloudWorkspace.archived.nothing', 'Nothing was captured for this workspace. Unarchive to open it.')}
+            {t(
+              'orcaCloudWorkspace.archived.nothing',
+              'Nothing was captured for this workspace. Unarchive to open it.'
+            )}
           </p>
         ) : (
           <>
@@ -256,14 +267,19 @@ export function CloudArchivedWorkspaceView({
                       <button
                         type="button"
                         onClick={() => onOpenUrl(pr.url)}
-                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent/50',
+                          FOCUS_RING
+                        )}
                       >
                         <GitPullRequest
                           className={cn('size-3.5 shrink-0', PR_TONE[pr.state])}
                           aria-hidden="true"
                         />
                         <span className="min-w-0 flex-1 truncate">{pr.title}</span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">#{pr.number}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          #{pr.number}
+                        </span>
                         <span className={cn('shrink-0', PR_TONE[pr.state])}>
                           {prStateLabel(pr.state, t)}
                         </span>
@@ -292,9 +308,13 @@ export function CloudArchivedWorkspaceView({
                     <TreeList nodes={tree} depth={0} />
                     {hiddenFiles > 0 ? (
                       <p className="px-1 pt-1 pb-4 text-[11px] text-muted-foreground">
-                        {t('orcaCloudWorkspace.archived.moreFiles', '{{count}} more files not shown', {
-                          count: hiddenFiles
-                        })}
+                        {t(
+                          'orcaCloudWorkspace.archived.moreFiles',
+                          '{{count}} more files not shown',
+                          {
+                            count: hiddenFiles
+                          }
+                        )}
                       </p>
                     ) : null}
                   </div>

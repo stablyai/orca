@@ -114,7 +114,10 @@ function QueueAnnouncer({ prompts }: { prompts: CloudQueuedPrompt[] }): React.JS
   const latest = [...prompts].sort((a, b) => b.updatedAt - a.updatedAt)[0]
   const message = latest
     ? {
-        queued: t('components.orcaCloud.offline.announceQueued', 'Message queued. It sends when the workspace wakes.'),
+        queued: t(
+          'components.orcaCloud.offline.announceQueued',
+          'Message queued. It sends when the workspace wakes.'
+        ),
         sending: t('components.orcaCloud.offline.announceSending', 'Delivering your message.'),
         delivered: t('components.orcaCloud.offline.announceDelivered', 'Message delivered.'),
         failed: t('components.orcaCloud.offline.announceFailed', 'Message not delivered.')
@@ -207,7 +210,7 @@ export function ChatPanel({
           <QueuedPromptRow key={prompt.id} prompt={prompt} onCancel={onCancel} onEdit={onEdit} />
         ))}
       </ol>
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-2">
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-2 focus-within:border-focus-ring">
         <Textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}

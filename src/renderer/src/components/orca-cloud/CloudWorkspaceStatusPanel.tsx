@@ -1,6 +1,9 @@
 import React from 'react'
-import { AlertCircle, Archive, ArchiveRestore, Cloud, Loader2, Play, RotateCw } from 'lucide-react'
+import { Archive, ArchiveRestore, Cloud, Loader2, Play, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
+import { Skeleton } from '@/components/ui/skeleton'
+import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
@@ -74,9 +77,9 @@ function MeterSkeleton(): React.JSX.Element {
     <div className="flex flex-col gap-1.5" aria-hidden="true">
       {Array.from({ length: METER_ROWS }, (_, row) => (
         <div key={row} className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-2">
-          <span className="h-3 w-10 rounded bg-muted motion-safe:animate-pulse" />
-          <span className="h-1 rounded-full bg-muted" />
-          <span className="h-3 w-20 rounded bg-muted motion-safe:animate-pulse" />
+          <Skeleton className="h-3 w-10 rounded" />
+          <Skeleton className="h-1 rounded-full animate-none" />
+          <Skeleton className="h-3 w-20 rounded" />
         </div>
       ))}
     </div>
@@ -185,19 +188,14 @@ export function CloudWorkspaceStatusPanel({
       </div>
 
       {unavailable ? (
-        <div
-          role="alert"
-          className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5"
-        >
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <AlertCircle className="size-3.5 shrink-0" aria-hidden="true" />
-            {t('orcaCloudWorkspace.statusUnavailableDetail', 'Orca Cloud didn’t answer.')}
-          </span>
-          <Button size="xs" variant="outline" onClick={() => void refreshCloudWorkspaceStatus(workspaceId)}>
-            <RotateCw />
-            {t('orcaCloudWorkspace.retry', 'Retry')}
-          </Button>
-        </div>
+        <InlineError
+          tone="neutral"
+          title={t('orcaCloudWorkspace.statusUnavailableDetail', 'Orca Cloud didn’t answer.')}
+          retryLabel={t('orcaCloudWorkspace.retry', 'Retry')}
+          retrying={entry?.loading}
+          onRetry={() => void refreshCloudWorkspaceStatus(workspaceId)}
+          className="text-xs"
+        />
       ) : firstLoad ? (
         <div aria-busy="true" aria-label={t('orcaCloudWorkspace.loading', 'Loading status')}>
           <MeterSkeleton />
@@ -263,10 +261,10 @@ export function CloudWorkspaceStatusPanel({
           {entry?.fetchedAt && showUpdatedAgo(entry.fetchedAt, now)
             ? entry.error
               ? t('orcaCloudWorkspace.staleSince', 'Last known · {{ago}} ago', {
-                  ago: formatDuration(now - entry.fetchedAt)
+                  ago: formatElapsedTime(now - entry.fetchedAt)
                 })
               : t('orcaCloudWorkspace.updatedAgo', 'Updated {{ago}} ago', {
-                  ago: formatDuration(now - entry.fetchedAt)
+                  ago: formatElapsedTime(now - entry.fetchedAt)
                 })
             : null}
         </span>
