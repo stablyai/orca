@@ -80,6 +80,6 @@ For agent harnesses that expose an OpenAI-compatible provider:
 | `deepseek-v4.1-flash` | 1,048,576 | 65,536     | Text, image |
 | `glm-5.3-flash`       | 1,048,576 | 131,072    | Text        |
 
-After saving, launch the harness from Orca's agent picker. Orca will run the same configured CLI in the selected worktree.
+After saving, launch the harness from Orca's agent picker if it has an entry. Otherwise, run its CLI in an Orca terminal in the selected worktree.
 
 The key rule is simple: configure Wally wherever the harness stores provider/model settings, then let Orca launch that harness in the right worktree.
