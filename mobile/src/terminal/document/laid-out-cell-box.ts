@@ -18,10 +18,6 @@ export function laidOutCellBox(scope: TerminalDocumentScope): TerminalLaidOutCel
 
 // Report changed measured boxes; refit only when the grid is unchanged or grid-driven refits would loop.
 export function reportLaidOutCellBox(scope: TerminalDocumentScope) {
-  // Hidden documents draw with the DOM renderer, whose cells differ from WebGL's; report on show.
-  if (!scope.shown) {
-    return
-  }
   const laidOut = laidOutCellBox(scope)
   if (!laidOut) {
     return

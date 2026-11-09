@@ -174,7 +174,7 @@ export function TerminalPaneView({
             ]}
             terminalTheme={terminalTheme}
             textScale={textScale}
-            shown={visible}
+            shownAtMount={visible}
             interactionActive={visible && appActive && routeFocused}
             onWebReady={() => onWebReady(handle)}
             onSelectionMode={(a) => onSelectionMode(handle, a)}

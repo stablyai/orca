@@ -189,7 +189,7 @@ describe('the cell box xterm laid out', () => {
   it('tells a document whose view was hidden at mount not to build before ready', () => {
     let renderer: ReactTestRenderer | undefined
     act(() => {
-      renderer = create(createElement(TerminalWebView, { shown: false }))
+      renderer = create(createElement(TerminalWebView, { shownAtMount: false }))
     })
     renderers.push(renderer!)
     const webView = renderer!.root.find((node) => typeof node.props.onMessage === 'function')

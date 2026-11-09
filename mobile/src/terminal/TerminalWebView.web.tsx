@@ -54,7 +54,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     // Seed shown/scale before document startup, matching native pre-content state.
     const [atMount] = useState(() => ({
       textScale: props.textScale ?? 1,
-      shown: props.shown ?? true
+      shown: props.shownAtMount ?? true
     }))
 
     useImperativeHandle(ref, () => handle, [handle])
