@@ -104,7 +104,10 @@ function discardLocalStream(state: SttSessionState, engine: SttEngine, streamId:
   const draining = reached.then(async (inTime) => {
     // Another device's decode may hold the queue; never kill its dictation.
     if (!inTime && state.engine === engine && sttEngineUsers(state, engine).length === 0) {
-      await teardownSttEngine(state, engine)
+      // A failed kill must not fail the dictation waiting on this; it starts on a fresh process either way.
+      await teardownSttEngine(state, engine).catch((error: unknown) =>
+        console.warn('[speech] Could not stop the busy speech process after a cancel:', error)
+      )
     }
   })
   engine.draining = draining
