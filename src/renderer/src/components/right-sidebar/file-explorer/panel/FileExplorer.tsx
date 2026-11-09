@@ -16,17 +16,14 @@ import { FileExplorerScopeNotice } from './FileExplorerScopeNotice'
 import { useFileExplorerRootNavigation } from '../navigation/use-file-explorer-root-navigation'
 import { useFileExplorerScopeTransition } from '../navigation/use-file-explorer-scope-transition'
 import { basename } from '@/lib/path'
-import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getVisibleFileExplorerWorktreePath } from '../navigation/file-explorer-reset'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerFilesTreePane } from '../tree/FileExplorerFilesTreePane'
 import { FileExplorerNameFilter } from './FileExplorerNameFilter'
-import { FileExplorerQueryStrip } from './FileExplorerQueryStrip'
-import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { SearchFilters } from '../content-search/SearchFilters'
 import { SearchQueryRow } from '../content-search/SearchQueryRow'
-import { SearchResultsPane } from '../content-search/SearchResultsPane'
+import { FileExplorerSearchResultsLayer } from '../content-search/FileExplorerSearchResultsLayer'
 import { useFileSearchPanel } from '../content-search/useFileSearchPanel'
 import {
   getNameFilterCollapsedPathsAfterExpand,
@@ -40,6 +37,15 @@ import { useFileExplorerVisibleRowProjection } from '../tree/useFileExplorerVisi
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pane-state'
+import {
+  FileExplorerHostAwareQueryStrip,
+  FileExplorerHostAwareToolbar,
+  FileExplorerHostInertBoundary,
+  FileExplorerHostModeProvider,
+  FileExplorerHostOverlay,
+  FileExplorerProjectOnly
+} from '../host-mode/file-explorer-host-mode-context'
+import { FileExplorerHostQueryRow } from '../host-mode/FileExplorerHostQueryRow'
 import { useWslHostUnavailableReason } from '../../../../lib/wsl-host-availability'
 import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { useTranslate } from '@/i18n/use-translate'
@@ -239,7 +245,7 @@ function FileExplorerFiles(): React.JSX.Element {
   }
 
   return (
-    <>
+    <FileExplorerHostModeProvider activeWorktreeId={activeWorktreeId} worktreePath={worktreePath}>
       <div
         ref={rowScrolling.setExplorerShellRef}
         data-orca-explorer-shell
@@ -248,7 +254,7 @@ function FileExplorerFiles(): React.JSX.Element {
         }
         className="flex min-h-0 flex-1 flex-col"
       >
-        <FileExplorerToolbar
+        <FileExplorerHostAwareToolbar
           repoName={repoName}
           worktreePath={worktreePath}
           {...getRouteForLocalPathOpenOwner(openInOwner)}
@@ -264,89 +270,89 @@ function FileExplorerFiles(): React.JSX.Element {
           onToggleDotfiles={handleToggleDotfiles}
         />
         {activeWorktree?.isSparse && (
-          <FileExplorerScopeNotice
-            rootSelect={
-              isFilesViewActive && rootOptions
-                ? {
-                    options: rootOptions,
-                    value: rootChoice,
-                    onValueChange: rootNavigation.selectRoot,
-                    disabled:
-                      Boolean(paneState.dragDrop.dragSourcePath) ||
-                      paneState.dragDrop.isNativeDragOver
-                  }
-                : null
-            }
-            returnRoot={rootNavigation.returnRoot}
-            onSelectRoot={rootNavigation.selectRoot}
-            disabled={
-              Boolean(paneState.dragDrop.dragSourcePath) || paneState.dragDrop.isNativeDragOver
-            }
-            searching={!isFilesViewActive}
-            sparse={!!activeWorktree?.isSparse}
-          />
+          <FileExplorerProjectOnly>
+            <FileExplorerScopeNotice
+              rootSelect={
+                isFilesViewActive && rootOptions
+                  ? {
+                      options: rootOptions,
+                      value: rootChoice,
+                      onValueChange: rootNavigation.selectRoot,
+                      disabled:
+                        Boolean(paneState.dragDrop.dragSourcePath) ||
+                        paneState.dragDrop.isNativeDragOver
+                    }
+                  : null
+              }
+              returnRoot={rootNavigation.returnRoot}
+              onSelectRoot={rootNavigation.selectRoot}
+              disabled={
+                Boolean(paneState.dragDrop.dragSourcePath) || paneState.dragDrop.isNativeDragOver
+              }
+              searching={!isFilesViewActive}
+              sparse={!!activeWorktree?.isSparse}
+            />
+          </FileExplorerProjectOnly>
         )}
-        <FileExplorerQueryStrip view={explorerView} onSelectView={setRightSidebarExplorerView}>
+        <FileExplorerHostAwareQueryStrip
+          view={explorerView}
+          onSelectView={setRightSidebarExplorerView}
+        >
           {/* Keep query rows mounted to preserve input selection when switching modes. */}
           <div className="relative min-h-8">
-            <div hidden={explorerView !== 'files'}>
-              <FileExplorerNameFilter
-                query={nameFilterQuery}
-                scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
-                loading={nameFilterFiles.loading}
-                onQueryChange={setNameFilterQuery}
-                onClear={handleClearNameFilter}
-              />
-            </div>
-            <div hidden={explorerView !== 'search'}>
-              <SearchQueryRow {...searchPanel.queryRowProps} />
-            </div>
-            <div hidden={explorerView !== 'search'}>
-              <SearchFilters key={activeWorktreeId} {...searchPanel.filtersProps} />
-            </div>
+            <FileExplorerHostQueryRow view={explorerView} />
+            <FileExplorerHostInertBoundary className="contents">
+              <div hidden={explorerView !== 'files'}>
+                <FileExplorerNameFilter
+                  query={nameFilterQuery}
+                  scopeLabel={rootOptions?.find((option) => option.value === rootChoice)?.label}
+                  loading={nameFilterFiles.loading}
+                  onQueryChange={setNameFilterQuery}
+                  onClear={handleClearNameFilter}
+                />
+              </div>
+              <div hidden={explorerView !== 'search'}>
+                <SearchQueryRow {...searchPanel.queryRowProps} />
+              </div>
+              <FileExplorerProjectOnly>
+                <div hidden={explorerView !== 'search'}>
+                  <SearchFilters key={activeWorktreeId} {...searchPanel.filtersProps} />
+                </div>
+              </FileExplorerProjectOnly>
+            </FileExplorerHostInertBoundary>
           </div>
-        </FileExplorerQueryStrip>
+        </FileExplorerHostAwareQueryStrip>
         {/* Layer Files/Contents in one body slot to retain heavy virtualized panes at full height. */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
-          <FileExplorerFilesTreePane
-            displayRootPath={displayRootPath}
-            activeRepo={activeRepo}
-            worktreePath={worktreePath}
-            explorerView={explorerView}
-            activeFileId={activeFileId}
-            hasNameFilter={hasNameFilter}
-            nameFilterSource={nameFilterSource}
-            nameFilterFiles={nameFilterFiles}
-            handleExpandNameFilterDir={handleExpandNameFilterDir}
-            tree={tree}
-            selection={selection}
-            paneState={paneState}
-            rowProjection={rowProjection}
-            ignoredByRelativePath={ignoredByRelativePath}
-            rowExpandedPaths={rowExpandedPaths}
-            visibleRowCount={visibleRowCount}
-            handleExplorerBackgroundContextMenuCapture={handleExplorerBackgroundContextMenuCapture}
-            handleExplorerBackgroundDoubleClick={handleExplorerBackgroundDoubleClick}
-            wslHostUnavailable={wslHostUnavailable}
-            stoppedWslHost={stoppedWslHost}
-          />
-          <div
-            className={cn(
-              'absolute inset-0 flex min-h-0 flex-col',
-              explorerView !== 'search' && 'pointer-events-none invisible'
-            )}
-          >
-            {searchPanel.activeWorktreeId ? (
-              <SearchResultsPane {...searchPanel.resultsProps} />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                {t(
-                  'auto.components.right.sidebar.Search.98c8435e36',
-                  'Select a workspace to search'
-                )}
-              </div>
-            )}
-          </div>
+          <FileExplorerHostOverlay showDotfiles={showDotfiles} />
+          {/* Why: Host mode overlays instead of unmounting so tree caches and listeners survive. */}
+          <FileExplorerHostInertBoundary>
+            <FileExplorerFilesTreePane
+              displayRootPath={displayRootPath}
+              activeRepo={activeRepo}
+              worktreePath={worktreePath}
+              explorerView={explorerView}
+              activeFileId={activeFileId}
+              hasNameFilter={hasNameFilter}
+              nameFilterSource={nameFilterSource}
+              nameFilterFiles={nameFilterFiles}
+              handleExpandNameFilterDir={handleExpandNameFilterDir}
+              tree={tree}
+              selection={selection}
+              paneState={paneState}
+              rowProjection={rowProjection}
+              ignoredByRelativePath={ignoredByRelativePath}
+              rowExpandedPaths={rowExpandedPaths}
+              visibleRowCount={visibleRowCount}
+              handleExplorerBackgroundContextMenuCapture={
+                handleExplorerBackgroundContextMenuCapture
+              }
+              handleExplorerBackgroundDoubleClick={handleExplorerBackgroundDoubleClick}
+              wslHostUnavailable={wslHostUnavailable}
+              stoppedWslHost={stoppedWslHost}
+            />
+            <FileExplorerSearchResultsLayer explorerView={explorerView} searchPanel={searchPanel} />
+          </FileExplorerHostInertBoundary>
         </div>
       </div>
 
@@ -358,7 +364,7 @@ function FileExplorerFiles(): React.JSX.Element {
         displayDepth={displayDepth}
         onStartNew={inlineInputState.startNew}
       />
-    </>
+    </FileExplorerHostModeProvider>
   )
 }
 

@@ -6,6 +6,10 @@ import type { DirEntry } from '../../shared/file-listing/directory-entry'
 import type { FsChangedPayload } from '../../shared/file-watch/filesystem-change-event'
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type {
+  HostBrowseEntryResolution,
+  HostDirectoryListing
+} from '../../shared/file-listing/host-directory-browse'
+import type {
   ImportItemResult,
   ResolveDroppedPathsResult
 } from '../../shared/file-import/filesystem-import-result'
@@ -184,6 +188,14 @@ export type FilesystemApi = {
         permanent?: boolean
       } & SshMutationExpectation
     ) => Promise<void>
+    /** Desktop-only names listing for the Explorer's Host mode; never widens path grants. */
+    browseHostDir?: (args: { dirPath: string }) => Promise<HostDirectoryListing>
+    /** Desktop-only; classifies a host path against the workspace without granting access. */
+    resolveHostBrowseEntry?: (args: {
+      targetPath: string
+      connectionId?: string
+      workspaceRoot?: string
+    }) => Promise<HostBrowseEntryResolution>
     stat: (args: {
       filePath: string
       connectionId?: string

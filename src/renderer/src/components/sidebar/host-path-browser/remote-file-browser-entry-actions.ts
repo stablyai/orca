@@ -6,7 +6,9 @@ import {
   driveRootOf,
   isDrivePath,
   joinDrivePath,
-  parentOfDrivePath
+  parentOfDrivePath,
+  parentOfUncPath,
+  uncRootOf
 } from './remote-file-browser-drive-paths'
 
 export type DirEntry = {
@@ -23,7 +25,7 @@ export function isRemoteFileBrowserFilterQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-export function filterEntries(entries: DirEntry[], filter: string): DirEntry[] {
+export function filterEntries<T extends DirEntry>(entries: T[], filter: string): T[] {
   if (isRemoteFileBrowserFilterQueryTooLarge(filter)) {
     return []
   }
@@ -67,13 +69,16 @@ export function joinPath(
   if (pathFlavor === 'win32' && resolvedPath === '/' && isDrivePath(name)) {
     return driveRootOf(name)
   }
-  if (pathFlavor === 'win32' && isDrivePath(resolvedPath)) {
+  if (pathFlavor === 'win32' && (isDrivePath(resolvedPath) || uncRootOf(resolvedPath))) {
     return joinDrivePath(resolvedPath, name)
   }
   return resolvedPath === '/' ? `/${name}` : `${resolvedPath}/${name}`
 }
 
 export function parentPath(p: string, pathFlavor: FilesystemPathFlavor = 'posix'): string {
+  if (pathFlavor === 'win32' && uncRootOf(p)) {
+    return parentOfUncPath(p)
+  }
   if (pathFlavor === 'win32' && isDrivePath(p)) {
     return parentOfDrivePath(p)
   }

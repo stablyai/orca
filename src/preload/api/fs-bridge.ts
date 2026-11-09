@@ -23,6 +23,10 @@ import type {
 import type { SearchResult } from '../../shared/file-search/code-search-types'
 import type { FsChangedPayload } from '../../shared/file-watch/filesystem-change-event'
 import type {
+  HostBrowseEntryResolution,
+  HostDirectoryListing
+} from '../../shared/file-listing/host-directory-browse'
+import type {
   ImportItemResult,
   ResolveDroppedPathsResult
 } from '../../shared/file-import/filesystem-import-result'
@@ -185,6 +189,13 @@ export const fsApi = {
       permanent?: boolean
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
+  browseHostDir: (args: { dirPath: string }): Promise<HostDirectoryListing> =>
+    ipcRenderer.invoke('fs:browseHostDir', args),
+  resolveHostBrowseEntry: (args: {
+    targetPath: string
+    connectionId?: string
+    workspaceRoot?: string
+  }): Promise<HostBrowseEntryResolution> => ipcRenderer.invoke('fs:resolveHostBrowseEntry', args),
   stat: (args: {
     filePath: string
     connectionId?: string

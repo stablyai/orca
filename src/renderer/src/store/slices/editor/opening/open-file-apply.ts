@@ -134,9 +134,17 @@ export function applyOpenFileToState(
     )
       ? (existing.fileContentReloadNonce ?? 0) + 1
       : existing.fileContentReloadNonce
-    // Normal open explicitly enables editing of a View Log; View Log must never downgrade an already writable tab.
+    // Normal open explicitly enables editing of a View Log or Explorer Host tab; read-only opens must never downgrade an already writable tab.
     const nextReadOnly = existing.readOnly === true && file.readOnly === true ? true : undefined
-    const nextLiveTail = file.liveTail === true && nextReadOnly === true ? true : undefined
+    // Why: a Host-mode open only focuses an existing View Log tab; it must not end its
+    // live tail or make it session-only.
+    const hostOpenOfReadOnlyTab = file.hostBrowse === true && nextReadOnly === true
+    const nextLiveTail = hostOpenOfReadOnlyTab
+      ? existing.liveTail
+      : file.liveTail === true && nextReadOnly === true
+        ? true
+        : undefined
+    const nextHostBrowse = hostOpenOfReadOnlyTab && existing.hostBrowse === true ? true : undefined
     const needsExistingUpdate =
       existing.mode !== file.mode ||
       existing.diffSource !== file.diffSource ||
@@ -157,7 +165,8 @@ export function applyOpenFileToState(
       existing.operationProvenance !== nextOperationProvenance ||
       existing.fileContentReloadNonce !== fileContentReloadNonce ||
       existing.readOnly !== nextReadOnly ||
-      existing.liveTail !== nextLiveTail
+      existing.liveTail !== nextLiveTail ||
+      existing.hostBrowse !== nextHostBrowse
     if (!needsExistingUpdate) {
       return { ...splitState, ...activeResult }
     }
@@ -188,7 +197,8 @@ export function applyOpenFileToState(
               isPreview: updatedPreview,
               fileContentReloadNonce,
               readOnly: nextReadOnly,
-              liveTail: nextLiveTail
+              liveTail: nextLiveTail,
+              hostBrowse: nextHostBrowse
             }
           : f
       ),
