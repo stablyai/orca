@@ -4,7 +4,6 @@ vi.mock('@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client', 
   const report = { checkedAt: 0, agents: [{ agent: 'claude', state: 'signedOut' }] }
   return {
     readHostAgentSignInReport: () => null,
-    readFreshHostAgentSignInReport: () => null,
     refreshHostAgentSignInReport: async () => report,
     hostAgentSignInEntry: (value: typeof report | null, agent: string) =>
       value?.agents.find((entry) => entry.agent === agent) ?? null
