@@ -213,7 +213,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
           commitGitHubProjectView(project, selectedView.id, views)
           return
         }
-        if (views.length === 0) {
+        if (!views.some((view) => view.layout === 'TABLE_LAYOUT')) {
           throw new Error('This project has no supported views.')
         }
         // Ask for a view, matching desktop: never silently choose the first table.
