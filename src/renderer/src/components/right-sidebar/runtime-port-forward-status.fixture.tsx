@@ -113,6 +113,20 @@ function Panel({ empty = false }: { empty?: boolean }): React.JSX.Element {
 
 export const allStates = defineFixture({ width: 300, render: () => <Panel /> })
 export const noPorts = defineFixture({ width: 300, render: () => <Panel empty /> })
+export const hostOffline = defineFixture({
+  width: 300,
+  render: () => (
+    <div className="w-[280px] bg-background p-3">
+      <RuntimePortForwardStatus
+        remotePort={5173}
+        state={{ kind: 'forwarded', forward: forward(5173), hostOffline: true }}
+        onForward={() => {}}
+        onOpenLocal={() => {}}
+      />
+    </div>
+  )
+})
+
 export const unreachable = defineFixture({
   width: 300,
   render: () => (

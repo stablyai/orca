@@ -7,7 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimePortForward } from '../../../../shared/runtime-port-forwards'
 
 export type RuntimePortForwardRowState =
-  | { kind: 'forwarded'; forward: RuntimePortForward }
+  | { kind: 'forwarded'; forward: RuntimePortForward; hostOffline?: boolean }
   | { kind: 'pending' }
   | { kind: 'unforwarded' }
   | { kind: 'failed'; message: string; busy: boolean }
@@ -30,15 +30,18 @@ export function RuntimePortForwardStatus({
   const t = useTranslate()
   if (state.kind === 'forwarded') {
     const { forward } = state
-    const unreachable = Boolean(forward.lastError)
+    const offline = state.hostOffline === true
+    const unreachable = !offline && Boolean(forward.lastError)
     const remapped = forward.localPort !== remotePort
-    const note = unreachable
-      ? t('auto.components.right.sidebar.RuntimePortForward.noResponse', 'no response on host')
-      : remapped
-        ? t('auto.components.right.sidebar.RuntimePortForward.remapped', '({{value0}} taken)', {
-            value0: remotePort
-          })
-        : null
+    const note = offline
+      ? t('auto.components.right.sidebar.RuntimePortForward.hostOffline', 'host offline')
+      : unreachable
+        ? t('auto.components.right.sidebar.RuntimePortForward.noResponse', 'no response on host')
+        : remapped
+          ? t('auto.components.right.sidebar.RuntimePortForward.remapped', '({{value0}} taken)', {
+              value0: remotePort
+            })
+          : null
     return (
       <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
         <button
@@ -49,23 +52,35 @@ export function RuntimePortForwardStatus({
           )}
           onClick={() => onOpenLocal(forward)}
           aria-label={
-            unreachable
+            offline
               ? t(
-                  'auto.components.right.sidebar.RuntimePortForward.unreachableLabel',
-                  'Port {{value0}} is forwarded to localhost:{{value1}}, but nothing answers on the host. Open in browser',
+                  'auto.components.right.sidebar.RuntimePortForward.offlineLabel',
+                  'Port {{value0}} is forwarded to localhost:{{value1}}, but the host is offline. Open in browser',
                   { value0: remotePort, value1: forward.localPort }
                 )
-              : t(
-                  'auto.components.right.sidebar.RuntimePortForward.forwardedLabel',
-                  'Port {{value0}} is forwarded to localhost:{{value1}}. Open in browser',
-                  { value0: remotePort, value1: forward.localPort }
-                )
+              : unreachable
+                ? t(
+                    'auto.components.right.sidebar.RuntimePortForward.unreachableLabel',
+                    'Port {{value0}} is forwarded to localhost:{{value1}}, but nothing answers on the host. Open in browser',
+                    { value0: remotePort, value1: forward.localPort }
+                  )
+                : t(
+                    'auto.components.right.sidebar.RuntimePortForward.forwardedLabel',
+                    'Port {{value0}} is forwarded to localhost:{{value1}}. Open in browser',
+                    { value0: remotePort, value1: forward.localPort }
+                  )
           }
         >
           {unreachable ? (
             <TriangleAlert size={11} aria-hidden className="shrink-0 text-status-warning-text" />
           ) : (
-            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-success" />
+            <span
+              aria-hidden
+              className={cn(
+                'size-1.5 shrink-0 rounded-full',
+                offline ? 'bg-muted-foreground/50' : 'bg-status-success'
+              )}
+            />
           )}
           <ArrowRight size={11} aria-hidden className="shrink-0 text-muted-foreground" />
           <span className="truncate font-medium">

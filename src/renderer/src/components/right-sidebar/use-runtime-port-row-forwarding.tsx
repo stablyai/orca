@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { BellOff, Copy, Plug, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem } from '@/components/ui/context-menu'
+import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import {
@@ -54,6 +55,11 @@ export function useRuntimePortRowForwarding(
   const t = useTranslate()
   const environmentId = runtimeTarget?.kind === 'environment' ? runtimeTarget.environmentId : null
   const { forwards: allForwards, pending, failures } = useRuntimePortForwardState()
+  // A known host whose connection is down: forwards stay bound but nothing reaches it until it returns.
+  const hostOffline = useAppStore((s) => {
+    const entry = environmentId ? s.runtimeStatusByEnvironmentId.get(environmentId) : undefined
+    return entry ? entry.status === null : false
+  })
   const forwards = useMemo(
     () => allForwards.filter((forward) => forward.environmentId === environmentId),
     [allForwards, environmentId]
@@ -97,7 +103,7 @@ export function useRuntimePortRowForwarding(
       const key = portForwardKey(environmentId ?? '', port.port)
       const failure = failures.get(key)
       return existing
-        ? { kind: 'forwarded', forward: existing }
+        ? { kind: 'forwarded', forward: existing, hostOffline }
         : pending.has(key)
           ? { kind: 'pending' }
           : failure
@@ -176,7 +182,7 @@ export function useRuntimePortRowForwarding(
         return existing ? `localhost:${existing.localPort}` : undefined
       }
     }
-  }, [environmentId, failures, forward, forwardFor, pending, t])
+  }, [environmentId, failures, forward, forwardFor, hostOffline, pending, t])
 
   if (!environmentId || !runtimePortForwardingAvailable()) {
     return null

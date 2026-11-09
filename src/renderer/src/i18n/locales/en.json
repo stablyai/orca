@@ -15525,7 +15525,9 @@
             "copied": "Copied {{value0}}",
             "copyLocal": "Copy Local URL",
             "stopAuto": "Stop and Don't Auto-Forward :{{value0}}",
-            "localAddress": "localhost:{{value0}}"
+            "localAddress": "localhost:{{value0}}",
+            "hostOffline": "host offline",
+            "offlineLabel": "Port {{value0}} is forwarded to localhost:{{value1}}, but the host is offline. Open in browser"
           }
         }
       },
