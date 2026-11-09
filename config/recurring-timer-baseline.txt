@@ -39,6 +39,7 @@
 1 src/main/native-chat/agent-session-wire/termination/structured-agent-session-idle-sweep.ts
 1 src/main/notifications/desktop-presence-reporter.ts
 1 src/main/orcad/orcad-browser-install-park.ts
+1 src/main/orcad/orcad-event-loop-watchdog.ts
 1 src/main/orcad/orcad-lock-clone-machine.ts
 1 src/main/orcad/orcad-stop-request-listener.ts
 1 src/main/plugins/catalog/plugin-auto-updater.ts
@@ -88,5 +89,6 @@
 1 src/renderer/src/lib/window-visibility-interval.ts
 1 src/renderer/src/lib/worker-auto-close.ts
 1 src/renderer/src/runtime/hosts/wsl/wsl-refused-read-watch.ts
+1 src/shared/remote-runtime/control/remote-runtime-shared-control-app-heartbeat.ts
 1 src/shared/remote-runtime/remote-runtime-socket-liveness.ts
 1 src/shared/tmux-agent-hook-owner.ts

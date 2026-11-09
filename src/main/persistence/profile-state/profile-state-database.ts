@@ -213,6 +213,8 @@ function configureProfileStatePragmas(db: Database.Database): void {
   // User state needs FULL durability; macOS checkpoints also need F_FULLFSYNC to flush drive caches.
   db.pragma('synchronous = FULL')
   db.pragma('checkpoint_fullfsync = ON')
+  // Without a limit the WAL keeps the size of the largest transaction ever written.
+  db.pragma('journal_size_limit = 8388608')
 }
 
 function migrateProfileStateSchema(

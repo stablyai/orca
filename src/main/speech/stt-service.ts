@@ -1,4 +1,9 @@
 import type { MessagePortMain } from 'electron'
+import {
+  createDictationTextPipeline,
+  type DictationTextSettings
+} from '../../shared/dictation-text-pipeline'
+import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
 import type { SpawnSttWorkerProcess } from './stt-worker-process'
 import { prewarmSttModel } from './stt-session-prewarm'
@@ -22,6 +27,16 @@ export type SttEvent =
 
 export type SttEventSink = (event: SttEvent) => void
 
+// Cleaned once here, so every route the host transcribes for gets the same text.
+function cleanTranscriptEvents(sink: SttEventSink, clean: (text: string) => string): SttEventSink {
+  return (event) =>
+    sink(
+      event.type === 'partial' || event.type === 'final'
+        ? { ...event, text: event.text && clean(event.text) }
+        : event
+    )
+}
+
 export class SttService {
   private readonly state: SttSessionState
 
@@ -34,9 +49,17 @@ export class SttService {
     sink: SttEventSink,
     hotwordsFilePath?: string,
     owner = 'desktop',
-    language?: string
+    voice?: Partial<DictationTextSettings>
   ): Promise<void> {
-    return startSttDictation(this.state, modelId, sink, hotwordsFilePath, owner, language)
+    const clean = createDictationTextPipeline(getCatalogModel(modelId), voice)
+    return startSttDictation(
+      this.state,
+      modelId,
+      clean ? cleanTranscriptEvents(sink, clean) : sink,
+      hotwordsFilePath,
+      owner,
+      voice?.dictationLanguage
+    )
   }
 
   feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): boolean {

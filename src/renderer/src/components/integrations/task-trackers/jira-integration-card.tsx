@@ -9,7 +9,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   getProviderRuntimeContextKey,
   hasRemoteProviderRuntime
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store/index'
 import {
   IntegrationCardDetails,

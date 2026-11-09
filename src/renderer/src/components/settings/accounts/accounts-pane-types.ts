@@ -13,6 +13,7 @@ import type { FeatureInteractionId } from '../../../../../shared/feature-interac
 import type { ProviderAccountRuntimeView } from '../../provider-accounts/provider-account-visibility'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+import type { LocalAccountRuntime } from '../../../lib/provider-accounts/account-runtime-label'
 
 export type AccountsPaneProps = {
   settings: GlobalSettings
@@ -30,20 +31,12 @@ export type AccountsPaneProps = {
   wslHostDistro?: string | null
 }
 
-export type LocalAccountRuntime = {
-  runtime: 'host' | 'wsl'
-  wslDistro?: string | null
-  label: string
-}
-
-export type CodexAccountAction =
+export type ProviderAccountAction =
   | 'idle'
   | 'adding'
   | `reauth:${string}`
   | `remove:${string}`
   | `select:${string}`
-
-export type ClaudeAccountAction = CodexAccountAction
 
 export type RemoveAccountTarget = {
   id: string
@@ -56,13 +49,13 @@ export type ProviderAccountVisibilityOptions = {
 }
 
 export type CodexAccountActionRunner = (
-  action: CodexAccountAction,
+  action: ProviderAccountAction,
   operation: () => Promise<CodexRateLimitAccountsState>,
   actionRuntime?: ProviderAccountRuntimeView
 ) => Promise<void>
 
 export type ClaudeAccountActionRunner = (
-  action: ClaudeAccountAction,
+  action: ProviderAccountAction,
   operation: () => Promise<ClaudeRateLimitAccountsState>,
   actionRuntime?: ProviderAccountRuntimeView
 ) => Promise<void>
@@ -90,13 +83,13 @@ export type AccountsPaneSectionModel = {
   accountRuntimeUnavailable: boolean
   accountVisibilityOptions: ProviderAccountVisibilityOptions
   claudeAccounts: ClaudeRateLimitAccountsState
-  claudeAction: ClaudeAccountAction
+  claudeAction: ProviderAccountAction
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runClaudeAccountAction: ClaudeAccountActionRunner
   codexAccounts: CodexRateLimitAccountsState
-  codexAction: CodexAccountAction
+  codexAction: ProviderAccountAction
   visibleCodexAccounts: CodexRateLimitAccountsState['accounts']
   systemCodexActive: boolean
   systemCodexNeedsSignIn: boolean

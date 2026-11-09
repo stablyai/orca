@@ -359,6 +359,8 @@ module.exports = {
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
     'out/main/plugins/plugin-authoring-checks.js',
+    'out/main/environment-doctor/environment-doctor.js',
+    'out/main/environment-doctor/environment-doctor-host.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
     'resources/plugins/declarative/*.mjs',
     'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
@@ -368,6 +370,7 @@ module.exports = {
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/foreign-sqlite-reader-entry.js',
+    'out/main/session-search-worker-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/browser-extension-native-host-supervisor-entry.js',
     'out/main/computer-sidecar.js',

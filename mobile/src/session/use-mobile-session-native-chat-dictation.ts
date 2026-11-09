@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
@@ -136,9 +136,12 @@ export function useMobileSessionNativeChatDictation(
   const dictationCanStart = showNativeChat
     ? connState === 'connected' || phoneDictation.ready
     : canSend
+  // The host's filler switch, kept from its last setup read; on until one says otherwise.
+  const [removeFillerWords, setRemoveFillerWords] = useState(true)
   const dictation = useMobileDictation({
     client,
     enabled: (showNativeChat || canCompose) && dictationEnabled,
+    removeFillerWords,
     onTranscript: (text) => {
       // Chat dictation is inserted locally; a terminal's words are typed into it live.
       if (destination.landsInChat(showNativeChatRef.current)) {
@@ -166,7 +169,8 @@ export function useMobileSessionNativeChatDictation(
     onError: (err) => {
       dictationRouteContextRef.current = null
       reportDictationFailure(err)
-    }
+    },
+    onAudioLimitReached: () => showToast(nativeChatDictationCopy.stoppedAtCloudLimit())
   })
 
   const dictationLeaveHold = useMobileDictationLeaveHold(dictation)
@@ -246,6 +250,7 @@ export function useMobileSessionNativeChatDictation(
       const setup = await fetchDictationSetup(client)
       if (read === dictationSettingsReadRef.current) {
         setDictationMode(setup.dictationMode)
+        setRemoveFillerWords(setup.removeFillerWords !== false)
         setDictationEnabled(!dictationMicHidden(setup))
         dictationNeedsSetupRef.current = dictationNeedsSetup(setup)
       }

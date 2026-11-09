@@ -179,9 +179,14 @@ vi.mock('../media/media-preview-protocol', () => ({ installMediaPreviewProtocolH
 vi.mock('../ipc/doc-preview-grant-ipc', () => ({ registerDocPreviewGrantHandlers: vi.fn() }))
 
 // Keep registry/startup real through meta load, retired-choice inspection and identity write; stub only surrounding route/policy/cookie machinery.
-vi.mock('../browser/routing/sessions/browser-route-session-runtime', () => ({
-  configureRouteSessionsForOrcaProfile: vi.fn()
-}))
+vi.mock(
+  '../browser/routing/partitions/browser-route-partition-binding-runtime',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    configureBrowserRoutePartitionBindingsForOrcaProfile: vi.fn()
+  })
+)
+vi.mock('../browser/routing/sessions/browser-route-session-runtime', () => ({}))
 vi.mock('../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', () => ({
   configurePairedRuntimeBrowserClientHostsForOrcaProfile: vi.fn()
 }))

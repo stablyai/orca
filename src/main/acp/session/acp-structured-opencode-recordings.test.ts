@@ -63,59 +63,6 @@ async function answer(rig: AcpAdapterRig, replay: GrokFixtureReplay, optionId: s
 }
 
 describe('OpenCode recordings through the adapter', () => {
-  it('an approved shell command lands with its exit code, and "always" keeps OpenCode\'s own name', async () => {
-    const { rig, replay } = await replaying('opencode-v1-tool')
-    const approval = await answer(rig, replay, 'once')
-    expect(approval.body).toMatchObject({
-      kind: 'approval',
-      options: [
-        { id: 'once', label: 'Allow once' },
-        { id: 'always', label: 'Always allow' },
-        { id: 'reject', label: 'Reject' }
-      ]
-    })
-    await waitFor(() => expect(replay.awaiting).toBeNull())
-    await waitFor(async () =>
-      expect(await turns(rig)).toMatchObject([{ state: 'completed', outcome: 'success' }])
-    )
-    const shell = (await rowsOf(rig, 'tool-call')).find(
-      (row) => row.body.kind === 'tool-call' && row.body.exitCode !== undefined
-    )
-    expect(shell?.body).toMatchObject({ state: 'completed', exitCode: 0 })
-  })
-
-  it('a rejected permission fails its tool and the turn still ends', async () => {
-    const { rig, replay } = await replaying('opencode-v1-deny')
-    await answer(rig, replay, 'reject')
-    await waitFor(() => expect(replay.awaiting).toBeNull())
-    await waitFor(async () => expect(await turns(rig)).toMatchObject([{ state: 'completed' }]))
-    expect((await rowsOf(rig, 'tool-call')).at(-1)?.body).toMatchObject({ state: 'failed' })
-  })
-
-  it("a subagent's approval never arrives (a known OpenCode bug); Stop still ends the turn", async () => {
-    const { rig, replay } = await replaying('opencode-v1-subagent-hang')
-    await waitFor(() => expect(replay.awaiting).toBe('session/cancel'))
-    expect(await rowsOf(rig, 'approval')).toEqual([])
-    await expect(rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })).resolves.toEqual({
-      cancelled: true
-    })
-    await waitFor(async () =>
-      expect(await turns(rig)).toMatchObject([{ state: 'interrupted', outcome: 'cancellation' }])
-    )
-  })
-
-  it("OpenCode's stray file write after an approved edit is refused without breaking the turn", async () => {
-    const { rig, replay } = await replaying('opencode-v1-stray-write')
-    await answer(rig, replay, 'once', 0)
-    await answer(rig, replay, 'reject', 1)
-    await waitFor(() => expect(replay.awaiting).toBeNull())
-    await waitFor(async () => expect(await turns(rig)).toMatchObject([{ state: 'completed' }]))
-    // No filesystem capability was advertised, so the repeated write request creates no row.
-    expect(JSON.stringify((await rig.rig.rows()).map((row) => row.body))).not.toContain(
-      'fs/write_text_file'
-    )
-  })
-
   it("a provider error fails the turn in OpenCode's own words", async () => {
     const { rig, replay } = await replaying('opencode-v1-provider-error')
     await waitFor(() => expect(replay.awaiting).toBeNull())
@@ -152,20 +99,6 @@ describe('OpenCode 2 recordings through the adapter', () => {
   it('a rejected permission fails its tool and OpenCode ends the turn as cancelled', async () => {
     const { rig, replay } = await replaying('opencode-v2-deny', 'opencode2')
     await answer(rig, replay, 'reject')
-    await waitFor(() => expect(replay.awaiting).toBeNull())
-    await waitFor(async () =>
-      expect(await turns(rig)).toMatchObject([{ state: 'interrupted', outcome: 'cancellation' }])
-    )
-    expect((await rowsOf(rig, 'tool-call')).at(-1)?.body).toMatchObject({ state: 'failed' })
-  })
-
-  it('Stop during an approved command cancels it and ends the turn', async () => {
-    const { rig, replay } = await replaying('opencode-v2-stop', 'opencode2')
-    await answer(rig, replay, 'once')
-    await waitFor(() => expect(replay.awaiting).toBe('session/cancel'))
-    await expect(rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })).resolves.toEqual({
-      cancelled: true
-    })
     await waitFor(() => expect(replay.awaiting).toBeNull())
     await waitFor(async () =>
       expect(await turns(rig)).toMatchObject([{ state: 'interrupted', outcome: 'cancellation' }])

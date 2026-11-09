@@ -22,8 +22,7 @@ const buttonVariants = cva(
         link: 'text-primary underline-offset-4 hover:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
-        'menu-segment':
-          'rounded-l-none border-l border-border bg-muted/40 text-muted-foreground hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground aria-expanded:bg-primary aria-expanded:text-primary-foreground',
+        'menu-segment': 'rounded-l-none border-l border-border',
         'pane-title': 'pane-title-split-trigger',
         'pane-title-close': 'pane-title-close',
         // The worktree card's "rename failed" chip, for a failure the user can open.
@@ -39,6 +38,8 @@ const buttonVariants = cva(
         lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
         icon: 'size-9',
         'icon-xs': "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
+        // The dictation pill's round finish button.
+        'icon-xs-round': "size-6 rounded-full [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8',
         'icon-lg': 'size-10',
         // As tall as the composer's round Send button, so swapping between them keeps the row's height.

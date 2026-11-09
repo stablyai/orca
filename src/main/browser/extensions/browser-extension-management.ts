@@ -58,6 +58,7 @@ async function settle(action: () => Promise<void>): Promise<BrowserExtensionActi
   }
 }
 
+/** Lists host-installed extensions with enablement and load status for the requested browser profile. */
 export async function listBrowserExtensionsForProfile(
   browserProfileId: string
 ): Promise<BrowserExtensionListResult> {
@@ -72,6 +73,7 @@ export async function listBrowserExtensionsForProfile(
       name: extension.name,
       version: extension.version,
       source: extension.source,
+      path: extension.path,
       enabled: enabled.has(extension.id),
       iconDataUrl: await readBrowserExtensionIconDataUrl(extension.path, extension.iconPath),
       hasOptionsPage: extension.optionsPage !== null,
@@ -182,6 +184,8 @@ export function reloadUnpackedBrowserExtension(
       }
       store.save(record, true)
       await reloadBrowserExtensionWhereEnabled(record, { refresh: true })
+      // Why: a CLI reload can change name, version or options page while Settings is open.
+      notifyBrowserExtensionListChanged()
     })
   )
 }

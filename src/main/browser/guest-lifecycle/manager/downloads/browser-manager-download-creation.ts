@@ -5,7 +5,7 @@ import { browserDownloadDestinationReservations } from '../../../downloads/brows
 import { routeBrowserClientDownload } from '../../../client-hosts/file-transfers/browser-client-download-routing'
 import { safeOrigin } from '../../browser-event-origin'
 import type { ActiveDownload, BrowserDownloadDoneState } from './browser-active-download'
-import type { BrowserDownloadFinishedEvent } from '../../../../../shared/browser-guest-events'
+import type { BrowserDownloadFinishedEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { BrowserManagerQueries } from '../browser-manager-queries'
 
 export type BrowserDownloadClaim = {

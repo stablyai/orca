@@ -100,8 +100,9 @@ export function createMainWindow(
 
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
-    // Webview guests have no safe transcript target; yield the dictation shortcut to the page.
-    return false
+    const voice = store?.getSettings().voice
+    // Guests forward only keydown, so Hold's release can't reach the renderer; the page keeps the key then.
+    return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
   const windowMaterial = resolveWindowMaterial(
     settings,

@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import {
   getEphemeralVmRecipeResultConnection,
@@ -8,7 +8,7 @@ import { RuntimeClientError } from './types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 
-export function waitForRecipeJson(child: ChildProcessHandle): Promise<number> {
+export function waitForRecipeJson(child: ChildProcess): Promise<number> {
   return new Promise((resolve, reject) => {
     let output = ''
     let settled = false

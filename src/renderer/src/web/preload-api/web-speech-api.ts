@@ -32,6 +32,8 @@ type HostDictation = {
   sending: Promise<void> | null
   failed: boolean
   textSoFar: string
+  // The host's cloud upload filled up; reported to capture once so it stops like the desktop does.
+  audioLimit: 'not-reached' | 'reached' | 'reported'
 }
 
 type Listeners<T> = Set<(data: T) => void>
@@ -84,6 +86,7 @@ export function createWebSpeechApi(): Pick<
   | 'startDictation'
   | 'feedAudio'
   | 'stopDictation'
+  | 'cancelDictation'
   | 'onPartialTranscript'
   | 'onFinalTranscript'
   | 'onStopped'
@@ -113,12 +116,18 @@ export function createWebSpeechApi(): Pick<
   const sendPendingAudio = async (dictation: HostDictation): Promise<void> => {
     while (dictation.pending.length > 0 && !dictation.failed) {
       try {
-        const reply = await callRuntimeResult<{ text?: string }>('speech.dictation.chunk', {
+        const reply = await callRuntimeResult<{
+          text?: string
+          audioLimitReached?: boolean
+        }>('speech.dictation.chunk', {
           dictationId: dictation.dictationId,
           audioBase64: encodePcm16Base64(takePendingAudio(dictation)),
           sampleRate: dictation.sampleRate,
           seq: dictation.seq++
         })
+        if (reply?.audioLimitReached && dictation.audioLimit === 'not-reached') {
+          dictation.audioLimit = 'reached'
+        }
         // The host repeats unchanged text about once a second in case a reply was lost.
         if (reply?.text && reply.text !== dictation.textSoFar) {
           dictation.textSoFar = reply.text
@@ -147,11 +156,16 @@ export function createWebSpeechApi(): Pick<
         pending: [],
         sending: null,
         failed: false,
-        textSoFar: ''
+        textSoFar: '',
+        audioLimit: 'not-reached'
       }
       active = dictation
       try {
         await callRuntimeResult('speech.dictation.start', { dictationId: dictation.dictationId })
+        // A cancel that landed while the host was starting couldn't reach this dictation yet.
+        if (active !== dictation) {
+          void cancelOnHost(dictation)
+        }
       } catch (error) {
         if (active === dictation) {
           active = null
@@ -161,7 +175,7 @@ export function createWebSpeechApi(): Pick<
         throw error
       }
     },
-    // The host's chunk RPC doesn't report the cloud upload cap, so the web client never sees it reached.
+    // A chunk reply reports the cap after its audio was sent, so a later feed passes it on.
     feedAudio: async (samples, sampleRate, sessionId) => {
       const dictation = active
       if (!dictation || dictation.sessionId !== sessionId || dictation.failed) {
@@ -170,7 +184,11 @@ export function createWebSpeechApi(): Pick<
       dictation.pending.push(samples)
       dictation.sampleRate = sampleRate
       dictation.sending ??= sendPendingAudio(dictation)
-      return false
+      if (dictation.audioLimit !== 'reached') {
+        return false
+      }
+      dictation.audioLimit = 'reported'
+      return true
     },
     stopDictation: async (sessionId = '') => {
       const dictation = active?.sessionId === sessionId ? active : null
@@ -212,6 +230,17 @@ export function createWebSpeechApi(): Pick<
       } finally {
         emit(stoppedListeners, { sessionId })
       }
+    },
+    cancelDictation: async (sessionId) => {
+      const dictation = active?.sessionId === sessionId ? active : null
+      if (!dictation) {
+        return
+      }
+      active = null
+      dictation.failed = true
+      dictation.pending = []
+      await cancelOnHost(dictation)
+      emit(stoppedListeners, { sessionId })
     },
     onPartialTranscript: (callback) => subscribe(partialListeners, callback),
     onFinalTranscript: (callback) => subscribe(finalListeners, callback),

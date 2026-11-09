@@ -7,7 +7,7 @@ import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from '../protocol/agent-brows
 import type {
   BrowserBackResult,
   BrowserReloadResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-commands'
 import {
   answerBrowserJavaScriptDialog,

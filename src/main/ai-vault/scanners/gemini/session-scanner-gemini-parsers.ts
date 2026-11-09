@@ -194,7 +194,8 @@ export async function parseGeminiSessionDocument(
       })
     },
     consume: (state, value) => consumeGeminiMessage(state, asRecord(value)),
-    signal
+    signal,
+    drain: () => messages?.drain?.() ?? Promise.resolve()
   })
   if (!parsed) {
     return null
