@@ -87,7 +87,7 @@ test('a host-area document can save and read chat view after entering a workspac
     params: { key: foreignKey }
   })
   const refused = view.frames.find((frame) => frame.id === 'read-other-host')
-  assert.equal(refused.payload.ok, false)
+  assert.equal(refused.error.code, 'native_verb_params')
   bridge.dispose()
   client.close()
 })

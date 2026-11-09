@@ -16,12 +16,13 @@ const manifest = {
       canOwnHostArea: true,
       canOwnHostAreaAcrossLayouts: true,
       grants: ['navigate'],
-      optionalGrants: []
+      optionalGrants: ['native.media.pick']
     }
   ]
 }
-function bridgeClass(peer) {
-  return loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes }).BridgeHost
+function bridgeClass(peer, bindings = {}) {
+  return loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes, ...bindings })
+    .BridgeHost
 }
 function createBridge(peer, client, BridgeHost = bridgeClass(peer)) {
   const frames = []
@@ -44,6 +45,58 @@ function createBridge(peer, client, BridgeHost = bridgeClass(peer)) {
 function post(bridge, message) {
   bridge.onClientMessage(JSON.stringify({ v: 1, type: 'request', ...message }))
 }
+
+test('an oversized document is refused with the native media size reason and a smaller retry works', async () => {
+  let size = 18 * 1024 * 1024 + 1
+  const { NativeDevice, NativeMediaTooLargeError } = loadArkts(
+    'webshell/NativeDevice.ets',
+    ['NativeDevice', 'NativeMediaTooLargeError'],
+    {
+      NativeSpeech: class {},
+      NativeImageActions: class {},
+      NativePdfViewer: class {},
+      picker: {
+        DocumentSelectOptions: class {},
+        DocumentViewPicker: class {
+          async select() {
+            return ['file://docs/fixture.txt']
+          }
+        }
+      },
+      fs: {
+        OpenMode: { READ_ONLY: 1 },
+        open: async () => ({ fd: 1 }),
+        stat: async () => ({ size }),
+        read: async (_fd, buffer) => {
+          new Uint8Array(buffer).set([111, 114, 99])
+          return 3
+        },
+        close: async () => {}
+      }
+    }
+  )
+  const device = new NativeDevice({})
+  const peer = createRpcPeer()
+  const { bridge, frames } = createBridge(
+    peer,
+    null,
+    bridgeClass(peer, { NativeMediaTooLargeError })
+  )
+  bridge.setNativeHandler(device.methods, (method, params) => device.serve(method, params))
+  const request = (id) =>
+    post(bridge, { id, method: 'native.media.pick', params: { source: 'files', multiple: true } })
+  request('oversized')
+  await new Promise(setImmediate)
+  assert.equal(
+    frames.find((frame) => frame.id === 'oversized' && frame.type === 'error').error.code,
+    'native_media_too_large'
+  )
+  size = 3
+  request('retry')
+  await new Promise(setImmediate)
+  assert.equal(frames.find((frame) => frame.id === 'retry').payload.result.items[0].byteLength, 3)
+  bridge.dispose()
+})
 
 test('two documents on one connection receive and cancel only their own calls', async () => {
   const peer = createRpcPeer()

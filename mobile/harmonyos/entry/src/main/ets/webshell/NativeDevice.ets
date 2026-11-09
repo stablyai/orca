@@ -24,6 +24,10 @@ export const NATIVE_DEVICE_METHODS: string[] = ['native.clipboard.read', 'native
   'native.audio.start', 'native.audio.read', 'native.audio.stop',
   'native.speech.act', 'native.image.act', 'native.pdf.view'];
 
+export class NativeMediaTooLargeError extends Error {
+  constructor() { super('Selected media is too large'); }
+}
+
 /** Each bridge owns its native resources; handles and microphone never outlive the document. */
 export class NativeDevice {
   readonly methods: string[] = NATIVE_DEVICE_METHODS;
@@ -263,7 +267,8 @@ export class NativeDevice {
           let file = await fs.open(uris[i], fs.OpenMode.READ_ONLY);
           try {
             let stat = await fs.stat(file.fd); this.checkSelection(generation);
-            if (stat.size > MEDIA_LIMIT || stat.size < 0) { throw new Error('File too large'); }
+            if (stat.size > MEDIA_LIMIT) { throw new NativeMediaTooLargeError(); }
+            if (!Number.isSafeInteger(stat.size) || stat.size < 0) { throw new Error('File size unavailable'); }
             let bytes = new Uint8Array(stat.size); let offset = 0;
             while (offset < bytes.length) {
               let part = new ArrayBuffer(Math.min(READ_LIMIT, bytes.length - offset));

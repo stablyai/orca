@@ -18,6 +18,7 @@ import {
 } from '../transport/TerminalBinaryFrame';
 import { HostMeta } from '../storage/HostStore';
 import { FoldDivision } from './WindowRegions';
+import { NativeMediaTooLargeError } from './NativeDevice';
 import { parseTerminalRailClaim, terminalRailKeyEnabled, TerminalRailClaim } from './TerminalRailClaim';
 
 /**
@@ -1139,8 +1140,13 @@ export class BridgeHost {
       let handler = this.nativeHandler;
       handler(method, msg['params']).then((result: Object): void => {
         if (this.pendingIds.delete(id) && !this.disposed) { this.sendReply(id, new RpcSuccess(id, JSON.stringify(result))); }
-      }).catch((_e: Error): void => {
-        if (this.pendingIds.delete(id)) { this.sendLocalNativeError(id, 'native_verb_failed', '设备操作未完成，请检查权限后重试'); }
+      }).catch((error: Error): void => {
+        if (!this.pendingIds.delete(id)) { return; }
+        if (method === 'native.media.pick' && error instanceof NativeMediaTooLargeError) {
+          this.sendLocalNativeError(id, 'native_media_too_large', error.message);
+          return;
+        }
+        this.sendLocalNativeError(id, 'native_verb_failed', '设备操作未完成，请检查权限后重试');
       });
       return;
     }
@@ -1178,8 +1184,7 @@ export class BridgeHost {
   }
 
   private sendLocalNativeError(id: string, code: string, message: string): void {
-    let payload = `{"id":${JSON.stringify(id)},"ok":false,"error":{"code":${JSON.stringify(code)},"message":${JSON.stringify(message)}}}`;
-    this.pushReply(id, payload);
+    this.sendError(id, message, false, code);
   }
 
   private handleCancel(msg: ESObject): void {
@@ -1541,8 +1546,9 @@ export class BridgeHost {
     } catch (e) { }
   }
 
-  private sendError(id: string, message: string, deliveryUnknown: boolean = false): void {
-    let frame = `{"v":${BRIDGE_PROTOCOL_VERSION},"type":"error","id":${JSON.stringify(id)},"error":{"category":"Error","message":${JSON.stringify(message)},"isRpcDeliveryUnknown":${deliveryUnknown}}}`;
+  private sendError(id: string, message: string, deliveryUnknown: boolean = false, code: string = ''): void {
+    let coded = code ? `,"code":${JSON.stringify(code)}` : '';
+    let frame = `{"v":${BRIDGE_PROTOCOL_VERSION},"type":"error","id":${JSON.stringify(id)},"error":{"category":"Error","message":${JSON.stringify(message)},"isRpcDeliveryUnknown":${deliveryUnknown}${coded}}}`;
     this.pushFrame(frame);
   }
 
