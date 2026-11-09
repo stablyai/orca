@@ -11,9 +11,11 @@ import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-router'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
+import {
+  ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
+  seedTestAgentSessionRecordStore
+} from '../records/agent-session-record-store-test-harness'
 import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
-import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../records/agent-session-record-store-test-harness'
 
 vi.mock('../model-catalog/structured-agent-model-catalog-wiring', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelCatalogWiring>()
