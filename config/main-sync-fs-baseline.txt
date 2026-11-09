@@ -116,7 +116,7 @@
 1 src/main/codex-accounts/codex-login-auth-snapshot.ts
 5 src/main/codex-accounts/codex-managed-home-lifecycle.ts
 6 src/main/codex-accounts/codex-managed-home-path.ts
-17 src/main/codex-accounts/fs-utils.ts
+17 src/main/filesystem/atomic-file-publication.ts
 1 src/main/codex-accounts/guest-codex-account-homes.ts
 6 src/main/codex-accounts/host-codex-managed-home-ownership.ts
 2 src/main/codex-accounts/legacy-shared-auth-migration.ts
