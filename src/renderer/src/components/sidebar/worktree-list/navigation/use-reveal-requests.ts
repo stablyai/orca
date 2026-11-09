@@ -90,7 +90,7 @@ export function useSidebarRevealRequests(args: {
         currentSidebarExecutionHostId
       )
       if (target) {
-        revealWorkspaceFilters(target, currentSidebarExecutionHostId ?? undefined)
+        revealWorkspaceFilters(target, target.hostId ?? currentSidebarExecutionHostId ?? undefined)
       }
     }
   }, [
@@ -179,7 +179,10 @@ export function useSidebarRevealRequests(args: {
             latest.visibleFolderWorkspaces
           )
         ) {
-          revealWorkspaceFilters(activeWorktree, currentSidebarExecutionHostId ?? undefined)
+          revealWorkspaceFilters(
+            activeWorktree,
+            activeWorktree.hostId ?? currentSidebarExecutionHostId ?? undefined
+          )
         }
       }
       revealWorktreeInSidebar(currentSidebarWorktreeId, {
