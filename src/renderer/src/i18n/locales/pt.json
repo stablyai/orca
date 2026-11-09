@@ -889,6 +889,7 @@
       "cleared": "Dados de busca limpos.",
       "clearError": "Não foi possível limpar os dados de busca. Tente novamente.",
       "webUnsupported": "Ative a busca de sessões pelo app desktop do Orca nesse computador.",
+      "title": "Busca de Sessões de Agente",
       "description": "Pesquise tudo o que seus agentes disseram e fizeram, neste computador e em qualquer servidor Orca pareado.",
       "searchDescription": "Ative a busca de sessões para este computador e servidores pareados, ou limpe os dados de busca.",
       "indexComputers": "Pesquisar dentro das sessões",
@@ -906,8 +907,7 @@
       "openInSidebar": "Abrir na barra lateral",
       "openInSidebarCopy": "Digite o que você lembra, ou peça a um agente: “encontre a sessão em que corrigimos o timeout de login.”",
       "open": "Abrir",
-      "enableOnAll": "Ativar em todos os computadores",
-      "title": "Busca de Sessões de Agente"
+      "enableOnAll": "Ativar em todos os computadores"
     },
     "dialog": {
       "select": "Selecionar",
@@ -1717,21 +1717,6 @@
         "missingHost": "A URL de proxy deve incluir um host."
       }
     },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "Máxima precisão para 25 idiomas europeus. Pontuação, maiúsculas e minúsculas e marcas de tempo por palavra.",
-        "parakeetV2": "Somente inglês. Mais rápido que v3 com precisão semelhante. Pontuação e maiúsculas e minúsculas.",
-        "zipformerBilingual": "Chinês + inglês com alternância de idiomas. Streaming em tempo real com baixa latência.",
-        "paraformerBilingual": "Chinês (mandarim + dialetos) + inglês. Bom desempenho com sotaques e variantes regionais do chinês.",
-        "zipformerStreamingEnRetired": "Não é mais oferecido: ele perde o início das frases. Exclua-o para liberar espaço.",
-        "zipformerStreamingZh": "Somente chinês. Modelo ultraleve de 14 milhões de parâmetros, ideal para dispositivos com poucos recursos.",
-        "zipformerStreamingKo": "Somente coreano. Streaming em tempo real com baixa latência.",
-        "parakeetJa": "Somente japonês. Treinado com mais de 35 mil horas de fala natural. Inclui pontuação.",
-        "whisperTiny": "Mais de 90 idiomas. Menor precisão que Parakeet, mas com a maior cobertura de idiomas.",
-        "senseVoice": "Chinês, inglês, japonês, coreano e cantonês com detecção automática de idioma.",
-        "gptTranscribe": "Transcrição na nuvem com alta precisão. Exige uma chave de API da OpenAI."
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "a criação de arquivos de revisão está desativada",
@@ -2126,7 +2111,6 @@
         "jira": {
           "856083302c": "A conexão com o Jira foi substituída por uma solicitação mais recente."
         },
-        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Falha ao criar o perfil",
@@ -2224,28 +2208,38 @@
         "e338c507c1": "Configurações de compatibilidade de baixo nível para solução de problemas.",
         "580a04cd81": "Avançado",
         "8400cfe1c1": "Controles de dados de uso anônimos e telemetria.",
+        "3618579df6": "Privacidade e Telemetria",
         "65ec7d1968": "Acesso de privacidade do macOS para ferramentas de desenvolvedor iniciadas pelo terminal.",
         "d91ae31fbd": "Permissões do macOS",
         "95a1886d94": "Controle terminais e agentes a partir do seu celular.",
         "1cd25673df": "Mobile",
         "31e57d1c70": "Use máquinas existentes via SSH para arquivos, terminais, Git e espaços de trabalho.",
+        "94a5afe910": "Hosts SSH",
         "40d80bad8a": "Beta",
+        "de0c2907a1": "Servidores Orca Remotos",
         "b351014180": "Estatísticas do Orca, além de análises de tokens do Claude, Codex, OpenCode e uso da assinatura do Grok.",
+        "d72a58b5b9": "Estatísticas e Uso",
         "dcd0d9b74f": "Atalhos de teclado para ações comuns.",
         "94295ebfb3": "Atalhos",
         "7682607591": "Notificações nativas do desktop para eventos de agente e terminal.",
         "2eece16ad1": "Notificações",
         "1f452cbd4c": "Comportamento de seleção e edição.",
+        "0c6ee88a5f": "Entrada e Edição",
         "b11a5a48a2": "Tema, zoom, aparência do aplicativo e do terminal, barras laterais e barra de status.",
         "93d88d20bf": "Aparência",
         "2d0659f6f0": "Abas globais de terminal, navegador e markdown.",
+        "65b19f5bde": "Espaço de Trabalho Flutuante",
         "3d65d3f1b9": "Configure o suporte a emulador mobile para o Orca e agentes de código.",
+        "1e761cff2b": "Emulador Mobile",
         "e815fd01bd": "Página inicial, roteamento de links e cookies de sessão.",
         "8c197f74a1": "Navegador",
         "42ae40842f": "Comandos de terminal salvos, com escopo global ou por projeto.",
+        "3fc3db144f": "Comandos Rápidos",
         "c33bfd664c": "Shells, renderização, sessões e comportamento do terminal.",
         "a9fb10afca": "Terminal",
+        "85f4fd7710": "Origens de Tarefas",
         "ab4b21b58e": "Nomenclatura de branch, refs base e Autor de IA do Git.",
+        "09607cb0fe": "Git e Controle de Versão",
         "33a5e1d597": "Conecte GitHub, GitLab, Linear e serviços de hospedagem de código.",
         "2b043783ef": "Integrações",
         "2cd4ea75da": "Padrões de espaço de trabalho, configuração do aplicativo e manutenção.",
@@ -2259,11 +2253,15 @@
         "8ac3de82f5": "Ditado de voz para texto local com modelos no dispositivo.",
         "6a50cdcd7c": "Voz",
         "0059bd17f3": "Permita que agentes controlem qualquer aplicativo no seu computador.",
+        "b35e92364b": "Uso do Computador",
         "cd50cec5d7": "Coordene vários agentes de código através do Orca.",
         "58a868e8e4": "Orquestração",
+        "7c79d3b7bf": "Opcional",
         "b1c2f8b0ac": "Alternância de conta opcional e configuração de uso para Claude, Codex, Gemini, OpenCode Go, MiniMax e Grok.",
+        "f70ac54d38": "Contas de Provedores de IA",
         "4121f7a0a2": "Gerencie agentes de IA, defina um padrão e personalize comandos.",
         "b49abbd2f7": "Agentes",
+        "dev": "Ferramentas de Dev",
         "devDescription": "Ferramentas exclusivas para desenvolvedores testarem estados de UI.",
         "devBadge": "Dev",
         "devSearchNotificationPlayground": "Playground de notificações",
@@ -2283,23 +2281,9 @@
         "artifactsDescription": "Compartilhe arquivos HTML e Markdown com sua equipe e gerencie seus links públicos.",
         "automationsTitle": "Automações",
         "automationsDescription": "Agende o trabalho dos agentes e escolha se Automações aparece na barra lateral.",
-        "shareSkillsDescription": "Compartilhe suas skills com um link não listado. Qualquer pessoa que o tiver pode instalá-las.",
-        "floatingWorkspaceWebDescription": "Abas globais de terminal e markdown.",
-        "dev": "Ferramentas de Dev",
-        "1e761cff2b": "Emulador Mobile",
-        "3fc3db144f": "Comandos Rápidos",
-        "b35e92364b": "Uso do Computador",
-        "0c6ee88a5f": "Entrada e Edição",
-        "85f4fd7710": "Origens de Tarefas",
-        "f70ac54d38": "Contas de Provedores de IA",
-        "09607cb0fe": "Git e Controle de Versão",
-        "7c79d3b7bf": "Opcional",
-        "d72a58b5b9": "Estatísticas e Uso",
         "shareSkillsTitle": "Compartilhar Skills",
-        "de0c2907a1": "Servidores Orca Remotos",
-        "65b19f5bde": "Espaço de Trabalho Flutuante",
-        "3618579df6": "Privacidade e Telemetria",
-        "94a5afe910": "Hosts SSH"
+        "shareSkillsDescription": "Compartilhe suas skills com um link não listado. Qualquer pessoa que o tiver pode instalá-las.",
+        "floatingWorkspaceWebDescription": "Abas globais de terminal e markdown."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "A colagem é muito grande."
@@ -3660,8 +3644,8 @@
               "797fdfe4ca": "selecionar",
               "zellij": "zellij",
               "grok": "grok",
-              "5639f17c59": "Copiar ao Selecionar",
-              "eacb392fe3": "Permitir Escrita na Área de Transferência por TUI (OSC 52)"
+              "eacb392fe3": "Permitir Escrita na Área de Transferência por TUI (OSC 52)",
+              "5639f17c59": "Copiar ao Selecionar"
             }
           },
           "search": {
@@ -3860,29 +3844,29 @@
             "ddd5efe113": "shell",
             "3de504994c": "Shell e argumentos usados em novos painéis locais de terminal interativo",
             "1733ccd3e9": "Shell do terminal",
-            "6e795fc619": "Opacidade do Painel Inativo",
-            "9ae234eae2": "Espessura do Divisor",
-            "1b00063795": "Perguntar Antes de Fechar Terminais em Execução",
-            "64f6b4fdf6": "Foco Segue o Mouse",
-            "8afdce471f": "Tamanho da Fonte",
-            "651c993c32": "Família de Fonte",
-            "7fabc609fa": "Peso da Fonte",
-            "c1794a43d7": "Altura de Linha",
-            "e3dae5017c": "Ligaduras de Fonte",
+            "10344a316c": "Separadores de Palavra",
             "b1061a2826": "Aceleração por GPU",
+            "8afdce471f": "Tamanho da Fonte",
             "990137dab4": "Formato do Cursor",
-            "317af36f37": "Opacidade do Cursor",
+            "edd38f8bb8": "Linhas de Histórico de Rolagem",
+            "ee9665265e": "Tema Escuro",
             "9b41f4be64": "Opacidade do Fundo",
-            "cfdaed8dae": "Espaçamento Interno Horizontal",
-            "3fdccf0277": "Espaçamento Interno Vertical",
+            "317af36f37": "Opacidade do Cursor",
+            "e3dae5017c": "Ligaduras de Fonte",
+            "c1794a43d7": "Altura de Linha",
+            "7fabc609fa": "Peso da Fonte",
             "9d81f938fd": "Ocultar Mouse Durante Digitação",
             "a5e5d2bca5": "Substituições de Cor",
-            "edd38f8bb8": "Linhas de Histórico de Rolagem",
-            "10344a316c": "Separadores de Palavra",
+            "cfdaed8dae": "Espaçamento Interno Horizontal",
+            "6e795fc619": "Opacidade do Painel Inativo",
             "bf8746544c": "Gerenciar Sessões",
-            "ee9665265e": "Tema Escuro",
+            "1b00063795": "Perguntar Antes de Fechar Terminais em Execução",
+            "9ae234eae2": "Espessura do Divisor",
             "88f3d1cec0": "Cor do Divisor no Modo Escuro",
             "e4d3288a81": "Tema Claro",
+            "3fdccf0277": "Espaçamento Interno Vertical",
+            "651c993c32": "Família de Fonte",
+            "64f6b4fdf6": "Foco Segue o Mouse",
             "18a9f63aff": "Cor do Divisor no Modo Claro"
           },
           "windows": {
@@ -3909,8 +3893,8 @@
               "6cd20b9e64": "cmd",
               "7c7056940a": "shell",
               "713c4a2f92": "Escolha o shell padrão para novos painéis de terminal no Windows.",
-              "94792c10ac": "Shell Padrão",
-              "6efd8b2174": "Versão do PowerShell"
+              "6efd8b2174": "Versão do PowerShell",
+              "94792c10ac": "Shell Padrão"
             }
           }
         },
@@ -3981,8 +3965,8 @@
             "b2799ba622": "milissegundos",
             "146728ac2c": "atraso",
             "86f54575c7": "salvamento automático",
-            "4469b6fa4e": "salvar",
             "8ea61ad55c": "Quanto tempo o Orca espera após sua última edição antes de salvar automaticamente.",
+            "4469b6fa4e": "salvar",
             "c56cb6f1c2": "rede",
             "3566fce83f": "localhost",
             "91a46caafc": "no_proxy",
@@ -4000,6 +3984,11 @@
             "5a9df5566f": "menu abrir",
             "b8093e9a93": "abrir em",
             "a916662068": "Escolha os apps disponíveis no menu Abrir em de um espaço de trabalho.",
+            "7e9b556873": "pular",
+            "ca86dd6e27": "caixa de diálogo",
+            "9f8558233a": "confirmar",
+            "7edf4f69e2": "automação",
+            "84c67d0108": "excluir",
             "df10666259": "worktree",
             "93f6ec5e70": "diretório",
             "9bde064915": "subpasta",
@@ -4032,6 +4021,16 @@
             "externalKeyword": "externo",
             "visibility": "visibilidade",
             "sidebar": "barra lateral",
+            "867dddea41": "fixado",
+            "5250cf0e48": "fixar",
+            "afa37a34e1": "fechar",
+            "running_terminal": "em execução",
+            "terminal": "terminal",
+            "agent": "agente",
+            "command": "comando",
+            "confirm": "confirmar",
+            "close": "fechar",
+            "omp": "OMP",
             "preview": "prévia",
             "reuse": "reutilizar",
             "replace": "substituir",
@@ -4040,36 +4039,21 @@
             "browsing": "navegação",
             "nodeDistMirror": "espelho",
             "nodeDistNodejs": "nodejs",
-            "34cda90656": "Cronômetro do Cache de Prompt",
             "d9168badd2": "Atraso do Salvamento Automático",
-            "66395fb7ff": "Família de Fonte do Editor",
-            "e2947b3723": "Quebra de Linha do Editor",
-            "aa367d753d": "Recolher Regiões Inalteradas",
-            "aa1c06eb2c": "Visualização de Diff Padrão",
+            "34cda90656": "Cronômetro do Cache de Prompt",
             "b8e1e1ac68": "Árvore de Arquivos Padrão do Diff",
-            "8ad175042b": "Verificação Ortográfica no Markdown Avançado",
-            "728a309ce1": "Notas de Revisão em Markdown",
             "0e030ce4e3": "Diretório de Espaços de Trabalho",
             "11003cbcbd": "Aninhar Espaços de Trabalho",
-            "da5c42780e": "Apps do Abrir Em",
+            "a361519c97": "Runtime Padrão do Projeto",
+            "e2947b3723": "Quebra de Linha do Editor",
+            "aa367d753d": "Recolher Regiões Inalteradas",
             "b180c1041b": "Ordem das Abas",
             "0504f69ba0": "Verificar Atualizações",
-            "a361519c97": "Runtime Padrão do Projeto",
-            "running_terminal": "em execução",
-            "9f8558233a": "confirmar",
-            "confirm": "confirmar",
-            "agent": "agente",
-            "84c67d0108": "excluir",
-            "close": "fechar",
-            "5250cf0e48": "fixar",
-            "terminal": "terminal",
-            "command": "comando",
-            "7e9b556873": "pular",
-            "7edf4f69e2": "automação",
-            "867dddea41": "fixado",
-            "omp": "OMP",
-            "afa37a34e1": "fechar",
-            "ca86dd6e27": "caixa de diálogo"
+            "728a309ce1": "Notas de Revisão em Markdown",
+            "66395fb7ff": "Família de Fonte do Editor",
+            "aa1c06eb2c": "Visualização de Diff Padrão",
+            "8ad175042b": "Verificação Ortográfica no Markdown Avançado",
+            "da5c42780e": "Apps do Abrir Em"
           }
         },
         "AccountsPane": {
@@ -4212,14 +4196,14 @@
           },
           "remoteScopeLocalAccountsKeptHostPicker": "As contas gerenciadas neste computador não são alteradas. Escolha este computador no menu Host no topo das Configurações para vê-las.",
           "apiKeyUpdateFailed": "Falha ao atualizar a chave de API do MiniMax.",
+          "91a1b78e67": "Local da Conta",
+          "699680a328": "Remover Conta",
           "89b9a151c3": "Contas do Claude",
           "bd16d363ed": "Contas do Codex",
           "4d274a02f0": "Cookie de Sessão do OpenCode Go",
-          "109431f707": "ID do Espaço de Trabalho do OpenCode Go",
-          "91a1b78e67": "Local da Conta",
           "4d41177f74": "Cookie de Sessão do MiniMax",
-          "699680a328": "Remover Conta",
-          "7e9977b560": "Adicionar Conta"
+          "7e9977b560": "Adicionar Conta",
+          "109431f707": "ID do Espaço de Trabalho do OpenCode Go"
         },
         "appearance": {
           "search": {
@@ -4379,26 +4363,26 @@
               "34f2b8c539": "Uso do Cursor"
             },
             "matchTerminal": "Combinar com o Terminal",
-            "19aa904233": "Ícone do App",
             "37e6b58b0e": "Zoom da Interface",
-            "aff6e6afdf": "Fonte do IDE",
-            "4af9002a0c": "Mostrar Arquivos Ignorados pelo Git",
-            "fb2353b8dd": "Nome do App na Barra de Título",
-            "9bc701a4d1": "Mostrar Botão de Tarefas",
-            "7f5d534f81": "Mostrar Botão de Automações",
-            "1b404ee6ad": "Mostrar Botão do Orca Mobile",
-            "ba1f9d39a6": "Uso do Antigravity",
-            "ca64c95969": "Uso do Grok",
-            "96e32c1118": "Uso do MiniMax",
             "931c53cd16": "Uso do Claude",
-            "40c10c4deb": "Uso do Codex",
+            "1b404ee6ad": "Mostrar Botão do Orca Mobile",
+            "183e6b8ef9": "Uso do ZCode",
+            "d408ece868": "Minimizar para a Bandeja ao Fechar",
             "585be839e9": "Uso do Gemini",
             "20e7d30150": "Uso do OpenCode Go",
-            "c29089716e": "Uso do Kimi",
-            "20b33a61c8": "Hosts Remotos",
+            "ca64c95969": "Uso do Grok",
+            "7f5d534f81": "Mostrar Botão de Automações",
+            "fb2353b8dd": "Nome do App na Barra de Título",
+            "4af9002a0c": "Mostrar Arquivos Ignorados pelo Git",
             "b8dc238d07": "Gerenciador de Recursos",
-            "183e6b8ef9": "Uso do ZCode",
-            "d408ece868": "Minimizar para a Bandeja ao Fechar"
+            "20b33a61c8": "Hosts Remotos",
+            "40c10c4deb": "Uso do Codex",
+            "19aa904233": "Ícone do App",
+            "9bc701a4d1": "Mostrar Botão de Tarefas",
+            "c29089716e": "Uso do Kimi",
+            "96e32c1118": "Uso do MiniMax",
+            "aff6e6afdf": "Fonte do IDE",
+            "ba1f9d39a6": "Uso do Antigravity"
           }
         },
         "repository": {
@@ -4523,22 +4507,22 @@
             "distro": "distro",
             "agentRuntime": "runtime do agente",
             "skillRuntime": "runtime da skill",
+            "0fe07b9e90": "Ícone do Projeto",
             "810b9f4106": "Script de Configuração",
-            "1617bc353d": "Script de Arquivamento",
-            "cedbe6c02c": "Quando Executar a Configuração",
+            "355868ac19": "Presets de Sparse Checkout",
+            "2e216fbad2": "Local da Worktree",
+            "ea22e2187e": "Caminhos Compartilhados de Worktree",
             "aced2fc1be": "Comando Personalizado de Issue do GitHub",
+            "7a89e2dc09": "Runtime do Projeto",
             "b1b5a4139d": "Configurações MCP",
             "7f380f89ea": "Nome de Exibição",
-            "0fe07b9e90": "Ícone do Projeto",
-            "eefc3e51ef": "Conta do GitHub",
-            "f94afd4078": "Manter o Fork Atualizado",
-            "7a89e2dc09": "Runtime do Projeto",
-            "bbbe994528": "Remover Projeto",
-            "6259586017": "Autor de IA do Git",
             "88d466b2e3": "Base Padrão da Worktree",
-            "2e216fbad2": "Local da Worktree",
-            "355868ac19": "Presets de Sparse Checkout",
-            "ea22e2187e": "Caminhos Compartilhados de Worktree"
+            "1617bc353d": "Script de Arquivamento",
+            "6259586017": "Autor de IA do Git",
+            "bbbe994528": "Remover Projeto",
+            "cedbe6c02c": "Quando Executar a Configuração",
+            "eefc3e51ef": "Conta do GitHub",
+            "f94afd4078": "Manter o Fork Atualizado"
           }
         },
         "browser": {
@@ -4633,12 +4617,12 @@
               "cleaned": "limpo",
               "restart": "reiniciar"
             },
-            "1c2aff8f82": "Página Inicial Padrão",
-            "5a70844e54": "Mecanismo de Busca Padrão",
-            "f6de9e25a0": "Zoom Padrão",
             "f0eb09ce09": "Roteamento de Links",
             "e2e32ba6da": "Rótulos de Worktree no Localhost",
-            "f1da035bcb": "Sessão e Cookies"
+            "5a70844e54": "Mecanismo de Busca Padrão",
+            "f1da035bcb": "Sessão e Cookies",
+            "f6de9e25a0": "Zoom Padrão",
+            "1c2aff8f82": "Página Inicial Padrão"
           },
           "use": {
             "search": {
@@ -4666,8 +4650,8 @@
               "9d97446873": "agente",
               "a2d489263e": "skill",
               "a7e82445fa": "Instale a skill Browser Use para que os agentes possam operar o navegador do Orca.",
-              "e72d500ca5": "Instalar Skill Browser Use",
-              "9e2bfa1405": "Importar Cookies do Navegador"
+              "9e2bfa1405": "Importar Cookies do Navegador",
+              "e72d500ca5": "Instalar Skill Browser Use"
             }
           }
         },
@@ -4760,10 +4744,10 @@
               "c5eca29310": "simulador ios",
               "25159de808": "emulador mobile",
               "9595354cff": "Configure o suporte a emulador mobile para o Orca e agentes de código.",
-              "f8468700d1": "Emulador Mobile",
-              "b8c9f903eb": "Dispositivo de Emulador Padrão",
               "de556a0911": "Disponibilidade do Emulador",
-              "0d6e7dba38": "Controle via CLI do Agente"
+              "b8c9f903eb": "Dispositivo de Emulador Padrão",
+              "0d6e7dba38": "Controle via CLI do Agente",
+              "f8468700d1": "Emulador Mobile"
             }
           },
           "pane": {
@@ -4803,9 +4787,9 @@
               "4a0c826f3d": "código",
               "3c1807a81a": "qr",
               "7fb728fb2b": "Pareie um dispositivo mobile escaneando um código QR.",
-              "a068d70f7b": "Interface de Rede",
+              "cb018bcc07": "Dispositivos Conectados",
               "1dcb1d1a11": "Pareamento Mobile",
-              "cb018bcc07": "Dispositivos Conectados"
+              "a068d70f7b": "Interface de Rede"
             }
           },
           "settings": {
@@ -4928,15 +4912,15 @@
           "1c29734248": "Shell usado em novos painéis de terminal",
           "9589abc009": "Shell padrão",
           "5a5eac2f44": "Shell não encontrado: {{value0}}",
-          "143ca8e340": "Linhas de Histórico de Rolagem",
-          "8abcfcf8d3": "Separadores de Palavra",
-          "1be0263c55": "Versão do PowerShell",
-          "82e19f00f0": "Interação do Terminal",
-          "8c07bc4d7a": "Foco Segue o Mouse",
-          "8f3e7bc91f": "Copiar ao Selecionar",
           "d54811df09": "Permitir Escrita na Área de Transferência por TUI (OSC 52)",
+          "1be0263c55": "Versão do PowerShell",
+          "8c07bc4d7a": "Foco Segue o Mouse",
           "37389522c6": "Aceleração por GPU",
           "5aab473c7e": "Shell do Windows",
+          "143ca8e340": "Linhas de Histórico de Rolagem",
+          "82e19f00f0": "Interação do Terminal",
+          "8f3e7bc91f": "Copiar ao Selecionar",
+          "8abcfcf8d3": "Separadores de Palavra",
           "e9c84d0338": "Shell Padrão"
         },
         "RepositoryHooksSection": {
@@ -5011,12 +4995,12 @@
           "issueCommandOptionalDefault": "Deixe em branco para usar o padrão do repositório de <yaml>orca.yaml</yaml>, quando existir.",
           "commandSourceDescription": "Quando houver comandos em <yaml>orca.yaml</yaml> e comandos locais, escolha quais executar.",
           "issueCommandWslStopped": "A distribuição WSL {{distro}} está parada. Abra um terminal nela para ver ou editar este comando.",
-          "01bdba296f": "Hooks de Worktree",
-          "1ecf0b115a": "Script de Configuração",
-          "1c17e751c4": "Quando Executar a Configuração",
           "bfdb1266ce": "Script de Arquivamento",
+          "1c17e751c4": "Quando Executar a Configuração",
           "da00f141c2": "Comando Personalizado de Issue do GitHub",
-          "88c6d1e54a": "Origem do Comando"
+          "88c6d1e54a": "Origem do Comando",
+          "01bdba296f": "Hooks de Worktree",
+          "1ecf0b115a": "Script de Configuração"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Caminhos relativos são resolvidos a partir da raiz deste projeto.",
@@ -5088,13 +5072,13 @@
           "removeProjectCheckout": "Remova este checkout do Orca. Outros checkouts deste projeto permanecem.",
           "removeProjectKeepCheckouts": "Remova este projeto do Orca. Os checkouts que têm suas próprias configurações permanecem.",
           "07deadaa00": "Nome de Exibição",
-          "e856e61455": "Ícone do Projeto",
-          "04eebebbea": "Remover Projeto",
-          "82733ff808": "Hosts Disponíveis",
           "41ccd99b57": "Runtime do Projeto",
+          "04eebebbea": "Remover Projeto",
           "38df44846b": "Base Padrão da Worktree",
+          "077dc18a4a": "Usar Global",
+          "82733ff808": "Hosts Disponíveis",
           "5ff7788414": "Local da Worktree",
-          "077dc18a4a": "Usar Global"
+          "e856e61455": "Ícone do Projeto"
         },
         "Settings": {
           "3bf149e873": "Configurações do Projeto > {{value0}}",
@@ -5131,7 +5115,6 @@
           "7807c11c4d": "Geral",
           "6855b0f77d": "Conclua os fluxos de trabalho essenciais que tornam o Orca útil para trabalho paralelo com agentes.",
           "6d119427ef": "Checklist de introdução",
-          "eb1176a14e": "Ditado de voz para texto local com modelos no dispositivo.",
           "5063bb47a5": "Voz",
           "7118953f14": "Permita que agentes controlem qualquer aplicativo no seu computador.",
           "475980f53d": "Coordene vários agentes de código através do Orca.",
@@ -5143,8 +5126,12 @@
           "acc7bbdefd": "Pressione ESC novamente para sair das configurações",
           "43b68e10f0": "Você tem alterações não salvas do Autor de IA do Git. Sair vai descartá-las.",
           "17bdee4ff1": "Descartar alterações não salvas do Autor de IA do Git?",
+          "084d8fac5b": "Privacidade e Segurança",
+          "23931df7e8": "Hosts Remotos",
           "8bd117d669": "Interface",
           "e1578cd4bc": "Fluxos de Trabalho",
+          "9abb9be3bc": "Configurar",
+          "23c6874fdf": "Capacidades de IA",
           "65358016ea": "Descartar",
           "devDescription": "Ferramentas exclusivas para desenvolvedores testarem estados de UI.",
           "linearTitle": "Linear",
@@ -5152,23 +5139,19 @@
           "tasksDescription": "Conecte provedores, instale a skill do Linear e escolha o que aparece em Tarefas.",
           "remoteServersDescription": "Execute o Orca em outra máquina e trabalhe nela por aqui.",
           "noSettingsFoundForQuery": "Nenhuma configuração encontrada para \"{{value0}}\"",
+          "045db77e21": "Hosts SSH",
+          "c0900fa64a": "Origens de Tarefas",
+          "129ae9859c": "Emulador Mobile",
+          "022effa46f": "Servidores Orca Remotos",
+          "d09b9d8f00": "Git e Controle de Versão",
           "3eac6fb97f": "Ferramentas de Dev",
           "4198aae333": "Contas de Provedores de IA",
           "3f3e11cb5d": "Uso do Computador",
-          "d09b9d8f00": "Git e Controle de Versão",
-          "c0900fa64a": "Origens de Tarefas",
-          "d60b7f0e58": "Comandos Rápidos",
-          "129ae9859c": "Emulador Mobile",
+          "084f34826d": "Estatísticas e Uso",
+          "742ca66ea6": "Privacidade e Telemetria",
           "c2bb9fc528": "Espaço de Trabalho Flutuante",
           "f1fddf7764": "Entrada e Edição",
-          "084f34826d": "Estatísticas e Uso",
-          "022effa46f": "Servidores Orca Remotos",
-          "045db77e21": "Hosts SSH",
-          "742ca66ea6": "Privacidade e Telemetria",
-          "084d8fac5b": "Privacidade e Segurança",
-          "9abb9be3bc": "Configurar",
-          "23c6874fdf": "Capacidades de IA",
-          "23931df7e8": "Hosts Remotos"
+          "d60b7f0e58": "Comandos Rápidos"
         },
         "experimental": {
           "search": {
@@ -5290,25 +5273,25 @@
           "color_overrides_light_description": "Substitui cores individuais do tema claro do terminal.",
           "reset_dark_color_overrides": "Redefinir as substituições de cor do tema escuro",
           "reset_light_color_overrides": "Redefinir as substituições de cor do tema claro",
-          "e80b782206": "Opacidade do Fundo",
-          "2d8a13cabd": "Espaçamento Interno Horizontal",
           "44c6f429e9": "Espaçamento Interno Vertical",
-          "a649973dd3": "Ocultar Mouse Durante Digitação",
-          "c9d73aee44": "Substituições de Cor",
-          "e3e70efcec": "Texto do Cursor",
-          "cd4ab89dc6": "Cor de Fundo da Seleção",
+          "8a4b23b3c4": "Azul Brilhante",
+          "2e5ea3f11b": "Branco Brilhante",
           "b1dce93161": "Cor do Texto da Seleção",
-          "6ec3252c1f": "Texto em Negrito",
+          "e3e70efcec": "Texto do Cursor",
+          "a649973dd3": "Ocultar Mouse Durante Digitação",
+          "93e2bff3ed": "Verde Brilhante",
+          "c863ae6b57": "Vermelho Brilhante",
           "5bea0a1ca1": "ANSI Normal",
+          "db0a91c623": "Ciano Brilhante",
+          "c9d73aee44": "Substituições de Cor",
+          "6ec3252c1f": "Texto em Negrito",
+          "2b813ceecc": "Magenta Brilhante",
+          "0451b1e684": "Amarelo Brilhante",
+          "cd4ab89dc6": "Cor de Fundo da Seleção",
+          "e80b782206": "Opacidade do Fundo",
           "9881daf4f5": "ANSI Brilhante",
           "f5bda64f57": "Preto Brilhante",
-          "c863ae6b57": "Vermelho Brilhante",
-          "93e2bff3ed": "Verde Brilhante",
-          "0451b1e684": "Amarelo Brilhante",
-          "8a4b23b3c4": "Azul Brilhante",
-          "2b813ceecc": "Magenta Brilhante",
-          "db0a91c623": "Ciano Brilhante",
-          "2e5ea3f11b": "Branco Brilhante"
+          "2d8a13cabd": "Espaçamento Interno Horizontal"
         },
         "agents": {
           "search": {
@@ -5438,13 +5421,13 @@
           "appStatus": "Aplicativo: ",
           "terminalHostStatus": "Hosts de terminal: ",
           "terminalHostRecovery": "Se um terminal não conseguir ler arquivos protegidos, salve o trabalho e feche-o em Terminal → Gerenciar sessões. Reinicie o daemon se novos terminais também forem afetados; a reinicialização fecha os terminais atuais dele.",
-          "515baa0f5c": "Gravação de Tela",
-          "b8cd05701d": "Abrir Configurações",
           "28350e590b": "Acionar Aviso",
-          "78b1e0b9d4": "Rede Local",
           "e2596159f6": "Solicitar Acesso",
+          "78b1e0b9d4": "Rede Local",
+          "a162df27d5": "Testar Conexão",
           "91f887e323": "Dispositivos USB",
-          "a162df27d5": "Testar Conexão"
+          "b8cd05701d": "Abrir Configurações",
+          "515baa0f5c": "Gravação de Tela"
         },
         "accounts": {
           "search": {
@@ -5522,12 +5505,12 @@
               },
               "0db9d0465f": "GLM Coding Plan"
             },
-            "be3a748ebb": "Contas do Claude",
             "5e2101f61f": "Local da Conta",
-            "54c541fc6e": "Contas do Codex",
-            "4518496456": "Conta Ativa do Codex",
             "f0e6678f99": "Cookie de Sessão do OpenCode Go",
             "8eef999193": "ID do Espaço de Trabalho do OpenCode Go",
+            "54c541fc6e": "Contas do Codex",
+            "4518496456": "Conta Ativa do Codex",
+            "be3a748ebb": "Contas do Claude",
             "9b6ce52c36": "Uso do MiniMax"
           }
         },
@@ -5549,8 +5532,8 @@
             "tintOpacityDescription": "Controla com que intensidade a tonalidade é misturada na barra lateral.",
             "tintDescription": "Mantenha a barra lateral esquerda padrão ou aplique uma tonalidade. Para seguir o terminal, escolha Combinar com o Terminal como tema claro ou escuro.",
             "fcc653abee": "Aparência da Barra Lateral Esquerda",
-            "ba1d9a0607": "Tonalidade da Barra Lateral",
-            "df205a675e": "Intensidade da Tonalidade"
+            "df205a675e": "Intensidade da Tonalidade",
+            "ba1d9a0607": "Tonalidade da Barra Lateral"
           },
           "interfaceDefaultFont": "Fonte padrão",
           "terminalDefaultFont": "Fonte padrão",
@@ -5563,18 +5546,18 @@
             "title": "Também mostrar worktrees fixadas em suas listas originais",
             "description": "As worktrees fixadas permanecem em Fixadas e também aparecem em Tudo, Projeto, Status e PR."
           },
-          "173edfb768": "Zoom da Interface",
-          "657a7230a2": "Fonte do IDE",
-          "8063dd3b6b": "Nome do App na Barra de Título",
-          "95a5581f66": "Minimizar para a Bandeja ao Fechar",
-          "e90c5d745a": "Janela e Barra Lateral",
-          "907888cd09": "Ícone do App",
-          "3a5d06686d": "Barra de Status",
           "e0f9902e18": "Mostrar Botão de Tarefas",
-          "7be0027489": "Mostrar Botão de Automações",
-          "d2b4ddbea0": "Mostrar Botão do Orca Mobile",
           "7e958ee950": "Mostrar Arquivos Ignorados pelo Git",
-          "8e374ce9a3": "Explorador de Arquivos"
+          "173edfb768": "Zoom da Interface",
+          "907888cd09": "Ícone do App",
+          "8e374ce9a3": "Explorador de Arquivos",
+          "3a5d06686d": "Barra de Status",
+          "7be0027489": "Mostrar Botão de Automações",
+          "8063dd3b6b": "Nome do App na Barra de Título",
+          "d2b4ddbea0": "Mostrar Botão do Orca Mobile",
+          "657a7230a2": "Fonte do IDE",
+          "95a5581f66": "Minimizar para a Bandeja ao Fechar",
+          "e90c5d745a": "Janela e Barra Lateral"
         },
         "git": {
           "search": {
@@ -5628,13 +5611,13 @@
             "issueKey": "chave da issue",
             "uppercase": "maiúsculas",
             "lowercase": "minúsculas",
-            "52d52b099d": "Orçamento de API do GitHub",
-            "b7562365cd": "Orçamento de API do GitLab",
-            "25eac7e904": "Prefixo da Branch",
-            "f760fc929e": "Maiúsculas e minúsculas na chave do Jira",
-            "410e821889": "Manter a Main Local Atualizada",
             "85983bb4f9": "Ordem dos Grupos de Controle de Versão",
-            "1ad8060ddc": "Base de Comparação Padrão"
+            "1ad8060ddc": "Base de Comparação Padrão",
+            "b7562365cd": "Orçamento de API do GitLab",
+            "410e821889": "Manter a Main Local Atualizada",
+            "f760fc929e": "Maiúsculas e minúsculas na chave do Jira",
+            "52d52b099d": "Orçamento de API do GitHub",
+            "25eac7e904": "Prefixo da Branch"
           }
         },
         "AgentsPane": {
@@ -5671,8 +5654,8 @@
           "codexSessionSourceTooltip": "O Orca executa o Codex em um diretório isolado. Aponte isso para o diretório Codex existente para importar esse histórico de sessão. Vazio usa ~/.codex.",
           "storedDefaultUndetected": "Salvo como seu padrão, mas não detectado agora",
           "noAgentsDetected": "Nenhum agente detectado. Se um estiver instalado, a verificação pode ter expirado.",
-          "3bddd54c9e": "Agente Padrão",
-          "9f30095d49": "Permissões do Agente"
+          "9f30095d49": "Permissões do Agente",
+          "3bddd54c9e": "Agente Padrão"
         },
         "ExperimentalPane": {
           "a20d5ea365": "Mantém um destaque visível no nível do painel após eventos de sino do terminal ou conclusão de agente, até que você interaja com esse painel. Experimental enquanto ajustamos o sinal.",
@@ -5844,16 +5827,16 @@
           "4415beb958": "desativado",
           "4e7d41a9f0": "ativado",
           "dimUnfocusedPanes": "Escurece painéis sem foco.",
-          "bb4ac88514": "Peso da Fonte",
-          "d9c0df9673": "Altura de Linha",
-          "e4cccb139e": "Ligaduras de Fonte",
-          "5ae74b7796": "Tipografia do Terminal",
-          "a157b95a08": "Família de Fonte",
           "4adb9364f4": "Formato do Cursor",
-          "55c3f22e7c": "Opacidade do Cursor",
-          "0f6515bf50": "Painéis de Terminal",
           "4d8b35c479": "Opacidade do Painel Inativo",
-          "835aad4f9d": "Espessura do Divisor"
+          "55c3f22e7c": "Opacidade do Cursor",
+          "835aad4f9d": "Espessura do Divisor",
+          "e4cccb139e": "Ligaduras de Fonte",
+          "0f6515bf50": "Painéis de Terminal",
+          "d9c0df9673": "Altura de Linha",
+          "bb4ac88514": "Peso da Fonte",
+          "5ae74b7796": "Tipografia do Terminal",
+          "a157b95a08": "Família de Fonte"
         },
         "CommitMessageAiPane": {
           "ad66ff886d": "Padrões da IA de Controle de Versão",
@@ -5939,13 +5922,13 @@
             "remote": "remoto",
             "ssh": "ssh",
             "mute": "silenciar",
+            "55ecae5b7e": "Enviar Notificação de Teste",
             "25f58f061f": "Ativar Notificações",
-            "db32fed5aa": "Tarefa do Agente Concluída",
-            "209323590a": "Sino do Terminal",
-            "8eeee85a4f": "Suprimir Enquanto em Foco",
-            "8517a2dd51": "Som de Notificação",
             "fe11c91724": "Volume da Notificação",
-            "55ecae5b7e": "Enviar Notificação de Teste"
+            "8517a2dd51": "Som de Notificação",
+            "209323590a": "Sino do Terminal",
+            "db32fed5aa": "Tarefa do Agente Concluída",
+            "8eeee85a4f": "Suprimir Enquanto em Foco"
           }
         },
         "developer": {
@@ -5988,9 +5971,9 @@
               "2270ccff3f": "privacidade",
               "a98aa11a9c": "permissões",
               "bc8ac95310": "Permissões do macOS para ferramentas de desenvolvedor iniciadas pelo terminal.",
-              "ad085fa291": "Permissões de Desenvolvedor",
+              "70ffdc218d": "Gravação de Tela e Acessibilidade",
               "16490ec4cd": "Microfone e Câmera",
-              "70ffdc218d": "Gravação de Tela e Acessibilidade"
+              "ad085fa291": "Permissões de Desenvolvedor"
             }
           }
         },
@@ -6088,13 +6071,13 @@
           "jiraIssueKeyCasingDescription": "Uso de maiúsculas e minúsculas na chave da issue do Jira nos nomes de espaços de trabalho e branches sugeridos pelo Orca para novos espaços de trabalho vinculados ao Jira, como PROJ-123-fix-login em vez de proj-123-fix-login. Os espaços de trabalho existentes e os nomes que você digita nunca são alterados.",
           "jiraIssueKeyCasingLowercase": "Minúsculas",
           "jiraIssueKeyCasingPreserve": "Chave em maiúsculas",
-          "7826f35f63": "Prefixo da Branch",
-          "53a0daed73": "Ordem dos Grupos de Controle de Versão",
-          "fdbcd676b0": "Orçamento de API do GitHub",
-          "f2765fbbf6": "Orçamento de API do GitLab",
-          "074f7aa0d6": "Base de Comparação Padrão",
           "d12c81a103": "Nome de Usuário do Git",
-          "8cdbaf4b03": "Maiúsculas e minúsculas na chave do Jira"
+          "53a0daed73": "Ordem dos Grupos de Controle de Versão",
+          "7826f35f63": "Prefixo da Branch",
+          "f2765fbbf6": "Orçamento de API do GitLab",
+          "8cdbaf4b03": "Maiúsculas e minúsculas na chave do Jira",
+          "fdbcd676b0": "Orçamento de API do GitHub",
+          "074f7aa0d6": "Base de Comparação Padrão"
         },
         "integrations": {
           "search": {
@@ -6128,13 +6111,13 @@
             "7166b9090c": "Autenticação do GitHub via a CLI gh.",
             "760e2446e0": "Autenticação do Bitbucket Cloud com um token de API salvo ou variáveis de ambiente.",
             "af5ae87847": "token de acesso",
-            "a17a94d0b0": "Integração com o GitHub",
-            "cd74b2f587": "Integração com o GitLab",
-            "9e238582e8": "Integração com o Bitbucket",
-            "b3efe7ab71": "Integração com o Azure DevOps",
-            "86a08aa60c": "Integração com o Gitea",
             "d8906d60a9": "Integração com o Jira",
-            "d905b3ecee": "Integração com o Linear"
+            "9e238582e8": "Integração com o Bitbucket",
+            "a17a94d0b0": "Integração com o GitHub",
+            "86a08aa60c": "Integração com o Gitea",
+            "cd74b2f587": "Integração com o GitLab",
+            "d905b3ecee": "Integração com o Linear",
+            "b3efe7ab71": "Integração com o Azure DevOps"
           }
         },
         "token": {
@@ -6210,8 +6193,8 @@
           "addHost": "Adicionar host",
           "proxyConnectionReuse": "Reutilizar uma única conexão de proxy",
           "proxyConnectionReuseHelp": "Conexões mais rápidas por hosts ProxyCommand ou ProxyJump lentos. Ative somente se o seu ssh_config não depender de regras Match ou %h específicas de host.",
-          "8349b7b4fa": "Arquivo de Identidade",
           "bc9854a353": "Meu Servidor",
+          "8349b7b4fa": "Arquivo de Identidade",
           "92ea40234c": "Salvar Alterações"
         },
         "RuntimeHostAccessForm": {
@@ -6361,16 +6344,16 @@
           "5195f0b9ef": "Mostra sublinhados e sugestões de ortografia do navegador ao editar Markdown avançado.",
           "9b18de6eea": "Quebra linhas longas nos editores de arquivo em vez de exigir rolagem horizontal.",
           "collapseUnchangedDescription": "Mostra somente as linhas alteradas e um pouco de contexto ao redor em um diff de arquivo, ocultando o restante por trás de faixas expansíveis. O diff Ver Todas as Alterações sempre recolhe dessa forma.",
-          "0971ef5c63": "Mostrar Espaços em Branco no Diff",
-          "75e326278e": "Quebra de Linha do Editor",
-          "89ba15b474": "Atraso do Salvamento Automático",
-          "b11d620d45": "Visualização de Diff Padrão",
-          "6f33c2a32f": "Quebra de Linha do Diff",
-          "3f63d16992": "Árvore de Arquivos Padrão do Diff",
+          "a37865966c": "Salvar Arquivos Automaticamente",
           "8b3f8e6b83": "Notas de Revisão em Markdown",
+          "89ba15b474": "Atraso do Salvamento Automático",
+          "75e326278e": "Quebra de Linha do Editor",
           "a0361dfb05": "Verificação Ortográfica no Markdown Avançado",
+          "3f63d16992": "Árvore de Arquivos Padrão do Diff",
+          "b11d620d45": "Visualização de Diff Padrão",
+          "0971ef5c63": "Mostrar Espaços em Branco no Diff",
           "916c5582f2": "Recolher Regiões Inalteradas",
-          "a37865966c": "Salvar Arquivos Automaticamente"
+          "6f33c2a32f": "Quebra de Linha do Diff"
         },
         "EphemeralVmRuntimesSection": {
           "cleanupFailed": "Falha na limpeza",
@@ -6466,7 +6449,6 @@
         "VoicePane": {
           "6fa734ed95": "Excluir {{value0}}",
           "68de13f72c": "Falha ao excluir o modelo.",
-          "1ba81c0ff0": "recomendado",
           "cfde55c7b0": "Falha ao baixar o modelo.",
           "62d2a84d31": "Falha ao limpar a chave de API da OpenAI",
           "37aba8bb63": "Chave de API da OpenAI removida",
@@ -6474,9 +6456,6 @@
           "506df81ba6": "Chave de API da OpenAI salva",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Extraindo...",
-          "8f4d2a51d7": "off-line",
-          "d504ab05f0": "streaming",
-          "e24f7d43d2": "Selecione um modelo de voz. Modelos locais funcionam off-line; modelos na nuvem exigem uma chave de API.",
           "174da92062": "Manter Pressionado",
           "118b3c2dee": "Alternar",
           "ad5d036ecc": "Não foi possível solicitar a permissão do microfone. O ditado por voz não foi ativado.",
@@ -6484,13 +6463,15 @@
           "1eac933202": "Privacidade e Segurança do macOS aberta. Ative o ditado novamente após conceder o acesso.",
           "cd9fe37556": "Permissão do microfone concedida",
           "openAiKeyName": "Sua chave de transcrição da OpenAI",
-          "dictationShortcutDescription": "Pressione {{shortcut}} para ditar texto em qualquer painel com foco.",
           "dictationModeAuto": "Automático",
           "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar.",
+          "speechGpuLabel": "Usar GPU",
+          "speechGpuDescription": "Reconhece a fala na placa de vídeo quando ela funciona e na CPU quando falha. Desative se o ditado travar ou reiniciar o computador.",
+          "updateToFasterVersion": "Atualizar para a versão mais rápida ({{value0}} MB)",
+          "2d9b81c687": "Selecionar Modelo",
           "6ffecf36fd": "Ativar Ditado por Voz",
-          "342f309724": "Modo de Ditado",
           "c5ea32143e": "Modelo de Voz",
-          "2d9b81c687": "Selecionar Modelo"
+          "342f309724": "Modo de Ditado"
         },
         "NotificationsPane": {
           "2772d2f257": "Ignora notificações quando a worktree que as acionou já está visível.",
@@ -6513,15 +6494,15 @@
           "98d70fb261": "Não foi possível reproduzir o som de notificação personalizado",
           "c83b05a055": "As notificações não são suportadas neste sistema",
           "e4b5e909ff": "Quando desativado, os espaços de trabalho ocultos por uma opção Ocultar no menu Filtros da barra lateral não mostram o ponto de não lido nem enviam notificações para este computador ou seu celular.",
-          "b3c7207c8f": "Som de Notificação",
-          "9c41a0d367": "Ativar Notificações",
-          "0acae1066d": "Tarefa do Agente Concluída",
           "6bc7bd7b6e": "Sino do Terminal",
+          "0acae1066d": "Tarefa do Agente Concluída",
           "3b77513cd0": "Notificar sobre espaços de trabalho ocultos",
-          "badd7ed4cf": "Suprimir Enquanto em Foco",
           "0b8141ed49": "Alterar Arquivo Personalizado",
-          "38e3bbeb25": "Escolher Arquivo Personalizado",
-          "f5b0498e1f": "Enviar Notificação de Teste"
+          "badd7ed4cf": "Suprimir Enquanto em Foco",
+          "9c41a0d367": "Ativar Notificações",
+          "f5b0498e1f": "Enviar Notificação de Teste",
+          "b3c7207c8f": "Som de Notificação",
+          "38e3bbeb25": "Escolher Arquivo Personalizado"
         },
         "PluginConsentDialog": {
           "reconsent": "Mudou desde que você aprovou",
@@ -6594,13 +6575,16 @@
               "modelMemoryKeyword": "memória",
               "fillerWordsDescription": "Remove “hã”, “hum” e sons parecidos do texto ditado.",
               "fillerWordsKeyword": "hesitações",
-              "ffaa3efe7c": "Transcrição da OpenAI",
-              "a5fb30e4da": "Ativar Ditado por Voz",
-              "d0c230c061": "Modo de Ditado",
-              "9d83747eae": "Idioma do ditado",
-              "c7a7eaa0da": "Remover hesitações",
+              "vocabularyTitle": "Vocabulário",
+              "vocabularyDescription": "Nomes e termos de código que o ditado escreve do seu jeito, para você ou para um repositório.",
+              "vocabularyKeyword": "dicionário",
               "b3920972d4": "Descarregar modelo de voz",
-              "7f5a2416a6": "Modelo de Voz"
+              "7f5a2416a6": "Modelo de Voz",
+              "9d83747eae": "Idioma do ditado",
+              "a5fb30e4da": "Ativar Ditado por Voz",
+              "ffaa3efe7c": "Transcrição da OpenAI",
+              "c7a7eaa0da": "Remover hesitações",
+              "d0c230c061": "Modo de Ditado"
             }
           }
         },
@@ -6762,9 +6746,9 @@
           "modeLabel": "Modo de sincronização do fork",
           "ask": "Perguntar",
           "off": "Desativado",
-          "1b00dcc746": "Manter o Fork Atualizado",
           "7a1ea2076d": "Automático Seguro",
-          "c64463b5fc": "Sincronizar Agora"
+          "c64463b5fc": "Sincronizar Agora",
+          "1b00dcc746": "Manter o Fork Atualizado"
         },
         "LinearAgentSkillGuide": {
           "setupConnectTitle": "1. Conectar o Linear",
@@ -6817,9 +6801,9 @@
           "import_theme_one": "Importar {{value0}} Tema",
           "import_theme_other": "Importar {{value0}} Temas",
           "import_theme_many": "Importar {{value0}} Temas",
-          "77f3e3d390": "Escolher Arquivo",
+          "1bceb1553d": "Importar Temas",
           "00aaf588da": "Escolher Pasta",
-          "1bceb1553d": "Importar Temas"
+          "77f3e3d390": "Escolher Arquivo"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -6854,12 +6838,12 @@
           "64898ecdab": "Criar",
           "7b649a578a": "Criando…",
           "4399c77caa": "Padrão",
-          "e25fd16b91": "Mecanismo de Busca Padrão",
           "bc44903d30": "Sessão e Cookies",
-          "ddd634b250": "Sessão e Cookies",
           "7a366a05e1": "Roteamento de Links",
-          "f36182ff2f": "Novo Perfil de Navegador",
-          "549f28cf10": "Adicionar Perfil"
+          "549f28cf10": "Adicionar Perfil",
+          "e25fd16b91": "Mecanismo de Busca Padrão",
+          "ddd634b250": "Sessão e Cookies",
+          "f36182ff2f": "Novo Perfil de Navegador"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Usar cor {{value0}} do repositório",
@@ -6884,8 +6868,8 @@
           "emojiTooLongForRepoIcon": "Este emoji não pode ser usado como ícone de repositório.",
           "currentEmojiSelection": "Atual: {{value0}}",
           "searchEmojiPlaceholder": "Pesquisar emoji",
-          "43bf3709dd": "Ícone do Repositório",
-          "cc76342291": "Usar Avatar do GitHub"
+          "cc76342291": "Usar Avatar do GitHub",
+          "43bf3709dd": "Ícone do Repositório"
         },
         "ComputerUsePane": {
           "1735461723": "Permite que agentes inspecionem e operem apps de desktop locais.",
@@ -6919,11 +6903,11 @@
           "externalWorktrees": "Worktrees externas",
           "externalWorktreesDescription": "Escolha quais worktrees criadas fora do Orca aparecem por padrão neste host.",
           "ad65d146f6": "Apps do Abrir Em",
-          "9d0ef6a2a6": "Diretório de Espaços de Trabalho",
+          "2ffd7c4fc8": "Perguntar Antes de Excluir Artifacts",
           "a8ce626e4b": "Aninhar Espaços de Trabalho",
           "c2d4beaf3a": "Perguntar Antes de Excluir Espaços de Trabalho",
-          "3ae2a59ce9": "Perguntar Antes de Excluir Automações",
-          "2ffd7c4fc8": "Perguntar Antes de Excluir Artifacts"
+          "9d0ef6a2a6": "Diretório de Espaços de Trabalho",
+          "3ae2a59ce9": "Perguntar Antes de Excluir Automações"
         },
         "TerminalThemeSections": {
           "5e0c24b5c8": "Controla a linha divisória entre painéis no modo claro.",
@@ -6937,14 +6921,14 @@
           "match_dark_mode_description": "Compartilha o tema de terminal escuro e a cor do divisor no modo claro.",
           "light_preview_description": "Mostra a aparência efetiva do terminal no modo claro.",
           "dark_preview_description": "Mostra a aparência efetiva do terminal no modo escuro.",
-          "3d91303d0d": "Tema Claro",
-          "44a006ab99": "Tema Escuro",
+          "3ebb499929": "Pré-visualização do Modo Escuro",
           "43afde3df7": "Cor do Divisor no Modo Claro",
-          "3a05b51211": "Cor do Divisor no Modo Escuro",
+          "2a11e028ff": "Pré-visualização do Modo Claro",
           "a39d64fe4a": "Temas de Terminal",
           "2318e07c68": "Modo do Tema",
-          "2a11e028ff": "Pré-visualização do Modo Claro",
-          "3ebb499929": "Pré-visualização do Modo Escuro"
+          "3a05b51211": "Cor do Divisor no Modo Escuro",
+          "3d91303d0d": "Tema Claro",
+          "44a006ab99": "Tema Escuro"
         },
         "BrowserUsePane": {
           "67d9a53f47": "Gerencie perfis para logins separados",
@@ -6960,9 +6944,9 @@
           "5301857d88": "De {{value0}}",
           "finishSteps": "Permita que agentes de programação controlem este navegador com suas contas conectadas. Conclua as etapas abaixo.",
           "b3e79d1c51": "Importar Cookies do Navegador",
-          "4451b3c0a6": "Instalar Skill Browser Use",
+          "507fdae102": "Uso do Navegador por Agente",
           "4ab048c0b8": "De um Arquivo…",
-          "507fdae102": "Uso do Navegador por Agente"
+          "4451b3c0a6": "Instalar Skill Browser Use"
         },
         "MobilePane": {
           "dd3cd78d04": "Escanear com o Orca Mobile",
@@ -7036,6 +7020,7 @@
           "signOut": "Sair",
           "signInAgain": "Entrar novamente",
           "signIn": "Entrar no Orca",
+          "title": "Conta do Orca",
           "description": "Compartilhe trabalho instantaneamente e acesse seu desktop pelo Orca Mobile de onde estiver.",
           "searchDescription": "Entre ou saia da conta usada por Artifacts e Orca Relay.",
           "benefitsTitle": "Incluído na sua conta",
@@ -7051,8 +7036,7 @@
           "keywordSignIn": "entrar",
           "keywordSignOut": "sair",
           "keywordRelay": "relay",
-          "keywordCloud": "nuvem",
-          "title": "Conta do Orca"
+          "keywordCloud": "nuvem"
         },
         "GeneralUpdateSettingsSection": {
           "8a52ca1d02": "Notas de versão",
@@ -7173,9 +7157,9 @@
             "d4bcd497c7": "remoto",
             "74c6d90d78": "Gerencie hosts SSH.",
             "53ae83cb55": "Conexões SSH",
-            "004ef87a84": "Adicionar Destino SSH",
             "893c8717f2": "Importar da Configuração SSH",
-            "50416e3809": "Testar Conexão"
+            "50416e3809": "Testar Conexão",
+            "004ef87a84": "Adicionar Destino SSH"
           }
         },
         "PluginMarketplaceSourceDialog": {
@@ -7829,8 +7813,8 @@
           "b07ef5a8b6": "Caminhos a materializar do checkout principal para worktrees recém-criadas.",
           "d72ba8dc68": "{{value0}} caminhos",
           "9ea912d811": "1 caminho",
-          "a995ebf5ab": "Caminhos Compartilhados de Worktree",
-          "9a7cd44772": "Adicionar Caminho"
+          "9a7cd44772": "Adicionar Caminho",
+          "a995ebf5ab": "Caminhos Compartilhados de Worktree"
         },
         "input": {
           "search": {
@@ -8007,11 +7991,11 @@
           "81afb79785": "Novas abas de terminal flutuante começam aqui. Notas em Markdown são salvas no espaço de trabalho flutuante do próprio Orca.",
           "41eb95f7f0": "Mostra o botão e o painel do espaço de trabalho flutuante.",
           "37df688d6f": "Ative o espaço de trabalho flutuante e escolha onde novas abas começam.",
-          "2374e81dd8": "Espaço de Trabalho Flutuante",
           "172d1d75c3": "Ativar Espaço de Trabalho Flutuante",
+          "2374e81dd8": "Espaço de Trabalho Flutuante",
+          "73ac917638": "Botão Flutuante",
           "7cedc178d6": "Diretório do Terminal",
           "b9c2a85346": "Local do Botão de Alternância",
-          "73ac917638": "Botão Flutuante",
           "dd7eb9270a": "Barra de Status"
         },
         "source": {
@@ -8081,9 +8065,9 @@
           "cdf794f46d": "O arquivo de atalhos não está disponível.",
           "dd532a01ce": "Falha ao abrir os atalhos no Orca.",
           "ad58206841": "Editar Arquivo no Orca",
-          "4bfe7a2e43": "Abrir com o App Padrão",
           "c322555264": "Mostrar no Gerenciador de Arquivos",
-          "5b639aea5c": "Recarregar do Disco"
+          "5b639aea5c": "Recarregar do Disco",
+          "4bfe7a2e43": "Abrir com o App Padrão"
         },
         "OrchestrationPane": {
           "52e0634e2c": "Peça a um agente coordenador para usar orquestração em transferências, transferências de worktree e agentes filhos sequenciais ou paralelos.",
@@ -8273,10 +8257,10 @@
           "c3380e4ca5": "sk-...",
           "2f797018f0": "Chave de API configurada",
           "07ed3e512e": "O áudio é enviado à OpenAI somente quando um modelo de voz da OpenAI é selecionado.",
-          "c3dfb3840e": "Chave de API",
-          "bf1ff9c891": "Transcrição da OpenAI",
+          "bce1b6d18a": "Salvar Chave",
           "be6c3f2eba": "Limpar Chave",
-          "bce1b6d18a": "Salvar Chave"
+          "bf1ff9c891": "Transcrição da OpenAI",
+          "c3dfb3840e": "Chave de API"
         },
         "PrivacyDiagnosticsSection": {
           "af2fc82cde": "Enviar diagnósticos do app ao suporte",
@@ -8381,9 +8365,6 @@
           "fe904ac984": "Compartilhar dados de uso anônimos",
           "77410e0566": "Política de privacidade",
           "8bfdd23a88": "Ajude-nos a descobrir o que construir a seguir. O Orca envia contagens anônimas de quais recursos você usa e onde as coisas quebram."
-        },
-        "RepositorySourceControlAiSection": {
-          "112f3b934f": "IA de Controle de Versão"
         },
         "ephemeralVms": {
           "search": {
@@ -8676,24 +8657,6 @@
         "TerminalRenderingSection": {
           "fffab5890b": "Exibe imagens diretamente no terminal usando os protocolos gráficos SIXEL, iTerm2 (IIP) e Kitty.",
           "08db7947d8": "Imagens Inline"
-        },
-        "keep": {
-          "local": {
-            "main": {
-              "up": {
-                "to": {
-                  "date": {
-                    "setting": {
-                      "f4c23aee76": "Manter a Main Local Atualizada"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "BrowserUseEnableSwitch": {
-          "ce4d6f80d8": "Ativar Uso do Navegador por Agente"
         },
         "YamlThemeImportButton": {
           "label": "Importar de YAML"
@@ -9198,6 +9161,7 @@
           "lastSeen": "Visto pela última vez {{when}}",
           "retry": "Tentar novamente",
           "pasteAccessLinkHelp": "Pareie com o Orca já em execução em outra máquina.",
+          "cloudVm": "VM na nuvem",
           "cloudVmHelp": "Criada para cada espaço de trabalho a partir de uma receita de ambiente.",
           "addDescriptionShort": "Cole o link de acesso de Compartilhar este computador na outra máquina.",
           "installHostPlaceholder": "Escolha um host SSH sem Orca",
@@ -9217,8 +9181,7 @@
           "settingUpInBackground": "Configurando o Orca em {{name}} em segundo plano. Ele aparece na lista quando estiver pronto.",
           "setUpOnSshHost": "Configurar Orca em um host SSH",
           "setUp": "Configurar",
-          "overYourSsh": "Pela sua conexão SSH",
-          "cloudVm": "VM na nuvem"
+          "overYourSsh": "Pela sua conexão SSH"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removidos",
@@ -9697,6 +9660,27 @@
           "shownPluginCount_other": "{{count}} plugins correspondentes exibidos, incluindo este",
           "samePublisher": "Mais itens listados como {{value0}}",
           "shownPluginCount_many": "{{count}} plugins correspondentes exibidos, incluindo este"
+        },
+        "RepositorySourceControlAiSection": {
+          "112f3b934f": "IA de Controle de Versão"
+        },
+        "keep": {
+          "local": {
+            "main": {
+              "up": {
+                "to": {
+                  "date": {
+                    "setting": {
+                      "f4c23aee76": "Manter a Main Local Atualizada"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "BrowserUseEnableSwitch": {
+          "ce4d6f80d8": "Ativar Uso do Navegador por Agente"
         }
       },
       "right": {
@@ -19223,6 +19207,7 @@
           "noModel": "Nenhum modelo de fala selecionado. Baixe um em Configurações > Voz.",
           "disabled": "O ditado por voz está desativado. Ative-o em Configurações > Voz.",
           "notReady": "O modelo de fala não está pronto. Baixe-o em Configurações > Voz.",
+          "modelNeedsUpdate": "Seu modelo de voz precisa de uma atualização para continuar funcionando. Atualize para a versão mais rápida em Configurações > Voz.",
           "unknownModel": "O modelo selecionado não está mais disponível. Escolha outro em Configurações > Voz.",
           "5d2c3e7ae3": "Nenhuma fala detectada.",
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
@@ -20176,6 +20161,7 @@
         "orcaStopCanContinue": "Você pode continuar nesta conversa.",
         "orcaStopUnnamedServer": "o servidor remoto",
         "permissionDenied": "{{agent}} negou a permissão. Ver detalhes.",
+        "safetyReviewApproved": "{{agent}} aprovou esta ação. Ver detalhes.",
         "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
         "forkedFrom": "Ramificado de"
@@ -20659,6 +20645,11 @@
         "providerExitedRow": "{{agent}} parou enquanto esta resposta estava em andamento. Você pode continuar nesta conversa.",
         "providerExitedRejection": "{{agent}} parou antes de esta mensagem ser enviada.",
         "providerExitedAnswer": "{{agent}} parou, por isso sua resposta não foi enviada. Envie uma mensagem para continuar.",
+        "providerUnavailable": "{{agent}} não conseguiu responder porque o serviço está ocupado. Escolha outro modelo ou aguarde um pouco e envie novamente.",
+        "providerSafetyStopped": "{{agent}} interrompeu esta resposta após uma verificação de segurança. Revise sua solicitação e envie novamente.",
+        "providerResponseFailed": "{{agent}} não conseguiu concluir esta resposta. Abra os detalhes para obter mais informações.",
+        "modelUnavailable": "{{agent}} não conseguiu usar {{detail}}. Selecione outro modelo e envie novamente.",
+        "selectedModel": "o modelo selecionado",
         "providerRejected": "{{agent}} não aceitou esta mensagem.",
         "providerRejectedQuoted": "{{agent}} não aceitou esta mensagem: {{detail}}.",
         "attachmentEmpty": "Uma imagem nesta mensagem está vazia, por isso a mensagem não foi enviada.",
@@ -20812,6 +20803,8 @@
         "pendingWork": "Aguarde a conclusão do trabalho e das mensagens pendentes antes de usar este comando.",
         "notDoneGoalChangeIncomplete": "Não foi possível concluir a alteração do objetivo. Verifique o chat."
       },
+      "newRowsAnnouncement": "Novas mensagens chegaram enquanto você estava ausente",
+      "newRowsMarker": "Novas",
       "find": {
         "label": "Localizar no chat",
         "noResults": "Nenhum resultado",
@@ -20898,7 +20891,8 @@
       "contextUsage": {
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
         "title": "Contexto",
-        "estimated": "Estimado a partir da última resposta."
+        "estimated": "Estimado a partir da última resposta.",
+        "deferredNote": "Carregado sob demanda. Não conta no total usado."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Copiar ID de sessão do Orca",
@@ -21558,8 +21552,8 @@
         "copyTrimsGutterDescription": "Remove a margem esquerda onde a saída do agente é desenhada por trás, para que o texto copiado não fique indentado. Apenas a indentação compartilhada por todas as linhas selecionadas é removida.",
         "copyOnSelectDescription": "Copiar automaticamente o texto selecionado em um terminal ou chat para a área de transferência.",
         "scrollOnUserInputDescription": "Digitar ou colar com o painel rolado para cima leva à saída mais recente. Desative para manter sua posição.",
-        "4c690cdfc3": "Rolar para o final ao digitar",
-        "4ed43d5060": "Remover Margem ao Copiar"
+        "4ed43d5060": "Remover Margem ao Copiar",
+        "4c690cdfc3": "Rolar para o final ao digitar"
       },
       "terminal": {
         "clipboard": {
@@ -21590,6 +21584,9 @@
         "scrollToLatestOnSendTitle": "Rolar até o mais recente ao enviar",
         "scrollToLatestOnSendCopy": "Enviar com o chat rolado para cima leva à mensagem mais recente e acompanha a resposta. Desative para manter sua posição.",
         "scrollToLatestOnSendSearchPosition": "posição",
+        "markNewMessagesTitle": "Marcar mensagens novas ao voltar para um chat",
+        "markNewMessagesCopy": "Ao voltar para um chat, uma linha Novas aparece acima do que chegou enquanto você estava fora, e o chat rola até ela se você estava lendo as mais recentes.",
+        "markNewMessagesSearchUnread": "não lida",
         "inlineVisualsTitle": "Visualizações nas respostas",
         "inlineVisualsCopy": "Permitir que o agente mostre gráficos, diagramas e mockups nas respostas. Aplica-se a novos chats.",
         "inlineVisualsToggleLabel": "Ativar ou desativar visualizações nas respostas",
@@ -21635,6 +21632,85 @@
         "fillerWords": {
           "description": "Remove sons como “hã” e “hum” do texto ditado, conforme o idioma do ditado.",
           "0134406785": "Remover hesitações"
+        },
+        "sectionDescription": "Fale em vez de digitar em qualquer painel. A fala é reconhecida neste computador, a menos que você escolha um modelo na nuvem.",
+        "input": {
+          "title": "Entrada",
+          "shortcut": "Atalho",
+          "shortcutDescription": "Inicia o ditado no painel em foco.",
+          "changeShortcut": "Alterar"
+        },
+        "language": {
+          "title": "Idioma"
+        },
+        "cleanup": {
+          "title": "Limpeza"
+        },
+        "advanced": {
+          "title": "Avançado"
+        },
+        "setup": {
+          "downloadingDescription": "Você pode sair desta página. O ditado funciona quando o download terminar.",
+          "title": "Configurar o ditado",
+          "pickModel": "Fale em vez de digitar em qualquer painel. Baixe um modelo de voz abaixo para começar; modelos neste computador mantêm seu áudio aqui.",
+          "microphoneMissingTitle": "{{microphone}} não está conectado",
+          "microphoneMissingDescription": "O ditado usa o microfone padrão do sistema até ele voltar.",
+          "changeMicrophone": "Trocar microfone",
+          "onTitle": "O ditado está ativado",
+          "onLocal": "Pressione {{shortcut}} em qualquer painel. {{model}} roda neste computador.",
+          "onCloud": "Pressione {{shortcut}} em qualquer painel. {{model}} roda na nuvem.",
+          "offTitle": "O ditado está desativado",
+          "offDescription": "Ative para ditar com {{shortcut}} em qualquer painel.",
+          "savedMicrophone": "Seu microfone"
+        },
+        "quality": {
+          "unsupported": "Não suporta seu idioma",
+          "unmeasured": "Não medido",
+          "poor": "Ruim",
+          "fair": "Razoável",
+          "good": "Boa",
+          "veryGood": "Muito boa",
+          "excellent": "Excelente",
+          "characterErrorRate": "{{percent}}% de erro por caractere",
+          "wordErrorRate": "{{percent}}% de erro por palavra",
+          "librispeech": "Teste: LibriSpeech (fala lida), {{clips}} clipes, medido em {{date}}.",
+          "fleurs": "Teste: FLEURS (fala lida), {{clips}} clipes, medido em {{date}}.",
+          "bench": "Benchmark do Orca em um Mac com Apple silicon.",
+          "label": "Qualidade: {{word}}"
+        },
+        "models": {
+          "retired": "Não é mais oferecido. Exclua para liberar espaço.",
+          "sendsToOpenAi": "Envia seu áudio para a OpenAI.",
+          "delete": "Excluir",
+          "cancelDownload": "Cancelar download",
+          "inUse": "Em uso",
+          "use": "Usar",
+          "setUpCloud": "Configurar",
+          "download": "Baixar",
+          "cloud": "Nuvem",
+          "description": "A qualidade é avaliada para {{language}}. Passe o cursor sobre uma avaliação para ver o teste.",
+          "where": "Onde os modelos rodam",
+          "local": "Neste computador",
+          "cloudDescription": "Modelos na nuvem enviam seu áudio ao provedor. Os deste computador o mantêm aqui.",
+          "sendsToCompatible": "Envia seu áudio para o serviço que você configurou."
+        },
+        "vocabulary": {
+          "title": "Vocabulário",
+          "description": "Nomes e termos de código escritos do seu jeito. Adicione como o modelo os ouve errado, se ele continuar errando.",
+          "repoScope": "Usado só ao ditar em {{repo}}.",
+          "personalScope": "Usado em todos os repositórios.",
+          "scope": "Termos para",
+          "personal": "Pessoal · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "Remover {{term}}",
+          "term": "Palavra ou frase",
+          "heardAs": "Ouvido como (opcional)",
+          "heardAsLabel": "Ouvido como",
+          "add": "Adicionar",
+          "repoNameHint": "Usar o nome do repositório como dica",
+          "repoNameHintDescription": "Ajuda a reconhecer o nome do repositório.",
+          "repoSaveFailed": "Não foi possível salvar os termos do repositório. O host deste repositório pode precisar de uma atualização do Orca."
         }
       },
       "repositoryHooks": {
@@ -22829,51 +22905,51 @@
       "terminalSplitDown": "Dividir terminal para baixo",
       "terminalSwitchInputSource": "Alternar fonte de entrada / idioma (nativo)",
       "newAgentTab": "Nova aba do {{agent}}",
-      "1d1d2ec47b": "Ir para arquivo",
-      "e316152321": "Abrir Configurações",
-      "8a1982d598": "Forçar Recarregamento",
-      "1d2c86248c": "Excluir Espaço de Trabalho",
-      "1524825c2c": "Alternar Quadro do Espaço de Trabalho",
-      "82c1bf448c": "Alternar Painel de Agentes",
-      "0feb1f0496": "Selecionar Espaço de Trabalho 1–9",
-      "81bcb6ec24": "Abrir Tarefas",
-      "5c1a9f83e0": "Abrir plugins",
-      "196b416429": "Alternar Barra Lateral",
-      "e0d7e6b665": "Alternar Barra Lateral Direita",
-      "da4e681113": "Mostrar Busca",
-      "44e8b7dcb5": "Mostrar Controle de Código-Fonte",
-      "e37b19864c": "Mostrar Verificações",
-      "cb816639bd": "Mostrar Portas",
-      "437260810f": "Alternar Espaços de Trabalho em Repouso",
-      "e67a41569d": "Alternar Terminal Flutuante",
-      "3e3a2d18d4": "Maximizar Painel do Espaço de Trabalho Flutuante",
-      "746ff0c872": "Minimizar Painel do Espaço de Trabalho Flutuante",
-      "f233164080": "Aumentar Zoom",
-      "2b20f1f14a": "Diminuir Zoom",
-      "bb3beaeef6": "Redefinir Tamanho",
-      "02dd0f77a0": "Voltar no Histórico de Worktrees",
-      "57c4fb0edd": "Avançar no Histórico de Worktrees",
       "eca3c9fdd7": "Selecionar Aba 1–9",
-      "fbf2216baa": "Localizar no Navegador",
-      "0fe8d02935": "Voltar no Navegador",
       "53ae577e44": "Avançar no Navegador",
-      "92fad2c21f": "Mostrar Histórico do Navegador",
-      "67ce6cf5a0": "Recarregar Página do Navegador",
-      "6bd12f3071": "Recarregamento Forçado da Página do Navegador",
-      "2f2961bebf": "Focar Barra de Endereço do Navegador",
-      "23350d5072": "Capturar Elemento da Página",
+      "324e886c0f": "Ir para Alteração Anterior",
+      "196b416429": "Alternar Barra Lateral",
+      "82c1bf448c": "Alternar Painel de Agentes",
+      "9cb1023d40": "Adicionar Nota de Revisão",
+      "57c4fb0edd": "Avançar no Histórico de Worktrees",
+      "02dd0f77a0": "Voltar no Histórico de Worktrees",
+      "bb3beaeef6": "Redefinir Tamanho",
+      "258e7f75ec": "Copiar Contexto",
+      "e0d7e6b665": "Alternar Barra Lateral Direita",
+      "1d2c86248c": "Excluir Espaço de Trabalho",
       "69b2b72c98": "Anotar Elemento da Página",
       "6a99c55b2d": "Salvar Arquivo",
       "e25a3e5f9a": "Mostrar Pré-visualização do Markdown",
-      "2f207aa199": "Alternar Quebra de Linha",
-      "258e7f75ec": "Copiar Contexto",
-      "324e886c0f": "Ir para Alteração Anterior",
+      "92fad2c21f": "Mostrar Histórico do Navegador",
       "7055c70bdb": "Ir para Próxima Alteração",
-      "9cb1023d40": "Adicionar Nota de Revisão",
-      "e9da9f872a": "Enviar Notas de Revisão ao Agente",
-      "3acf4e9eb1": "Pesquisar Configurações",
-      "128cce6e6d": "Definir Título…",
+      "e37b19864c": "Mostrar Verificações",
+      "6bd12f3071": "Recarregamento Forçado da Página do Navegador",
       "8788e3be3a": "Alternar Espaços de Trabalho Filhos",
+      "44e8b7dcb5": "Mostrar Controle de Código-Fonte",
+      "2f2961bebf": "Focar Barra de Endereço do Navegador",
+      "cb816639bd": "Mostrar Portas",
+      "0fe8d02935": "Voltar no Navegador",
+      "2f207aa199": "Alternar Quebra de Linha",
+      "e316152321": "Abrir Configurações",
+      "8a1982d598": "Forçar Recarregamento",
+      "81bcb6ec24": "Abrir Tarefas",
+      "67ce6cf5a0": "Recarregar Página do Navegador",
+      "23350d5072": "Capturar Elemento da Página",
+      "1d1d2ec47b": "Ir para arquivo",
+      "fbf2216baa": "Localizar no Navegador",
+      "e67a41569d": "Alternar Terminal Flutuante",
+      "3e3a2d18d4": "Maximizar Painel do Espaço de Trabalho Flutuante",
+      "746ff0c872": "Minimizar Painel do Espaço de Trabalho Flutuante",
+      "437260810f": "Alternar Espaços de Trabalho em Repouso",
+      "3acf4e9eb1": "Pesquisar Configurações",
+      "5c1a9f83e0": "Abrir plugins",
+      "da4e681113": "Mostrar Busca",
+      "f233164080": "Aumentar Zoom",
+      "0feb1f0496": "Selecionar Espaço de Trabalho 1–9",
+      "2b20f1f14a": "Diminuir Zoom",
+      "128cce6e6d": "Definir Título…",
+      "e9da9f872a": "Enviar Notas de Revisão ao Agente",
+      "1524825c2c": "Alternar Quadro do Espaço de Trabalho",
       "d286d1ab85": "Limpar Título do Painel"
     },
     "group": {
@@ -23936,5 +24012,31 @@
     "branchName": "Nome da branch",
     "invalidBranchName": "Este nome de branch é inválido. Escolha outro nome.",
     "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Atualize seu modelo de voz",
+    "updateDescription": "O ditado agora usa um mecanismo mais rápido. {{model}} precisa de um download único ({{size}} MB) antes que você possa ditar novamente.",
+    "update": "Atualizar",
+    "replacedTitle": "Seu modelo de voz foi substituído",
+    "replacedDescription": "{{old}} não funciona no novo mecanismo de voz. {{model}} o substitui ({{size}} MB).",
+    "downloadReplacement": "Baixar {{model}}",
+    "later": "Mais tarde",
+    "dismiss": "Fechar",
+    "updatingTitle": "Atualizando {{model}}",
+    "downloadingTitle": "Baixando {{model}}",
+    "downloadingDescription": "Você pode continuar trabalhando. O ditado volta quando isso terminar.",
+    "progress": "{{done}} de {{total}} MB",
+    "cancel": "Cancelar",
+    "doneTitle": "O ditado está pronto",
+    "doneDescription": "{{model}} foi atualizado. Os arquivos antigos foram removidos.",
+    "doneRetiredDescription": "{{model}} está pronto. Os arquivos antigos de {{old}} ainda estão no disco.",
+    "keep": "Manter",
+    "deleteOld": "Excluir modelo antigo",
+    "deleteFailed": "Não foi possível excluir {{model}}.",
+    "updateFailedTitle": "Não foi possível atualizar {{model}}",
+    "downloadFailedTitle": "Não foi possível baixar {{model}}",
+    "failedAtDescription": "O download parou em {{mb}} MB. Verifique sua conexão e tente novamente.",
+    "failedDescription": "O download parou. Verifique sua conexão e tente novamente.",
+    "tryAgain": "Tentar novamente"
   }
 }

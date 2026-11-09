@@ -158,6 +158,14 @@ export function createRepoUpdateActions(
           ) {
             return false
           }
+          // A host from before dictionaries drops the field and still answers with its row.
+          if (
+            sanitizedUpdates.dictationTerms !== undefined &&
+            JSON.stringify(updatedRepo?.dictationTerms ?? []) !==
+              JSON.stringify(sanitizedUpdates.dictationTerms)
+          ) {
+            return false
+          }
           set((s) => {
             const nextRepos = s.repos.map((r) => {
               const matchesOwner = ownerHasExplicitHost

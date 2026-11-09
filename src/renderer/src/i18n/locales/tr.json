@@ -240,6 +240,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Parola kaydetme önerisi",
+        "updateTitle": "Parola güncellensin mi?",
+        "saveTitle": "Parola kaydedilsin mi?",
+        "username": "Kullanıcı adı",
+        "password": "Parola",
+        "never": "Bu site için asla",
+        "notNow": "Şimdi değil",
+        "update": "Güncelle",
+        "save": "Kaydet"
+      },
+      "fill": {
+        "noUsername": "(kullanıcı adı yok)",
+        "title": "Kaydedilmiş girişler",
+        "otherLogins": "Bu sitedeki diğer girişler"
+      }
+    },
     "loadFailure": {
       "connectionNotSecure": "Bağlantı güvenli değil",
       "cantReachHost": "{{value0}} adresine ulaşılamıyor",
@@ -930,21 +948,6 @@
         "missingHost": "Proxy URL'si bir ana makine içermelidir."
       }
     },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "25 Avrupa dili için en yüksek doğruluk. Noktalama, büyük/küçük harf kullanımı ve sözcük düzeyinde zaman damgaları.",
-        "parakeetV2": "Yalnızca İngilizce. Benzer doğrulukla v3'ten daha hızlı. Noktalama ve büyük/küçük harf kullanımı.",
-        "zipformerBilingual": "Dil geçişleriyle Çince + İngilizce. Düşük gecikmeli gerçek zamanlı akış.",
-        "paraformerBilingual": "Çince (Mandarin + lehçeler) + İngilizce. Aksanlı ve bölgesel Çince konuşmalarda güçlü.",
-        "zipformerStreamingEnRetired": "Artık sunulmuyor: cümlelerin başını atlıyor. Yer açmak için silin.",
-        "zipformerStreamingZh": "Yalnızca Çince. Kaynakları kısıtlı cihazlar için ideal, 14 milyon parametreli çok hafif model.",
-        "zipformerStreamingKo": "Yalnızca Korece. Düşük gecikmeli gerçek zamanlı akış.",
-        "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
-        "whisperTiny": "90'dan fazla dil. Parakeet'ten daha düşük doğruluk, ancak en geniş dil kapsamı.",
-        "senseVoice": "Otomatik dil algılamayla Çince, İngilizce, Japonca, Korece ve Kantonca.",
-        "gptTranscribe": "Yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir."
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "inceleme dosyası oluşturma devre dışı",
@@ -1327,7 +1330,6 @@
         "jira": {
           "856083302c": "Jira bağlantısının yerini daha yeni bir istek aldı."
         },
-        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Profil oluşturulamadı",
@@ -1930,28 +1932,38 @@
         "e338c507c1": "Sorun giderme için düşük seviyeli uyumluluk ayarları.",
         "580a04cd81": "Gelişmiş",
         "8400cfe1c1": "Anonim kullanım verisi ve telemetri denetimleri.",
+        "3618579df6": "Gizlilik ve Telemetri",
         "65ec7d1968": "Terminalden başlatılan geliştirici araçları için macOS gizlilik erişimi.",
         "d91ae31fbd": "macOS İzinleri",
         "95a1886d94": "Terminalleri ve ajanları telefonunuzdan kontrol edin.",
         "1cd25673df": "Mobil",
         "31e57d1c70": "Dosyalar, terminaller, Git ve çalışma alanları için SSH üzerinden mevcut makineleri kullanın.",
+        "94a5afe910": "SSH Sunucuları",
         "40d80bad8a": "Beta",
+        "de0c2907a1": "Uzak Orca Sunucuları",
         "b351014180": "Orca istatistikleri; Claude, Codex, OpenCode ve Muse token analizleri ile Grok abonelik kullanımı.",
+        "d72a58b5b9": "İstatistikler ve Kullanım",
         "dcd0d9b74f": "Sık kullanılan eylemler için klavye kısayolları.",
         "94295ebfb3": "Kısayollar",
         "7682607591": "Ajan ve terminal olayları için yerel masaüstü bildirimleri.",
         "2eece16ad1": "Bildirimler",
         "1f452cbd4c": "Seçim ve düzenleme davranışı.",
+        "0c6ee88a5f": "Giriş ve Düzenleme",
         "b11a5a48a2": "Tema, yakınlaştırma, uygulama ve terminal görünümü, kenar çubukları ve durum çubuğu.",
         "93d88d20bf": "Görünüm",
         "2d0659f6f0": "Genel terminal, tarayıcı ve markdown sekmeleri.",
+        "65b19f5bde": "Yüzen Çalışma Alanı",
         "3d65d3f1b9": "Orca ve kodlama ajanları için mobil emülatör desteğini yapılandırın.",
+        "1e761cff2b": "Mobil Emülatör",
         "e815fd01bd": "Ana sayfa, bağlantı yönlendirme ve oturum çerezleri.",
         "8c197f74a1": "Tarayıcı",
         "42ae40842f": "Genel veya proje bazında kapsamlandırılmış, kayıtlı terminal komutları.",
+        "3fc3db144f": "Hızlı Komutlar",
         "c33bfd664c": "Kabuklar, render motoru, oturumlar ve terminal davranışı.",
         "a9fb10afca": "Terminal",
+        "85f4fd7710": "Görev Kaynakları",
         "ab4b21b58e": "Branch adlandırma, taban referanslar ve Git AI Yazarı.",
+        "09607cb0fe": "Git ve Kaynak Kontrolü",
         "33a5e1d597": "GitHub, GitLab, Linear ve kaynak barındırma hizmetlerini bağlayın.",
         "2b043783ef": "Entegrasyonlar",
         "2cd4ea75da": "Çalışma alanı varsayılanları, uygulama kurulumu ve bakım.",
@@ -1965,11 +1977,15 @@
         "8ac3de82f5": "Cihaz üzerindeki modellerle yerel sesten metne dikte.",
         "6a50cdcd7c": "Ses",
         "0059bd17f3": "Ajanların bilgisayarınızdaki herhangi bir uygulamayı kontrol etmesini etkinleştirin.",
+        "b35e92364b": "Bilgisayar Kullanımı",
         "cd50cec5d7": "Orca üzerinden birden fazla kodlama ajanını koordine edin.",
         "58a868e8e4": "Orkestrasyon",
+        "7c79d3b7bf": "Opsiyonel",
         "b1c2f8b0ac": "Claude, Codex, Gemini, OpenCode Go, MiniMax ve Grok için isteğe bağlı hesap değiştirme ve kullanım kurulumu.",
+        "f70ac54d38": "AI Sağlayıcı Hesapları",
         "4121f7a0a2": "AI ajanlarını yönetin, bir varsayılan belirleyin ve komutları özelleştirin.",
         "b49abbd2f7": "Ajanlar",
+        "dev": "Geliştirici Araçları",
         "devDescription": "UI durumlarını denemek için yalnızca geliştiriciye yönelik araçlar.",
         "devBadge": "Dev",
         "devSearchNotificationPlayground": "Bildirim deneme alanı",
@@ -1989,23 +2005,9 @@
         "artifactsDescription": "HTML ve Markdown dosyalarını ekibinizle paylaşın ve genel bağlantılarını yönetin.",
         "automationsTitle": "Otomasyonlar",
         "automationsDescription": "Ajan işini zamanlayın ve Otomasyonlar'ın kenar çubuğunda görünüp görünmeyeceğini seçin.",
-        "shareSkillsDescription": "Becerilerinizi listelenmemiş bir bağlantıyla paylaşın. Bağlantıya sahip olan herkes onları yükleyebilir.",
-        "floatingWorkspaceWebDescription": "Genel terminal ve markdown sekmeleri.",
-        "dev": "Geliştirici Araçları",
-        "1e761cff2b": "Mobil Emülatör",
-        "3fc3db144f": "Hızlı Komutlar",
-        "b35e92364b": "Bilgisayar Kullanımı",
-        "0c6ee88a5f": "Giriş ve Düzenleme",
-        "85f4fd7710": "Görev Kaynakları",
-        "f70ac54d38": "AI Sağlayıcı Hesapları",
-        "09607cb0fe": "Git ve Kaynak Kontrolü",
-        "7c79d3b7bf": "Opsiyonel",
-        "d72a58b5b9": "İstatistikler ve Kullanım",
         "shareSkillsTitle": "Becerileri paylaş",
-        "de0c2907a1": "Uzak Orca Sunucuları",
-        "65b19f5bde": "Yüzen Çalışma Alanı",
-        "3618579df6": "Gizlilik ve Telemetri",
-        "94a5afe910": "SSH Sunucuları"
+        "shareSkillsDescription": "Becerilerinizi listelenmemiş bir bağlantıyla paylaşın. Bağlantıya sahip olan herkes onları yükleyebilir.",
+        "floatingWorkspaceWebDescription": "Genel terminal ve markdown sekmeleri."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Yapıştırılan içerik çok büyük."
@@ -2762,7 +2764,7 @@
         "untitled": "Başlıksız sohbet",
         "listLabel": "Devam edilecek sohbetler",
         "dontAskAgain": "Bir daha sorma (otomatik devam et)",
-        "dontAskAgainHint": "Bu seçeneği Ayarlar → Deneysel → Sohbet Arayüzü bölümünden kapatabilirsiniz.",
+        "dontAskAgainHint": "Bu seçeneği Ayarlar → Sohbet → Davranış bölümünden kapatabilirsiniz.",
         "selectAgent": "{{value2}} içindeki \"{{value1}}\" adlı {{value0}} sohbetine devam et",
         "dismissAll": "Tümünü kapat",
         "viewChats": "Sohbetleri görüntüle",
@@ -7349,21 +7351,6 @@
         }
       },
       "settings": {
-        "keep": {
-          "local": {
-            "main": {
-              "up": {
-                "to": {
-                  "date": {
-                    "setting": {
-                      "f4c23aee76": "Yerel Main'i Güncel Tut"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
         "AccountsPane": {
           "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "dbb9626ed1": "İptal",
@@ -7504,14 +7491,14 @@
           },
           "remoteScopeLocalAccountsKeptHostPicker": "Bu masaüstünde yönetilen hesaplar değişmedi. Görüntülemek için Ayarlar'ın üst kısmındaki Ana makine menüsünden bu bilgisayarı seçin.",
           "apiKeyUpdateFailed": "MiniMax API anahtarı güncellenemedi.",
+          "91a1b78e67": "Hesap Konumu",
+          "699680a328": "Hesabı Kaldır",
           "89b9a151c3": "Claude Hesapları",
           "bd16d363ed": "Codex Hesapları",
           "4d274a02f0": "OpenCode Go Oturum Çerezi",
-          "109431f707": "OpenCode Go Çalışma Alanı Kimliği",
-          "91a1b78e67": "Hesap Konumu",
           "4d41177f74": "MiniMax Oturum Çerezi",
-          "699680a328": "Hesabı Kaldır",
-          "7e9977b560": "Hesap Ekle"
+          "7e9977b560": "Hesap Ekle",
+          "109431f707": "OpenCode Go Çalışma Alanı Kimliği"
         },
         "AdvancedPane": {
           "40b29e0bf3": "Yeniden başlat",
@@ -7580,8 +7567,8 @@
           "codexSessionSourceTooltip": "Orca, Codex'i izole bir ana dizinde çalıştırır. Bu oturum geçmişini içe aktarmak için bunu mevcut Codex ana dizininize yönlendirin. Boş bırakılırsa ~/.codex kullanılır.",
           "storedDefaultUndetected": "Varsayılanınız olarak kaydedildi ancak şu anda algılanamıyor",
           "noAgentsDetected": "Ajan algılanmadı. Bir tanesi yüklüyse, yoklama zaman aşımına uğramış olabilir.",
-          "3bddd54c9e": "Varsayılan Ajan",
-          "9f30095d49": "Ajan İzinleri"
+          "9f30095d49": "Ajan İzinleri",
+          "3bddd54c9e": "Varsayılan Ajan"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Sonraki simge",
@@ -7606,8 +7593,8 @@
             "tintOpacityDescription": "Rengin kenar çubuğuna ne kadar güçlü karıştırılacağını kontrol eder.",
             "tintDescription": "Sol kenar çubuğunu varsayılan bırakın veya renklendirin. Terminali izlemek için açık veya koyu tema olarak Terminalle Eşleştir seçeneğini seçin.",
             "fcc653abee": "Sol Kenar Çubuğu Görünümü",
-            "ba1d9a0607": "Kenar Çubuğu Rengi",
-            "df205a675e": "Renk Yoğunluğu"
+            "df205a675e": "Renk Yoğunluğu",
+            "ba1d9a0607": "Kenar Çubuğu Rengi"
           },
           "interfaceDefaultFont": "Varsayılan yazı tipi",
           "terminalDefaultFont": "Varsayılan yazı tipi",
@@ -7620,18 +7607,18 @@
             "title": "Sabitlenmiş worktree'leri orijinal listelerinde de göster",
             "description": "Sabitlenmiş worktree'ler Sabitlenenler'de kalır ve ayrıca Tümü, Proje, Durum ve PR listelerinde de görünür."
           },
-          "173edfb768": "Arayüz Yakınlaştırma",
-          "657a7230a2": "IDE Yazı Tipi",
-          "8063dd3b6b": "Başlık Çubuğu Uygulama Adı",
-          "95a5581f66": "Kapatınca Tepsiye Küçült",
-          "e90c5d745a": "Pencere ve Kenar Çubuğu",
-          "907888cd09": "Uygulama Simgesi",
-          "3a5d06686d": "Durum Çubuğu",
           "e0f9902e18": "Görevler Düğmesini Göster",
-          "7be0027489": "Otomasyonlar Düğmesini Göster",
-          "d2b4ddbea0": "Orca Mobile Düğmesini Göster",
           "7e958ee950": "Git Tarafından Yok Sayılan Dosyaları Göster",
-          "8e374ce9a3": "Dosya Gezgini"
+          "173edfb768": "Arayüz Yakınlaştırma",
+          "907888cd09": "Uygulama Simgesi",
+          "8e374ce9a3": "Dosya Gezgini",
+          "3a5d06686d": "Durum Çubuğu",
+          "7be0027489": "Otomasyonlar Düğmesini Göster",
+          "8063dd3b6b": "Başlık Çubuğu Uygulama Adı",
+          "d2b4ddbea0": "Orca Mobile Düğmesini Göster",
+          "657a7230a2": "IDE Yazı Tipi",
+          "95a5581f66": "Kapatınca Tepsiye Küçült",
+          "e90c5d745a": "Pencere ve Kenar Çubuğu"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -7693,12 +7680,12 @@
           "64898ecdab": "Oluştur",
           "7b649a578a": "Oluşturuluyor…",
           "4399c77caa": "Varsayılan",
-          "e25fd16b91": "Varsayılan Arama Motoru",
           "bc44903d30": "Oturum ve Çerezler",
-          "ddd634b250": "Oturum ve Çerezler",
           "7a366a05e1": "Bağlantı Yönlendirme",
-          "f36182ff2f": "Yeni Tarayıcı Profili",
-          "549f28cf10": "Profil Ekle"
+          "549f28cf10": "Profil Ekle",
+          "e25fd16b91": "Varsayılan Arama Motoru",
+          "ddd634b250": "Oturum ve Çerezler",
+          "f36182ff2f": "Yeni Tarayıcı Profili"
         },
         "BrowserProfileRow": {
           "8e636cae25": "\"{{value0}}\" profili kaldırıldı.",
@@ -7716,9 +7703,6 @@
           "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Orca Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
           "333984cf90": "Mevcut bir tarayıcı oturumunu kullan",
           "9895ed44de": "Computer Use'u Aç"
-        },
-        "BrowserUseEnableSwitch": {
-          "ce4d6f80d8": "Ajan Tarayıcı Kullanımını Etkinleştir"
         },
         "BrowserUseExamples": {
           "1199258ace": "Kopyala",
@@ -7744,9 +7728,9 @@
           "5301857d88": "{{value0}} kaynağından",
           "finishSteps": "Kodlama ajanlarının oturum açtığınız hesaplarla bu tarayıcıyı kullanmasına izin verin. Aşağıdaki adımları tamamlayın.",
           "b3e79d1c51": "Tarayıcı Çerezlerini İçe Aktar",
-          "4451b3c0a6": "Browser Use Becerisini Yükle",
+          "507fdae102": "Ajan Tarayıcı Kullanımı",
           "4ab048c0b8": "Dosyadan…",
-          "507fdae102": "Ajan Tarayıcı Kullanımı"
+          "4451b3c0a6": "Browser Use Becerisini Yükle"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Ajanların Orca'nın tarayıcısında sayfalarda gezinmesini ve doğrulama yapmasını sağlar.",
@@ -7906,13 +7890,13 @@
           "appStatus": "Uygulama: ",
           "terminalHostStatus": "Terminal ana makineleri: ",
           "terminalHostRecovery": "Bir terminal korumalı dosyaları okuyamıyorsa çalışmasını kaydedin ve Terminal → Oturumları Yönet bölümünden kapatın. Yeni terminaller de etkileniyorsa arka plan hizmetini yeniden başlatın; yeniden başlatma mevcut terminalleri kapatır.",
-          "515baa0f5c": "Ekran Kaydı",
-          "b8cd05701d": "Ayarları Aç",
           "28350e590b": "İstemi Tetikle",
-          "78b1e0b9d4": "Yerel Ağ",
           "e2596159f6": "Erişim İste",
+          "78b1e0b9d4": "Yerel Ağ",
+          "a162df27d5": "Bağlantıyı Test Et",
           "91f887e323": "USB Cihazları",
-          "a162df27d5": "Bağlantıyı Test Et"
+          "b8cd05701d": "Ayarları Aç",
+          "515baa0f5c": "Ekran Kaydı"
         },
         "ExperimentalPane": {
           "a20d5ea365": "Terminal zili veya ajan tamamlama olaylarından sonra siz o bölmeyle etkileşime geçene kadar bölme düzeyinde bir vurguyu görünür tutar. Sinyali ayarlarken deneysel.",
@@ -7972,11 +7956,11 @@
           "81afb79785": "Yeni yüzen terminal sekmeleri burada başlar. Markdown notları, Orca'nın uygulamaya ait yüzen çalışma alanında kaydedilir.",
           "41eb95f7f0": "Yüzen çalışma alanı düğmesini ve panelini gösterir.",
           "37df688d6f": "Yüzen çalışma alanını etkinleştirin ve yeni sekmelerin nerede başlayacağını seçin.",
-          "2374e81dd8": "Yüzen Çalışma Alanı",
           "172d1d75c3": "Yüzen Çalışma Alanını Etkinleştir",
+          "2374e81dd8": "Yüzen Çalışma Alanı",
+          "73ac917638": "Yüzen Düğme",
           "7cedc178d6": "Terminal Dizini",
           "b9c2a85346": "Aç/Kapat Düğmesi Konumu",
-          "73ac917638": "Yüzen Düğme",
           "dd7eb9270a": "Durum Çubuğu"
         },
         "AgentCacheTimerSection": {
@@ -8014,16 +7998,16 @@
           "5195f0b9ef": "Zengin Markdown düzenlerken tarayıcı yazım altı çizgilerini ve önerilerini gösterin.",
           "9b18de6eea": "Yatay kaydırma gerektirmek yerine dosya düzenleyicilerinde uzun satırları kaydırın.",
           "collapseUnchangedDescription": "Bir dosya diff'inde yalnızca değişen satırları ve çevrelerindeki birkaç satırı gösterin; geri kalanını genişletilebilir bantların arkasında gizleyin. Tüm Değişiklikleri Görüntüle görünümündeki diff her zaman bu şekilde daraltılır.",
-          "0971ef5c63": "Diff'te boşlukları göster",
-          "75e326278e": "Düzenleyici Satır Kaydırma",
-          "89ba15b474": "Otomatik Kaydetme Gecikmesi",
-          "b11d620d45": "Varsayılan diff görünümü",
-          "6f33c2a32f": "Diff satır kaydırma",
-          "3f63d16992": "Varsayılan diff dosya ağacı",
+          "a37865966c": "Dosyaları Otomatik Kaydet",
           "8b3f8e6b83": "Markdown İnceleme Notları",
+          "89ba15b474": "Otomatik Kaydetme Gecikmesi",
+          "75e326278e": "Düzenleyici Satır Kaydırma",
           "a0361dfb05": "Zengin Markdown Yazım Denetimi",
+          "3f63d16992": "Varsayılan diff dosya ağacı",
+          "b11d620d45": "Varsayılan diff görünümü",
+          "0971ef5c63": "Diff'te boşlukları göster",
           "916c5582f2": "Değişmeyen Bölgeleri Daralt",
-          "a37865966c": "Dosyaları Otomatik Kaydet"
+          "6f33c2a32f": "Diff satır kaydırma"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -8081,11 +8065,11 @@
           "externalWorktrees": "Harici worktree'ler",
           "externalWorktreesDescription": "Bu ana makinede Orca dışında oluşturulan worktree'lerden hangilerinin varsayılan olarak görüneceğini seçin.",
           "ad65d146f6": "Şunda Aç Uygulamaları",
-          "9d0ef6a2a6": "Çalışma Alanı Dizini",
+          "2ffd7c4fc8": "Yapıtları Silmeden Önce Sor",
           "a8ce626e4b": "Çalışma Alanlarını İç İçe Yerleştir",
           "c2d4beaf3a": "Çalışma Alanlarını Silmeden Önce Sor",
-          "3ae2a59ce9": "Otomasyonları Silmeden Önce Sor",
-          "2ffd7c4fc8": "Yapıtları Silmeden Önce Sor"
+          "9d0ef6a2a6": "Çalışma Alanı Dizini",
+          "3ae2a59ce9": "Otomasyonları Silmeden Önce Sor"
         },
         "GhosttyImportModal": {
           "f96688b6bc": "İptal",
@@ -8123,9 +8107,9 @@
           "cancel": "İptal",
           "import_theme_one": "{{value0}} temayı içe aktar",
           "import_theme_other": "{{value0}} temayı içe aktar",
-          "77f3e3d390": "Dosya Seç",
+          "1bceb1553d": "Temaları İçe Aktar",
           "00aaf588da": "Klasör Seç",
-          "1bceb1553d": "Temaları İçe Aktar"
+          "77f3e3d390": "Dosya Seç"
         },
         "useWarpThemeImport": {
           "unknown_error": "Bilinmeyen hata",
@@ -8172,13 +8156,13 @@
           "jiraIssueKeyCasingDescription": "Orca'nın Jira'ya bağlı yeni çalışma alanları için önerdiği çalışma alanı ve branch adlarındaki Jira sorun anahtarının harf biçimi; örneğin proj-123-fix-login yerine PROJ-123-fix-login. Mevcut çalışma alanları ve sizin yazdığınız adlar hiçbir zaman değiştirilmez.",
           "jiraIssueKeyCasingLowercase": "Küçük harf",
           "jiraIssueKeyCasingPreserve": "Büyük harfli anahtar",
-          "7826f35f63": "Branch Öneki",
-          "53a0daed73": "Kaynak Kontrolü Grup Sırası",
-          "fdbcd676b0": "GitHub API Bütçesi",
-          "f2765fbbf6": "GitLab API Bütçesi",
-          "074f7aa0d6": "Varsayılan Karşılaştırma Tabanı",
           "d12c81a103": "Git Kullanıcı Adı",
-          "8cdbaf4b03": "Jira anahtarının harf biçimi"
+          "53a0daed73": "Kaynak Kontrolü Grup Sırası",
+          "7826f35f63": "Branch Öneki",
+          "f2765fbbf6": "GitLab API Bütçesi",
+          "8cdbaf4b03": "Jira anahtarının harf biçimi",
+          "fdbcd676b0": "GitHub API Bütçesi",
+          "074f7aa0d6": "Varsayılan Karşılaştırma Tabanı"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Bu makinede bold-glitch yakalama hareketlerini etkinleştirir: {{samplingShortcut}} bir örnekleme patlaması başlatır; {{captureShortcut}} bölme kanıtını diske kaydeder.",
@@ -8213,9 +8197,9 @@
           "cdf794f46d": "Tuş atamaları dosyası kullanılamıyor.",
           "dd532a01ce": "Tuş atamaları Orca'da açılamadı.",
           "ad58206841": "Dosyayı Orca'da Düzenle",
-          "4bfe7a2e43": "Varsayılan Uygulamayla Aç",
           "c322555264": "Dosya Yöneticisinde Göster",
-          "5b639aea5c": "Diskten Yeniden Yükle"
+          "5b639aea5c": "Diskten Yeniden Yükle",
+          "4bfe7a2e43": "Varsayılan Uygulamayla Aç"
         },
         "ManageSessionKillDialog": {
           "6bf4627168": "İptal",
@@ -8360,25 +8344,25 @@
           "7f45542625": "Test bildirimi istendi",
           "98d70fb261": "Özel bildirim sesi çalınamadı",
           "c83b05a055": "Bu sistemde bildirimler desteklenmiyor",
-          "b3c7207c8f": "Bildirim Sesi",
-          "9c41a0d367": "Bildirimleri Etkinleştir",
-          "0acae1066d": "Ajan Görevi Tamamlandı",
           "6bc7bd7b6e": "Terminal Zili",
+          "0acae1066d": "Ajan Görevi Tamamlandı",
           "3b77513cd0": "Gizli çalışma alanları hakkında bildirim gönder",
-          "badd7ed4cf": "Odaktayken Gizle",
           "0b8141ed49": "Özel Dosyayı Değiştir",
-          "38e3bbeb25": "Özel Dosya Seç",
-          "f5b0498e1f": "Test Bildirimi Gönder"
+          "badd7ed4cf": "Odaktayken Gizle",
+          "9c41a0d367": "Bildirimleri Etkinleştir",
+          "f5b0498e1f": "Test Bildirimi Gönder",
+          "b3c7207c8f": "Bildirim Sesi",
+          "38e3bbeb25": "Özel Dosya Seç"
         },
         "OpenAiTranscriptionKeyDialog": {
           "d246b2bdb3": "Yerel çalışma zamanı anahtarları, mevcut olduğunda Electron şifreli depolama kullanılarak ~/.orca içinde saklanır.",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "API anahtarı yapılandırıldı",
           "07ed3e512e": "Ses, yalnızca bir OpenAI konuşma modeli seçildiğinde OpenAI'ye gönderilir.",
-          "c3dfb3840e": "API Anahtarı",
-          "bf1ff9c891": "OpenAI Transkripsiyon",
+          "bce1b6d18a": "Anahtarı Kaydet",
           "be6c3f2eba": "Anahtarı Temizle",
-          "bce1b6d18a": "Anahtarı Kaydet"
+          "bf1ff9c891": "OpenAI Transkripsiyon",
+          "c3dfb3840e": "API Anahtarı"
         },
         "OpenAiTranscriptionSettingsRow": {
           "85c589cd61": "API anahtarı ekle",
@@ -8581,12 +8565,12 @@
           "issueCommandOptionalDefault": "Varsa <yaml>orca.yaml</yaml> dosyasındaki repo varsayılanını kullanmak için boş bırakın.",
           "commandSourceDescription": "Hem <yaml>orca.yaml</yaml> hem de yerel komutlar varsa hangilerinin çalışacağını seçin.",
           "issueCommandWslStopped": "WSL dağıtımı {{distro}} durduruldu. Bu komutu görmek veya düzenlemek için içinde bir terminal açın.",
-          "01bdba296f": "Worktree Hook'ları",
-          "1ecf0b115a": "Kurulum Betiği",
-          "1c17e751c4": "Kurulumun Ne Zaman Çalıştırılacağı",
           "bfdb1266ce": "Arşiv Betiği",
+          "1c17e751c4": "Kurulumun Ne Zaman Çalıştırılacağı",
           "da00f141c2": "Özel GitHub sorun komutu",
-          "88c6d1e54a": "Komut Kaynağı"
+          "88c6d1e54a": "Komut Kaynağı",
+          "01bdba296f": "Worktree Hook'ları",
+          "1ecf0b115a": "Kurulum Betiği"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} reposunun rengini kullan",
@@ -8611,8 +8595,8 @@
           "emojiTooLongForRepoIcon": "Bu emoji, repo simgesi olarak kullanılamaz.",
           "currentEmojiSelection": "Geçerli: {{value0}}",
           "searchEmojiPlaceholder": "Emoji ara",
-          "43bf3709dd": "Repo simgesi",
-          "cc76342291": "GitHub Avatarını Kullan"
+          "cc76342291": "GitHub Avatarını Kullan",
+          "43bf3709dd": "Repo simgesi"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Göreli yollar bu proje kökünden çözümlenir.",
@@ -8684,13 +8668,13 @@
           "externalWorktreesGlobal": "Genel varsayılan: {{value0}}",
           "useGlobal": "Genel ayarı kullan",
           "07deadaa00": "Görünen Ad",
-          "e856e61455": "Proje Simgesi",
-          "04eebebbea": "Projeyi Kaldır",
-          "82733ff808": "Kullanılabilir Sunucular",
           "41ccd99b57": "Proje Çalışma Zamanı",
+          "04eebebbea": "Projeyi Kaldır",
           "38df44846b": "Varsayılan Worktree Tabanı",
+          "077dc18a4a": "Genel Ayarı Kullan",
+          "82733ff808": "Kullanılabilir Sunucular",
           "5ff7788414": "Worktree Konumu",
-          "077dc18a4a": "Genel Ayarı Kullan"
+          "e856e61455": "Proje Simgesi"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Komut şablonu",
@@ -8723,9 +8707,6 @@
           "14f1eb99d0": "PR Oluştur açıldığında ayrıntıları üret",
           "d32b87e754": "Mevcutsa inceleme şablonunu kullan",
           "981eae7e14": "Varsayılan olarak taslak"
-        },
-        "RepositorySourceControlAiSection": {
-          "112f3b934f": "Kaynak Kontrolü AI"
         },
         "RuntimeAccessGrantList": {
           "sshAccessCaveat": "Buradan erişimi iptal etmek, bu bilgisayara SSH erişimi olan birinin yeniden eşleştirme yapmasını engellemez. Bağlantısını kesmek için SSH erişimini kaldırın.",
@@ -8881,7 +8862,6 @@
           "7807c11c4d": "Genel",
           "6855b0f77d": "Orca'yı paralel ajan çalışması için kullanışlı kılan temel iş akışlarını tamamlayın.",
           "6d119427ef": "Başlangıç kontrol listesi",
-          "eb1176a14e": "Cihaz üzerindeki modellerle yerel sesten metne dikte.",
           "5063bb47a5": "Ses",
           "7118953f14": "Ajanların bilgisayarınızdaki herhangi bir uygulamayı kontrol etmesini sağlayın.",
           "475980f53d": "Orca üzerinden birden fazla kodlama ajanını koordine edin.",
@@ -8893,8 +8873,12 @@
           "acc7bbdefd": "Ayarlardan çıkmak için ESC tuşuna tekrar basın",
           "43b68e10f0": "Kaydedilmemiş yapay zekâ ayarlarınız var. Çıkarsanız bunlar atılır.",
           "17bdee4ff1": "Kaydedilmemiş yapay zekâ ayarları atılsın mı?",
+          "084d8fac5b": "Gizlilik ve Güvenlik",
+          "23931df7e8": "Uzak Sunucular",
           "8bd117d669": "Arayüz",
           "e1578cd4bc": "İş Akışları",
+          "9abb9be3bc": "Kurulum",
+          "23c6874fdf": "AI Özellikleri",
           "65358016ea": "At",
           "devDescription": "UI durumlarını test etmek için yalnızca geliştiricilere yönelik araçlar.",
           "linearTitle": "Linear",
@@ -8902,23 +8886,19 @@
           "tasksDescription": "Sağlayıcılara bağlanın, Linear becerisini yükleyin ve Görevler bölümünde nelerin görüneceğini seçin.",
           "remoteServersDescription": "Orca'yı başka bir makinede çalıştırın ve o makinede buradan çalışın.",
           "noSettingsFoundForQuery": "\"{{value0}}\" için ayar bulunamadı",
+          "045db77e21": "SSH Sunucuları",
+          "c0900fa64a": "Görev Kaynakları",
+          "129ae9859c": "Mobil Emülatör",
+          "022effa46f": "Uzak Orca Sunucuları",
+          "d09b9d8f00": "Git ve Kaynak Kontrolü",
           "3eac6fb97f": "Geliştirici Araçları",
           "4198aae333": "AI Sağlayıcı Hesapları",
           "3f3e11cb5d": "Bilgisayar Kullanımı",
-          "d09b9d8f00": "Git ve Kaynak Kontrolü",
-          "c0900fa64a": "Görev Kaynakları",
-          "d60b7f0e58": "Hızlı Komutlar",
-          "129ae9859c": "Mobil Emülatör",
+          "084f34826d": "İstatistikler ve Kullanım",
+          "742ca66ea6": "Gizlilik ve Telemetri",
           "c2bb9fc528": "Yüzen Çalışma Alanı",
           "f1fddf7764": "Girdi ve Düzenleme",
-          "084f34826d": "İstatistikler ve Kullanım",
-          "022effa46f": "Uzak Orca Sunucuları",
-          "045db77e21": "SSH Sunucuları",
-          "742ca66ea6": "Gizlilik ve Telemetri",
-          "084d8fac5b": "Gizlilik ve Güvenlik",
-          "9abb9be3bc": "Kurulum",
-          "23c6874fdf": "AI Özellikleri",
-          "23931df7e8": "Uzak Sunucular"
+          "d60b7f0e58": "Hızlı Komutlar"
         },
         "SettingsFormControls": {
           "42a4d15a30": "Eşleşen yazı tipi yok.",
@@ -9122,8 +9102,8 @@
           "addDescription": "SSH üzerinden giriş yapabileceğiniz kalıcı bir makine ekleyin.",
           "editingPrefix": "Düzenleniyor",
           "addHost": "Sunucu ekle",
-          "8349b7b4fa": "Kimlik Dosyası",
           "bc9854a353": "Sunucum",
+          "8349b7b4fa": "Kimlik Dosyası",
           "92ea40234c": "Değişiklikleri Kaydet"
         },
         "TasksPane": {
@@ -9179,16 +9159,16 @@
           "4415beb958": "devre dışı",
           "4e7d41a9f0": "etkin",
           "dimUnfocusedPanes": "Odaklanılmayan bölmeleri soluklaştır.",
-          "bb4ac88514": "Yazı Tipi Kalınlığı",
-          "d9c0df9673": "Satır Yüksekliği",
-          "e4cccb139e": "Yazı Tipi Bitişik Harfleri",
-          "5ae74b7796": "Terminal Tipografisi",
-          "a157b95a08": "Yazı Tipi Ailesi",
           "4adb9364f4": "İmleç Şekli",
-          "55c3f22e7c": "İmleç Opaklığı",
-          "0f6515bf50": "Terminal Bölmeleri",
           "4d8b35c479": "Etkin Olmayan Bölme Opaklığı",
-          "835aad4f9d": "Ayırıcı Kalınlığı"
+          "55c3f22e7c": "İmleç Opaklığı",
+          "835aad4f9d": "Ayırıcı Kalınlığı",
+          "e4cccb139e": "Yazı Tipi Bitişik Harfleri",
+          "0f6515bf50": "Terminal Bölmeleri",
+          "d9c0df9673": "Satır Yüksekliği",
+          "bb4ac88514": "Yazı Tipi Kalınlığı",
+          "5ae74b7796": "Terminal Tipografisi",
+          "a157b95a08": "Yazı Tipi Ailesi"
         },
         "TerminalAdvancedTypographyControls": {
           "0e0d1ee15a": "Yazı Tipi Kalınlığı'ndan bağımsız olarak ayarlayın. Bazı yazı tipleri birkaç değeri tek bir yüze eşler; bu yüzden kalın görünüm değişmiyorsa Yazı Tipi Kalınlığı'nı düşürün veya başka bir yazı tipi seçin.",
@@ -9291,15 +9271,15 @@
           "1c29734248": "Yeni terminal bölmelerinde kullanılan kabuk",
           "9589abc009": "Varsayılan kabuk",
           "5a5eac2f44": "Kabuk bulunamadı: {{value0}}",
-          "143ca8e340": "Geri Kaydırma Satırları",
-          "8abcfcf8d3": "Kelime Ayırıcıları",
-          "1be0263c55": "PowerShell Sürümü",
-          "82e19f00f0": "Terminal Etkileşimi",
-          "8c07bc4d7a": "Odak Fareyi Takip Eder",
-          "8f3e7bc91f": "Seçince Kopyala",
           "d54811df09": "TUI Pano Yazmalarına İzin Ver (OSC 52)",
+          "1be0263c55": "PowerShell Sürümü",
+          "8c07bc4d7a": "Odak Fareyi Takip Eder",
           "37389522c6": "GPU Hızlandırma",
           "5aab473c7e": "Windows Kabuğu",
+          "143ca8e340": "Geri Kaydırma Satırları",
+          "82e19f00f0": "Terminal Etkileşimi",
+          "8f3e7bc91f": "Seçince Kopyala",
+          "8abcfcf8d3": "Kelime Ayırıcıları",
           "e9c84d0338": "Varsayılan Kabuk"
         },
         "TerminalSettingsPreview": {
@@ -9320,14 +9300,14 @@
           "match_dark_mode_description": "Koyu terminal temasını ve ayırıcı rengini açık modda da paylaşın.",
           "light_preview_description": "Geçerli açık terminal görünümünü gösterir.",
           "dark_preview_description": "Geçerli koyu terminal görünümünü gösterir.",
-          "3d91303d0d": "Açık Tema",
-          "44a006ab99": "Koyu Tema",
+          "3ebb499929": "Koyu Mod Önizlemesi",
           "43afde3df7": "Açık Ayırıcı Rengi",
-          "3a05b51211": "Koyu Ayırıcı Rengi",
+          "2a11e028ff": "Açık Mod Önizlemesi",
           "a39d64fe4a": "Terminal Temaları",
           "2318e07c68": "Tema Modu",
-          "2a11e028ff": "Açık Mod Önizlemesi",
-          "3ebb499929": "Koyu Mod Önizlemesi"
+          "3a05b51211": "Koyu Ayırıcı Rengi",
+          "3d91303d0d": "Açık Tema",
+          "44a006ab99": "Koyu Tema"
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI eflatun rengi",
@@ -9380,25 +9360,25 @@
           "color_overrides_light_description": "Açık terminal temasının renklerini tek tek geçersiz kılın.",
           "reset_dark_color_overrides": "Koyu tema renk geçersiz kılmalarını sıfırla",
           "reset_light_color_overrides": "Açık tema renk geçersiz kılmalarını sıfırla",
-          "e80b782206": "Arka Plan Opaklığı",
-          "2d8a13cabd": "Yatay Dolgu",
           "44c6f429e9": "Dikey Dolgu",
-          "a649973dd3": "Yazarken Fareyi Gizle",
-          "c9d73aee44": "Renk Geçersiz Kılmaları",
-          "e3e70efcec": "İmleç Metni",
-          "cd4ab89dc6": "Seçim Arka Plan Rengi",
+          "8a4b23b3c4": "Parlak Mavi",
+          "2e5ea3f11b": "Parlak Beyaz",
           "b1dce93161": "Seçim Ön Plan Rengi",
-          "6ec3252c1f": "Kalın Metin",
+          "e3e70efcec": "İmleç Metni",
+          "a649973dd3": "Yazarken Fareyi Gizle",
+          "93e2bff3ed": "Parlak Yeşil",
+          "c863ae6b57": "Parlak Kırmızı",
           "5bea0a1ca1": "ANSI Normal",
+          "db0a91c623": "Parlak Camgöbeği",
+          "c9d73aee44": "Renk Geçersiz Kılmaları",
+          "6ec3252c1f": "Kalın Metin",
+          "2b813ceecc": "Parlak Eflatun",
+          "0451b1e684": "Parlak Sarı",
+          "cd4ab89dc6": "Seçim Arka Plan Rengi",
+          "e80b782206": "Arka Plan Opaklığı",
           "9881daf4f5": "ANSI Parlak",
           "f5bda64f57": "Parlak Siyah",
-          "c863ae6b57": "Parlak Kırmızı",
-          "93e2bff3ed": "Parlak Yeşil",
-          "0451b1e684": "Parlak Sarı",
-          "8a4b23b3c4": "Parlak Mavi",
-          "2b813ceecc": "Parlak Eflatun",
-          "db0a91c623": "Parlak Camgöbeği",
-          "2e5ea3f11b": "Parlak Beyaz"
+          "2d8a13cabd": "Yatay Dolgu"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Sıfırla"
@@ -9406,7 +9386,6 @@
         "VoicePane": {
           "6fa734ed95": "{{value0}} silinsin mi",
           "68de13f72c": "Model silinemedi.",
-          "1ba81c0ff0": "önerilen",
           "cfde55c7b0": "Model indirilemedi.",
           "62d2a84d31": "OpenAI API anahtarı temizlenemedi",
           "37aba8bb63": "OpenAI API anahtarı temizlendi",
@@ -9414,9 +9393,6 @@
           "506df81ba6": "OpenAI API anahtarı kaydedildi",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Çıkarılıyor...",
-          "8f4d2a51d7": "çevrimdışı",
-          "d504ab05f0": "akış",
-          "e24f7d43d2": "Bir konuşma modeli seçin. Yerel modeller çevrimdışı çalışır; bulut modelleri bir API anahtarı gerektirir.",
           "174da92062": "Basılı Tut",
           "118b3c2dee": "Aç/kapat",
           "ad5d036ecc": "Mikrofon izni istenemedi. Sesli dikte etkinleştirilmedi.",
@@ -9424,13 +9400,15 @@
           "1eac933202": "macOS Gizlilik ve Güvenlik açıldı. Erişimi verdikten sonra dikteyi tekrar etkinleştirin.",
           "cd9fe37556": "Mikrofon izni verildi",
           "openAiKeyName": "OpenAI transkripsiyon anahtarınız",
-          "dictationShortcutDescription": "Odaktaki herhangi bir bölmeye metin dikte etmek için {{shortcut}} tuşlarına basın.",
           "dictationModeAuto": "Otomatik",
           "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın.",
+          "speechGpuLabel": "GPU kullan",
+          "speechGpuDescription": "Konuşmayı çalıştığında ekran kartında, başarısız olduğunda CPU’da tanır. Dikte bilgisayarınızı donduruyor veya yeniden başlatıyorsa kapatın.",
+          "updateToFasterVersion": "Daha hızlı sürüme güncelle ({{value0}} MB)",
+          "2d9b81c687": "Model Seç",
           "6ffecf36fd": "Sesli Dikteyi Etkinleştir",
-          "342f309724": "Dikte Modu",
           "c5ea32143e": "Konuşma Modeli",
-          "2d9b81c687": "Model Seç"
+          "342f309724": "Dikte Modu"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",
@@ -9444,8 +9422,8 @@
           "b07ef5a8b6": "Birincil checkout'tan yeni oluşturulan worktree'lere aktarılacak yollar.",
           "d72ba8dc68": "{{value0}} yol",
           "9ea912d811": "1 yol",
-          "a995ebf5ab": "Worktree Paylaşılan Yolları",
-          "9a7cd44772": "Yol Ekle"
+          "9a7cd44772": "Yol Ekle",
+          "a995ebf5ab": "Worktree Paylaşılan Yolları"
         },
         "WslCliRegistration": {
           "c6f6f89d7c": "İptal",
@@ -9547,12 +9525,12 @@
               },
               "0db9d0465f": "GLM Coding Plan"
             },
-            "be3a748ebb": "Claude Hesapları",
             "5e2101f61f": "Hesap Konumu",
-            "54c541fc6e": "Codex Hesapları",
-            "4518496456": "Etkin Codex Hesabı",
             "f0e6678f99": "OpenCode Go Oturum Çerezi",
             "8eef999193": "OpenCode Go Çalışma Alanı Kimliği",
+            "54c541fc6e": "Codex Hesapları",
+            "4518496456": "Etkin Codex Hesabı",
+            "be3a748ebb": "Claude Hesapları",
             "9b6ce52c36": "MiniMax Kullanımı"
           }
         },
@@ -9807,26 +9785,26 @@
               "34f2b8c539": "Cursor Kullanımı"
             },
             "matchTerminal": "Terminalle Eşleştir",
-            "19aa904233": "Uygulama Simgesi",
             "37e6b58b0e": "UI Yakınlaştırma",
-            "aff6e6afdf": "IDE Yazı Tipi",
-            "4af9002a0c": "Git Tarafından Yok Sayılan Dosyaları Göster",
-            "fb2353b8dd": "Başlık Çubuğu Uygulama Adı",
-            "9bc701a4d1": "Görevler Düğmesini Göster",
-            "7f5d534f81": "Otomasyonlar Düğmesini Göster",
-            "1b404ee6ad": "Orca Mobile Düğmesini Göster",
-            "ba1f9d39a6": "Antigravity Kullanımı",
-            "ca64c95969": "Grok Kullanımı",
-            "96e32c1118": "MiniMax Kullanımı",
             "931c53cd16": "Claude Kullanımı",
-            "40c10c4deb": "Codex Kullanımı",
+            "1b404ee6ad": "Orca Mobile Düğmesini Göster",
+            "183e6b8ef9": "ZCode Kullanımı",
+            "d408ece868": "Kapatınca Sistem Tepsisine Küçült",
             "585be839e9": "Gemini Kullanımı",
             "20e7d30150": "OpenCode Go Kullanımı",
-            "c29089716e": "Kimi Kullanımı",
-            "20b33a61c8": "Uzak Sunucular",
+            "ca64c95969": "Grok Kullanımı",
+            "7f5d534f81": "Otomasyonlar Düğmesini Göster",
+            "fb2353b8dd": "Başlık Çubuğu Uygulama Adı",
+            "4af9002a0c": "Git Tarafından Yok Sayılan Dosyaları Göster",
             "b8dc238d07": "Kaynak Yöneticisi",
-            "183e6b8ef9": "ZCode Kullanımı",
-            "d408ece868": "Kapatınca Sistem Tepsisine Küçült"
+            "20b33a61c8": "Uzak Sunucular",
+            "40c10c4deb": "Codex Kullanımı",
+            "19aa904233": "Uygulama Simgesi",
+            "9bc701a4d1": "Görevler Düğmesini Göster",
+            "c29089716e": "Kimi Kullanımı",
+            "96e32c1118": "MiniMax Kullanımı",
+            "aff6e6afdf": "IDE Yazı Tipi",
+            "ba1f9d39a6": "Antigravity Kullanımı"
           }
         },
         "auto": {
@@ -9947,12 +9925,12 @@
               "cleaned": "temizlenmiş",
               "restart": "yeniden başlat"
             },
-            "1c2aff8f82": "Varsayılan Ana Sayfa",
-            "5a70844e54": "Varsayılan Arama Motoru",
-            "f6de9e25a0": "Varsayılan Yakınlaştırma",
             "f0eb09ce09": "Bağlantı Yönlendirme",
             "e2e32ba6da": "Localhost Worktree Etiketleri",
-            "f1da035bcb": "Oturum ve Çerezler"
+            "5a70844e54": "Varsayılan Arama Motoru",
+            "f1da035bcb": "Oturum ve Çerezler",
+            "f6de9e25a0": "Varsayılan Yakınlaştırma",
+            "1c2aff8f82": "Varsayılan Ana Sayfa"
           },
           "use": {
             "search": {
@@ -9980,8 +9958,8 @@
               "9d97446873": "ajan",
               "a2d489263e": "beceri",
               "a7e82445fa": "Ajanların Orca'nın tarayıcısını çalıştırabilmesi için Tarayıcı Kullanımı becerisini yükleyin.",
-              "e72d500ca5": "Tarayıcı Kullanımı Becerisini Yükle",
-              "9e2bfa1405": "Tarayıcı Çerezlerini İçe Aktar"
+              "9e2bfa1405": "Tarayıcı Çerezlerini İçe Aktar",
+              "e72d500ca5": "Tarayıcı Kullanımı Becerisini Yükle"
             }
           }
         },
@@ -10078,9 +10056,9 @@
               "2270ccff3f": "gizlilik",
               "a98aa11a9c": "izinler",
               "bc8ac95310": "Terminalden başlatılan geliştirici araçları için macOS izinleri.",
-              "ad085fa291": "Geliştirici İzinleri",
+              "70ffdc218d": "Ekran Kaydı ve Erişilebilirlik",
               "16490ec4cd": "Mikrofon ve Kamera",
-              "70ffdc218d": "Ekran Kaydı ve Erişilebilirlik"
+              "ad085fa291": "Geliştirici İzinleri"
             }
           }
         },
@@ -10241,8 +10219,8 @@
             "b2799ba622": "milisaniye",
             "146728ac2c": "gecikme",
             "86f54575c7": "otomatik kaydetme",
-            "4469b6fa4e": "kaydet",
             "8ea61ad55c": "Orca'nın otomatik kaydetmeden önce son düzenlemenizden sonra ne kadar bekleyeceği.",
+            "4469b6fa4e": "kaydet",
             "c56cb6f1c2": "ağ",
             "nodeDistMirror": "yansı",
             "nodeDistNodejs": "nodejs",
@@ -10262,6 +10240,11 @@
             "5a9df5566f": "açma menüsü",
             "b8093e9a93": "birlikte aç",
             "a916662068": "Bir çalışma alanının Birlikte Aç menüsünde bulunan uygulamaları seçin.",
+            "7e9b556873": "atla",
+            "ca86dd6e27": "iletişim kutusu",
+            "9f8558233a": "onayla",
+            "7edf4f69e2": "otomasyon",
+            "84c67d0108": "sil",
             "df10666259": "worktree",
             "93f6ec5e70": "dizin",
             "9bde064915": "alt klasör",
@@ -10294,36 +10277,31 @@
             "externalKeyword": "harici",
             "visibility": "görünürlük",
             "sidebar": "kenar çubuğu",
-            "34cda90656": "Prompt Önbelleği Zamanlayıcısı",
+            "867dddea41": "sabitlenmiş",
+            "5250cf0e48": "sabitle",
+            "afa37a34e1": "kapat",
+            "running_terminal": "çalışıyor",
+            "terminal": "terminal",
+            "agent": "ajan",
+            "command": "komut",
+            "confirm": "onayla",
+            "close": "kapat",
+            "omp": "OMP",
             "d9168badd2": "Otomatik Kaydetme Gecikmesi",
-            "66395fb7ff": "Düzenleyici Yazı Tipi Ailesi",
-            "e2947b3723": "Düzenleyici Satır Kaydırma",
-            "aa367d753d": "Değişmeyen Bölgeleri Daralt",
-            "aa1c06eb2c": "Varsayılan Diff Görünümü",
+            "34cda90656": "Prompt Önbelleği Zamanlayıcısı",
             "b8e1e1ac68": "Varsayılan Diff Dosya Ağacı",
-            "8ad175042b": "Zengin Markdown Yazım Denetimi",
-            "728a309ce1": "Markdown İnceleme Notları",
             "0e030ce4e3": "Çalışma Alanı Dizini",
             "11003cbcbd": "Çalışma Alanlarını İç İçe Yerleştir",
-            "da5c42780e": "Birlikte Aç Uygulamaları",
+            "a361519c97": "Varsayılan Proje Çalışma Zamanı",
+            "e2947b3723": "Düzenleyici Satır Kaydırma",
+            "aa367d753d": "Değişmeyen Bölgeleri Daralt",
             "b180c1041b": "Sekme Sırası",
             "0504f69ba0": "Güncellemeleri Denetle",
-            "a361519c97": "Varsayılan Proje Çalışma Zamanı",
-            "running_terminal": "çalışıyor",
-            "9f8558233a": "onayla",
-            "confirm": "onayla",
-            "agent": "ajan",
-            "84c67d0108": "sil",
-            "close": "kapat",
-            "5250cf0e48": "sabitle",
-            "terminal": "terminal",
-            "command": "komut",
-            "7e9b556873": "atla",
-            "7edf4f69e2": "otomasyon",
-            "867dddea41": "sabitlenmiş",
-            "omp": "OMP",
-            "afa37a34e1": "kapat",
-            "ca86dd6e27": "iletişim kutusu"
+            "728a309ce1": "Markdown İnceleme Notları",
+            "66395fb7ff": "Düzenleyici Yazı Tipi Ailesi",
+            "aa1c06eb2c": "Varsayılan Diff Görünümü",
+            "8ad175042b": "Zengin Markdown Yazım Denetimi",
+            "da5c42780e": "Birlikte Aç Uygulamaları"
           }
         },
         "git": {
@@ -10378,13 +10356,13 @@
             "issueKey": "sorun anahtarı",
             "uppercase": "büyük harf",
             "lowercase": "küçük harf",
-            "52d52b099d": "GitHub API Bütçesi",
-            "b7562365cd": "GitLab API Bütçesi",
-            "25eac7e904": "Branch Ön Eki",
-            "f760fc929e": "Jira anahtarının harf biçimi",
-            "410e821889": "Yerel Main'i Güncel Tut",
             "85983bb4f9": "Kaynak Kontrolü Grup Sırası",
-            "1ad8060ddc": "Varsayılan Karşılaştırma Temeli"
+            "1ad8060ddc": "Varsayılan Karşılaştırma Temeli",
+            "b7562365cd": "GitLab API Bütçesi",
+            "410e821889": "Yerel Main'i Güncel Tut",
+            "f760fc929e": "Jira anahtarının harf biçimi",
+            "52d52b099d": "GitHub API Bütçesi",
+            "25eac7e904": "Branch Ön Eki"
           }
         },
         "input": {
@@ -10436,13 +10414,13 @@
             "7166b9090c": "gh CLI aracılığıyla GitHub kimlik doğrulaması.",
             "760e2446e0": "Kaydedilmiş bir API token'ı veya ortam değişkenleriyle Bitbucket Cloud kimlik doğrulaması.",
             "af5ae87847": "erişim token'ı",
-            "a17a94d0b0": "GitHub Entegrasyonu",
-            "cd74b2f587": "GitLab Entegrasyonu",
-            "9e238582e8": "Bitbucket Entegrasyonu",
-            "b3efe7ab71": "Azure DevOps Entegrasyonu",
-            "86a08aa60c": "Gitea Entegrasyonu",
             "d8906d60a9": "Jira Entegrasyonu",
-            "d905b3ecee": "Linear Entegrasyonu"
+            "9e238582e8": "Bitbucket Entegrasyonu",
+            "a17a94d0b0": "GitHub Entegrasyonu",
+            "86a08aa60c": "Gitea Entegrasyonu",
+            "cd74b2f587": "GitLab Entegrasyonu",
+            "d905b3ecee": "Linear Entegrasyonu",
+            "b3efe7ab71": "Azure DevOps Entegrasyonu"
           }
         },
         "jira": {
@@ -10503,10 +10481,10 @@
               "c5eca29310": "ios simülatörü",
               "25159de808": "mobil emülatör",
               "9595354cff": "Orca ve kodlama ajanları için mobil emülatör desteğini yapılandırın.",
-              "f8468700d1": "Mobil Emülatör",
-              "b8c9f903eb": "Varsayılan Emülatör Cihazı",
               "de556a0911": "Emülatör Kullanılabilirliği",
-              "0d6e7dba38": "Ajan CLI Kontrolü"
+              "b8c9f903eb": "Varsayılan Emülatör Cihazı",
+              "0d6e7dba38": "Ajan CLI Kontrolü",
+              "f8468700d1": "Mobil Emülatör"
             }
           },
           "pane": {
@@ -10546,9 +10524,9 @@
               "4a0c826f3d": "kod",
               "3c1807a81a": "qr",
               "7fb728fb2b": "QR kodu tarayarak bir mobil cihazı eşleştirin.",
-              "a068d70f7b": "Ağ Arayüzü",
+              "cb018bcc07": "Bağlı Cihazlar",
               "1dcb1d1a11": "Mobil Eşleştirme",
-              "cb018bcc07": "Bağlı Cihazlar"
+              "a068d70f7b": "Ağ Arayüzü"
             }
           },
           "settings": {
@@ -10621,13 +10599,13 @@
             "remote": "uzak",
             "ssh": "ssh",
             "mute": "sessize al",
+            "55ecae5b7e": "Test Bildirimi Gönder",
             "25f58f061f": "Bildirimleri Etkinleştir",
-            "db32fed5aa": "Ajan Görevi Tamamlandı",
-            "209323590a": "Terminal Zili",
-            "8eeee85a4f": "Odaklanmışken Bastır",
-            "8517a2dd51": "Bildirim Sesi",
             "fe11c91724": "Bildirim Ses Düzeyi",
-            "55ecae5b7e": "Test Bildirimi Gönder"
+            "8517a2dd51": "Bildirim Sesi",
+            "209323590a": "Terminal Zili",
+            "db32fed5aa": "Ajan Görevi Tamamlandı",
+            "8eeee85a4f": "Odaklanmışken Bastır"
           }
         },
         "orchestration": {
@@ -10828,22 +10806,22 @@
             "distro": "dağıtım",
             "agentRuntime": "ajan çalışma zamanı",
             "skillRuntime": "beceri çalışma zamanı",
+            "0fe07b9e90": "Proje Simgesi",
             "810b9f4106": "Kurulum Betiği",
-            "1617bc353d": "Arşiv Betiği",
-            "cedbe6c02c": "Kurulum Ne Zaman Çalıştırılsın",
+            "355868ac19": "Seyrek Checkout Ön Ayarları",
+            "2e216fbad2": "Worktree Konumu",
+            "ea22e2187e": "Worktree Paylaşılan Yolları",
             "aced2fc1be": "Özel GitHub Issue Komutu",
+            "7a89e2dc09": "Proje Çalışma Zamanı",
             "b1b5a4139d": "MCP Yapılandırmaları",
             "7f380f89ea": "Görünen Ad",
-            "0fe07b9e90": "Proje Simgesi",
-            "eefc3e51ef": "GitHub Hesabı",
-            "f94afd4078": "Fork'u Güncel Tut",
-            "7a89e2dc09": "Proje Çalışma Zamanı",
-            "bbbe994528": "Projeyi Kaldır",
-            "6259586017": "Git AI Yazarı",
             "88d466b2e3": "Varsayılan Worktree Temeli",
-            "2e216fbad2": "Worktree Konumu",
-            "355868ac19": "Seyrek Checkout Ön Ayarları",
-            "ea22e2187e": "Worktree Paylaşılan Yolları"
+            "1617bc353d": "Arşiv Betiği",
+            "6259586017": "Git AI Yazarı",
+            "bbbe994528": "Projeyi Kaldır",
+            "cedbe6c02c": "Kurulum Ne Zaman Çalıştırılsın",
+            "eefc3e51ef": "GitHub Hesabı",
+            "f94afd4078": "Fork'u Güncel Tut"
           }
         },
         "runtime": {
@@ -10909,9 +10887,9 @@
             "d4bcd497c7": "remote",
             "74c6d90d78": "SSH sunucularını yönetin.",
             "53ae83cb55": "SSH Bağlantıları",
-            "004ef87a84": "SSH Hedefi Ekle",
             "893c8717f2": "SSH Config'den İçe Aktar",
-            "50416e3809": "Bağlantıyı Test Et"
+            "50416e3809": "Bağlantıyı Test Et",
+            "004ef87a84": "SSH Hedefi Ekle"
           }
         },
         "tasks": {
@@ -10958,8 +10936,8 @@
               "797fdfe4ca": "seç",
               "zellij": "zellij",
               "grok": "grok",
-              "5639f17c59": "Seçimde Kopyala",
-              "eacb392fe3": "TUI Pano Yazmalarına İzin Ver (OSC 52)"
+              "eacb392fe3": "TUI Pano Yazmalarına İzin Ver (OSC 52)",
+              "5639f17c59": "Seçimde Kopyala"
             }
           },
           "search": {
@@ -11158,29 +11136,29 @@
             "ddd5efe113": "kabuk",
             "3de504994c": "Yeni yerel etkileşimli terminal bölmelerinde kullanılan kabuk ve argümanlar",
             "1733ccd3e9": "Terminal kabuğu",
-            "6e795fc619": "Etkin Olmayan Bölme Opaklığı",
-            "9ae234eae2": "Ayırıcı Kalınlığı",
-            "1b00063795": "Çalışan Terminalleri Kapatmadan Önce Sor",
-            "64f6b4fdf6": "Odak Fareyi İzler",
-            "8afdce471f": "Yazı Tipi Boyutu",
-            "651c993c32": "Yazı Tipi Ailesi",
-            "7fabc609fa": "Yazı Tipi Kalınlığı",
-            "c1794a43d7": "Satır Yüksekliği",
-            "e3dae5017c": "Yazı Tipi Ligatürleri",
+            "10344a316c": "Kelime Ayırıcıları",
             "b1061a2826": "GPU Hızlandırma",
+            "8afdce471f": "Yazı Tipi Boyutu",
             "990137dab4": "İmleç Şekli",
-            "317af36f37": "İmleç Opaklığı",
+            "edd38f8bb8": "Geçmiş Kaydırma Satırları",
+            "ee9665265e": "Koyu Mod Teması",
             "9b41f4be64": "Arka Plan Opaklığı",
-            "cfdaed8dae": "Yatay İç Boşluk",
-            "3fdccf0277": "Dikey İç Boşluk",
+            "317af36f37": "İmleç Opaklığı",
+            "e3dae5017c": "Yazı Tipi Ligatürleri",
+            "c1794a43d7": "Satır Yüksekliği",
+            "7fabc609fa": "Yazı Tipi Kalınlığı",
             "9d81f938fd": "Yazarken Fareyi Gizle",
             "a5e5d2bca5": "Renk Geçersiz Kılmaları",
-            "edd38f8bb8": "Geçmiş Kaydırma Satırları",
-            "10344a316c": "Kelime Ayırıcıları",
+            "cfdaed8dae": "Yatay İç Boşluk",
+            "6e795fc619": "Etkin Olmayan Bölme Opaklığı",
             "bf8746544c": "Oturumları Yönet",
-            "ee9665265e": "Koyu Mod Teması",
+            "1b00063795": "Çalışan Terminalleri Kapatmadan Önce Sor",
+            "9ae234eae2": "Ayırıcı Kalınlığı",
             "88f3d1cec0": "Koyu Mod Ayırıcı Rengi",
             "e4d3288a81": "Açık Mod Teması",
+            "3fdccf0277": "Dikey İç Boşluk",
+            "651c993c32": "Yazı Tipi Ailesi",
+            "64f6b4fdf6": "Odak Fareyi İzler",
             "18a9f63aff": "Açık Mod Ayırıcı Rengi"
           },
           "windows": {
@@ -11207,8 +11185,8 @@
               "6cd20b9e64": "cmd",
               "7c7056940a": "kabuk",
               "713c4a2f92": "Windows'ta yeni terminal bölmeleri için varsayılan kabuğu seçin.",
-              "94792c10ac": "Varsayılan Kabuk",
-              "6efd8b2174": "PowerShell Sürümü"
+              "6efd8b2174": "PowerShell Sürümü",
+              "94792c10ac": "Varsayılan Kabuk"
             }
           }
         },
@@ -11247,13 +11225,16 @@
               "modelMemoryKeyword": "bellek",
               "fillerWordsDescription": "Dikte edilen metinden “hmm” gibi duraksama seslerini çıkarır.",
               "fillerWordsKeyword": "dolgu",
-              "ffaa3efe7c": "OpenAI Yazıya Dökme",
-              "a5fb30e4da": "Sesli Yazmayı Etkinleştir",
-              "d0c230c061": "Dikte Modu",
-              "9d83747eae": "Dikte dili",
-              "c7a7eaa0da": "Dolgu seslerini kaldır",
+              "vocabularyTitle": "Sözcük dağarcığı",
+              "vocabularyDescription": "Diktenin senin yazımınla yazdığı adlar ve kod terimleri, senin için veya bir depo için.",
+              "vocabularyKeyword": "sözlük",
               "b3920972d4": "Konuşma modelini bellekten kaldır",
-              "7f5a2416a6": "Konuşma Modeli"
+              "7f5a2416a6": "Konuşma Modeli",
+              "9d83747eae": "Dikte dili",
+              "a5fb30e4da": "Sesli Yazmayı Etkinleştir",
+              "ffaa3efe7c": "OpenAI Yazıya Dökme",
+              "c7a7eaa0da": "Dolgu seslerini kaldır",
+              "d0c230c061": "Dikte Modu"
             }
           }
         },
@@ -11477,9 +11458,9 @@
           "modeLabel": "Fork senkronizasyon modu",
           "ask": "Sor",
           "off": "Kapalı",
-          "1b00dcc746": "Fork'u Güncel Tut",
           "7a1ea2076d": "Güvenli Otomatik",
-          "c64463b5fc": "Şimdi Senkronize Et"
+          "c64463b5fc": "Şimdi Senkronize Et",
+          "1b00dcc746": "Fork'u Güncel Tut"
         },
         "DefaultWindowsProjectRuntimeSetting": {
           "defaultRuntime": "Varsayılan proje runtime'ı",
@@ -12270,6 +12251,7 @@
           "signOut": "Oturumu kapat",
           "signInAgain": "Tekrar oturum aç",
           "signIn": "Orca'da oturum aç",
+          "title": "Orca Hesabı",
           "description": "Çalışmanızı anında paylaşın ve nerede olursanız olun Orca Mobile'dan masaüstünüze ulaşın.",
           "searchDescription": "Artifact'ler ve Orca Relay tarafından kullanılan hesapta oturum açın veya kapatın.",
           "benefitsTitle": "Hesabınıza dahil",
@@ -12285,8 +12267,7 @@
           "keywordSignIn": "oturum aç",
           "keywordSignOut": "oturumu kapat",
           "keywordRelay": "relay",
-          "keywordCloud": "bulut",
-          "title": "Orca Hesabı"
+          "keywordCloud": "bulut"
         },
         "automations": {
           "showButtonDescription": "Otomasyonlar kısayolunu kenar çubuğunda gösterin.",
@@ -12907,6 +12888,7 @@
           "lastSeen": "Son görülme: {{when}}",
           "retry": "Yeniden dene",
           "pasteAccessLinkHelp": "Başka bir makinede zaten çalışan Orca ile eşleştirin.",
+          "cloudVm": "Bulut sanal makinesi",
           "cloudVmHelp": "Bir ortam tarifinden her çalışma alanı için oluşturulur.",
           "addDescriptionShort": "Diğer makinedeki Bu bilgisayarı paylaş bölümünden erişim bağlantısını alıp yapıştırın.",
           "installHostPlaceholder": "Orca bulunmayan bir SSH sunucusu seçin",
@@ -12926,8 +12908,7 @@
           "settingUpInBackground": "{{name}} üzerinde Orca arka planda kuruluyor. Hazır olduğunda listede görünecek.",
           "setUpOnSshHost": "Bir SSH sunucusuna Orca kur",
           "setUp": "Kur",
-          "overYourSsh": "SSH bağlantınız üzerinden",
-          "cloudVm": "Bulut sanal makinesi"
+          "overYourSsh": "SSH bağlantınız üzerinden"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} kaldırıldı",
@@ -13394,6 +13375,27 @@
           "shownPluginCount_one": "Bu dahil eşleşen {{count}} eklenti gösteriliyor",
           "shownPluginCount_other": "Bu dahil eşleşen {{count}} eklenti gösteriliyor",
           "samePublisher": "{{value0}} olarak listelenen diğerleri"
+        },
+        "RepositorySourceControlAiSection": {
+          "112f3b934f": "Kaynak Kontrolü AI"
+        },
+        "keep": {
+          "local": {
+            "main": {
+              "up": {
+                "to": {
+                  "date": {
+                    "setting": {
+                      "f4c23aee76": "Yerel Main'i Güncel Tut"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "BrowserUseEnableSwitch": {
+          "ce4d6f80d8": "Ajan Tarayıcı Kullanımını Etkinleştir"
         }
       },
       "right": {
@@ -16922,6 +16924,7 @@
           "noModel": "Konuşma modeli seçilmedi. Ayarlar > Ses bölümünden bir model indirin.",
           "disabled": "Sesli dikte devre dışı. Ayarlar > Ses bölümünden etkinleştirin.",
           "notReady": "Konuşma modeli hazır değil. Ayarlar > Ses bölümünden indirin.",
+          "modelNeedsUpdate": "Konuşma modelinizin çalışmaya devam etmesi için güncellenmesi gerekiyor. Ayarlar > Ses bölümünden daha hızlı sürüme güncelleyin.",
           "unknownModel": "Seçili model artık kullanılamıyor. Ayarlar > Ses bölümünden başka bir model seçin.",
           "5d2c3e7ae3": "Konuşma algılanmadı.",
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
@@ -19220,6 +19223,11 @@
         "providerExitedRow": "Bu yanıt hazırlanırken {{agent}} durdu. Bu konuşmada devam edebilirsiniz.",
         "providerExitedRejection": "Bu mesaj gönderilmeden önce {{agent}} durdu.",
         "providerExitedAnswer": "{{agent}} durduğu için yanıtınız gönderilmedi. Devam etmek için bir mesaj gönderin.",
+        "providerUnavailable": "Hizmet meşgul olduğu için {{agent}} yanıt veremedi. Başka bir model seçin veya biraz bekleyip yeniden gönderin.",
+        "providerSafetyStopped": "{{agent}}, bir güvenlik kontrolünden sonra bu yanıtı durdurdu. İsteğinizi gözden geçirip yeniden gönderin.",
+        "providerResponseFailed": "{{agent}} bu yanıtı tamamlayamadı. Daha fazla bilgi için ayrıntıları açın.",
+        "modelUnavailable": "{{agent}}, {{detail}} modelini kullanamadı. Başka bir model seçip yeniden gönderin.",
+        "selectedModel": "seçilen modeli",
         "providerRejected": "{{agent}} bu mesajı kabul etmedi.",
         "providerRejectedQuoted": "{{agent}} bu mesajı kabul etmedi: {{detail}}.",
         "attachmentEmpty": "Bu mesajdaki bir görsel boş olduğu için mesaj gönderilmedi.",
@@ -19424,6 +19432,7 @@
         "orcaStopCanContinue": "Bu konuşmada devam edebilirsiniz.",
         "orcaStopUnnamedServer": "uzak sunucu",
         "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+        "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
         "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
         "forkedFrom": "Çatallandığı kaynak"
@@ -19719,6 +19728,8 @@
         "showAgent": "{{value0}} öğesini konuşmada göster"
       },
       "jumpToLatest": "En son öğeye git",
+      "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
+      "newRowsMarker": "Yeni",
       "find": {
         "label": "Sohbette bul",
         "noResults": "Sonuç yok",
@@ -19904,7 +19915,8 @@
       "contextUsage": {
         "label": "Bağlam: {{used}} / {{window}} token kullanıldı (%{{percent}})",
         "title": "Bağlam",
-        "estimated": "Son yanıta göre tahmin edilmiştir."
+        "estimated": "Son yanıta göre tahmin edilmiştir.",
+        "deferredNote": "İhtiyaç olduğunda yüklenir. Kullanılan toplama dahil değildir."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Orca Oturum Kimliğini Kopyala",
@@ -20552,8 +20564,8 @@
         "copyTrimsGutterDescription": "Ajan çıktısının arkasına çizildiği sol kenar boşluğunu kaldırır, böylece kopyalanan metin girintili olmaz. Yalnızca seçilen tüm satırların paylaştığı girinti kaldırılır.",
         "copyOnSelectDescription": "Terminalde veya sohbette seçtiğiniz metni otomatik olarak panoya kopyalayın.",
         "scrollOnUserInputDescription": "Yukarı kaydırılmışken yazmak veya yapıştırmak en son çıktıya götürür. Konumunuzu korumak için kapatın.",
-        "4c690cdfc3": "Girişte en alta kaydır",
-        "4ed43d5060": "Kopyalarken Kenar Boşluğunu Kırp"
+        "4ed43d5060": "Kopyalarken Kenar Boşluğunu Kırp",
+        "4c690cdfc3": "Girişte en alta kaydır"
       },
       "terminal": {
         "clipboard": {
@@ -20584,6 +20596,9 @@
         "scrollToLatestOnSendTitle": "Gönderirken en son mesaja kaydır",
         "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",
         "scrollToLatestOnSendSearchPosition": "konum",
+        "markNewMessagesTitle": "Bir sohbete dönünce yeni mesajları işaretle",
+        "markNewMessagesCopy": "Bir sohbete döndüğünüzde, siz yokken gelenlerin üstünde bir Yeni çizgisi gösterilir. En son mesajları okuyorduysanız sohbet oraya kaydırılır.",
+        "markNewMessagesSearchUnread": "okunmamış",
         "inlineVisualsTitle": "Yanıtlarda görseller",
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",
         "inlineVisualsToggleLabel": "Yanıtlardaki görselleri aç/kapat",
@@ -20629,6 +20644,85 @@
         "fillerWords": {
           "description": "Dikte edilen metinden “hmm” gibi duraksama seslerini dikte diline göre çıkarır.",
           "0134406785": "Dolgu seslerini kaldır"
+        },
+        "sectionDescription": "Her bölmede yazmak yerine konuşun. Bulut modeli seçmediğiniz sürece konuşma bu bilgisayarda tanınır.",
+        "input": {
+          "title": "Giriş",
+          "shortcut": "Kısayol",
+          "shortcutDescription": "Odaktaki bölmede dikteyi başlatır.",
+          "changeShortcut": "Değiştir"
+        },
+        "language": {
+          "title": "Dil"
+        },
+        "cleanup": {
+          "title": "Temizleme"
+        },
+        "advanced": {
+          "title": "Gelişmiş"
+        },
+        "setup": {
+          "downloadingDescription": "Bu sayfadan ayrılabilirsiniz. İndirme bitince dikte çalışır.",
+          "title": "Dikteyi kur",
+          "pickModel": "Her bölmede yazmak yerine konuşun. Başlamak için aşağıdan bir konuşma modeli indirin; bu bilgisayardaki modeller sesinizi burada tutar.",
+          "microphoneMissingTitle": "{{microphone}} bağlı değil",
+          "microphoneMissingDescription": "Geri gelene kadar dikte sistemin varsayılan mikrofonunu kullanır.",
+          "changeMicrophone": "Mikrofonu değiştir",
+          "onTitle": "Dikte açık",
+          "onLocal": "Herhangi bir bölmede {{shortcut}} tuşuna basın. {{model}} bu bilgisayarda çalışır.",
+          "onCloud": "Herhangi bir bölmede {{shortcut}} tuşuna basın. {{model}} bulutta çalışır.",
+          "offTitle": "Dikte kapalı",
+          "offDescription": "Her bölmede {{shortcut}} ile dikte etmek için açın.",
+          "savedMicrophone": "Mikrofonunuz"
+        },
+        "quality": {
+          "unsupported": "Dilinizi desteklemiyor",
+          "unmeasured": "Ölçülmedi",
+          "poor": "Zayıf",
+          "fair": "Orta",
+          "good": "İyi",
+          "veryGood": "Çok iyi",
+          "excellent": "Mükemmel",
+          "characterErrorRate": "%{{percent}} karakter hata oranı",
+          "wordErrorRate": "%{{percent}} kelime hata oranı",
+          "librispeech": "Test: LibriSpeech (sesli okuma), {{clips}} klip, ölçüm tarihi {{date}}.",
+          "fleurs": "Test: FLEURS (sesli okuma), {{clips}} klip, ölçüm tarihi {{date}}.",
+          "bench": "Orca'nın Apple silikonlu bir Mac'teki kıyaslaması.",
+          "label": "Kalite: {{word}}"
+        },
+        "models": {
+          "retired": "Artık sunulmuyor. Yer açmak için silin.",
+          "sendsToOpenAi": "Sesinizi OpenAI'ye gönderir.",
+          "delete": "Sil",
+          "cancelDownload": "İndirmeyi iptal et",
+          "inUse": "Kullanımda",
+          "use": "Kullan",
+          "setUpCloud": "Kur",
+          "download": "İndir",
+          "cloud": "Bulut",
+          "description": "Kalite {{language}} için değerlendirildi. Testi görmek için bir puanın üzerine gelin.",
+          "where": "Modellerin çalıştığı yer",
+          "local": "Bu bilgisayarda",
+          "cloudDescription": "Bulut modelleri sesinizi sağlayıcıya gönderir. Bu bilgisayardaki modeller sesi burada tutar.",
+          "sendsToCompatible": "Sesinizi kurduğunuz hizmete gönderir."
+        },
+        "vocabulary": {
+          "title": "Sözcük dağarcığı",
+          "description": "Kendi yazımınla yazılacak adlar ve kod terimleri. Model sürekli yanlış duyuyorsa nasıl duyduğunu da ekle.",
+          "repoScope": "Yalnızca {{repo}} içinde dikte ederken kullanılır.",
+          "personalScope": "Her depoda kullanılır.",
+          "scope": "Terimler",
+          "personal": "Kişisel · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} kaldır",
+          "term": "Sözcük veya ifade",
+          "heardAs": "Duyulan biçim (isteğe bağlı)",
+          "heardAsLabel": "Duyulan biçim",
+          "add": "Ekle",
+          "repoNameHint": "Depo adını ipucu olarak kullan",
+          "repoNameHintDescription": "Depo adının tanınmasına yardımcı olur.",
+          "repoSaveFailed": "Deponun terimleri kaydedilemedi. Bu deponun ana makinesinde Orca güncellemesi gerekebilir."
         }
       },
       "repositoryHooks": {
@@ -21423,6 +21517,7 @@
       "cleared": "Arama verileri temizlendi.",
       "clearError": "Arama verileri temizlenemedi. Tekrar deneyin.",
       "webUnsupported": "Oturum aramasını o bilgisayardaki Orca masaüstü uygulamasından açın.",
+      "title": "Ajan Oturumu Arama",
       "description": "Bu bilgisayarda ve eşlenmiş herhangi bir Orca sunucusunda ajanlarınızın söylediği ve yaptığı her şeyi arayın.",
       "searchDescription": "Bu bilgisayar ve eşlenmiş sunucular için oturum aramasını açın veya arama verilerini temizleyin.",
       "indexComputers": "Oturumların içinde ara",
@@ -21440,8 +21535,7 @@
       "openInSidebar": "Kenar çubuğunda aç",
       "openInSidebarCopy": "Hatırladığınızı yazın veya bir ajana sorun: “giriş zaman aşımını düzelttiğimiz oturumu bul.”",
       "open": "Aç",
-      "enableOnAll": "Tüm bilgisayarlarda etkinleştir",
-      "title": "Ajan Oturumu Arama"
+      "enableOnAll": "Tüm bilgisayarlarda etkinleştir"
     },
     "dialog": {
       "select": "Seç",
@@ -22494,51 +22588,51 @@
       "terminalSplitDown": "Terminali aşağı böl",
       "terminalSwitchInputSource": "Giriş kaynağını / dilini değiştir (yerel)",
       "newAgentTab": "Yeni {{agent}} sekmesi",
-      "1d1d2ec47b": "Dosyaya git",
-      "e316152321": "Ayarlar bölümünü aç",
-      "8a1982d598": "Zorla yeniden yükle",
-      "1d2c86248c": "Çalışma alanını sil",
-      "1524825c2c": "Çalışma alanı panosunu göster/gizle",
-      "82c1bf448c": "Ajan panosunu göster/gizle",
-      "0feb1f0496": "1–9 numaralı çalışma alanını seç",
-      "81bcb6ec24": "Görevler bölümünü aç",
-      "5c1a9f83e0": "Eklentileri Aç",
-      "196b416429": "Kenar çubuğunu göster/gizle",
-      "e0d7e6b665": "Sağ kenar çubuğunu göster/gizle",
-      "da4e681113": "Arama bölümünü göster",
-      "44e8b7dcb5": "Kaynak kontrolü bölümünü göster",
-      "e37b19864c": "Kontroller bölümünü göster",
-      "cb816639bd": "Portlar bölümünü göster",
-      "437260810f": "Uyuyan çalışma alanlarını göster/gizle",
-      "e67a41569d": "Yüzen terminali göster/gizle",
-      "3e3a2d18d4": "Yüzen çalışma alanı panelini büyüt",
-      "746ff0c872": "Yüzen çalışma alanı panelini küçült",
-      "f233164080": "Yakınlaştır",
-      "2b20f1f14a": "Uzaklaştır",
-      "bb3beaeef6": "Boyutu sıfırla",
-      "02dd0f77a0": "Worktree geçmişinde geri git",
-      "57c4fb0edd": "Worktree geçmişinde ileri git",
       "eca3c9fdd7": "1–9 numaralı sekmeyi seç",
-      "fbf2216baa": "Tarayıcıda bul",
-      "0fe8d02935": "Tarayıcıda geri git",
       "53ae577e44": "Tarayıcıda ileri git",
-      "92fad2c21f": "Tarayıcı geçmişini göster",
-      "67ce6cf5a0": "Tarayıcı sayfasını yeniden yükle",
-      "6bd12f3071": "Tarayıcı sayfasını zorla yeniden yükle",
-      "2f2961bebf": "Tarayıcı adres çubuğuna odaklan",
-      "23350d5072": "Sayfa öğesini yakala",
+      "324e886c0f": "Önceki değişikliğe git",
+      "196b416429": "Kenar çubuğunu göster/gizle",
+      "82c1bf448c": "Ajan panosunu göster/gizle",
+      "9cb1023d40": "İnceleme notu ekle",
+      "57c4fb0edd": "Worktree geçmişinde ileri git",
+      "02dd0f77a0": "Worktree geçmişinde geri git",
+      "bb3beaeef6": "Boyutu sıfırla",
+      "258e7f75ec": "Bağlamı kopyala",
+      "e0d7e6b665": "Sağ kenar çubuğunu göster/gizle",
+      "1d2c86248c": "Çalışma alanını sil",
       "69b2b72c98": "Sayfa öğesine açıklama ekle",
       "6a99c55b2d": "Dosyayı kaydet",
       "e25a3e5f9a": "Markdown önizlemesini göster",
-      "2f207aa199": "Sözcük kaydırmayı aç/kapat",
-      "258e7f75ec": "Bağlamı kopyala",
-      "324e886c0f": "Önceki değişikliğe git",
+      "92fad2c21f": "Tarayıcı geçmişini göster",
       "7055c70bdb": "Sonraki değişikliğe git",
-      "9cb1023d40": "İnceleme notu ekle",
-      "e9da9f872a": "İnceleme notlarını ajana gönder",
-      "3acf4e9eb1": "Ayarlar bölümünde ara",
-      "128cce6e6d": "Başlık belirle…",
+      "e37b19864c": "Kontroller bölümünü göster",
+      "6bd12f3071": "Tarayıcı sayfasını zorla yeniden yükle",
       "8788e3be3a": "Alt çalışma alanlarını göster/gizle",
+      "44e8b7dcb5": "Kaynak kontrolü bölümünü göster",
+      "2f2961bebf": "Tarayıcı adres çubuğuna odaklan",
+      "cb816639bd": "Portlar bölümünü göster",
+      "0fe8d02935": "Tarayıcıda geri git",
+      "2f207aa199": "Sözcük kaydırmayı aç/kapat",
+      "e316152321": "Ayarlar bölümünü aç",
+      "8a1982d598": "Zorla yeniden yükle",
+      "81bcb6ec24": "Görevler bölümünü aç",
+      "67ce6cf5a0": "Tarayıcı sayfasını yeniden yükle",
+      "23350d5072": "Sayfa öğesini yakala",
+      "1d1d2ec47b": "Dosyaya git",
+      "fbf2216baa": "Tarayıcıda bul",
+      "e67a41569d": "Yüzen terminali göster/gizle",
+      "3e3a2d18d4": "Yüzen çalışma alanı panelini büyüt",
+      "746ff0c872": "Yüzen çalışma alanı panelini küçült",
+      "437260810f": "Uyuyan çalışma alanlarını göster/gizle",
+      "3acf4e9eb1": "Ayarlar bölümünde ara",
+      "5c1a9f83e0": "Eklentileri Aç",
+      "da4e681113": "Arama bölümünü göster",
+      "f233164080": "Yakınlaştır",
+      "0feb1f0496": "1–9 numaralı çalışma alanını seç",
+      "2b20f1f14a": "Uzaklaştır",
+      "128cce6e6d": "Başlık belirle…",
+      "e9da9f872a": "İnceleme notlarını ajana gönder",
+      "1524825c2c": "Çalışma alanı panosunu göster/gizle",
       "d286d1ab85": "Bölme başlığını temizle"
     },
     "group": {
@@ -23537,5 +23631,31 @@
     "branchName": "Dal adı",
     "invalidBranchName": "Bu dal adı geçersiz. Farklı bir ad seçin.",
     "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Konuşma modelinizi güncelleyin",
+    "updateDescription": "Dikte artık daha hızlı bir motorla çalışıyor. Yeniden dikte edebilmeniz için {{model}} modelinin bir kez indirilmesi gerekiyor ({{size}} MB).",
+    "update": "Güncelle",
+    "replacedTitle": "Konuşma modeliniz değiştirildi",
+    "replacedDescription": "{{old}} yeni konuşma motorunda çalışamıyor. Yerine {{model}} kullanılacak ({{size}} MB).",
+    "downloadReplacement": "{{model}} indir",
+    "later": "Daha sonra",
+    "dismiss": "Kapat",
+    "updatingTitle": "{{model}} güncelleniyor",
+    "downloadingTitle": "{{model}} indiriliyor",
+    "downloadingDescription": "Çalışmaya devam edebilirsiniz. Bu bittiğinde dikte geri gelir.",
+    "progress": "{{done}} / {{total}} MB",
+    "cancel": "İptal",
+    "doneTitle": "Dikte hazır",
+    "doneDescription": "{{model}} güncellendi. Eski dosyalar kaldırıldı.",
+    "doneRetiredDescription": "{{model}} kuruldu. Eski {{old}} dosyaları hâlâ diskte.",
+    "keep": "Sakla",
+    "deleteOld": "Eski modeli sil",
+    "deleteFailed": "{{model}} silinemedi.",
+    "updateFailedTitle": "{{model}} güncellenemedi",
+    "downloadFailedTitle": "{{model}} indirilemedi",
+    "failedAtDescription": "İndirme {{mb}} MB'de durdu. Bağlantınızı kontrol edip yeniden deneyin.",
+    "failedDescription": "İndirme durdu. Bağlantınızı kontrol edip yeniden deneyin.",
+    "tryAgain": "Yeniden dene"
   }
 }

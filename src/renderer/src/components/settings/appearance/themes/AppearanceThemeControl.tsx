@@ -22,7 +22,7 @@ import {
   isPluginTerminalThemeSelected,
   terminalThemeUpdate
 } from '../../../plugins/state/plugin-theme-apply'
-import { findCodeEditorTheme } from '@/lib/code-editor-theme'
+import { findCodeEditorTheme } from '@/lib/editor/appearance/code-editor-theme'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { requestPluginBrowse } from '@/store/plugins/navigation/plugin-preview-request'
 import { useCatalogAppThemes, type CatalogAppTheme } from './use-catalog-app-themes'

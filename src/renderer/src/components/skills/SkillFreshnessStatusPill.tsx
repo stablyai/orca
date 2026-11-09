@@ -14,7 +14,7 @@ import {
   hasSkillCopyNeedingAttention,
   skillPlanHasDetails,
   type SkillFreshnessDisplayStatus
-} from '@/lib/skill-freshness-display-status'
+} from '@/lib/skills/presentation/skill-freshness-display-status'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 
 function statusPill(

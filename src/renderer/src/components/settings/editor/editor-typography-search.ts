@@ -2,7 +2,7 @@ import { GENERAL_SETTING_ANCHORS, generalSetting } from '../general/general-sett
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { supportsCodeFontSmoothing } from '@/lib/code-font-smoothing'
+import { supportsCodeFontSmoothing } from '@/lib/editor/appearance/code-font-smoothing'
 import type { SettingsSearchEntry } from '../search/settings-search'
 
 function editorTypographyKeywords(): string[] {

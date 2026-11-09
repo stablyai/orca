@@ -1,9 +1,9 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import type { TabGroup } from '../../../../../shared/tab-types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { isPaneColumnSplitDropNoOp } from '../../../../../shared/workspace-layout/pane-column-split-drop-no-op'
 import {
-  collapseGroupLayout,
+  collapseWorktreeGroupLayout,
   buildSplitNode,
   replaceLeaf
 } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
@@ -11,6 +11,7 @@ import { buildActiveSurfacePatch } from './tabs-surface'
 import { findGroupAndWorktree, findGroupForTab, findTabAndWorktree } from './tab-group-state'
 import { pickNextActiveTab, pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 export function createTabsDropActions(
   set: TabsSliceSet,
@@ -55,8 +56,9 @@ export function createTabsDropActions(
         moved = true
 
         let nextGroups = state.groupsByWorktree[worktreeId] ?? []
-        let nextLayoutByWorktree = state.layoutByWorktree
-        let nextActiveGroupIdByWorktree = state.activeGroupIdByWorktree
+        // Pending writes to this worktree's layout and active-group entries; null deletes the layout.
+        let nextLayout: TabGroupLayoutNode | null | undefined
+        let nextActiveGroupId: string | undefined
         let resolvedTargetGroupId = target.groupId
 
         if (target.splitDirection) {
@@ -68,7 +70,8 @@ export function createTabsDropActions(
             tabOrder: []
           }
           const currentLayout =
-            nextLayoutByWorktree[worktreeId] ?? ({ type: 'leaf', groupId: target.groupId } as const)
+            state.layoutByWorktree[worktreeId] ??
+            ({ type: 'leaf', groupId: target.groupId } as const)
           const replacement = buildSplitNode(
             target.groupId,
             newGroupId,
@@ -80,14 +83,8 @@ export function createTabsDropActions(
 
           resolvedTargetGroupId = newGroupId
           nextGroups = [...nextGroups, newGroup]
-          nextLayoutByWorktree = {
-            ...nextLayoutByWorktree,
-            [worktreeId]: replaceLeaf(currentLayout, target.groupId, replacement)
-          }
-          nextActiveGroupIdByWorktree = {
-            ...nextActiveGroupIdByWorktree,
-            [worktreeId]: newGroupId
-          }
+          nextLayout = replaceLeaf(currentLayout, target.groupId, replacement)
+          nextActiveGroupId = newGroupId
         }
 
         const dedupedSourceGroupOrder = dedupeTabOrder(sourceGroup.tabOrder)
@@ -140,32 +137,41 @@ export function createTabsDropActions(
 
         if (sourceOrder.length === 0) {
           nextGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
-          const collapsedState = collapseGroupLayout(
-            nextLayoutByWorktree,
-            nextActiveGroupIdByWorktree,
-            worktreeId,
-            sourceGroup.id,
-            resolvedTargetGroupId
-          )
-          nextLayoutByWorktree = collapsedState.layoutByWorktree
-          nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
-        } else {
-          nextActiveGroupIdByWorktree = {
-            ...nextActiveGroupIdByWorktree,
-            [worktreeId]: resolvedTargetGroupId
+          const currentLayout =
+            nextLayout === undefined ? state.layoutByWorktree[worktreeId] : nextLayout
+          if (currentLayout) {
+            const collapsed = collapseWorktreeGroupLayout(
+              currentLayout,
+              nextActiveGroupId ?? state.activeGroupIdByWorktree[worktreeId],
+              sourceGroup.id,
+              resolvedTargetGroupId
+            )
+            nextLayout = collapsed.layout
+            nextActiveGroupId = collapsed.activeGroupId
           }
+        } else {
+          nextActiveGroupId = resolvedTargetGroupId
         }
 
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: resolvedTargetGroupId } : candidate
-          )
-        }
-        const nextGroupsByWorktree = {
-          ...state.groupsByWorktree,
-          [worktreeId]: nextGroups
-        }
+        const nextLayoutByWorktree =
+          nextLayout === undefined
+            ? state.layoutByWorktree
+            : replaceRecordEntries(state.layoutByWorktree, [[worktreeId, nextLayout]])
+        const nextActiveGroupIdByWorktree =
+          nextActiveGroupId === undefined
+            ? state.activeGroupIdByWorktree
+            : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, nextActiveGroupId]])
+        const nextUnifiedTabsByWorktree = replaceTabBuckets(state.unifiedTabsByWorktree, [
+          [
+            worktreeId,
+            (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+              candidate.id === tabId ? { ...candidate, groupId: resolvedTargetGroupId } : candidate
+            )
+          ]
+        ])
+        const nextGroupsByWorktree = replaceRecordEntries(state.groupsByWorktree, [
+          [worktreeId, nextGroups]
+        ])
 
         return {
           unifiedTabsByWorktree: nextUnifiedTabsByWorktree,

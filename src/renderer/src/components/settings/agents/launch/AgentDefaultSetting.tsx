@@ -1,7 +1,8 @@
 import { Check } from 'lucide-react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
-import { type AgentCatalogEntry, AgentIcon } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'

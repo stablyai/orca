@@ -40,6 +40,7 @@ import {
   resolveCodexPaneStatus,
   setCodexMainAgentTurnState
 } from './codex-state'
+import { pendingCodexAsyncQuestion, trackCodexAsyncQuestions } from './codex-async-questions'
 
 export function buildCodexStatusPayload(
   state: HookListenerState,
@@ -55,6 +56,11 @@ export function buildCodexStatusPayload(
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
+  // An approval or blocking question on screen wins; otherwise a waiting row shows the open async question.
+  const asyncQuestion =
+    options.stateName === 'waiting' && !snapshot.interactivePrompt
+      ? pendingCodexAsyncQuestion(state, paneKey)
+      : undefined
 
   return normalizeAgentStatusPayload({
     state: options.stateName,
@@ -64,9 +70,9 @@ export function buildCodexStatusPayload(
     }),
     agentType: 'codex',
     model: lead?.model,
-    toolName: snapshot.toolName,
+    toolName: asyncQuestion?.toolName ?? snapshot.toolName,
     toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
+    interactivePrompt: asyncQuestion?.prompt ?? snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted: mainAgentTurnInterrupted(lead),
@@ -242,6 +248,11 @@ export function normalizeCodexEvent(
     transcriptPath,
     stateName
   )
+  // An open async question needs the user even while Codex keeps working.
+  const leadState =
+    trackCodexAsyncQuestions(state, paneKey, eventName, hookPayload) && ownedState === 'working'
+      ? 'waiting'
+      : ownedState
   const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(paneKey)
   const turnId = readString(hookPayload, 'turn_id')
@@ -260,10 +271,10 @@ export function normalizeCodexEvent(
         !previousLead?.turnId ||
         codexTranscriptTurnEnd(transcript, previousLead.turnId) !== undefined))
   const record = setCodexMainAgentTurnState(state, paneKey, {
-    state: ownedState,
+    state: leadState,
     ...(failedTurn
       ? { outcome: 'failure' as const }
-      : codexLeadOutcomeForEvent(eventName, previousLead, ownedState)),
+      : codexLeadOutcomeForEvent(eventName, previousLead, leadState)),
     model:
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
       (eventName === 'SessionStart' ? undefined : previousLead?.model),

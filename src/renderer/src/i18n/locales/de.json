@@ -240,6 +240,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Aufforderung zum Speichern des Passworts",
+        "updateTitle": "Passwort aktualisieren?",
+        "saveTitle": "Passwort speichern?",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "never": "Nie für diese Website",
+        "notNow": "Jetzt nicht",
+        "update": "Aktualisieren",
+        "save": "Speichern"
+      },
+      "fill": {
+        "noUsername": "(kein Benutzername)",
+        "title": "Gespeicherte Anmeldungen",
+        "otherLogins": "Weitere Anmeldungen auf dieser Website"
+      }
+    },
     "loadFailure": {
       "connectionNotSecure": "Die Verbindung ist nicht sicher",
       "cantReachHost": "{{value0}} ist nicht erreichbar",
@@ -954,21 +972,6 @@
         "missingHost": "Die Proxy-URL muss einen Host enthalten."
       }
     },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "Höchste Genauigkeit für 25 europäische Sprachen. Zeichensetzung, Groß- und Kleinschreibung und Zeitstempel auf Wortebene.",
-        "parakeetV2": "Nur Englisch. Schneller als v3 bei ähnlicher Genauigkeit. Zeichensetzung und Groß- und Kleinschreibung.",
-        "zipformerBilingual": "Chinesisch + Englisch mit Sprachwechsel. Echtzeit-Streaming mit geringer Latenz.",
-        "paraformerBilingual": "Chinesisch (Mandarin + Dialekte) + Englisch. Stark bei Akzenten und regionalen Varianten des Chinesischen.",
-        "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
-        "zipformerStreamingZh": "Nur Chinesisch. Sehr schlankes Modell mit 14 Mio. Parametern, ideal für Geräte mit wenig Ressourcen.",
-        "zipformerStreamingKo": "Nur Koreanisch. Echtzeit-Streaming mit geringer Latenz.",
-        "parakeetJa": "Nur Japanisch. Mit über 35.000 Stunden natürlicher Sprache trainiert. Mit Zeichensetzung.",
-        "whisperTiny": "Über 90 Sprachen. Geringere Genauigkeit als Parakeet, aber die größte Sprachabdeckung.",
-        "senseVoice": "Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch mit automatischer Erkennung der gesprochenen Sprache.",
-        "gptTranscribe": "Cloud-Transkription mit hoher Genauigkeit. Benötigt einen OpenAI-API-Schlüssel."
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "das Erstellen von Dateien zur Prüfung ist deaktiviert",
@@ -1351,7 +1354,6 @@
         "jira": {
           "856083302c": "Die Jira-Verbindung wurde durch eine neuere Anfrage ersetzt."
         },
-        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "Profil konnte nicht erstellt werden",
@@ -1954,28 +1956,38 @@
         "e338c507c1": "Systemnahe Kompatibilitätseinstellungen zur Fehlerbehebung.",
         "580a04cd81": "Erweitert",
         "8400cfe1c1": "Anonyme Nutzungsdaten und Telemetrieeinstellungen.",
+        "3618579df6": "Datenschutz & Telemetrie",
         "65ec7d1968": "macOS-Datenschutzberechtigungen für Entwicklerwerkzeuge, die im Terminal gestartet werden.",
         "d91ae31fbd": "macOS-Berechtigungen",
         "95a1886d94": "Terminals und Agenten vom Smartphone aus steuern.",
         "1cd25673df": "Mobil",
         "31e57d1c70": "Vorhandene Computer über SSH für Dateien, Terminals, Git und Arbeitsbereiche nutzen.",
+        "94a5afe910": "SSH-Hosts",
         "40d80bad8a": "Beta",
+        "de0c2907a1": "Entfernte Orca-Server",
         "b351014180": "Orca-Statistiken, Token-Analysen für Claude, Codex, OpenCode und Muse sowie Nutzung des Grok-Abonnements.",
+        "d72a58b5b9": "Statistiken & Nutzung",
         "dcd0d9b74f": "Tastenkürzel für häufige Aktionen.",
         "94295ebfb3": "Tastenkürzel",
         "7682607591": "Native Desktop-Benachrichtigungen zu Agenten- und Terminalereignissen.",
         "2eece16ad1": "Benachrichtigungen",
         "1f452cbd4c": "Verhalten bei Auswahl und Bearbeitung.",
+        "0c6ee88a5f": "Eingabe & Bearbeitung",
         "b11a5a48a2": "Design, Zoom, Darstellung von App und Terminal, Seitenleisten und Statusleiste.",
         "93d88d20bf": "Darstellung",
         "2d0659f6f0": "Globale Terminal-, Browser- und Markdown-Tabs.",
+        "65b19f5bde": "Schwebender Arbeitsbereich",
         "3d65d3f1b9": "Unterstützung für Mobilgeräte-Emulatoren in Orca und für Coding-Agenten konfigurieren.",
+        "1e761cff2b": "Mobilgeräte-Emulator",
         "e815fd01bd": "Startseite, Linkweiterleitung und Sitzungs-Cookies.",
         "8c197f74a1": "Browser",
         "42ae40842f": "Gespeicherte Terminalbefehle, global oder pro Projekt.",
+        "3fc3db144f": "Schnellbefehle",
         "c33bfd664c": "Shells, Renderer, Sitzungen und Terminalverhalten.",
         "a9fb10afca": "Terminal",
+        "85f4fd7710": "Aufgabenquellen",
         "ab4b21b58e": "Branch-Benennung, Basisreferenzen und Git AI Author.",
+        "09607cb0fe": "Git & Quellcodeverwaltung",
         "33a5e1d597": "GitHub, GitLab, Linear und Dienste zum Hosten von Quellcode verbinden.",
         "2b043783ef": "Integrationen",
         "2cd4ea75da": "Standardeinstellungen für Arbeitsbereiche, App-Einrichtung und Wartung.",
@@ -1989,11 +2001,15 @@
         "8ac3de82f5": "Lokales Diktieren mit Spracherkennungsmodellen auf dem Gerät.",
         "6a50cdcd7c": "Spracheingabe",
         "0059bd17f3": "Agenten die Steuerung beliebiger Apps auf dem Computer ermöglichen.",
+        "b35e92364b": "Computersteuerung",
         "cd50cec5d7": "Mehrere Coding-Agenten über Orca koordinieren.",
         "58a868e8e4": "Orchestrierung",
+        "7c79d3b7bf": "Optional",
         "b1c2f8b0ac": "Optional: Konten wechseln und Nutzungsstatistiken für Claude, Codex, Gemini, OpenCode Go, MiniMax und Grok einrichten.",
+        "f70ac54d38": "Konten bei KI-Anbietern",
         "4121f7a0a2": "KI-Agenten verwalten, einen Standard festlegen und Befehle anpassen.",
         "b49abbd2f7": "Agenten",
+        "dev": "Entwicklerwerkzeuge",
         "devDescription": "Werkzeuge nur für die Entwicklung zum Testen von UI-Zuständen.",
         "devBadge": "Entwicklung",
         "devSearchNotificationPlayground": "Testbereich für Benachrichtigungen",
@@ -2013,23 +2029,9 @@
         "artifactsDescription": "HTML- und Markdown-Dateien mit dem Team teilen und ihre öffentlichen Links verwalten.",
         "automationsTitle": "Automatisierungen",
         "automationsDescription": "Agentenaufgaben planen und festlegen, ob Automatisierungen in der Seitenleiste angezeigt werden.",
-        "shareSkillsDescription": "Skills über einen nicht gelisteten Link teilen. Alle, die den Link haben, können sie installieren.",
-        "floatingWorkspaceWebDescription": "Globale Terminal- und Markdown-Tabs.",
-        "dev": "Entwicklerwerkzeuge",
-        "1e761cff2b": "Mobilgeräte-Emulator",
-        "3fc3db144f": "Schnellbefehle",
-        "b35e92364b": "Computersteuerung",
-        "0c6ee88a5f": "Eingabe & Bearbeitung",
-        "85f4fd7710": "Aufgabenquellen",
-        "f70ac54d38": "Konten bei KI-Anbietern",
-        "09607cb0fe": "Git & Quellcodeverwaltung",
-        "7c79d3b7bf": "Optional",
-        "d72a58b5b9": "Statistiken & Nutzung",
         "shareSkillsTitle": "Skills teilen",
-        "de0c2907a1": "Entfernte Orca-Server",
-        "65b19f5bde": "Schwebender Arbeitsbereich",
-        "3618579df6": "Datenschutz & Telemetrie",
-        "94a5afe910": "SSH-Hosts"
+        "shareSkillsDescription": "Skills über einen nicht gelisteten Link teilen. Alle, die den Link haben, können sie installieren.",
+        "floatingWorkspaceWebDescription": "Globale Terminal- und Markdown-Tabs."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Der einzufügende Inhalt ist zu groß."
@@ -2786,7 +2788,7 @@
         "untitled": "Unbenannter Chat",
         "listLabel": "Chats, die fortgesetzt würden",
         "dontAskAgain": "Nicht erneut fragen (automatisch fortsetzen)",
-        "dontAskAgainHint": "Lässt sich unter Einstellungen → Experimentell → Chat-Oberfläche deaktivieren.",
+        "dontAskAgainHint": "Lässt sich unter Einstellungen → Chat → Verhalten deaktivieren.",
         "selectAgent": "{{value0}}-Chat „{{value1}}“ in {{value2}} fortsetzen",
         "dismissAll": "Alle verwerfen",
         "viewChats": "Chats anzeigen",
@@ -7365,21 +7367,6 @@
         }
       },
       "settings": {
-        "keep": {
-          "local": {
-            "main": {
-              "up": {
-                "to": {
-                  "date": {
-                    "setting": {
-                      "f4c23aee76": "Lokalen main-Branch aktuell halten"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
         "AccountsPane": {
           "locationSaveFailed": "Der Speicherort der Konten konnte nicht gespeichert werden. Versuche es erneut.",
           "dbb9626ed1": "Abbrechen",
@@ -7520,14 +7507,14 @@
           },
           "remoteScopeLocalAccountsKeptHostPicker": "Auf diesem Desktop verwaltete Konten bleiben unverändert. Um sie anzuzeigen, oben in den Einstellungen im Menü „Host“ diesen Computer auswählen.",
           "apiKeyUpdateFailed": "MiniMax-API-Schlüssel konnte nicht aktualisiert werden.",
+          "91a1b78e67": "Kontospeicherort",
+          "699680a328": "Konto entfernen",
           "89b9a151c3": "Claude-Konten",
           "bd16d363ed": "Codex-Konten",
           "4d274a02f0": "Sitzungs-Cookie für OpenCode Go",
-          "109431f707": "Arbeitsbereichs-ID für OpenCode Go",
-          "91a1b78e67": "Kontospeicherort",
           "4d41177f74": "MiniMax-Sitzungs-Cookie",
-          "699680a328": "Konto entfernen",
-          "7e9977b560": "Konto hinzufügen"
+          "7e9977b560": "Konto hinzufügen",
+          "109431f707": "Arbeitsbereichs-ID für OpenCode Go"
         },
         "AdvancedPane": {
           "40b29e0bf3": "Neu starten",
@@ -7596,8 +7583,8 @@
           "codexSessionSourceTooltip": "Orca führt Codex in einem isolierten Home-Verzeichnis aus. Hier das vorhandene Codex-Home-Verzeichnis angeben, um dessen Sitzungsverlauf zu importieren. Bei leerem Feld wird ~/.codex verwendet.",
           "storedDefaultUndetected": "Als Standard gespeichert, aber derzeit nicht erkannt",
           "noAgentsDetected": "Keine Agenten erkannt. Falls einer installiert ist, hat die Erkennung möglicherweise das Zeitlimit überschritten.",
-          "3bddd54c9e": "Standard-Agent",
-          "9f30095d49": "Agentenberechtigungen"
+          "9f30095d49": "Agentenberechtigungen",
+          "3bddd54c9e": "Standard-Agent"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Nächstes Symbol anzeigen",
@@ -7622,8 +7609,8 @@
             "tintOpacityDescription": "Legt fest, wie stark die Farbe der Seitenleiste beigemischt wird.",
             "tintDescription": "Behalte die Standard-Seitenleiste bei oder töne sie ein. Um dem Terminal zu folgen, wähle „An Terminal anpassen“ als helles oder dunkles Design.",
             "fcc653abee": "Darstellung der linken Seitenleiste",
-            "ba1d9a0607": "Farbtönung der Seitenleiste",
-            "df205a675e": "Stärke der Farbtönung"
+            "df205a675e": "Stärke der Farbtönung",
+            "ba1d9a0607": "Farbtönung der Seitenleiste"
           },
           "interfaceDefaultFont": "Standardschriftart",
           "terminalDefaultFont": "Standardschriftart",
@@ -7636,18 +7623,18 @@
             "title": "Angeheftete Worktrees auch in ihren ursprünglichen Listen anzeigen",
             "description": "Angeheftete Worktrees bleiben unter „Angeheftet“ und erscheinen auch unter „Alle“, „Projekt“, „Status“ und „PR“."
           },
-          "173edfb768": "UI-Zoom",
-          "657a7230a2": "IDE-Schriftart",
-          "8063dd3b6b": "App-Name in der Titelleiste",
-          "95a5581f66": "Beim Schließen in den Infobereich minimieren",
-          "e90c5d745a": "Fenster und Seitenleiste",
-          "907888cd09": "App-Symbol",
-          "3a5d06686d": "Statusleiste",
           "e0f9902e18": "Schaltfläche „Aufgaben“ anzeigen",
-          "7be0027489": "Schaltfläche „Automatisierungen“ anzeigen",
-          "d2b4ddbea0": "Schaltfläche „Orca Mobile“ anzeigen",
           "7e958ee950": "Von Git ignorierte Dateien anzeigen",
-          "8e374ce9a3": "Datei-Explorer"
+          "173edfb768": "UI-Zoom",
+          "907888cd09": "App-Symbol",
+          "8e374ce9a3": "Datei-Explorer",
+          "3a5d06686d": "Statusleiste",
+          "7be0027489": "Schaltfläche „Automatisierungen“ anzeigen",
+          "8063dd3b6b": "App-Name in der Titelleiste",
+          "d2b4ddbea0": "Schaltfläche „Orca Mobile“ anzeigen",
+          "657a7230a2": "IDE-Schriftart",
+          "95a5581f66": "Beim Schließen in den Infobereich minimieren",
+          "e90c5d745a": "Fenster und Seitenleiste"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -7709,12 +7696,12 @@
           "64898ecdab": "Erstellen",
           "7b649a578a": "Wird erstellt…",
           "4399c77caa": "Standard",
-          "e25fd16b91": "Standardsuchmaschine",
           "bc44903d30": "Sitzung & Cookies",
-          "ddd634b250": "Sitzung & Cookies",
           "7a366a05e1": "Link-Weiterleitung",
-          "f36182ff2f": "Neues Browser-Profil",
-          "549f28cf10": "Profil hinzufügen"
+          "549f28cf10": "Profil hinzufügen",
+          "e25fd16b91": "Standardsuchmaschine",
+          "ddd634b250": "Sitzung & Cookies",
+          "f36182ff2f": "Neues Browser-Profil"
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profil „{{value0}}“ entfernt.",
@@ -7732,9 +7719,6 @@
           "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
           "333984cf90": "Bestehende Browser-Sitzung verwenden",
           "9895ed44de": "Computer Use öffnen"
-        },
-        "BrowserUseEnableSwitch": {
-          "ce4d6f80d8": "Browser-Nutzung durch Agenten aktivieren"
         },
         "BrowserUseExamples": {
           "1199258ace": "Kopieren",
@@ -7760,9 +7744,9 @@
           "5301857d88": "Aus {{value0}}",
           "finishSteps": "Coding-Agenten diesen Browser mit bestehenden Anmeldungen steuern lassen. Dazu die folgenden Schritte abschließen.",
           "b3e79d1c51": "Browser-Cookies importieren",
-          "4451b3c0a6": "Browser Use-Skill installieren",
+          "507fdae102": "Browsersteuerung durch Agenten",
           "4ab048c0b8": "Aus Datei…",
-          "507fdae102": "Browsersteuerung durch Agenten"
+          "4451b3c0a6": "Browser Use-Skill installieren"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Ermöglicht Agenten, im Browser von Orca zu navigieren und Seiten zu prüfen.",
@@ -7922,13 +7906,13 @@
           "appStatus": "App: ",
           "terminalHostStatus": "Terminal-Hosts: ",
           "terminalHostRecovery": "Wenn ein Terminal geschützte Dateien nicht lesen kann, die Arbeit speichern und es unter Terminal → Sitzungen verwalten schließen. Den Daemon neu starten, wenn auch neue Terminals betroffen sind; ein Neustart schließt dessen aktuelle Terminals.",
-          "515baa0f5c": "Bildschirmaufnahme",
-          "b8cd05701d": "Einstellungen öffnen",
           "28350e590b": "Rückfrage auslösen",
-          "78b1e0b9d4": "Lokales Netzwerk",
           "e2596159f6": "Zugriff anfordern",
+          "78b1e0b9d4": "Lokales Netzwerk",
+          "a162df27d5": "Verbindung testen",
           "91f887e323": "USB-Geräte",
-          "a162df27d5": "Verbindung testen"
+          "b8cd05701d": "Einstellungen öffnen",
+          "515baa0f5c": "Bildschirmaufnahme"
         },
         "ExperimentalPane": {
           "a20d5ea365": "Die Hervorhebung eines Bereichs bleibt nach einem Terminal-Signalton oder dem Abschluss eines Agenten bis zur nächsten Interaktion mit diesem Bereich sichtbar. Experimentell, während das Signal abgestimmt wird.",
@@ -7988,11 +7972,11 @@
           "81afb79785": "Neue Terminal-Tabs im schwebenden Arbeitsbereich starten hier. Markdown-Notizen werden in Orcas eigenem schwebenden Arbeitsbereich gespeichert.",
           "41eb95f7f0": "Zeigt die Schaltfläche und das Panel des schwebenden Arbeitsbereichs an.",
           "37df688d6f": "Den schwebenden Arbeitsbereich aktivieren und festlegen, wo neue Tabs starten.",
-          "2374e81dd8": "Schwebender Arbeitsbereich",
           "172d1d75c3": "Schwebenden Arbeitsbereich aktivieren",
+          "2374e81dd8": "Schwebender Arbeitsbereich",
+          "73ac917638": "Schwebende Schaltfläche",
           "7cedc178d6": "Terminal-Verzeichnis",
           "b9c2a85346": "Position der Umschaltfläche",
-          "73ac917638": "Schwebende Schaltfläche",
           "dd7eb9270a": "Statusleiste"
         },
         "AgentCacheTimerSection": {
@@ -8030,16 +8014,16 @@
           "5195f0b9ef": "Rechtschreibmarkierungen und Vorschläge des Browsers beim Bearbeiten von formatiertem Markdown anzeigen.",
           "9b18de6eea": "Lange Zeilen in Datei-Editoren umbrechen, um horizontales Scrollen zu vermeiden.",
           "collapseUnchangedDescription": "In einem Datei-Diff nur geänderte Zeilen und etwas umgebenden Kontext anzeigen und den Rest hinter aufklappbaren Leisten ausblenden. Die Diff-Ansicht „Alle Änderungen anzeigen“ wird immer so eingeklappt.",
-          "0971ef5c63": "Leerraum in Diffs anzeigen",
-          "75e326278e": "Zeilenumbruch im Editor",
-          "89ba15b474": "Verzögerung beim automatischen Speichern",
-          "b11d620d45": "Standard-Diff-Ansicht",
-          "6f33c2a32f": "Zeilenumbruch in Diffs",
-          "3f63d16992": "Standardanzeige des Diff-Dateibaums",
+          "a37865966c": "Dateien automatisch speichern",
           "8b3f8e6b83": "Markdown-Review-Notizen",
+          "89ba15b474": "Verzögerung beim automatischen Speichern",
+          "75e326278e": "Zeilenumbruch im Editor",
           "a0361dfb05": "Rechtschreibprüfung für formatiertes Markdown",
+          "3f63d16992": "Standardanzeige des Diff-Dateibaums",
+          "b11d620d45": "Standard-Diff-Ansicht",
+          "0971ef5c63": "Leerraum in Diffs anzeigen",
           "916c5582f2": "Unveränderte Bereiche einklappen",
-          "a37865966c": "Dateien automatisch speichern"
+          "6f33c2a32f": "Zeilenumbruch in Diffs"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -8097,11 +8081,11 @@
           "externalWorktrees": "Externe Worktrees",
           "externalWorktreesDescription": "Auswählen, welche außerhalb von Orca erstellten Worktrees auf diesem Host standardmäßig angezeigt werden.",
           "ad65d146f6": "Apps für „Öffnen in“",
-          "9d0ef6a2a6": "Arbeitsbereichsverzeichnis",
+          "2ffd7c4fc8": "Vor dem Löschen von Artefakten nachfragen",
           "a8ce626e4b": "Arbeitsbereiche verschachteln",
           "c2d4beaf3a": "Vor dem Löschen von Arbeitsbereichen nachfragen",
-          "3ae2a59ce9": "Vor dem Löschen von Automatisierungen nachfragen",
-          "2ffd7c4fc8": "Vor dem Löschen von Artefakten nachfragen"
+          "9d0ef6a2a6": "Arbeitsbereichsverzeichnis",
+          "3ae2a59ce9": "Vor dem Löschen von Automatisierungen nachfragen"
         },
         "GhosttyImportModal": {
           "f96688b6bc": "Abbrechen",
@@ -8139,9 +8123,9 @@
           "cancel": "Abbrechen",
           "import_theme_one": "{{value0}} Design importieren",
           "import_theme_other": "{{value0}} Designs importieren",
-          "77f3e3d390": "Datei auswählen",
+          "1bceb1553d": "Designs importieren",
           "00aaf588da": "Ordner auswählen",
-          "1bceb1553d": "Designs importieren"
+          "77f3e3d390": "Datei auswählen"
         },
         "useWarpThemeImport": {
           "unknown_error": "Unbekannter Fehler",
@@ -8188,13 +8172,13 @@
           "jiraIssueKeyCasingDescription": "Groß-/Kleinschreibung des Jira-Issue-Schlüssels in den Arbeitsbereichs- und Branch-Namen, die Orca für neue mit Jira verknüpfte Arbeitsbereiche vorschlägt, etwa PROJ-123-fix-login statt proj-123-fix-login. Bestehende Arbeitsbereiche und selbst eingegebene Namen werden nie geändert.",
           "jiraIssueKeyCasingLowercase": "Kleinbuchstaben",
           "jiraIssueKeyCasingPreserve": "Schlüssel in Großbuchstaben",
-          "7826f35f63": "Branch-Präfix",
-          "53a0daed73": "Gruppenreihenfolge in der Quellcodeverwaltung",
-          "fdbcd676b0": "GitHub-API-Kontingent",
-          "f2765fbbf6": "GitLab-API-Kontingent",
-          "074f7aa0d6": "Standardvergleichsbasis",
           "d12c81a103": "Git-Benutzername",
-          "8cdbaf4b03": "Groß-/Kleinschreibung von Jira-Schlüsseln"
+          "53a0daed73": "Gruppenreihenfolge in der Quellcodeverwaltung",
+          "7826f35f63": "Branch-Präfix",
+          "f2765fbbf6": "GitLab-API-Kontingent",
+          "8cdbaf4b03": "Groß-/Kleinschreibung von Jira-Schlüsseln",
+          "fdbcd676b0": "GitHub-API-Kontingent",
+          "074f7aa0d6": "Standardvergleichsbasis"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Aktiviert die Erfassungsaktionen für den Fettschriftfehler auf diesem Rechner: {{samplingShortcut}} startet eine Messserie; {{captureShortcut}} speichert Diagnosedaten des Bereichs auf dem Datenträger.",
@@ -8229,9 +8213,9 @@
           "cdf794f46d": "Die Tastenbelegungsdatei ist nicht verfügbar.",
           "dd532a01ce": "Tastenbelegungen konnten in Orca nicht geöffnet werden.",
           "ad58206841": "Datei in Orca bearbeiten",
-          "4bfe7a2e43": "Mit Standard-App öffnen",
           "c322555264": "Im Dateimanager anzeigen",
-          "5b639aea5c": "Vom Datenträger neu laden"
+          "5b639aea5c": "Vom Datenträger neu laden",
+          "4bfe7a2e43": "Mit Standard-App öffnen"
         },
         "ManageSessionKillDialog": {
           "6bf4627168": "Abbrechen",
@@ -8376,25 +8360,25 @@
           "7f45542625": "Testbenachrichtigung angefordert",
           "98d70fb261": "Benutzerdefinierter Benachrichtigungston konnte nicht abgespielt werden",
           "c83b05a055": "Benachrichtigungen werden auf diesem System nicht unterstützt",
-          "b3c7207c8f": "Benachrichtigungston",
-          "9c41a0d367": "Benachrichtigungen aktivieren",
-          "0acae1066d": "Agentenaufgabe abgeschlossen",
           "6bc7bd7b6e": "Terminal-Signalton",
+          "0acae1066d": "Agentenaufgabe abgeschlossen",
           "3b77513cd0": "Über ausgeblendete Arbeitsbereiche benachrichtigen",
-          "badd7ed4cf": "Bei Fokus unterdrücken",
           "0b8141ed49": "Benutzerdefinierte Datei ändern",
-          "38e3bbeb25": "Benutzerdefinierte Datei auswählen",
-          "f5b0498e1f": "Testbenachrichtigung senden"
+          "badd7ed4cf": "Bei Fokus unterdrücken",
+          "9c41a0d367": "Benachrichtigungen aktivieren",
+          "f5b0498e1f": "Testbenachrichtigung senden",
+          "b3c7207c8f": "Benachrichtigungston",
+          "38e3bbeb25": "Benutzerdefinierte Datei auswählen"
         },
         "OpenAiTranscriptionKeyDialog": {
           "d246b2bdb3": "Schlüssel der lokalen Laufzeitumgebung werden in ~/.orca gespeichert, sofern verfügbar mit der verschlüsselten Speicherung von Electron.",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "API-Schlüssel konfiguriert",
           "07ed3e512e": "Audiodaten werden nur an OpenAI gesendet, wenn ein OpenAI-Modell zur Spracherkennung ausgewählt ist.",
-          "c3dfb3840e": "API-Schlüssel",
-          "bf1ff9c891": "OpenAI-Transkription",
+          "bce1b6d18a": "Schlüssel speichern",
           "be6c3f2eba": "Schlüssel löschen",
-          "bce1b6d18a": "Schlüssel speichern"
+          "bf1ff9c891": "OpenAI-Transkription",
+          "c3dfb3840e": "API-Schlüssel"
         },
         "OpenAiTranscriptionSettingsRow": {
           "85c589cd61": "API-Schlüssel hinzufügen",
@@ -8597,12 +8581,12 @@
           "issueCommandOptionalDefault": "Leer lassen, um den Repository-Standard aus <yaml>orca.yaml</yaml> zu verwenden, sofern vorhanden.",
           "commandSourceDescription": "Wenn sowohl <yaml>orca.yaml</yaml> als auch lokale Befehle vorhanden sind, auswählen, welche ausgeführt werden.",
           "issueCommandWslStopped": "Die WSL-Distribution {{distro}} ist gestoppt. Öffne darin ein Terminal, um diesen Befehl anzuzeigen oder zu bearbeiten.",
-          "01bdba296f": "Worktree-Hooks",
-          "1ecf0b115a": "Einrichtungsskript",
-          "1c17e751c4": "Zeitpunkt der Einrichtung",
           "bfdb1266ce": "Archivierungsskript",
+          "1c17e751c4": "Zeitpunkt der Einrichtung",
           "da00f141c2": "Benutzerdefinierter Befehl für GitHub-Issues",
-          "88c6d1e54a": "Befehlsquelle"
+          "88c6d1e54a": "Befehlsquelle",
+          "01bdba296f": "Worktree-Hooks",
+          "1ecf0b115a": "Einrichtungsskript"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Repository-Farbe {{value0}} verwenden",
@@ -8627,8 +8611,8 @@
           "emojiTooLongForRepoIcon": "Dieses Emoji kann nicht als Repository-Symbol verwendet werden.",
           "currentEmojiSelection": "Aktuell: {{value0}}",
           "searchEmojiPlaceholder": "Emoji suchen",
-          "43bf3709dd": "Repository-Symbol",
-          "cc76342291": "GitHub-Avatar verwenden"
+          "cc76342291": "GitHub-Avatar verwenden",
+          "43bf3709dd": "Repository-Symbol"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative Pfade werden ausgehend von diesem Projektstammverzeichnis aufgelöst.",
@@ -8700,13 +8684,13 @@
           "externalWorktreesGlobal": "Globaler Standard: {{value0}}",
           "useGlobal": "Globale Einstellung verwenden",
           "07deadaa00": "Anzeigename",
-          "e856e61455": "Projektsymbol",
-          "04eebebbea": "Projekt entfernen",
-          "82733ff808": "Verfügbare Hosts",
           "41ccd99b57": "Projektlaufzeitumgebung",
+          "04eebebbea": "Projekt entfernen",
           "38df44846b": "Standardbasis für Worktrees",
+          "077dc18a4a": "Globale Einstellung verwenden",
+          "82733ff808": "Verfügbare Hosts",
           "5ff7788414": "Worktree-Speicherort",
-          "077dc18a4a": "Globale Einstellung verwenden"
+          "e856e61455": "Projektsymbol"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Befehlsvorlage",
@@ -8739,9 +8723,6 @@
           "14f1eb99d0": "Details beim Öffnen von „PR erstellen“ generieren",
           "d32b87e754": "Review-Vorlage verwenden, falls verfügbar",
           "981eae7e14": "Standardmäßig als Entwurf erstellen"
-        },
-        "RepositorySourceControlAiSection": {
-          "112f3b934f": "KI für die Quellcodeverwaltung"
         },
         "RuntimeAccessGrantList": {
           "sshAccessCaveat": "Ein Widerruf hier verhindert nicht, dass sich jemand mit SSH-Zugriff auf diesen Computer erneut koppelt. Um den Zugriff vollständig zu entziehen, muss der SSH-Zugriff entfernt werden.",
@@ -8897,7 +8878,6 @@
           "7807c11c4d": "Allgemein",
           "6855b0f77d": "Die grundlegenden Abläufe abschließen, die Orca für die parallele Arbeit mit Agenten nützlich machen.",
           "6d119427ef": "Checkliste für den Einstieg",
-          "eb1176a14e": "Lokales Sprachdiktat mit Modellen auf dem Gerät.",
           "5063bb47a5": "Spracheingabe",
           "7118953f14": "Agenten die Steuerung beliebiger Apps auf dem Computer ermöglichen.",
           "475980f53d": "Mehrere Coding-Agenten über Orca koordinieren.",
@@ -8909,8 +8889,12 @@
           "acc7bbdefd": "Zum Verlassen der Einstellungen erneut ESC drücken",
           "43b68e10f0": "Es gibt ungespeicherte KI-Einstellungen. Beim Verlassen werden sie verworfen.",
           "17bdee4ff1": "Ungespeicherte KI-Einstellungen verwerfen?",
+          "084d8fac5b": "Datenschutz & Sicherheit",
+          "23931df7e8": "Remote-Hosts",
           "8bd117d669": "Oberfläche",
           "e1578cd4bc": "Arbeitsabläufe",
+          "9abb9be3bc": "Einrichtung",
+          "23c6874fdf": "KI-Funktionen",
           "65358016ea": "Verwerfen",
           "devDescription": "Werkzeuge nur für die Entwicklung zum Testen von UI-Zuständen.",
           "linearTitle": "Linear",
@@ -8918,23 +8902,19 @@
           "tasksDescription": "Anbieter verbinden, den Linear-Skill installieren und festlegen, was unter „Aufgaben“ angezeigt wird.",
           "remoteServersDescription": "Orca auf einem anderen Rechner ausführen und von hier aus damit arbeiten.",
           "noSettingsFoundForQuery": "Keine Einstellungen für „{{value0}}“ gefunden",
+          "045db77e21": "SSH-Hosts",
+          "c0900fa64a": "Aufgabenquellen",
+          "129ae9859c": "Mobilgeräte-Emulator",
+          "022effa46f": "Entfernte Orca-Server",
+          "d09b9d8f00": "Git & Quellcodeverwaltung",
           "3eac6fb97f": "Entwicklerwerkzeuge",
           "4198aae333": "Konten bei KI-Anbietern",
           "3f3e11cb5d": "Computersteuerung",
-          "d09b9d8f00": "Git & Quellcodeverwaltung",
-          "c0900fa64a": "Aufgabenquellen",
-          "d60b7f0e58": "Schnellbefehle",
-          "129ae9859c": "Mobilgeräte-Emulator",
+          "084f34826d": "Statistiken & Nutzung",
+          "742ca66ea6": "Datenschutz & Telemetrie",
           "c2bb9fc528": "Schwebender Arbeitsbereich",
           "f1fddf7764": "Eingabe & Bearbeitung",
-          "084f34826d": "Statistiken & Nutzung",
-          "022effa46f": "Entfernte Orca-Server",
-          "045db77e21": "SSH-Hosts",
-          "742ca66ea6": "Datenschutz & Telemetrie",
-          "084d8fac5b": "Datenschutz & Sicherheit",
-          "9abb9be3bc": "Einrichtung",
-          "23c6874fdf": "KI-Funktionen",
-          "23931df7e8": "Remote-Hosts"
+          "d60b7f0e58": "Schnellbefehle"
         },
         "SettingsFormControls": {
           "42a4d15a30": "Keine passenden Schriftarten.",
@@ -9138,8 +9118,8 @@
           "addDescription": "Einen dauerhaft eingerichteten Rechner mit SSH-Zugang hinzufügen.",
           "editingPrefix": "Bearbeitung",
           "addHost": "Host hinzufügen",
-          "8349b7b4fa": "Identitätsdatei",
           "bc9854a353": "Mein Server",
+          "8349b7b4fa": "Identitätsdatei",
           "92ea40234c": "Änderungen speichern"
         },
         "TasksPane": {
@@ -9195,16 +9175,16 @@
           "4415beb958": "deaktiviert",
           "4e7d41a9f0": "aktiviert",
           "dimUnfocusedPanes": "Bereiche ohne Fokus abdunkeln.",
-          "bb4ac88514": "Schriftstärke",
-          "d9c0df9673": "Zeilenhöhe",
-          "e4cccb139e": "Schriftligaturen",
-          "5ae74b7796": "Terminaltypografie",
-          "a157b95a08": "Schriftfamilie",
           "4adb9364f4": "Cursor-Form",
-          "55c3f22e7c": "Cursor-Deckkraft",
-          "0f6515bf50": "Terminal-Bereiche",
           "4d8b35c479": "Deckkraft inaktiver Bereiche",
-          "835aad4f9d": "Trennlinienstärke"
+          "55c3f22e7c": "Cursor-Deckkraft",
+          "835aad4f9d": "Trennlinienstärke",
+          "e4cccb139e": "Schriftligaturen",
+          "0f6515bf50": "Terminal-Bereiche",
+          "d9c0df9673": "Zeilenhöhe",
+          "bb4ac88514": "Schriftstärke",
+          "5ae74b7796": "Terminaltypografie",
+          "a157b95a08": "Schriftfamilie"
         },
         "TerminalAdvancedTypographyControls": {
           "0e0d1ee15a": "Unabhängig von der Schriftstärke anpassen. Einige Schriftarten ordnen mehrere Werte demselben Schriftschnitt zu. Falls Fettschrift unverändert aussieht, die Schriftstärke verringern oder eine andere Schriftart auswählen.",
@@ -9307,15 +9287,15 @@
           "1c29734248": "Shell für neue Terminalbereiche",
           "9589abc009": "Standard-Shell",
           "5a5eac2f44": "Shell nicht gefunden: {{value0}}",
-          "143ca8e340": "Verlaufszeilen",
-          "8abcfcf8d3": "Worttrennzeichen",
-          "1be0263c55": "PowerShell-Version",
-          "82e19f00f0": "Terminalinteraktion",
-          "8c07bc4d7a": "Fokus folgt der Maus",
-          "8f3e7bc91f": "Beim Auswählen kopieren",
           "d54811df09": "TUI-Schreibzugriff auf die Zwischenablage erlauben (OSC 52)",
+          "1be0263c55": "PowerShell-Version",
+          "8c07bc4d7a": "Fokus folgt der Maus",
           "37389522c6": "GPU-Beschleunigung",
           "5aab473c7e": "Windows-Shell",
+          "143ca8e340": "Verlaufszeilen",
+          "82e19f00f0": "Terminalinteraktion",
+          "8f3e7bc91f": "Beim Auswählen kopieren",
+          "8abcfcf8d3": "Worttrennzeichen",
           "e9c84d0338": "Standard-Shell"
         },
         "TerminalSettingsPreview": {
@@ -9336,14 +9316,14 @@
           "match_dark_mode_description": "Terminal-Design und Trennlinienfarbe des dunklen Modus auch im hellen Modus verwenden.",
           "light_preview_description": "Zeigt das tatsächlich verwendete Erscheinungsbild des Terminals im hellen Modus.",
           "dark_preview_description": "Zeigt das tatsächlich verwendete Erscheinungsbild des Terminals im dunklen Modus.",
-          "3d91303d0d": "Helles Design",
-          "44a006ab99": "Dunkles Design",
+          "3ebb499929": "Vorschau des dunklen Modus",
           "43afde3df7": "Trennlinienfarbe im hellen Modus",
-          "3a05b51211": "Trennlinienfarbe im dunklen Modus",
+          "2a11e028ff": "Vorschau des hellen Modus",
           "a39d64fe4a": "Terminal-Designs",
           "2318e07c68": "Designmodus",
-          "2a11e028ff": "Vorschau des hellen Modus",
-          "3ebb499929": "Vorschau des dunklen Modus"
+          "3a05b51211": "Trennlinienfarbe im dunklen Modus",
+          "3d91303d0d": "Helles Design",
+          "44a006ab99": "Dunkles Design"
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI-Farbe Magenta",
@@ -9396,25 +9376,25 @@
           "color_overrides_light_description": "Einzelne Farben des hellen Terminal-Themes anpassen.",
           "reset_dark_color_overrides": "Farbanpassungen des dunklen Themes zurücksetzen",
           "reset_light_color_overrides": "Farbanpassungen des hellen Themes zurücksetzen",
-          "e80b782206": "Hintergrunddeckkraft",
-          "2d8a13cabd": "Horizontaler Innenabstand",
           "44c6f429e9": "Vertikaler Innenabstand",
-          "a649973dd3": "Mauszeiger beim Tippen ausblenden",
-          "c9d73aee44": "Farbanpassungen",
-          "e3e70efcec": "Cursor-Text",
-          "cd4ab89dc6": "Hintergrund der Auswahl",
+          "8a4b23b3c4": "Helles Blau",
+          "2e5ea3f11b": "Helles Weiß",
           "b1dce93161": "Vordergrund der Auswahl",
-          "6ec3252c1f": "Fetter Text",
+          "e3e70efcec": "Cursor-Text",
+          "a649973dd3": "Mauszeiger beim Tippen ausblenden",
+          "93e2bff3ed": "Helles Grün",
+          "c863ae6b57": "Helles Rot",
           "5bea0a1ca1": "Normale ANSI-Farben",
+          "db0a91c623": "Helles Cyan",
+          "c9d73aee44": "Farbanpassungen",
+          "6ec3252c1f": "Fetter Text",
+          "2b813ceecc": "Helles Magenta",
+          "0451b1e684": "Helles Gelb",
+          "cd4ab89dc6": "Hintergrund der Auswahl",
+          "e80b782206": "Hintergrunddeckkraft",
           "9881daf4f5": "Helle ANSI-Farben",
           "f5bda64f57": "Helles Schwarz",
-          "c863ae6b57": "Helles Rot",
-          "93e2bff3ed": "Helles Grün",
-          "0451b1e684": "Helles Gelb",
-          "8a4b23b3c4": "Helles Blau",
-          "2b813ceecc": "Helles Magenta",
-          "db0a91c623": "Helles Cyan",
-          "2e5ea3f11b": "Helles Weiß"
+          "2d8a13cabd": "Horizontaler Innenabstand"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Zurücksetzen"
@@ -9422,7 +9402,6 @@
         "VoicePane": {
           "6fa734ed95": "{{value0}} löschen",
           "68de13f72c": "Modell konnte nicht gelöscht werden.",
-          "1ba81c0ff0": "empfohlen",
           "cfde55c7b0": "Modell konnte nicht heruntergeladen werden.",
           "62d2a84d31": "OpenAI-API-Schlüssel konnte nicht entfernt werden",
           "37aba8bb63": "OpenAI-API-Schlüssel entfernt",
@@ -9430,9 +9409,6 @@
           "506df81ba6": "OpenAI-API-Schlüssel gespeichert",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Wird entpackt…",
-          "8f4d2a51d7": "offline",
-          "d504ab05f0": "Streaming",
-          "e24f7d43d2": "Ein Spracherkennungsmodell auswählen. Lokale Modelle funktionieren offline; Cloud-Modelle benötigen einen API-Schlüssel.",
           "174da92062": "Gedrückt halten",
           "118b3c2dee": "Umschalten",
           "ad5d036ecc": "Mikrofonberechtigung konnte nicht angefordert werden. Das Diktat wurde nicht aktiviert.",
@@ -9440,13 +9416,15 @@
           "1eac933202": "Die macOS-Einstellungen „Privacy & Security“ wurden geöffnet. Nach der Zugriffsfreigabe das Diktat erneut aktivieren.",
           "cd9fe37556": "Mikrofonberechtigung erteilt",
           "openAiKeyName": "OpenAI-Transkriptionsschlüssel",
-          "dictationShortcutDescription": "Mit {{shortcut}} Text in den jeweils fokussierten Bereich diktieren.",
           "dictationModeAuto": "Automatisch",
           "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken.",
+          "speechGpuLabel": "GPU verwenden",
+          "speechGpuDescription": "Sprache auf der Grafikkarte erkennen, wenn sie funktioniert, und auf der CPU, wenn sie versagt. Deaktivieren, wenn das Diktieren Ihren Computer einfrieren oder neu starten lässt.",
+          "updateToFasterVersion": "Auf die schnellere Version aktualisieren ({{value0}} MB)",
+          "2d9b81c687": "Modell auswählen",
           "6ffecf36fd": "Diktat aktivieren",
-          "342f309724": "Diktatmodus",
           "c5ea32143e": "Spracherkennungsmodell",
-          "2d9b81c687": "Modell auswählen"
+          "342f309724": "Diktatmodus"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} entfernen",
@@ -9460,8 +9438,8 @@
           "b07ef5a8b6": "Pfade, die aus dem primären Checkout in neu erstellten Worktrees bereitgestellt werden.",
           "d72ba8dc68": "{{value0}} Pfade",
           "9ea912d811": "1 Pfad",
-          "a995ebf5ab": "Gemeinsam genutzte Worktree-Pfade",
-          "9a7cd44772": "Pfad hinzufügen"
+          "9a7cd44772": "Pfad hinzufügen",
+          "a995ebf5ab": "Gemeinsam genutzte Worktree-Pfade"
         },
         "WslCliRegistration": {
           "c6f6f89d7c": "Abbrechen",
@@ -9563,12 +9541,12 @@
               },
               "0db9d0465f": "GLM Coding Plan"
             },
-            "be3a748ebb": "Claude-Konten",
             "5e2101f61f": "Kontospeicherort",
-            "54c541fc6e": "Codex-Konten",
-            "4518496456": "Aktives Codex-Konto",
             "f0e6678f99": "Sitzungs-Cookie für OpenCode Go",
             "8eef999193": "Arbeitsbereichs-ID für OpenCode Go",
+            "54c541fc6e": "Codex-Konten",
+            "4518496456": "Aktives Codex-Konto",
+            "be3a748ebb": "Claude-Konten",
             "9b6ce52c36": "MiniMax-Nutzung"
           }
         },
@@ -9823,26 +9801,26 @@
               "34f2b8c539": "Cursor-Nutzung"
             },
             "matchTerminal": "An Terminal anpassen",
-            "19aa904233": "App-Symbol",
             "37e6b58b0e": "Zoom der Benutzeroberfläche",
-            "aff6e6afdf": "IDE-Schriftart",
-            "4af9002a0c": "Von Git ignorierte Dateien anzeigen",
-            "fb2353b8dd": "App-Name in der Titelleiste",
-            "9bc701a4d1": "Schaltfläche „Aufgaben“ anzeigen",
-            "7f5d534f81": "Schaltfläche „Automatisierungen“ anzeigen",
-            "1b404ee6ad": "Schaltfläche „Orca Mobile“ anzeigen",
-            "ba1f9d39a6": "Antigravity-Nutzung",
-            "ca64c95969": "Grok-Nutzung",
-            "96e32c1118": "MiniMax-Nutzung",
             "931c53cd16": "Claude-Nutzung",
-            "40c10c4deb": "Codex-Nutzung",
+            "1b404ee6ad": "Schaltfläche „Orca Mobile“ anzeigen",
+            "183e6b8ef9": "ZCode-Nutzung",
+            "d408ece868": "Beim Schließen in den Infobereich minimieren",
             "585be839e9": "Gemini-Nutzung",
             "20e7d30150": "OpenCode Go-Nutzung",
-            "c29089716e": "Kimi-Nutzung",
-            "20b33a61c8": "Remote-Hosts",
+            "ca64c95969": "Grok-Nutzung",
+            "7f5d534f81": "Schaltfläche „Automatisierungen“ anzeigen",
+            "fb2353b8dd": "App-Name in der Titelleiste",
+            "4af9002a0c": "Von Git ignorierte Dateien anzeigen",
             "b8dc238d07": "Ressourcenverwaltung",
-            "183e6b8ef9": "ZCode-Nutzung",
-            "d408ece868": "Beim Schließen in den Infobereich minimieren"
+            "20b33a61c8": "Remote-Hosts",
+            "40c10c4deb": "Codex-Nutzung",
+            "19aa904233": "App-Symbol",
+            "9bc701a4d1": "Schaltfläche „Aufgaben“ anzeigen",
+            "c29089716e": "Kimi-Nutzung",
+            "96e32c1118": "MiniMax-Nutzung",
+            "aff6e6afdf": "IDE-Schriftart",
+            "ba1f9d39a6": "Antigravity-Nutzung"
           }
         },
         "auto": {
@@ -9963,12 +9941,12 @@
               "cleaned": "bereinigt",
               "restart": "Neustart"
             },
-            "1c2aff8f82": "Standardstartseite",
-            "5a70844e54": "Standardsuchmaschine",
-            "f6de9e25a0": "Standardzoom",
             "f0eb09ce09": "Link-Weiterleitung",
             "e2e32ba6da": "Localhost-Worktree-Beschriftungen",
-            "f1da035bcb": "Sitzung und Cookies"
+            "5a70844e54": "Standardsuchmaschine",
+            "f1da035bcb": "Sitzung und Cookies",
+            "f6de9e25a0": "Standardzoom",
+            "1c2aff8f82": "Standardstartseite"
           },
           "use": {
             "search": {
@@ -9996,8 +9974,8 @@
               "9d97446873": "Agent",
               "a2d489263e": "Skill",
               "a7e82445fa": "Den Browser Use-Skill installieren, damit Agenten den Browser von Orca bedienen können.",
-              "e72d500ca5": "Browser Use-Skill installieren",
-              "9e2bfa1405": "Browser-Cookies importieren"
+              "9e2bfa1405": "Browser-Cookies importieren",
+              "e72d500ca5": "Browser Use-Skill installieren"
             }
           }
         },
@@ -10094,9 +10072,9 @@
               "2270ccff3f": "Datenschutz",
               "a98aa11a9c": "Berechtigungen",
               "bc8ac95310": "macOS-Berechtigungen für Entwicklerwerkzeuge, die über das Terminal gestartet werden.",
-              "ad085fa291": "Entwicklerberechtigungen",
+              "70ffdc218d": "Bildschirmaufnahme und Bedienungshilfen",
               "16490ec4cd": "Mikrofon und Kamera",
-              "70ffdc218d": "Bildschirmaufnahme und Bedienungshilfen"
+              "ad085fa291": "Entwicklerberechtigungen"
             }
           }
         },
@@ -10257,8 +10235,8 @@
             "b2799ba622": "Millisekunden",
             "146728ac2c": "Verzögerung",
             "86f54575c7": "Automatisches Speichern",
-            "4469b6fa4e": "Speichern",
             "8ea61ad55c": "Wartezeit nach der letzten Bearbeitung, bevor Orca automatisch speichert.",
+            "4469b6fa4e": "Speichern",
             "c56cb6f1c2": "Netzwerk",
             "nodeDistMirror": "Spiegelserver",
             "nodeDistNodejs": "nodejs",
@@ -10278,6 +10256,11 @@
             "5a9df5566f": "Menü öffnen",
             "b8093e9a93": "Öffnen in",
             "a916662068": "Apps auswählen, die im Menü „Öffnen in“ eines Arbeitsbereichs verfügbar sind.",
+            "7e9b556873": "Überspringen",
+            "ca86dd6e27": "Dialog",
+            "9f8558233a": "Bestätigen",
+            "7edf4f69e2": "Automatisierung",
+            "84c67d0108": "Löschen",
             "df10666259": "Worktree",
             "93f6ec5e70": "Verzeichnis",
             "9bde064915": "Unterordner",
@@ -10310,36 +10293,31 @@
             "externalKeyword": "extern",
             "visibility": "Sichtbarkeit",
             "sidebar": "Seitenleiste",
-            "34cda90656": "Prompt-Cache-Timer",
+            "867dddea41": "angeheftet",
+            "5250cf0e48": "Anheften",
+            "afa37a34e1": "Schließen",
+            "running_terminal": "laufend",
+            "terminal": "Terminal",
+            "agent": "Agent",
+            "command": "Befehl",
+            "confirm": "Bestätigen",
+            "close": "Schließen",
+            "omp": "OMP",
             "d9168badd2": "Verzögerung beim automatischen Speichern",
-            "66395fb7ff": "Editor-Schriftfamilie",
-            "e2947b3723": "Zeilenumbruch im Editor",
-            "aa367d753d": "Unveränderte Bereiche einklappen",
-            "aa1c06eb2c": "Standard-Diff-Ansicht",
+            "34cda90656": "Prompt-Cache-Timer",
             "b8e1e1ac68": "Standardanzeige des Diff-Dateibaums",
-            "8ad175042b": "Rechtschreibprüfung für formatiertes Markdown",
-            "728a309ce1": "Markdown-Review-Notizen",
             "0e030ce4e3": "Arbeitsbereichsverzeichnis",
             "11003cbcbd": "Arbeitsbereiche verschachteln",
-            "da5c42780e": "Apps für „Öffnen in“",
+            "a361519c97": "Standardlaufzeit für Projekte",
+            "e2947b3723": "Zeilenumbruch im Editor",
+            "aa367d753d": "Unveränderte Bereiche einklappen",
             "b180c1041b": "Tab-Reihenfolge",
             "0504f69ba0": "Nach Updates suchen",
-            "a361519c97": "Standardlaufzeit für Projekte",
-            "running_terminal": "laufend",
-            "9f8558233a": "Bestätigen",
-            "confirm": "Bestätigen",
-            "agent": "Agent",
-            "84c67d0108": "Löschen",
-            "close": "Schließen",
-            "5250cf0e48": "Anheften",
-            "terminal": "Terminal",
-            "command": "Befehl",
-            "7e9b556873": "Überspringen",
-            "7edf4f69e2": "Automatisierung",
-            "867dddea41": "angeheftet",
-            "omp": "OMP",
-            "afa37a34e1": "Schließen",
-            "ca86dd6e27": "Dialog"
+            "728a309ce1": "Markdown-Review-Notizen",
+            "66395fb7ff": "Editor-Schriftfamilie",
+            "aa1c06eb2c": "Standard-Diff-Ansicht",
+            "8ad175042b": "Rechtschreibprüfung für formatiertes Markdown",
+            "da5c42780e": "Apps für „Öffnen in“"
           }
         },
         "git": {
@@ -10394,13 +10372,13 @@
             "issueKey": "Issue-Schlüssel",
             "uppercase": "Großbuchstaben",
             "lowercase": "Kleinbuchstaben",
-            "52d52b099d": "GitHub-API-Kontingent",
-            "b7562365cd": "GitLab-API-Kontingent",
-            "25eac7e904": "Branch-Präfix",
-            "f760fc929e": "Groß-/Kleinschreibung von Jira-Schlüsseln",
-            "410e821889": "Lokalen main-Branch aktuell halten",
             "85983bb4f9": "Gruppenreihenfolge in der Quellcodeverwaltung",
-            "1ad8060ddc": "Standardvergleichsbasis"
+            "1ad8060ddc": "Standardvergleichsbasis",
+            "b7562365cd": "GitLab-API-Kontingent",
+            "410e821889": "Lokalen main-Branch aktuell halten",
+            "f760fc929e": "Groß-/Kleinschreibung von Jira-Schlüsseln",
+            "52d52b099d": "GitHub-API-Kontingent",
+            "25eac7e904": "Branch-Präfix"
           }
         },
         "input": {
@@ -10452,13 +10430,13 @@
             "7166b9090c": "GitHub-Authentifizierung über die gh-CLI.",
             "760e2446e0": "Authentifizierung bei Bitbucket Cloud mit einem gespeicherten API-Token oder Umgebungsvariablen.",
             "af5ae87847": "Zugriffstoken",
-            "a17a94d0b0": "GitHub-Integration",
-            "cd74b2f587": "GitLab-Integration",
-            "9e238582e8": "Bitbucket-Integration",
-            "b3efe7ab71": "Integration für Azure DevOps",
-            "86a08aa60c": "Gitea-Integration",
             "d8906d60a9": "Jira-Integration",
-            "d905b3ecee": "Linear-Integration"
+            "9e238582e8": "Bitbucket-Integration",
+            "a17a94d0b0": "GitHub-Integration",
+            "86a08aa60c": "Gitea-Integration",
+            "cd74b2f587": "GitLab-Integration",
+            "d905b3ecee": "Linear-Integration",
+            "b3efe7ab71": "Integration für Azure DevOps"
           }
         },
         "jira": {
@@ -10519,10 +10497,10 @@
               "c5eca29310": "iOS-Simulator",
               "25159de808": "Mobilgeräte-Emulator",
               "9595354cff": "Unterstützung für Mobilgeräte-Emulatoren in Orca und für Coding-Agenten konfigurieren.",
-              "f8468700d1": "Mobilgeräte-Emulator",
-              "b8c9f903eb": "Standardgerät für den Emulator",
               "de556a0911": "Emulator-Verfügbarkeit",
-              "0d6e7dba38": "CLI-Steuerung durch Agenten"
+              "b8c9f903eb": "Standardgerät für den Emulator",
+              "0d6e7dba38": "CLI-Steuerung durch Agenten",
+              "f8468700d1": "Mobilgeräte-Emulator"
             }
           },
           "pane": {
@@ -10562,9 +10540,9 @@
               "4a0c826f3d": "Code",
               "3c1807a81a": "QR",
               "7fb728fb2b": "Ein Mobilgerät durch Scannen eines QR-Codes koppeln.",
-              "a068d70f7b": "Netzwerkschnittstelle",
+              "cb018bcc07": "Verbundene Geräte",
               "1dcb1d1a11": "Mobilgeräte koppeln",
-              "cb018bcc07": "Verbundene Geräte"
+              "a068d70f7b": "Netzwerkschnittstelle"
             }
           },
           "settings": {
@@ -10637,13 +10615,13 @@
             "remote": "entfernt",
             "ssh": "ssh",
             "mute": "Stummschalten",
+            "55ecae5b7e": "Testbenachrichtigung senden",
             "25f58f061f": "Benachrichtigungen aktivieren",
-            "db32fed5aa": "Agentenaufgabe abgeschlossen",
-            "209323590a": "Terminal-Signalton",
-            "8eeee85a4f": "Bei Fokus unterdrücken",
-            "8517a2dd51": "Benachrichtigungston",
             "fe11c91724": "Benachrichtigungslautstärke",
-            "55ecae5b7e": "Testbenachrichtigung senden"
+            "8517a2dd51": "Benachrichtigungston",
+            "209323590a": "Terminal-Signalton",
+            "db32fed5aa": "Agentenaufgabe abgeschlossen",
+            "8eeee85a4f": "Bei Fokus unterdrücken"
           }
         },
         "orchestration": {
@@ -10844,22 +10822,22 @@
             "distro": "Distribution",
             "agentRuntime": "Agentenlaufzeit",
             "skillRuntime": "Skill-Laufzeit",
+            "0fe07b9e90": "Projektsymbol",
             "810b9f4106": "Einrichtungsskript",
-            "1617bc353d": "Archivierungsskript",
-            "cedbe6c02c": "Zeitpunkt der Einrichtung",
+            "355868ac19": "Sparse-Checkout-Vorlagen",
+            "2e216fbad2": "Worktree-Speicherort",
+            "ea22e2187e": "Gemeinsam genutzte Worktree-Pfade",
             "aced2fc1be": "Benutzerdefinierter Befehl für GitHub-Issues",
+            "7a89e2dc09": "Projektlaufzeitumgebung",
             "b1b5a4139d": "MCP-Konfigurationen",
             "7f380f89ea": "Anzeigename",
-            "0fe07b9e90": "Projektsymbol",
-            "eefc3e51ef": "GitHub-Konto",
-            "f94afd4078": "Fork aktuell halten",
-            "7a89e2dc09": "Projektlaufzeitumgebung",
-            "bbbe994528": "Projekt entfernen",
-            "6259586017": "KI-Autor für Git",
             "88d466b2e3": "Standardbasis für Worktrees",
-            "2e216fbad2": "Worktree-Speicherort",
-            "355868ac19": "Sparse-Checkout-Vorlagen",
-            "ea22e2187e": "Gemeinsam genutzte Worktree-Pfade"
+            "1617bc353d": "Archivierungsskript",
+            "6259586017": "KI-Autor für Git",
+            "bbbe994528": "Projekt entfernen",
+            "cedbe6c02c": "Zeitpunkt der Einrichtung",
+            "eefc3e51ef": "GitHub-Konto",
+            "f94afd4078": "Fork aktuell halten"
           }
         },
         "runtime": {
@@ -10925,9 +10903,9 @@
             "d4bcd497c7": "entfernt",
             "74c6d90d78": "SSH-Hosts verwalten.",
             "53ae83cb55": "SSH-Verbindungen",
-            "004ef87a84": "SSH-Ziel hinzufügen",
             "893c8717f2": "Aus SSH-Konfiguration importieren",
-            "50416e3809": "Verbindung testen"
+            "50416e3809": "Verbindung testen",
+            "004ef87a84": "SSH-Ziel hinzufügen"
           }
         },
         "tasks": {
@@ -10974,8 +10952,8 @@
               "797fdfe4ca": "Auswählen",
               "zellij": "zellij",
               "grok": "grok",
-              "5639f17c59": "Beim Auswählen kopieren",
-              "eacb392fe3": "TUI-Schreibzugriff auf die Zwischenablage erlauben (OSC 52)"
+              "eacb392fe3": "TUI-Schreibzugriff auf die Zwischenablage erlauben (OSC 52)",
+              "5639f17c59": "Beim Auswählen kopieren"
             }
           },
           "search": {
@@ -11174,29 +11152,29 @@
             "ddd5efe113": "Shell",
             "3de504994c": "Shell und Argumente für neue lokale interaktive Terminal-Bereiche",
             "1733ccd3e9": "Terminal-Shell",
-            "6e795fc619": "Deckkraft inaktiver Bereiche",
-            "9ae234eae2": "Trennlinienstärke",
-            "1b00063795": "Vor dem Schließen laufender Terminals nachfragen",
-            "64f6b4fdf6": "Fokus folgt der Maus",
-            "8afdce471f": "Schriftgröße",
-            "651c993c32": "Schriftfamilie",
-            "7fabc609fa": "Schriftstärke",
-            "c1794a43d7": "Zeilenhöhe",
-            "e3dae5017c": "Schriftligaturen",
+            "10344a316c": "Worttrennzeichen",
             "b1061a2826": "GPU-Beschleunigung",
+            "8afdce471f": "Schriftgröße",
             "990137dab4": "Cursor-Form",
-            "317af36f37": "Cursor-Deckkraft",
+            "edd38f8bb8": "Verlaufszeilen",
+            "ee9665265e": "Dunkles Design",
             "9b41f4be64": "Hintergrunddeckkraft",
-            "cfdaed8dae": "Horizontaler Innenabstand",
-            "3fdccf0277": "Vertikaler Innenabstand",
+            "317af36f37": "Cursor-Deckkraft",
+            "e3dae5017c": "Schriftligaturen",
+            "c1794a43d7": "Zeilenhöhe",
+            "7fabc609fa": "Schriftstärke",
             "9d81f938fd": "Mauszeiger beim Tippen ausblenden",
             "a5e5d2bca5": "Farbanpassungen",
-            "edd38f8bb8": "Verlaufszeilen",
-            "10344a316c": "Worttrennzeichen",
+            "cfdaed8dae": "Horizontaler Innenabstand",
+            "6e795fc619": "Deckkraft inaktiver Bereiche",
             "bf8746544c": "Sitzungen verwalten",
-            "ee9665265e": "Dunkles Design",
+            "1b00063795": "Vor dem Schließen laufender Terminals nachfragen",
+            "9ae234eae2": "Trennlinienstärke",
             "88f3d1cec0": "Trennlinienfarbe im dunklen Modus",
             "e4d3288a81": "Helles Design",
+            "3fdccf0277": "Vertikaler Innenabstand",
+            "651c993c32": "Schriftfamilie",
+            "64f6b4fdf6": "Fokus folgt der Maus",
             "18a9f63aff": "Trennlinienfarbe im hellen Modus"
           },
           "windows": {
@@ -11223,8 +11201,8 @@
               "6cd20b9e64": "cmd",
               "7c7056940a": "Shell",
               "713c4a2f92": "Die Standard-Shell für neue Terminal-Bereiche unter Windows auswählen.",
-              "94792c10ac": "Standard-Shell",
-              "6efd8b2174": "PowerShell-Version"
+              "6efd8b2174": "PowerShell-Version",
+              "94792c10ac": "Standard-Shell"
             }
           }
         },
@@ -11263,13 +11241,16 @@
               "modelMemoryKeyword": "speicher",
               "fillerWordsDescription": "Entfernt „äh“, „ähm“ und ähnliche Laute aus diktiertem Text.",
               "fillerWordsKeyword": "füllwörter",
-              "ffaa3efe7c": "OpenAI-Transkription",
-              "a5fb30e4da": "Diktat aktivieren",
-              "d0c230c061": "Diktatmodus",
-              "9d83747eae": "Diktiersprache",
-              "c7a7eaa0da": "Füllwörter entfernen",
+              "vocabularyTitle": "Wortschatz",
+              "vocabularyDescription": "Namen und Code-Begriffe, die das Diktat auf deine Weise schreibt, für dich oder ein Repo.",
+              "vocabularyKeyword": "wörterbuch",
               "b3920972d4": "Sprachmodell entladen",
-              "7f5a2416a6": "Spracherkennungsmodell"
+              "7f5a2416a6": "Spracherkennungsmodell",
+              "9d83747eae": "Diktiersprache",
+              "a5fb30e4da": "Diktat aktivieren",
+              "ffaa3efe7c": "OpenAI-Transkription",
+              "c7a7eaa0da": "Füllwörter entfernen",
+              "d0c230c061": "Diktatmodus"
             }
           }
         },
@@ -11493,9 +11474,9 @@
           "modeLabel": "Fork-Synchronisierungsmodus",
           "ask": "Nachfragen",
           "off": "Aus",
-          "1b00dcc746": "Fork aktuell halten",
           "7a1ea2076d": "Sichere Automatik",
-          "c64463b5fc": "Jetzt synchronisieren"
+          "c64463b5fc": "Jetzt synchronisieren",
+          "1b00dcc746": "Fork aktuell halten"
         },
         "DefaultWindowsProjectRuntimeSetting": {
           "defaultRuntime": "Standard-Laufzeitumgebung für Projekte",
@@ -12286,6 +12267,7 @@
           "signOut": "Abmelden",
           "signInAgain": "Erneut anmelden",
           "signIn": "Bei Orca anmelden",
+          "title": "Orca-Konto",
           "description": "Arbeit sofort teilen und von überall über Orca Mobile auf den Desktop zugreifen.",
           "searchDescription": "Beim Konto für Artefakte und Orca Relay anmelden oder abmelden.",
           "benefitsTitle": "Im Konto enthalten",
@@ -12301,8 +12283,7 @@
           "keywordSignIn": "anmelden",
           "keywordSignOut": "abmelden",
           "keywordRelay": "Relay",
-          "keywordCloud": "Cloud",
-          "title": "Orca-Konto"
+          "keywordCloud": "Cloud"
         },
         "automations": {
           "showButtonDescription": "Die Verknüpfung zu Automatisierungen in der Seitenleiste anzeigen.",
@@ -12923,6 +12904,7 @@
           "lastSeen": "Zuletzt gesehen {{when}}",
           "retry": "Erneut versuchen",
           "pasteAccessLinkHelp": "Mit Orca koppeln, das bereits auf einem anderen Rechner läuft.",
+          "cloudVm": "Cloud-VM",
           "cloudVmHelp": "Wird für jeden Arbeitsbereich aus einem Umgebungsrezept erstellt.",
           "addDescriptionShort": "Den Zugriffslink aus „Diesen Computer freigeben“ auf dem anderen Rechner einfügen.",
           "installHostPlaceholder": "Einen SSH-Host ohne Orca auswählen",
@@ -12942,8 +12924,7 @@
           "settingUpInBackground": "Orca wird im Hintergrund auf {{name}} eingerichtet. Sobald die Einrichtung abgeschlossen ist, erscheint der Server in der Liste.",
           "setUpOnSshHost": "Orca auf einem SSH-Host einrichten",
           "setUp": "Einrichten",
-          "overYourSsh": "Über die SSH-Verbindung",
-          "cloudVm": "Cloud-VM"
+          "overYourSsh": "Über die SSH-Verbindung"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} entfernt",
@@ -13410,6 +13391,27 @@
           "shownPluginCount_one": "{{count}} passendes Plugin angezeigt, einschließlich dieses Plugins",
           "shownPluginCount_other": "{{count}} passende Plugins angezeigt, einschließlich dieses Plugins",
           "samePublisher": "Weitere unter {{value0}} aufgeführte Plugins"
+        },
+        "RepositorySourceControlAiSection": {
+          "112f3b934f": "KI für die Quellcodeverwaltung"
+        },
+        "keep": {
+          "local": {
+            "main": {
+              "up": {
+                "to": {
+                  "date": {
+                    "setting": {
+                      "f4c23aee76": "Lokalen main-Branch aktuell halten"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "BrowserUseEnableSwitch": {
+          "ce4d6f80d8": "Browser-Nutzung durch Agenten aktivieren"
         }
       },
       "right": {
@@ -16938,6 +16940,7 @@
           "noModel": "Kein Sprachmodell ausgewählt. Laden Sie eines unter Einstellungen > Spracheingabe herunter.",
           "disabled": "Spracheingabe ist deaktiviert. Aktivieren Sie sie unter Einstellungen > Spracheingabe.",
           "notReady": "Sprachmodell nicht bereit. Laden Sie es unter Einstellungen > Spracheingabe herunter.",
+          "modelNeedsUpdate": "Ihr Sprachmodell braucht ein Update, um weiter zu funktionieren. Aktualisieren Sie es unter Einstellungen > Spracheingabe auf die schnellere Version.",
           "unknownModel": "Das ausgewählte Modell ist nicht mehr verfügbar. Wählen Sie unter Einstellungen > Spracheingabe ein anderes aus.",
           "5d2c3e7ae3": "Keine Sprache erkannt.",
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
@@ -19236,6 +19239,11 @@
         "providerExitedRow": "{{agent}} wurde während dieser Antwort gestoppt. Die Unterhaltung kann fortgesetzt werden.",
         "providerExitedRejection": "{{agent}} wurde gestoppt, bevor diese Nachricht gesendet wurde.",
         "providerExitedAnswer": "{{agent}} wurde gestoppt, daher wurde die Antwort nicht gesendet. Zum Fortfahren eine Nachricht senden.",
+        "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
+        "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
+        "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+        "modelUnavailable": "{{agent}} konnte {{detail}} nicht verwenden. Ein anderes Modell auswählen und erneut senden.",
+        "selectedModel": "das ausgewählte Modell",
         "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
         "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
         "attachmentEmpty": "Ein Bild in dieser Nachricht ist leer, daher wurde die Nachricht nicht gesendet.",
@@ -19439,6 +19447,7 @@
         "orcaStopCanContinue": "Die Unterhaltung kann fortgesetzt werden.",
         "orcaStopUnnamedServer": "dem entfernten Server",
         "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+        "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
         "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
         "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
         "forkedFrom": "Abgezweigt von"
@@ -19734,6 +19743,8 @@
         "showAgent": "{{value0}} im Gespräch anzeigen"
       },
       "jumpToLatest": "Zur neuesten Nachricht springen",
+      "newRowsAnnouncement": "Während der Abwesenheit sind neue Nachrichten eingegangen",
+      "newRowsMarker": "Neu",
       "find": {
         "label": "Im Chat suchen",
         "noResults": "Keine Ergebnisse",
@@ -19919,7 +19930,8 @@
       "contextUsage": {
         "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
         "title": "Kontext",
-        "estimated": "Anhand der letzten Antwort geschätzt."
+        "estimated": "Anhand der letzten Antwort geschätzt.",
+        "deferredNote": "Bei Bedarf geladen. Nicht in der Nutzung enthalten."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Orca-Sitzungs-ID kopieren",
@@ -20570,8 +20582,8 @@
         "copyTrimsGutterDescription": "Den linken Rand vor der Agentenausgabe entfernen, damit kopierter Text nicht eingerückt ist. Entfernt wird nur die gemeinsame Einrückung aller ausgewählten Zeilen.",
         "copyOnSelectDescription": "In einem Terminal oder Chat ausgewählten Text automatisch in die Zwischenablage kopieren.",
         "scrollOnUserInputDescription": "Tippen oder Einfügen im hochgescrollten Zustand springt zur neuesten Ausgabe. Deaktiviere dies, um deine Position zu behalten.",
-        "4c690cdfc3": "Bei Eingabe nach unten scrollen",
-        "4ed43d5060": "Linken Rand beim Kopieren entfernen"
+        "4ed43d5060": "Linken Rand beim Kopieren entfernen",
+        "4c690cdfc3": "Bei Eingabe nach unten scrollen"
       },
       "terminal": {
         "clipboard": {
@@ -20602,6 +20614,9 @@
         "scrollToLatestOnSendTitle": "Beim Senden zur neuesten Nachricht scrollen",
         "scrollToLatestOnSendCopy": "Senden im hochgescrollten Zustand springt zur neuesten Nachricht und folgt der Antwort. Deaktiviere dies, um deine Position zu behalten.",
         "scrollToLatestOnSendSearchPosition": "Position",
+        "markNewMessagesTitle": "Neue Nachrichten bei der Rückkehr in einen Chat markieren",
+        "markNewMessagesCopy": "Bei der Rückkehr in einen Chat erscheint eine Neu-Linie über dem, was in deiner Abwesenheit eingegangen ist. Warst du bei der neuesten Nachricht, scrollt der Chat dorthin.",
+        "markNewMessagesSearchUnread": "ungelesen",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
@@ -20647,6 +20662,85 @@
         "fillerWords": {
           "description": "Entfernt Laute wie „äh“ und „ähm“ aus diktiertem Text, passend zur Diktiersprache.",
           "0134406785": "Füllwörter entfernen"
+        },
+        "sectionDescription": "Sprechen statt tippen, in jedem Bereich. Die Sprache wird auf diesem Computer erkannt, außer du wählst ein Cloud-Modell.",
+        "input": {
+          "title": "Eingabe",
+          "shortcut": "Tastenkürzel",
+          "shortcutDescription": "Startet das Diktieren im fokussierten Bereich.",
+          "changeShortcut": "Ändern"
+        },
+        "language": {
+          "title": "Sprache"
+        },
+        "cleanup": {
+          "title": "Bereinigung"
+        },
+        "advanced": {
+          "title": "Erweitert"
+        },
+        "setup": {
+          "downloadingDescription": "Du kannst diese Seite verlassen. Diktieren funktioniert, sobald der Download fertig ist.",
+          "title": "Diktieren einrichten",
+          "pickModel": "Sprechen statt tippen, in jedem Bereich. Lade unten ein Sprachmodell herunter; Modelle auf diesem Computer behalten deine Audiodaten hier.",
+          "microphoneMissingTitle": "{{microphone}} ist nicht verbunden",
+          "microphoneMissingDescription": "Diktieren nutzt das Standardmikrofon des Systems, bis es wieder da ist.",
+          "changeMicrophone": "Mikrofon ändern",
+          "onTitle": "Diktieren ist an",
+          "onLocal": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft auf diesem Computer.",
+          "onCloud": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft in der Cloud.",
+          "offTitle": "Diktieren ist aus",
+          "offDescription": "Schalte es ein, um mit {{shortcut}} in jedem Bereich zu diktieren.",
+          "savedMicrophone": "Dein Mikrofon"
+        },
+        "quality": {
+          "unsupported": "Unterstützt deine Sprache nicht",
+          "unmeasured": "Nicht gemessen",
+          "poor": "Schwach",
+          "fair": "Mäßig",
+          "good": "Gut",
+          "veryGood": "Sehr gut",
+          "excellent": "Hervorragend",
+          "characterErrorRate": "{{percent}} % Zeichenfehlerrate",
+          "wordErrorRate": "{{percent}} % Wortfehlerrate",
+          "librispeech": "Test: LibriSpeech (vorgelesene Sprache), {{clips}} Clips, gemessen am {{date}}.",
+          "fleurs": "Test: FLEURS (vorgelesene Sprache), {{clips}} Clips, gemessen am {{date}}.",
+          "bench": "Orcas Benchmark auf einem Mac mit Apple Silicon.",
+          "label": "Qualität: {{word}}"
+        },
+        "models": {
+          "retired": "Wird nicht mehr angeboten. Lösche es, um Speicherplatz freizugeben.",
+          "sendsToOpenAi": "Sendet deine Audiodaten an OpenAI.",
+          "delete": "Löschen",
+          "cancelDownload": "Download abbrechen",
+          "inUse": "In Verwendung",
+          "use": "Verwenden",
+          "setUpCloud": "Einrichten",
+          "download": "Herunterladen",
+          "cloud": "Cloud",
+          "description": "Die Qualität ist für {{language}} bewertet. Fahre über eine Bewertung, um den Test dahinter zu sehen.",
+          "where": "Wo Modelle laufen",
+          "local": "Auf diesem Computer",
+          "cloudDescription": "Cloud-Modelle senden deine Audiodaten an den Anbieter. Modelle auf diesem Computer behalten sie hier.",
+          "sendsToCompatible": "Sendet deine Audiodaten an den Dienst, den du eingerichtet hast."
+        },
+        "vocabulary": {
+          "title": "Wortschatz",
+          "description": "Namen und Code-Begriffe, die du auf deine Weise geschrieben haben willst. Gib an, wie das Modell sie falsch hört, wenn es sie immer wieder verwechselt.",
+          "repoScope": "Nur beim Diktieren in {{repo}}.",
+          "personalScope": "In jedem Repo.",
+          "scope": "Begriffe für",
+          "personal": "Persönlich · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} entfernen",
+          "term": "Wort oder Wendung",
+          "heardAs": "Gehört als (optional)",
+          "heardAsLabel": "Gehört als",
+          "add": "Hinzufügen",
+          "repoNameHint": "Repo-Namen als Hinweis verwenden",
+          "repoNameHintDescription": "Hilft, den Namen des Repos zu erkennen.",
+          "repoSaveFailed": "Die Begriffe des Repos konnten nicht gespeichert werden. Auf dem Host dieses Repos ist eventuell ein Orca-Update nötig."
         }
       },
       "repositoryHooks": {
@@ -21442,6 +21536,7 @@
       "cleared": "Suchdaten gelöscht.",
       "clearError": "Die Suchdaten konnten nicht gelöscht werden. Erneut versuchen.",
       "webUnsupported": "Die Sitzungssuche in der Orca-Desktop-App auf dem betreffenden Computer aktivieren.",
+      "title": "Suche in Agentensitzungen",
       "description": "Alles durchsuchen, was Agenten auf diesem Computer und auf gekoppelten Orca-Servern gesagt und getan haben.",
       "searchDescription": "Die Sitzungssuche für diesen Computer und gekoppelte Server aktivieren oder Suchdaten löschen.",
       "indexComputers": "Innerhalb von Sitzungen suchen",
@@ -21459,8 +21554,7 @@
       "openInSidebar": "In der Seitenleiste öffnen",
       "openInSidebarCopy": "Das eingeben, was in Erinnerung geblieben ist, oder einen Agenten bitten: „Finde die Sitzung, in der wir den Anmelde-Timeout behoben haben.“",
       "open": "Öffnen",
-      "enableOnAll": "Auf allen Computern aktivieren",
-      "title": "Suche in Agentensitzungen"
+      "enableOnAll": "Auf allen Computern aktivieren"
     },
     "dialog": {
       "select": "Auswählen",
@@ -22670,51 +22764,51 @@
       "terminalSplitDown": "Terminal nach unten teilen",
       "terminalSwitchInputSource": "Eingabequelle / Sprache wechseln (nativ)",
       "newAgentTab": "Neuen Tab für {{agent}} öffnen",
-      "1d1d2ec47b": "Zur Datei wechseln",
-      "e316152321": "Einstellungen öffnen",
-      "8a1982d598": "Neuladen erzwingen",
-      "1d2c86248c": "Arbeitsbereich löschen",
-      "1524825c2c": "Arbeitsbereichsübersicht ein-/ausblenden",
-      "82c1bf448c": "Agenten-Dashboard ein-/ausblenden",
-      "0feb1f0496": "Arbeitsbereich 1–9 auswählen",
-      "81bcb6ec24": "Aufgaben öffnen",
-      "5c1a9f83e0": "Plugins öffnen",
-      "196b416429": "Seitenleiste ein-/ausblenden",
-      "e0d7e6b665": "Rechte Seitenleiste ein-/ausblenden",
-      "da4e681113": "Suche anzeigen",
-      "44e8b7dcb5": "Quellcodeverwaltung anzeigen",
-      "e37b19864c": "Checks anzeigen",
-      "cb816639bd": "Ports anzeigen",
-      "437260810f": "Ruhende Arbeitsbereiche ein-/ausblenden",
-      "e67a41569d": "Schwebendes Terminal ein-/ausblenden",
-      "3e3a2d18d4": "Schwebendes Arbeitsbereichs-Panel maximieren",
-      "746ff0c872": "Schwebendes Arbeitsbereichs-Panel minimieren",
-      "f233164080": "Vergrößern",
-      "2b20f1f14a": "Verkleinern",
-      "bb3beaeef6": "Größe zurücksetzen",
-      "02dd0f77a0": "Im Worktree-Verlauf zurückgehen",
-      "57c4fb0edd": "Im Worktree-Verlauf vorwärtsgehen",
       "eca3c9fdd7": "Tab 1–9 auswählen",
-      "fbf2216baa": "Im Browser suchen",
-      "0fe8d02935": "Im Browser zurückgehen",
       "53ae577e44": "Im Browser vorwärtsgehen",
-      "92fad2c21f": "Browserverlauf anzeigen",
-      "67ce6cf5a0": "Browser-Seite neu laden",
-      "6bd12f3071": "Browser-Seite ohne Cache neu laden",
-      "2f2961bebf": "Browser-Adressleiste fokussieren",
-      "23350d5072": "Seitenelement erfassen",
+      "324e886c0f": "Zur vorherigen Änderung wechseln",
+      "196b416429": "Seitenleiste ein-/ausblenden",
+      "82c1bf448c": "Agenten-Dashboard ein-/ausblenden",
+      "9cb1023d40": "Review-Notiz hinzufügen",
+      "57c4fb0edd": "Im Worktree-Verlauf vorwärtsgehen",
+      "02dd0f77a0": "Im Worktree-Verlauf zurückgehen",
+      "bb3beaeef6": "Größe zurücksetzen",
+      "258e7f75ec": "Kontext kopieren",
+      "e0d7e6b665": "Rechte Seitenleiste ein-/ausblenden",
+      "1d2c86248c": "Arbeitsbereich löschen",
       "69b2b72c98": "Seitenelement mit Anmerkung versehen",
       "6a99c55b2d": "Datei speichern",
       "e25a3e5f9a": "Markdown-Vorschau anzeigen",
-      "2f207aa199": "Zeilenumbruch ein-/ausschalten",
-      "258e7f75ec": "Kontext kopieren",
-      "324e886c0f": "Zur vorherigen Änderung wechseln",
+      "92fad2c21f": "Browserverlauf anzeigen",
       "7055c70bdb": "Zur nächsten Änderung wechseln",
-      "9cb1023d40": "Review-Notiz hinzufügen",
-      "e9da9f872a": "Review-Notizen an Agenten senden",
-      "3acf4e9eb1": "Einstellungen durchsuchen",
-      "128cce6e6d": "Titel festlegen…",
+      "e37b19864c": "Checks anzeigen",
+      "6bd12f3071": "Browser-Seite ohne Cache neu laden",
       "8788e3be3a": "Untergeordnete Arbeitsbereiche ein-/ausblenden",
+      "44e8b7dcb5": "Quellcodeverwaltung anzeigen",
+      "2f2961bebf": "Browser-Adressleiste fokussieren",
+      "cb816639bd": "Ports anzeigen",
+      "0fe8d02935": "Im Browser zurückgehen",
+      "2f207aa199": "Zeilenumbruch ein-/ausschalten",
+      "e316152321": "Einstellungen öffnen",
+      "8a1982d598": "Neuladen erzwingen",
+      "81bcb6ec24": "Aufgaben öffnen",
+      "67ce6cf5a0": "Browser-Seite neu laden",
+      "23350d5072": "Seitenelement erfassen",
+      "1d1d2ec47b": "Zur Datei wechseln",
+      "fbf2216baa": "Im Browser suchen",
+      "e67a41569d": "Schwebendes Terminal ein-/ausblenden",
+      "3e3a2d18d4": "Schwebendes Arbeitsbereichs-Panel maximieren",
+      "746ff0c872": "Schwebendes Arbeitsbereichs-Panel minimieren",
+      "437260810f": "Ruhende Arbeitsbereiche ein-/ausblenden",
+      "3acf4e9eb1": "Einstellungen durchsuchen",
+      "5c1a9f83e0": "Plugins öffnen",
+      "da4e681113": "Suche anzeigen",
+      "f233164080": "Vergrößern",
+      "0feb1f0496": "Arbeitsbereich 1–9 auswählen",
+      "2b20f1f14a": "Verkleinern",
+      "128cce6e6d": "Titel festlegen…",
+      "e9da9f872a": "Review-Notizen an Agenten senden",
+      "1524825c2c": "Arbeitsbereichsübersicht ein-/ausblenden",
       "d286d1ab85": "Bereichstitel leeren"
     },
     "group": {
@@ -23559,5 +23653,31 @@
   },
   "checks": {
     "gitlabAllowedFailure": "Fehlschlag erlaubt"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Sprachmodell aktualisieren",
+    "updateDescription": "Die Diktierfunktion läuft jetzt mit einer schnelleren Engine. {{model}} muss einmalig heruntergeladen werden ({{size}} MB), bevor Sie wieder diktieren können.",
+    "update": "Aktualisieren",
+    "replacedTitle": "Ihr Sprachmodell wurde ersetzt",
+    "replacedDescription": "{{old}} läuft nicht mit der neuen Spracherkennung. {{model}} ersetzt es ({{size}} MB).",
+    "downloadReplacement": "{{model}} herunterladen",
+    "later": "Später",
+    "dismiss": "Schließen",
+    "updatingTitle": "{{model}} wird aktualisiert",
+    "downloadingTitle": "{{model}} wird heruntergeladen",
+    "downloadingDescription": "Sie können weiterarbeiten. Die Diktierfunktion ist wieder da, sobald dies abgeschlossen ist.",
+    "progress": "{{done}} von {{total}} MB",
+    "cancel": "Abbrechen",
+    "doneTitle": "Diktieren ist bereit",
+    "doneDescription": "{{model}} ist aktualisiert. Die alten Dateien wurden entfernt.",
+    "doneRetiredDescription": "{{model}} ist eingerichtet. Die alten Dateien von {{old}} sind noch auf dem Datenträger.",
+    "keep": "Behalten",
+    "deleteOld": "Altes Modell löschen",
+    "deleteFailed": "{{model}} konnte nicht gelöscht werden.",
+    "updateFailedTitle": "{{model}} konnte nicht aktualisiert werden",
+    "downloadFailedTitle": "{{model}} konnte nicht heruntergeladen werden",
+    "failedAtDescription": "Der Download wurde bei {{mb}} MB unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "failedDescription": "Der Download wurde unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "tryAgain": "Erneut versuchen"
   }
 }

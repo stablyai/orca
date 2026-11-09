@@ -18,6 +18,7 @@ import { attachRemoteDispatchAttachmentCreate } from './federation/remote-dispat
 import { attachRemoteDispatchAttachmentRelease } from './federation/remote-dispatch-attachment-release'
 import { attachRemoteDispatchAttachmentStop } from './federation/remote-dispatch-attachment-stop'
 import { attachRemoteQuestionStore } from './federation/remote-question-store'
+import { attachPeerMailStore } from './federation/peer-mail-store'
 import { attachLegacyAskOperation } from './legacy/legacy-ask-operation'
 import { attachLegacyCompatibilityCandidates } from './legacy/legacy-compatibility-candidates'
 import { attachLegacyCompatibilityPrincipals } from './legacy/legacy-compatibility-principals'
@@ -122,6 +123,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachFederationRelayAck(ctor)
   attachFederationRelayImport(ctor)
   attachRemoteQuestionStore(ctor)
+  attachPeerMailStore(ctor)
   attachFederationRelayItem(ctor)
   attachWorkerTerminalResourceStore(ctor)
   attachWorkerTerminalTransfer(ctor)

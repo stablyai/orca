@@ -73,7 +73,15 @@ function noticeLineText(
   // Only reword text fully described by its fact; other host text stays as written.
   const context = { agentName: names.agentName }
   const surface =
-    failure?.kind === 'savedConversationMissing' || failure?.kind === 'pluginInputRequired'
+    failure &&
+    [
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (candidate) => notice.text === agentSessionFailureSentence(failure, candidate, context)
         )
@@ -157,17 +165,21 @@ export function MobileNativeChatNoticeRow({
     case 'settled-permission': {
       const agent = names.agentName ?? look.agent
       const summary =
-        look.decision === 'denied'
-          ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
+        look.decision === 'approved'
+          ? t('chat.notice.safetyReviewApproved', '{{agent}} approved this action. View details.', {
               agent
             })
-          : t(
-              'chat.notice.safetyReview',
-              '{{agent}} reported a safety review warning. View details.',
-              {
+          : look.decision === 'denied'
+            ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
                 agent
-              }
-            )
+              })
+            : t(
+                'chat.notice.safetyReview',
+                '{{agent}} reported a safety review warning. View details.',
+                {
+                  agent
+                }
+              )
       return (
         <View>
           <MobileNativeChatNoticeDisclosure

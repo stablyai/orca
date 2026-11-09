@@ -534,13 +534,46 @@
       "meterOnPhone": "Recording, {{duration}}, on this phone",
       "meterOn": "Recording, {{duration}}, on {{computer}}",
       "meterOnComputer": "Recording, {{duration}}, on the computer",
-      "meter": "Recording, {{duration}}"
+      "meter": "Recording, {{duration}}",
+      "discard": "Discard recording",
+      "retry": "Retry dictation",
+      "retryShort": "Retry"
     },
     "status": {
       "finishingOn": "Finishing on {{computer}}",
       "finishingOnComputer": "Finishing on the computer",
       "movedTo": "Moved to {{computer}}",
       "movedToComputer": "Moved to the computer"
+    },
+    "failure": {
+      "recordingKept": "Recording kept",
+      "connectionLost": "Connection lost",
+      "connectionSlow": "Connection too slow",
+      "phoneStopped": "Stopped on this phone",
+      "stopped": "Dictation stopped"
+    },
+    "announce": {
+      "typedInto": "Typed into {{target}}",
+      "insertedIn": "Inserted in {{target}}",
+      "listeningOnPhone": "Listening. Transcribing on this phone.",
+      "listeningOn": "Listening. Transcribing on {{computer}}.",
+      "listeningOnComputer": "Listening. Transcribing on the computer.",
+      "finishing": "Finishing.",
+      "inserted": "Inserted.",
+      "cancelled": "Dictation cancelled.",
+      "movedTo": "This phone stopped transcribing. Continuing on {{computer}}.",
+      "movedToComputer": "This phone stopped transcribing. Continuing on the computer.",
+      "stoppedKept": "Dictation stopped. {{reason}}. Your recording is kept.",
+      "stillListening": "Still listening."
+    },
+    "pill": {
+      "open": "Open",
+      "listening": "Listening",
+      "starting": "Starting",
+      "finishing": "Finishing",
+      "stopped": "Dictation stopped",
+      "label": "Dictation to {{target}}, {{duration}}",
+      "hint": "Double-tap to go back"
     }
   },
   "home": {
@@ -1456,6 +1489,10 @@
     },
     "offlineAsOfTime": {
       "yesterday": "yesterday, {{time}}"
+    },
+    "smartRailRow": {
+      "title": "Smart rail",
+      "subtitle": "Shows keys for what your agent is doing"
     }
   },
   "pullRequest": {
@@ -2615,6 +2652,10 @@
       "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
       "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
       "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
+      "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+      "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
+      "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+      "selectedModel": "the selected model",
       "providerRejected": "{{agent}} didn't accept this message.",
       "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
       "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
@@ -2860,6 +2901,25 @@
     },
     "usePrTextAction": {
       "updateFailed": "Failed to update pull request."
+    },
+    "smartKeys": {
+      "always": "Always",
+      "answer": "Answer",
+      "background": "Background",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "edit": "Edit",
+      "history": "History",
+      "keyLabel": "{{word}}, sends {{combo}}",
+      "mode": "Mode",
+      "no": "No",
+      "queue": "Queue",
+      "reject": "Reject",
+      "rewind": "Rewind",
+      "sendNow": "Send now",
+      "skip": "Skip",
+      "stop": "Stop",
+      "yes": "Yes"
     }
   },
   "chat": {
@@ -3054,6 +3114,7 @@
       "contextCleared": "Context cleared",
       "plan": "Plan",
       "permissionDenied": "{{agent}} denied permission. View details.",
+      "safetyReviewApproved": "{{agent}} approved this action. View details.",
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
       "modelFallback": "Claude switched models: {{from}} → {{to}}.",
@@ -3313,6 +3374,7 @@
       "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} is offline · as of {{time}}",
       "reconnecting": "{{hostName}} is reconnecting…",
       "stopped": "{{hostName}} is stopped. Start it on your computer.",
       "server": "The server",

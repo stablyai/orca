@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser/browser-use-setup-state'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,

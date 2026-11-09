@@ -21,7 +21,7 @@ import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agen
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store/index'
-import { resolveExecutionHostAgentStartupShell } from '@/lib/execution-host-facts'
+import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchFact,
@@ -29,7 +29,7 @@ import {
 } from './folder-workspace-agent-startup'
 
 import { translate } from '@/i18n/i18n'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
 
 export async function submitFolderWorkspaceCreate({

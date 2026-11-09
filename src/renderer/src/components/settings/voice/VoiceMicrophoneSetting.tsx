@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { VoiceSettings } from '../../../../../shared/speech-types'
 import { Button } from '../../ui/button'
@@ -6,15 +6,14 @@ import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import {
   buildVoiceMicrophoneSelectOptions,
-  listVoiceMicrophoneDevices,
-  microphoneDeviceIdFromSelectValue,
-  type VoiceMicrophoneDevice
+  microphoneDeviceIdFromSelectValue
 } from '@/components/dictation/microphone-devices'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { useVoiceMicrophoneDevices } from './use-voice-microphone-devices'
 
 type VoiceMicrophoneSettingProps = {
   voiceSettings: VoiceSettings
@@ -62,66 +61,17 @@ function microphoneAccessErrorMessage(error: unknown): string {
       )
 }
 
-function sameDeviceList(
-  a: readonly VoiceMicrophoneDevice[],
-  b: readonly VoiceMicrophoneDevice[]
-): boolean {
-  return (
-    a.length === b.length &&
-    a.every((device, index) => {
-      const other = b[index]
-      return device.deviceId === other?.deviceId && device.label === other.label
-    })
-  )
-}
-
 export function VoiceMicrophoneSetting({
   voiceSettings,
   onUpdateVoiceSettings
 }: VoiceMicrophoneSettingProps): React.JSX.Element {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
-  const [devices, setDevices] = useState<VoiceMicrophoneDevice[]>([])
-  const [devicesKnown, setDevicesKnown] = useState(false)
+  // Rescan when dictation enables because permission and real device labels may arrive with that toggle.
+  const { devices, devicesKnown, refreshDevices } = useVoiceMicrophoneDevices(voiceSettings.enabled)
   const [accessPending, setAccessPending] = useState(false)
   const [accessError, setAccessError] = useState<string | null>(null)
   const mountedRef = useMountedRef()
-  // Bluetooth emits repeated devicechange events; reject stale enumeration results.
-  const refreshGenerationRef = useRef(0)
-
-  const refreshDevices = useCallback(async (): Promise<void> => {
-    const generation = refreshGenerationRef.current + 1
-    refreshGenerationRef.current = generation
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
-      return
-    }
-    let next: VoiceMicrophoneDevice[] = []
-    try {
-      next = listVoiceMicrophoneDevices(await navigator.mediaDevices.enumerateDevices())
-    } catch {
-      next = []
-    }
-    if (!mountedRef.current || refreshGenerationRef.current !== generation) {
-      return
-    }
-    setDevicesKnown(next.length > 0)
-    setDevices((current) => (sameDeviceList(current, next) ? current : next))
-  }, [mountedRef])
-
-  // Rescan when dictation enables because permission and real device labels may arrive with that toggle.
-  useEffect(() => {
-    void refreshDevices()
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.addEventListener) {
-      return
-    }
-    const handleDeviceChange = (): void => {
-      void refreshDevices()
-    }
-    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange)
-    return () => {
-      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange)
-    }
-  }, [refreshDevices, voiceSettings.enabled])
 
   // A generic stream grants discovery even when the saved device is stale.
   const openStreamAndRefreshDevices = useCallback(async (): Promise<void> => {

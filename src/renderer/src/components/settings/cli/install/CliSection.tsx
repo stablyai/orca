@@ -4,7 +4,7 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill

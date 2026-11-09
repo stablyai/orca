@@ -68,8 +68,9 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('lets concurrent agent-complete notifications win over terminal bell notifications', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('../../notifications/use-notification-dispatch')
@@ -127,8 +128,9 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('keeps an in-flight generic completion when desktop completion banners are enabled', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 
@@ -198,8 +200,9 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('restores a suppressed terminal bell when disabling pending agent completion', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)
 

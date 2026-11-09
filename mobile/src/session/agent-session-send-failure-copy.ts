@@ -1,3 +1,4 @@
+import { AGENT_SESSION_FAILURE_COPY } from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues
@@ -51,6 +52,26 @@ export const SEND_FAILURE_COPY = {
     translate(
       'session.failure.modelUnavailableUpdate',
       "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
+      values
+    ),
+  selectedModel: (values) =>
+    translate('session.failure.selectedModel', AGENT_SESSION_FAILURE_COPY.selectedModel, values),
+  providerUnavailable: (values) =>
+    translate(
+      'session.failure.providerUnavailable',
+      AGENT_SESSION_FAILURE_COPY.providerUnavailable,
+      values
+    ),
+  providerSafetyStopped: (values) =>
+    translate(
+      'session.failure.providerSafetyStopped',
+      AGENT_SESSION_FAILURE_COPY.providerSafetyStopped,
+      values
+    ),
+  providerResponseFailed: (values) =>
+    translate(
+      'session.failure.providerResponseFailed',
+      AGENT_SESSION_FAILURE_COPY.providerResponseFailed,
       values
     ),
   providerRejected: (values) =>

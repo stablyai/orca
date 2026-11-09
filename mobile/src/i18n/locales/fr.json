@@ -304,6 +304,7 @@
       "plan": "Plan",
       "stoppedManually": "Arrêté manuellement",
       "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
+      "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
       "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
       "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
       "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}.",
@@ -637,6 +638,7 @@
       "fullCopySaveUpdate": "La copie intégrale et l’enregistrement de cette pièce jointe seront disponibles dans une mise à jour du téléphone."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} est hors ligne · état à {{time}}",
       "reconnecting": "{{hostName}} se reconnecte…",
       "stopped": "{{hostName}} est arrêté. Démarrez-le sur votre ordinateur.",
       "server": "Le serveur",
@@ -1358,13 +1360,46 @@
       "durationSeconds_many": "{{count}} secondes",
       "durationMinutes_one": "{{count}} minute",
       "durationMinutes_other": "{{count}} minutes",
-      "durationMinutes_many": "{{count}} minutes"
+      "durationMinutes_many": "{{count}} minutes",
+      "discard": "Supprimer l’enregistrement",
+      "retry": "Relancer la dictée",
+      "retryShort": "Réessayer"
     },
     "status": {
       "finishingOn": "Finalisation sur {{computer}}",
       "finishingOnComputer": "Finalisation sur l’ordinateur",
       "movedTo": "Passé sur {{computer}}",
       "movedToComputer": "Passé sur l’ordinateur"
+    },
+    "failure": {
+      "connectionLost": "Connexion perdue",
+      "connectionSlow": "Connexion trop lente",
+      "phoneStopped": "Arrêté sur ce téléphone",
+      "stopped": "Dictée arrêtée",
+      "recordingKept": "Enregistrement conservé"
+    },
+    "announce": {
+      "typedInto": "Saisi dans {{target}}",
+      "insertedIn": "Inséré dans {{target}}",
+      "listeningOnPhone": "Écoute. Transcription sur ce téléphone.",
+      "listeningOn": "Écoute. Transcription sur {{computer}}.",
+      "listeningOnComputer": "Écoute. Transcription sur l’ordinateur.",
+      "finishing": "Finalisation.",
+      "inserted": "Inséré.",
+      "cancelled": "Dictée annulée.",
+      "movedTo": "Ce téléphone a arrêté de transcrire. Suite sur {{computer}}.",
+      "movedToComputer": "Ce téléphone a arrêté de transcrire. Suite sur l’ordinateur.",
+      "stoppedKept": "Dictée arrêtée. {{reason}}. Votre enregistrement est conservé.",
+      "stillListening": "Toujours à l’écoute."
+    },
+    "pill": {
+      "open": "Ouvrir",
+      "listening": "Écoute",
+      "starting": "Démarrage",
+      "finishing": "Finalisation",
+      "stopped": "Dictée arrêtée",
+      "label": "Dictée vers {{target}}, {{duration}}",
+      "hint": "Touchez deux fois pour revenir"
     }
   },
   "files": {
@@ -2197,6 +2232,10 @@
       "providerExitedRejection": "{{agent}} s'est arrêté avant l'envoi de ce message.",
       "providerExitedRow": "{{agent}} s'est arrêté pendant que cette réponse était en cours. Vous pouvez continuer dans cette conversation.",
       "providerRateLimited": "{{agent}} est limité en débit et réessaie.",
+      "providerUnavailable": "{{agent}} n’a pas pu répondre car le service est occupé. Choisissez un autre modèle ou patientez un peu, puis renvoyez le message.",
+      "providerSafetyStopped": "{{agent}} a arrêté cette réponse après un contrôle de sécurité. Vérifiez votre demande et renvoyez-la.",
+      "providerResponseFailed": "{{agent}} n’a pas pu terminer cette réponse. Ouvrez les détails pour en savoir plus.",
+      "selectedModel": "le modèle sélectionné",
       "providerRejected": "{{agent}} n'a pas accepté ce message.",
       "providerRejectedQuoted": "{{agent}} n'a pas accepté ce message : {{detail}}.",
       "providerRetryLastError": "Dernière erreur : {{detail}}.",
