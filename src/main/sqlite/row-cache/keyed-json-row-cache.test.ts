@@ -187,7 +187,12 @@ describe('keyed JSON row cache', () => {
        process.kill(process.pid, 'SIGKILL')`,
       path
     ])
-    expect(crashed.signal).toBe('SIGKILL')
+    // Windows terminates the child with an exit code instead of reporting a signal.
+    if (process.platform === 'win32') {
+      expect(crashed.status).not.toBe(0)
+    } else {
+      expect(crashed.signal).toBe('SIGKILL')
+    }
     expect(existsSync(`${path}-journal`)).toBe(true)
 
     expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual(['1'])

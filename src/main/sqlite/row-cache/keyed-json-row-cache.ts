@@ -122,7 +122,11 @@ export class KeyedJsonRowCache {
     this.closeDatabase()
   }
 
-  /** One read-only snapshot: another connection's write lock cannot block it. */
+  /**
+   * One read-only snapshot: another connection's write lock cannot block it. After a crash
+   * mid-save, SQLite needs a writable connection to roll back or recover; that one retry
+   * replays at most the unfinished transaction, and only the next startup pays it.
+   */
   private readSnapshot(
     busyTimeoutMs: number,
     readonly = true
