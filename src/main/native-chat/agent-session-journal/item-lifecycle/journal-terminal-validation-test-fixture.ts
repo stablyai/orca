@@ -2,7 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect } from 'vitest'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import {
+  agentSessionJournalProviderHandle,
+  codexProviderHandle
+} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
@@ -33,7 +36,16 @@ export function createFixture() {
   async function saveOldItems(inputs: { itemId: string; revision?: number; body: unknown }[]) {
     const epoch = 'saved-approval'
     const rows: JournalRow[] = [
-      { v: 3, kind: 'epoch', epoch, seq: 1, ts: 900, fence: 7, reason: 'session_created' }
+      {
+        v: 3,
+        kind: 'epoch',
+        epoch,
+        seq: 1,
+        ts: 900,
+        fence: 7,
+        reason: 'session_created',
+        providerHandle: agentSessionJournalProviderHandle(savedIdentity.providerHandle)
+      }
     ]
     for (const [index, input] of inputs.entries()) {
       rows.push({

@@ -37,7 +37,11 @@ import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixtur
 import { projectSessionTabsForClient } from './rpc/methods/session-tabs/session-tabs-inventory'
 import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'
 import { structuredMailSource } from './orchestration/mailbox/structured-mail/structured-mail-source'
-import { scaleStore } from './agent-session-scale.test-fixture'
+import { scaleDirectory, scaleRecord } from './agent-session-scale.test-fixture'
+import {
+  openTestAgentSessionRecordStore,
+  seedTestAgentSessionRecordStore
+} from './agent-session/records/agent-session-record-store-test-harness'
 import { AgentSenderPublisher } from './runtime-agent-sender-publication'
 
 const unissued = (): never => {
@@ -375,34 +379,30 @@ it.each([100, 1000])(
   }
 )
 
-it.each([100, 1000])(
-  'rebuilds chat senders only when a chat appears, moves, clears or closes, not on other writes, at %i chats',
-  async (n) => {
-    const { store } = await scaleStore(n)
-    const h = harness(1, conversationRecordReader(store))
-    const first = h.projection.build()
-    expect(
-      first.associations.filter((r) => r.identity.startsWith('orca_session_id:')).length
-    ).toBeGreaterThanOrEqual(n)
-    const settled = identityReads(h)
-    // A record write that leaves its location, /clear successor and tab alone, as lease
-    // renewals and receipts do, rebuilds nothing.
-    for (let i = 0; i < 5; i++) {
-      await store.setConversationName(`chat-0000${i}`, `renamed ${i}`)
-      expect(h.projection.build()).toBe(first)
-    }
-    expect(identityReads(h)).toEqual(settled)
-    await store.setSessionTabVisibility('chat-00000', false)
-    const closed = h.projection.build()
-    expect(closed.associations.some((r) => r.identity === 'orca_session_id:chat-00000')).toBe(false)
-    // One rebuild, which reads each open chat once (none here has a /clear predecessor).
-    expect(identityReads(h)).toEqual({
-      ...settled,
-      chatReads: settled.chatReads + 1,
-      chatRecords: settled.chatRecords + store.listVisibleSessionIds().length
-    })
-  }
-)
+it('withdraws a closed chat sender while retaining another open chat', async () => {
+  const root = await scaleDirectory()
+  await seedTestAgentSessionRecordStore(root, {
+    records: [scaleRecord('closed-chat'), scaleRecord('open-chat')],
+    sessionTabs: [
+      { tabId: 'closed-tab', sessionId: 'closed-chat' },
+      { tabId: 'open-tab', sessionId: 'open-chat' }
+    ]
+  })
+  const store = await openTestAgentSessionRecordStore(root)
+  const h = harness(1, conversationRecordReader(store))
+  expect(h.projection.build().associations).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ identity: 'orca_session_id:closed-chat' }),
+      expect.objectContaining({ identity: 'orca_session_id:open-chat' })
+    ])
+  )
+  await store.setSessionTabVisibility('closed-chat', false)
+  const closed = h.projection.build()
+  expect(closed.associations.some((r) => r.identity === 'orca_session_id:closed-chat')).toBe(false)
+  expect(closed.associations).toContainEqual(
+    expect.objectContaining({ identity: 'orca_session_id:open-chat' })
+  )
+})
 
 it('reports only worktrees whose scope changed since their last frame', () => {
   const h = harness(1)

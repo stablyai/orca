@@ -16,7 +16,10 @@ import {
   updateTestJournalRowJson
 } from '../store-lifecycle/journal-host-database-test-support'
 import { seedTestJournalHistoricalRows } from '../replay/journal-historical-inputs.test-support'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import {
+  agentSessionJournalProviderHandle,
+  claudeProviderHandle
+} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalRowContextUsageTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -90,7 +93,16 @@ export function registerJournalRowContextUsageTests(): void {
       const db = openTestJournalHostDatabase(root).db
       const epoch = 'saved-context'
       seedTestJournalHistoricalRows(db, IDENTITY, [
-        { v: 3, kind: 'epoch', epoch, seq: 1, ts: 1_000, fence: 1, reason: 'session_created' },
+        {
+          v: 3,
+          kind: 'epoch',
+          epoch,
+          seq: 1,
+          ts: 1_000,
+          fence: 1,
+          reason: 'session_created',
+          providerHandle: agentSessionJournalProviderHandle(IDENTITY.providerHandle)
+        },
         {
           v: 3,
           kind: 'item',
