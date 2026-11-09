@@ -114,4 +114,31 @@ export function registerHomeRecordScenarios(harness: AutoReleaseScenarioHarness)
     ).resolves.toMatchObject({ ok: true, result: { state: 'stopped' } })
     expect(harness.workerDb().getRemoteDispatchAttachment(dispatchId)?.state).toBe('stopped')
   })
+
+  it('records a stop the server could not settle as unknown, so it can be asked again', async () => {
+    const dispatchId = await harness.startRemoteWorker()
+    const call = harness.homeRuntime().callOrchestrationWorkerServer.bind(harness.homeRuntime())
+    const pending = vi
+      .spyOn(harness.homeRuntime(), 'callOrchestrationWorkerServer')
+      .mockImplementation((environmentId, method, ...rest) =>
+        method === 'orchestration.federationStop'
+          ? Promise.reject(
+              new OrchestrationError('operation_unknown', 'The stop is still pending.')
+            )
+          : call(environmentId, method, ...rest)
+      )
+
+    await expect(
+      fromHome('orchestration.workerStop', { dispatch: dispatchId }, 'stop_pending')
+    ).resolves.toMatchObject({ ok: true, result: { state: 'stop_unknown' } })
+    expect(harness.homeDb().getWorkerDispatch(dispatchId)).toMatchObject({
+      state: 'stop_unknown',
+      stage: 'stop_outcome_unknown'
+    })
+    pending.mockRestore()
+
+    await expect(
+      fromHome('orchestration.workerStop', { dispatch: dispatchId }, 'stop_after_pending')
+    ).resolves.toMatchObject({ ok: true, result: { state: 'stopped' } })
+  })
 }

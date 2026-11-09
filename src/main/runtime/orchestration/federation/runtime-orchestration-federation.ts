@@ -217,6 +217,7 @@ export class RuntimeOrchestrationFederation {
       return
     }
     const runtime = this.runtime
+    const generation = this.relayGeneration
     void resendOwedFederatedStop(
       {
         getOrchestrationDb: () => runtime.getOrchestrationDb(),
@@ -225,7 +226,8 @@ export class RuntimeOrchestrationFederation {
         callOrchestrationWorkerServer: (...args) => runtime.callOrchestrationWorkerServer(...args),
         syncOrchestrationFederatedDispatchAfterCurrent: (id) => this.syncDispatchAfterCurrent(id)
       },
-      dispatchId
+      dispatchId,
+      () => generation === this.relayGeneration
     ).catch((error: unknown) => {
       console.warn(`[orchestration] Resending the stop for ${dispatchId} failed:`, error)
     })
