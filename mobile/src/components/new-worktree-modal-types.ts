@@ -18,6 +18,16 @@ export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'
     >
   >
 
+/** Opened from a folder's empty state: that repo and name, created attached to the folder. */
+export type NewWorktreeFolderLaunch = {
+  repoId: string
+  /** The repo's host, so a same-id copy on another host isn't picked. */
+  executionHostId: ExecutionHostId
+  name: string
+  /** The folder's workspace key, `folder:<id>`. */
+  parentWorkspace: string
+}
+
 export type NewWorktreeModalProps = {
   visible: boolean
   client: RpcClient | null
@@ -37,6 +47,7 @@ export type NewWorktreeModalProps = {
     executionHost?: ExecutionHostId
   ) => void
   onClose: () => void
+  folderLaunch?: NewWorktreeFolderLaunch
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'

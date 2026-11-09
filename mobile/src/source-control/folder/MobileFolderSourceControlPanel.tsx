@@ -24,8 +24,12 @@ import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identit
 import { MobileSourceControlHeader } from '../MobileSourceControlHeader'
 import { MobileSourceControlPanel } from '../MobileSourceControlPanel'
 import { styles as sourceControlStyles } from '../mobile-source-control-styles'
+import { MobileFolderEmptyState } from './MobileFolderEmptyState'
 import { MobileFolderWorktreeRow } from './MobileFolderWorktreeRow'
+import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
 import { useMobileFolderAttachedWorktrees } from './use-mobile-folder-attached-worktrees'
+
+const NO_CAPABILITIES: readonly string[] = []
 
 type Props = {
   hostId: string
@@ -61,6 +65,8 @@ export function MobileFolderSourceControlPanel({
   const observing = focused && !pageOpen
   const { folder, worktrees, desktopCapabilities, serverHosts, connState, loadError, refetch } =
     useMobileFolderAttachedWorktrees(hostId, folderWorktreeId, observing)
+  // In a server's scope these are the server's own; otherwise the desktop's.
+  const folderHostGates = useOptionalHostProtocolGates()
   const forceReconnect = useForceReconnect()
   const [refreshers] = useState(() => new Set<() => void>())
   const refresh = () => {
@@ -118,13 +124,14 @@ export function MobileFolderSourceControlPanel({
         title={t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')}
       />
     ) : worktrees.length === 0 ? (
-      <MobileStateView
-        icon={GitBranch}
-        title={t('sourceControl.folder.emptyTitle', 'No attached worktrees yet')}
-        message={t(
-          'sourceControl.folder.emptyCopy',
-          'Worktrees created from this workspace will show up here.'
-        )}
+      <MobileFolderEmptyState
+        hostId={hostId}
+        folder={folder}
+        desktopCapabilities={desktopCapabilities}
+        folderHostCapabilities={folderHostGates?.hostCapabilities ?? NO_CAPABILITIES}
+        observing={observing}
+        refetch={refetch}
+        bottomInset={insets.bottom}
       />
     ) : (
       // One card per attached worktree, as desktop shows them.

@@ -58,3 +58,36 @@ describe('createWorktreeWithNameRetry', () => {
     ).resolves.toEqual({ worktreeId: 'wt-legacy', name: 'topic-2' })
   })
 })
+
+describe('createWorktreeWithNameRetry parent', () => {
+  it('attaches every collision candidate to the same parent', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient(
+      [{ errorMessage: 'already exists locally' }, { id: 'wt-child' }],
+      attempts
+    )
+
+    await createWorktreeWithNameRetry({
+      client,
+      baseName: 'topic',
+      buildParams: (name) => ({ repo: 'id:r', name }),
+      parent: { parentWorkspace: 'folder:f-1', parentWorkspaceOrigin: 'manual' },
+      worktreeCreateIdempotency: false
+    })
+
+    expect(attempts.map((attempt) => attempt.params)).toEqual([
+      {
+        repo: 'id:r',
+        name: 'topic',
+        parentWorkspace: 'folder:f-1',
+        parentWorkspaceOrigin: 'manual'
+      },
+      {
+        repo: 'id:r',
+        name: 'topic-2',
+        parentWorkspace: 'folder:f-1',
+        parentWorkspaceOrigin: 'manual'
+      }
+    ])
+  })
+})

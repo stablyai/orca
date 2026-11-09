@@ -4,6 +4,7 @@ import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-ho
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../platform/haptics'
+import type { WorktreeCreateParent } from '../tasks/worktree-create-retry'
 import { createBlankWorkspace } from '../tasks/blank-workspace-create'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import {
@@ -65,6 +66,8 @@ export function useNewWorkspaceCreateSubmit(args: {
   setError: Dispatch<SetStateAction<string>>
   onCreated: (worktreeId: string, name: string, warning?: string) => void
   onClose: () => void
+  /** Attaches the new worktree to this workspace, on whichever source the user creates from. */
+  parent?: WorktreeCreateParent
 }): {
   creating: boolean
   setupTrustPrompt: OrcaHookTrustPrompt | null
@@ -178,7 +181,8 @@ export function useNewWorkspaceCreateSubmit(args: {
             agentLaunchSupported: args.getAgentLaunchSupport(),
             branchIntentSupported: args.getBranchIntentSupport(
               selection.kind === 'branch' && selection.reuse ? 'open-existing-v2' : 'create-new'
-            )
+            ),
+            parent: args.parent
           })
         : await createBlankWorkspace({
             client,
@@ -189,7 +193,8 @@ export function useNewWorkspaceCreateSubmit(args: {
             comment: trimmedNote,
             setupDecision,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
-            agentLaunchSupported: args.getAgentLaunchSupport()
+            agentLaunchSupported: args.getAgentLaunchSupport(),
+            parent: args.parent
           })
       if ('error' in result) {
         triggerError()

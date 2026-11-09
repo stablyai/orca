@@ -3589,7 +3589,12 @@
       "emptyTitle": "No attached worktrees yet",
       "emptyCopy": "Worktrees created from this workspace will show up here.",
       "statusUnavailable": "Unavailable",
-      "backToFolder": "Back to folder"
+      "backToFolder": "Back to folder",
+      "createSection": "Create a worktree",
+      "createIn": "Create a worktree in {{repo}}",
+      "created": "Created worktree {{name}} in {{repo}}",
+      "createdNamed": "Created worktree {{name}}",
+      "createFailed": "Could not create a worktree in {{repo}}."
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",
