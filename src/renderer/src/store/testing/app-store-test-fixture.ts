@@ -52,6 +52,7 @@ import { createRemoteServerUpdatesSlice } from '../slices/runtime-host-updates/r
 import { createTerminalQuickCommandHostsSlice } from '../terminals/terminal-quick-command-hosts'
 import { createStructuredSessionLaunchDirectorySlice } from '../slices/agent-status/structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from '../slices/agent-status/structured-chat-slept-at'
+import { createStructuredChatCompanionWritesSlice } from '../slices/agent-status/structured-chat-companion-writes'
 import { createWorkspaceAttentionSlice } from '../slices/workspace-attention/workspace-attention-slice'
 import { createEphemeralVmLifecycleSlice } from '../slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import '@/i18n/i18n'
@@ -118,6 +119,7 @@ export function createTestStore(
         ...createTerminalQuickCommandHostsSlice(...a),
         ...createStructuredSessionLaunchDirectorySlice(...a),
         ...createStructuredChatSleptAtSlice(...a),
+        ...createStructuredChatCompanionWritesSlice(...a),
         ...createWorkspaceAttentionSlice(...a),
         ...createEphemeralVmLifecycleSlice(...a)
       }),
