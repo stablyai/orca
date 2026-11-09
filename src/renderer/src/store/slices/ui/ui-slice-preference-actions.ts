@@ -99,6 +99,8 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setHideAutomationGeneratedWorkspaces: (v) => set({ hideAutomationGeneratedWorkspaces: v }),
     hideCliCreatedWorkspaces: false,
     setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
+    hideEmptyProjects: false,
+    setHideEmptyProjects: (v) => set({ hideEmptyProjects: v }),
     hideDetachedHeadWorkspaces: false,
     setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
     hideWorkspacesFromOtherDevices: false,

@@ -57,6 +57,8 @@ export type UISlicePreferences = {
   setHideAutomationGeneratedWorkspaces: (v: boolean) => void
   hideCliCreatedWorkspaces: boolean
   setHideCliCreatedWorkspaces: (v: boolean) => void
+  hideEmptyProjects: boolean
+  setHideEmptyProjects: (v: boolean) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
   hideWorkspacesFromOtherDevices: boolean

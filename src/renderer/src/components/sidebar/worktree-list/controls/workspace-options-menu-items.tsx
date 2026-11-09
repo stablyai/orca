@@ -209,6 +209,7 @@ const OPTION_ITEMS: Record<WorkspaceViewOptionKey, ComponentType<OptionItemProps
   cardLayout: WorktreeCardLayoutMenuItem,
   cardProperties: WorktreeCardPropertiesMenuItem,
   cardDisplay: WorktreeCardDisplayMenuItem,
+  hideEmptyProjects: () => <WorkspaceFilterOptionRow optionKey="hideEmptyProjects" />,
   hideSleepingWorkspaces: () => <WorkspaceFilterOptionRow optionKey="hideSleepingWorkspaces" />,
   alwaysShowDefaultBranchWorkspace: () => (
     <WorkspaceFilterOptionRow optionKey="alwaysShowDefaultBranchWorkspace" />

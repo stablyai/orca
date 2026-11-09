@@ -20,6 +20,7 @@ export type PersistedUIWriteBaseline = {
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
+  hideEmptyProjects: boolean
   hideDetachedHeadWorkspaces: boolean
   hideWorkspacesFromOtherDevices: boolean
   alwaysShowDefaultBranchWorkspace: boolean
@@ -52,6 +53,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   hideAutomationGeneratedWorkspaces: true,
   hideCliCreatedWorkspaces: true,
   hideDetachedHeadWorkspaces: true,
+  hideEmptyProjects: true,
   hideWorkspacesFromOtherDevices: true,
   alwaysShowDefaultBranchWorkspace: true,
   explorerDisplayRootByWorktree: true,

@@ -24480,6 +24480,9 @@
     "checkAction": "Check compatibility",
     "settingsStatus": "Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac."
   },
+  "workspaceOptions": {
+    "hideEmptyProjects": "Hide empty projects"
+  },
   "remoteHostBrowserControl": {
     "title": "{{host}} is controlling a browser tab",
     "description": "Agents on this SSH host can open and use Orca browser tabs in its workspaces. Tabs it controls show its name. You can change this in Settings > SSH.",

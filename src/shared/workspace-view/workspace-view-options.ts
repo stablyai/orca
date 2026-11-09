@@ -124,6 +124,7 @@ export const WORKSPACE_VIEW_OPTIONS = [
   { key: 'cardProperties', section: 'arrange', label: 'Show properties' },
   { key: 'cardDisplay', section: 'arrange', label: 'Card display' },
   { key: 'hideSleepingWorkspaces', section: 'filters', label: 'Hide sleeping' },
+  { key: 'hideEmptyProjects', section: 'filters', label: 'Hide empty projects' },
   {
     key: 'alwaysShowDefaultBranchWorkspace',
     section: 'filters',
@@ -169,6 +170,7 @@ const SHOWN: Record<WorkspaceViewOptionKey, (context: WorkspaceViewOptionContext
   cardProperties: (context) => !context.newCardStyle,
   cardDisplay: (context) => context.newCardStyle,
   hideSleepingWorkspaces: () => true,
+  hideEmptyProjects: (context) => context.groupBy === 'repo',
   // Why: the exemption only bites while sleeping workspaces are being swept.
   alwaysShowDefaultBranchWorkspace: (context) => context.hideSleepingWorkspaces,
   hideDefaultBranchWorkspace: () => true,

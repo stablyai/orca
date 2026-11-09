@@ -68,6 +68,10 @@ function workspaceOptionLabels(t: Translate): Record<WorkspaceViewOptionKey, str
       'hostScreen.workspaceOptionsSheet.hideOtherClientWorkspaces',
       'Hide other-client workspaces'
     ),
+    hideEmptyProjects: t(
+      'hostScreen.workspaceOptionsSheet.hideEmptyProjects',
+      'Hide empty projects'
+    ),
     hideDetachedHeadWorkspaces: t(
       'hostScreen.workspaceOptionsSheet.hideDetachedHead',
       'Hide detached HEAD'

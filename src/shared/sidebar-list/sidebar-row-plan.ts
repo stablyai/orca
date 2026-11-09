@@ -54,12 +54,14 @@ import { orderMainWorktreeFirst } from './section-order'
 import { appendImportedWorktreeLines } from './imported-worktree-lines'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
 import { buildOrderedGroups } from './worktree-grouping'
+import { buildSidebarProjectVisibility } from './sidebar-project-visibility'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
 
 /** Everything the row builder reads. Pure data: no store, clock or client-specific state. */
 export type SidebarRowPlanInputs = {
+  hideEmptyProjects?: boolean
   groupBy: WorktreeGroupBy
   sortBy: WorkspaceSortBy
   /** Visible worktrees in the frozen sort order. */
@@ -121,12 +123,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
-  const pendingByRepo = new Map<string, PendingCreationRef[]>()
-  for (const creation of pendingCreations) {
-    const list = pendingByRepo.get(creation.repoId) ?? []
-    list.push(creation)
-    pendingByRepo.set(creation.repoId, list)
-  }
+  const { pendingByRepo, keptProjects } = buildSidebarProjectVisibility(inputs, projectIndex)
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   // Folder rows are occurrences too, so a folder parent nests its children like any other row.
@@ -175,7 +172,9 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
               repoOrder,
               projectOrderBy,
               folderWorkspaces: renderableFolderWorkspaces
-            })
+            }).filter(
+              ([key, group]) => !keptProjects || group.items.length > 0 || keptProjects.has(key)
+            )
       if (pinned.length > 0) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
       }
@@ -307,6 +306,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     }
 
     appendProjectGroupSections(sectionContext, {
+      hideEmptyProjects: inputs.hideEmptyProjects,
       orderedGroups,
       projectGroups,
       folderWorkspaces: renderableFolderWorkspaces,

@@ -770,7 +770,8 @@
       "workspaceOptions": "Workspace options",
       "syncedAcrossDevices": "Synced across your devices",
       "done": "Done",
-      "reset": "Reset"
+      "reset": "Reset",
+      "hideEmptyProjects": "Hide empty projects"
     },
     "hostBottomBar": {
       "workspaceOptions": "Workspace options",
