@@ -257,6 +257,8 @@ declare module 'orca/host' {
     "agent.tool.after": { event: { agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JsonValue; callId?: string; output?: JsonValue }; result: never }
     /** The person is about to save a text file from an Orca editor tab (an explicit save, not autosave). Change `text` with `next` (format on save) or return `{ deny }` to refuse the save, which shows your reason. Edits made while the hook ran stay unsaved. */
     "editor.save.before": { event: { workspaceId: string | null; path: string; languageId?: string; text: string }; result: { deny: string } }
+    /** The person paused typing in an Orca editor tab, and Orca wants inline (ghost text) completion at the cursor. Set `suggestion` with `next` to the text to insert; leave it empty to offer nothing. Orca asks after a short pause and drops answers that arrive after the cursor moved, so keep it fast. */
+    "editor.inlineCompletion": { event: { workspaceId: string | null; path: string; languageId?: string; prefix: string; suffix: string; suggestion: string }; result: never }
   }
   export type PluginHookName = keyof PluginHooks
 }

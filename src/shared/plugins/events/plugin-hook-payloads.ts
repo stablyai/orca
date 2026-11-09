@@ -125,6 +125,28 @@ export const editorSaveBeforeHookPayloadSchema = z.object({
   text: z.string().max(TERMINAL_INPUT_MAX_BYTES)
 })
 
+export const INLINE_COMPLETION_PREFIX_MAX_CHARS = 32 * 1024
+export const INLINE_COMPLETION_SUFFIX_MAX_CHARS = 8 * 1024
+export const INLINE_COMPLETION_SUGGESTION_MAX_CHARS = 8 * 1024
+
+export const editorInlineCompletionHookPayloadSchema = z.object({
+  /** The editor tab's workspace; null for a file outside any workspace. */
+  workspaceId: z.string().min(1).max(2048).nullable(),
+  /** Relative to the workspace root (or the absolute path outside one). */
+  path: z
+    .string()
+    .min(1)
+    .max(32 * 1024),
+  /** The editor's language, e.g. `typescript`, when it has one. */
+  languageId: z.string().min(1).max(128).optional(),
+  /** Text before the cursor, cut to its last characters when the file is longer. */
+  prefix: z.string().max(INLINE_COMPLETION_PREFIX_MAX_CHARS),
+  /** Text after the cursor, cut to its first characters when the file is longer. */
+  suffix: z.string().max(INLINE_COMPLETION_SUFFIX_MAX_CHARS),
+  /** Starts empty: the text to offer at the cursor. */
+  suggestion: z.string().max(INLINE_COMPLETION_SUGGESTION_MAX_CHARS).default('')
+})
+
 export const PLUGIN_HOOK_SPECS = {
   'terminal.send': {
     payload: terminalSendHookPayloadSchema,
@@ -189,6 +211,14 @@ export const PLUGIN_HOOK_SPECS = {
     deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
     summary:
       'The person is about to save a text file from an Orca editor tab (an explicit save, not autosave). Change `text` with `next` (format on save) or return `{ deny }` to refuse the save, which shows your reason. Edits made while the hook ran stay unsaved.'
+  },
+  'editor.inlineCompletion': {
+    payload: editorInlineCompletionHookPayloadSchema,
+    result: null,
+    mutable: ['suggestion'],
+    deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
+    summary:
+      'The person paused typing in an Orca editor tab, and Orca wants inline (ghost text) completion at the cursor. Set `suggestion` with `next` to the text to insert; leave it empty to offer nothing. Orca asks after a short pause and drops answers that arrive after the cursor moved, so keep it fast.'
   }
 } satisfies Record<PluginHookName, PluginHookSpec>
 

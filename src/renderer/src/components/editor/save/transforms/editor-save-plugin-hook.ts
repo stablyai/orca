@@ -1,21 +1,13 @@
 import { translate } from '@/i18n/i18n'
-import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { AppStoreApi } from '../queue/editor-save-queue-contract'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { EditorSaveTrigger } from '../queue/editor-save-disk-precondition'
 import { hasEditorBytesDraft } from '../bytes/editor-bytes-documents'
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { adoptEditorSaveText } from './editor-save-text-transform'
-import type { PluginHostListEntry } from '../../../../../../shared/plugins/plugin-list-entry'
+import { pluginEditorHookWanted } from '../../plugin-editor-hook-wanted'
 
 const SAVE_HOOK = 'editor.save.before'
-// Why errored too: an approved guard whose worker crashed may deny on error; main decides.
-const HOOKING_STATUSES: ReadonlySet<PluginHostListEntry['status']> = new Set([
-  'running',
-  'restarting',
-  'idle',
-  'errored'
-])
 
 /** A plugin refused this save; the message names it and its reason. */
 export class EditorSaveDeniedByPluginError extends Error {
@@ -37,12 +29,7 @@ export class EditorSaveDeniedByPluginError extends Error {
 /** Synchronous, so a save with no plugin listing the hook takes no extra await. */
 export function editorSaveHookWanted(): boolean {
   return (
-    typeof window.api?.plugins?.editorSaveHook === 'function' &&
-    usePluginPanelsStore
-      .getState()
-      .plugins.some(
-        (plugin) => HOOKING_STATUSES.has(plugin.status) && plugin.hooks?.includes(SAVE_HOOK)
-      )
+    typeof window.api?.plugins?.editorSaveHook === 'function' && pluginEditorHookWanted(SAVE_HOOK)
   )
 }
 

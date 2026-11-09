@@ -148,6 +148,8 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
   event `{ agent: string; workspaceId: string | null; terminalId?: string; tool: string; input: JSON; callId?: string; output?: JSON }`; `next` may change nothing; stop with nothing (observe only)
 - `editor.save.before` (since 1.4.248): The person is about to save a text file from an Orca editor tab (an explicit save, not autosave). Change `text` with `next` (format on save) or return `{ deny }` to refuse the save, which shows your reason. Edits made while the hook ran stay unsaved.
   event `{ workspaceId: string | null; path: string; languageId?: string; text: string }`; `next` may change `text`; stop with `{ deny: string }`
+- `editor.inlineCompletion` (since 1.4.255): The person paused typing in an Orca editor tab, and Orca wants inline (ghost text) completion at the cursor. Set `suggestion` with `next` to the text to insert; leave it empty to offer nothing. Orca asks after a short pause and drops answers that arrive after the cursor moved, so keep it fast.
+  event `{ workspaceId: string | null; path: string; languageId?: string; prefix: string; suffix: string; suggestion: string }`; `next` may change `suggestion`; stop with nothing (observe only)
 
 ## Capabilities
 

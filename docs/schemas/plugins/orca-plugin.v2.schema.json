@@ -218,9 +218,9 @@
         },
         "hooks": {
           "default": [],
-          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.",
+          "description": "Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 9.",
           "x-orca-since": "1.4.248",
-          "maxItems": 8,
+          "maxItems": 9,
           "type": "array",
           "items": {
             "$ref": "#/$defs/HookContribution"
@@ -767,7 +767,8 @@
             "agent.prompt.before",
             "agent.tool.before",
             "agent.tool.after",
-            "editor.save.before"
+            "editor.save.before",
+            "editor.inlineCompletion"
           ],
           "description": "Hook the worker handles with `orca.hooks.on`.",
           "x-orca-since": "1.4.248",
@@ -779,7 +780,8 @@
             "agent.prompt.before": "1.4.248",
             "agent.tool.before": "1.4.248",
             "agent.tool.after": "1.4.248",
-            "editor.save.before": "1.4.248"
+            "editor.save.before": "1.4.248",
+            "editor.inlineCompletion": "1.4.255"
           }
         },
         "onError": {

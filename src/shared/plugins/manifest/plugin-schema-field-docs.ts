@@ -23,6 +23,8 @@ export const PLUGIN_HOOKS_SINCE = '1.4.248'
 export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
 /** First release that plays an app theme's `background.videoPath`. */
 export const PLUGIN_THEME_VIDEO_BACKGROUND_SINCE = '1.4.254'
+/** First release that runs the `editor.inlineCompletion` hook. */
+export const PLUGIN_INLINE_COMPLETION_SINCE = '1.4.255'
 
 type PluginFieldDoc = {
   description: string

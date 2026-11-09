@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
-import { pluginFieldDoc, PLUGIN_HOOKS_SINCE } from '../manifest/plugin-schema-field-docs'
+import {
+  pluginFieldDoc,
+  PLUGIN_HOOKS_SINCE,
+  PLUGIN_INLINE_COMPLETION_SINCE
+} from '../manifest/plugin-schema-field-docs'
 
 /** Points where a worker can change or stop what Orca is about to do. Closed set: Orca waits
  *  only on plugins whose manifest lists the hook. */
@@ -12,7 +16,8 @@ export const PLUGIN_HOOK_NAMES = [
   'agent.prompt.before',
   'agent.tool.before',
   'agent.tool.after',
-  'editor.save.before'
+  'editor.save.before',
+  'editor.inlineCompletion'
 ] as const
 export const PLUGIN_HOOK_LIMIT = PLUGIN_HOOK_NAMES.length
 
@@ -27,7 +32,8 @@ export const PLUGIN_HOOK_SINCE: Record<PluginHookName, string> = {
   'agent.prompt.before': PLUGIN_HOOKS_SINCE,
   'agent.tool.before': PLUGIN_HOOKS_SINCE,
   'agent.tool.after': PLUGIN_HOOKS_SINCE,
-  'editor.save.before': PLUGIN_HOOKS_SINCE
+  'editor.save.before': PLUGIN_HOOKS_SINCE,
+  'editor.inlineCompletion': PLUGIN_INLINE_COMPLETION_SINCE
 }
 
 /** RPC error code for an action a plugin hook refused; `data` names the plugin and its reason. */
