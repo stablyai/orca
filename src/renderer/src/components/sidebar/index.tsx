@@ -175,6 +175,7 @@ function Sidebar({
         <div
           ref={sidebarRef}
           className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden"
+          data-glass-surface="worktree-sidebar"
           style={leftSidebarStyle}
           {...dropHandlers}
         >
