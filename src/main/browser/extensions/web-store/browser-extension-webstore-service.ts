@@ -4,8 +4,8 @@ import {
   parseChromeWebStoreExtensionInput,
   type BrowserExtensionWebStoreInstallResult
 } from '../../../../shared/browser/extensions/browser-extension-webstore'
-import { browserManager } from '../../browser-manager'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { requestBrowserExtensionInstallPrompt } from '../permissions/browser-extension-install-prompt'
 import { removeBrowserExtension } from '../browser-extension-management'

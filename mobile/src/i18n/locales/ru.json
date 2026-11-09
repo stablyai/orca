@@ -2327,8 +2327,7 @@
       "copyPathLabel": "Скопировать путь к файлу Markdown",
       "copySource": "Скопировать исходный текст Markdown",
       "discard": "Отменить изменения",
-      "dismissKeyboard": "Скрыть клавиатуру",
-      "dismissKeyboardHint": "Скрывает экранную клавиатуру и оставляет редактор Markdown открытым.",
+      "previewTruncated": "Показана часть файла.",
       "readOnly": "Только чтение"
     },
     "nativeChatAttachActions": {

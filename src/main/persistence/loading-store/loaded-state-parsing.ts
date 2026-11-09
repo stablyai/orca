@@ -18,7 +18,7 @@ import {
   isLegacyOpenCodeSessionCookie,
   isLegacySshPtyOwnerLease
 } from '../leasing-ssh-ptys/secret-validation'
-import { readGitHubCacheDatabase } from './github-cache-startup-read'
+import { readGitHubCacheDatabase } from './github-cache-database'
 import { retainLegacyOpenCodeGoApiKey } from './legacy-opencode-go-api-key-migration'
 import {
   gcStaleWorktreeMeta,
@@ -51,6 +51,7 @@ type LoadedStateParsingOperationsRuntime = Pick<
   | 'dataFile'
   | 'githubCacheDirty'
   | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
   | 'loadNeedsSave'
   | 'originalExperimentalNativeChat'
   | 'protectedSecrets'
@@ -304,9 +305,9 @@ export class LoadedStateParsingOperations {
       // A sidecar import, or rows that already hold it, saves so the sidecar retires.
       this.runtime.githubCacheDirty ||= stored.sidecarHash !== null
     }
-    // While the rows are unreadable nothing is dirty, so no save can replace them; a later
-    // commit of polled state supersedes the unhydrated sidecar instead.
     this.runtime.githubCacheLegacyFileHash = stored?.sidecarHash ?? null
+    // Unread rows or an unread sidecar may hold newer entries than this session will poll.
+    this.runtime.githubCachePersistenceDisabled = stored?.unavailable ?? false
 
     logStartupMilestone('persistence-load-done', () => ({
       repos: migrated.repos.length,

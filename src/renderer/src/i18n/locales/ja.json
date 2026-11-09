@@ -3667,6 +3667,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "オンにする"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "別のウィンドウに合わせたサイズ",
+            "fitHere": "ここに合わせる"
           }
         }
       },
@@ -5336,7 +5340,10 @@
           "69f5b5380d": "クローン作成中…",
           "cloneOnHostDescription": "Git URL を入力し、{{value0}} 上のクローン先を選択してください。",
           "cloneParentFolder": "親フォルダー",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "フォルダー名",
+          "cloneFolderTakenByRepo": "このフォルダー内の「{{value0}}」はすでに別のリポジトリのため、このクローンには専用のフォルダーが必要です。",
+          "cloneFolderNotEmpty": "このフォルダーには「{{value0}}」がすでに存在するため、このクローンには専用のフォルダーが必要です。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "閉じる",
@@ -18802,6 +18809,7 @@
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
         "skills": "スキル",
+        "checkingSkills": "新しいスキルを確認しています…",
         "loadingSkills": "スキルを読み込み中…",
         "clearDescription": "会話のコンテキストをクリア",
         "skillsUnavailableHost": "SSH チャットではスキルを一覧表示できません",
@@ -21062,7 +21070,6 @@
       "sortRelevance": "最も関連性の高い",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "ソート結果: {{value0}}",
-      "consent": "全文検索を有効にしますか? Orca は、完全な会話とツール出力ごとに最大 3,072 文字を含む、ローカル Agent のトランスクリプトからこのコンピュータ上にインデックスを作成します。内容は編集されていません。認証されたペアリングされたクライアントは検索できます。",
       "remoteDisabled": "このコンピュータでは検索が無効になっています。そのコンピュータ上でトランスクリプトのインデックス作成を有効にして、セッションを検索します。",
       "titleOnly": "このコンピュータでは全文検索がオフのため、セッションのタイトルのみが照合されます。",
       "notReady": "検索インデックスはまだ準備ができていません。しばらくしてからもう一度お試しください。",
@@ -21119,7 +21126,6 @@
       "description": "このコンピュータおよびペアになっている Orca サーバー上で、Agent の言動をすべて検索します。",
       "searchDescription": "このコンピュータとペアリングされたサーバーのセッション検索をオンにするか、検索データをクリアします。",
       "indexComputers": "セッション内を検索",
-      "computersConsent": "各コンピュータは、自身の Agent の会話とツールの出力の検索可能なコピーを保持します。そのコンピュータからは何も残りません。",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}} のセッションを検索",
       "serverOffline": "オフライン",

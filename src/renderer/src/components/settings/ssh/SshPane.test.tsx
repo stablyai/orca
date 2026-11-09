@@ -43,7 +43,7 @@ vi.mock('@/ssh/ssh-old-relay-terminals-action', () => ({
   useSshConnectFailureToast: () => vi.fn()
 }))
 vi.mock('./targets/SshTargetForm', () => ({ SshTargetForm: () => null }))
-vi.mock('./targets/ssh-target-draft', () => ({ EMPTY_FORM: {} }))
+vi.mock('../../ssh-host-form/ssh-target-draft', () => ({ EMPTY_FORM: {} }))
 vi.mock('./targets/SshTargetDestructiveActions', () => ({
   SshTargetDestructiveActions: ({
     children
