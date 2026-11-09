@@ -26,8 +26,9 @@ import {
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
 import { WorkspaceTitleLanguageSetting } from './WorkspaceTitleLanguageSetting'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AutoRenameBranchFromWorkSettingProps = {
   settings: GlobalSettings
@@ -63,6 +64,7 @@ export function AutoRenameBranchFromWorkSetting({
   branchPromptDiscardSignal,
   settingsSearchQuery
 }: AutoRenameBranchFromWorkSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const storeSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const config = readSourceControlSettings(settings)
@@ -122,11 +124,11 @@ export function AutoRenameBranchFromWorkSetting({
 
   return (
     <SearchableSetting
-      title={translate(
+      title={t(
         'auto.components.settings.AutoRenameBranchFromWorkSetting.ef787db0e3',
         'Auto-rename branch & worktree'
       )}
-      description={translate(
+      description={t(
         'auto.components.settings.AutoRenameBranchFromWorkSetting.6a051586d2',
         'Rename the auto-generated branch based on the work once an agent starts.'
       )}
@@ -144,35 +146,32 @@ export function AutoRenameBranchFromWorkSetting({
         ...(getWorkspaceTitleLanguageSearchEntry().keywords ?? [])
       ]}
       forceVisible={forceVisible || branchNamePromptDirty || advancedSearchOpen}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
     >
       <div ref={setSettingRootRef} className="flex items-center justify-between gap-4">
         <div className="space-y-0.5">
           <Label>
-            {translate(
+            {t(
               'auto.components.settings.AutoRenameBranchFromWorkSetting.ef787db0e3',
               'Auto-rename branch & worktree'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.AutoRenameBranchFromWorkSetting.12ea4a408d',
               'When an agent starts working in a new workspace, Orca renames its auto-generated branch (e.g.'
             )}{' '}
             <code>
-              {translate(
-                'auto.components.settings.AutoRenameBranchFromWorkSetting.1626524572',
-                'Nautilus'
-              )}
+              {t('auto.components.settings.AutoRenameBranchFromWorkSetting.1626524572', 'Nautilus')}
             </code>
-            {translate(
+            {t(
               'auto.components.settings.AutoRenameBranchFromWorkSetting.d9b65054ef',
               ') to a short name summarizing the task. Only branches Orca named itself are renamed, and never after they have been pushed.'
             )}
           </p>
         </div>
         <Switch
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.AutoRenameBranchFromWorkSetting.ef787db0e3',
             'Auto-rename branch & worktree'
           )}
@@ -195,10 +194,7 @@ export function AutoRenameBranchFromWorkSetting({
             size="sm"
             className="-ml-2 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate(
-              'auto.components.settings.AutoRenameBranchFromWorkSetting.e784ea62dc',
-              'Advanced'
-            )}
+            {t('auto.components.settings.AutoRenameBranchFromWorkSetting.e784ea62dc', 'Advanced')}
             <ChevronDown
               className={cn('size-3.5 transition-transform', advancedOpen && 'rotate-180')}
             />
@@ -209,7 +205,7 @@ export function AutoRenameBranchFromWorkSetting({
             <div className="space-y-2">
               <div className="space-y-0.5">
                 <Label htmlFor="git-auto-rename-branch-name-template">
-                  {translate(
+                  {t(
                     'auto.components.settings.AutoRenameBranchFromWorkSetting.a869d0edd8',
                     'Branch name command template'
                   )}
@@ -217,7 +213,7 @@ export function AutoRenameBranchFromWorkSetting({
                 <p className="text-xs text-muted-foreground">
                   <Trans
                     i18n={i18n}
-                    defaults={translate(
+                    defaults={t(
                       'auto.components.settings.AutoRenameBranchFromWorkSetting.commandTemplateDescription',
                       "Use <basePrompt>{basePrompt}</basePrompt> to include Orca's <promptLink>built-in branch-name prompt</promptLink>. You can also reference <firstPrompt>{firstPrompt}</firstPrompt> and <assistantMessage>{assistantMessage}</assistantMessage>. Orca generates only the final segment, like <example>fix-login-flow</example>; your branch prefix setting still applies."
                     )}
@@ -236,7 +232,7 @@ export function AutoRenameBranchFromWorkSetting({
                 rows={4}
                 value={branchNameTemplateDraft}
                 onChange={(event) => setBranchNameTemplateDraft(event.target.value)}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.settings.AutoRenameBranchFromWorkSetting.c71770c455',
                   '{basePrompt}'
                 )}
@@ -255,11 +251,11 @@ export function AutoRenameBranchFromWorkSetting({
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] text-muted-foreground">
                   {branchNamePromptDirty
-                    ? translate(
+                    ? t(
                         'auto.components.settings.AutoRenameBranchFromWorkSetting.7c7e34a66d',
                         'Unsaved changes'
                       )
-                    : translate(
+                    : t(
                         'auto.components.settings.AutoRenameBranchFromWorkSetting.40e7be7850',
                         'Saved'
                       )}
@@ -273,7 +269,7 @@ export function AutoRenameBranchFromWorkSetting({
                       onClick={onDiscardPrompt}
                       disabled={isSavingPrompt}
                     >
-                      {translate(
+                      {t(
                         'auto.components.settings.AutoRenameBranchFromWorkSetting.0de9fda203',
                         'Discard'
                       )}
@@ -287,11 +283,11 @@ export function AutoRenameBranchFromWorkSetting({
                     disabled={!branchNamePromptDirty || isSavingPrompt}
                   >
                     {isSavingPrompt
-                      ? translate(
+                      ? t(
                           'auto.components.settings.AutoRenameBranchFromWorkSetting.cfd82406dd',
                           'Saving...'
                         )
-                      : translate(
+                      : t(
                           'auto.components.settings.AutoRenameBranchFromWorkSetting.ec3e0c388e',
                           'Save'
                         )}

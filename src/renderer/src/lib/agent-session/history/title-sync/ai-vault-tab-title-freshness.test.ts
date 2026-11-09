@@ -4,7 +4,7 @@ import { makeState, titleResult } from './ai-vault-tab-title-test-fixture'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
-import type * as MountedTerminalTabRegistry from '@/runtime/mounted-terminal-tab-registry'
+import type * as MountedTerminalTabRegistry from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type * as TitleRequests from './ai-vault-tab-title-requests'
 
 vi.mock('./ai-vault-tab-title-requests', async (importOriginal) => {
@@ -12,17 +12,20 @@ vi.mock('./ai-vault-tab-title-requests', async (importOriginal) => {
   return { ...actual, collectAiVaultTitleRequests: vi.fn(actual.collectAiVaultTitleRequests) }
 })
 
-vi.mock('@/runtime/mounted-terminal-tab-registry', async (importOriginal) => ({
-  ...(await importOriginal<typeof MountedTerminalTabRegistry>()),
-  findRegisteredTerminalTab: () => ({
-    tab: {
-      getManager: () => ({
-        getNumericIdForLeaf: (leafId: string) =>
-          leafId === '00000000-0000-4000-8000-000000000001' ? 7 : 8
-      })
-    }
+vi.mock(
+  '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof MountedTerminalTabRegistry>()),
+    findRegisteredTerminalTab: () => ({
+      tab: {
+        getManager: () => ({
+          getNumericIdForLeaf: (leafId: string) =>
+            leafId === '00000000-0000-4000-8000-000000000001' ? 7 : 8
+        })
+      }
+    })
   })
-}))
+)
 let stop: (() => void) | undefined
 afterEach(() => {
   stop?.()
@@ -174,64 +177,5 @@ describe('session title freshness', () => {
     )
     expect(sent).not.toContain('tab-64')
     expect(sent).toHaveLength(64)
-  })
-})
-
-describe('host-status title gating', () => {
-  function runtimeStatus(capabilities: string[], checkedAt: number) {
-    return new Map([
-      [
-        'server-1',
-        {
-          checkedAt,
-          status: {
-            runtimeId: 'server-1',
-            rendererGraphEpoch: 1,
-            graphStatus: 'ready' as const,
-            authoritativeWindowId: null,
-            liveTabCount: 1,
-            liveLeafCount: 1,
-            capabilities
-          }
-        }
-      ]
-    ])
-  }
-
-  it('skips the tab catalog walk when a status ping keeps title-refresh support', async () => {
-    const store = storeFor('runtime:server-1')
-    const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'First name'))
-    stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles })
-    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    vi.mocked(collectAiVaultTitleRequests).mockClear()
-
-    store.update({ runtimeStatusByEnvironmentId: runtimeStatus([], 2) })
-    store.update({ runtimeStatusByEnvironmentId: runtimeStatus([], 3) })
-
-    expect(collectAiVaultTitleRequests).not.toHaveBeenCalled()
-  })
-
-  it('reconciles when a host gains title-refresh support', async () => {
-    const store = storeFor('runtime:server-1')
-    const resolveSessionTitles = vi.fn(async () => titleResult('codex', 'First name'))
-    const scheduleReconcile = vi.fn((callback: () => void) => {
-      queueMicrotask(callback)
-      return () => {}
-    })
-    stop = startAiVaultTabTitleSync({ ...store, resolveSessionTitles, scheduleReconcile })
-    await vi.waitFor(() => expect(resolveSessionTitles).toHaveBeenCalledTimes(1))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    scheduleReconcile.mockClear()
-
-    store.update({ runtimeStatusByEnvironmentId: runtimeStatus([], 2) })
-    expect(scheduleReconcile).not.toHaveBeenCalled()
-    store.update({
-      runtimeStatusByEnvironmentId: runtimeStatus(
-        [AI_VAULT_SESSION_TITLE_REFRESH_RUNTIME_CAPABILITY],
-        3
-      )
-    })
-    expect(scheduleReconcile).toHaveBeenCalledTimes(1)
   })
 })

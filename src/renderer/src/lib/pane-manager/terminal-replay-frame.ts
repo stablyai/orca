@@ -38,6 +38,12 @@ export function retainTerminalReplayFrame(
       overflow: 'hidden',
       pointerEvents: 'none'
     })
+    // Why: Chromium drops subpixel (LCD) text for a transparent copy over the hidden screen.
+    const background =
+      screen.parentElement && getComputedStyle(screen.parentElement).backgroundColor
+    if (background?.startsWith('rgb(')) {
+      frame.style.backgroundColor = background
+    }
     for (const child of screen.children) {
       if (!child.matches('.xterm-helpers')) {
         frame.append(child.cloneNode(true))

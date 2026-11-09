@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import { useStore } from 'zustand'
 import { createEditorStore } from '@/store/slices/editor/editor-slice-test-harness'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { editorSelectionCache, editorViewStateCache, scrollTopCache } from '@/lib/scroll-cache'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -31,12 +31,12 @@ vi.mock('@/store', () => {
     )
   }
 })
-vi.mock('@/lib/monaco-setup', async () => {
+vi.mock('@/lib/editor/monaco/monaco-setup', async () => {
   const { loader } = await import('@monaco-editor/react')
   // Why: the real setup installs this guard; without it a disposed editor's pending word
   // highlight rejects with Monaco's "Canceled" and the run reports unhandled errors.
   const { installMonacoDelayerCancellationGuard } =
-    await import('@/lib/monaco-delayer-cancellation-guard')
+    await import('@/lib/editor/monaco/monaco-delayer-cancellation-guard')
   installMonacoDelayerCancellationGuard()
   loader.config({ monaco })
   return {}

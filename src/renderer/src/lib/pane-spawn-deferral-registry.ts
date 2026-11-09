@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { SpawnDeferralReason } from '../../../shared/host-spawn-admission'
+import type { SpawnDeferralReason } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 export type PaneSpawnDeferral = {
   reason: SpawnDeferralReason

@@ -10,18 +10,18 @@ import {
 } from '../../../shared/agent-session/structured-agent-session-create'
 import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { useAppStore } from '@/store'
 import {
   clearWebSessionFocusIntentIfMatches,
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
-} from '@/runtime/web-session-focus-intent'
+} from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
@@ -47,6 +47,8 @@ export type StructuredAgentSessionLaunchIntent = {
   agent: TuiAgent
   params: StructuredAgentSessionCreateParams
   sendSelectionSupport?: boolean
+  /** Client-only admission requirement; reacquired from the child after reload. */
+  forkRequiresInheritedOriginal?: boolean
   sendSkillsSupport?: boolean
   createMessageSupport?: boolean
   createPrepared?: true
@@ -158,7 +160,9 @@ function buildStructuredAgentSessionLaunchIntent(
 /** A definitive refusal consumed its operation id, but the provisional tab still owns its session. */
 export function retryStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent,
-  retainOpening = false
+  retainOpening = false,
+  /** Starts a new conversation instead of resuming one the agent never saved. */
+  fresh = false
 ): StructuredAgentSessionLaunchIntent {
   if (retainOpening) {
     const { beforeCreate: _beforeCreate, createAfter: _createAfter, ...retained } = intent
@@ -179,10 +183,11 @@ export function retryStructuredAgentSessionLaunchIntent(
       intent,
       intent.agent,
       intent.sessionId,
-      intent.params.resumeFrom,
+      fresh ? undefined : intent.params.resumeFrom,
       intent.seedOptions,
       intent.params.forkFrom
     ),
+    forkRequiresInheritedOriginal: intent.forkRequiresInheritedOriginal,
     explicitLaunchOptions: intent.explicitLaunchOptions
   }
 }

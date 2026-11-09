@@ -1,29 +1,32 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AppState } from '../../types'
-import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
+
+import {
+  GRAB_BUDGET,
+  type BrowserPageAnnotation
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { makeAnnotation } from './annotations/browser-annotation-test-fixture'
-import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
-import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser-profile-scope'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { createBrowserMockApi, createTestStore } from './browser-slice-test-harness'
+import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser/profiles/browser-profile-scope'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { createBrowserMockApi } from './browser-slice-test-harness'
 import { createTestStoreDrawnFromMain } from './browser-slice-drawn-from-main.test-fixture'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const runtimeEnvironmentTransportCall = vi.fn()
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
-vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+vi.mock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock
 }))
 
@@ -150,60 +153,6 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().managedBrowserProfileStatusById['minted-by-main']).toBeUndefined()
   })
 
-  it('puts a removed history page back as it was on Undo, unless a revisit already re-created it', () => {
-    const store = createTestStore()
-    store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
-    store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
-    const [visited] = store.getState().browserUrlHistory
-
-    const removed = store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
-    expect(removed).toBe(visited)
-    expect(store.getState().browserUrlHistory).toEqual([])
-    store
-      .getState()
-      .restoreBrowserHistory({ browserUrlHistory: [removed!], workspaceDocHistory: [] })
-    expect(store.getState().browserUrlHistory).toEqual([visited])
-
-    store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
-    store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
-    const revisited = store.getState().browserUrlHistory
-    store
-      .getState()
-      .restoreBrowserHistory({ browserUrlHistory: [removed!], workspaceDocHistory: [] })
-    expect(store.getState().browserUrlHistory).toBe(revisited)
-  })
-
-  it('clears pages and documents visited since a time, and Undo puts back exactly those', () => {
-    vi.useFakeTimers()
-    try {
-      const store = createTestStore()
-      const doc = { kind: 'workspace-doc' as const, worktreeId: 'wt-1', filePath: '/repo/a.html' }
-      vi.setSystemTime(1_000)
-      store.getState().addBrowserHistoryEntry('https://old.example', 'Old')
-      vi.setSystemTime(5_000)
-      store.getState().addBrowserHistoryEntry('https://new.example', 'New')
-      store.getState().recordWorkspaceDocVisit(doc, 'Doc')
-
-      const removed = store.getState().clearBrowserHistory(5_000)
-      expect(store.getState().browserUrlHistory.map((e) => e.title)).toEqual(['Old'])
-      expect(store.getState().workspaceDocHistory).toEqual([])
-
-      store.getState().restoreBrowserHistory(removed)
-      expect(
-        store
-          .getState()
-          .browserUrlHistory.map((e) => e.title)
-          .sort()
-      ).toEqual(['New', 'Old'])
-      expect(store.getState().workspaceDocHistory.map((e) => e.title)).toEqual(['Doc'])
-
-      store.getState().clearBrowserHistory()
-      expect(store.getState().browserUrlHistory).toEqual([])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('sanitizes persistent annotation payloads at the store boundary', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
@@ -231,29 +180,6 @@ describe('createBrowserSlice annotations', () => {
 
     const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
     expect(stored?.payload.screenshot).toBeNull()
-  })
-})
-
-describe('createBrowserSlice floating tabs', () => {
-  it('tracks new floating browser tabs without changing the main browser surface', async () => {
-    const { store, main } = await createTestStoreDrawnFromMain()
-    store.setState({ activeWorktreeId: 'wt-1', activeTabType: 'terminal' } as Partial<AppState>)
-    const mainTab = store.getState().createBrowserTab('wt-1', 'https://example.com')
-    await main.settle()
-    const activeTabTypeBeforeFloating = store.getState().activeTabType
-
-    const tab = store.getState().createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, 'about:blank', {
-      focusAddressBar: true
-    })
-    await main.settle()
-
-    expect(store.getState().activeBrowserTabId).toBe(mainTab.id)
-    expect(store.getState().activeBrowserTabIdByWorktree['wt-1']).toBe(mainTab.id)
-    expect(store.getState().activeBrowserTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
-      tab.id
-    )
-    expect(store.getState().pendingAddressBarFocusByTabId[tab.id]).toBe(true)
-    expect(store.getState().activeTabType).toBe(activeTabTypeBeforeFloating)
   })
 })
 

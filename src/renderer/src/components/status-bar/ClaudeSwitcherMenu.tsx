@@ -2,10 +2,10 @@ import type React from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
 import { useAppStore } from '../../store'
-import { defaultScopeHost } from '@/lib/default-creation-host'
-import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
+import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
 import { ClaudeSwitcherForOwner } from './ClaudeSwitcherForOwner'
-import { getProviderAccountsOwnerKey } from '@/runtime/runtime-provider-accounts-client'
+import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 export type ClaudeSwitcherMenuProps = {
   claude: ProviderRateLimits | null

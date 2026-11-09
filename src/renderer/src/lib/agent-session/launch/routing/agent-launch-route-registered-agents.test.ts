@@ -23,16 +23,18 @@ vi.mock('@/lib/local-preflight-context', () => ({
   getLocalRepoProjectExecutionRuntimeContext: vi.fn()
 }))
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => false }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.readLocalRuntimeCapabilitiesOrUnknown
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('@/lib/agent-session/launch/continuation/structured-agent-launch-settlement', () => ({}))
 
 import {
   loadHostStructuredAgents,
   resetHostStructuredAgentsForTests
-} from '@/runtime/host-structured-agents'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import type { AgentLaunchRouteStore, ProspectiveWorkspace } from './agent-launch-route-input'
 import { planAgentSessionLaunch } from './agent-session-launch-plan'
 

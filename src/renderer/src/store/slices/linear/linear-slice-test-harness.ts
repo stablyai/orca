@@ -6,7 +6,7 @@ import type { AppState } from '../../types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearProjectSummary } from '../../../../../shared/linear/project-types'
 import { createLinearSlice } from './linear'
-import { createTaskCreationDraftsSlice } from '../task-creation-drafts'
+import { createTaskCreationDraftsSlice } from '../task-creation/task-creation-drafts'
 import type { LinearSlice } from './linear-slice-contract'
 
 type IssueReadAction =

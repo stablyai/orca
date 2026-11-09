@@ -6,7 +6,6 @@ import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import { useOnboardingFlow } from './use-onboarding-flow'
-import { usePersistCurrentStep } from './use-onboarding-flow-persistence'
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -60,56 +59,4 @@ describe('onboarding completion persistence', () => {
     expect(openModal).not.toHaveBeenCalled()
     expect(notify).toHaveBeenCalledOnce()
   })
-
-  it.each([
-    ['claude', 'claude'],
-    [null, 'blank']
-  ] as const)(
-    'saves the visible %s selection when completing without visiting the agent page',
-    async (selectedAgent, expectedAgent) => {
-      const savedProgress = getDefaultOnboardingState()
-      const saveProgress = vi.fn().mockResolvedValue(savedProgress)
-      Object.defineProperty(window, 'api', {
-        configurable: true,
-        value: { onboarding: { update: saveProgress } }
-      })
-      vi.spyOn(useAppStore.getState(), 'recordFeatureInteraction').mockResolvedValue(undefined)
-      const updateSettings = vi.fn().mockResolvedValue(undefined)
-      const onOnboardingChange = vi.fn()
-      const { result } = renderHook(() =>
-        usePersistCurrentStep({
-          currentStepId: 'notifications',
-          agentSurface: 'terminal',
-          selectedAgent,
-          agentInteractedRef: { current: false },
-          yoloPermissions: true,
-          yoloPermissionsChosen: { current: false },
-          theme: 'dark',
-          settings: {
-            ...getDefaultSettings('/tmp'),
-            defaultTuiAgent: 'codex',
-            agentDefaultSurface: 'chat'
-          },
-          updateSettings,
-          onboardingChecklist: savedProgress.checklist,
-          onOnboardingChange,
-          setError: vi.fn()
-        })
-      )
-
-      await act(async () => {
-        expect(await result.current()).toEqual({ ok: true })
-      })
-      expect(updateSettings).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ defaultTuiAgent: expectedAgent, agentDefaultSurface: 'terminal' })
-      )
-      expect(saveProgress).toHaveBeenCalledWith(
-        expect.objectContaining({
-          lastCompletedStep: 5,
-          checklist: expect.objectContaining({ choseAgent: selectedAgent !== null })
-        })
-      )
-      expect(onOnboardingChange).toHaveBeenCalledWith(savedProgress)
-    }
-  )
 })

@@ -5,8 +5,8 @@ import {
   type WorktreeCreationPhase,
   type WorktreeCreationRequest
 } from '@/lib/workspace/creation/pending-worktree-creation'
-import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
-import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
+import { updateNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import {
   isInstantFolderWorktreeCreation,
@@ -172,6 +172,7 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
     provisioningLog: undefined,
+    environmentCheck: undefined,
     checkoutProgress: undefined,
     worktreeId: undefined
   })

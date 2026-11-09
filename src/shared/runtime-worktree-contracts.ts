@@ -6,6 +6,7 @@ import type {
 } from './agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from './agent-status/lifecycle/main-agent-status'
 import type { ProgramStatusFacet } from './program-status/facet'
+import type { AgentListVerdict } from './agent-status/presentation/agent-list-status'
 import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
 import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
@@ -63,6 +64,8 @@ export type RuntimeWorktreeAgentRow = {
   hasLivePty?: true
   /** The program's own OSC 7501 report; never decides `state`. Optional: old hosts never send it. */
   programStatus?: ProgramStatusFacet
+  /** How the desktop Agents list shows this agent. Omitted with no desktop window, by old hosts, and for a turn newer than the window's last verdicts. */
+  activity?: AgentListVerdict
 }
 
 export type RuntimeWorktreePsSummary = {
@@ -70,6 +73,8 @@ export type RuntimeWorktreePsSummary = {
   worktreeId: string
   repoId: string
   hostId?: Worktree['hostId']
+  /** Host-qualified identity; tells same-id rows on different hosts apart. Absent from older hosts. */
+  identity?: Worktree['identity']
   terminalPlatform?: NodeJS.Platform
   repo: string
   path: string
@@ -143,11 +148,15 @@ export type RuntimeWorktreePsSummary = {
   detachedHead?: true
   /** Other-client classification for this host’s own phone, which shares its filter setting. */
   desktopOtherClient?: true
+  /** Set by a relaying desktop that created this workspace's environment from a recipe. */
+  recipeEnvironment?: { name: string; destroys?: boolean }
 }
 
 export type RuntimeGitLocalBranches = {
   current: string | null
   branches: string[]
+  committedAt?: Record<string, number>
+  worktreePaths?: Record<string, string>
 }
 
 export type RuntimeSpeechModelSummary = {
@@ -164,8 +173,14 @@ export type RuntimeSpeechSetupState = {
   enabled: boolean
   selectedModelId: string
   dictationMode: 'toggle' | 'hold'
+  /** Toggle plus hold-to-record is Auto. */
+  dictationHoldToRecord: boolean
+  /** Phones that recognize speech themselves clean their own text by this switch. */
+  removeFillerWords: boolean
   models: RuntimeSpeechModelSummary[]
 }
+
+export type RuntimeGitSwitchResult = { ok: true; branch: string; head?: string; warning?: string }
 
 export type RuntimeGitCheckoutResult = {
   ok: true
@@ -214,6 +229,7 @@ export type RuntimeWorktreePsResult = {
 export type RuntimeRepoList = { repos: Repo[] }
 
 export type RuntimeRepoSearchRefs = {
+  namespace?: 'remote'
   refs: string[]
   refDetails?: BaseRefSearchResult[]
   truncated: boolean

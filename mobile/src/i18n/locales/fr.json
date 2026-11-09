@@ -210,7 +210,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
-      "reconnecting": "Reconnexion…",
       "waitingForTerminal": "En attente du terminal…"
     },
     "diffCard": {
@@ -305,12 +304,18 @@
       "plan": "Plan",
       "stoppedManually": "Arrêté manuellement",
       "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
+      "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
       "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
       "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
       "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}.",
       "signIn": "Se connecter",
       "signInHint": "Ouvre un terminal sur l’ordinateur qui exécute ce chat",
       "forkedFrom": "Branche créée à partir de"
+    },
+    "ciResultLine": {
+      "failingLead": "CI en échec sur",
+      "greenLead": "CI au vert sur",
+      "at": "à"
     },
     "orcaStop": {
       "canContinue": "Vous pouvez continuer dans cette conversation.",
@@ -357,6 +362,13 @@
       "resume": "Reprendre",
       "resumeSending": "Reprendre l'envoi des messages en file d'attente",
       "title": "Messages en file d'attente"
+    },
+    "offlineQueue": {
+      "failed": "Échec de l'envoi — touchez Envoyer pour réessayer",
+      "waitingFor": "Sera envoyé au retour de {{host}}",
+      "waiting": "Sera envoyé au retour de l'ordinateur",
+      "behind": "En attente — un message précédent requiert votre attention",
+      "closed": "Non envoyé avant la fermeture d'Orca"
     },
     "receipt": {
       "cancelled": "Annulé",
@@ -626,6 +638,7 @@
       "fullCopySaveUpdate": "La copie intégrale et l’enregistrement de cette pièce jointe seront disponibles dans une mise à jour du téléphone."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} est hors ligne · état à {{time}}",
       "reconnecting": "{{hostName}} se reconnecte…",
       "stopped": "{{hostName}} est arrêté. Démarrez-le sur votre ordinateur.",
       "server": "Le serveur",
@@ -1330,6 +1343,30 @@
       "sessionLimit": "Trop d'appareils dictent sur cet ordinateur. Réessayez quand l'un d'eux aura terminé.",
       "sessionLost": "La dictée a perdu sa connexion à l'ordinateur. Réessayez.",
       "updateFailed": "Impossible de mettre à jour les paramètres de dictée"
+    },
+    "controls": {
+      "start": "Dicter",
+      "starting": "Démarrage de la dictée",
+      "stop": "Arrêter et insérer",
+      "finishing": "Finalisation de la dictée",
+      "cancel": "Annuler la dictée",
+      "meterOnPhone": "Enregistrement, {{duration}}, sur ce téléphone",
+      "meterOn": "Enregistrement, {{duration}}, sur {{computer}}",
+      "meterOnComputer": "Enregistrement, {{duration}}, sur l’ordinateur",
+      "meter": "Enregistrement, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} seconde",
+      "durationSeconds_other": "{{count}} secondes",
+      "durationSeconds_many": "{{count}} secondes",
+      "durationMinutes_one": "{{count}} minute",
+      "durationMinutes_other": "{{count}} minutes",
+      "durationMinutes_many": "{{count}} minutes"
+    },
+    "status": {
+      "finishingOn": "Finalisation sur {{computer}}",
+      "finishingOnComputer": "Finalisation sur l’ordinateur",
+      "movedTo": "Passé sur {{computer}}",
+      "movedToComputer": "Passé sur l’ordinateur"
     }
   },
   "files": {
@@ -1346,10 +1383,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponible sur mobile",
       "loadFolderFailed": "Impossible de charger le dossier",
+      "loadedOfTotal": "{{loaded}} sur {{total}}",
       "loading": "Chargement…",
       "openFolder": "Ouvrir le dossier {{name}}",
       "previewFile": "Afficher l'aperçu du fichier {{name}}",
       "retryLoading": "Réessayer de charger {{path}}",
+      "searchAll": "Tout rechercher",
+      "searchAllIn": "Rechercher dans tout {{folder}}",
+      "searched": "{{loaded}} sur {{total}} parcourus dans {{folder}}.",
+      "searching": "Recherche dans {{folder}}… {{loaded}} sur {{total}}",
+      "showMore": "Afficher {{rows}} de plus",
       "unavailable": "Indisponible sur mobile"
     },
     "fileExplorerRowActions": {
@@ -1423,15 +1466,16 @@
       "openFailed": "Impossible d'ouvrir ce PDF",
       "opening": "Ouverture du PDF…",
       "updateRequired": "Mettez à jour Orca Mobile pour ouvrir des PDF."
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Modifié sur l'ordinateur depuis vos modifications de {{time}}",
+      "copyMyEdits": "Copier mes modifications",
+      "discard": "Abandonner",
+      "restore": "Restaurer",
+      "unsavedFrom": "Modifications non enregistrées de {{time}}"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} en activité",
-      "heading": "Agents",
-      "showAll": "Tout afficher ({{count}})",
-      "showFewer": "Afficher moins"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Ignorer la mise à jour Orca {{version}}",
       "title": "Orca {{version}} est disponible",
@@ -1512,7 +1556,8 @@
       "microphonePermissionDenied": "Accès au microphone refusé",
       "noSpeech": "Aucune parole détectée.",
       "phoneUnavailable": "La dictée sur ce téléphone n’est pas prête. Téléchargez-la dans les réglages Voix ou choisissez Automatique.",
-      "phoneFailed": "La dictée sur ce téléphone a cessé de fonctionner. Réessayez."
+      "phoneFailed": "La dictée sur ce téléphone a cessé de fonctionner. Réessayez.",
+      "phoneBusy": "La dictée sur ce téléphone démarre encore. Réessayez dans un instant."
     }
   },
   "host": {
@@ -1554,6 +1599,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Supprimer « {{name}} » ({{branch}}) ?",
+      "deleteDestroysEnvironment": "Cela détruit aussi l’environnement « {{environment}} » qu’Orca a créé pour lui, avec les modifications non validées et les terminaux en cours qui s’y trouvent.",
+      "deleteKeepsEnvironment": "L’environnement « {{environment}} » qu’Orca a créé pour lui continue de tourner : sa recette n’a pas d’étape de destruction.",
       "deleteWorktree": "Supprimer le worktree",
       "pin": "Épingler",
       "primaryWorktreeDeleteHint": "Worktree principal — impossible à supprimer. Retirez plutôt le projet.",
@@ -2241,8 +2288,7 @@
       "copyPathLabel": "Copier le chemin du fichier Markdown",
       "copySource": "Copier la source Markdown",
       "discard": "Abandonner",
-      "dismissKeyboard": "Masquer le clavier",
-      "dismissKeyboardHint": "Masque le clavier virtuel et laisse l'éditeur Markdown ouvert.",
+      "previewTruncated": "Aperçu tronqué.",
       "readOnly": "Lecture seule"
     },
     "nativeChatAttachActions": {
@@ -2452,11 +2498,7 @@
     "terminalInputActions": {
       "attachFileHint": "Appuyez longuement pour joindre un fichier à la place.",
       "attachPhoto": "Joindre une photo",
-      "sendingImage": "Envoi de l'image",
-      "startDictation": "Démarrer la dictée vocale",
-      "startingDictation": "Démarrage de la dictée vocale",
-      "stopDictation": "Arrêter la dictée vocale",
-      "transcribingDictation": "Transcription de la dictée vocale"
+      "sendingImage": "Envoi de l'image"
     },
     "terminalLiveInputStatus": {
       "listening": "Écoute en cours",
@@ -2465,8 +2507,6 @@
       "processing": "Traitement en cours",
       "releaseMicHint": "Relâchez le micro pour arrêter",
       "startingMic": "Démarrage du micro",
-      "stopHint": "Touchez le micro pour arrêter",
-      "transcribing": "Transcription sur l'ordinateur",
       "uploadingImage": "Envoi de l'image à l'hôte",
       "uploadingImageTitle": "Envoi de l'image"
     },
@@ -2560,7 +2600,8 @@
       "insertFailed": "Impossible d'insérer la dictée",
       "insertFailedCopied": "Impossible d'insérer la dictée ; elle a été copiée dans le presse-papiers",
       "inserted": "Dictée insérée",
-      "stoppedAfterSilence": "Arrêt après une minute de silence"
+      "stoppedAfterSilence": "Arrêt après une minute de silence",
+      "stoppedAtCloudLimit": "Dictée arrêtée à la limite cloud de 10 minutes."
     },
     "useNativeChatStop": {
       "stopNotSent": "Commande d'arrêt non envoyée",
@@ -2885,6 +2926,8 @@
       "dictationHeading": "DICTÉE",
       "dictationMode": "Mode de dictée",
       "dictationModeDescription": "Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que vous maintenez l'appui.",
+      "dictationModeWithAutoDescription": "Auto : appuyez pour démarrer et arrêter ; sur votre ordinateur, maintenir le raccourci enregistre jusqu’à ce que vous relâchiez. Maintien : dictez tant que vous maintenez l’appui. Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter.",
+      "autoMode": "Auto",
       "downloadFailed": "Échec du téléchargement",
       "enableDictation": "Activer la dictée vocale",
       "holdMode": "Maintien",
@@ -2910,8 +2953,10 @@
       "phoneReady": "Prêt sur ce téléphone",
       "phoneNeedsDownload": "Téléchargement de la langue requis",
       "phoneDownloading": "Téléchargement… {{progress}} %",
-      "phoneUnsupported": "Indisponible pour la langue de ce téléphone",
-      "download": "Télécharger pour ce téléphone"
+      "phoneUnsupported": "Indisponible sur ce téléphone",
+      "download": "Télécharger pour ce téléphone",
+      "downloadSize": "Environ {{size}} Mo",
+      "phoneChecking": "Vérification…"
     }
   },
   "sourceControl": {

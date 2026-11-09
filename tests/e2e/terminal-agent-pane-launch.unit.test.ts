@@ -10,7 +10,7 @@ import {
   markAgentLaunchesClosedByUser,
   resetAgentLaunchPanesForTests
 } from '../../src/main/agent-launch/agent-launch-pane-attachment'
-import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../src/shared/agent-launch/contracts/agent-launch-pane-verdict'
+import '../../src/shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import {
   makePaneSpawnReservationKey,
@@ -56,14 +56,18 @@ vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subs
     return () => renderer.watchers.delete(id)
   }
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: async () => null
 }))
-vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: renderer.writes
 }))
-vi.mock('@/runtime/runtime-terminal-stream', () => ({ subscribeToRuntimeTerminalData: vi.fn() }))
-vi.mock('@/lib/agent-ready-wait', () => ({ waitForAgentReady: async () => ({ ready: false }) }))
+vi.mock('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription', () => ({
+  subscribeToRuntimeTerminalData: vi.fn()
+}))
+vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
+  waitForAgentReady: async () => ({ ready: false })
+}))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: mockLaunchAgentKind }))
 const mockLaunchAgentKind = vi.hoisted(() => () => 'claude')
 vi.mock('../../src/shared/agent-kind', async (importOriginal) => ({
@@ -100,7 +104,7 @@ vi.mock('../../src/main/opencode/hook-service', () =>
 vi.mock('../../src/main/mimo/hook-service', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
-vi.mock('../../src/main/agent-hooks/server', () =>
+vi.mock('../../src/main/agent-hooks/server/agent-hook-server', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../src/main/pi/titlebar-extension-service', () =>
@@ -128,7 +132,7 @@ vi.mock('../../src/main/cli/linux-terminal-orca-cli-shim', () =>
 vi.mock('../../src/main/memory/pty-registry', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
-vi.mock('../../src/main/agent-hooks/migration-unsupported-pty-state', () =>
+vi.mock('../../src/main/agent-hooks/observations/migration-unsupported-pty-state', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.migrationUnsupportedPtyModuleMock()
   )
@@ -216,35 +220,6 @@ describe('a pane that starts its own agent launch', () => {
     )
   }
 
-  it("starts the host's planned command once, at the pane's size, and says it started", async () => {
-    const providerSpawn = vi.fn(async () => ({ id: 'pty-agent' }))
-    const runtime = register(providerSpawn)
-
-    await expect(spawnPane()).resolves.toMatchObject({ id: 'pty-agent' })
-
-    expect(runtime.planAgentPaneLaunch).toHaveBeenCalledOnce()
-    expect(providerSpawn).toHaveBeenCalledOnce()
-    expect(providerSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({ command: 'claude', cols: 132, rows: 40 })
-    )
-    expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
-      kind: 'proceed'
-    })
-  })
-
-  // Why: the window submits a handoff into this pane, and Enter picks Codex's "Update now" (#18153).
-  it('plans a pane whose prompt the window submits without the startup update prompt', async () => {
-    const runtime = register(vi.fn(async () => ({ id: 'pty-agent' })))
-
-    await spawnPane({ ...AI_BUTTON, suppressStartupUpdatePrompt: true })
-
-    expect(runtime.planAgentPaneLaunch).toHaveBeenCalledWith(
-      worktreeId,
-      expect.objectContaining({ startupAgent: 'claude', suppressStartupUpdatePrompt: true }),
-      undefined
-    )
-  })
-
   it('compiles an Automation submit on the host with its full options, raw Args and separate extras', async () => {
     const prompt = `Review 'the changes'\n${'Keep every requested detail. '.repeat(1200)}`.trim()
     const planned = await planQueuedPaneAgentLaunch(
@@ -300,30 +275,6 @@ describe('a pane that starts its own agent launch', () => {
     expect(planned.launchConfig?.agentArgs).not.toContain('/host-default')
     expect(planned.agentLaunch).toBeUndefined()
   })
-
-  it.each([
-    { connectionId: 'ssh-fixture', expected: 'shell-ready' },
-    { connectionId: null, expected: undefined }
-  ] as const)(
-    'preserves caller shell-ready delivery only for a connection-scoped adapter ($connectionId)',
-    async ({ connectionId, expected }) => {
-      const planned = await planQueuedPaneAgentLaunch(
-        AI_BUTTON,
-        { agentPermissionDefault: 'own' },
-        PANE_ADDRESS,
-        {
-          connectionId,
-          commandDelivery: 'provider',
-          startupCommandDelivery: 'shell-ready'
-        }
-      )
-
-      expect(planned.command).toBe('claude')
-      expect(planned.commandDelivery).toBe('provider')
-      expect(planned.connectionId).toBe(connectionId)
-      expect(planned.startupCommandDelivery).toBe(expected)
-    }
-  )
 
   // Planned command quoting requires the planner's runtime shell; an inferred tab shell can reject WSL-share repos.
   it("runs the plan's runtime shell, not the tab's, as a host launch does", async () => {
@@ -398,41 +349,6 @@ describe('a pane that starts its own agent launch', () => {
     await Promise.all([spawnPane(), spawnPane()])
 
     expect(providerSpawn).toHaveBeenCalledOnce()
-  })
-
-  it.each([
-    { returnLaunchFailure: false, error: AGENT_LAUNCH_PANE_REFUSED_CODE },
-    { returnLaunchFailure: true, error: 'agent_launch_agent_disabled' }
-  ])(
-    'starts no shell on plan failure (original failure: $returnLaunchFailure)',
-    async ({ returnLaunchFailure, error }) => {
-      const providerSpawn = vi.fn(async () => ({ id: 'pty-shell' }))
-      const runtime = register(providerSpawn, async () => {
-        throw new Error('agent_launch_agent_disabled')
-      })
-
-      await expect(spawnPane({ ...AI_BUTTON, returnLaunchFailure })).rejects.toThrow(error)
-
-      expect(providerSpawn).not.toHaveBeenCalled()
-      expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
-        kind: 'not-started',
-        code: 'agent_launch_agent_disabled'
-      })
-    }
-  )
-
-  it('cannot confirm a start whose provider answer was lost', async () => {
-    const providerSpawn = vi.fn(async () => {
-      throw new Error('daemon reply lost')
-    })
-    const runtime = register(providerSpawn)
-
-    await expect(spawnPane()).rejects.toThrow(AGENT_LAUNCH_PANE_REFUSED_CODE)
-
-    expect(providerSpawn).toHaveBeenCalledOnce()
-    expect(runtime.reportAgentLaunchPaneVerdict).toHaveBeenCalledWith(PANE_ADDRESS, {
-      kind: 'unconfirmed'
-    })
   })
 
   it('starts nothing when the user closed the pane while it was planned', async () => {

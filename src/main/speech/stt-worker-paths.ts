@@ -1,9 +1,9 @@
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { speechEngineForModelFiles, type SpeechEngine } from '../../shared/speech-model-engine'
 import {
-  SPEECH_RECOGNIZER_DIR_ENV,
-  speechRecognizerPackageName
+  hasSpeechEnginePackage,
+  SPEECH_RECOGNIZER_DIR_ENV
 } from '../../shared/speech-recognizer-package'
 import {
   currentWorkerEntryLayout,
@@ -17,34 +17,42 @@ export function getSttWorkerPath(): string {
   return resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), 'stt-worker.js')
 }
 
-/** Recognizer directory, or null on hosts without one. */
-export function getSherpaModulePath(): string | null {
-  const nativePackage = speechRecognizerPackageName(process.platform, process.arch)
+function speechNodeModulesDirCandidates(): string[] {
   const resourcesPath =
     'resourcesPath' in process && typeof process.resourcesPath === 'string'
       ? process.resourcesPath
       : undefined
-
   if (getAppEnvironment().isPackaged() && resourcesPath) {
-    const resourcesNodeModule = join(resourcesPath, 'node_modules', nativePackage)
-    if (existsSync(resourcesNodeModule)) {
-      return resourcesNodeModule
-    }
-    return join(resourcesPath, 'app.asar.unpacked', 'node_modules', nativePackage)
+    return [
+      join(resourcesPath, 'node_modules'),
+      join(resourcesPath, 'app.asar.unpacked', 'node_modules')
+    ]
   }
   if (getAppEnvironment().isPackaged()) {
     // orcad: only the installed app's copy, which `orca serve` names.
     const handed = process.env[SPEECH_RECOGNIZER_DIR_ENV]
-    return handed && existsSync(join(handed, 'sherpa-onnx.node')) ? handed : null
+    return handed ? [handed] : []
   }
-
-  try {
-    return join(require.resolve(nativePackage), '..')
-  } catch {
-    return null
-  }
+  return require.resolve.paths('transcribe-cpp') ?? []
 }
 
-export function hasLocalSpeechRecognizer(): boolean {
-  return getSherpaModulePath() !== null
+// The app's engine packages don't change while it runs, so each engine is looked up once.
+const speechEngineModulesDirs = new Map<SpeechEngine, string | null>()
+
+/** The node_modules directory holding `engine`, or null on hosts without it. */
+export function getSpeechEngineModulesDir(engine: SpeechEngine): string | null {
+  let dir = speechEngineModulesDirs.get(engine)
+  if (dir === undefined) {
+    dir =
+      speechNodeModulesDirCandidates().find((candidate) =>
+        hasSpeechEnginePackage(candidate, engine)
+      ) ?? null
+    speechEngineModulesDirs.set(engine, dir)
+  }
+  return dir
+}
+
+/** Whether this host ships the engine `model` runs on. */
+export function hasLocalSpeechRecognizer(model: { files?: readonly string[] }): boolean {
+  return getSpeechEngineModulesDir(speechEngineForModelFiles(model.files ?? [])) !== null
 }

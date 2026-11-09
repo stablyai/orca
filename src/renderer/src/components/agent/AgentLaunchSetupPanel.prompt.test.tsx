@@ -10,8 +10,8 @@ import { fireEvent, getByRole, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
-import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
-import { readNativeChatComposerDraft } from '../native-chat/native-chat-composer-draft-store'
+import { changePrompt } from '../native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { readNativeChatComposerDraft } from '../native-chat/drafts/native-chat-composer-draft-store'
 import { EntryActionRow } from '../tab-bar/TabBarCreateEntryRow'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import {
@@ -41,7 +41,9 @@ it.each(['claude', 'codex'] as const)(
             id: 'selected',
             label: 'Selected',
             efforts: [{ value: 'high', label: 'High' }],
-            isDefault: true
+            isDefault: true,
+            supportsFastMode: true,
+            serviceTiers: [{ value: 'fast', label: 'Fast' }]
           }
         ]
       }
@@ -68,9 +70,8 @@ it.each(['claude', 'codex'] as const)(
       )!
     fireEvent.click(panel().querySelector('[cmdk-item]')!)
     fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
-    fireEvent.change(panel().querySelector('textarea')!, {
-      target: { value: '--add-dir "authored exact path"' }
-    })
+    // A speed edit copies the current Arguments into the draft; later settings must still win.
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Fast' }))
     changePrompt(
       panel().querySelector<HTMLElement>('[contenteditable]')!,
       'keep @/repo/exact-file.ts'
@@ -86,55 +87,57 @@ it.each(['claude', 'codex'] as const)(
     act(() =>
       root.render(
         <TooltipProvider>
-          <EntryActionRow
-            id="actual-search-row"
-            option={{
-              kind: 'agent',
-              option: { agent, aliases: [], label: agent, pickerEntry: refreshed }
-            }}
-            selected={false}
-            onClick={() => launch(undefined)}
-            onUseAgent={(draft) => launch(own.rows[0], draft, refreshed)}
-          />
+          <DropdownMenu defaultOpen modal={false}>
+            <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <EntryActionRow
+                id="actual-search-row"
+                option={{
+                  kind: 'agent',
+                  option: { agent, aliases: [], label: agent, pickerEntry: refreshed }
+                }}
+                selected={false}
+                onClick={() => launch(undefined)}
+                onUseAgent={(draft) => launch(own.rows[0], draft, refreshed)}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
         </TooltipProvider>
       )
     )
     fireEvent.click(configure())
-    expect(panel().querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(
-      '--add-dir "authored exact path"'
-    )
+    expect(panel().querySelector('textarea[aria-label="Arguments"]')).toBeNull()
     expect(panel().querySelector('[contenteditable]')?.textContent).toContain('exact-file.ts')
     launch.mockReturnValueOnce(false)
-    fireEvent.keyDown(panel().querySelector('textarea')!, { key: 'Enter' })
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
     await waitFor(() => expect(launch).toHaveBeenCalledOnce())
     const inputs = agentPickerLaunchInputs(launch.mock.lastCall![1], refreshed)
-    expect(inputs).toMatchObject({
-      agentArgs: '--add-dir "authored exact path"',
-      sessionOptions: { model: 'selected', effort: 'high' }
-    })
+    expect(inputs).toMatchObject({ sessionOptions: { model: 'selected', effort: 'high' } })
     expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], refreshed)).toMatchObject({
       ok: true,
       tokens:
         agent === 'claude'
           ? [
               'claude',
-              '--add-dir',
-              'authored exact path',
+              '--dangerously-skip-permissions',
               '--model',
               'selected',
               '--effort',
-              'high'
+              'high',
+              '--settings',
+              '{"fastMode":true}'
             ]
           : [
               'codex',
               '-c',
               'disable_paste_burst=true',
-              '--add-dir',
-              'authored exact path',
+              '--dangerously-bypass-approvals-and-sandbox',
               '-m',
               'selected',
               '-c',
-              'model_reasoning_effort=high'
+              'model_reasoning_effort=high',
+              '-c',
+              'service_tier=fast'
             ]
     })
     await waitFor(() =>
@@ -144,10 +147,7 @@ it.each(['claude', 'codex'] as const)(
     )
     fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
     await waitFor(() => expect(launch).toHaveBeenCalledTimes(2))
-    expect(launch.mock.lastCall![1]).toMatchObject({
-      prompt: 'keep @/repo/exact-file.ts',
-      argumentsOwner: refreshed.ownerKey
-    })
+    expect(launch.mock.lastCall![1]).toMatchObject({ prompt: 'keep @/repo/exact-file.ts' })
     await waitFor(() =>
       expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(refreshed)).text).toBe('')
     )

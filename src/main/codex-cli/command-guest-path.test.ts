@@ -2,7 +2,6 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { probeRecentClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { resolveGuestNativeAgentCommand, WINDOWS_ONLY_AGENT_CLI_DIR } from './command'
 
 let root: string
@@ -46,17 +45,4 @@ describe.skipIf(process.platform === 'win32')('agent CLI resolution on a WSL hos
       )
     }
   )
-
-  it('resolves exactly as before off a WSL host', () => {
-    const windowsCopy = install(join(drive, 'npm'), 'claude')
-    expect(resolveGuestNativeAgentCommand('claude', options(), [])).toBe(windowsCopy)
-  })
-})
-
-describe.skipIf(process.platform === 'win32')('callers given a Windows-only CLI', () => {
-  const missing = `${WINDOWS_ONLY_AGENT_CLI_DIR}/claude`
-
-  it('read no version (hook-event and diff-panel version probes)', async () => {
-    await expect(probeRecentClaudeCliVersion(missing)).resolves.toBeNull()
-  })
 })

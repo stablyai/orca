@@ -2,17 +2,12 @@ import { releaseUnreferencedEditorContent } from '../editor/tabs/editor-tab-reti
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
+import { getActiveExecutionHostIdForWorktree } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import {
-  ensureGroup,
-  findGroupForTab,
-  pushRecentTabId,
-  sanitizeRecentTabIds,
-  updateGroup
-} from '../tab-group-state'
+import { ensureGroup, findGroupForTab, updateGroup } from './tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import {
   applyTabOrderSortValues,
   canReplacePreviewContentType,
@@ -23,7 +18,7 @@ import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
-import { selectFolderWorkspaces } from '../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,

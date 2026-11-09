@@ -9,7 +9,10 @@ import type {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { stopCurrentClaudeBackgroundTasks } from './claude-structured-control-actions'
 import { claudeHeldSends, claudeHoldsDispatch } from '../claude-command-lifecycle'
-import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
+import {
+  releaseClaudeAcquisition,
+  type ClaudeReleaseRequest
+} from './claude-structured-acquisition-release'
 import { acquireClaudeSession } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './launch/claude-structured-location-support'
 import * as claudeOptions from './launch/claude-structured-options'
@@ -97,7 +100,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
           finishClaudeCloseAfterExit({
             sessions: this.sessions,
             exits: this.exits,
-            closeExit: this.releaseProviderSession,
+            closeExit: (sessionId) => this.releaseProviderSession({ sessionId }),
             sessionId,
             connection: attempt.connection,
             deps: { ...this.deps, settledExitErrors: this.settledExitErrors },
@@ -227,9 +230,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId))
-  releaseAcquisition = (input: { sessionId: string }): Promise<boolean> => {
+  releaseAcquisition = (input: ClaudeReleaseRequest): Promise<boolean> => {
     this.endings.retire(input.sessionId)
-    return this.afterClose(input.sessionId, () => this.releaseProviderSession(input.sessionId))
+    return this.afterClose(input.sessionId, () => this.releaseProviderSession(input))
   }
   acknowledgeSessionRelease = (sessionId: string): void => {
     this.settledExitErrors.delete(sessionId)
@@ -260,9 +263,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     }
   }
 
-  private releaseProviderSession = (sessionId: string): Promise<boolean> =>
+  private releaseProviderSession = (request: ClaudeReleaseRequest): Promise<boolean> =>
     releaseClaudeAcquisition({
-      sessionId,
+      ...request,
       sessions: this.sessions,
       acquisitions: this.acquisitions,
       exits: this.exits,
@@ -272,8 +275,12 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       ...this.deps
     })
 
-  closeSession = (sessionId: string): Promise<boolean> =>
-    this.releaseAcquisition({ sessionId }).finally(() => {
+  closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (
+    sessionId,
+    _,
+    options
+  ) =>
+    this.releaseAcquisition({ sessionId, closeOptions: options }).finally(() => {
       const receipt = this.settledExitErrors.get(sessionId)
       if (
         !(

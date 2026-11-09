@@ -10,20 +10,20 @@ import type {
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { classifyGitHubUnavailable } from '../../../../../shared/github/api-availability'
-import { callRuntimeRpc } from '../../../runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '../../../runtime/runtime-rpc-result'
-import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/repo-runtime-owner'
+import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../../runtime/rpc/calls/runtime-rpc-result'
+import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/workspace/ownership/repo-runtime-owner'
 import {
   runtimeTargetForOwnerEnvironment,
   ipcOrRuntimeTargetForHostId
-} from '@/runtime/runtime-client-target'
+} from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { workItemsCacheKey } from '../cache/cache-identity'
 import { findRepoForGitHubOwner, getRuntimeRepoTarget } from '../repositories/repository-routing'

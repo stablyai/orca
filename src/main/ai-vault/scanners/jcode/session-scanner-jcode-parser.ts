@@ -1,3 +1,4 @@
+import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -47,14 +48,21 @@ function jcodeMessageTokens(message: Record<string, unknown>): number {
 export async function parseJcodeSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseJcodeSessionContent(
+  const fold = foldJcodeSessionContent(
     file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    await waitForAiVaultScan(wslGatedReadFile(file.path, 'utf-8', 'scan', signal), signal),
     platform,
-    messages ? { messages } : undefined
+    { messages }
   )
+  let step = fold.next()
+  while (!step.done) {
+    await waitForAiVaultScan(messages?.drain?.() ?? Promise.resolve(), signal)
+    step = fold.next()
+  }
+  return step.value
 }
 
 export function parseJcodeSessionContent(
@@ -63,6 +71,20 @@ export function parseJcodeSessionContent(
   platform: NodeJS.Platform = process.platform,
   options: ParserSessionOptions = {}
 ): AiVaultSession | null {
+  const fold = foldJcodeSessionContent(file, content, platform, options)
+  let step = fold.next()
+  while (!step.done) {
+    step = fold.next()
+  }
+  return step.value
+}
+
+function* foldJcodeSessionContent(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform,
+  options: ParserSessionOptions
+): Generator<void, AiVaultSession | null> {
   let parsed: unknown
   try {
     parsed = JSON.parse(content)
@@ -94,6 +116,7 @@ export function parseJcodeSessionContent(
   // Ignore the live journal: its appends do not change the document signature used by the parse cache.
   for (const message of arrayValue(record.messages)) {
     consumeJcodeMessage(accumulator, message)
+    yield
   }
 
   return finalizeSession(accumulator, platform, options)

@@ -1,6 +1,6 @@
 import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   mutateJiraSavedFilters,
   readJiraSavedFilterState
@@ -12,6 +12,7 @@ import type {
 } from '../../../../../shared/jira/jira-saved-filters'
 import type { TaskPageLinearViewStateModel } from '../linear/use-task-page-linear-view-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const EMPTY_SAVED_FILTER_STATE: JiraSavedFilterState = { filters: [], activeFilterId: null }
 
@@ -32,6 +33,7 @@ export function useTaskPageJiraSavedFilters(
   model: JiraSavedFilterModel,
   setQuery: (jql: string) => void
 ) {
+  const t = useTranslate()
   const ownerKey = model.jiraTaskSourceContext?.hostId ?? model.accountBackedTaskSourceHostId
   const target = useMemo(() => ipcOrRuntimeTargetForHostId(ownerKey), [ownerKey])
   const [snapshot, setSnapshot] = useState<{
@@ -158,7 +160,7 @@ export function useTaskPageJiraSavedFilters(
         setError(
           reason instanceof Error
             ? reason.message
-            : translate('jira.savedFilters.saveFailed', 'Could not save Jira filters.')
+            : t('jira.savedFilters.saveFailed', 'Could not save Jira filters.')
         )
       }
       throw reason

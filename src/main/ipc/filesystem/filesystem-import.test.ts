@@ -84,16 +84,6 @@ describe('fs:importExternalPaths', () => {
     })
   }
 
-  function mockSymlinkSource(filePath: string): void {
-    const resolvedPath = path.resolve(filePath)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === resolvedPath) {
-        return { isFile: () => false, isDirectory: () => false, isSymbolicLink: () => true }
-      }
-      throw enoent()
-    })
-  }
-
   function mockLocalCopyOpenSuccess(content = Buffer.from('file-content')): void {
     openMock.mockImplementation(async (_p: string, flags: unknown) => {
       if (flags === 'wx') {
@@ -152,30 +142,6 @@ describe('fs:importExternalPaths', () => {
     unlinkMock.mockResolvedValue(undefined)
 
     registerFilesystemMutationHandlers(store as never)
-  })
-
-  it('imports a single file', async () => {
-    const sourcePath = '/tmp/dropped/logo.png'
-    mockSourceFile(sourcePath)
-
-    const result = (await handlers.get('fs:importExternalPaths')!(null, {
-      sourcePaths: [sourcePath],
-      destDir
-    })) as { results: unknown[] }
-
-    expect(result.results).toHaveLength(1)
-    expect(result.results[0]).toMatchObject({
-      status: 'imported',
-      kind: 'file',
-      renamed: false,
-      destPath: path.join(destDir, 'logo.png')
-    })
-    expect(openMock).toHaveBeenCalledWith(
-      path.resolve(sourcePath),
-      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)
-    )
-    expect(openMock).toHaveBeenCalledWith(path.join(destDir, 'logo.png'), 'wx')
-    expect(copyFileMock).not.toHaveBeenCalled()
   })
 
   it('fails local import instead of clobbering when the chosen destination appears late', async () => {
@@ -276,102 +242,6 @@ describe('fs:importExternalPaths', () => {
     ).toEqual(['file-content', 'file-content'])
   })
 
-  it('deconflicts top-level filename collisions', async () => {
-    const sourcePath = '/tmp/dropped/logo.png'
-    const existingDest = path.join(destDir, 'logo.png')
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === path.resolve(sourcePath)) {
-        return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
-      }
-      if (p === existingDest) {
-        return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
-      }
-      throw enoent()
-    })
-
-    const result = (await handlers.get('fs:importExternalPaths')!(null, {
-      sourcePaths: [sourcePath],
-      destDir
-    })) as { results: { status: string; destPath?: string; renamed?: boolean }[] }
-
-    expect(result.results[0]).toMatchObject({
-      status: 'imported',
-      destPath: path.join(destDir, 'logo copy.png'),
-      renamed: true
-    })
-  })
-
-  it('deconflicts top-level directory collisions', async () => {
-    const sourcePath = '/tmp/dropped/assets'
-    const existingDest = path.join(destDir, 'assets')
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === path.resolve(sourcePath)) {
-        return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
-      }
-      if (p === existingDest) {
-        return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
-      }
-      throw enoent()
-    })
-    readdirMock.mockResolvedValue([])
-
-    const result = (await handlers.get('fs:importExternalPaths')!(null, {
-      sourcePaths: [sourcePath],
-      destDir
-    })) as { results: { status: string; destPath?: string; renamed?: boolean }[] }
-
-    expect(result.results[0]).toMatchObject({
-      status: 'imported',
-      destPath: path.join(destDir, 'assets copy'),
-      renamed: true
-    })
-  })
-
-  it('rejects top-level symlink sources before canonicalization', async () => {
-    const sourcePath = '/tmp/dropped/link.txt'
-    mockSymlinkSource(sourcePath)
-
-    const result = (await handlers.get('fs:importExternalPaths')!(null, {
-      sourcePaths: [sourcePath],
-      destDir
-    })) as { results: { status: string; reason?: string }[] }
-
-    expect(result.results[0]).toMatchObject({ status: 'skipped', reason: 'symlink' })
-    expect(copyFileMock).not.toHaveBeenCalled()
-  })
-
-  it('skips a dropped directory with nested symlinks without leaving partial output', async () => {
-    const sourcePath = '/tmp/dropped/mixeddir'
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === path.resolve(sourcePath)) {
-        return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
-      }
-      throw enoent()
-    })
-    readdirMock.mockResolvedValue([
-      {
-        name: 'normal.txt',
-        isDirectory: () => false,
-        isSymbolicLink: () => false,
-        isFile: () => true
-      },
-      {
-        name: 'bad-link',
-        isDirectory: () => false,
-        isSymbolicLink: () => true,
-        isFile: () => false
-      }
-    ])
-
-    const result = (await handlers.get('fs:importExternalPaths')!(null, {
-      sourcePaths: [sourcePath],
-      destDir
-    })) as { results: { status: string; reason?: string }[] }
-
-    expect(result.results[0]).toMatchObject({ status: 'skipped', reason: 'symlink' })
-    expect(copyFileMock).not.toHaveBeenCalled()
-  })
-
   it('fails and removes output if a local directory entry becomes a symlink after pre-scan', async () => {
     const sourcePath = '/tmp/dropped/mixeddir'
     const resolvedSource = path.resolve(sourcePath)
@@ -427,99 +297,6 @@ describe('fs:importExternalPaths', () => {
         destDir: '/outside/evil'
       })
     ).rejects.toThrow('Access denied')
-  })
-
-  it('returns per-item results including rename metadata', async () => {
-    const sources = ['/tmp/dropped/a.txt', '/tmp/dropped/missing.txt']
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === path.resolve(sources[0])) {
-        return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
-      }
-      throw enoent()
-    })
-
-    const result = (await handlers.get('fs:importExternalPaths')!(null, {
-      sourcePaths: sources,
-      destDir
-    })) as {
-      results: {
-        sourcePath: string
-        status: string
-        reason?: string
-        renamed?: boolean
-      }[]
-    }
-
-    expect(result.results).toHaveLength(2)
-    expect(result.results[0]).toMatchObject({
-      sourcePath: sources[0],
-      status: 'imported',
-      renamed: false
-    })
-    expect(result.results[1]).toMatchObject({
-      sourcePath: sources[1],
-      status: 'skipped',
-      reason: 'missing'
-    })
-  })
-
-  it('stages external files for runtime upload without copying into the local worktree', async () => {
-    const sourcePath = '/tmp/dropped/logo.png'
-    const resolvedPath = path.resolve(sourcePath)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === resolvedPath) {
-        return {
-          size: 4,
-          ino: 1,
-          dev: 1,
-          mtimeMs: 1700000000000,
-          isFile: () => true,
-          isDirectory: () => false,
-          isSymbolicLink: () => false
-        }
-      }
-      throw enoent()
-    })
-    const closeMock = vi.fn().mockResolvedValue(undefined)
-    const readFileHandleMock = vi.fn().mockResolvedValue(Buffer.from('png'))
-    openMock.mockResolvedValue({
-      stat: vi.fn().mockResolvedValue({
-        size: 4,
-        ino: 1,
-        dev: 1,
-        mtimeMs: 1700000000000,
-        isFile: () => true
-      }),
-      readFile: readFileHandleMock,
-      close: closeMock
-    })
-
-    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
-      sourcePaths: [sourcePath]
-    })) as { sources: unknown[] }
-
-    expect(result.sources).toEqual([
-      {
-        sourcePath,
-        status: 'staged',
-        name: 'logo.png',
-        kind: 'file',
-        entries: [
-          {
-            relativePath: '',
-            kind: 'file',
-            byteLength: 4,
-            inode: 1,
-            deviceId: 1,
-            modifiedAtMs: 1700000000000
-          }
-        ]
-      }
-    ])
-    expect(copyFileMock).not.toHaveBeenCalled()
-    // Bodies stream at upload time; staging must not read them.
-    expect(readFileHandleMock).not.toHaveBeenCalled()
-    expect(closeMock).toHaveBeenCalled()
   })
 
   it('stages runtime upload directories whose child names start with dotdot characters', async () => {

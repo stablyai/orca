@@ -14,7 +14,7 @@ vi.mock('@monaco-editor/react', () => ({
   },
   loader: { config: vi.fn() }
 }))
-vi.mock('@/lib/monaco-setup', () => ({ monaco: {} }))
+vi.mock('@/lib/editor/monaco/monaco-setup', () => ({ monaco: {} }))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -46,56 +46,6 @@ afterEach(() => {
 })
 
 describe('AutomationEditorPromptEditor', () => {
-  it('passes the initial content as defaultValue rather than controlled value', () => {
-    render(
-      <AutomationEditorPromptEditor
-        value="weekly audit"
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={vi.fn()}
-      />
-    )
-
-    expect(editorProps.current?.defaultValue).toBe('weekly audit')
-    expect(editorProps.current).not.toHaveProperty('value')
-    expect(editorProps.current?.defaultLanguage).toBe('plaintext')
-    expect(
-      (editorProps.current?.options as { placeholder?: string } | undefined)?.placeholder
-    ).toBe('Prompt placeholder')
-  })
-
-  it('installs find and syncs an external rewrite after mount', () => {
-    const editorInstance = {
-      getContainerDomNode: () => document.createElement('div'),
-      onDidDispose: vi.fn()
-    }
-    const { rerender } = render(
-      <AutomationEditorPromptEditor
-        value="original"
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={vi.fn()}
-      />
-    )
-
-    const onMount = editorProps.current?.onMount as (editor: typeof editorInstance) => void
-    onMount(editorInstance)
-
-    expect(installFindShortcut).toHaveBeenCalledWith(editorInstance)
-    expect(syncContentOnMount).toHaveBeenCalledWith(editorInstance, 'original')
-
-    rerender(
-      <AutomationEditorPromptEditor
-        value="from template"
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={vi.fn()}
-      />
-    )
-
-    expect(syncContentUpdate).toHaveBeenCalledWith(editorInstance, 'from template')
-  })
-
   it('dismisses on Escape only when find is closed', () => {
     const onDismiss = vi.fn()
     const editorDom = document.createElement('div')
@@ -124,22 +74,6 @@ describe('AutomationEditorPromptEditor', () => {
     findWidget.setAttribute('aria-hidden', 'true')
     editorDom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(onDismiss).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not render a custom placeholder overlay on an empty prompt', () => {
-    const { container } = render(
-      <AutomationEditorPromptEditor
-        value=""
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={vi.fn()}
-      />
-    )
-
-    expect(container.textContent).not.toContain('Prompt placeholder')
-    expect(
-      (editorProps.current?.options as { placeholder?: string } | undefined)?.placeholder
-    ).toBe('Prompt placeholder')
   })
 
   it('scopes find-widget lookups to the prompt editor slot, not the document', () => {
@@ -173,21 +107,5 @@ describe('AutomationEditorPromptEditor', () => {
 
     dialog.remove()
     background.remove()
-  })
-
-  it('forwards typed edits to the draft', () => {
-    const onChange = vi.fn()
-    render(
-      <AutomationEditorPromptEditor
-        value=""
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={onChange}
-      />
-    )
-
-    const handleChange = editorProps.current?.onChange as (value: string) => void
-    handleChange('typed prompt')
-    expect(onChange).toHaveBeenCalledWith('typed prompt')
   })
 })

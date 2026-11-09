@@ -21,7 +21,7 @@ import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agen
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store/index'
-import { resolveExecutionHostAgentStartupShell } from '@/lib/execution-host-facts'
+import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchFact,
@@ -29,7 +29,7 @@ import {
 } from './folder-workspace-agent-startup'
 
 import { translate } from '@/i18n/i18n'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import type { SubmitFolderWorkspaceCreateParams } from './folder-workspace-composer-submit-input'
 
 export async function submitFolderWorkspaceCreate({
@@ -42,6 +42,7 @@ export async function submitFolderWorkspaceCreate({
   quickAgent,
   launchChoice,
   launchInputs,
+  legacyLaunchInputs,
   sessionOptions: requestedSessionOptions,
   chatSessionOptions: requestedChatSessionOptions,
   autoRenameBranchFromWork,
@@ -55,7 +56,8 @@ export async function submitFolderWorkspaceCreate({
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
-  const agentArgs = launchInputs ? launchInputs.agentArgs : requestedAgentArgs
+  const legacyInputs = legacyLaunchInputs ?? launchInputs
+  const agentArgs = legacyInputs ? legacyInputs.agentArgs : requestedAgentArgs
   const sessionOptions = launchInputs ? launchInputs.sessionOptions : requestedSessionOptions
   const chatSessionOptions = launchInputs
     ? launchInputs.chatSessionOptions
@@ -203,6 +205,17 @@ export async function submitFolderWorkspaceCreate({
           launchConfig: startupPlan.launchConfig,
           ...(startupPlan.launchToken ? { launchToken: startupPlan.launchToken } : {}),
           launchAgent: quickAgent,
+          freshAgentLaunch: {
+            agentArgs: launchInputs ? launchInputs.agentArgs : requestedAgentArgs,
+            sessionOptions,
+            prompt: launchDraftPrompt ?? note,
+            promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const),
+            legacy: () => ({
+              startupPlan,
+              pasteDraftAfterLaunch: startupPlan.draftPrompt ?? startupPlan.followupPrompt ?? null,
+              submitPastedPrompt: Boolean(startupPlan.followupPrompt)
+            })
+          },
           ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
           ...(startupPlan.startupCommandDelivery
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
@@ -256,6 +269,7 @@ export async function submitFolderWorkspaceCreate({
       })
     }
     if (
+      !runtimeEnvironmentId &&
       !structuredLaunch &&
       startupPlan &&
       (startupPlan.followupPrompt || startupPlan.draftPrompt) &&

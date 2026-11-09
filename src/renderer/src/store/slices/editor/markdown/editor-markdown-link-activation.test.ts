@@ -6,12 +6,12 @@ import {
 import { createEditorStore } from '../editor-slice-test-harness'
 import { buildOwnedEditorFileId as ownedEditorFileId } from '../file-ids/editor-file-ids'
 import type { AppState } from '../../../types'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../../../runtime/runtime-rpc-client'
+} from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -24,7 +24,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
-vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))

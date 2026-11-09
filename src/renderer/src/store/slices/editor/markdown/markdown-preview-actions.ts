@@ -1,7 +1,7 @@
 import { editorPlacementIntent } from '../tabs/editor-placement-intent'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
-import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
+import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { createUntitledFileInActiveWorkspace } from '../opening/untitled-file-creation'
 import type { OpenFile } from '../types/open-file'
 import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
@@ -11,7 +11,10 @@ import type { Tab } from '../../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { withPreviewEnded } from '../../tabs/tab-preview-flag'
 import { previewEditorTabsOf } from '../tabs/editor-tab-layout-owner'
-import { afterPendingEntityTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import {
+  afterPendingEntityTabs,
+  hasPendingEntityTab
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import {
   endsPreviewHere,
   promotePreviewTabsThroughLayoutOwner

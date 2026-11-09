@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { TerminalRunFacts } from '../runtime/terminal-run-facts'
+import type { TerminalRunFacts } from '../runtime/terminal/lifecycle/terminal-run-facts'
 import { OpenCodeStartupPromptClaims } from './opencode-startup-prompt-claims'
 
 describe('execution-owned startup prompt claims', () => {

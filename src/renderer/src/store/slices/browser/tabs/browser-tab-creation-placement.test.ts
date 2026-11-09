@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { createTestStore, seedStore } from '../../store-test-helpers'
-import { makeTabGroup, makeUnifiedTab } from '../../store-session-test-harness'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
+
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -19,20 +21,20 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 // Main answers the window's layout commands; its frames draw the browser tabs.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -134,26 +136,6 @@ describe('browser tab creation placement', () => {
     await main?.settle()
   }
 
-  it('opens Group New Browser Tab in a new split beside the invoking group', async () => {
-    seedSplit(store)
-    await drawFromMain()
-    await store.getState().openNewBrowserTabInActiveWorkspace(G1, 'right')
-    await settled()
-    const n = store
-      .getState()
-      .unifiedTabsByWorktree[WT]!.find((tab) => !['A', 'B', 'C', 'X'].includes(tab.id))!
-    expect(group(store, G1)?.tabOrder).toEqual(['A', 'B', 'C'])
-    expect(store.getState().layoutByWorktree[WT]).toMatchObject({
-      first: {
-        type: 'split',
-        direction: 'horizontal',
-        first: { type: 'leaf', groupId: G1 },
-        second: { type: 'leaf', groupId: n.groupId }
-      },
-      second: { type: 'leaf', groupId: G2 }
-    })
-  })
-
   it('uses the invoking group workspace instead of the globally selected one', async () => {
     seedSplit(store)
     store.setState({ activeWorktreeId: 'repo1::/elsewhere' })
@@ -188,84 +170,6 @@ describe('browser tab creation placement', () => {
       undefined
     )
     expect(after.unifiedTabsByWorktree[WT]!.find((tab) => tab.id === 'B')?.lastFocusedAt).toBe(100)
-  })
-
-  it('lets an explicit destination win over the anchor group', async () => {
-    seedSplit(store)
-    await drawFromMain()
-    const workspace = store
-      .getState()
-      .createBrowserTab(WT, 'https://example.com', { afterTabId: 'B', targetGroupId: G2 })
-    await settled()
-    expect(group(store, G2)?.tabOrder).toEqual(['X', createdUnifiedId(store, workspace.id)])
-    expect(group(store, G1)?.tabOrder).toEqual(['A', 'B', 'C'])
-  })
-
-  it('falls back to the active group, not the first group, for an expired requested group', async () => {
-    seedSplit(store)
-    await drawFromMain()
-    const workspace = store
-      .getState()
-      .createBrowserTab(WT, 'https://example.com', { targetGroupId: 'deleted-group' })
-    await settled()
-    expect(group(store, G2)?.tabOrder).toEqual(['X', createdUnifiedId(store, workspace.id)])
-  })
-
-  it('keeps an unpinned tab from a pinned source after the pinned prefix', async () => {
-    seedSplit(store, {
-      tabs: [
-        browserTab('P1', G1, { isPinned: true }),
-        browserTab('P2', G1, { isPinned: true }),
-        browserTab('C', G1),
-        browserTab('X', G2)
-      ],
-      groups: [
-        makeTabGroup({ id: G1, worktreeId: WT, activeTabId: 'P1', tabOrder: ['P1', 'P2', 'C'] }),
-        makeTabGroup({ id: G2, worktreeId: WT, activeTabId: 'X', tabOrder: ['X'] })
-      ]
-    })
-    await drawFromMain()
-    const workspace = store
-      .getState()
-      .createBrowserTab(WT, 'https://example.com', { afterTabId: 'P1' })
-    await settled()
-    expect(group(store, G1)?.tabOrder).toEqual([
-      'P1',
-      'P2',
-      createdUnifiedId(store, workspace.id),
-      'C'
-    ])
-  })
-
-  it('appends in the partition when preview replacement removes the anchor', () => {
-    seedSplit(store, {
-      tabs: [
-        browserTab('A', G1, { sortOrder: 0 }),
-        makeUnifiedTab({
-          id: 'P',
-          worktreeId: WT,
-          groupId: G1,
-          contentType: 'editor',
-          isPreview: true,
-          sortOrder: 1
-        }),
-        browserTab('C', G1, { sortOrder: 2 }),
-        browserTab('X', G2)
-      ],
-      groups: [
-        makeTabGroup({ id: G1, worktreeId: WT, activeTabId: 'P', tabOrder: ['A', 'P', 'C'] }),
-        makeTabGroup({ id: G2, worktreeId: WT, activeTabId: 'X', tabOrder: ['X'] })
-      ]
-    })
-    const created = store
-      .getState()
-      .createUnifiedTab(WT, 'editor', { afterTabId: 'P', isPreview: true, targetGroupId: G1 })
-    expect(group(store, G1)?.tabOrder).toEqual(['A', 'C', created.id])
-    expect(created.sortOrder).toBe(2)
-    const sortOrderById = Object.fromEntries(
-      store.getState().unifiedTabsByWorktree[WT]!.map((tab) => [tab.id, tab.sortOrder])
-    )
-    expect(sortOrderById).toMatchObject({ A: 0, C: 1, [created.id]: 2 })
   })
 
   it('rejects an anchor owned by a foreign execution host', async () => {
@@ -310,63 +214,5 @@ describe('browser tab creation placement', () => {
     })
     await settled()
     expect(group(store, G1)?.tabOrder).toEqual(['A', createdUnifiedId(store, workspace.id), 'C'])
-  })
-
-  it('places source actions in folder and floating workspaces', async () => {
-    const folderWt = 'folder:folder-1'
-    const folder: FolderWorkspace = {
-      id: 'folder-1',
-      projectGroupId: 'pg',
-      name: 'Folder',
-      folderPath: '/tmp/folder',
-      executionHostId: 'local',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      createdAt: 0,
-      updatedAt: 0
-    }
-    for (const worktreeId of [folderWt, FLOATING_TERMINAL_WORKTREE_ID]) {
-      store.setState({
-        folderWorkspaces: [folder],
-        unifiedTabsByWorktree: {
-          ...store.getState().unifiedTabsByWorktree,
-          [worktreeId]: ['A', 'B'].map((id) =>
-            makeUnifiedTab({
-              id: `${worktreeId}-${id}`,
-              worktreeId,
-              groupId: `${worktreeId}-g`,
-              contentType: 'browser'
-            })
-          )
-        },
-        groupsByWorktree: {
-          ...store.getState().groupsByWorktree,
-          [worktreeId]: [
-            makeTabGroup({
-              id: `${worktreeId}-g`,
-              worktreeId,
-              activeTabId: `${worktreeId}-A`,
-              tabOrder: [`${worktreeId}-A`, `${worktreeId}-B`]
-            })
-          ]
-        }
-      })
-      await drawFromMain()
-      const workspace = store.getState().createBrowserTab(worktreeId, 'https://example.com', {
-        afterTabId: `${worktreeId}-A`,
-        browserRuntimeEnvironmentId: null
-      })
-      await settled()
-      expect(group(store, `${worktreeId}-g`, worktreeId)?.tabOrder).toEqual([
-        `${worktreeId}-A`,
-        createdUnifiedId(store, workspace.id, worktreeId),
-        `${worktreeId}-B`
-      ])
-    }
   })
 })

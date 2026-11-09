@@ -147,6 +147,7 @@ export type KeybindingFileSnapshot = {
   platform: KeybindingPlatform
   exists: boolean
   overrides: KeybindingOverrides
+  defaultOverrides?: KeybindingOverrides
   commonOverrides: KeybindingOverrides
   platformOverrides: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
   diagnostics: KeybindingFileDiagnostic[]
@@ -220,6 +221,6 @@ export type KeybindingConflict = {
 export type FindKeybindingConflictOptions = {
   ignoredActionIds?: Iterable<KeybindingActionId>
   relevantActionIds?: Iterable<KeybindingActionId>
-  /** Settings-only diagnostic; the loader and writes keep the scope-only check so saved overrides still load. */
+  /** Include native interception for Settings writes, diagnostics and inherited defaults; saved overrides use scope-only checks. */
   includeMainProcessInterception?: boolean
 }

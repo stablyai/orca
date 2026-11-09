@@ -1,15 +1,18 @@
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '../../../types'
 import type { NewBrowserTabProfile } from '../browser-slice-contract'
-import { findWorktreeById } from '../../worktree-helpers'
+import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
 import { getDefaultBrowserProfileForHost } from '../hosts/browser-host-state'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getManagedBrowserProfileOwner,
   type ManagedBrowserProfileOwner
-} from '../../../../../../shared/browser-profile-scope'
+} from '../../../../../../shared/browser/profiles/browser-profile-scope'
 
 /** Profile a new tab gets when its caller names none: the workspace's own under a repo or workspace scope, else the host default. */
 export function resolveNewBrowserTabProfile(
@@ -45,7 +48,8 @@ function managedProfileLabel(
   const name =
     (scope?.type === 'folder'
       ? selectFolderWorkspaces(state).find((folder) => folder.id === scope.folderWorkspaceId)?.name
-      : findWorktreeById(selectWorktreesByRepo(state), worktreeId)?.displayName) || worktreeId
+      : findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId)?.displayName) ||
+    worktreeId
   return translate('settings.browser.profileScope.worktreeProfileLabel', 'Workspace: {{name}}', {
     name
   })

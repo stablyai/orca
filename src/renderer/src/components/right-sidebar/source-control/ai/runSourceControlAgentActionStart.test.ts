@@ -3,11 +3,9 @@ import type { SourceControlActionRecipe } from '../../../../../../shared/source-
 import type * as RuntimeGitStatusClientModule from '@/runtime/source-control/git/runtime-git-status-client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import {
-  makeFolderWorkspace,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const mocks = vi.hoisted(() => ({
   focusTerminalTabSurface: vi.fn(),
@@ -38,7 +36,7 @@ vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, success: mocks.toastSuccess }
 }))
 
-vi.mock('@/lib/workspace-navigation-toast-action', () => ({
+vi.mock('@/lib/workspace/activation/workspace-navigation-toast-action', () => ({
   workspaceNavigationToastAction: ({
     workspaceId,
     executionHostId

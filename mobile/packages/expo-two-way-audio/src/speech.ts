@@ -35,7 +35,7 @@ export type SpeechStartResult =
   | { started: false; reason: SpeechFailureCode }
 
 // committed is the whole final text so far, never a delta; tentative is the current unstable tail after it.
-// revision rises by one per event, so a reader can drop a stale one.
+// revision only rises over the module's lifetime, across sessions too, so a reader can drop a stale or previous-session event.
 export type SpeechTextEvent = { revision: number; committed: string; tentative: string }
 
 export type SpeechErrorEvent = { code: SpeechFailureCode }
@@ -45,6 +45,7 @@ export type SpeechDownloadProgressEvent = { locale: string; fraction: number }
 
 type SpeechNativeModule = {
   // Never prompts and never downloads. Must be cheap: called before every dictation.
+  // Rejects with code 'busy' when the OS speech service didn't answer in time; asking again later is safe.
   speechAvailability?: (locale: string) => Promise<SpeechAvailability>
   // Installs the assets for locale; resolves true when ready, false when it failed or isn't possible.
   speechDownload?: (locale: string) => Promise<boolean>

@@ -3,12 +3,12 @@ import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
-import type { AutomationRunOutputSnapshot } from '../../shared/automations-types'
+import type { AutomationRunOutputSnapshot } from '../../shared/automations/history/automation-run'
 import {
   AUTOMATION_RUN_FAILURE_COPY,
   automationRunFailure,
   type AutomationRunFailure
-} from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run-failure-copy'
 import {
   judgeHeldRunTurn,
   judgeIdleRun,
@@ -74,7 +74,9 @@ async function judgeIdleTail(
   judged: JudgedRun,
   runStartedAt: number
 ): Promise<AutomationRunCompletionObservation | null> {
-  const verdict = judgeIdleRun(judged.evidence, judged.run, tail, runStartedAt, Date.now())
+  const verdict: IdleRunVerdict = judged.turn()?.interrupted
+    ? { kind: 'failed', ...automationRunFailure('agentInterrupted') }
+    : judgeIdleRun(judged.evidence, judged.run, tail, runStartedAt, Date.now())
   return verdict.kind === 'wait' ? null : observationOf(verdict, tail, judged)
 }
 

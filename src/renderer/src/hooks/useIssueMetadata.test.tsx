@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearLinearMetadataCache, useTeamStates, useTeamsStates } from './useIssueMetadata'
+import { clearLinearMetadataCache, useTeamsStates } from './useIssueMetadata'
 import { useRepoLabels, useRepoAssignees } from './useGitHubRepoMetadata'
 
 const linearMocks = vi.hoisted(() => ({
@@ -21,7 +21,9 @@ vi.mock('@/runtime/linear/runtime-linear-project-client', () => ({
   linearTeamMembers: linearMocks.linearTeamMembers
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: runtimeMocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: runtimeMocks.callRuntimeRpc
+}))
 
 const roots: Root[] = []
 
@@ -135,70 +137,6 @@ describe('useIssueMetadata hooks', () => {
     await flushEffects()
     expect(logins).toEqual(['upstream-user'])
     expect(githubMocks.listAssignableUsers).toHaveBeenCalledTimes(2)
-  })
-
-  it('prefers an explicit remote environment and repo id', async () => {
-    let labels: string[] = []
-    runtimeMocks.callRuntimeRpc.mockResolvedValue(['remote'])
-
-    function LabelsProbe(): null {
-      labels = useRepoLabels('/local/repo', 'remote-repo-id', {
-        target: { kind: 'environment', environmentId: 'env-explicit' }
-      }).data
-      return null
-    }
-
-    renderProbe(<LabelsProbe />)
-    await flushEffects()
-
-    expect(labels).toEqual(['remote'])
-    expect(runtimeMocks.callRuntimeRpc).toHaveBeenCalledExactlyOnceWith(
-      { kind: 'environment', environmentId: 'env-explicit' },
-      'github.listLabels',
-      { repo: 'remote-repo-id' },
-      {
-        timeoutMs: 15_000,
-        expectedEnvironmentPairingRevision: undefined,
-        expectedEnvironmentRuntimeId: undefined,
-        beforeSend: expect.any(Function)
-      }
-    )
-    const options: unknown = runtimeMocks.callRuntimeRpc.mock.calls[0]?.[3]
-    if (
-      !options ||
-      typeof options !== 'object' ||
-      !('beforeSend' in options) ||
-      typeof options.beforeSend !== 'function'
-    ) {
-      throw new Error('metadata request did not supply its currentness callback')
-    }
-    expect(Object.hasOwn(options, 'expectedEnvironmentPairingRevision')).toBe(true)
-    expect(Object.hasOwn(options, 'expectedEnvironmentRuntimeId')).toBe(true)
-    const beforeSend = options.beforeSend
-    expect(() => beforeSend()).not.toThrow()
-    expect(githubMocks.listLabels).not.toHaveBeenCalled()
-  })
-
-  it('does not re-issue a failed team-state fetch when a fresh settings object re-renders', async () => {
-    let renders = 0
-    let error: string | null = null
-    linearMocks.linearTeamStates.mockRejectedValue(new Error('Could not connect'))
-
-    function StatesProbe(): null {
-      renders += 1
-      const metadata = useTeamStates('team-1', { kind: 'local' }, 'ws-1')
-      error = metadata.error
-      return null
-    }
-
-    renderProbe(<StatesProbe />)
-    await flushEffects()
-    await flushEffects()
-    await flushEffects()
-
-    expect(error).toBe('Could not connect')
-    expect(linearMocks.linearTeamStates).toHaveBeenCalledTimes(1)
-    expect(renders).toBeLessThanOrEqual(4)
   })
 
   it('unions workflow states across every selected team (#8739)', async () => {

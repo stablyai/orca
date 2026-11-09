@@ -229,6 +229,7 @@
   --chat-composer-mix: 0%;
   --chat-composer-base: var(--chat-canvas);
   --chat-composer-border-mix: 11%;
+  --chat-selection-mix: 30%;
   --chat-content-max-width: 46rem;
   --card: #fff;
   --card-foreground: #0a0a0a;
@@ -350,6 +351,7 @@
   --chat-composer-mix: 4%;
   --chat-composer-base: transparent;
   --chat-composer-border-mix: 9%;
+  --chat-selection-mix: 40%;
   --chat-content-max-width: 46rem;
   --card: #171717;
   --card-foreground: #f0f0f0;
@@ -586,6 +588,42 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   margin-left: 0;
 }
 
+/* Why: Sonner's 24px buttons with untokened fills don't match Orca; mirror Button size="sm" default/secondary. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  transition:
+    opacity 0.4s,
+    box-shadow 0.2s,
+    background-color 150ms;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:hover {
+  background: color-mix(in oklab, var(--primary) 90%, transparent);
+}
+
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-button][data-cancel] {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-button][data-cancel]:hover {
+  background: color-mix(in oklab, var(--secondary) 80%, transparent);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
   line-height: 1.35;
 }
@@ -654,10 +692,13 @@ body[data-modal-overlay-open]
     var(--chat-source-foreground) var(--chat-strong-mix),
     var(--chat-canvas)
   );
-  --chat-foreground-faint: color-mix(
-    in srgb,
-    var(--chat-source-muted-foreground) var(--chat-faint-mix),
-    var(--chat-canvas)
+  --chat-foreground-faint: var(
+    --chat-muted-foreground,
+    color-mix(
+      in srgb,
+      var(--chat-source-muted-foreground) var(--chat-faint-mix),
+      var(--chat-canvas)
+    )
   );
   --chat-user-surface: var(
     --chat-user-message,
@@ -669,16 +710,18 @@ body[data-modal-overlay-open]
     transparent
   );
   --chat-code-foreground: color-mix(in srgb, var(--chat-source-foreground) 85%, var(--chat-canvas));
-  --chat-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-code-mix),
-    var(--chat-code-base)
+  --chat-code-surface: var(
+    --chat-code-block,
+    color-mix(in srgb, var(--chat-source-foreground) var(--chat-code-mix), var(--chat-code-base))
   );
   --chat-code-border: color-mix(in srgb, var(--chat-source-foreground) 7%, transparent);
-  --chat-inline-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-inline-code-mix),
-    var(--chat-inline-code-base)
+  --chat-inline-code-surface: var(
+    --chat-inline-code,
+    color-mix(
+      in srgb,
+      var(--chat-source-foreground) var(--chat-inline-code-mix),
+      var(--chat-inline-code-base)
+    )
   );
   --chat-inline-code-border: color-mix(
     in srgb,
@@ -704,6 +747,15 @@ body[data-modal-overlay-open]
     in srgb,
     var(--text-link, var(--callout-note)) 70%,
     var(--chat-source-foreground)
+  );
+  /* The link hue at about the system highlight's depth; a dim theme lowers the mix (chat-selection-mix.ts). */
+  --chat-selection-surface: var(
+    --chat-selection,
+    color-mix(
+      in srgb,
+      var(--text-link, var(--callout-note)) var(--chat-selection-mix),
+      var(--chat-canvas)
+    )
   );
 }
 
@@ -942,6 +994,27 @@ body[data-modal-overlay-open]
   background-size: auto, var(--orca-theme-background-size);
   background-repeat: no-repeat, var(--orca-theme-background-repeat);
   background-position: center, var(--orca-theme-background-position);
+}
+
+/* Its video (lib/theme-background-video.ts) plays over the image once a frame is ready. The opaque
+   base and the video's opacity reproduce the image's veil; position and opacity are the image's. */
+.theme-background-video {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  visibility: hidden;
+  background-color: var(--background);
+}
+.theme-background-video[data-ready] {
+  visibility: visible;
+}
+.theme-background-video > video {
+  width: 100%;
+  height: 100%;
+  object-fit: var(--orca-theme-background-video-fit);
+  object-position: var(--orca-theme-background-position);
+  opacity: var(--orca-theme-background-opacity);
 }
 
 /* The window material (window-material-options.ts) is the backdrop; an opaque body would cover it.

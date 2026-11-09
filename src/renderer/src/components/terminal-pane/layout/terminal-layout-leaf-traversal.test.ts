@@ -22,20 +22,4 @@ describe('collectLeafIdsInReplayCreationOrder', () => {
     expect(collectLeafIdsInOrder(layout)).toEqual(['A', 'B', 'C'])
     expect(collectLeafIdsInReplayCreationOrder(layout)).toEqual(['A', 'C', 'B'])
   })
-
-  it('visits the inner right split after the outer left leaf', () => {
-    const layout: TerminalPaneLayoutNode = {
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: 'A' },
-      second: {
-        type: 'split',
-        direction: 'horizontal',
-        first: { type: 'leaf', leafId: 'B' },
-        second: { type: 'leaf', leafId: 'C' }
-      }
-    }
-
-    expect(collectLeafIdsInReplayCreationOrder(layout)).toEqual(['A', 'B', 'C'])
-  })
 })

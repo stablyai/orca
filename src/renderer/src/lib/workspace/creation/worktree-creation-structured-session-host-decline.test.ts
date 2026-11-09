@@ -9,11 +9,14 @@ import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-w
 
 const mocks = vi.hoisted(() => {
   const mainStarts: unknown[] = []
-  return { createSupport: vi.fn(), mainStarts, launches: vi.fn() }
+  return { createSupport: vi.fn(), mainStarts, launches: vi.fn(), webLaunch: vi.fn() }
 })
 
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab', () => ({
+  launchAgentInWebHostTab: mocks.webLaunch
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: vi.fn(async (_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? mocks.createSupport() : new Promise(() => undefined)
   )
@@ -47,9 +50,9 @@ import { launchStructuredWorktreeSession } from './worktree-creation-structured-
 
 // Main's answer to the window's layout commands, as a switch-on build sends them, and the first
 // terminals it starts for the window's new tabs.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const client = (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
   return {
     ...client,
@@ -162,6 +165,7 @@ function pendingCreation() {
 afterEach(() => {
   mocks.mainStarts.length = 0
   mocks.launches.mockClear()
+  mocks.webLaunch.mockReset()
   mocks.createSupport.mockReset()
   vi.unstubAllGlobals()
   useAppStore.setState(initial, true)
@@ -170,7 +174,12 @@ afterEach(() => {
 describe('a background worktree create whose paired server declines the chat', () => {
   it("opens the request's agent terminal without pulling the user onto the new workspace", async () => {
     mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
-    const call = seedPairedServer()
+    seedPairedServer()
+    mocks.webLaunch.mockResolvedValue({
+      outcome: { status: 'created' },
+      delivered: true,
+      failureNotified: false
+    })
 
     await launchStructuredWorktreeSession({
       creationId: 'creation-1',
@@ -182,16 +191,16 @@ describe('a background worktree create whose paired server declines the chat', (
       primaryTabId: null
     })
 
-    await vi.waitFor(() =>
-      expect(call).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'session.tabs.createTerminal',
-          params: expect.objectContaining({
-            command: "claude --model opus 'fix the flaky test'",
-            select: false
-          })
-        })
-      )
+    expect(mocks.webLaunch).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        agent: 'claude',
+        worktreeId: CREATED.id,
+        environmentId: 'server-1',
+        prompt: 'fix the flaky test',
+        promptDelivery: 'auto-submit',
+        activate: false,
+        selectWorktree: false
+      })
     )
     expect(useAppStore.getState().activeWorktreeId).toBe(OTHER.id)
   })

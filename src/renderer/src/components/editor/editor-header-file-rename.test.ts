@@ -8,7 +8,8 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { useAppStore } from '@/store'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const renameFileOnDiskMock = vi.hoisted(() => vi.fn())
 afterEach(() => vi.unstubAllGlobals())
@@ -27,9 +28,11 @@ vi.mock('./autosave/editor-autosave', async (original) => ({
   requestEditorSaveQuiesce: renameIO.quiesce,
   requestEditorFileSave: renameIO.save
 }))
-vi.mock('@/lib/execute-open-editor-path-move', () => ({ executeOpenEditorPathMove: renameIO.move }))
+vi.mock('@/lib/editor/file-operations/execute-open-editor-path-move', () => ({
+  executeOpenEditorPathMove: renameIO.move
+}))
 
-vi.mock('@/store/selectors', () => ({
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })
 }))
 

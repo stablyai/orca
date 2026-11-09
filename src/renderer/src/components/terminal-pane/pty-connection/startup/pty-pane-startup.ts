@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { EventProps } from '../../../../../../shared/telemetry-event-classification'
 import type { StartupCommandDelivery } from '../../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -26,6 +27,7 @@ export type PtyPaneStartup = {
   launchAgent?: TuiAgent
   /** The agent launch the pane's own spawn starts, instead of `command`. */
   agentLaunch?: AgentPaneLaunchRequest
+  freshAgentLaunch?: FreshWorkspaceAgentLaunch
   /** Explicit CLI override for host-owned agent launches; omission uses host settings. */
   agentArgsOverride?: string | null
   draftPrompt?: string

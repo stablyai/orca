@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
@@ -27,6 +27,7 @@ export function BrowserNewTabServerRow({
   showOwner?: boolean
   onOpenUrl: (url: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { port, title, faviconDataUrl } = server
   const localhostLabelRoute = useLocalhostLabelRouteForPort(port)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
@@ -47,10 +48,9 @@ export function BrowserNewTabServerRow({
       localhostLabelRoute
     })
     if (!result.ok) {
-      toast.error(
-        translate('browser.newTab.openServerFailed', 'Couldn’t open {{address}}', { address }),
-        { description: result.reason }
-      )
+      toast.error(t('browser.newTab.openServerFailed', 'Couldn’t open {{address}}', { address }), {
+        description: result.reason
+      })
     }
   }
 

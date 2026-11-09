@@ -6,7 +6,7 @@ import {
 } from '../../speech/speech-runtime-service'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 type Sink = (event: { type: string; text?: string }) => void
 
@@ -159,5 +159,17 @@ describe('mobile dictation on several phones', () => {
       dictationId: 'd-1',
       text: 'before the drop'
     })
+  })
+})
+
+describe('mobile dictation at the cloud length cap', () => {
+  it('tells the phone on every reply after the speech session filled up', async () => {
+    const controller = await startPhoneDictation()
+    controller.feed(chunk)
+    feedAudio.mockReturnValueOnce(true)
+
+    // The second reply is inside the one-second text throttle, so it carries no text.
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', audioLimitReached: true })
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', audioLimitReached: true })
   })
 })

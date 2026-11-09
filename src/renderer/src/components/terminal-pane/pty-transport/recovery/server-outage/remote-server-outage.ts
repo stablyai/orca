@@ -3,8 +3,8 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { toRuntimeExecutionHostId } from '../../../../../../../shared/execution-host'
 import { tailscaleHostOfEndpoint } from '../../../../../../../shared/remote-runtime/remote-runtime-tailscale-hint'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RemoteRuntimeRecoveryCause } from '../../remote-runtime/recovery/remote-runtime-recovery-copy'
 
 /** Read shared server reconnection once so individual panes do not announce the same outage. */

@@ -12,7 +12,7 @@ import type { DaemonPtyRouterExitEvent } from '../../protocol/daemon-pty-router-
 import { logWslPaneDiagnostic } from '../wsl/daemon-wsl-diagnostic-log'
 import { classifyWslBridgeExit, WSL_DISTRO_LOSS_EXIT_CODE } from '../wsl/daemon-wsl-bridge-exit'
 import { isProvenProcessExit } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
+import { DaemonPtyPreservedHostLoss } from './daemon-pty-preserved-host-loss'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-adapter-options'
 
 import type { DaemonEvent } from '../../protocol/daemon-stream-events'
@@ -24,7 +24,7 @@ import {
   type AutomaticWorkResumeOutcome,
   type AutomaticWorkResumeResult,
   type AutomaticWorkStatus
-} from '../../../../shared/host-spawn-admission'
+} from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import type { AutomaticWorkRequestType } from '../../admission/daemon-automatic-work-protocol'
 import type {
@@ -34,7 +34,7 @@ import type {
 import { observeDaemonAsyncIoHealth } from '../../observability/daemon-async-io-telemetry-event'
 import { sameEndpointIdentity } from '../../endpoint/identity/daemon-endpoint-incarnation'
 
-export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPtyProvider {
   constructor(opts: DaemonPtyAdapterOptions) {
     super(opts)
     // Registered after the base listener, which marks the sessions awaiting recovery first.

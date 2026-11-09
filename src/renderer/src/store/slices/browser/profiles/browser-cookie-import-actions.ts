@@ -1,12 +1,12 @@
-import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import type { BrowserCookieImportResult } from '../../../../../../shared/browser-workspace-types'
 import type {
   BrowserProfileImportFromBrowserResult,
   BrowserProfileClearDefaultCookiesResult
-} from '../../../../../../shared/runtime-browser-contracts'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+} from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import {
   getBrowserSettingsHostId,
   getBrowserSettingsRuntimeEnvironmentId,

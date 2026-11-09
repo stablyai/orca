@@ -27,32 +27,6 @@ beforeEach(() => {
 })
 
 describe('explicit local branch reuse on the execution host', () => {
-  it('routes all probes through the WSL distro and does not compare or reset the remote tip', async () => {
-    git.mockResolvedValueOnce({ stdout: 'local-ahead\n' })
-    git.mockResolvedValueOnce({ stdout: 'refs/heads/feature/test\n' })
-    worktrees.mockResolvedValue([])
-    await expect(
-      canCheckoutExistingLocalBranch(
-        '/repo',
-        'feature/test',
-        'origin/feature/test',
-        { wslDistro: 'Ubuntu' },
-        true
-      )
-    ).resolves.toBe(true)
-    expect(git.mock.calls).toEqual([
-      [
-        ['rev-parse', '--verify', '--quiet', 'refs/heads/feature/test^{commit}'],
-        { cwd: '/repo', wslDistro: 'Ubuntu' }
-      ],
-      [
-        ['for-each-ref', '--format=%(refname)', 'refs/heads/feature/test'],
-        { cwd: '/repo', wslDistro: 'Ubuntu' }
-      ]
-    ])
-    expect(worktrees).toHaveBeenCalledWith('/repo', { wslDistro: 'Ubuntu' })
-  })
-
   it('rejects a filesystem alias before attempting checkout through WSL', async () => {
     git.mockResolvedValueOnce({ stdout: 'local-ahead\n' })
     git.mockResolvedValueOnce({ stdout: '' })

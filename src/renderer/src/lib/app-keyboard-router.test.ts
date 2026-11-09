@@ -39,31 +39,6 @@ function press(): string[] {
 }
 
 describe('app keyboard router', () => {
-  // STA-11205: a tab shortcut owner re-registered after the terminal pane still runs first.
-  it.each(['pane first', 'app owner first'])(
-    'runs app owners ahead of the terminal pane whatever the registration order (%s)',
-    (order) => {
-      const seen: string[] = []
-      const pane = (event: KeyboardEvent): void => {
-        seen.push('pane translation')
-        event.stopImmediatePropagation()
-      }
-      const tabSwitch = (event: KeyboardEvent): void => {
-        seen.push('tab switch')
-        event.stopImmediatePropagation()
-      }
-      if (order === 'pane first') {
-        onWindow(pane)
-        onApp(tabSwitch)
-      } else {
-        onApp(tabSwitch)
-        onWindow(pane)
-      }
-      const tail = press()
-      expect([...seen, ...tail]).toEqual(['tab switch'])
-    }
-  )
-
   it('leaves the terminal fallback when no app owner claims the key', () => {
     const seen: string[] = []
     onWindow(() => seen.push('pane translation'))
@@ -75,6 +50,22 @@ describe('app keyboard router', () => {
       'document',
       'terminal input'
     ])
+  })
+
+  it('runs a first owner ahead of owners registered before it', () => {
+    const seen: string[] = []
+    onApp((event) => {
+      seen.push('overlay')
+      event.stopImmediatePropagation()
+    })
+    const dictation = (event: KeyboardEvent): void => {
+      seen.push('dictation')
+      event.stopImmediatePropagation()
+    }
+    addAppKeyListener('keydown', dictation, { first: true })
+    cleanups.push(() => removeAppKeyListener('keydown', dictation))
+    const tail = press()
+    expect([...seen, ...tail]).toEqual(['dictation'])
   })
 
   it('keeps native stop semantics between app owners', () => {

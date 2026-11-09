@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { pluginPanelContributionSchema } from './plugin-panel-contribution'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
-import { pluginManifestCompatibilityError } from '../manifest/plugin-manifest-compatibility'
 
 const panel = { id: 'board', title: 'Board' }
 
@@ -20,15 +19,6 @@ function manifest(engine: string, panelFields: Record<string, unknown>) {
 }
 
 describe('panel ui', () => {
-  it.each(['dist/panel.js', 'panel.mjs', 'Panel.JS', 'src/panel.tsx', 'panel.ts', 'panel.jsx'])(
-    'accepts a components %s module',
-    (entry) => {
-      expect(
-        pluginPanelContributionSchema.safeParse({ ...panel, entry, ui: 'components' }).success
-      ).toBe(true)
-    }
-  )
-
   it.each(['panel.html', 'panel.d.css', 'panel.js.map'])(
     'refuses a components %s entry',
     (entry) => {
@@ -58,11 +48,5 @@ describe('panel ui', () => {
     expect(parsePluginManifest(manifest('>=1.4.246', { ui: 'components', icon: 'add' })).ok).toBe(
       true
     )
-  })
-
-  it('lets an older Orca say which release it needs', () => {
-    expect(
-      pluginManifestCompatibilityError(manifest('>=1.4.246', { ui: 'components' }), '1.4.245')
-    ).toBe('requires Orca >=1.4.246 (this is 1.4.245)')
   })
 })

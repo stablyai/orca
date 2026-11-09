@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   BrowserPasswordEntrySummary,
   BrowserPasswordImportResult,
@@ -25,11 +25,8 @@ import {
 } from './BrowserPasswordImportMenu'
 import { BrowserPasswordList } from './BrowserPasswordList'
 import { BrowserPasswordNeverList } from './BrowserPasswordNeverList'
-import {
-  browserPasswordHostOf,
-  toastBrowserPasswordImportResult
-} from './browser-password-import-toast'
-import { getBrowserPasswordsSearchEntry } from './browser-passwords-copy'
+import { toastBrowserPasswordImportResult } from './browser-password-import-toast'
+import { browserPasswordHostOf, getBrowserPasswordsSearchEntry } from './browser-passwords-copy'
 
 type VaultView = {
   status: BrowserPasswordsStatus | null
@@ -53,14 +50,15 @@ type BrowserPasswordsSectionProps = {
 
 /** Saved logins for the profile picked under Session & Cookies, as Extensions does. */
 export function BrowserPasswordsSection(props: BrowserPasswordsSectionProps): React.JSX.Element {
-  const entry = getBrowserPasswordsSearchEntry()
+  const t = useTranslate()
+  const entry = getBrowserPasswordsSearchEntry(t)
   return (
     <SearchableSetting
       id="browser-passwords"
       title={entry.title}
       description={entry.description}
       keywords={entry.keywords}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
     >
       <BrowserPasswordsProfile key={props.browserProfileId} {...props} />
     </SearchableSetting>
@@ -73,6 +71,7 @@ function BrowserPasswordsProfile({
   settings,
   updateSettings
 }: BrowserPasswordsSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const api = window.api.browserPasswords
   const confirm = useConfirmationDialog()
   const [view, setView] = useState<VaultView>({
@@ -123,7 +122,7 @@ function BrowserPasswordsProfile({
     void runImport(() => api.importFromBrowser({ browserProfileId, ...source }))
 
   const authFailed = (): void => {
-    toast.error(translate('settings.browser.passwords.authFailed', 'Could not confirm it was you'))
+    toast.error(t('settings.browser.passwords.authFailed', 'Could not confirm it was you'))
   }
 
   const openAdd = (): void => {
@@ -158,7 +157,7 @@ function BrowserPasswordsProfile({
     const result = await api.copyPassword({ browserProfileId, entryId: item.id })
     if (result.ok) {
       toast.success(
-        translate(
+        t(
           'settings.browser.passwords.copied',
           'Password copied. Orca clears it from the clipboard in 2 minutes.'
         )
@@ -170,20 +169,19 @@ function BrowserPasswordsProfile({
 
   const remove = async (item: BrowserPasswordEntrySummary): Promise<void> => {
     const confirmed = await confirm({
-      title: translate(
+      title: t(
         'settings.browser.passwords.deleteConfirmTitle',
         'Delete the {{site}} password for {{username}}?',
         {
           site: browserPasswordHostOf(item.origin),
-          username:
-            item.username || translate('settings.browser.passwords.noUsername', '(no username)')
+          username: item.username || t('settings.browser.passwords.noUsername', '(no username)')
         }
       ),
-      description: translate(
+      description: t(
         'settings.browser.passwords.deleteConfirmDescription',
         'Orca won’t fill it anymore. This can’t be undone.'
       ),
-      confirmLabel: translate('settings.browser.passwords.deleteConfirm', 'Delete'),
+      confirmLabel: t('settings.browser.passwords.deleteConfirm', 'Delete'),
       confirmVariant: 'destructive'
     })
     if (confirmed && (await api.deleteEntry({ browserProfileId, entryId: item.id }))) {
@@ -199,20 +197,17 @@ function BrowserPasswordsProfile({
 
   const deleteAll = async (): Promise<void> => {
     const confirmed = await confirm({
-      title: translate(
-        'settings.browser.passwords.deleteAllConfirmTitle',
-        'Delete all password data?'
-      ),
-      description: translate(
+      title: t('settings.browser.passwords.deleteAllConfirmTitle', 'Delete all password data?'),
+      description: t(
         'settings.browser.passwords.deleteAllConfirmDescription',
         'Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.',
         { profile: profileLabel }
       ),
-      confirmLabel: translate('settings.browser.passwords.deleteAll', 'Delete data'),
+      confirmLabel: t('settings.browser.passwords.deleteAll', 'Delete data'),
       confirmVariant: 'destructive'
     })
     if (confirmed && (await api.deleteAll({ browserProfileId }))) {
-      toast.success(translate('settings.browser.passwords.deletedAll', 'Password data deleted'))
+      toast.success(t('settings.browser.passwords.deletedAll', 'Password data deleted'))
       await refresh()
     }
   }
@@ -226,9 +221,9 @@ function BrowserPasswordsProfile({
     <>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 space-y-0.5">
-          <Label>{getBrowserPasswordsSearchEntry().title}</Label>
+          <Label>{getBrowserPasswordsSearchEntry(t).title}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'settings.browser.passwords.profileDescription',
               'Saved logins for the {{profile}} profile. Orca fills one only when you pick it under a sign-in field.',
               { profile: profileLabel }
@@ -249,7 +244,7 @@ function BrowserPasswordsProfile({
             onClick={openAdd}
           >
             <Plus />
-            {translate('settings.browser.passwords.add', 'Add')}
+            {t('settings.browser.passwords.add', 'Add')}
           </Button>
         </div>
       </div>
@@ -257,7 +252,7 @@ function BrowserPasswordsProfile({
       {unavailableReason ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5">
           <p className="text-sm">
-            {translate(
+            {t(
               'settings.browser.passwords.unavailableTitle',
               'Saved passwords are off on this computer'
             )}
@@ -277,10 +272,10 @@ function BrowserPasswordsProfile({
           <KeyRound className="size-5 text-muted-foreground/60" />
           <div className="space-y-1">
             <p className="text-sm">
-              {translate('settings.browser.passwords.emptyTitle', 'No saved passwords yet')}
+              {t('settings.browser.passwords.emptyTitle', 'No saved passwords yet')}
             </p>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'settings.browser.passwords.empty',
                 'Orca offers to save a login after you sign in. You can also bring them from another browser or a CSV file.'
               )}
@@ -295,12 +290,10 @@ function BrowserPasswordsProfile({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={translate(
-                'settings.browser.passwords.search',
-                'Search {{count}} passwords',
-                { count: view.entries.length }
-              )}
-              aria-label={translate('settings.browser.passwords.searchLabel', 'Search passwords')}
+              placeholder={t('settings.browser.passwords.search', 'Search {{count}} passwords', {
+                count: view.entries.length
+              })}
+              aria-label={t('settings.browser.passwords.searchLabel', 'Search passwords')}
               density="compact"
             />
           ) : null}
@@ -316,7 +309,7 @@ function BrowserPasswordsProfile({
             />
           ) : (
             <p className="py-4 text-center text-xs text-muted-foreground">
-              {translate('settings.browser.passwords.noMatches', 'No saved passwords match.')}
+              {t('settings.browser.passwords.noMatches', 'No saved passwords match.')}
             </p>
           )}
         </div>
@@ -332,15 +325,15 @@ function BrowserPasswordsProfile({
       {ready ? (
         <SettingsRow
           className="border-t border-border/50"
-          label={translate('settings.browser.passwords.deleteAllTitle', 'Delete all password data')}
-          description={translate(
+          label={t('settings.browser.passwords.deleteAllTitle', 'Delete all password data')}
+          description={t(
             'settings.browser.passwords.deleteAllDescription',
             'Every saved password, note and never-save site in the {{profile}} profile.',
             { profile: profileLabel }
           )}
           control={
             <Button type="button" variant="destructive" size="xs" onClick={() => void deleteAll()}>
-              {translate('settings.browser.passwords.deleteAllAction', 'Delete…')}
+              {t('settings.browser.passwords.deleteAllAction', 'Delete…')}
             </Button>
           }
         />

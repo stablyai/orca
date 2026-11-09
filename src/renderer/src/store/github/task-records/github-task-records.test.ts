@@ -1,5 +1,5 @@
 import { answered } from '../requests/answered-request.test-fixture'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -609,4 +609,48 @@ describe('shared GitHub task records through production store actions', () => {
       expect(lookup).not.toHaveBeenCalled()
     }
   )
+  it('keeps the PR body result through a compound metadata update', async () => {
+    const { store } = setup()
+    const cacheKey = projectViewCacheKey('organization', 'acme', 1, 'v')
+    const source = projectRow()
+    store.setState({
+      projectViewCache: {
+        [cacheKey]: {
+          data: board([
+            {
+              ...source,
+              itemType: 'PULL_REQUEST',
+              content: { ...source.content, url: 'https://github.com/acme/widgets/pull/42' }
+            }
+          ]),
+          fetchedAt: 1
+        }
+      }
+    })
+    const body =
+      '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+    Object.assign(mockApi.gh, {
+      updatePullRequestBySlug: vi.fn().mockResolvedValue({
+        ok: true,
+        bodyImageUrls: {
+          'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+            'https://private-user-images.githubusercontent.com/1/image.png?jwt=TEST'
+        }
+      })
+    })
+    mockApi.gh.updateIssueBySlug.mockResolvedValue({ ok: true })
+    const result = await store
+      .getState()
+      .patchProjectIssueOrPr(cacheKey, 'r', { body, addLabels: ['bug'] })
+    expect(result).toEqual({
+      ok: true,
+      bodyImageUrls: {
+        'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+          'https://private-user-images.githubusercontent.com/1/image.png?jwt=TEST'
+      }
+    })
+    expect(mockApi.gh.updateIssueBySlug).toHaveBeenCalledWith(
+      expect.objectContaining({ updates: { addLabels: ['bug'] } })
+    )
+  })
 })

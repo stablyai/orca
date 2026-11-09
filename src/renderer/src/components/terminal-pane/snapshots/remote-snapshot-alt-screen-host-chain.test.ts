@@ -48,7 +48,7 @@ let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -62,7 +62,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../pty-connection/test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -132,6 +132,7 @@ type HostConnection = {
   streams: Map<number, HostStream>
   closed: boolean
   ackTotalInFlightBytes: number
+  linkEstimate: { enabled: boolean }
   sendFrame: (streamId: number, opcode: number, payload?: Uint8Array<ArrayBufferLike>) => boolean
   sendStreamError: (streamId: number, message: string) => void
   sendAckRecoverySnapshot?: (stream: HostStream) => Promise<void>
@@ -329,6 +330,7 @@ async function publishHostRecovery(
     streams: new Map([[streamId, stream]]),
     closed: false,
     ackTotalInFlightBytes: 0,
+    linkEstimate: { enabled: false },
     sendFrame,
     sendStreamError: (_id, message) => {
       throw new Error(message)
@@ -362,7 +364,9 @@ describe('host-published recovery snapshot onto a live alt screen', () => {
     meta: PtyReplayDataMeta
   ): Promise<PaneEvent[]> {
     const { connectPanePty } = await import('../pty-connection/connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('agent-pty')
     const replay: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {

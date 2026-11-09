@@ -1,4 +1,4 @@
-import type { ArtifactWriteRequest } from '../../../../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artifacts'
 import {
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId
@@ -8,22 +8,22 @@ import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishBut
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
 import type { BrowserChromeShareControl } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
 import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
-import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
+import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
 import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
 import { basename } from '@/lib/path'
 import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../../../../shared/cross-platform-path'
-import type { RuntimeFilePreviewResult } from '../../../../../shared/runtime-types'
+import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
 import {
   acquireTerminalArtifactGrant,
   pinTerminalArtifactGrantTarget,
   type TerminalArtifactGrantTarget
-} from '@/runtime/runtime-terminal-artifact-grant'
+} from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 
 /** The host a grant reads from, spelled as the editor's route for that host. */
 export function docPreviewGrantFileOwner(owner: DocPreviewGrantOwner): FileArtifactOwner {

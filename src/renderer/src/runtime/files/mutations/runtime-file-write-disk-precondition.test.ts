@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { writeRuntimeFile } from './runtime-file-mutation-client'
-import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../../shared/files-runtime-capabilities'
+import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../../../shared/file-access/files-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
@@ -8,10 +8,10 @@ import {
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
   FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
-} from '../../../../../shared/file-write-disk-precondition'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
-import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
-import { replaceRuntimeEnvironmentRevisions } from '../../runtime-environment-revision'
+} from '../../../../../shared/file-write/file-write-disk-precondition'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
+import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
 import {
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,

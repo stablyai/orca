@@ -43,7 +43,6 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -68,8 +67,9 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
     it('resumes a local sleeping pane in place when the restored PTY hint is missing', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const spawn = createDeferred<string>()
       const transport = createMockTransport()
       transport.connect.mockImplementation(() => spawn.promise)
@@ -202,8 +202,9 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     it('says the fresh-spawn resume started fresh when main declined it', async () => {
       // Sidebar resume creates a fresh tab without a restored PTY; it still needs a resume banner (#10757).
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const spawn = createDeferred<{ id: string; agentResumeUnavailable: true }>()
       const transport = createMockTransport()
       transport.connect.mockImplementation(() => spawn.promise)
@@ -295,8 +296,9 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
     it('lets a declined resume replace an already-shown restored banner', async () => {
       // A later declined resume must clear an earlier restored-banner latch.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       let connectCount = 0
       transport.connect.mockImplementation(async () => {
@@ -397,8 +399,9 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
     it('keeps sleeping resume record when fresh cold-restore spawn fails', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const staleSessionId = 'wt-1@@stale-session'
       const transport = createMockTransport()
       transport.connect.mockResolvedValue(undefined)
@@ -456,8 +459,9 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
 
     it('forwards one sidebar resume spawn without writing the restored banner through xterm', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-1')
       transportFactoryQueue.push(transport)
       const pane = createPane(1)

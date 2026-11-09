@@ -1,13 +1,13 @@
 import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
 import { dirname, basename } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { useAppStore } from '@/store/index'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import {
   acquireEditorFileOperation,
   getEditorFileOperationContext
-} from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
@@ -18,9 +18,12 @@ import { buildRichMarkdownImageInsertContent } from './rich-markdown-image-inser
 import { showRichMarkdownImageInsertionCanceled } from './rich-markdown-image-insertion-feedback'
 import type { RichMarkdownImageInsertionRange } from './rich-markdown-image-insertion-target'
 import { richMarkdownClipboardInsertionOrderKey } from '../clipboard/rich-markdown-clipboard-insertion-order'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import type { LocalFileAccess } from '../../../../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../../../../shared/file-access/local-file-access'
 
 export type RichMarkdownImageInsertArgs = {
   editor: Editor

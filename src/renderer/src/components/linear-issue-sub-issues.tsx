@@ -9,11 +9,12 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { linearCreateSubIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { useAppStore } from '@/store'
 import type { LinearIssue, LinearIssueChildSummary } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 function mergeLinearSubIssues(
   serverSubIssues: LinearIssueChildSummary[] | undefined,
@@ -36,6 +37,7 @@ export function LinearIssueSubIssues({
   onOpenIssue: (issue: LinearIssue) => void
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const fetchLinearIssue = useAppStore((state) => state.fetchLinearIssue)
@@ -204,9 +206,7 @@ export function LinearIssueSubIssues({
             className="flex h-9 items-center gap-2 rounded-md px-1 text-sm font-medium text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <Plus className="size-4" />
-            <span>
-              {translate('auto.components.LinearIssueWorkspace.8c55d6696a', 'Add sub-issues')}
-            </span>
+            <span>{t('auto.components.LinearIssueWorkspace.8c55d6696a', 'Add sub-issues')}</span>
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3" align="start">
@@ -220,10 +220,7 @@ export function LinearIssueSubIssues({
                   void handleCreate()
                 }
               }}
-              placeholder={translate(
-                'auto.components.LinearIssueWorkspace.c182e02de5',
-                'Sub-issue title'
-              )}
+              placeholder={t('auto.components.LinearIssueWorkspace.c182e02de5', 'Sub-issue title')}
               className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <div className="flex justify-end">
@@ -233,7 +230,7 @@ export function LinearIssueSubIssues({
                 disabled={!title.trim() || submitting}
               >
                 {submitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
-                {translate('auto.components.LinearIssueWorkspace.42589845bc', 'Create')}
+                {t('auto.components.LinearIssueWorkspace.42589845bc', 'Create')}
               </Button>
             </div>
           </div>

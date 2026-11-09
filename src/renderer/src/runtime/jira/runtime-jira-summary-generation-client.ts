@@ -7,7 +7,8 @@ import type {
 } from '../../../../shared/jira/jira-issue-summary-generation'
 import { JIRA_ISSUE_SUMMARY_RUNTIME_CAPABILITY } from '../../../../shared/jira/jira-detail-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '../runtime-rpc-client'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '../rpc/compatibility/runtime-capability-proof'
 
 export async function generateRuntimeJiraIssueSummary(
   target: RuntimeClientTarget,

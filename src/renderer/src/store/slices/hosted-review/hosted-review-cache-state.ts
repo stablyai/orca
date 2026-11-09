@@ -12,8 +12,8 @@ import { hostedReviewForBranchOutcome } from '../../../../../shared/source-contr
 import type { Repo } from '../../../../../shared/repo-types'
 import type { PRInfo } from '../../../../../shared/github/pull-request-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 export type HostedReviewCacheEntry<T> = {

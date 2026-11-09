@@ -1,9 +1,9 @@
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import { subscribeRuntimeFileChanges } from '@/runtime/files/watching/runtime-file-watch-client'
-import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
-import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
+import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
+import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function subscribeEditorRuntimeFileWatch(
   target: EditorExternalWatchTarget & { runtimeEnvironmentId: string },

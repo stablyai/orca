@@ -1,10 +1,9 @@
 import { federationRelayPrefix } from '../relay/federation-relay-prefix'
 import { federationRelayWireItem } from '../relay/federation-relay-wire'
-import { z } from 'zod'
 import type { FederationRuntime } from '../federation-runtime'
 import type { FederatedLifecycleSettlement } from '../federation-lifecycle-settlement'
 import '../../../../../shared/protocol-version'
-import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrchestrationError } from '../../orchestration-error'
 import {
   acquireFederationAckLease,
@@ -17,29 +16,14 @@ import {
   resolveFederatedLifecycleSettlementCapability
 } from './federation-sync-capability'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
-import { parseFederatedLifecycle, parseRelayedMessage } from './federation-sync-message'
+import {
+  parseFederatedLifecycle,
+  parseRelayedMessage,
+  PulledRelayPage
+} from './federation-sync-message'
 
 const FEDERATION_PULL_PAGE_SIZE = 50
 const MAX_FEDERATION_PULL_PAGES_PER_SYNC = 6
-
-// Decode untrusted peer pages before import to report malformed input as an orchestration error.
-const PulledRelayPage = z
-  .object({
-    runtimeEpoch: z.string().min(1),
-    items: z.array(
-      z
-        .object({
-          dispatch_id: z.string(),
-          direction: z.literal('to_home'),
-          sequence: z.number(),
-          message_id: z.string(),
-          kind: z.string(),
-          payload: z.string()
-        })
-        .passthrough()
-    )
-  })
-  .passthrough()
 
 export async function syncFederatedDispatch(
   runtime: FederationRuntime,
@@ -85,6 +69,9 @@ async function syncFederatedDispatchPages(
     federated,
     currentServer.pairingRevision
   )
+  if (!isCurrent()) {
+    return { imported: 0, acknowledgedThrough: federated.to_home_imported_sequence }
+  }
   const supportsLifecycleSettlement =
     federated.protocol_version >= ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION &&
     capability?.supported === true
@@ -221,26 +208,31 @@ async function syncFederatedDispatchPages(
     const locallyAcknowledgedThrough = keepRelayEligible
       ? Math.max(0, delivered.acknowledgedThrough - 1)
       : delivered.acknowledgedThrough
-    db.recordFederatedHomeAcknowledgment({
-      dispatchId,
-      remoteRuntimeEpoch: pulled.runtimeEpoch,
-      sequence: locallyAcknowledgedThrough
-    })
-    recordFederationAckCheckpoint(runtime, ackLease, {
-      ...ackIdentity,
-      throughSequence: locallyAcknowledgedThrough
-    })
+    if (isCurrent()) {
+      db.recordFederatedHomeAcknowledgment({
+        dispatchId,
+        remoteRuntimeEpoch: pulled.runtimeEpoch,
+        sequence: locallyAcknowledgedThrough
+      })
+      recordFederationAckCheckpoint(runtime, ackLease, {
+        ...ackIdentity,
+        throughSequence: locallyAcknowledgedThrough
+      })
+    }
   }
-  getOrchestrationPeerCapabilityCache(runtime).observeEpoch(
-    federated.peer_fingerprint,
-    pulled.runtimeEpoch
-  )
-  db.updateFederatedDispatchRuntimeEpoch(dispatchId, pulled.runtimeEpoch)
   if (isCurrent()) {
-    // Best effort: without a deadline the worker keeps manual release, as before.
-    await armHomeAutoReleaseForOlderHost(runtime, dispatchId, currentServer.pairingRevision).catch(
-      () => undefined
+    getOrchestrationPeerCapabilityCache(runtime).observeEpoch(
+      federated.peer_fingerprint,
+      pulled.runtimeEpoch
     )
+    db.updateFederatedDispatchRuntimeEpoch(dispatchId, pulled.runtimeEpoch)
+    // Best effort: without a deadline the worker keeps manual release, as before.
+    await armHomeAutoReleaseForOlderHost(
+      runtime,
+      dispatchId,
+      currentServer.pairingRevision,
+      isCurrent
+    ).catch(() => undefined)
   }
   const toWorker =
     db.getWorkerDispatch(dispatchId)?.state === 'ready'

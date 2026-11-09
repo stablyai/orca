@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 import { getConnectionExecutionHostId } from '../../../../../../shared/execution-host'
-import { getRuntimeTargetHostId } from '@/runtime/runtime-client-target'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { AppState } from '../../../types'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { GitRuntimeOperationOptions } from '../types/git-runtime-operation'
 

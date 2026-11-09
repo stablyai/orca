@@ -14,9 +14,9 @@ import {
   updateEditorBuffer,
   writeEditorBuffer
 } from '../buffers/editor-buffer-record'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
-import { isSameEditorFileOperationIdentity } from '@/lib/editor-file-operation-owner'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import { isSameEditorFileOperationIdentity } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { editorBufferSiblingViewIds } from '../buffers/editor-buffer-views'
 
 function withoutKeys<T>(record: Record<string, T>, keys: readonly string[]): Record<string, T> {

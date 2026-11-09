@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { readRuntimeFileRange } from '@/runtime/files/reads/runtime-file-range-client'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { detectCsvDelimiter } from './csv-parse'
 import { CsvFooter, csvChosenDelimiter } from './CsvViewer'
 import { CsvGrid } from './CsvGrid'
@@ -11,7 +11,7 @@ import { EditorFileLoadErrorView } from '../EditorFileLoadErrorView'
 import { useCsvColumnWidths } from './useCsvColumnWidths'
 import { buildFileViewPreferenceKey } from '../file-view-preference-storage'
 import { openCsvHttpLink } from './csv-link-routing'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { formatCsvPreviewError } from './csv-preview-error-message'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
@@ -26,6 +26,7 @@ export default function CsvPagedViewer({
   preferenceKey?: string
   onReload: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const [sniff, setSniff] = useState<{ delimiter: string; error: string | null } | null>(null)
   const [choice, setChoice] = useState<CsvDelimiterChoice>('auto')
@@ -56,7 +57,7 @@ export default function CsvPagedViewer({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="border-b border-border px-3 py-1 text-xs text-muted-foreground">
-        {translate('csv.readOnlyPreview', 'Large file preview · Read-only')}
+        {t('csv.readOnlyPreview', 'Large file preview · Read-only')}
       </div>
       {sniff?.error ? (
         <EditorFileLoadErrorView message={sniff.error} onRetry={onReload} />
@@ -73,7 +74,7 @@ export default function CsvPagedViewer({
         />
       ) : (
         <div role="status" className="p-4 text-sm text-muted-foreground">
-          {translate('csv.detectingDelimiter', 'Detecting delimiter…')}
+          {t('csv.detectingDelimiter', 'Detecting delimiter…')}
         </div>
       )}
     </div>
@@ -97,6 +98,7 @@ function CsvPagedTable({
   onChange: (choice: CsvDelimiterChoice) => void
   onReload: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const storedKey = JSON.stringify([
     preferenceKey ??
       buildFileViewPreferenceKey({
@@ -114,7 +116,7 @@ function CsvPagedTable({
     <>
       {preview.error !== null ? (
         <EditorFileLoadErrorView
-          message={formatCsvPreviewError(preview.error)}
+          message={formatCsvPreviewError(preview.error, t)}
           onRetry={onReload}
         />
       ) : preview.index ? (
@@ -141,7 +143,7 @@ function CsvPagedTable({
           role="status"
           className="flex flex-1 items-center justify-center text-sm text-muted-foreground"
         >
-          {translate('csv.indexProgress', 'Indexing CSV… {{percent}}%', {
+          {t('csv.indexProgress', 'Indexing CSV… {{percent}}%', {
             percent: Math.floor((preview.progress / file.snapshot.size) * 100)
           })}
         </div>

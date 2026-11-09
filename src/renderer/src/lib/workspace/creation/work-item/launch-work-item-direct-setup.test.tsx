@@ -4,10 +4,10 @@ import { readDirectSetupRequest } from '@/lib/workspace/creation/work-item/direc
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import * as preflight from './launch-work-item-direct-preflight'
-import * as inventory from '../../../agent-detection-target-inventory'
+import * as inventory from '../../../agent-session/launch/inventory/agent-detection-target-inventory'
 
 import { useAppStore } from '@/store/index'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 
 vi.doUnmock('@/lib/ensure-hooks-confirmed')
 const { launchWorkItemDirect } = await import('./launch-work-item-direct')

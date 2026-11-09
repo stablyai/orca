@@ -5,9 +5,9 @@ import {
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import type { ConflictResolution } from '../../../../../shared/source-control/listing/source-control-entry-actions'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
-import { RuntimeRpcCallError } from '../../runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 export async function stageRuntimeGitPath(
   context: RuntimeGitContext,

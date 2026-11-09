@@ -13,15 +13,15 @@ import type {
   LinearWorkflowState,
   LinearWorkspaceSelection
 } from '../../../../shared/linear/workspace-types'
-import { isRuntimeProviderSearchQueryWithinLimit } from '../runtime-provider-search-bounds'
-import { callRuntimeRpc } from '../runtime-rpc-client'
+import { isRuntimeProviderSearchQueryWithinLimit } from '../issue-search/runtime-provider-search-bounds'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import {
   getLinearRuntimeTarget,
   linearReadForce,
   type LinearCreateProjectResult,
   type LinearReadOptions
 } from './runtime-linear-client'
-import type { RowLessSource as RuntimeLinearSettings } from '../../lib/default-creation-host'
+import type { RowLessSource as RuntimeLinearSettings } from '../hosts/selection/default-creation-host'
 
 export async function linearListTeams(
   settings: RuntimeLinearSettings,

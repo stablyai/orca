@@ -177,17 +177,6 @@ describe('only the state that mounted the view hears the view', () => {
 
 // A finished WebView load can still have failed script evaluation; only page ready proves its code ran.
 describe('the page has to speak for the document that loaded', () => {
-  it('does nothing when the wait expires after the page has spoken', () => {
-    const step = run(
-      readySession().session,
-      { type: 'document-loaded' },
-      { type: 'page-ready' },
-      { type: 'page-ready-deadline' }
-    )
-    expect(step.effects).toEqual([])
-    expect(step.session.state.kind).toBe('ready')
-  })
-
   it('leaves a remounted document its own wait when the first one expires late', () => {
     const first = run(readySession().session, { type: 'document-loaded' }, { type: 'page-ready' })
     const armed = first.session.flow
@@ -245,12 +234,11 @@ describe('a cached page opened before the verdict', () => {
     )
   }
 
-  it('checks for a newer build once the verdict opens, and stages it behind the page', () => {
+  it('stages the newer build when the manifest answers after the page document starts', () => {
     const opened = run(openedWhileDialling().session, { type: 'gates-changed', gates: gates() })
-    expect(opened.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-early' })
-    expect(opened.effects).toEqual([{ kind: 'read-manifest' }])
-    const staged = run(opened.session, { type: 'manifest-read', manifest: NEWER })
-    expect(staged.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-early' })
+    const asked = opened.session.flow
+    const started = run(opened.session, { type: 'document-started' })
+    const staged = run(started.session, { type: 'manifest-read', manifest: NEWER, flow: asked })
     expect(staged.effects).toEqual([{ kind: 'stage-update' }])
   })
 

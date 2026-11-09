@@ -3,7 +3,7 @@ import {
   type AutomationCapturedOwner,
   type AutomationRowAction
 } from './automation-captured-owner'
-import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
+import type { RuntimeEnvironmentSshBucket } from '../../store/slices/ssh/runtime-environment-ssh'
 import React from 'react'
 import { MoreHorizontal, Pause, Pencil, Play, ShieldCheck, Trash2 } from 'lucide-react'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -19,10 +19,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/utils'
-import type { AutomationRun } from '../../../../shared/automations-types'
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import {
   getExecutionHostLabel,
@@ -53,7 +53,7 @@ import {
 } from '@/lib/list-table-layout'
 import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { wslMovedProjectForAutomation } from '@/store/repos/wsl-moved-projects'
 
@@ -112,6 +112,8 @@ export function AutomationListLocalRow({
   onDelete,
   onReviewSetup
 }: AutomationListLocalRowProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const allows = (row: AutomationListRow, action: AutomationRowAction): boolean =>
     isActionEnabled?.(row, action) ?? true
   const { automation } = row
@@ -123,24 +125,27 @@ export function AutomationListLocalRow({
       ? worktreeForRow(row, automationRepo)
       : worktreeMap.get(automation.workspaceId)
     : null
-  const automationRunAvailability = getAutomationTargetAvailability({
-    automation,
-    capturedOwner: capturedAutomationOwner(capturedOwners, row.key),
-    repo: automationRepo,
-    workspace: automationWorktree,
-    projectHostSetups,
-    sshConnectionStates,
-    sshStateByEnvironment,
-    runtimeStatusByEnvironmentId,
-    automationHostTarget: hostTargetFor(row)
-  })
+  const automationRunAvailability = getAutomationTargetAvailability(
+    {
+      automation,
+      capturedOwner: capturedAutomationOwner(capturedOwners, row.key),
+      repo: automationRepo,
+      workspace: automationWorktree,
+      projectHostSetups,
+      sshConnectionStates,
+      sshStateByEnvironment,
+      runtimeStatusByEnvironmentId,
+      automationHostTarget: hostTargetFor(row)
+    },
+    t
+  )
   const projectLabel =
     automationProjectName(automation, automationRepo, repoMap, !!needsMigration?.(row)) ??
-    translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
-  const scheduleLabel = formatUiAutomationSchedule(automation.rrule)
+    t('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
+  const scheduleLabel = formatUiAutomationSchedule(automation.rrule, t, intlLocale)
   const nextRunLabel = automation.enabled
-    ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
-    : translate('auto.components.automations.enablement.paused', 'Paused')
+    ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow, t, intlLocale)
+    : t('auto.components.automations.enablement.paused', 'Paused')
   const isSelected = isSelectedLocal && selectedRowKey === row.key
   const movedToDistro = useAppStore(
     (state) => wslMovedProjectForAutomation(state.wslMovedProjects, automation)?.distro ?? null
@@ -154,20 +159,17 @@ export function AutomationListLocalRow({
     (hostId
       ? (hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId))
       : getLocalExecutionHostLabel())
-  const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${formatAutomationUsageSummary(row.usageSummary ?? undefined)}`
+  const agentTooltipLabel = `${agentLabel} · ${hostLabel} · ${formatAutomationUsageSummary(row.usageSummary ?? undefined, t, intlLocale)}`
   const canRunNow = automationRunAvailability.canRunNow && allows(row, 'run')
   const lastRun = lastRunByAutomationId.get(automation.id)
   // Use the projected newest retained run when history is absent; the list does not download history.
   const lastRunSnapshot = lastRun
-    ? getLocalAutomationLastRunSnapshot(automation, lastRun)
-    : getAutomationRowLastRunSnapshot(row)
+    ? getLocalAutomationLastRunSnapshot(automation, lastRun, t)
+    : getAutomationRowLastRunSnapshot(row, t)
 
   const setupReview = pendingAutomationSetupReviewFromSummary(automation, row.usageSummary)
   const reviewContent = onReviewSetup && allows(row, 'save') ? setupReview?.content : null
-  const reviewSetupLabel = translate(
-    'automations.setupTrust.reviewAction',
-    'Review and approve setup'
-  )
+  const reviewSetupLabel = t('automations.setupTrust.reviewAction', 'Review and approve setup')
 
   const dropdownRunItem = (
     <DropdownMenuItem
@@ -181,7 +183,7 @@ export function AutomationListLocalRow({
       <Play className="size-3.5" />
       <span className="min-w-0 truncate">
         {automationRunAvailability.canRunNow
-          ? translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
+          ? t('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
           : automationRunAvailability.message}
       </span>
     </DropdownMenuItem>
@@ -196,7 +198,7 @@ export function AutomationListLocalRow({
         }
         label={
           automationRunAvailability.canRunNow
-            ? translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
+            ? t('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')
             : automationRunAvailability.message
         }
         onSelect={() => onRunNow(row)}
@@ -204,7 +206,7 @@ export function AutomationListLocalRow({
       <MenuItem
         disabled={!allows(row, 'edit')}
         icon={<Pencil className="size-3.5" />}
-        label={translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
+        label={t('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
         onSelect={() => onEdit(row)}
       />
       <MenuItem
@@ -212,8 +214,8 @@ export function AutomationListLocalRow({
         icon={automation.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
         label={
           automation.enabled
-            ? translate('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
-            : translate('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')
+            ? t('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
+            : t('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')
         }
         onSelect={() => onToggle(row)}
       />
@@ -228,7 +230,7 @@ export function AutomationListLocalRow({
       <MenuItem
         disabled={!allows(row, 'delete')}
         icon={<Trash2 className="size-3.5" />}
-        label={translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
+        label={t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
         variant="destructive"
         onSelect={() => onDelete(row)}
       />
@@ -305,7 +307,7 @@ export function AutomationListLocalRow({
                 variant="ghost"
                 size="icon-xs"
                 className="size-7 text-muted-foreground"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.automations.AutomationListLocalRows.c92c9463c6',
                   'Automation actions'
                 )}
@@ -322,7 +324,7 @@ export function AutomationListLocalRow({
               )}
               <DropdownMenuItem disabled={!allows(row, 'edit')} onSelect={() => onEdit(row)}>
                 <Pencil className="size-3.5" />
-                {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
+                {t('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
               </DropdownMenuItem>
               <DropdownMenuItem disabled={!allows(row, 'toggle')} onSelect={() => onToggle(row)}>
                 {automation.enabled ? (
@@ -331,8 +333,8 @@ export function AutomationListLocalRow({
                   <Play className="size-3.5" />
                 )}
                 {automation.enabled
-                  ? translate('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
-                  : translate('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')}
+                  ? t('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
+                  : t('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')}
               </DropdownMenuItem>
               {reviewContent ? (
                 <DropdownMenuItem onSelect={() => onReviewSetup?.(row, reviewContent)}>
@@ -347,7 +349,7 @@ export function AutomationListLocalRow({
                 onSelect={() => onDelete(row)}
               >
                 <Trash2 className="size-3.5" />
-                {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
+                {t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

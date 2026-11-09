@@ -4,14 +4,17 @@ import {
   RuntimeCapabilityMissingError,
   type GitLabApi
 } from './runtime-gitlab-api'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import {
-  callRuntimeRpc,
   runtimeEnvironmentCapabilityProof,
   runtimeEnvironmentSupportsCapability,
   type RuntimeCapabilityProof
-} from '../runtime-rpc-client'
-import { captureRuntimeEnvironmentRequestRevision } from '../runtime-environment-revision'
-import { forgeCredentialTarget, type ForgeRepoSelector } from '../forge-credential-target'
+} from '../rpc/compatibility/runtime-capability-proof'
+import { captureRuntimeEnvironmentRequestRevision } from '../rpc/environment-revisions/runtime-environment-revision'
+import {
+  forgeCredentialTarget,
+  type ForgeRepoSelector
+} from '../source-control/forge/forge-credential-target'
 
 // Why: job logs outlive main's 60s `glab` timeout so its classified error reaches the caller.
 export const JOB_TRACE_TIMEOUT_MS = 65_000

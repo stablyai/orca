@@ -11,7 +11,7 @@ import { STATUS_COLORS } from '../../lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { openWorkspaceSpaceChange } from './workspace-space-open-change'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function WorkspaceSpaceChanges({
   worktree,
@@ -22,6 +22,7 @@ export function WorkspaceSpaceChanges({
   entries: readonly GitStatusEntry[]
   canOpen: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const normalizedQuery = query.trim().toLowerCase()
@@ -39,7 +40,7 @@ export function WorkspaceSpaceChanges({
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           >
-            {translate('workspaceSpace.changes.count', 'Changed files ({{count}})', {
+            {t('workspaceSpace.changes.count', 'Changed files ({{count}})', {
               count: fileCount
             })}
             <ChevronRight />
@@ -55,14 +56,14 @@ export function WorkspaceSpaceChanges({
         <div className="space-y-2 border-b border-border p-3">
           <div className="truncate text-sm font-semibold">{worktree.displayName}</div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'workspaceSpace.changes.description',
               'Uncommitted files · Click a file to view its changes in Orca.'
             )}
           </p>
           <Input
-            aria-label={translate('workspaceSpace.changes.search', 'Filter changed files')}
-            placeholder={translate('workspaceSpace.changes.search', 'Filter changed files')}
+            aria-label={t('workspaceSpace.changes.search', 'Filter changed files')}
+            placeholder={t('workspaceSpace.changes.search', 'Filter changed files')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -96,12 +97,12 @@ export function WorkspaceSpaceChanges({
                 <DiffLineCounts added={entry.added} removed={entry.removed} />
                 <span className="shrink-0 text-muted-foreground">
                   {entry.conflictStatus === 'unresolved'
-                    ? translate('workspaceSpace.changes.conflict', 'Conflict')
+                    ? t('workspaceSpace.changes.conflict', 'Conflict')
                     : entry.area === 'staged'
-                      ? translate('workspaceSpace.changes.staged', 'Staged')
+                      ? t('workspaceSpace.changes.staged', 'Staged')
                       : entry.area === 'untracked'
-                        ? translate('workspaceSpace.changes.untracked', 'Untracked')
-                        : translate('workspaceSpace.changes.unstaged', 'Unstaged')}
+                        ? t('workspaceSpace.changes.untracked', 'Untracked')
+                        : t('workspaceSpace.changes.unstaged', 'Unstaged')}
                 </span>
                 <span style={{ color: STATUS_COLORS[entry.status] }}>
                   {STATUS_LABELS[entry.status]}
@@ -111,7 +112,7 @@ export function WorkspaceSpaceChanges({
           />
           {rows.length === 0 ? (
             <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-              {translate('workspaceSpace.changes.empty', 'No matching files.')}
+              {t('workspaceSpace.changes.empty', 'No matching files.')}
             </p>
           ) : null}
         </div>

@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -15,9 +16,16 @@ import {
 } from '../../ratchet-baseline/ratchet-baseline.mjs'
 import {
   HAZARD_FIXES,
-  findMemoizedHookCalls,
+  LIVE_MODULE_READERS,
+  VIRTUALIZER_HOOKS,
+  findLiveReadWrappers,
+  findMemoizedCalls,
   findSourceHazards,
-  hookCallLines
+  findVirtualizerMemoFlows,
+  findVirtualizerWrappers,
+  hookCallLines,
+  renderLiveReadLines,
+  renderStoreReadLines
 } from './react-compiler-hazards.mjs'
 
 // Runs React Compiler (analysis only, nothing is written) over the renderer so code that compiles
@@ -26,6 +34,8 @@ import {
 const SCAN_ROOT = 'src/renderer/src'
 const BAILOUT_BASELINE = 'config/react-compiler-bailout-baseline.txt'
 const HAZARD_BASELINE = 'config/react-compiler-hazard-baseline.txt'
+// The build leaves these files uncompiled, so their hazards cannot run.
+const UNCOMPILED_LIST = 'config/react-compiler-uncompiled-files.txt'
 const COMMAND = 'pnpm check:react-compiler-compat-ratchet'
 const NOT_SHIPPED =
   /(?:^|\/)__(?:mocks|fixtures|tests)__\/|\.(?:test|spec|bench)\.[cm]?tsx?$|[.-]test-|[.-]fixtures?\.tsx?$/
@@ -91,6 +101,59 @@ function addTo(map, key, value) {
   map.set(key, [...(map.get(key) ?? []), value])
 }
 
+function readUncompiledFiles(root) {
+  const file = path.join(root, UNCOMPILED_LIST)
+  if (!fs.existsSync(file)) {
+    return new Set()
+  }
+  return new Set(
+    fs
+      .readFileSync(file, 'utf8')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'))
+  )
+}
+
+/** Virtualizer hooks plus every hook that returns one, followed through wrappers of wrappers. */
+function collectVirtualizerHooks(sources) {
+  const hooks = new Map(VIRTUALIZER_HOOKS)
+  for (let grew = true; grew;) {
+    grew = false
+    for (const [rel, text] of sources) {
+      for (const { name, shape } of findVirtualizerWrappers(rel, text, hooks)) {
+        if (!hooks.has(name)) {
+          hooks.set(name, shape)
+          grew = true
+        }
+      }
+    }
+  }
+  return hooks
+}
+
+/** Live module-state readers plus every plain function that calls one, followed through wrappers. */
+function collectLiveReaders(sources) {
+  const readers = new Set(LIVE_MODULE_READERS)
+  for (let grew = true; grew;) {
+    grew = false
+    for (const [rel, text] of sources) {
+      for (const name of findLiveReadWrappers(rel, text, readers)) {
+        if (!readers.has(name)) {
+          readers.add(name)
+          grew = true
+        }
+      }
+    }
+  }
+  return readers
+}
+
+function sourceLineOf(text, snippet) {
+  const index = text.split('\n').findIndex((line) => line.includes(snippet.split('(')[0]))
+  return index === -1 ? '?' : index + 1
+}
+
 async function scanFile(rel, text, result) {
   const output = await transform(rel, text, COMPILER_OPTIONS)
   if (output.fatal) {
@@ -103,18 +166,60 @@ async function scanFile(rel, text, result) {
     const message = error.message.split('\n')[0]
     addTo(result.diagnostics, rel, { line: lineAt(bytes, error.labels[0]?.start ?? 0), message })
   }
+  if (result.uncompiled.has(rel)) {
+    return
+  }
+  for (const { fn, text: snippet } of findVirtualizerMemoFlows(
+    rel,
+    text,
+    output.code,
+    result.virtualizerHooks
+  )) {
+    addTo(
+      result.hazards,
+      `${rel}#${fn}:virtualizer-in-memo-block`,
+      `${sourceLineOf(text, snippet)}: ${snippet}`
+    )
+  }
   for (const hazard of findSourceHazards(rel, text)) {
     addTo(result.hazards, `${rel}#${hazard.fn}:${hazard.kind}`, `${hazard.line}: ${hazard.text}`)
   }
-  for (const { fn, hook } of findMemoizedHookCalls(rel, output.code)) {
-    const lines = hookCallLines(rel, text, fn, hook)
-    addTo(result.hazards, `${rel}#${fn}:hook-in-memo-block`, `${lines.join(', ')}: ${hook}()`)
+  const storeReadFns = new Set()
+  for (const { fn, kind, name } of findMemoizedCalls(rel, output.code, result.liveReaders)) {
+    if (kind === 'store-read') {
+      storeReadFns.add(fn)
+      continue
+    }
+    if (kind === 'live-read') {
+      // A call inside the source's own useMemo or a closure keeps its written behavior.
+      for (const line of renderLiveReadLines(rel, text, fn, name)) {
+        addTo(result.hazards, `${rel}#${fn}:live-read-in-memo-block`, `${line}: ${name}()`)
+      }
+      continue
+    }
+    const lines = hookCallLines(rel, text, fn, name)
+    addTo(result.hazards, `${rel}#${fn}:hook-in-memo-block`, `${lines.join(', ')}: ${name}()`)
+  }
+  for (const fn of storeReadFns) {
+    // A read inside the source's own useMemo keeps its written deps, so only render-level ones count.
+    for (const line of renderStoreReadLines(rel, text, fn)) {
+      addTo(result.hazards, `${rel}#${fn}:store-read-in-memo-block`, `${line}: getState()`)
+    }
   }
 }
 
 export async function scanRenderer(root = process.cwd()) {
-  const result = { files: 0, compiled: 0, diagnostics: new Map(), hazards: new Map() }
-  const pending = [...readTrackedSources(root, [SCAN_ROOT], isScannedPath)]
+  const sources = [...readTrackedSources(root, [SCAN_ROOT], isScannedPath)]
+  const result = {
+    files: 0,
+    compiled: 0,
+    diagnostics: new Map(),
+    hazards: new Map(),
+    uncompiled: readUncompiledFiles(root),
+    virtualizerHooks: collectVirtualizerHooks(sources),
+    liveReaders: collectLiveReaders(sources)
+  }
+  const pending = [...sources]
   result.files = pending.length
   await Promise.all(
     Array.from({ length: IN_FLIGHT }, async () => {
@@ -162,24 +267,56 @@ function reportGrowth(kind, grown, details) {
   }
 }
 
-function check(root, label, baselinePath, current, details) {
+// Under check:changed (ORCA_CODE_QUALITY_BASE set) a shrink fails only in files the change touches;
+// elsewhere, e.g. after a stale-CI merge to main, it is a notice so improvements never turn CI red.
+export function listTouchedFiles(root, base = process.env.ORCA_CODE_QUALITY_BASE) {
+  if (!base) {
+    return null
+  }
+  try {
+    const git = (args) =>
+      execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    const mergeBase = git(['merge-base', 'HEAD', base]).trim()
+    const tracked = git(['diff', '--name-only', '--no-renames', '-z', mergeBase]).split('\0')
+    const untracked = git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0')
+    return new Set([...tracked, ...untracked].filter(Boolean))
+  } catch {
+    return null
+  }
+}
+
+const fileOfKey = (key) => key.split('#')[0]
+
+function check(root, label, baselinePath, current, details, touched) {
   const { grown, shrunk } = diffCounts(
     current,
     parseCountBaseline(readBaseline(root, baselinePath))
   )
   reportGrowth(label, grown, details)
+  const enforced = new Set(
+    shrunk.filter(({ file }) => touched?.has(fileOfKey(file))).map(({ file }) => file)
+  )
   for (const { file, now, allowed } of shrunk) {
-    console.error(
-      `::error::${file}: now ${now} ${label}, baseline ${allowed}. Record it: ${COMMAND} --prune`
-    )
+    const level = enforced.has(file) ? 'error' : 'notice'
+    const line = `::${level}::${file}: now ${now} ${label}, baseline ${allowed}. Record it: ${COMMAND} --prune`
+    if (level === 'error') {
+      console.error(line)
+    } else {
+      console.log(line)
+    }
   }
   if (shrunk.length > 0) {
-    console.error(
-      `\n${shrunk.length} baseline row(s) improved, so the baseline must shrink to lock that in.\n` +
-        `Run: ${COMMAND} --prune\nthen commit ${baselinePath}.`
+    const touchedNote =
+      enforced.size > 0
+        ? ` (${enforced.size} in files this change touches, which must be recorded)`
+        : ''
+    const write = enforced.size > 0 ? console.error : console.log
+    write(
+      `\n${shrunk.length} baseline row(s) improved${touchedNote}.\n` +
+        `Lock it in: ${COMMAND} --prune\nthen commit ${baselinePath}.`
     )
   }
-  return grown.length + shrunk.length === 0
+  return grown.length + enforced.size === 0
 }
 
 function writeBaseline(root, baselinePath, header, current) {
@@ -204,9 +341,10 @@ export async function main(root = process.cwd(), arg = undefined) {
     )
     return 0
   }
+  const touched = listTouchedFiles(root)
   const ok = [
-    check(root, 'bailout(s)', BAILOUT_BASELINE, bailouts, scan.diagnostics),
-    check(root, 'hazard(s)', HAZARD_BASELINE, hazards, scan.hazards)
+    check(root, 'bailout(s)', BAILOUT_BASELINE, bailouts, scan.diagnostics, touched),
+    check(root, 'hazard(s)', HAZARD_BASELINE, hazards, scan.hazards, touched)
   ].every(Boolean)
   const seconds = ((performance.now() - startedAt) / 1000).toFixed(1)
   if (!ok) {

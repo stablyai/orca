@@ -1,13 +1,13 @@
 import type { LinearIssueUpdate } from '../../../../shared/issue-mutation-types'
 import type { LinearComment, LinearIssue } from '../../../../shared/linear/issue-types'
-import { callRuntimeRpc } from '../runtime-rpc-client'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import {
   getLinearRuntimeTarget,
   type LinearCommentResult,
   type LinearCreateIssueResult,
   type LinearMutationResult
 } from './runtime-linear-client'
-import type { RowLessSource as RuntimeLinearSettings } from '../../lib/default-creation-host'
+import type { RowLessSource as RuntimeLinearSettings } from '../hosts/selection/default-creation-host'
 
 export async function linearCreateIssue(
   settings: RuntimeLinearSettings,

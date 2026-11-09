@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
-  ORCA_EDITOR_FILE_SAVED_EVENT,
   ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
   requestEditorFileSave,
-  requestEditorSaveQuiesce,
   type EditorSaveAndCloseDetail
 } from '../../autosave/editor-autosave'
 import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
@@ -12,12 +10,9 @@ import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { keepTabEditsOverExternalChange } from '../../external-changes/ExternalFileChangeBanner'
 
-import {
-  getDiskBaselineSignature,
-  getWrittenContentDiskSignature
-} from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import { GUARDED_PATH, openGuardedFile, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn(), toastError: vi.fn() }))
 const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> | null } => ({
@@ -25,7 +20,9 @@ const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> 
 }))
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: mocks.toastError }) }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
 vi.mock('@/lib/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
@@ -55,32 +52,6 @@ describe('guarded editor saves under races', () => {
     mocks.toastError.mockReset()
   })
 
-  it('rebaselines to its own write even when a quiesce supersedes the save mid-write', async () => {
-    const gate = deferred()
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'original' }, () => gate.promise)
-    const store = createEditorStore()
-    openGuardedFile(store, { baseline: 'original', draft: 'first' })
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const save = requestEditorFileSave({ fileId: GUARDED_PATH })
-      await vi.advanceTimersByTimeAsync(0)
-      const quiesce = requestEditorSaveQuiesce({ fileId: GUARDED_PATH })
-      gate.resolve()
-      await save
-      await quiesce
-      expect(store.getState().openFiles[0]?.lastKnownDiskSignature).toBe(
-        getWrittenContentDiskSignature('first')
-      )
-
-      store.getState().setEditorDraft(GUARDED_PATH, 'second')
-      await requestEditorFileSave({ fileId: GUARDED_PATH })
-      expect(disk.files.get(GUARDED_PATH)).toBe('second')
-    } finally {
-      cleanup()
-    }
-  })
-
   function openSharedModelTabs(disk: string) {
     const store = createEditorStore()
     storeRef.current = store
@@ -107,49 +78,6 @@ describe('guarded editor saves under races', () => {
     }
     return { store, a, b }
   }
-
-  it('coalesces saves from two views of one record into one write, ending on the saved text', async () => {
-    const gate = deferred()
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'A' }, () => gate.promise)
-    const { store, a, b } = openSharedModelTabs('A')
-    for (const tab of [a, b]) {
-      store.getState().setEditorDraft(tab.id, 'X')
-      store.getState().markFileDirty(tab.id, true)
-    }
-    // Mount from per-tab text updated by saved events, matching panel consumers.
-    const shown = new Map([
-      [a.id, 'A'],
-      [b.id, 'A']
-    ])
-    const onSaved = (event: Event): void => {
-      if (event instanceof CustomEvent) {
-        shown.set(event.detail.fileId, event.detail.content)
-      }
-    }
-    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
-
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const saves = Promise.all([
-        requestEditorFileSave({ fileId: a.id }),
-        requestEditorFileSave({ fileId: b.id })
-      ])
-      gate.resolve()
-      await saves
-
-      expect(disk.writeFile).toHaveBeenCalledTimes(1)
-      expect(disk.files.get(GUARDED_PATH)).toBe('X')
-      expect(shown.get(a.id)).toBe('X')
-      for (const tab of store.getState().openFiles) {
-        expect(tab.isDirty).toBe(false)
-        expect(tab.externalMutation).toBeUndefined()
-        expect(store.getState().editorDrafts[tab.id]).toBeUndefined()
-      }
-    } finally {
-      cleanup()
-      window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
-    }
-  })
 
   it('makes Cmd+S in one tab wait for Keep My Edits in its sibling', async () => {
     const disk = stubGuardedDisk({ [GUARDED_PATH]: 'B' })

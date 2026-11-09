@@ -3,13 +3,14 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
 import type {
   AutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   deleteAutomationForTarget,
   listAutomationsForTarget,
@@ -74,7 +75,8 @@ export type AutomationEditDestinationResult =
 
 /** Validates an edited row's destination and identifies a cross-authority move. */
 export function resolveAutomationEditDestination(
-  input: AutomationEditDestinationInput
+  input: AutomationEditDestinationInput,
+  t: Translate = translate
 ): AutomationEditDestinationResult {
   const destinationHostChanged =
     input.editingDestination !== null &&
@@ -91,7 +93,7 @@ export function resolveAutomationEditDestination(
     return { ok: true, editDestination: undefined, moveTarget: null }
   }
   if (!input.editingDestination || input.editingDestination.projectId !== input.draft.projectId) {
-    return { ok: false, notice: unavailableDestinationNotice() }
+    return { ok: false, notice: unavailableDestinationNotice(t) }
   }
   const revalidated = revalidateAutomationCreateDestination(
     input.editingDestination.destination,
@@ -101,7 +103,7 @@ export function resolveAutomationEditDestination(
     return {
       ok: false,
       notice: {
-        message: translate(
+        message: t(
           'auto.components.automations.createDestination.projectStale',
           '{host} changed while this form was open. Choose the project again before saving.'
         ).replace('{host}', revalidated.entry.label),
@@ -111,7 +113,7 @@ export function resolveAutomationEditDestination(
     }
   }
   if (revalidated.status !== 'ready') {
-    return { ok: false, notice: unavailableDestinationNotice() }
+    return { ok: false, notice: unavailableDestinationNotice(t) }
   }
   const sourceAuthorityKey =
     input.automationDialogTarget.kind === 'environment'
@@ -132,9 +134,9 @@ export function resolveAutomationEditDestination(
   }
 }
 
-function unavailableDestinationNotice(): AutomationActionNotice {
+function unavailableDestinationNotice(t: Translate = translate): AutomationActionNotice {
   return {
-    message: translate(
+    message: t(
       'auto.components.automations.createDestination.projectUnavailable',
       'Choose an available project on this host before saving.'
     ),

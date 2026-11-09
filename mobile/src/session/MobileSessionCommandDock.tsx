@@ -1,28 +1,29 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { View } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
-import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
-import { MobileTerminalInputActions } from './MobileTerminalInputActions'
-import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
-import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
+import { MobileTerminalLiveInputStatus } from '../terminal/session/MobileTerminalLiveInputStatus'
+import { MobileTerminalInputActions } from '../terminal/session/MobileTerminalInputActions'
+import { MobileSessionAccessoryKeys } from '../terminal/session/MobileSessionAccessoryKeys'
+import { MobileTerminalMoreKeysSheet } from '../terminal/session/MobileTerminalMoreKeysSheet'
 import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
-import { useSessionTerminalKeyRail } from './use-session-terminal-key-rail'
-import { terminalDockStyles as dockStyles } from './terminal-dock-styles'
+import { useSessionTerminalKeyRail } from '../terminal/session/use-session-terminal-key-rail'
+import { terminalDockStyles as dockStyles } from '../terminal/session/terminal-dock-styles'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
-import { useMobileSessionKeyboardLift } from './use-mobile-session-keyboard-lift'
-import { useLiveInputCaptureText } from './live-input-capture'
+import { useMobileSessionKeyboardLift } from '../terminal/session/use-mobile-session-keyboard-lift'
+import { useLiveInputCaptureText } from '../terminal/session/live-input-capture'
 
 // The key row above one live field: every letter typed goes straight to the terminal, shell or agent.
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
   const rail = useSessionTerminalKeyRail(controller)
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
+  // The field's ✕, which the held mic may be released over.
+  const dictationCancelRef = useRef<View>(null)
   const {
     insets,
     dictationMode,
@@ -63,6 +64,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           trailing={
             <MobileTerminalLiveInputStatus
               dictation={dictation}
+              cancelRef={dictationCancelRef}
               dictationMode={dictationMode}
               heard={liveDictationText}
               isAttaching={isAttaching}
@@ -76,7 +78,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           dictationMode={dictationMode}
           dictationEnabled={dictationEnabled}
           buttonStyle={inputStyles.controlButton}
-          activeButtonStyle={styles.dictationButtonActive}
+          dictationCancelRef={dictationCancelRef}
           disabledButtonStyle={inputStyles.disabled}
           onAttachImage={() => void attachImage('library')}
           onAttachFile={() => void attachImage('files')}

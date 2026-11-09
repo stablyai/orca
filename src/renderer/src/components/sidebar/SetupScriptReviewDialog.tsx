@@ -11,7 +11,9 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { SetupScriptCodeBlock } from './SetupScriptCodeBlock'
 
 export type SetupScriptReviewDialogProps = {
   open: boolean
@@ -19,24 +21,34 @@ export type SetupScriptReviewDialogProps = {
   repoDisplayName: string
   setup: string
   archive: string | null
+  skippedFields: readonly string[]
   provenance: string | null
   isSaving: boolean
   onSave: () => void
 }
 
-function ScriptBlock({ heading, script }: { heading: string; script: string }): React.JSX.Element {
+function SkippedFieldsList({ fields }: { fields: readonly string[] }): React.JSX.Element {
+  const t = useTranslate()
   return (
-    <section className="min-w-0 rounded-md border border-border/70 bg-muted/35 px-3 py-2">
-      <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {heading}
+    <section className="min-w-0 text-xs text-muted-foreground">
+      <h3 className="mb-0.5 font-medium text-foreground">
+        {t('auto.components.sidebar.SetupScriptReviewDialog.notImported', 'Not imported')}
       </h3>
-      <pre
-        tabIndex={0}
-        aria-label={heading}
-        className="max-h-[40vh] overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-5 text-foreground outline-none scrollbar-sleek focus-visible:ring-1 focus-visible:ring-ring"
-      >
-        {script}
-      </pre>
+      <p className="mb-1.5">
+        {t(
+          'auto.components.sidebar.SetupScriptReviewDialog.notImportedHint',
+          "These settings have no Orca equivalent and won't be saved."
+        )}
+      </p>
+      <ul className="flex max-h-24 flex-wrap gap-1 overflow-y-auto scrollbar-sleek">
+        {fields.map((field) => (
+          <li key={field} className="max-w-full">
+            <code className="block truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+              {field}
+            </code>
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }
@@ -47,63 +59,65 @@ export function SetupScriptReviewDialog({
   repoDisplayName,
   setup,
   archive,
+  skippedFields,
   provenance,
   isSaving,
   onSave
 }: SetupScriptReviewDialogProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent scrollable className="sm:max-w-xl">
-        <DialogHeader>
+      {/* Viewport-capped column: only the middle scrolls, so the title and Save stay visible for any script length. */}
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle size="compact">
-            {translate(
-              'auto.components.sidebar.SetupScriptReviewDialog.title',
-              'Review setup script'
-            )}
+            {t('auto.components.sidebar.SetupScriptReviewDialog.title', 'Review setup script')}
           </DialogTitle>
           <DialogDescription size="compact">
-            {translate(
-              'auto.components.sidebar.SetupScriptReviewDialog.description',
-              'Saving runs this whenever Orca creates a worktree for {{repo}}.',
-              { repo: repoDisplayName }
+            {provenance ? (
+              <Trans
+                i18n={i18n}
+                defaults={t(
+                  'auto.components.sidebar.SetupScriptReviewDialog.descriptionWithSource',
+                  'From <file>{{source}}</file>. Saving runs this whenever Orca creates a worktree for {{repo}}.'
+                )}
+                values={{ source: provenance, repo: repoDisplayName }}
+                components={{ file: <code className="font-mono text-foreground" /> }}
+              />
+            ) : (
+              t(
+                'auto.components.sidebar.SetupScriptReviewDialog.description',
+                'Saving runs this whenever Orca creates a worktree for {{repo}}.',
+                { repo: repoDisplayName }
+              )
             )}
           </DialogDescription>
         </DialogHeader>
 
-        <ScriptBlock
-          heading={translate(
-            'auto.components.sidebar.SetupScriptReviewDialog.setupScript',
-            'Setup script'
-          )}
-          script={setup}
-        />
-        {archive ? (
-          <ScriptBlock
-            heading={translate(
-              'auto.components.sidebar.SetupScriptReviewDialog.archiveScript',
-              'Archive script'
+        <div className="-mx-6 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto scrollbar-sleek px-6">
+          <SetupScriptCodeBlock
+            heading={t(
+              'auto.components.sidebar.SetupScriptReviewDialog.setupScript',
+              'Setup script'
             )}
-            script={archive}
+            script={setup}
           />
-        ) : null}
-
-        {provenance ? (
-          <p className="text-xs text-muted-foreground">
-            <Trans
-              i18n={i18n}
-              defaults={translate(
-                'auto.components.sidebar.SetupScriptPromptCardViews.detectedFromSource',
-                'Detected from <source>{{source}}</source>'
+          {archive ? (
+            <SetupScriptCodeBlock
+              heading={t(
+                'auto.components.sidebar.SetupScriptReviewDialog.archiveScript',
+                'Archive script'
               )}
-              values={{ source: provenance }}
-              components={{ source: <code className="rounded bg-muted px-1 py-0.5" /> }}
+              script={archive}
             />
-          </p>
-        ) : null}
+          ) : null}
 
-        <DialogFooter>
+          {skippedFields.length > 0 ? <SkippedFieldsList fields={skippedFields} /> : null}
+        </div>
+
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {translate('common.cancel', 'Cancel')}
+            {t('common.cancel', 'Cancel')}
           </Button>
           <Button onClick={onSave} disabled={isSaving}>
             {isSaving ? (
@@ -112,10 +126,7 @@ export function SetupScriptReviewDialog({
               <Download className="size-3.5" />
             )}
             <span className={cn(isSaving && 'text-muted-foreground')}>
-              {translate(
-                'auto.components.sidebar.SetupScriptReviewDialog.save',
-                'Save local setup'
-              )}
+              {t('auto.components.sidebar.SetupScriptReviewDialog.save', 'Save local setup')}
             </span>
           </Button>
         </DialogFooter>

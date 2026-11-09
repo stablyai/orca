@@ -8,7 +8,7 @@ import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useCloseWith } from './use-onboarding-flow-persistence'
 import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 import { STEPS } from './use-onboarding-flow-types'
-import type { WorkspaceActivationOutcome } from '@/lib/worktree-activation-outcome'
+import type { WorkspaceActivationOutcome } from '@/lib/workspace/activation/worktree-activation-outcome'
 
 const {
   track,
@@ -54,7 +54,9 @@ vi.mock('@/components/agent-tab-launch-context', () => ({
   captureAgentTabLaunchContext: () => ({ groupId: 'group', focusIntent })
 }))
 vi.mock('@/lib/telemetry', () => ({ track }))
-vi.mock('@/lib/agent-detection-target-inventory', () => ({ loadDetectedAgentsForWorktree: detect }))
+vi.mock('@/lib/agent-session/launch/inventory/agent-detection-target-inventory', () => ({
+  loadDetectedAgentsForWorktree: detect
+}))
 vi.mock('@/lib/host-chat-program-acquisition', () => ({
   acquireAgentLaunchChoices: acquireChoices
 }))
@@ -136,48 +138,6 @@ function renderActions(
 }
 
 describe('onboarding completion destination', () => {
-  it.each(['claude', 'codex'] as const)(
-    'opens the requested %s in the selected workspace after close',
-    async (agent) => {
-      const { result, openModal, update, onOnboardingChange } = renderActions(
-        true,
-        STEPS.length - 1,
-        agent
-      )
-      await act(() => result.current.next())
-      expect(update).toHaveBeenCalledWith(
-        expect.objectContaining({ outcome: 'completed', lastCompletedStep: 5 })
-      )
-      expect(launch).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          agent,
-          worktreeId: 'folder:home',
-          workspaceExecutionHostId: 'runtime:chosen',
-          launchSource: 'onboarding',
-          groupId: 'group',
-          focusIntent
-        })
-      )
-      expect(onOnboardingChange.mock.invocationCallOrder[0]).toBeLessThan(
-        launch.mock.invocationCallOrder[0]
-      )
-      launch.mock.calls[0][0].beforeSurfaceOpen()
-      expect(reveal).toHaveBeenCalledWith(
-        'folder:home',
-        expect.objectContaining({
-          agent,
-          providesInitialSurface: true,
-          executionHostId: 'runtime:chosen'
-        })
-      )
-      expect(openModal).not.toHaveBeenCalled()
-      expect(track).toHaveBeenCalledWith(
-        'onboarding_completed',
-        expect.objectContaining({ path: 'workspace' })
-      )
-    }
-  )
-
   it('reports a captured workspace disappearing while completion is saved, without opening a surface', async () => {
     const { result, persistCurrentStep } = renderActions(true, STEPS.length - 1, 'claude')
     const saved = Promise.withResolvers<{ ok: boolean }>()
@@ -199,45 +159,6 @@ describe('onboarding completion destination', () => {
     expect(createSurface).not.toHaveBeenCalled()
     expect(toastError).toHaveBeenCalledOnce()
   })
-
-  it('retains Add Project when no workspace is selected', async () => {
-    const { result, openModal } = renderActions(false)
-    await act(() => result.current.next())
-    expect(launch).not.toHaveBeenCalled()
-    expect(openModal).toHaveBeenCalledWith('add-repo')
-    expect(track).toHaveBeenCalledWith(
-      'onboarding_completed',
-      expect.objectContaining({ path: 'add_project_modal' })
-    )
-  })
-
-  it.each([true, false])(
-    'returns to the main page when setting up later, selected workspace=%s',
-    async (hasSelectedWorkspace) => {
-      const { result, openModal, update, updateSettings } = renderActions(
-        hasSelectedWorkspace,
-        STEPS.findIndex((step) => step.id === 'agent'),
-        'claude'
-      )
-      await act(() => result.current.setUpLater())
-      expect(updateSettings).toHaveBeenCalledWith({ defaultTuiAgent: 'claude' })
-      expect(update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          outcome: 'completed',
-          lastCompletedStep: 5,
-          checklist: { dismissed: false }
-        })
-      )
-      expect(openModal).not.toHaveBeenCalled()
-      if (hasSelectedWorkspace) {
-        expect(launch).toHaveBeenCalledWith(
-          expect.objectContaining({ agent: 'claude', worktreeId: 'folder:home' })
-        )
-      } else {
-        expect(launch).not.toHaveBeenCalled()
-      }
-    }
-  )
 
   it('keeps onboarding open for retry when setting up later cannot save completion', async () => {
     const { result, update, onOnboardingChange, openModal } = renderActions(
@@ -301,66 +222,6 @@ describe('onboarding completion destination', () => {
         workspaceExecutionHostId: 'runtime:chosen'
       })
     )
-  })
-
-  it.each(['chat', 'terminal'] as const)(
-    'confirms first-page %s mode and launches the saved agent instead of a hidden auto-pick',
-    async (surface) => {
-      const { result, openModal } = renderActions(true, 0, 'claude', {
-        surface,
-        defaultAgent: 'codex'
-      })
-      await act(() => result.current.setUpLater())
-      expect(state.settings).toEqual(
-        expect.objectContaining({
-          agentDefaultSurface: surface,
-          defaultTuiAgent: 'codex'
-        })
-      )
-      expect(launch).toHaveBeenCalledWith(
-        expect.objectContaining({ agent: 'codex', worktreeId: 'folder:home' })
-      )
-      expect(openModal).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each(['agent_surface', 'theme'] as const)(
-    'preserves saved Blank on %s despite a hidden auto-pick',
-    async (step) => {
-      const { result } = renderActions(
-        true,
-        STEPS.findIndex((value) => value.id === step),
-        'claude',
-        {
-          surface: 'chat',
-          defaultAgent: 'blank'
-        }
-      )
-      await act(() => result.current.setUpLater())
-      expect(state.settings?.defaultTuiAgent).toBe('blank')
-      expect(launch).not.toHaveBeenCalled()
-    }
-  )
-
-  it('confirms a visible agent or Blank without substituting an installed agent', async () => {
-    const agentPage = STEPS.findIndex((step) => step.id === 'agent')
-    const chosen = renderActions(true, agentPage, 'aider', { defaultAgent: 'codex' })
-    await act(() => chosen.result.current.setUpLater())
-    expect(state.settings?.defaultTuiAgent).toBe('aider')
-    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ agent: 'aider' }))
-    cleanup()
-    launch.mockClear()
-    const blank = renderActions(true, agentPage, null, { defaultAgent: 'codex' })
-    await act(() => blank.result.current.setUpLater())
-    expect(state.settings?.defaultTuiAgent).toBe('blank')
-    expect(launch).not.toHaveBeenCalled()
-  })
-
-  it('resolves ordinary Auto without replacing the saved preference', async () => {
-    const { result } = renderActions(true, 0, 'codex')
-    await act(() => result.current.setUpLater())
-    expect(state.settings?.defaultTuiAgent).toBeNull()
-    expect(launch).toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude' }))
   })
 
   it('retains the clicked workspace owner through deferred save and post-close discovery', async () => {

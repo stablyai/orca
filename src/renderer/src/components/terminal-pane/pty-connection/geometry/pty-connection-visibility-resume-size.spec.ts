@@ -34,7 +34,6 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -65,8 +64,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         pane: ReturnType<typeof createPane>
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -177,8 +177,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         try {
           vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 200, rows: 40 })
           const { connectPanePty } = await import('../connect-pane-pty')
-          const agentTitleMocks2 =
-            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+          const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+            '@/lib/agent-status/aggregation/worktree-agent-status'
+          )
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -208,8 +209,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
 
       it('repairs stale xterm grid drift on foreground output even without a pane resize', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks3 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-2')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -264,8 +266,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         emitFrame: (data: string) => void
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks4 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-2')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -403,8 +406,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
       it('skips foreground grid drift repair while mobile owns the PTY without a fit override', async () => {
         const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks5 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-2')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -461,8 +465,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const observer = installObservedPane(pane)
         try {
           const { connectPanePty } = await import('../connect-pane-pty')
-          const agentTitleMocks6 =
-            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+          const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+            '@/lib/agent-status/aggregation/worktree-agent-status'
+          )
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -511,8 +516,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const observer = installObservedPane(pane)
         try {
           const { connectPanePty } = await import('../connect-pane-pty')
-          const agentTitleMocks7 =
-            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+          const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+            '@/lib/agent-status/aggregation/worktree-agent-status'
+          )
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -567,8 +573,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const observer = installObservedPane(pane)
         try {
           const { connectPanePty } = await import('../connect-pane-pty')
-          const agentTitleMocks8 =
-            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+          const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+            '@/lib/agent-status/aggregation/worktree-agent-status'
+          )
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -615,8 +622,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const observer = installObservedPane(pane)
         try {
           const { connectPanePty } = await import('../connect-pane-pty')
-          const agentTitleMocks9 =
-            await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+          const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+            '@/lib/agent-status/aggregation/worktree-agent-status'
+          )
           const transport = createMockTransport('pty-pane-2')
           transportFactoryQueue.push(transport)
           const manager = createManager(2)
@@ -724,8 +732,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         const getSize = vi.mocked(window.api.pty.getSize)
         getSize.mockClear()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks10 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('remote:env-1@@terminal-2')
         transport.getConnectionId.mockReturnValue(null)
         transportFactoryQueue.push(transport)
@@ -760,8 +769,9 @@ export function registerPtyConnectionVisibilityResumeSizeTests(): void {
         } as unknown as Document
         const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks11 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const ptyId = 'remote:env-1@@terminal-visible'
         const transport = createMockTransport(ptyId)
         transportFactoryQueue.push(transport)

@@ -1,5 +1,5 @@
-import * as emulatorPreferences from '@/lib/emulator-opening-preferences-capability'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import * as emulatorPreferences from '@/lib/simulator/launch/emulator-opening-preferences-capability'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -9,8 +9,8 @@ import { useAppStore } from '@/store'
 import {
   consumePrelaunchedSimulatorSession,
   rememberPrelaunchedSimulatorSession
-} from '@/lib/simulator-launch-coordination'
-import { cancelPendingSimulatorPaneShutdown } from '@/lib/simulator-pane-shutdown-scheduler'
+} from '@/lib/simulator/launch/simulator-launch-coordination'
+import { cancelPendingSimulatorPaneShutdown } from '@/lib/simulator/tabs/simulator-pane-shutdown-scheduler'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
 

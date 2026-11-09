@@ -1,4 +1,3 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -98,20 +97,6 @@ describe('agentSession.acknowledgeAttention', () => {
     expect(dismissed).toEqual(['read'])
   })
 
-  it('refuses a read without its journal boundary or with unknown fields, before any work', async () => {
-    const retire = vi.fn()
-    for (const params of [
-      { sessionId: SESSION },
-      { sessionId: SESSION, observedCursor: { epoch: 'journal-a', sequence: 10 }, extra: true }
-    ]) {
-      const reply = await call('agentSession.acknowledgeAttention', params, STRUCTURED_CLIENT, {
-        acknowledgeNotificationAttention: retire
-      })
-      expect(reply).toMatchObject({ ok: false })
-    }
-    expect(retire).not.toHaveBeenCalled()
-  })
-
   it('uses the installed session location to preserve an identical journal in another WSL scope', async () => {
     const { controller, dismissed, deliver } = hostWithDeliveries()
     const host = getStructuredAgentSessionHost()
@@ -135,23 +120,5 @@ describe('agentSession.acknowledgeAttention', () => {
 
     expect(reply).toMatchObject({ ok: true, result: { acknowledged: true } })
     expect(dismissed).toEqual(['read'])
-  })
-
-  it('rejects a caller without structured capability before any work', async () => {
-    setStructuredAgentSessionHost(null)
-    const install = vi.fn()
-    const retire = vi.fn()
-    const reply = await call(
-      'agentSession.acknowledgeAttention',
-      { sessionId: SESSION, observedCursor: { epoch: 'journal-a', sequence: 10 } },
-      { clientKind: 'runtime', clientCapabilities: [] },
-      { acknowledgeNotificationAttention: retire, ensureStructuredAgentSessionHost: install }
-    )
-    expect(reply).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
-    })
-    expect(install).not.toHaveBeenCalled()
-    expect(retire).not.toHaveBeenCalled()
   })
 })

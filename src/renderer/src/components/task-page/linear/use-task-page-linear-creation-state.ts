@@ -13,7 +13,7 @@ import {
 import { useNewLinearIssueProjects } from '../../use-new-linear-issue-projects'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { writeNewLinearIssueDraft, writeNewLinearProjectDraft } from '../task-page-draft-storage'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 type FormAction = (value: LinearIssueForm, target: string) => LinearIssueForm
 export function useLinearIssueCreationForm(
   runtime: string,

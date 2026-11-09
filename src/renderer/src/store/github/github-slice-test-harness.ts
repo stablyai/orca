@@ -8,9 +8,9 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason

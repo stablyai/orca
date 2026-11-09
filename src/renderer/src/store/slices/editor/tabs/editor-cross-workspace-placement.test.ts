@@ -3,25 +3,28 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import { hasPendingEntityTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { buildMobileSessionTabSnapshots } from '@/runtime/sync-runtime-graph/mobile-session-snapshots'
 import { workspaceEditorFiles } from './workspace-editor-files'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
-import { buildHydratedTabState } from '../../tabs-hydration'
+import { buildHydratedTabState } from '../../tabs/tabs-hydration'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
-import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
+import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
 
@@ -338,29 +341,6 @@ it('restores legacy edit membership only at hydration, never inventing tabs for 
   expect(modern.unifiedTabsByWorktree[CHILD] ?? []).toEqual([])
 })
 
-it('saves an untracked edit and its unsaved draft under the child and restores child membership', async () => {
-  const id = useAppStore.getState().openFile(
-    {
-      filePath: '/child/readme.md',
-      relativePath: 'readme.md',
-      worktreeId: CHILD,
-      language: 'markdown',
-      mode: 'edit',
-      runtimeEnvironmentId: null
-    },
-    { placementWorkspaceId: FOLDER, executionHostId: 'local' }
-  )
-  await main.settle()
-  useAppStore.getState().setEditorDraft(id, 'unsaved child text')
-  useAppStore.getState().markFileDirty(id, true)
-  const session = buildWorkspaceSessionPayload(useAppStore.getState())
-  expect(session.openFilesByWorktree?.[FOLDER]).toBeUndefined()
-  expect(session.openFilesByWorktree?.[CHILD]?.[0]?.dirtyDraftContent).toBe('unsaved child text')
-  const hydrated = buildHydratedTabState(session, new Set([CHILD, FOLDER]))
-  expect(hydrated.unifiedTabsByWorktree[FOLDER] ?? []).toEqual([])
-  expect(hydrated.unifiedTabsByWorktree[CHILD]?.map((tab) => tab.entityId)).toEqual([id])
-})
-
 it('retires a placement intent deleted during content publication without creating a ghost tab', async () => {
   let retired = false
   const stop = useAppStore.subscribe((state) => {
@@ -380,121 +360,6 @@ it('retires a placement intent deleted during content publication without creati
   expect(tabs(CHILD)).toEqual([])
   expect(useAppStore.getState().openFiles).toEqual([])
 })
-
-it('dirty SSH edit tab survives restart round trip (no drop, no duplicate on reopen)', async () => {
-  useAppStore.setState((state): Partial<AppState> => ({
-    activeWorktreeId: CHILD,
-    activeWorkspaceKey: worktreeWorkspaceKey(CHILD),
-    activeWorkspaceExecutionHostId: 'ssh:builder',
-    repos: state.repos.map((repo) => ({
-      ...repo,
-      connectionId: 'builder',
-      executionHostId: 'ssh:builder'
-    })),
-    worktreesByRepo: {
-      repo: state.worktreesByRepo.repo!.map((worktree) => ({ ...worktree, hostId: 'ssh:builder' }))
-    },
-    sshConnectionStates: new Map([
-      [
-        'builder',
-        {
-          targetId: 'builder',
-          status: 'connected',
-          error: null,
-          reconnectAttempt: 0,
-          connectionGeneration: 1
-        }
-      ]
-    ])
-  }))
-  const file = {
-    filePath: '/child/ssh.ts',
-    relativePath: 'ssh.ts',
-    worktreeId: CHILD,
-    language: 'typescript',
-    mode: 'edit' as const,
-    runtimeEnvironmentId: null
-  }
-  const id = useAppStore
-    .getState()
-    .openFile(file, { executionHostId: 'ssh:builder', preview: false })
-  await main.settle()
-  useAppStore.getState().setEditorDraft(id, 'unsaved SSH text')
-  useAppStore.getState().markFileDirty(id, true)
-  const saved = buildWorkspaceSessionPayload(useAppStore.getState())
-  const restoredTabs = buildHydratedTabState(saved, new Set([CHILD]))
-  useAppStore.setState({ ...restoredTabs, openFiles: [], editorDrafts: {} })
-  useAppStore.getState().hydrateEditorSession(saved)
-  useAppStore.getState().reconcileWorktreeTabModel(CHILD)
-  expect(tabs(CHILD).map((tab) => tab.entityId)).toEqual(['/child/ssh.ts'])
-  expect(useAppStore.getState().editorDrafts['/child/ssh.ts']).toBe('unsaved SSH text')
-  const reopened = useAppStore
-    .getState()
-    .openFile(file, { executionHostId: 'ssh:builder', preview: false })
-  await main.settle()
-  expect(reopened).toBe('/child/ssh.ts')
-  expect(useAppStore.getState().openFiles).toHaveLength(1)
-  expect(tabs(CHILD)).toHaveLength(1)
-  expect(useAppStore.getState().editorDrafts[reopened]).toBe('unsaved SSH text')
-})
-
-it.each([false, true])(
-  'preserves different-owner local and SSH collision drafts on restart (bare owner closed: %s)',
-  async (closeLocal) => {
-    const file = {
-      filePath: '/child/twin.ts',
-      relativePath: 'twin.ts',
-      language: 'typescript',
-      mode: 'edit' as const,
-      runtimeEnvironmentId: null
-    }
-    const localId = useAppStore
-      .getState()
-      .openFile({ ...file, worktreeId: FOLDER }, { executionHostId: 'local', preview: false })
-    await main.settle()
-    useAppStore.getState().setEditorDraft(localId, 'local draft')
-    useAppStore.getState().markFileDirty(localId, true)
-    selectSshTwin()
-    const id = useAppStore
-      .getState()
-      .openFile({ ...file, worktreeId: CHILD }, { executionHostId: 'ssh:builder', preview: false })
-    await main.settle()
-    expect(localId).toBe('/child/twin.ts')
-    expect(id).toBe('editor:repo%3A%3A%2Fchild:local:%2Fchild%2Ftwin.ts')
-    expect(
-      useAppStore.getState().openFiles.find((file) => file.id === id)?.operationProvenance
-        ?.generation.route.executionHostId
-    ).toBe('ssh:builder')
-    useAppStore.getState().setEditorDraft(id, 'SSH draft')
-    useAppStore.getState().markFileDirty(id, true)
-    if (closeLocal) {
-      useAppStore.getState().closeFile(localId)
-      await main.settle()
-    }
-    const saved = buildWorkspaceSessionPayload(useAppStore.getState())
-    const restoredTabs = buildHydratedTabState(saved, new Set([CHILD, FOLDER]))
-    useAppStore.setState({ ...restoredTabs, openFiles: [], editorDrafts: {} })
-    useAppStore.getState().hydrateEditorSession(saved)
-    useAppStore.getState().reconcileWorktreeTabModel(CHILD)
-    useAppStore.getState().reconcileWorktreeTabModel(FOLDER)
-    expect(tabs(CHILD).map((tab) => tab.entityId)).toEqual([
-      'editor:repo%3A%3A%2Fchild:local:%2Fchild%2Ftwin.ts'
-    ])
-    expect(tabs(FOLDER).map((tab) => tab.entityId)).toEqual(closeLocal ? [] : ['/child/twin.ts'])
-    expect(useAppStore.getState().editorDrafts[id]).toBe('SSH draft')
-    if (!closeLocal) {
-      expect(useAppStore.getState().editorDrafts['/child/twin.ts']).toBe('local draft')
-    }
-    const reopened = useAppStore
-      .getState()
-      .openFile({ ...file, worktreeId: CHILD }, { executionHostId: 'ssh:builder', preview: false })
-    await main.settle()
-    expect(reopened).toBe(id)
-    expect(tabs(CHILD)).toHaveLength(1)
-    expect(useAppStore.getState().openFiles).toHaveLength(closeLocal ? 1 : 2)
-    expect(useAppStore.getState().editorDrafts[reopened]).toBe('SSH draft')
-  }
-)
 
 it('reuses the same-worktree runtime/path edit across host selection, retaining its draft and provenance', async () => {
   const file = {

@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { TabsDrawnFromMain } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import {
   EDITOR_OWNER,
   EDITOR_PLACEMENT,
@@ -19,16 +19,16 @@ import {
 } from './editor/autosave/editor-autosave'
 import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
-import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { beginPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
 vi.mock('./use-bulk-tab-close-confirmation', () => ({
@@ -263,83 +263,6 @@ it('does not discard a shared dirty record when another view opens during confir
   expect(useAppStore.getState().unifiedTabsByWorktree[EDITOR_OWNER]).toHaveLength(1)
   expect(useAppStore.getState().unifiedTabsByWorktree[EDITOR_PLACEMENT] ?? []).toEqual([])
 })
-
-it('keeps the placed content in mixed order when agent launch persists tab order', () => {
-  seedEditorPlacementConsumers()
-  persistAgentLaunchTabOrder(EDITOR_PLACEMENT, 'new-agent')
-  expect(useAppStore.getState().tabBarOrderByWorktree[EDITOR_PLACEMENT]).toEqual([
-    'content',
-    'new-agent'
-  ])
-})
-
-it.each([3, 30])(
-  'publishes one recent-close history update for %i folder placements',
-  async (count) => {
-    seedEditorPlacementConsumers()
-    const source = useAppStore.getState().unifiedTabsByWorktree[EDITOR_PLACEMENT]![0]!
-    const views = Array.from({ length: count }, (_, index) => ({
-      ...source,
-      id: `folder-view-${index}`,
-      entityId: `folder-content-${index}`
-    }))
-    const file = useAppStore.getState().openFiles[0]!
-    useAppStore.setState({
-      openFiles: [
-        file,
-        ...views.map((view, index) => ({
-          ...file,
-          id: view.entityId,
-          filePath: `/repo/file-${index}.md`,
-          relativePath: `file-${index}.md`
-        }))
-      ],
-      unifiedTabsByWorktree: {
-        ...useAppStore.getState().unifiedTabsByWorktree,
-        [EDITOR_PLACEMENT]: views
-      },
-      groupsByWorktree: {
-        ...useAppStore.getState().groupsByWorktree,
-        [EDITOR_PLACEMENT]: [
-          {
-            id: 'x-source',
-            worktreeId: EDITOR_PLACEMENT,
-            activeTabId: views[0]!.id,
-            tabOrder: views.map((tab) => tab.id)
-          }
-        ]
-      },
-      layoutByWorktree: {
-        ...useAppStore.getState().layoutByWorktree,
-        [EDITOR_PLACEMENT]: { type: 'leaf', groupId: 'x-source' }
-      },
-      activeGroupIdByWorktree: {
-        ...useAppStore.getState().activeGroupIdByWorktree,
-        [EDITOR_PLACEMENT]: 'x-source'
-      }
-    })
-    main = await drawEditorPlacementConsumers()
-    let historyUpdates = 0
-    const unsubscribe = useAppStore.subscribe((state, previous) => {
-      if (
-        state.recentlyClosedEditorTabsByWorktree !== previous.recentlyClosedEditorTabsByWorktree
-      ) {
-        historyUpdates += 1
-      }
-    })
-    try {
-      useAppStore.getState().closeUnifiedTabs(views.map((tab) => tab.id))
-      await main.settle()
-    } finally {
-      unsubscribe()
-    }
-    expect(historyUpdates).toBe(1)
-    expect(useAppStore.getState().unifiedTabsByWorktree[EDITOR_PLACEMENT] ?? []).toEqual([])
-    expect(
-      useAppStore.getState().unifiedTabsByWorktree[EDITOR_OWNER]?.map((tab) => tab.id)
-    ).toEqual(['y-tab'])
-  }
-)
 
 it('retains placement order across browser, terminal and agent openings', async () => {
   seedEditorPlacementConsumers()

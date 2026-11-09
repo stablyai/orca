@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
+import type { RuntimeNotifier } from '../runtime/client/events/runtime-notifier-contract'
 
 type MockFn = ReturnType<typeof vi.fn>
 
@@ -30,6 +30,8 @@ type RuntimeStub = {
   markRendererReloadCancelled: MockFn
   markGraphReloadFailed: MockFn
   markGraphUnavailable: MockFn
+  readAgentListPublication: MockFn
+  setAgentListPublication: MockFn
 }
 
 export function createMainWindowServiceStub(
@@ -67,7 +69,9 @@ export function createRuntime(): RuntimeStub {
     markRendererReloading: vi.fn(),
     markRendererReloadCancelled: vi.fn(),
     markGraphReloadFailed: vi.fn(),
-    markGraphUnavailable: vi.fn()
+    markGraphUnavailable: vi.fn(),
+    readAgentListPublication: vi.fn(() => null),
+    setAgentListPublication: vi.fn()
   }
 }
 

@@ -1,9 +1,10 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
-import { getWorktreeMapFromState } from '@/store/selectors'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import type { TerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
-import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
@@ -46,7 +47,7 @@ export function resolveTerminalPaneOwnerContext(
       ? null
       : selectedHost
         ? state.getKnownWorktreeById(worktreeId, selectedHost.id)
-        : getWorktreeMapFromState(state).get(worktreeId)
+        : getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(worktreeId)
   const repos = worktree
     ? state.repos.filter(
         (repo) =>

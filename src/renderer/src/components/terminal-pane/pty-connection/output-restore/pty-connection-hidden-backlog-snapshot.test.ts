@@ -29,7 +29,6 @@ import {
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
-  scheduleTerminalWebglAtlasRecovery,
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
@@ -37,7 +36,6 @@ const {
   presentPaneViewport
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalWebglAtlasRecovery: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
@@ -50,7 +48,7 @@ let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 
@@ -68,10 +66,6 @@ vi.mock('@/lib/pane-manager/pane-viewport-present', async (importOriginal) => ({
   presentPaneViewport
 }))
 
-vi.mock('../../render-health/terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
-}))
-
 vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => mockStoreState,
@@ -84,7 +78,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -167,7 +161,9 @@ describe('connectPanePty', () => {
   // Use a real alt-screen pane so a stubbed normal-buffer check cannot pass without emitting the missing ?1049l reset.
   it('emits the alt-screen unstick when the pane is on alt and the model is not', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks6 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks6 = await vi.importMock<AgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -219,7 +215,9 @@ describe('connectPanePty', () => {
   // Why: pins the switch-off hidden fallback chain — 2MB lossy cap drops the backlog, latches restore, and reveal repaints from the model snapshot.
   it('restores hidden backlog overflow from the main terminal snapshot on foreground output', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks7 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks7 = await vi.importMock<AgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -273,7 +271,9 @@ describe('connectPanePty', () => {
 
   it('rebuilds normal and alternate buffers from an authoritative alternate snapshot', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks8 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks8 = await vi.importMock<AgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -348,7 +348,9 @@ describe('connectPanePty', () => {
 
   it('keeps a hidden-output alt frame at the capture grid below the fit floor', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks9 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks9 = await vi.importMock<AgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('pty-id')
     let onData: ConnectCallbacks['onData']
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -410,7 +412,9 @@ describe('connectPanePty', () => {
 
   it('drains foreground output after a renderer-sourced hidden-backlog snapshot without seq', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks10 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks10 = await vi.importMock<AgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -462,7 +466,9 @@ describe('connectPanePty', () => {
 
   it('slices abandoned pending chunks against a replay that already painted', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks11 = await vi.importMock<AgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks11 = await vi.importMock<AgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: {
       current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null

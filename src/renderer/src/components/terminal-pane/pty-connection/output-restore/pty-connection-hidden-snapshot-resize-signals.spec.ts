@@ -33,7 +33,6 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -79,8 +78,9 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       } as unknown as Document
 
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -172,8 +172,9 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('does not signal SIGWINCH after hidden-backlog snapshot replay when dimensions are unchanged', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: {
         current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
@@ -228,8 +229,9 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('writes a background-origin alternate-screen repaint that arrives after the reveal restore', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.useFakeTimers({
         toFake: [
           'setTimeout',
@@ -322,8 +324,9 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('re-restores a skipped alt frame from the model when the fit lands back on the capture grid', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.useFakeTimers({
         toFake: [
           'setTimeout',
@@ -400,8 +403,9 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
 
     it('restores a dropped daemon alt frame from the model when the fit lands back on the capture grid', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId

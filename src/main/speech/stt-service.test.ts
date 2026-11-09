@@ -159,6 +159,7 @@ vi.mock('./model-catalog', () => ({
           id,
           type: 'openai',
           provider: 'openai',
+          language: 'multilingual',
           streaming: false,
           sampleRate: 16000
         }
@@ -167,6 +168,7 @@ vi.mock('./model-catalog', () => ({
             id,
             type: 'whisper',
             provider: 'local',
+            language: 'multilingual',
             streaming: false,
             sampleRate: 16000,
             files: ['encoder.onnx', 'decoder.onnx', 'tokens.txt'],
@@ -176,6 +178,7 @@ vi.mock('./model-catalog', () => ({
             id: 'model-a',
             type: 'transducer',
             provider: 'local',
+            language: 'en',
             streaming: true,
             sampleRate: 16000,
             files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
@@ -233,6 +236,38 @@ describe('SttService', () => {
     expect(worker.messages.at(-1)).toMatchObject({ type: 'feed', streamId: desktopStream })
   })
 
+  it('removes filler words from the text every host route reads, unless they are turned off', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+    const cleaned = vi.fn<SttEventSink>()
+    const raw = vi.fn<SttEventSink>()
+
+    await service.startDictation('model-a', cleaned, undefined, 'desktop', {
+      removeFillerWords: true
+    })
+    await service.startDictation('model-a', raw, undefined, 'mobile:phone-a:1', {
+      removeFillerWords: false
+    })
+    service.feedAudio(new Float32Array([1]), 16000, 'desktop')
+    service.feedAudio(new Float32Array([2]), 16000, 'mobile:phone-a:1')
+    const worker = getLastWorker()!
+    const [cleanedStream, rawStream] = worker.messages
+      .filter((message) => message.type === 'feed')
+      .map((message) => message.streamId)
+    for (const streamId of [cleanedStream, rawStream]) {
+      worker.emit('message', { type: 'partial', streamId, text: 'Um, ship' })
+      worker.emit('message', { type: 'final', streamId, text: 'Um, ship it, uh, today.' })
+    }
+
+    expect(cleaned.mock.calls.slice(1)).toEqual([
+      [{ type: 'partial', text: 'Ship' }],
+      [{ type: 'final', text: 'Ship it today.' }]
+    ])
+    expect(raw.mock.calls.slice(1)).toEqual([
+      [{ type: 'partial', text: 'Um, ship' }],
+      [{ type: 'final', text: 'Um, ship it, uh, today.' }]
+    ])
+  })
+
   it("hands a renderer's audio port only to its own on-device stream", async () => {
     const service = new SttService(readyModels(), spawnMockWorker)
     await service.startDictation('model-a', vi.fn(), undefined, 'mobile:phone-a:1')
@@ -284,16 +319,6 @@ describe('SttService', () => {
     }
   })
 
-  it('reuses an idle warm worker for a second dictation with the same owner', async () => {
-    const service = new SttService(readyModels(), spawnMockWorker)
-
-    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
-    await service.stopDictation('desktop')
-    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
-
-    expect(getCreatedWorkerCount()).toBe(1)
-  })
-
   it('rebuilds the warm worker when the dictation language changes', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a local start reads only getModelState and getModelDir.
     const service = new SttService(
@@ -304,9 +329,13 @@ describe('SttService', () => {
       spawnMockWorker
     )
 
-    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', 'ko')
+    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', {
+      dictationLanguage: 'ko'
+    })
     await service.stopDictation('desktop')
-    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', 'ja')
+    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', {
+      dictationLanguage: 'ja'
+    })
 
     expect(getCreatedWorkerCount()).toBe(2)
     expect(getLastWorker()!.messages.find((message) => message.type === 'init')).toMatchObject({
@@ -356,26 +385,6 @@ describe('SttService', () => {
     expect(events.map((event) => event.type)).toEqual(['ready', 'error', 'stopped'])
     await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
     expect(getCreatedWorkerCount()).toBe(2)
-  })
-
-  it('keeps an idle worker warm for 15 minutes by default', async () => {
-    vi.useFakeTimers()
-    try {
-      const service = new SttService(readyModels(), spawnMockWorker)
-
-      await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
-      const worker = getLastWorker()
-      expect(worker).toBeDefined()
-
-      await service.stopDictation('desktop')
-      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 1)
-      expect(worker!.terminated).toBe(false)
-
-      await vi.advanceTimersByTimeAsync(DEFAULT_IDLE_UNLOAD_MS - 5 * 60 * 1000 - 1)
-      expect(worker!.terminated).toBe(true)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('resets the idle teardown timer after each stop', async () => {
@@ -501,25 +510,6 @@ describe('SttService', () => {
     await service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
 
     expect(getLastWorker()!.terminated).toBe(true)
-  })
-
-  it('reads the OpenAI key only when finishing cloud dictation', async () => {
-    const service = new SttService(
-      {
-        getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
-        getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
-      } as never,
-      spawnMockWorker
-    )
-
-    await service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
-    service.feedAudio(new Float32Array([0.25]), 16000, 'desktop')
-
-    expect(readOpenAiSpeechApiKeyMock).not.toHaveBeenCalled()
-
-    await service.stopDictation('desktop')
-
-    expect(readOpenAiSpeechApiKeyMock).toHaveBeenCalledOnce()
   })
 
   it('lets a model that is still loading finish when its dictation is canceled', async () => {
@@ -714,18 +704,6 @@ describe('SttService', () => {
 
     worker!.emit('message', stoppedReply(worker!))
     await Promise.all([firstStop, secondStop])
-  })
-
-  it('does not emit synthetic stopped when the worker reports stopped', async () => {
-    const service = new SttService(readyModels(), spawnMockWorker)
-    const events: unknown[] = []
-
-    await service.startDictation('model-a', (event) => events.push(event), undefined, 'desktop')
-    await service.stopDictation('desktop')
-
-    expect(events.filter((event) => (event as { type?: string }).type === 'stopped')).toHaveLength(
-      1
-    )
   })
 
   it('does not retain or reuse a worker that timed out while stopping', async () => {

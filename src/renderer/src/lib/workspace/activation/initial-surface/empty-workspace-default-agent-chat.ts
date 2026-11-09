@@ -1,5 +1,5 @@
 import { pickTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { newAgentLaunchesMayOpenChats } from '@/runtime/local-structured-chats'
+import { newAgentLaunchesMayOpenChats } from '@/runtime/native-chat/local-sessions/local-structured-chats'
 import { acquireAgentLaunchChoices } from '../../../host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
@@ -11,8 +11,8 @@ import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import {
   ensureDetectedAgentsForTarget,
   readDetectedAgentsForTarget
-} from '@/lib/agent-detection-target-inventory'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { chosenAgentChatUnlearned, agentChoiceOpensAsChat } from '@/lib/host-chat-program'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
@@ -106,7 +106,7 @@ export function openDefaultAgentChatInEmptyWorkspace(
     pendingActivationSpawn: true,
     onStructuredHostDeclined: () => ({ opened: seedShell() })
   })
-  if (!result) {
+  if (!result || 'refused' in result) {
     return null
   }
   return { primaryTabId: result.surface.kind === 'host-published' ? null : result.surface.tabId }

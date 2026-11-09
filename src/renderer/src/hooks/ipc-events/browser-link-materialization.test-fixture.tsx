@@ -65,6 +65,7 @@ export function installBrowserLinkMaterializationProbe() {
       primarySelectionMiddleClickPaste: false,
       primarySelectionDefaultedForLinux: false,
       terminalFontFamily: 'monospace',
+      terminalFontWeight: 500,
       terminalInactivePaneOpacity: 1,
       terminalRightClickToPaste: false,
       notifications: {
@@ -85,6 +86,8 @@ export function installBrowserLinkMaterializationProbe() {
         modelsDir: '',
         dictationLanguage: 'auto',
         dictationMode: 'hold',
+        dictationHoldToRecord: false,
+        removeFillerWords: true,
         terminalConfirmBeforeInsert: true,
         userModels: [],
         openAiApiKeyConfigured: false,

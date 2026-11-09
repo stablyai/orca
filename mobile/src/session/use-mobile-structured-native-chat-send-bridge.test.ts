@@ -95,4 +95,42 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
       'review'
     ])
   })
+
+  it('puts a host command whose reply was lost back in the box', async () => {
+    sendStructured.mockResolvedValue('unknown')
+    mount('codex')
+
+    await expect(sendWithOutcome('/compact')).resolves.toBe('unknown')
+
+    expect(holdUnconfirmed).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/compact', {
+      preserveConversationCommands: true
+    })
+  })
+
+  it('sends a queued message with its own skills and leaves the composer alone when refused', async () => {
+    recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
+      token: '$draft',
+      path: '/skills/draft/SKILL.md'
+    })
+    sendStructured.mockResolvedValue('rejected')
+    mount('codex')
+    const queuedSkill = { name: 'review', path: '/skills/review/SKILL.md' }
+
+    await expect(
+      sendWithOutcome('$review the PR', undefined, undefined, undefined, undefined, {
+        queued: {
+          id: 'queued-1',
+          images: [],
+          files: [],
+          skills: [queuedSkill],
+          skillOrigin: '$review'
+        }
+      })
+    ).resolves.toBe('rejected')
+
+    expect(sendStructured.mock.calls[0]![4]).toEqual([queuedSkill])
+    expect(clearDraftForSend).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+  })
 })

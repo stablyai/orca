@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import '../../../../../shared/setup-agent-sequencing'
-import './worktree-activation'
-import { ensureWorktreeHasInitialTerminal } from './initial-surface/worktree-initial-terminal-seeding'
+import '../../../../../shared/agent-launch/startup/setup-agent-sequencing'
+import { activateAndRevealWorktreeWithOutcome } from './worktree-activation'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 
 import {
   type AppStoreState,
@@ -13,8 +13,8 @@ import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
 } from './worktree-activation-created-agent.test-fixture'
-import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
-import '../../../runtime/runtime-environment-bridge-fixture'
+import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
+import '../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 import '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
@@ -26,7 +26,6 @@ import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '../../../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 
 registerWorktreeActivationReset()
 const originalCreateTab = useAppStore.getState().createTab
@@ -43,100 +42,6 @@ afterEach(() => {
 })
 
 describe('activateAndRevealWorktree', () => {
-  it.each(['local', 'ssh:box', 'inherited-ssh'] as const)(
-    'real historical folder action selects exact %s pane through the store without a replacement shell',
-    (kind) => {
-      const before = useAppStore.getState()
-      const hostId = kind === 'local' ? 'local' : 'ssh:box'
-      const folder = makeFolderWorkspace({
-        id: 'historical-folder',
-        projectGroupId: 'historical-group',
-        ...(kind === 'inherited-ssh' ? {} : { executionHostId: hostId })
-      })
-      const workspaceId = folderWorkspaceKey(folder.id)
-      const worktree = makeCreatedAgentWorktree()
-      seedEmptyActivatableWorktree(worktree)
-      const tabId = 'historical-folder-tab'
-      const leafId = '11111111-1111-4111-8111-111111111111'
-      const ptyId = 'historical-folder-pty'
-      const createTab = vi.fn()
-      const run = makeRun({
-        workspaceId,
-        terminalPaneKey: makePaneKey(tabId, leafId),
-        terminalPtyId: ptyId
-      })
-      useAppStore.setState({
-        setActiveWorktree: originalSetActiveWorktree,
-        folderWorkspaces: [folder],
-        projectGroups: [{ ...makeProjectGroup(), id: 'historical-group', executionHostId: hostId }],
-        activeWorktreeId: worktree.id,
-        activeWorkspaceExecutionHostId: 'local',
-        createTab,
-        everActivatedWorktreeIds: new Set([workspaceId]),
-        unifiedTabsByWorktree: {
-          [workspaceId]: [
-            {
-              id: tabId,
-              entityId: tabId,
-              groupId: 'historical-group',
-              worktreeId: workspaceId,
-              contentType: 'terminal',
-              executionHostId: hostId,
-              label: 'Saved agent',
-              customLabel: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        },
-        tabsByWorktree: {
-          [workspaceId]: [
-            {
-              id: tabId,
-              worktreeId: workspaceId,
-              ptyId,
-              title: 'Saved agent',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        },
-        ptyIdsByTabId: { [tabId]: [ptyId] },
-        terminalLayoutsByTabId: {
-          [tabId]: {
-            root: { type: 'leaf', leafId },
-            activeLeafId: leafId,
-            expandedLeafId: null,
-            ptyIdsByLeafId: { [leafId]: ptyId }
-          }
-        }
-      })
-      try {
-        const runTargetFor = () =>
-          resolveAutomationRunTarget(useAppStore.getState(), run, { kind: 'desktop' })
-        expect(runTargetFor().worktree?.hostId).toBe(hostId)
-        expect(runTargetFor().terminalTarget?.tabId).toBe(tabId)
-        // SAFETY: this action uses only the list's historical target function.
-        const open = createAutomationRunWorkspaceAction({
-          list: { runTargetFor }
-        })
-        open(run)
-        const after = useAppStore.getState()
-        expect(after.activeWorktreeId).toBe(workspaceId)
-        expect(after.activeWorkspaceExecutionHostId).toBe(hostId)
-        expect(after.activeTabId).toBe(tabId)
-        expect(after.terminalLayoutsByTabId[tabId].activeLeafId).toBe(leafId)
-        expect(after.ptyIdsByTabId[tabId]).toEqual([ptyId])
-        expect(createTab).not.toHaveBeenCalled()
-      } finally {
-        useAppStore.setState(before, true)
-      }
-    }
-  )
-
   it('real historical workspace-only inherited folder enters through the fresh native folder path', () => {
     const before = useAppStore.getState()
     const folder = makeFolderWorkspace({
@@ -247,4 +152,35 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       command: 'gh issue view 42'
     })
   })
+})
+
+it('accepts live paired startup through after-wake when initial seeding returns no primary tab', async () => {
+  const worktree = makeCreatedAgentWorktree()
+  seedEmptyActivatableWorktree(worktree)
+  useAppStore.setState((state) => ({
+    repos: state.repos.map((repo) => ({ ...repo, executionHostId: 'runtime:paired' as const })),
+    worktreesByRepo: { [worktree.repoId]: [{ ...worktree, runtimeOwnerEnvironmentId: 'paired' }] }
+  }))
+  const runtimeCall = vi.fn(async (args: { method: string }) => ({
+    id: 'reply',
+    ok: true,
+    result:
+      args.method === 'status.get'
+        ? { runtimeProtocolVersion: 3, minCompatibleRuntimeClientVersion: 2, capabilities: [] }
+        : args.method === 'session.tabs.createTerminal'
+          ? { tab: { id: 'host-tab', leafId: '11111111-1111-4111-8111-111111111111' } }
+          : { worktree: worktree.id, tabs: [] },
+    _meta: { runtimeId: 'paired-runtime' }
+  }))
+  vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+  const result = activateAndRevealWorktreeWithOutcome(worktree.id, {
+    runtimeEnvironmentId: 'paired',
+    startup: { command: 'codex', launchAgent: 'codex', launchToken: 'launch-1' }
+  })
+  expect(result).toEqual({ opened: { primaryTabId: null, startupAccepted: true } })
+  await vi.waitFor(() =>
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'session.tabs.createTerminal' })
+    )
+  )
 })

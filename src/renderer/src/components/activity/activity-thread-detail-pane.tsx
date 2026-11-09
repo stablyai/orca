@@ -1,8 +1,8 @@
 import React from 'react'
 import { MessageSquareText, TerminalSquare } from 'lucide-react'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { EventRepoBadge, ThreadAgentStateIndicator } from './activity-thread-controls'
 import type { ActivityTerminalPortalSlotId, AgentPaneThread } from './activity-thread-types'
 
@@ -33,6 +33,7 @@ export function ActivityThreadDetailPane({
   showTerminalLoadingLabel: boolean
   visibleThreadCount: number
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section className="min-w-0 flex-1 overflow-hidden">
       {selectedThread ? (
@@ -67,11 +68,11 @@ export function ActivityThreadDetailPane({
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
                   <TerminalSquare className="size-7" />
                   {selectedWorktreeAvailable
-                    ? translate(
+                    ? t(
                         'auto.components.activity.ActivityPrototypePage.afdc2139a8',
                         'Agent terminal closed. Open a new terminal in this workspace to continue.'
                       )
-                    : translate(
+                    : t(
                         'auto.components.activity.ActivityPrototypePage.22b22034bc',
                         'Standalone terminal unavailable in Activity.'
                       )}
@@ -111,7 +112,7 @@ export function ActivityThreadDetailPane({
                       <div className="ml-3 mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-xs">
                         <span className="h-3 w-1.5 rounded-sm bg-muted-foreground/70" />
                         <span>
-                          {translate(
+                          {t(
                             'auto.components.activity.ActivityPrototypePage.8de7c5beaa',
                             'Terminal unavailable'
                           )}
@@ -121,7 +122,7 @@ export function ActivityThreadDetailPane({
                       <div className="ml-3 mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-xs">
                         <span className="h-3 w-1.5 animate-pulse rounded-sm bg-muted-foreground/70" />
                         <span>
-                          {translate(
+                          {t(
                             'auto.components.activity.ActivityPrototypePage.1b633f5c1e',
                             'Connecting terminal...'
                           )}
@@ -139,15 +140,12 @@ export function ActivityThreadDetailPane({
           {visibleThreadCount === 0 ? (
             <>
               <MessageSquareText className="size-7" />
-              {translate(
-                'auto.components.activity.ActivityPrototypePage.e3db9892f6',
-                'No activity yet.'
-              )}
+              {t('auto.components.activity.ActivityPrototypePage.e3db9892f6', 'No activity yet.')}
             </>
           ) : (
             <>
               <TerminalSquare className="size-7" />
-              {translate(
+              {t(
                 'auto.components.activity.ActivityPrototypePage.cf780197a1',
                 'Select an agent to view its activity'
               )}

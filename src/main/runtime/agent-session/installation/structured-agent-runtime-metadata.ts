@@ -1,15 +1,19 @@
 import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
-import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../../../acp/acp-launch-specs'
-import { acpStructuredAgentDefinition } from '../../../acp/acp-structured-agent-definitions'
-import { resolveAcpLaunchCommand, selectAcpHostAccountHome } from '../../../acp/acp-launch-command'
+import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
+import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
+import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
+import {
+  resolveAcpLaunchCommand,
+  selectAcpHostAccountHome
+} from '../../../acp/launch/acp-launch-command'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { CLAUDE_CLI_CONVERSATIONS } from '../../../claude/claude-cli-conversations'
 import { CODEX_CLI_CONVERSATIONS } from '../../../codex/history/journal-views/codex-cli-conversations'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
 import { supportsClaudeStructuredLocation } from '../../../claude/structured/launch/claude-structured-location-support'
-import { supportsAcpStructuredLocation } from '../../../acp/acp-structured-location-support'
+import { supportsAcpStructuredLocation } from '../../../acp/session/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../../../pi/rpc-runtime-metadata'
 import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
 import {
@@ -144,6 +148,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
       modelCatalog: codexModelCatalogDiscovery,
       ...CODEX_CLI_CONVERSATIONS,
       supportsLocation: (location) => supportsCodexStructuredLocation(location),
+      launchFollowsSelection: () => true,
       resolveAccountHome: async (request, services) =>
         agentSessionAccountHome(
           CODEX_STRUCTURED_AGENT,

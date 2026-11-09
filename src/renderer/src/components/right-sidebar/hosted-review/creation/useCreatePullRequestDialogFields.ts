@@ -22,7 +22,7 @@ import {
 import { useCreatePullRequestFieldSeeding } from './use-create-pull-request-field-seeding'
 import { useCreatePullRequestBaseRefDiscovery } from './use-create-pull-request-base-ref-discovery'
 import { useCreatePullRequestFieldGeneration } from './use-create-pull-request-field-generation'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function useCreatePullRequestDialogFields({
   open,

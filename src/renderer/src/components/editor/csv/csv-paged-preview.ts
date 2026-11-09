@@ -1,4 +1,4 @@
-import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-range-read'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-content/file-range-read'
 import {
   readRuntimeFileRange,
   statRuntimeReadTarget
