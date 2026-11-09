@@ -220,6 +220,9 @@ export const WORKTREE_METHODS = [
     params: WorktreeRemove,
     handler: async (params, context) => {
       const { runtime } = context
+      if (runtime.ownsRecipeWorkspaceRemoval?.(params)) {
+        return runtime.removeRecipeWorkspace(params)
+      }
       // Translate a paired client's runtime-local host spelling before host-qualified reads.
       let resolvedHostId = resolvePairedCallerHostId(
         () => runtime.listRepos(),

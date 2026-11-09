@@ -1556,6 +1556,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "„{{name}}“ ({{branch}}) löschen?",
+      "deleteDestroysEnvironment": "Dadurch wird auch die Umgebung „{{environment}}“ gelöscht, die Orca dafür erstellt hat, samt nicht committeter Änderungen und laufender Terminals.",
+      "deleteKeepsEnvironment": "Die Umgebung „{{environment}}“, die Orca dafür erstellt hat, läuft weiter: Ihr Rezept hat keinen Löschschritt.",
       "deleteWorktree": "Worktree löschen",
       "pin": "Anheften",
       "primaryWorktreeDeleteHint": "Primärer Worktree — kann nicht gelöscht werden. Stattdessen das Projekt entfernen.",

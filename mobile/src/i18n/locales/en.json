@@ -669,6 +669,8 @@
     "hostScreenOverlays": {
       "deleteWorktree": "Delete Worktree",
       "deleteConfirmMessage": "Delete \"{{name}}\" ({{branch}})?",
+      "deleteDestroysEnvironment": "This also destroys the environment \"{{environment}}\" that Orca created for it, with any uncommitted work and running terminals on it.",
+      "deleteKeepsEnvironment": "The environment \"{{environment}}\" that Orca created for it keeps running: its recipe has no destroy step.",
       "sleep": "Sleep",
       "unpin": "Unpin",
       "pin": "Pin",

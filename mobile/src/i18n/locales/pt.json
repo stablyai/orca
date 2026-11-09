@@ -1597,6 +1597,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Excluir \"{{name}}\" ({{branch}})?",
+      "deleteDestroysEnvironment": "Isto também destrói o ambiente \"{{environment}}\" que o Orca criou para ele, com as alterações não confirmadas e os terminais em execução nele.",
+      "deleteKeepsEnvironment": "O ambiente \"{{environment}}\" que o Orca criou para ele continua em execução: a receita não tem um passo de destruição.",
       "deleteWorktree": "Excluir Worktree",
       "pin": "Fixar",
       "primaryWorktreeDeleteHint": "Worktree primária — não pode ser excluída. Remova o projeto em vez disso.",
