@@ -1,6 +1,5 @@
 import { EventEmitter } from 'node:events'
 import type { MessagePortMain } from 'electron'
-import { speechEngineForModelFiles } from '../../shared/speech-model-engine'
 import { OFFLINE_DECODE_CHUNK_SECONDS } from './stt-offline-audio-chunker'
 import type { SttWorkerProcess, SttWorkerRequest } from './stt-worker-process'
 
@@ -44,7 +43,6 @@ class SttCpuFallbackWorker extends EventEmitter implements SttWorkerProcess {
   private detachChild: () => void = () => undefined
   private cpuOnly: boolean
   private init: Extract<SttWorkerRequest, { type: 'init' }> | null = null
-  private transcribeCpp = false
   private ready = false
   private exitRequested = false
   private markOnCpuReady = false
@@ -63,7 +61,6 @@ class SttCpuFallbackWorker extends EventEmitter implements SttWorkerProcess {
   postMessage(msg: SttWorkerRequest): void {
     if (msg.type === 'init') {
       this.init = msg
-      this.transcribeCpp = speechEngineForModelFiles(msg.files) === 'transcribe-cpp'
     } else if (msg.type === 'feed' && this.canFallBack()) {
       const stream = this.backlog(msg.streamId)
       stream.feeds.push(msg)
@@ -87,7 +84,7 @@ class SttCpuFallbackWorker extends EventEmitter implements SttWorkerProcess {
   }
 
   private canFallBack(): boolean {
-    return this.transcribeCpp && !this.cpuOnly && !this.exitRequested
+    return this.init !== null && !this.cpuOnly && !this.exitRequested
   }
 
   private backlog(streamId: string): StreamBacklog {

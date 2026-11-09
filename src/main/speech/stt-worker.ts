@@ -1,8 +1,6 @@
 import type { MessagePortMain } from 'electron'
-import { speechEngineForModelFiles } from '../../shared/speech-model-engine'
 import type { SpeechAudioPortMessage } from '../../shared/speech-types'
 import type { SttRecognizer, SttRecognizerInit, SttRecognizerPost } from './stt-recognizer'
-import { createSherpaRecognizer } from './stt-sherpa-recognizer'
 import { createTranscribeCppRecognizer } from './stt-transcribe-cpp-recognizer'
 import { connectSttWorkerParentPort } from './stt-worker-parent-port'
 import type { SttWorkerRequest } from './stt-worker-process'
@@ -29,10 +27,7 @@ function enqueue(task: () => void | Promise<void>): void {
 async function handleInit(init: SttRecognizerInit): Promise<void> {
   try {
     const post: SttRecognizerPost = (event) => parentPort.post(event)
-    recognizer =
-      speechEngineForModelFiles(init.files) === 'transcribe-cpp'
-        ? await createTranscribeCppRecognizer(init, post)
-        : createSherpaRecognizer(init, post)
+    recognizer = await createTranscribeCppRecognizer(init, post)
     parentPort.post({ type: 'ready' })
   } catch (err) {
     parentPort.post({ type: 'error', error: String(err) })

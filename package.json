@@ -398,11 +398,6 @@
     "@transcribe-cpp/linux-x64-cpu-vulkan": "0.4.1",
     "@transcribe-cpp/win32-x64-cpu-vulkan": "0.4.1",
     "@vscode/windows-process-tree": "0.8.0",
-    "sherpa-onnx-darwin-arm64": "1.12.37",
-    "sherpa-onnx-darwin-x64": "1.12.37",
-    "sherpa-onnx-linux-arm64": "1.12.37",
-    "sherpa-onnx-linux-x64": "1.12.37",
-    "sherpa-onnx-win-x64": "1.12.37",
     "transcribe-cpp": "0.4.1"
   },
   "lint-staged": {
