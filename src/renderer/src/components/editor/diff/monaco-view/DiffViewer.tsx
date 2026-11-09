@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store/index'
+import { EditorVimStatusRow } from '../../use-monaco-vim-attachment'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
@@ -95,7 +96,8 @@ export default function DiffViewer({
   useLayoutEffect(() => {
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
-  const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+  const [modifiedEditor, setModifiedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
+
   useEffect(() => {
     const models = diffEditorRef.current?.getModel()
     applyModelLanguage([models?.original, models?.modified], language)
@@ -270,7 +272,8 @@ export default function DiffViewer({
 
       setupCopy(originalEditor, monaco, filePath, propsRef)
       setupCopy(modifiedEditor, monaco, filePath, propsRef)
-      setModifiedEditor(modifiedEditor)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: DiffEditorWidget._editors.modified is a standalone editor; the public return type widened to ICodeEditor.
+      setModifiedEditor(modifiedEditor as editor.IStandaloneCodeEditor)
 
       // Restore cursor and selection across both panes alongside scroll.
       const savedViewState = diffViewStateCache.get(modelKey)
@@ -374,7 +377,6 @@ export default function DiffViewer({
       diffCollapseUnchangedRegions
     ]
   )
-
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex-1 min-h-0 relative">
@@ -414,6 +416,18 @@ export default function DiffViewer({
           />
         )}
       </div>
+      <EditorVimStatusRow
+        editor={modifiedEditor}
+        preset={settings?.editorKeybindings}
+        readOnly={!editable}
+        autoHeight={false}
+        onWrite={() => {
+          if (!modifiedEditor) {
+            return
+          }
+          onSaveRef.current?.(modifiedEditor.getValue())
+        }}
+      />
       {toastNode}
     </div>
   )

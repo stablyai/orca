@@ -22,6 +22,7 @@ export type MonacoE2EProbe = {
   restoreScrollTop: (scrollTop: number) => void
   runLegacySetValueAppend: (suffix: string) => void
   snapshot: () => MonacoE2ESnapshot
+  getValue: () => string
 }
 
 export function installMonacoE2EProbe(
@@ -35,6 +36,7 @@ export function installMonacoE2EProbe(
   let legacyControlIncomingValue: string | null = null
   const probe: MonacoE2EProbe = {
     filePath,
+    getValue: (): string => editorInstance.getValue(),
     runLegacySetValueAppend: (suffix: string): void => {
       if (legacyControlOriginalValue !== null) {
         throw new Error('Legacy control must be restored before running again')
