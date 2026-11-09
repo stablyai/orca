@@ -30,7 +30,7 @@ export function nativeChatPendingContentKey(
   return imagePaths.length > 0 ? `images:${JSON.stringify(imagePaths)}` : 'empty'
 }
 
-function nativeChatUserMessageContentKey(
+export function nativeChatUserMessageContentKey(
   message: NativeChatMessage,
   sentImagePaths?: readonly string[]
 ): string | null {

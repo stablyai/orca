@@ -9,6 +9,7 @@ import {
   nativeChatPendingMatchKey,
   nativeChatPendingMatchingAfter,
   nativeChatPendingOccurrence,
+  nativeChatUserMessageContentKey,
   selectPendingIndicesRepresentedByUserRows,
   type NativeChatGluedUserRow,
   type NativeChatUserRow
@@ -40,6 +41,7 @@ export type NativeChatPendingSend = {
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
   matchingAfterTimestamp?: number
+  beforeMessage?: NativeChatMessage['pendingBeforeMessage']
 }
 
 function messagesAfterPendingBoundary(
@@ -130,6 +132,50 @@ function gluedCandidateRows(
     })
     return { text: row.text, representablePendingIndices }
   })
+}
+
+export function anchorNativeChatPendingSends<T extends NativeChatPendingSend>(
+  pending: T[],
+  messages: readonly NativeChatMessage[]
+): T[] {
+  if (pending.length < 2) {
+    return pending
+  }
+  const consumed = new Map<string, number>()
+  const matches = pending.map((entry) => {
+    const key = nativeChatPendingMatchKey(entry)
+    const used = consumed.get(key) ?? 0
+    const occurrence = nativeChatPendingOccurrence(entry, used)
+    consumed.set(key, Math.max(used, occurrence))
+    if (entry.afterMessageId === undefined) {
+      return undefined
+    }
+    const contentKey = nativeChatPendingContentKey(entry)
+    return messagesAfterPendingBoundary(messages, entry).filter(
+      (message) => nativeChatUserMessageContentKey(message, entry.imagePaths) === contentKey
+    )[occurrence - 1]
+  })
+  let changed = false
+  const next = pending.map((entry, index) => {
+    if (entry.beforeMessage) {
+      return entry
+    }
+    const eligible = messagesAfterPendingBoundary(messages, entry)
+    const anchor = matches.slice(index + 1).find((message) => message && eligible.includes(message))
+    if (!anchor) {
+      return entry
+    }
+    changed = true
+    return {
+      ...entry,
+      beforeMessage: {
+        id: anchor.id,
+        timestamp: anchor.timestamp,
+        ...(anchor.transcriptOrder !== undefined ? { transcriptOrder: anchor.transcriptOrder } : {})
+      }
+    }
+  })
+  return changed ? next : pending
 }
 
 /** Keep echoes until a later non-user turn to avoid first-turn flashes during transient empty reads. */
@@ -226,7 +272,10 @@ export function pendingSendsAsMessages(
   existingMessages: readonly NativeChatMessage[] = [],
   workingEpoch?: number | null
 ): NativeChatMessage[] {
-  return visibleNativeChatPendingSends(pending, existingMessages).map((entry) => ({
+  return visibleNativeChatPendingSends(
+    anchorNativeChatPendingSends(pending, existingMessages),
+    existingMessages
+  ).map((entry) => ({
     id: `pending:${entry.id}`,
     role: 'user' as const,
     blocks: [
@@ -235,6 +284,7 @@ export function pendingSendsAsMessages(
     ],
     timestamp: entry.sentAt,
     pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch),
+    ...(entry.beforeMessage ? { pendingBeforeMessage: entry.beforeMessage } : {}),
     source: 'scrape' as const
   }))
 }
