@@ -53,7 +53,7 @@ function getDefaultBranchIdentityLabel(t: Translate = translate): string {
   return t('auto.components.sidebar.WorktreeCardStatusSlot.branchIdentity', 'Branch')
 }
 function getSleepingStatusLabel(t: Translate = translate): string {
-  return t('auto.components.sidebar.WorktreeCardStatusSlot.sleeping', 'Sleeping')
+  return t('auto.components.sidebar.WorktreeCardStatusSlot.sleeping', 'Asleep')
 }
 // Offset optically left-heavy branch glyphs to align with centered activity dots.
 const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
