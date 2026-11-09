@@ -1,3 +1,4 @@
+import { getMainHttpClient } from '../network/http-client'
 import { saveOpenAiSpeechApiKey } from './openai-api-key-store'
 import {
   OPENAI_TRANSCRIPTION_URL,
@@ -20,7 +21,7 @@ async function rejectUnauthorizedOpenAiKey(apiKey: string): Promise<void> {
   let response: Response
   try {
     // An empty form is refused before any transcription, but only after OpenAI checks the key.
-    response = await fetch(OPENAI_TRANSCRIPTION_URL, {
+    response = await getMainHttpClient().fetch(OPENAI_TRANSCRIPTION_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: new FormData(),
