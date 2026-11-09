@@ -1,10 +1,18 @@
-import { constants } from 'node:fs'
-import { open, readlink } from 'node:fs/promises'
+import { readlink, type FileHandle } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { Zip, ZipDeflate, ZipPassThrough, type ZipInputFile } from 'fflate'
 import { isVanishedOrDenied, type FolderArchiveEntry } from './folder-archive-walk'
+import {
+  ChangedSinceWalkError,
+  isSmallFile,
+  openUnchangedFile,
+  readSmallFile,
+  type SmallFileRead
+} from './folder-archive-file-reads'
 
 const FILE_READ_BYTES = 256 * 1024
+/** Small files read ahead at once; bounds look-ahead memory to about 2 MiB. */
+const PREFETCH_WINDOW = 32
 /** Encoded bytes buffered ahead of the reader before the producer pauses. */
 const DEFAULT_HIGH_WATER_BYTES = 8 * 1024 * 1024
 // Level 4 keeps pure-JS deflate fast enough not to starve a fast link while still shrinking text.
@@ -49,6 +57,8 @@ const STORED_EXTENSIONS = new Set([
  */
 export class FolderArchiveZipStream {
   private readonly chunks: Uint8Array[] = []
+  // Head index instead of shift(): a folder of small files leaves thousands of tiny chunks queued.
+  private chunkHead = 0
   private bufferedBytes = 0
   private finished = false
   private failure: Error | null = null
@@ -92,24 +102,28 @@ export class FolderArchiveZipStream {
     }
     const parts: Uint8Array[] = []
     let taken = 0
-    while (this.chunks.length > 0 && taken < maxBytes) {
-      const head = this.chunks[0]
+    while (this.chunkHead < this.chunks.length && taken < maxBytes) {
+      const head = this.chunks[this.chunkHead]
       const room = maxBytes - taken
       if (head.byteLength <= room) {
         parts.push(head)
         taken += head.byteLength
-        this.chunks.shift()
+        this.chunkHead += 1
       } else {
         parts.push(head.subarray(0, room))
-        this.chunks[0] = head.subarray(room)
+        this.chunks[this.chunkHead] = head.subarray(room)
         taken += room
       }
+    }
+    if (this.chunkHead > 1024 || this.chunkHead === this.chunks.length) {
+      this.chunks.splice(0, this.chunkHead)
+      this.chunkHead = 0
     }
     this.bufferedBytes -= taken
     this.notifyProducer()
     return {
       bytes: Buffer.concat(parts, taken),
-      eof: this.finished && this.chunks.length === 0
+      eof: this.finished && this.chunkHead >= this.chunks.length
     }
   }
 
@@ -117,18 +131,33 @@ export class FolderArchiveZipStream {
     this.canceled = true
     this.zip.terminate()
     this.chunks.length = 0
+    this.chunkHead = 0
     this.bufferedBytes = 0
     this.fail(new Error('archive_canceled'))
     this.notifyProducer()
   }
 
   private async produce(): Promise<void> {
+    const prefetched = new Map<number, Promise<SmallFileRead>>()
     try {
-      for (const entry of this.entries) {
+      for (let index = 0; index < this.entries.length; index += 1) {
         if (this.canceled) {
           return
         }
-        await this.addEntry(entry)
+        // Keep the next few small files' reads in flight while this entry is zipped.
+        for (
+          let ahead = index;
+          ahead < index + PREFETCH_WINDOW && ahead < this.entries.length;
+          ahead += 1
+        ) {
+          const next = this.entries[ahead]
+          if (!prefetched.has(ahead) && isSmallFile(next)) {
+            prefetched.set(ahead, readSmallFile(next))
+          }
+        }
+        const small = prefetched.get(index)
+        prefetched.delete(index)
+        await this.addEntry(this.entries[index], small ? await small : undefined)
       }
       this.zip.end()
     } catch (error) {
@@ -136,7 +165,7 @@ export class FolderArchiveZipStream {
     }
   }
 
-  private async addEntry(entry: FolderArchiveEntry): Promise<void> {
+  private async addEntry(entry: FolderArchiveEntry, small?: SmallFileRead): Promise<void> {
     if (entry.kind === 'directory') {
       const file = withAttributes(new ZipPassThrough(entry.archivePath), entry, entry.mode)
       this.zip.add(file)
@@ -160,26 +189,27 @@ export class FolderArchiveZipStream {
       file.push(new TextEncoder().encode(target), true)
       return
     }
-    let handle: Awaited<ReturnType<typeof open>>
+    if (small?.kind === 'skip') {
+      return this.skip(small.error)
+    }
+    if (small?.kind === 'bytes') {
+      await this.waitForRoom()
+      if (this.canceled) {
+        return
+      }
+      const file = this.addFileEntry(entry)
+      this.processedBytes += small.bytes.byteLength
+      file.push(small.bytes, true)
+      return
+    }
+    let handle: FileHandle
     try {
-      handle = await open(entry.absolutePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+      handle = await openUnchangedFile(entry)
     } catch (error) {
       return this.skip(error)
     }
     try {
-      // A file swapped for something else after the walk is skipped, not archived.
-      if (!(await handle.stat()).isFile()) {
-        this.skippedCount += 1
-        return
-      }
-      const file = withAttributes(
-        STORED_EXTENSIONS.has(extname(entry.archivePath).toLowerCase())
-          ? new ZipPassThrough(entry.archivePath)
-          : new ZipDeflate(entry.archivePath, { level: DEFLATE_LEVEL }),
-        entry,
-        entry.mode
-      )
-      this.zip.add(file)
+      const file = this.addFileEntry(entry)
       const buffer = Buffer.allocUnsafe(FILE_READ_BYTES)
       for (;;) {
         await this.waitForRoom()
@@ -200,8 +230,20 @@ export class FolderArchiveZipStream {
     }
   }
 
+  private addFileEntry(entry: FolderArchiveEntry): ZipInputFile {
+    const file = withAttributes(
+      STORED_EXTENSIONS.has(extname(entry.archivePath).toLowerCase())
+        ? new ZipPassThrough(entry.archivePath)
+        : new ZipDeflate(entry.archivePath, { level: DEFLATE_LEVEL }),
+      entry,
+      entry.mode
+    )
+    this.zip.add(file)
+    return file
+  }
+
   private skip(error: unknown): void {
-    if (!isVanishedOrDenied(error)) {
+    if (!(error instanceof ChangedSinceWalkError) && !isVanishedOrDenied(error)) {
       throw error
     }
     this.skippedCount += 1

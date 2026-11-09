@@ -1,10 +1,14 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile, chmod } from 'node:fs/promises'
+import { mkdtemp, mkdir, rename, rm, symlink, writeFile, chmod } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FolderArchiveSessions } from './folder-archive-sessions'
-import { FolderArchiveLimitError, planFolderArchive } from './folder-archive-walk'
+import {
+  FolderArchiveLimitError,
+  planFolderArchive,
+  sanitizeArchiveSegment
+} from './folder-archive-walk'
 import { FolderArchiveZipStream } from './folder-archive-zip-stream'
 
 let root: string
@@ -95,6 +99,38 @@ describe('FolderArchiveSessions', () => {
     expect(Buffer.from(files['p/link']).toString()).toBe(outside)
     expect(Object.keys(files).some((name) => name.includes('outside-secret'))).toBe(false)
     expect(Object.keys(files)).not.toContain('p/dir-link/')
+  })
+
+  it('skips a file whose parent directory was swapped for a link after the walk', async () => {
+    const outside = join(root, 'outside')
+    await mkdir(outside)
+    await writeFile(join(outside, 'a.txt'), 'secret')
+    const project = join(root, 'p')
+    await mkdir(join(project, 'sub'), { recursive: true })
+    await writeFile(join(project, 'sub', 'a.txt'), 'inside')
+    const plan = await planFolderArchive(project, 'p', { excludeDefaultDirs: true })
+    // Same name, different file: O_NOFOLLOW alone would follow the swapped parent.
+    await rename(join(project, 'sub'), join(root, 'moved'))
+    await symlink(outside, join(project, 'sub'))
+    const stream = new FolderArchiveZipStream(plan.entries)
+    const parts: Buffer[] = []
+    for (;;) {
+      const page = await stream.read(1 << 20)
+      parts.push(page.bytes)
+      if (page.eof) {
+        break
+      }
+    }
+    const files = unzipSync(Buffer.concat(parts))
+    expect(files['p/sub/a.txt']).toBeUndefined()
+    expect(stream.skippedCount).toBe(1)
+  })
+
+  it('rewrites backslashes and control characters so Windows extractors cannot escape', () => {
+    expect(sanitizeArchiveSegment('..\\..\\evil')).toBe('.._.._evil')
+    expect(sanitizeArchiveSegment('a\u0001b')).toBe('a_b')
+    expect(sanitizeArchiveSegment('..')).toBe('_')
+    expect(sanitizeArchiveSegment('normal name.txt')).toBe('normal name.txt')
   })
 
   it('refuses folders over the byte or entry limits', async () => {

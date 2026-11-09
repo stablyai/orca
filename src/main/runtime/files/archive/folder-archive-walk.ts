@@ -14,6 +14,9 @@ export type FolderArchiveEntry = {
   size: number
   mode: number
   mtimeMs: number
+  /** Walk-time identity; the zip stream refuses to read a file whose dev/ino changed since. */
+  dev: number
+  ino: number
 }
 
 export type FolderArchivePlan = {
@@ -66,7 +69,9 @@ export async function planFolderArchive(
         kind: 'directory',
         size: 0,
         mode: rootStat.mode,
-        mtimeMs: rootStat.mtimeMs
+        mtimeMs: rootStat.mtimeMs,
+        dev: rootStat.dev,
+        ino: rootStat.ino
       }
     ],
     fileCount: 0,
@@ -115,7 +120,7 @@ export async function planFolderArchive(
       }
       const { name, stat } = item
       const absolutePath = join(dir.absolutePath, name)
-      const archivePath = `${dir.archivePath}${name}`
+      const archivePath = `${dir.archivePath}${sanitizeArchiveSegment(name)}`
       if (stat.isDirectory()) {
         if (excluded.has(name)) {
           plan.excludedDirCount += 1
@@ -128,7 +133,9 @@ export async function planFolderArchive(
           kind: 'directory',
           size: 0,
           mode: stat.mode,
-          mtimeMs: stat.mtimeMs
+          mtimeMs: stat.mtimeMs,
+          dev: stat.dev,
+          ino: stat.ino
         })
         childDirs.push({ absolutePath, archivePath: `${archivePath}/` })
       } else if (stat.isFile() || stat.isSymbolicLink()) {
@@ -146,7 +153,9 @@ export async function planFolderArchive(
           kind,
           size: kind === 'file' ? stat.size : 0,
           mode: stat.mode,
-          mtimeMs: stat.mtimeMs
+          mtimeMs: stat.mtimeMs,
+          dev: stat.dev,
+          ino: stat.ino
         })
       }
       // Sockets, FIFOs and devices have no archivable content.
@@ -160,6 +169,16 @@ export async function planFolderArchive(
     }
   }
   return plan
+}
+
+/**
+ * One path segment as stored in the ZIP. Linux allows `\` and control characters in names; Windows
+ * extractors treat `\` as a separator, so a file named `..\..\x` would escape the extract folder.
+ */
+export function sanitizeArchiveSegment(name: string): string {
+  // oxlint-disable-next-line no-control-regex
+  const cleaned = name.replace(/[\u0000-\u001f\\]/g, '_')
+  return cleaned === '.' || cleaned === '..' ? '_' : cleaned
 }
 
 async function isUnmovedDirectory(absolutePath: string): Promise<boolean> {
