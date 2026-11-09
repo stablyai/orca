@@ -12,6 +12,7 @@ import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolu
 import { applyClaudeEnvPatch } from '../../../claude-accounts/environment'
 import { resolveClaudeCommand } from '../../../codex-cli/command'
 import { withoutInheritedClaudeConfigDir } from '../../claude-config-dir-pin'
+import { stripInheritedClaudeSessionEnv } from '../../../../shared/agent-launch/startup/claude-parent-session-env'
 
 function cloneDefinedEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   const next: Record<string, string> = {}
@@ -90,18 +91,11 @@ export function withOrcaClaudeEntrypoint(
   overlay: Record<string, string> | undefined,
   platform: NodeJS.Platform
 ): Record<string, string> {
-  // Windows env names are case-insensitive, so a differently cased twin is the same variable.
-  const isEntrypointKey = (key: string): boolean =>
-    (platform === 'win32' ? key.toUpperCase() : key) === CLAUDE_ENTRYPOINT_ENV
-  const withoutEntrypoint = (source: Record<string, string>): Record<string, string> =>
-    Object.fromEntries(Object.entries(source).filter(([key]) => !isEntrypointKey(key)))
-  const override = Object.entries(overlay ?? {}).find(([key]) => isEntrypointKey(key))?.[1]
+  const env = { ...inheritedEnv, ...overlay }
+  stripInheritedClaudeSessionEnv(env, { launchEnv: overlay, platform })
   // The SDK reads only the exact name and otherwise adds its own default, which Windows would pick.
-  return {
-    ...withoutEntrypoint(inheritedEnv),
-    ...withoutEntrypoint(overlay ?? {}),
-    [CLAUDE_ENTRYPOINT_ENV]: override ?? 'orca'
-  }
+  env[CLAUDE_ENTRYPOINT_ENV] ??= 'orca'
+  return env
 }
 
 // Merge onto the shell environment to retain PATH and ambient Anthropic auth.
