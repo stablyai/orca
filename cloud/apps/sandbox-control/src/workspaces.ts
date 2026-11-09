@@ -12,6 +12,7 @@ import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import type { MachineSize } from './entitlements'
 import { getSandbox, touchActivity, updateRegistry, type SandboxRow } from './store'
+import { memberNamesFor } from './member-names'
 import { sandboxView } from './wire'
 
 export const PRESENCE_TTL_MS = 45_000
@@ -162,10 +163,23 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
     computeMsFor(db, ids),
     activeGrantUsers(db, ids, caller.userId)
   ])
+  const referenced = (row: SandboxRow, live: readonly PresenceRow[]) =>
+    [row.user_id, row.created_by, row.last_activity_by, ...live.map((p) => p.user_id)].filter(
+      (id): id is string => typeof id === 'string'
+    )
+  const names = await memberNamesFor(
+    db,
+    caller.accountId,
+    rows.flatMap((row) => referenced(row, presence.get(row.id) ?? []))
+  )
   return rows.map((row) => {
     const access = accessFor(caller, row, granted.has(row.id))
     // Private rows an admin sees for management show who/what, never live presence.
     const showPresence = access !== 'none'
+    const live = showPresence ? (presence.get(row.id) ?? []) : []
+    const memberNames = Object.fromEntries(
+      referenced(row, live).flatMap((id) => (names.has(id) ? [[id, names.get(id)!]] : []))
+    )
     return {
       ...sandboxView(row),
       title: row.name,
@@ -179,9 +193,9 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
       lastActivityBy: row.last_activity_by,
       cost: costView(row, compute.get(row.id) ?? 0, now),
       access,
-      presence: showPresence
-        ? (presence.get(row.id) ?? []).map((p) => ({ userId: p.user_id, clientId: p.client_id, state: p.state, chatId: p.chat_id, at: p.updated_at }))
-        : []
+      presence: live.map((p) => ({ userId: p.user_id, clientId: p.client_id, state: p.state, chatId: p.chat_id, at: p.updated_at })),
+      // Display names (token `name` claim) for the ids above; the roster wins where it has one.
+      memberNames
     }
   })
 }

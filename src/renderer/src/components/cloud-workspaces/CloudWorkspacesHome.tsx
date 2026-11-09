@@ -36,7 +36,7 @@ const INITIAL_FILTERS: CloudWorkspacesFilters = {
   archived: false
 }
 
-function useMemberDirectory(orgId: string | undefined) {
+function useMemberDirectory(orgId: string | undefined, workspaces: readonly CloudWorkspace[]) {
   const roster = useOrgRoster(orgId ?? '')
   return useMemo(() => {
     const directory: MemberDirectory = new Map()
@@ -50,8 +50,17 @@ function useMemberDirectory(orgId: string | undefined) {
       canAdmin =
         roster.result.roster.viewerRole === 'owner' || roster.result.roster.viewerRole === 'admin'
     }
+    // Ids the roster does not cover (still loading, a dev org, a member who left) fall back to the
+    // name each member's own token carries, as the control plane reports it.
+    for (const w of workspaces) {
+      for (const [userId, name] of Object.entries(w.memberNames ?? {})) {
+        if (name && !directory.has(userId)) {
+          directory.set(userId, { name, email: null })
+        }
+      }
+    }
     return { directory, canAdmin }
-  }, [orgId, roster.result])
+  }, [orgId, roster.result, workspaces])
 }
 
 /** Whether Home has a cloud section to show (signed in and this build has a control plane). */
@@ -77,7 +86,6 @@ export function CloudWorkspacesHome({
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
-  const { directory, canAdmin } = useMemberDirectory(orgId)
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
     { scope, archived: filters.archived ? 'only' : 'exclude' },
@@ -108,6 +116,7 @@ export function CloudWorkspacesHome({
         : [],
     [state]
   )
+  const { directory, canAdmin } = useMemberDirectory(orgId, all)
   const repos = useMemo(
     () => [...new Set(all.flatMap((w) => (w.repo ? [w.repo.url] : [])))].sort(),
     [all]
