@@ -75,7 +75,7 @@ export function RepositoryHooksSection({
     updateHookSettingsPolicyDraft
   } = useRepositoryHookSettingsDraft({ repo, repoHostIdentity, onUpdateHookSettings })
   const isFolder = isFolderRepo(repo)
-  const localHookFields = getLocalHookFields(t)
+  const localHookFields = getLocalHookFields(t, isFolder)
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
   const selectedSetupAgentStartupPolicy: SetupAgentStartupPolicy =
@@ -175,6 +175,7 @@ export function RepositoryHooksSection({
           keywords={['setup run policy', 'ask', 'run by default', 'skip by default']}
         >
           <RepositorySetupPolicySetting
+            isFolder={isFolder}
             setupRunPolicy={selectedSetupRunPolicy}
             setupAgentStartupPolicy={selectedSetupAgentStartupPolicy}
             onRunPolicyChange={(setupRunPolicy) =>

@@ -101,11 +101,13 @@ function getCommandSourcePolicyOptions(
 }
 
 export function RepositorySetupPolicySetting({
+  isFolder = false,
   setupRunPolicy,
   setupAgentStartupPolicy,
   onRunPolicyChange,
   onStartupPolicyChange
 }: {
+  isFolder?: boolean
   setupRunPolicy: SetupRunPolicy
   setupAgentStartupPolicy: SetupAgentStartupPolicy
   onRunPolicyChange: (policy: SetupRunPolicy) => void
@@ -121,10 +123,15 @@ export function RepositorySetupPolicySetting({
             {t('auto.components.settings.RepositoryHooksSection.793dcee97d', 'When to run')}
           </h5>
           <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.RepositoryHooksSection.21fb607a87',
-              'Default behavior when a new worktree is created.'
-            )}
+            {isFolder
+              ? t(
+                  'components.settings.RepositoryHooksSection.folderRunPolicyDescription',
+                  'Default behavior when a new workspace is created.'
+                )
+              : t(
+                  'auto.components.settings.RepositoryHooksSection.21fb607a87',
+                  'Default behavior when a new worktree is created.'
+                )}
           </p>
         </div>
         <SegmentedPolicyToggle

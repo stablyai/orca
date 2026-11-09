@@ -21310,7 +21310,10 @@
         "folderTitle": "Workspace Hooks",
         "folderDescription": "Scripts that run in this folder when a workspace is created or removed. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
         "folderSetupDescription": "Local and shared scripts that run after a new workspace is created.",
-        "folderArchiveDescription": "Local and shared scripts that run before a workspace is removed."
+        "folderArchiveDescription": "Local and shared scripts that run before a workspace is removed.",
+        "folderRunPolicyDescription": "Default behavior when a new workspace is created.",
+        "folderSetupFieldDescription": "Runs after a new workspace is created; create child worktrees, install deps, copy env files.",
+        "folderArchiveFieldDescription": "Runs before a workspace is removed."
       }
     },
     "agentChildRow": {
