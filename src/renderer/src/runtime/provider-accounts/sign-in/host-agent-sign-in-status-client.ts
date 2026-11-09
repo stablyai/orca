@@ -8,9 +8,13 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 
 const CALL_TIMEOUT_MS = 30_000
+// A verdict this young is trusted for a launch without asking again; launches still re-ask quietly.
+const FRESH_REPORT_MS = 5 * 60_000
 
 type Entry = {
   report: HostAgentSignInReport | null
+  /** This client's clock when the report arrived; the host's checkedAt is on another clock. */
+  receivedAt: number
   pending: Promise<HostAgentSignInReport | null> | null
 }
 
@@ -53,6 +57,23 @@ export function readHostAgentSignInReport(environmentId: string): HostAgentSignI
   return entries.get(environmentId)?.report ?? null
 }
 
+/** The last verdicts when they arrived recently enough to act on without waiting for the host. */
+export function readFreshHostAgentSignInReport(
+  environmentId: string
+): HostAgentSignInReport | null {
+  const entry = entries.get(environmentId)
+  return entry?.report && Date.now() - entry.receivedAt < FRESH_REPORT_MS ? entry.report : null
+}
+
+/** Asks once in the background unless a fresh answer or a request is already here. */
+export function precheckHostAgentSignIn(environmentId: string): void {
+  const entry = entries.get(environmentId)
+  if (entry?.pending || readFreshHostAgentSignInReport(environmentId)) {
+    return
+  }
+  void refreshHostAgentSignInReport(environmentId)
+}
+
 export function hostAgentSignInEntry(
   report: HostAgentSignInReport | null,
   agent: HostAgentSignInAgent
@@ -70,19 +91,22 @@ export function refreshHostAgentSignInReport(
   environmentId: string,
   options: { force?: boolean } = {}
 ): Promise<HostAgentSignInReport | null> {
-  const entry = entries.get(environmentId) ?? { report: null, pending: null }
+  const entry = entries.get(environmentId) ?? { report: null, receivedAt: 0, pending: null }
   if (entry.pending && !options.force) {
     return entry.pending
   }
   const pending = fetchReport(environmentId, options.force === true).then((report) => {
     const current = entries.get(environmentId)
     if (current?.pending === pending) {
-      entries.set(environmentId, { report: report ?? current.report, pending: null })
+      entries.set(
+        environmentId,
+        report ? { report, receivedAt: Date.now(), pending: null } : { ...current, pending: null }
+      )
       notify()
     }
     return report
   })
-  entries.set(environmentId, { report: entry.report, pending })
+  entries.set(environmentId, { ...entry, pending })
   return pending
 }
 
@@ -91,7 +115,7 @@ export function rememberHostAgentSignInReport(
   environmentId: string,
   report: HostAgentSignInReport
 ): void {
-  entries.set(environmentId, { report, pending: null })
+  entries.set(environmentId, { report, receivedAt: Date.now(), pending: null })
   notify()
 }
 

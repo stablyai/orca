@@ -11,6 +11,7 @@ import { StepIcon } from './WorktreeSetupSteps'
 import type { WorktreeSetupStepState } from './worktree-setup-steps'
 import { VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard, type VmBuildFailure } from './VmBuildFailureCard'
+import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
 
 type VmBuildStep = { id: 'provision' | 'checks' | 'create'; state: WorktreeSetupStepState }
 
@@ -72,7 +73,8 @@ export function VmBuildSheet({
   onCancel,
   onRetry,
   onDismiss,
-  onEditRecipe
+  onEditRecipe,
+  agentSignInRow
 }: {
   creationId: string
   entry: PendingWorktreeCreation
@@ -82,6 +84,8 @@ export function VmBuildSheet({
   onRetry: () => void
   onDismiss: () => void
   onEditRecipe: () => void
+  /** Fixtures only: a fixed sign-in row in place of the live one. */
+  agentSignInRow?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const steps = deriveVmBuildSteps(entry)
@@ -174,6 +178,13 @@ export function VmBuildSheet({
                 </span>
               </li>
             ))}
+            {agentSignInRow ??
+              (entry.vmEnvironmentId ? (
+                <VmBuildAgentSignInRow
+                  creationId={creationId}
+                  environmentId={entry.vmEnvironmentId}
+                />
+              ) : null)}
           </ol>
 
           <VmBuildFailureCard
