@@ -1,5 +1,5 @@
 import { MARINE_CREATURES } from '../../../marine-creatures'
-import { assertJsonTextStructureWithinLimits } from '../../../json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from '../../../json-stream/json-text-structure-limit'
 import { sanitizeGeneratedConversationName } from '../generation/conversation-name-generation'
 
 // Bound generated leaves after generation; leave prompts general so user naming instructions own style.

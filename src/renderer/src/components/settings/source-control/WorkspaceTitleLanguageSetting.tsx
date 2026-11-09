@@ -5,7 +5,7 @@ import { normalizeWorkspaceTitleLanguage } from '../../../../../shared/workspace
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { getWorkspaceTitleLanguageSearchEntry } from './auto-rename-branch-search'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function WorkspaceTitleLanguageSetting({
   settings,
@@ -14,6 +14,7 @@ export function WorkspaceTitleLanguageSetting({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const entry = getWorkspaceTitleLanguageSearchEntry()
   return (
     <div className="@container">
@@ -34,16 +35,10 @@ export function WorkspaceTitleLanguageSetting({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="branch">
-                {translate(
-                  'settings.sourceControl.workspaceTitleLanguage.branch',
-                  'Same as branch name'
-                )}
+                {t('settings.sourceControl.workspaceTitleLanguage.branch', 'Same as branch name')}
               </SelectItem>
               <SelectItem value="ui">
-                {translate(
-                  'settings.sourceControl.workspaceTitleLanguage.ui',
-                  'Follow interface language'
-                )}
+                {t('settings.sourceControl.workspaceTitleLanguage.ui', 'Follow interface language')}
               </SelectItem>
               {SUPPORTED_UI_LOCALES.map((locale) => (
                 <SelectItem key={locale} value={locale}>
