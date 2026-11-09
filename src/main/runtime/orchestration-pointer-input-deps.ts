@@ -1,4 +1,4 @@
-import type { TerminalRunFactsRegister } from './terminal-run-facts'
+import type { TerminalRunFactsRegister } from './terminal/lifecycle/terminal-run-facts'
 import { claudeTerminalPromptChannel } from './claude-terminal-prompt-channel'
 
 /** What pointer delivery reads about input: the person's keystrokes, and the agent's own prompt channel. */

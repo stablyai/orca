@@ -1,4 +1,4 @@
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import type { AgentPromptChannel } from './orchestration/mailbox/terminal-pointer/mailbox-pointer-channel-submit'
 import type { OrchestrationMailboxTerminal } from './orchestration/mailbox/routing/mailbox-owner'
 
