@@ -10,6 +10,7 @@ import {
   AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY
 } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
+  AuthorityRuntime,
   B,
   G,
   authorityProfile,
@@ -26,6 +27,8 @@ const PHONE = {
   clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
 }
 // What the paired CLI sends: launch, rename and close, never structured.v1.
+// The local socket declares no client kind; the runtime stamps it as the local CLI.
+const LOCAL_CLI = {}
 const PAIRED_CLI = {
   pairedDeviceId: 'laptop',
   clientKind: 'runtime' as const,
@@ -72,4 +75,27 @@ it('lets the paired CLI close a chat and nothing else', async () => {
     ok: true,
     result: { ok: true, found: true }
   })
+})
+
+// After a restart a saved chat can be at rest before any window or phone has built the host.
+it.each([
+  ['the local CLI', LOCAL_CLI],
+  ['the paired CLI', PAIRED_CLI]
+])('lets %s close a chat at rest before the host is built', async (_caller, cli) => {
+  const { profile } = await authorityProfile([B], { records: [B], visible: [B] })
+  const rpc = new RpcDispatcher({
+    runtime: new AuthorityRuntime(profile),
+    methods: [STRUCTURED_AGENT_SESSION_CLOSE_METHOD]
+  })
+  const close = (ctx: object) =>
+    rpc.dispatch(
+      { id: 'close', authToken: 'token', method: 'agentSession.close', params: { sessionId: B } },
+      ctx
+    )
+
+  expect(await close(PHONE)).toMatchObject({
+    ok: false,
+    error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+  })
+  expect(await close(cli)).toMatchObject({ ok: true, result: { ok: true, found: true } })
 })

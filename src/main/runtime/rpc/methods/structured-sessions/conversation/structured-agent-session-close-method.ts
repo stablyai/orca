@@ -30,7 +30,7 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
           null
       )
     }
-    const host = requireCloseStructuredHost(ctx)
+    const host = await requireCloseStructuredHost(ctx)
     // Read before closing; the CLI reports an unknown id instead of a close that did nothing.
     const found = host.deps.store.getConversation(params.sessionId) !== null
     const surface = captureStructuredSessionSurface(host, params.sessionId, ctx.runtime)

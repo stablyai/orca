@@ -82,8 +82,17 @@ export function requireCloseStructuredCapability(ctx: RpcContext): void {
   }
 }
 
-export function requireCloseStructuredHost(ctx: RpcContext): StructuredAgentSessionHost {
+/** The CLI may close a chat at rest after a restart, before anything built the host; desktop and phone closes never build one. */
+export async function requireCloseStructuredHost(
+  ctx: RpcContext
+): Promise<StructuredAgentSessionHost> {
   requireCloseStructuredCapability(ctx)
+  const fromCli =
+    ctx.caller?.kind === 'local-cli' ||
+    ctx.clientCapabilities?.includes(AGENT_SESSION_CLOSE_ONLY_CLIENT_CAPABILITY) === true
+  if (fromCli && !getStructuredAgentSessionHost()) {
+    await ctx.runtime.ensureStructuredAgentSessionHost()
+  }
   return requireHostOrRefusal()
 }
 
