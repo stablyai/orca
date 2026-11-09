@@ -42,6 +42,8 @@ export type NativeChatListScope = {
   units: NativeChatFoldUnit[]
   /** Each unit's first row within the scope's rows. */
   starts: number[]
+  /** A subagent chunk's parent turn, when its rows show it. */
+  turn?: { key: string | undefined }
 }
 
 export type NativeChatListState = {
@@ -52,7 +54,9 @@ export type NativeChatListState = {
   scopes: NativeChatListScope[]
   place: Map<NativeChatMessage, { scope: number; unit: number }>
   kinds: Map<NativeChatMessage, NativeChatToolFoldKind>
-  /** Input arrived in display order, every row journal-placed and ordinarily ranked. */
+  /** Subagent rows' turn keys by journal turn, when the host states turn scopes. */
+  turnKeys: Map<string, string | undefined> | null
+  /** Input arrived in display order, every row journal-placed and ordinarily ranked, so appends can follow it. */
   ordered: boolean
 }
 

@@ -86,22 +86,21 @@ function upsertItems(
   current: AgentJournalRenderItem[],
   incoming: readonly AgentJournalRenderItem[]
 ): AgentJournalRenderItem[] | null {
-  let next: AgentJournalRenderItem[] | null = null
+  if (incoming.length === 0) {
+    return current
+  }
+  // One pass copies the rows and finds every incoming id's row.
+  const rowOf = new Map(incoming.map((item) => [item.itemId, -1]))
+  const next: AgentJournalRenderItem[] = []
+  for (const row of current) {
+    if (rowOf.has(row.itemId)) {
+      rowOf.set(row.itemId, next.length)
+    }
+    next.push(row)
+  }
   let changed = false
   for (const item of incoming) {
-    let index = -1
-    if (next) {
-      index = next.findLastIndex((row) => row.itemId === item.itemId)
-    } else {
-      // One pass both copies the rows and finds the revised one.
-      next = []
-      for (const row of current) {
-        if (row.itemId === item.itemId) {
-          index = next.length
-        }
-        next.push(row)
-      }
-    }
+    const index = rowOf.get(item.itemId)!
     const prior = next[index]
     if (prior && item.revision < prior.revision) {
       continue
@@ -117,11 +116,11 @@ function upsertItems(
     if (prior) {
       next[index] = item
     } else {
-      next.push(item)
+      rowOf.set(item.itemId, next.push(item) - 1)
     }
     changed = true
   }
-  return changed && next ? next : current
+  return changed ? next : current
 }
 
 /** Keep the contiguous loaded suffix: an older revision retains its sequence and would move the paging anchor past a hole.

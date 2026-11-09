@@ -4,7 +4,10 @@ import {
   type NativeChatSubagentRow,
   type NativeChatTranscriptProjection
 } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
-import type { NativeChatTurnJournal } from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
+import {
+  hostStatesTurnScopes,
+  type NativeChatTurnJournal
+} from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import {
   compareNativeChatDisplayMessages as compareMessages,
   nativeChatDisplaySortRank,
@@ -19,6 +22,7 @@ import { foldSubagentItems } from '../../../../../../shared/native-chat/transcri
 import { stripNoiseMessages } from '../../../../../../shared/native-chat/native-chat-noise'
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { reuseUnits } from './native-chat-message-list-reuse'
+import { subagentTurnKeys } from './native-chat-message-list-turns'
 import {
   settleUnit,
   unitStarts,
@@ -60,6 +64,7 @@ function projectFully(
       scopes: [],
       place: new Map(),
       kinds: new Map(),
+      turnKeys: null,
       ordered: false
     }
   }
@@ -111,6 +116,15 @@ function projectFully(
     order,
     projectScope
   )
+  for (const scope of scopes) {
+    const first =
+      scope.agentId !== null && scope.units.some((unit) => unit.rows.length > 0)
+        ? projected.subagentRows.get(scope.agentId)?.[scope.offset]
+        : undefined
+    if (first) {
+      scope.turn = { key: first.turnKey }
+    }
+  }
   return {
     input: messages,
     ids,
@@ -119,6 +133,12 @@ function projectFully(
     scopes,
     place,
     kinds,
+    turnKeys:
+      journal && hostStatesTurnScopes(journal.items)
+        ? projected.subagentRows.size > 0
+          ? subagentTurnKeys(projected.subagentRows, journal.items)
+          : new Map()
+        : null,
     ordered
   }
 }

@@ -1,5 +1,8 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { sameNativeChatRowPlacement } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
+import {
+  sameNativeChatRowPlacement,
+  type NativeChatSubagentRow
+} from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatTurnJournal } from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import {
   compareNativeChatDisplayMessages as compareMessages,
@@ -15,53 +18,13 @@ import { isOrphanRowId } from '../../../../../../shared/native-chat/tools/native
 import { subagentItemBlock } from '../../../../../../shared/native-chat/transcript/native-chat-subagent-items'
 import { stripNoiseMessages } from '../../../../../../shared/native-chat/native-chat-noise'
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { compareAgentJournalItems } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
-import { readAgentJournalTurn } from '../../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { appendedSubagentTurnKey, appendedTurnNeutralItems } from './native-chat-message-list-turns'
 import {
   settleUnit,
   unitStarts,
   type NativeChatListScope,
   type NativeChatListState
 } from './native-chat-message-list-units'
-
-function isUserMessage(item: AgentJournalRenderItem): boolean {
-  return item.body.kind === 'message' && item.body.role === 'user'
-}
-
-/** Turn keys read user rows, turn records, turn scopes, submissions and the host's latest turn. */
-function sameTurnInputs(
-  before: NativeChatTurnJournal | null | undefined,
-  after: NativeChatTurnJournal | null | undefined
-): boolean {
-  if (!before || !after) {
-    return before === after
-  }
-  if (
-    before.submissions !== after.submissions ||
-    before.working !== after.working ||
-    JSON.stringify(before.latestTurn) !== JSON.stringify(after.latestTurn) ||
-    before.items.length !== after.items.length
-  ) {
-    return false
-  }
-  return before.items.every((item, index) => {
-    const next = after.items[index]!
-    return (
-      item === next ||
-      (item.itemId === next.itemId &&
-        item.agentId === next.agentId &&
-        compareAgentJournalItems(item, next) === 0 &&
-        item.turnScope?.kind === next.turnScope?.kind &&
-        (item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : undefined) ===
-          (next.turnScope?.kind === 'turn' ? next.turnScope.turnItemId : undefined) &&
-        !readAgentJournalTurn(item.body) &&
-        !readAgentJournalTurn(next.body) &&
-        !isUserMessage(item) &&
-        !isUserMessage(next))
-    )
-  })
-}
 
 /** Revised rows re-fold only their unit, and conversation appends only the last unit onward; else null. */
 export function reuseUnits(
@@ -71,11 +34,14 @@ export function reuseUnits(
 ): NativeChatListState | null {
   const before = state.input
   const subagents = state.projection.subagentRows.size > 0
-  if (
-    !state.ordered ||
-    messages.length < before.length ||
-    (subagents && (messages.length !== before.length || !sameTurnInputs(state.journal, journal)))
-  ) {
+  // Revisions keep every ordering field, so only appends need input already in display order.
+  if (messages.length < before.length || (!state.ordered && messages.length !== before.length)) {
+    return null
+  }
+  // Subagent rows keep their turns only while no earlier turn input changed.
+  const appendedItems = subagents ? appendedTurnNeutralItems(state.journal, journal) : null
+  // Only explicit turn scopes prove an appended row leaves earlier rows' turns alone.
+  if (subagents && (!appendedItems || (messages.length > before.length && !state.turnKeys))) {
     return null
   }
   const changed: [NativeChatMessage, NativeChatMessage][] = []
@@ -88,7 +54,6 @@ export function reuseUnits(
     if (
       prior.id !== message.id ||
       !sameNativeChatRowPlacement(prior, message) ||
-      nativeChatDisplaySortRank(message) !== 0 ||
       subagentItemBlock(prior) !== null ||
       subagentItemBlock(message) !== null ||
       // A conversation user row opens the turns subagent rows are grouped by.
@@ -101,12 +66,21 @@ export function reuseUnits(
   }
   const appended = messages.slice(before.length)
   const appendedIds = new Set<string>()
+  const appendedTurns = new Map<NativeChatMessage, string | undefined>()
   let last = before.at(-1)
   for (const message of appended) {
+    if (agentJournalItemSubagentId(message) !== null) {
+      const items = appendedItems ?? appendedTurnNeutralItems(state.journal, journal)
+      const turn =
+        items && state.turnKeys && appendedSubagentTurnKey(message, items, state.turnKeys)
+      if (!turn) {
+        return null
+      }
+      appendedTurns.set(message, turn.turnKey)
+    }
     if (
       !message.journalPosition ||
       nativeChatDisplaySortRank(message) !== 0 ||
-      agentJournalItemSubagentId(message) !== null ||
       subagentItemBlock(message) !== null ||
       // A raw id shaped like a detached result's renames every later orphan.
       isOrphanRowId(message.id) ||
@@ -127,19 +101,40 @@ export function reuseUnits(
     return scopes[index]!
   }
   let conversation = state.projection.conversation
-  let subagentRows = state.projection.subagentRows
+  const copiedRows = new Map<string, NativeChatSubagentRow[]>()
+  const agentRowsFor = (agentId: string): NativeChatSubagentRow[] => {
+    let rows = copiedRows.get(agentId)
+    if (!rows) {
+      rows = state.projection.subagentRows.get(agentId)?.slice() ?? []
+      copiedRows.set(agentId, rows)
+    }
+    return rows
+  }
+  // Several revisions in one unit re-fold it once.
+  const revisedUnits = new Map<
+    string,
+    { scope: number; unit: number; swaps: Map<NativeChatMessage, NativeChatMessage> }
+  >()
   for (const [prior, message] of changed) {
     const at = state.place.get(prior)
     if (!at) {
       return null
     }
-    const scope = edit(at.scope)
-    const unit = scope.units[at.unit]!
+    const key = `${at.scope}:${at.unit}`
+    const entry = revisedUnits.get(key) ?? { ...at, swaps: new Map() }
+    entry.swaps.set(prior, message)
+    revisedUnits.set(key, entry)
+  }
+  for (const { scope: scopeIndex, unit: unitIndex, swaps } of revisedUnits.values()) {
+    const scope = edit(scopeIndex)
+    const unit = scope.units[unitIndex]!
     // A refused reuse projects in full with fresh maps, so recording sources as we go is safe.
-    state.kinds.set(message, state.kinds.get(prior)!)
+    for (const [prior, message] of swaps) {
+      state.kinds.set(message, state.kinds.get(prior)!)
+    }
     const rebuilt = settleUnit(
       buildNativeChatFoldUnit(
-        unit.sources.map((source) => (source === prior ? message : source)),
+        unit.sources.map((source) => swaps.get(source) ?? source),
         scope.ids,
         state.kinds,
         unit,
@@ -155,42 +150,40 @@ export function reuseUnits(
     ) {
       return null
     }
-    scope.units[at.unit] = rebuilt
-    state.kinds.delete(prior)
-    state.place.delete(prior)
-    state.place.set(message, at)
+    scope.units[unitIndex] = rebuilt
+    for (const [prior, message] of swaps) {
+      state.kinds.delete(prior)
+      state.place.delete(prior)
+      state.place.set(message, { scope: scopeIndex, unit: unitIndex })
+    }
     if (rebuilt.rows.every((row, index) => row === unit.rows[index])) {
       continue
     }
-    const start = scope.offset + scope.starts[at.unit]!
+    const start = scope.offset + scope.starts[unitIndex]!
     if (scope.agentId === null) {
       conversation =
         conversation === state.projection.conversation ? conversation.slice() : conversation
       conversation.splice(start, rebuilt.rows.length, ...rebuilt.rows)
     } else {
-      const rows = subagentRows.get(scope.agentId)!.slice()
-      rebuilt.rows.forEach((row, offset) => {
+      const rows = agentRowsFor(scope.agentId)
+      for (const [offset, row] of rebuilt.rows.entries()) {
         rows[start + offset] = { message: row, turnKey: rows[start + offset]!.turnKey }
-      })
-      subagentRows = new Map(subagentRows).set(scope.agentId, rows)
+      }
     }
   }
-  if (appended.length > 0) {
-    const scope = edit(0)
-    if (scope.agentId !== null) {
-      return null
-    }
-    for (const message of appended) {
+  // Each scope's appended rows re-fold from its last unit; a subagent row in a new turn opens a new chunk.
+  const appendTo = (index: number, added: readonly NativeChatMessage[]): boolean => {
+    const scope = edit(index)
+    for (const message of added) {
       state.kinds.set(message, nativeChatToolFoldKind(message))
       state.ids.add(message.id)
       scope.ids.add(message.id)
     }
-    // Units start where the scan starts a group, so re-scan from the last head.
     const from = Math.max(0, scope.units.length - 1)
     const head = scope.units[from]
     const units: NativeChatFoldUnit[] = []
     for (const members of groupNativeChatFoldUnitMembers(
-      [...(head?.sources ?? []), ...appended],
+      [...(head?.sources ?? []), ...added],
       state.kinds
     )) {
       const held = members[0] === head?.sources[0] ? head : undefined
@@ -199,10 +192,10 @@ export function reuseUnits(
         held
       )
       if (unit.orphans.length > 0 || (held && held.orphans.length > 0)) {
-        return null
+        return false
       }
       unit.sources.forEach((source) =>
-        state.place.set(source, { scope: 0, unit: from + units.length })
+        state.place.set(source, { scope: index, unit: from + units.length })
       )
       units.push(unit)
     }
@@ -212,11 +205,68 @@ export function reuseUnits(
       ...scope.starts.slice(0, from),
       ...unitStarts(units).map((offset) => start + offset)
     ]
-    conversation = [...conversation.slice(0, start), ...units.flatMap((unit) => unit.rows)]
+    const rows = units.flatMap((unit) => unit.rows)
+    if (scope.agentId === null) {
+      conversation = [...conversation.slice(0, start), ...rows]
+      return true
+    }
+    const agentRows = agentRowsFor(scope.agentId)
+    const turnKey = scope.turn?.key
+    agentRows.splice(
+      scope.offset + start,
+      agentRows.length,
+      ...rows.map((message) => ({ message, turnKey }))
+    )
+    return true
+  }
+  const own = appended.filter((message) => !appendedTurns.has(message))
+  if (own.length > 0 && !appendTo(0, own)) {
+    return null
+  }
+  // Per subagent, consecutive rows of one turn extend its last chunk or open the next.
+  const runs: { agentId: string; turnKey: string | undefined; rows: NativeChatMessage[] }[] = []
+  const lastRun = new Map<string, (typeof runs)[number]>()
+  for (const [message, turnKey] of appendedTurns) {
+    const agentId = agentJournalItemSubagentId(message)!
+    const run = lastRun.get(agentId)
+    if (run && run.turnKey === turnKey) {
+      run.rows.push(message)
+    } else {
+      const next = { agentId, turnKey, rows: [message] }
+      runs.push(next)
+      lastRun.set(agentId, next)
+    }
+  }
+  for (const { agentId, turnKey, rows } of runs) {
+    const tail = scopes.findLastIndex((scope) => scope.agentId === agentId)
+    let index = tail
+    if (tail === -1 || !scopes[tail]!.turn || scopes[tail]!.turn!.key !== turnKey) {
+      if (tail !== -1 && !scopes[tail]!.turn) {
+        return null
+      }
+      index = scopes.length
+      scopes.push({
+        agentId,
+        offset: agentRowsFor(agentId).length,
+        ids: new Set(),
+        units: [],
+        starts: [],
+        turn: { key: turnKey }
+      })
+    }
+    if (!appendTo(index, rows)) {
+      return null
+    }
   }
   const projection =
-    conversation === state.projection.conversation && subagentRows === state.projection.subagentRows
+    conversation === state.projection.conversation && copiedRows.size === 0
       ? state.projection
-      : { conversation, subagentRows }
+      : {
+          conversation,
+          subagentRows:
+            copiedRows.size === 0
+              ? state.projection.subagentRows
+              : new Map([...state.projection.subagentRows, ...copiedRows])
+        }
   return { ...state, input: messages, journal, projection, scopes }
 }
