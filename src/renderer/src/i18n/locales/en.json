@@ -20047,6 +20047,7 @@
         "noCommands": "No matching commands",
         "commands": "Commands",
         "skills": "Skills",
+        "checkingSkills": "Checking for new skills...",
         "loadingSkills": "Loading skills...",
         "skillsLoaded": "Skills loaded",
         "clearDescription": "Clear conversation context",
@@ -20332,7 +20333,6 @@
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
         "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
         "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
-        "terminalExitUnprovenInChat": "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Make sure it has stopped, then try again.",
         "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again."
       },
       "state": {
@@ -22124,7 +22124,7 @@
       "sortRelevance": "Most relevant",
       "sortNewest": "Newest",
       "sortResultsAriaLabel": "Sort results: {{value0}}",
-      "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.",
+      "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations. Content is not redacted. Authenticated paired clients can search it.",
       "remoteDisabled": "Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.",
       "titleOnly": "Full-text search is off on this computer, so only session titles are matched.",
       "notReady": "The search index is not ready yet. Try again shortly.",
@@ -22184,7 +22184,7 @@
       "description": "Search everything your agents have said and done, on this computer and on any paired Orca server.",
       "searchDescription": "Turn on session search for this computer and paired servers, or clear search data.",
       "indexComputers": "Search inside sessions",
-      "computersConsent": "Each computer keeps a searchable copy of its own agent conversations and tool output. Nothing leaves that computer.",
+      "computersConsent": "Each computer keeps a searchable copy of its own agent conversations. Nothing leaves that computer.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Search sessions on {{host}}",
       "serverOffline": "Offline",

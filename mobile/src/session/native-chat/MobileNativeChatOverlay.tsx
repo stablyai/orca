@@ -285,6 +285,7 @@ function MobileNativeChatOverlayContent({
                       status={session.status}
                       error={session.error}
                       readFailedFinally={session.readFailedFinally === true}
+                      clearing={session.clearing === true}
                       agent={controller.nativeChatAgent}
                       sessionLive={controller.nativeChatSessionLive}
                       agentWorking={controller.nativeChatTurnActive}

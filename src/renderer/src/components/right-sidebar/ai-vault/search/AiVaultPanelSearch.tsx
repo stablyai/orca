@@ -103,7 +103,7 @@ export function AiVaultPanelSearch({
   if (needsLocalConsent) {
     message = t(
       'sessionSearch.panel.consent',
-      'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.'
+      'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations. Content is not redacted. Authenticated paired clients can search it.'
     )
   } else if (noAgents) {
     message = t('auto.components.right.sidebar.AiVaultPanel.noAgentsSelected', 'No agents selected')
@@ -159,7 +159,7 @@ export function AiVaultPanelSearch({
       )
     }
   }
-  if (response?.kind === 'results' && search.hits.length === 0 && !hasMetadataMatches) {
+  if (response?.kind === 'results' && search.hits.length === 0 && !hasMetadataMatches && !message) {
     message = t(
       'sessionSearch.panel.noMatches',
       'No matching sessions in the indexed history. Try another query or scope.'

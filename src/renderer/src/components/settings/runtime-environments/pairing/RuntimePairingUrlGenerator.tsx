@@ -14,11 +14,16 @@ import {
   runtimePairingLinkCache,
   runtimePairingReachForIntent,
   selectRuntimePairingIntent,
-  type RuntimePairingIntent,
-  type RuntimePairingUrlGeneratorProps
+  type RuntimePairingIntent
 } from './runtime-pairing-link-state'
 import { useRuntimePairingLinkExpiry } from './use-runtime-pairing-link-expiry'
 import { useRuntimePairingUrlCopy } from './use-runtime-pairing-url-copy'
+
+type RuntimePairingUrlGeneratorProps = {
+  framed?: boolean
+  showHeader?: boolean
+  showGeneratorForm?: boolean
+}
 
 export function RuntimePairingUrlGenerator({
   framed = true,
