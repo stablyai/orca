@@ -109,7 +109,7 @@ export function ArtifactPublishedLinkPanel({
           type="button"
           variant="outline"
           size="sm"
-          className="w-full"
+          className="h-auto min-h-8 w-full max-w-full whitespace-normal"
           disabled={publishing}
           onClick={onUpdate}
         >
