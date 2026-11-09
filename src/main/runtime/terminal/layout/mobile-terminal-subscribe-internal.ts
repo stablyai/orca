@@ -7,13 +7,8 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
     clientId: string,
     viewport?: { cols: number; rows: number }
   ): Promise<boolean> {
-    // A fresh view (not a same-client resume or a peer joining) must not inherit an earlier phone's claim.
-    if (
-      !this.mobileSubscribers.get(ptyId)?.size &&
-      this.pendingSoftLeavers.get(ptyId)?.clientId !== clientId
-    ) {
-      this.resetMobileDisplayModeForFreshViewer(ptyId)
-    }
+    // A fresh view must not inherit a departed phone's claim.
+    this.resetMobileDisplayModeForFreshViewer(ptyId)
     const mode = this.getMobileDisplayMode(ptyId)
 
     // Any new subscriber supersedes the prior client's pending restore.
@@ -129,7 +124,7 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
       lastActedAt: now
     })
 
-    // Subscribe-fresh in auto mode takes the floor; headless hosts default to desktop mode, so only input or an explicit phone-mode request reaches here there.
+    // Subscribe-fresh in auto mode takes the floor. Headless hosts start in desktop mode, so a lone viewer arrives here only after input or a phone-mode request.
     this.setDriver(ptyId, { kind: 'mobile', clientId })
 
     // The first transition has no layout entry yet; admit it through the fresh-subscribe guard.
