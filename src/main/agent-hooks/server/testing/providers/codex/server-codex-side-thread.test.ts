@@ -182,6 +182,30 @@ it.each(['local', 'relay', 'relay-done'])(
       const main = { session_id: MAIN, transcript_path: join(dir, 'rollout-main.jsonl') }
       await post({ ...main, hook_event_name: 'UserPromptSubmit', prompt: 'main task' })
       await post({ ...main, hook_event_name: 'SubagentStart', agent_id: 'old-child' })
+      if (route === 'relay') {
+        for (const [session_id, prompt] of [
+          ['01a16f91-0000-4000-8000-000000000001', TITLE_PROMPT],
+          [
+            '01a16f91-0000-4000-8000-000000000002',
+            'Write a brief catch-up for a user returning to this task.'
+          ]
+        ]) {
+          const hidden = { session_id, transcript_path: null }
+          await post({ ...hidden, hook_event_name: 'SessionStart', source: 'startup' })
+          expect(server.getStatusSnapshot()[0]).toMatchObject({
+            prompt: 'main task',
+            providerSession: { id: MAIN }
+          })
+          await post({ ...hidden, hook_event_name: 'UserPromptSubmit', prompt })
+          await post({ ...hidden, hook_event_name: 'Stop' })
+          expect(server.getStatusSnapshot()[0]).toMatchObject({
+            state: 'working',
+            prompt: 'main task',
+            providerSession: { id: MAIN },
+            subagents: [{ id: 'old-child', state: 'working' }]
+          })
+        }
+      }
       if (route === 'relay-done') {
         await post({ ...main, hook_event_name: 'Stop' })
       }

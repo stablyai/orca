@@ -158,10 +158,6 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
     }
-    // Any submitted prompt (incl. a replayed Codex start) opens a new turn; OSC must not inherit the old stamp.
-    if (payload.hookEventName === 'UserPromptSubmit' || payload.hasExplicitPrompt === true) {
-      this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
-    }
     if (terminalOwnedPayload.connectionId) {
       this.connectionTimestampWatermarkById.set(terminalOwnedPayload.connectionId, now)
     }
@@ -197,6 +193,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     )
     if (!stateReconciledPayload) {
       return undefined
+    }
+    if (previous && stateReconciledPayload === previous) {
+      return previous
     }
     // Relay restart loses root context; child hooks must not erase persisted resume/model identity.
     const rootContextPreservingPayload = retainHookRootContext(

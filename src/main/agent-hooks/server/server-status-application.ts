@@ -132,6 +132,13 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     now = Date.now(),
     observedAt?: number
   ): EnrichedAgentHookEventPayload {
+    // Only live submissions open a new turn; cached starts restate historical context.
+    if (
+      !payload.isReplay &&
+      (payload.hookEventName === 'UserPromptSubmit' || payload.hasExplicitPrompt === true)
+    ) {
+      this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
+    }
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined

@@ -27,6 +27,7 @@ import { writePtyFromRuntimeController } from '../../ipc/pty/runtime/operations'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()
@@ -61,12 +62,23 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
   return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
 
-it.each(['before', 'after', 'paired', 'orchestration', 'codex-startup'] as const)(
+it.each([
+  'before',
+  'after',
+  'paired',
+  'orchestration',
+  'codex-startup',
+  'codex-replay',
+  'codex-cold-replay'
+] as const)(
   'real CLI phone admission and delivery: %s',
   async (boundary) => {
     const disconnect = boundary === 'before' || boundary === 'after'
     const paired = boundary === 'paired'
-    const codex = boundary === 'codex-startup'
+    const codex = boundary.startsWith('codex-')
+    const replay = boundary === 'codex-replay' || boundary === 'codex-cold-replay'
+    const hookServer = replay ? new AgentHookServer() : undefined
+    await hookServer?.start({ env: 'production' })
     const text = codex ? 'x'.repeat(1_000) : 'first'
     const hookState = createHookListenerState()
     let hook: ReturnType<typeof normalizeHookPayload> = null
@@ -95,34 +107,64 @@ it.each(['before', 'after', 'paired', 'orchestration', 'codex-startup'] as const
             {
               paneKey: 'tab-prompt:22222222-2222-4222-8222-222222222222',
               payload: held
-                ? { hook_event_name: 'SessionStart', source: 'startup', session_id: 'session-1' }
+                ? {
+                    hook_event_name: 'SessionStart',
+                    source: 'startup',
+                    session_id: '11111111-1111-4111-8111-111111111111'
+                  }
                 : {
                     hook_event_name: 'UserPromptSubmit',
-                    session_id: 'session-1',
+                    session_id: '11111111-1111-4111-8111-111111111111',
                     turn_id: 'turn-1',
                     prompt: text
                   }
             },
             'production'
           )
+          if (hook && hookServer) {
+            if (!held || boundary !== 'codex-cold-replay') {
+              hookServer.ingestRemote(hook, 'fixture-connection')
+            }
+            if (held) {
+              hookServer.ingestRemote(
+                {
+                  ...hook,
+                  hasExplicitPrompt: true,
+                  isReplay: true,
+                  payload: {
+                    ...hook.payload,
+                    state: 'working',
+                    prompt: 'old task',
+                    sessionBoundary: undefined,
+                    mainAgent: { state: 'working', stateStartedAt: 1_000 }
+                  }
+                },
+                'fixture-connection'
+              )
+            }
+          }
         }
       },
       codex ? 'codex' : 'claude',
       (host, id, data) => writePtyFromRuntimeController({ runtime: host }, id, data, 'driving'),
       {
         getAgentStatusSnapshot: () =>
-          hook
-            ? [
-                {
-                  ...hook.payload,
-                  paneKey: hook.paneKey,
-                  terminalHandle: promptHandle,
-                  receivedAt: hook.payload.mainAgent?.stateStartedAt ?? 1_000,
-                  stateStartedAt: hook.payload.mainAgent?.stateStartedAt ?? 1_000,
-                  connectionId: null
-                }
-              ]
-            : []
+          hookServer
+            ? hookServer
+                .getStatusSnapshot()
+                .map((row) => ({ ...row, terminalHandle: promptHandle }))
+            : hook
+              ? [
+                  {
+                    ...hook.payload,
+                    paneKey: hook.paneKey,
+                    terminalHandle: promptHandle,
+                    receivedAt: hook.payload.mainAgent?.stateStartedAt ?? 1_000,
+                    stateStartedAt: hook.payload.mainAgent?.stateStartedAt ?? 1_000,
+                    connectionId: null
+                  }
+                ]
+              : []
       }
     )
     promptHandle = handle
@@ -277,7 +319,7 @@ it.each(['before', 'after', 'paired', 'orchestration', 'codex-startup'] as const
         expect(paired ? rawAdmission : promptAdmission).toHaveBeenCalledWith(
           runtime,
           paired ? 'programmatic' : 'pty-prompt',
-          undefined
+          codex ? 'programmatic' : undefined
         )
         expect(runtime.getDriver('pty-prompt')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
         return
@@ -316,6 +358,7 @@ it.each(['before', 'after', 'paired', 'orchestration', 'codex-startup'] as const
       }
       await exited
       await server?.stop()
+      hookServer?.stop()
       await transport.stop()
       await Promise.allSettled(done)
       db.close()

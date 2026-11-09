@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../../../../../wsl-guest/agent-hook-server'
 import { AgentHookServer } from '../../../agent-hook-server'
+import { selectFreshExplicitAgentStatus } from '../../../../../runtime/workspaces/process-listing/runtime-hook-agent-row-selection'
 import { buildBody, postHookEvent, PANE } from '../../server.test-fixtures'
 
 it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
@@ -116,6 +117,12 @@ it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
         await post({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-2', prompt: 'next turn' })
         expect(desktop.getStatusSnapshot()[0].mainAgent).toMatchObject({ stateStartedAt: 6_000 })
         await post({ hook_event_name: 'Stop' })
+        await post({ hook_event_name: 'SubagentStart', agent_id: 'child-session' })
+        expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+          state: 'working',
+          mainAgent: { state: 'done', stateStartedAt: 6_000 },
+          subagents: [{ id: 'child-session', state: 'working' }]
+        })
         vi.setSystemTime(7_000)
         await post({ hook_event_name: 'SessionStart', source: 'compact' })
         expect(desktop.getStatusSnapshot()[0]).toMatchObject({
@@ -131,6 +138,28 @@ it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
           state: 'done',
           sessionBoundary: true,
           mainAgent: { state: 'done', stateStartedAt: 6_000, outcome: 'cancellation' }
+        })
+        await post({ hook_event_name: 'UserPromptSubmit', prompt: 'old session work' })
+        await post({
+          hook_event_name: 'SessionStart',
+          source: 'startup',
+          session_id: 'replacement-session',
+          transcript_path: join(directory, 'replacement.jsonl')
+        })
+        expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+          state: 'done',
+          sessionBoundary: true,
+          mainAgent: { state: 'done' },
+          providerSession: { id: 'replacement-session' }
+        })
+        await post({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'replacement-session',
+          prompt: 'replacement task'
+        })
+        expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+          state: 'working',
+          prompt: 'replacement task'
         })
       }
     } finally {
@@ -166,9 +195,10 @@ it('does not confirm restored work from an older relay startup or redate a submi
     expect(desktop.getStatusSnapshot()[0].restoredUnconfirmed).toBe(true)
     desktop.ingestRemote({ ...event, hookEventName: 'SessionStart' }, 'ssh-connection')
     expect(desktop.getStatusSnapshot()[0]).toMatchObject({
-      state: 'done',
-      sessionBoundary: true,
-      mainAgent: { state: 'done' }
+      state: 'working',
+      restoredUnconfirmed: true,
+      providerSession: { id: 'root-session' },
+      mainAgent: { state: 'working', stateStartedAt: 1_000 }
     })
     desktop.ingestRemote(
       {
@@ -179,10 +209,59 @@ it('does not confirm restored work from an older relay startup or redate a submi
       },
       'ssh-connection'
     )
-    expect(desktop.getStatusSnapshot()[0].mainAgent).toEqual({
-      state: 'working',
-      stateStartedAt: 1_000
+    expect(desktop.getStatusSnapshot()[0].restoredUnconfirmed).toBe(true)
+    desktop.ingestRemote(
+      {
+        ...event,
+        hookEventName: 'SubagentStart',
+        toolAgentId: 'child-1',
+        payload: {
+          ...event.payload,
+          subagents: [{ id: 'child-1', state: 'working', startedAt: 1_000 }]
+        }
+      },
+      'ssh-connection'
+    )
+    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+      restoredUnconfirmed: true,
+      subagents: [{ id: 'child-1', state: 'working' }]
     })
+    desktop.ingestRemote(
+      {
+        ...event,
+        hookEventName: 'UserPromptSubmit',
+        hasExplicitPrompt: true,
+        payload: { ...event.payload, mainAgent: { state: 'working', stateStartedAt: 6_000 } }
+      },
+      'ssh-connection'
+    )
+    expect(desktop.getStatusSnapshot()[0].restoredUnconfirmed).toBeUndefined()
+    desktop.ingestRemote(
+      {
+        ...event,
+        hookEventName: 'Interrupt',
+        payload: {
+          ...event.payload,
+          state: 'done',
+          mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 7_000 }
+        }
+      },
+      'ssh-connection'
+    )
+    const stopped = desktop.getStatusSnapshot()[0]
+    expect(stopped.mainAgent).toMatchObject({ state: 'done', outcome: 'cancellation' })
+    desktop.ingestRemote(
+      { ...event, hookEventName: 'SessionStart', hasExplicitPrompt: true, isReplay: true },
+      'ssh-connection'
+    )
+    expect(desktop.getStatusSnapshot()[0]).toEqual(stopped)
+    expect(
+      selectFreshExplicitAgentStatus({
+        handle: 'fixture',
+        paneKey: PANE,
+        hookRows: desktop.getStatusSnapshot()
+      })?.mainAgentWorkingStartedAt
+    ).toBeNull()
   } finally {
     first.stop()
     desktop.stop()

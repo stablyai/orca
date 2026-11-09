@@ -1,4 +1,5 @@
 import { normalizeAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
+import { sameAgentStatusTerminalOwner } from '../../agent-status/identity/agent-status-terminal-owner'
 import type { AgentLeadStatusResolution } from '../../agent-status/lifecycle/agent-lead-status-fold'
 import { codexRosterToSnapshots } from '../../codex-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
@@ -12,6 +13,12 @@ import {
   type CodexRemoteRosterAuthority
 } from './codex-state'
 
+function clearCodexSessionState(state: HookListenerState, paneKey: string): void {
+  state.codexSubagentRosterByPaneKey.delete(paneKey)
+  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+  state.codexLeadStateByPaneKey.delete(paneKey)
+}
+
 export function applyCodexSessionStart(
   state: HookListenerState,
   paneKey: string,
@@ -20,9 +27,7 @@ export function applyCodexSessionStart(
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
   if (
     start.agentId ||
-    (start.sessionId &&
-      (state.codexSubagentRosterByPaneKey.get(paneKey)?.has(start.sessionId) ||
-        (lead?.state !== 'done' && lead?.sessionId && lead.sessionId !== start.sessionId)))
+    (start.sessionId && state.codexSubagentRosterByPaneKey.get(paneKey)?.has(start.sessionId))
   ) {
     return null
   }
@@ -47,9 +52,7 @@ export function applyCodexSessionStart(
       ...(resolution.stateName === 'done' ? { sessionBoundary: true } : {})
     }
   }
-  state.codexSubagentRosterByPaneKey.delete(paneKey)
-  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
-  state.codexLeadStateByPaneKey.delete(paneKey)
+  clearCodexSessionState(state, paneKey)
   setCodexMainAgentTurnState(state, paneKey, {
     state: 'done',
     sessionId: start.sessionId,
@@ -59,12 +62,12 @@ export function applyCodexSessionStart(
 }
 
 /** Correct session-only evidence before an older relay's working payload can seed the root. */
-export function reconcileCodexStatusEvent<T extends AgentHookEventPayload>(
+export function reconcileCodexStatusEvent(
   state: HookListenerState,
-  event: T,
-  previous: AgentHookEventPayload | undefined,
+  event: AgentHookEventPayload,
+  previous: (AgentHookEventPayload & { stateStartedAt?: number }) | undefined,
   remoteRosterAuthority?: CodexRemoteRosterAuthority
-): T | null {
+): AgentHookEventPayload | null {
   if (
     (!event.connectionId && event.hookEventName) ||
     event.payload.agentType !== 'codex' ||
@@ -72,16 +75,45 @@ export function reconcileCodexStatusEvent<T extends AgentHookEventPayload>(
   ) {
     return event
   }
+  const replayedStart = event.hookEventName === 'SessionStart' && event.isReplay === true
+  if (
+    replayedStart &&
+    previous?.payload.agentType === 'codex' &&
+    previous.providerSession?.id &&
+    previous.providerSession.id === event.providerSession?.id &&
+    sameAgentStatusTerminalOwner(previous, event)
+  ) {
+    // The accepted row can include a desktop-inferred end that the cached host never saw.
+    const oldLead = state.codexLeadStateByPaneKey.get(event.paneKey)
+    state.codexLeadStateByPaneKey.delete(event.paneKey)
+    state.codexSubagentRosterByPaneKey.delete(event.paneKey)
+    seedCodexStateFromSnapshot(state, event.paneKey, previous.payload)
+    const lead = state.codexLeadStateByPaneKey.get(event.paneKey)!
+    setCodexMainAgentTurnState(state, event.paneKey, {
+      ...lead,
+      stateStartedAt:
+        previous.payload.mainAgent?.stateStartedAt ??
+        previous.stateStartedAt ??
+        oldLead?.stateStartedAt,
+      sessionId: previous.providerSession.id,
+      turnId: oldLead?.sessionId === previous.providerSession.id ? oldLead.turnId : null
+    })
+    return previous
+  }
+  if (replayedStart) {
+    clearCodexSessionState(state, event.paneKey)
+  }
+  const unconfirmedRoot =
+    replayedStart ||
+    (previous?.restoredUnconfirmed &&
+      (event.hookEventName === 'SessionStart' || event.toolAgentId !== undefined))
   if (
     event.hookEventName === 'SessionStart' &&
-    (!event.hasExplicitPrompt || (event.isReplay && !event.payload.mainAgent))
+    ((!event.isReplay && !event.hasExplicitPrompt) || (event.isReplay && !event.payload.mainAgent))
   ) {
-    const confirmedPrevious =
-      previous?.payload.agentType === 'codex' && !previous.restoredUnconfirmed
-    if (!confirmedPrevious) {
-      state.codexSubagentRosterByPaneKey.delete(event.paneKey)
-      state.codexSubagentTranscriptByPaneKey.delete(event.paneKey)
-      state.codexLeadStateByPaneKey.delete(event.paneKey)
+    const codexPrevious = previous?.payload.agentType === 'codex'
+    if (!codexPrevious) {
+      clearCodexSessionState(state, event.paneKey)
     } else {
       seedCodexStateFromSnapshot(state, event.paneKey, previous.payload)
       const lead = state.codexLeadStateByPaneKey.get(event.paneKey)!
@@ -110,6 +142,7 @@ export function reconcileCodexStatusEvent<T extends AgentHookEventPayload>(
       state.codexSubagentRosterByPaneKey.delete(event.paneKey)
       return {
         ...event,
+        restoredUnconfirmed: unconfirmedRoot ? true : undefined,
         payload: reconcileRemoteCodexState(
           state,
           event.paneKey,
@@ -124,6 +157,7 @@ export function reconcileCodexStatusEvent<T extends AgentHookEventPayload>(
     const lead = state.codexLeadStateByPaneKey.get(event.paneKey)
     return {
       ...event,
+      restoredUnconfirmed: unconfirmedRoot ? true : undefined,
       payload: normalizeAgentStatusPayload({
         ...(start.updateLead ? {} : previous?.payload),
         state: start.stateName,
@@ -143,9 +177,7 @@ export function reconcileCodexStatusEvent<T extends AgentHookEventPayload>(
     !event.isReplay &&
     event.providerSession?.id !== previous?.providerSession?.id
   if (replacement) {
-    state.codexSubagentRosterByPaneKey.delete(event.paneKey)
-    state.codexSubagentTranscriptByPaneKey.delete(event.paneKey)
-    state.codexLeadStateByPaneKey.delete(event.paneKey)
+    clearCodexSessionState(state, event.paneKey)
     setCodexMainAgentTurnState(state, event.paneKey, {
       state: 'working',
       sessionId: event.providerSession?.id,
@@ -154,6 +186,7 @@ export function reconcileCodexStatusEvent<T extends AgentHookEventPayload>(
   }
   return {
     ...event,
+    restoredUnconfirmed: unconfirmedRoot ? true : undefined,
     payload: reconcileRemoteCodexState(
       state,
       event.paneKey,
