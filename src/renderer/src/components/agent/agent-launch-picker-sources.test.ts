@@ -27,8 +27,6 @@ import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choice
 import { retireAgentPickerSetups } from './agent-launch-picker-retirement'
 import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import type { AgentDedicatedChoices } from '../../../../shared/agent-launch/choices/agent-launch-choices'
-import { AcpStructuredOptions } from '../../../../main/acp/options/acp-structured-options'
-import recording from '../../../../main/acp/fixtures/antigravity-v1.4.3-options.json'
 
 it('selects protocol rows, efforts, defaults and search by the actual draft surface', () => {
   for (const defaultSurface of ['chat', 'terminal'] as const) {
@@ -66,11 +64,6 @@ it('selects protocol rows, efforts, defaults and search by the actual draft surf
     expect(agentPickerModelMenu(pending, 'terminal').status).toBe('listing')
     expect(agentPickerModelMenu(pending, 'chat').status).toBe('listed')
   }
-  const old = new AcpStructuredOptions()
-  old.adoptSession({ models: recording.session.models })
-  const entry = sourceEntry()
-  entry.catalog = { origin: 'probe', fetchedAt: 1, models: old.read().models }
-  expect(agentPickerModels(entry, 'chat')[0].id).toBe('gemini-3.8-flash-high')
 })
 
 it.each([

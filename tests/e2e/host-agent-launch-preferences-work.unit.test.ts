@@ -216,17 +216,12 @@ it.each([20, 200])(
     const host = hostWriter()
     const pending: { kind: string; finish: () => void }[] = []
     let held = false
-    let allowResource = true
     rpc.call.mockImplementation(async (_target, method, mutation) => {
       if (method === 'settings.mutateAgentLaunch') {
-        allowResource = true
         return { settings: await host.controller.mutateAgentLaunch(mutation) }
       }
-      const resource = method === 'settings.getAgentLaunch' && allowResource
-      if (resource) {
-        allowResource = false
-      }
-      if (held && !resource) {
+      // Command eligibility needs settled settings before a catalog request can be admitted.
+      if (held && method !== 'settings.getAgentLaunch') {
         await new Promise<void>((resolve) => pending.push({ kind: method, finish: resolve }))
       }
       if (method === 'agentSession.modelCatalog') {
@@ -267,7 +262,6 @@ it.each([20, 200])(
       acquisitions.agentPickerAcquisitionDiagnostics().every((owner) => owner.observers === 0)
     ).toBe(true)
     held = false
-    allowResource = true
     const successor = mount(1)
     try {
       await settle()
@@ -280,16 +274,19 @@ it.each([20, 200])(
       await act(async () => pending.forEach((work) => work.finish()))
       await settle()
       await settle()
-      expect(rpc.call).toHaveBeenCalledTimes(admitted)
+      // Only the live successor may admit its third agent after the two shared reads finish.
+      expect(
+        rpc.call.mock.calls.slice(admitted).map(([, method, params]) => [method, params])
+      ).toEqual([['agentSession.modelCatalog', { agent: 'opencode', worktree: 'id:wt' }]])
       expect(acquisitions.agentPickerAcquisitionDiagnostics()).toHaveLength(1)
       const completions = pending.reduce<Record<string, number>>((counts, work) => {
         counts[work.kind] = (counts[work.kind] ?? 0) + 1
         return counts
       }, {})
       expect(completions).toEqual({
-        'agentSession.modelCatalog': 2 * count,
-        'agentSession.createSupport': 2 * count,
-        'settings.getAgentLaunch': count
+        // One pending physical catalog read per agent survives acquisition generations.
+        'agentSession.modelCatalog': 2,
+        'agentSession.createSupport': 2 * count
       })
       process.stdout.write(
         `${JSON.stringify({

@@ -64,6 +64,7 @@ export function status(runtimeId = 'runtime-1'): RuntimeEnvironmentStatus {
   return {
     status: {
       runtimeId,
+      hostPlatform: 'linux',
       capabilities: [CHAT, CLIENT],
       rendererGraphEpoch: 0,
       graphStatus: 'ready',

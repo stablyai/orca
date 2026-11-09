@@ -1,9 +1,3 @@
-import {
-  NewSessionResponseSchema,
-  SessionModelStateSchema
-} from '../../../../main/acp/generated/acp-protocol.generated'
-import recording from '../../../../main/acp/fixtures/antigravity-v1.4.3-options.json'
-import { AcpStructuredOptions } from '../../../../main/acp/options/acp-structured-options'
 import { parseAntigravityModels } from '../../../../shared/source-control/ai/generation/commit-message-model-parsers'
 import { getCommitMessageAgentCapability } from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { cliModelCatalogAnswer } from '@/runtime/native-chat/model-catalogs/model-menu-cli-catalog'
@@ -23,11 +17,6 @@ export const cliResult = {
 export function sourceEntry(
   defaultSurface: AgentPickerEntry['defaultSurface'] = 'chat'
 ): AgentPickerEntry {
-  const options = new AcpStructuredOptions()
-  const session = NewSessionResponseSchema.extend({ models: SessionModelStateSchema }).parse(
-    recording.session
-  )
-  options.adoptSession(session, 'new')
   return {
     agent: 'antigravity',
     label: 'Antigravity',
@@ -36,7 +25,34 @@ export function sourceEntry(
     defaultSurface,
     terminal: {},
     structured: {},
-    catalog: { origin: 'probe', fetchedAt: 1, models: options.read().models },
+    catalog: {
+      origin: 'probe',
+      fetchedAt: 1,
+      // Host answer for the recorded ACP session; protocol adaptation is tested in main.
+      models: [
+        {
+          id: 'gemini-3.8-flash',
+          label: 'Gemini 3.8 Flash',
+          isDefault: false,
+          efforts: [
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' }
+          ]
+        },
+        ...[
+          { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash' },
+          { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
+          { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+          { id: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro' }
+        ].map((model) => ({
+          ...model,
+          isDefault: false,
+          efforts: [],
+          effortsKnown: false as const
+        }))
+      ]
+    },
     coherentCatalog: true,
     catalogRead: 'settled',
     sourceCatalogs: {

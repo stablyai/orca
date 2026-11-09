@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch/choices/agent-launch-settings'
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
+import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
@@ -14,9 +15,14 @@ import { TooltipProvider } from '../../../components/ui/tooltip'
 import { AgentLaunchSettingsCatalog } from '../../../components/settings/agents/launch/AgentLaunchSettingsCatalog'
 
 const store = vi.hoisted(
-  (): { settings: unknown; localDetectedAgentIdsByContext: { host: TuiAgent[] | null } } => ({
+  (): {
+    settings: unknown
+    localDetectedAgentIdsByContext: { host: TuiAgent[] | null }
+    runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus>
+  } => ({
     settings: null,
-    localDetectedAgentIdsByContext: { host: ['claude'] }
+    localDetectedAgentIdsByContext: { host: ['claude'] },
+    runtimeStatusByEnvironmentId: new Map()
   })
 )
 const inventory = vi.hoisted(
@@ -70,7 +76,8 @@ vi.mock('@/lib/host-chat-program', async (importOriginal) => ({
       : 'missing'
 }))
 vi.mock('@/runtime/native-chat/agent-catalogs/host-structured-agents', () => ({
-  readHostStructuredAgents: () => [{ agent: 'antigravity', managedRuntime: true }]
+  readHostStructuredAgents: () => [{ agent: 'antigravity', managedRuntime: true }],
+  readHostStructuredAgentsForRuntime: () => [{ agent: 'antigravity', managedRuntime: true }]
 }))
 vi.mock('@/runtime/hosts/installation/managed-runtime-install-status', async (importOriginal) => ({
   ...(await importOriginal<typeof ManagedRuntimeInstallModule>()),

@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
+import { createAgentPickerInventorySource } from '../agent/agent-picker-inventory-source'
+import type * as InventoryModule from '../agent/use-agent-launch-picker-inventory'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_CATALOG } from '@/lib/agent-catalog/agent-catalog'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -42,27 +46,36 @@ vi.mock('../tab-bar/use-new-tab-agent-menu-rows', () => ({
     }
   })
 }))
-vi.mock('../agent/use-agent-launch-picker-inventory', () => ({
-  useAgentLaunchPickerInventory: (_id: unknown, model: { rows: { agent: string }[] }) =>
-    model.rows.map((row) => ({
-      agent: row.agent,
-      label: row.agent,
-      rows: [row],
-      ownerKey: `automation-${row.agent}`,
-      surfaces: ['terminal'],
-      defaultSurface: 'terminal',
-      terminal: { model: 'gpt-5.4', permissionMode: 'ask' },
-      structured: {},
-      arguments: '--base',
-      catalog: {
-        origin: 'probe',
-        fetchedAt: 1,
-        models: [
-          { id: 'gpt-5.4', label: 'Model A', isDefault: true, efforts: [] },
-          { id: 'gpt-5.5', label: 'Model B', isDefault: false, efforts: [] }
-        ]
-      }
-    }))
+vi.mock('../agent/use-agent-launch-picker-inventory', async (importOriginal) => ({
+  ...(await importOriginal<typeof InventoryModule>()),
+  useAgentLaunchPickerInventorySource: (_id: unknown, model: NewTabAgentMenuModel) =>
+    useMemo(
+      () =>
+        createAgentPickerInventorySource(
+          model.state !== 'settled'
+            ? []
+            : model.rows.map((row): AgentPickerEntry => ({
+                agent: row.agent,
+                label: row.agent,
+                rows: [row],
+                ownerKey: `automation-${row.agent}`,
+                surfaces: ['terminal'],
+                defaultSurface: 'terminal',
+                terminal: { model: 'gpt-5.4', permissionMode: 'ask' },
+                structured: {},
+                arguments: '--base',
+                catalog: {
+                  origin: 'probe',
+                  fetchedAt: 1,
+                  models: [
+                    { id: 'gpt-5.4', label: 'Model A', isDefault: true, efforts: [] },
+                    { id: 'gpt-5.5', label: 'Model B', isDefault: false, efforts: [] }
+                  ]
+                }
+              }))
+        ),
+      [model]
+    )
 }))
 
 const DRAFT: AutomationDraft = {

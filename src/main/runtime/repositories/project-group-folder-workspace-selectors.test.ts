@@ -96,10 +96,7 @@ it('discovers CLI models in a registered folder when no repository exists', asyn
     catalogOrigin: 'probe',
     models: [{ id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' }]
   })
-  const result = await createRuntime().discoverRuntimeCommitMessageModels(
-    `id:${WORKSPACE_ID}`,
-    'antigravity'
-  )
+  const result = await createRuntime().discoverTerminalModels(`id:${WORKSPACE_ID}`, 'antigravity')
   expect(result).toMatchObject({ success: true, models: [{ id: 'gemini-3.8-flash-low' }] })
   expect(discovery.env).toHaveBeenCalledWith('antigravity', undefined, { runtime: 'host' })
   expect(discovery.models).toHaveBeenCalledWith('antigravity', {}, undefined, { cwd: FOLDER_PATH })
