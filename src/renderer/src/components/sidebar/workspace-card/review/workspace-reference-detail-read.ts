@@ -25,7 +25,7 @@ function lookup<T>(
 ) {
   return {
     rawEntry: entry,
-    entry: entry && { ...entry, data: entry.data && project(entry.data) },
+    getEntry: () => entry && { ...entry, data: entry.data && project(entry.data) },
     read: async (signal?: AbortSignal) => {
       const value = await read(signal)
       return value && project(value)
