@@ -9,6 +9,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
+import { PlanBillingSection } from '../../../billing/PlanBillingSection'
 
 function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
@@ -127,6 +128,8 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           )}
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </div>
+
+        {connected ? <PlanBillingSection /> : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

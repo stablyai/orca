@@ -25,6 +25,11 @@ import type {
   TransferOrcaProfileProjectArgs,
   TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
+import type {
+  OrcaBillingCheckoutArgs,
+  OrcaBillingOpenResult,
+  OrcaBillingStatusResult
+} from '../../shared/orca-billing'
 
 export type OrcaProfileApi = {
   list: () => Promise<OrcaProfileListResult>
@@ -64,4 +69,10 @@ export type OrcaProfileApi = {
   orgMemberRemove: (
     args: OrcaProfileOrgMemberRemoveArgs
   ) => Promise<OrcaProfileOrgMemberMutationResult>
+  /** Plan & billing for the signed-in account (Orca Cloud billing service). */
+  billingStatus: () => Promise<OrcaBillingStatusResult>
+  /** Opens hosted Stripe Checkout in the browser. */
+  billingOpenCheckout: (args: OrcaBillingCheckoutArgs) => Promise<OrcaBillingOpenResult>
+  /** Opens the Stripe Customer Portal in the browser. */
+  billingOpenPortal: () => Promise<OrcaBillingOpenResult>
 }
