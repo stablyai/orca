@@ -52,12 +52,12 @@ export function sendFederatedControlMail(args: {
   )
   if (refusal) {
     const server = federatedTarget.environment_name
-    // Paired servers cannot continue a finished worker yet; steering a running one still works.
+    // A server that takes follow-ups never gets here for a finished worker: the send starts one.
     const message =
       refusal.code !== 'dispatch_inactive'
         ? refusal.message
         : state && ['succeeded', 'failed', 'stopped', 'abandoned'].includes(state)
-          ? `Dispatch ${dispatchId} finished on ${server}, which cannot take follow-ups for finished workers yet. Start a new worker there with \`orca orchestration worker-start --on ${server}\`.`
+          ? `Dispatch ${dispatchId} finished on ${server}, which ran an Orca too old to continue a finished worker. Start a new worker there with \`orca orchestration worker-start --on ${server}\`, or update Orca on ${server} so later workers there take follow-ups.`
           : `Dispatch ${dispatchId} on ${server} is not confirmed running (${state ?? 'unknown'}), so this message was not sent. Check it with \`orca orchestration worker-show --dispatch ${dispatchId}\` before starting another worker.`
     throw new OrchestrationError(refusal.code, message)
   }

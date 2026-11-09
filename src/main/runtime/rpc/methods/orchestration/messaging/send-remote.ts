@@ -15,6 +15,7 @@ import type { SendParams } from './send-params'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
 import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
+import { relayFinishedRemoteWorkerMail } from './finished-worker-mail'
 
 type SendParamsInput = z.infer<typeof SendParams>
 
@@ -23,6 +24,36 @@ type RemoteAttachment = {
   home_run_id: string
   state: WorkerDispatchState
   protocol_version: number
+}
+
+/** Mail from a worker this host runs for another computer: a working one's goes to its Run home, as does a finished
+ *  one's late mail. Undefined: the sender is no such worker. */
+export async function sendFromRemoteWorker(args: {
+  params: SendParamsInput
+  runtime: OrcaRuntimeService
+  db: OrchestrationDb
+  from: string
+  senderPaneKey: string | undefined
+  processIncarnation: () => string | undefined
+  signal?: AbortSignal
+}) {
+  const { db, senderPaneKey } = args
+  const remoteAttachment = senderPaneKey
+    ? db.findActiveRemoteAttachmentForPane(senderPaneKey)
+    : undefined
+  if (remoteAttachment && senderPaneKey) {
+    return sendRemoteMessage({
+      ...args,
+      senderPaneKey,
+      remoteAttachment,
+      processIncarnation: args.processIncarnation()
+    })
+  }
+  return relayFinishedRemoteWorkerMail(
+    db,
+    { from: args.from, paneKey: senderPaneKey, processIncarnation: args.processIncarnation() },
+    args.params
+  )
 }
 
 export async function sendRemoteMessage(args: {

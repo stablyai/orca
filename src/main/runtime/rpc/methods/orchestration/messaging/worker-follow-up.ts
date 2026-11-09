@@ -6,6 +6,7 @@ import {
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { refusesWorkerFollowUp } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'
 import {
   carryWorkerResumeSession,
   resolveWorkerLineage
@@ -53,7 +54,7 @@ export function planWorkerFollowUp(
     db.getDispatchContextById(dispatchId),
     () => resolveWorkerLineage(db, dispatchId),
     type,
-    (id) => Boolean(db.getFederatedDispatch(id)),
+    (id) => refusesWorkerFollowUp(db.getFederatedDispatch(id)?.protocol_version),
     (id) => Boolean(db.getWorkerDispatch(id))
   )
 }

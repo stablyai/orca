@@ -4,7 +4,8 @@ const RELAY_MAX_DELAY_MS = 30_000
 /** How often a coordinator blocked in `check --wait` re-arms its run's relays, so recovery is seen within this. */
 export const FEDERATION_RELAY_WAIT_REARM_MS = 15_000
 
-export type FederationRelayTickOutcome = 'synced' | 'failed' | 'ended'
+/** `idle`: synced a finished worker that may still send late mail, which is rare and waits the longest. */
+export type FederationRelayTickOutcome = 'synced' | 'idle' | 'failed' | 'ended'
 
 /** Consecutive failures double the wait up to the cap; a failure never ends a relay, since an unreachable host or dispatch can come back. */
 export function federationRelayRetryDelayMs(failures: number): number {
@@ -124,8 +125,12 @@ export class FederationRelayScheduler {
       }
       return
     }
-    chain.failures = outcome === 'synced' ? 0 : chain.failures + 1
-    const delayMs = chain.runAgain ? 0 : federationRelayRetryDelayMs(chain.failures)
+    chain.failures = outcome === 'failed' ? chain.failures + 1 : 0
+    const delayMs = chain.runAgain
+      ? 0
+      : outcome === 'idle'
+        ? RELAY_MAX_DELAY_MS
+        : federationRelayRetryDelayMs(chain.failures)
     chain.runAgain = false
     this.schedule(dispatchId, chain, delayMs)
   }
