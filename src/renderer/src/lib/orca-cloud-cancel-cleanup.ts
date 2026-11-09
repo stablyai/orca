@@ -22,6 +22,8 @@ type Cleanup = {
   pending: number
   failed: boolean
   scope: OrcaCloudCancelScope
+  /** A Try again: anything of this create still up afterwards counts as not deleted. */
+  retry: boolean
   timeout?: ReturnType<typeof setTimeout>
 }
 
@@ -63,12 +65,13 @@ export function trackOrcaCloudCreateStep<T>(creationId: string, step: Promise<T>
 export function beginOrcaCloudCancelCleanup(
   creationId: string,
   steps: readonly CleanupStep[],
-  scope: OrcaCloudCancelScope
+  scope: OrcaCloudCancelScope,
+  retry = false
 ): void {
   if (cleanups.has(creationId)) {
     return
   }
-  const cleanup: Cleanup = { pending: 0, failed: false, scope }
+  const cleanup: Cleanup = { pending: 0, failed: false, scope, retry }
   cleanup.timeout = setTimeout(() => finish(creationId, cleanup, true), CLEANUP_TIMEOUT_MS)
   cleanups.set(creationId, cleanup)
   showOrcaCloudCleanupStartedToast(creationId)
@@ -108,7 +111,12 @@ function finish(creationId: string, cleanup: Cleanup, timedOut: boolean): void {
   }
   cleanups.delete(creationId)
   clearTimeout(cleanup.timeout)
-  void cleanupLeftSandboxRunning(cleanup, timedOut).then((failed) => {
+  // A provision still in flight at the cancel can write its record after it; once every tracked
+  // step has settled, nothing of this create can appear later, so widen the window to now.
+  if (!timedOut) {
+    cleanup.scope = { ...cleanup.scope, canceledAt: Math.max(cleanup.scope.canceledAt, Date.now()) }
+  }
+  void cleanupLeftSandboxRunning(cleanup, timedOut || cleanup.retry).then((failed) => {
     if (failed) {
       showOrcaCloudCleanupFailedToast(creationId, () => retryCleanup(creationId, cleanup.scope))
     } else {
@@ -170,5 +178,5 @@ function retryCleanup(creationId: string, scope: OrcaCloudCancelScope): void {
           )
         ).then((results) => results.every(Boolean))
   )
-  beginOrcaCloudCancelCleanup(creationId, [step], scope)
+  beginOrcaCloudCancelCleanup(creationId, [step], scope, true)
 }
