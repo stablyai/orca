@@ -19,12 +19,14 @@ const READ_LIMIT = 384 * 1024;
 
 interface MediaRecord { bytes: Uint8Array; mime: string; name: string; }
 
+export const NATIVE_DEVICE_METHODS: string[] = ['native.clipboard.read', 'native.clipboard.write',
+  'native.media.pick', 'native.media.read', 'native.media.release', 'native.media.name',
+  'native.audio.start', 'native.audio.read', 'native.audio.stop',
+  'native.speech.act', 'native.image.act', 'native.pdf.view'];
+
 /** Each bridge owns its native resources; handles and microphone never outlive the document. */
 export class NativeDevice {
-  readonly methods: string[] = ['native.clipboard.read', 'native.clipboard.write',
-    'native.media.pick', 'native.media.read', 'native.media.release', 'native.media.name',
-    'native.audio.start', 'native.audio.read', 'native.audio.stop',
-    'native.speech.act', 'native.image.act', 'native.pdf.view'];
+  readonly methods: string[] = NATIVE_DEVICE_METHODS;
   private context: common.UIAbilityContext;
   private speech: NativeSpeech;
   private images: NativeImageActions;

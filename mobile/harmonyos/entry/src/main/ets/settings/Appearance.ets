@@ -19,6 +19,7 @@ export function applyThemeMode(mode: string): void {
   AppStorage.setOrCreate('themeAccent', light ? '#225be3' : '#3276f2');
   AppStorage.setOrCreate('themeLink', light ? '#225be3' : '#3276f2');
   AppStorage.setOrCreate('themeWarning', light ? '#ca8a04' : '#eab308');
+  AppStorage.setOrCreate('themeStatusRed', light ? '#e40014' : '#ff6568');
   if (appearanceListener) { appearanceListener(); }
 }
 export async function loadAppearance(context: common.Context): Promise<void> {

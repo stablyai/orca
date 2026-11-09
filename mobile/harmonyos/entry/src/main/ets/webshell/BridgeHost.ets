@@ -463,11 +463,14 @@ export class BridgeHost {
     return routes.filter((route: BundleRoute): boolean => route.grants.every((grant: string): boolean => this.supportsGrant(grant)));
   }
 
-  routeBlock(pathname: string, manifest: BundleManifest = this.manifest): string {
-    let declared = manifest.routes.some((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname));
-    if (!declared) { return 'desktop'; }
-    return this.servedRoutes(manifest.routes).some((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname))
-      ? '' : 'mobile';
+  static classifyRoute(pathname: string, manifest: BundleManifest, supports: (grant: string) => boolean): string {
+    let declared = manifest.routes.filter((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname));
+    if (declared.length === 0) { return 'desktop'; }
+    return declared.some((route: BundleRoute): boolean => route.grants.every(supports)) ? '' : 'mobile';
+  }
+
+  routeBlock(pathname: string): string {
+    return BridgeHost.classifyRoute(pathname, this.manifest, (grant: string): boolean => this.supportsGrant(grant));
   }
 
   ownsHostArea(pathname: string = this.routePathname): boolean {
@@ -483,15 +486,17 @@ export class BridgeHost {
    * keeps their storage/navigate/verb grants alive on a single Web instance.
    */
   private supportsGrant(grant: string): boolean {
-    if (grant.startsWith('native.')) {
-      return this.nativeMethods.includes(grant) || ['native.storage.read', 'native.store.rows'].includes(grant);
-    }
     if (grant === 'fault') { return this.faultSink !== null; }
     if (grant === 'externalLink') { return this.externalLink !== null; }
     if (grant === 'externalNavigation') { return this.externalNavigationEnabled; }
     if (grant === 'haptics') { return this.haptics !== null; }
     if (grant === 'terminalKeyRail') { return this.railClaimSink !== null && !this.overlayNavigation; }
-    return ['navigate', 'storage', 'rpcEnvelope', 'screencastBinary'].includes(grant);
+    return BridgeHost.supportsCoreGrant(grant, this.nativeMethods);
+  }
+
+  static supportsCoreGrant(grant: string, nativeMethods: string[]): boolean {
+    return ['navigate', 'storage', 'rpcEnvelope', 'screencastBinary', 'native.storage.read', 'native.store.rows'].includes(grant)
+      || nativeMethods.includes(grant);
   }
 
   private routeGrants(pathname: string = this.routePathname): string[] {

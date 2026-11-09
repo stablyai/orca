@@ -55,6 +55,11 @@ export interface CachedWebBundle {
   directory: string;
 }
 
+export interface DesktopBundleStatus {
+  hostStatus: DesktopProtocolFacts;
+  capabilities: string[];
+}
+
 const RANGE_METHOD = 'mobileWeb.bundle.range';
 const CHUNK_METHOD = 'mobileWeb.bundle.chunk';
 const MANIFEST_METHOD = 'mobileWeb.bundle.manifest';
@@ -205,7 +210,7 @@ export class WebBundleFetcher {
     return asset;
   }
 
-  async fetchManifest(): Promise<BundleManifest> {
+  async fetchDesktopStatus(): Promise<DesktopBundleStatus> {
     let status = await this.client.request('status.get', null, 8000);
     if (!(status instanceof RpcSuccess)) { throw new Error('Desktop status unavailable'); }
     let reply = JSON.parse(status.result) as Record<string, Object>;
@@ -220,19 +225,25 @@ export class WebBundleFetcher {
     let advertised = reply['capabilities'];
     let capabilities = Array.isArray(advertised) && (advertised as Object[]).every((value: Object): boolean =>
       typeof value === 'string') ? advertised as string[] : [];
-    let eligibility = bundleCompat.evaluateMobileWebBundleCompat({
-      hostCapabilities: capabilities, hostStatus: hostStatus, manifest: null
-    });
-    if (eligibility.kind === 'blocked') { throw new BundleCompatibilityError('desktop', eligibility.reason ?? ''); }
+    let result: DesktopBundleStatus = { capabilities: capabilities, hostStatus: hostStatus };
+    WebBundleFetcher.requireCompatibility(result, null);
+    return result;
+  }
+
+  async fetchManifest(status?: DesktopBundleStatus): Promise<BundleManifest> {
+    let desktop = status ?? await this.fetchDesktopStatus();
     let manifestReply = await this.requestJson(MANIFEST_METHOD, null);
-    let facts = protocolFacts(manifestFields(manifestReply));
+    WebBundleFetcher.requireCompatibility(desktop, protocolFacts(manifestFields(manifestReply)));
+    return WebBundleFetcher.readManifest(manifestReply);
+  }
+
+  static requireCompatibility(desktop: DesktopBundleStatus, manifest: BundleProtocolFacts | null): void {
     let verdict = bundleCompat.evaluateMobileWebBundleCompat({
-      hostCapabilities: capabilities, hostStatus: hostStatus, manifest: facts
+      hostCapabilities: desktop.capabilities, hostStatus: desktop.hostStatus, manifest: manifest
     });
     if (verdict.kind === 'blocked') {
       throw new BundleCompatibilityError(verdict.side === 'mobile' ? 'workspace' : 'desktop', verdict.reason ?? '');
     }
-    return WebBundleFetcher.readManifest(manifestReply);
   }
 
   private static readManifest(parsed: Object | null): BundleManifest {
@@ -356,7 +367,9 @@ export class WebBundleFetcher {
       // HarmonyOS mkdirSync throws File exists even with recursion — ignore.
     }
     let file = fs.openSync(target, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-    try { fs.writeSync(file.fd, bytes.buffer); }
+    try {
+      if (fs.writeSync(file.fd, bytes.buffer) !== bytes.byteLength) { throw new Error('Incomplete bundle asset write'); }
+    }
     finally { fs.closeSync(file); }
   }
 
@@ -414,6 +427,12 @@ export class WebBundleFetcher {
     try { fs.unlinkSync(pairedBundlePath(context, hostId)); } catch (e) {}
   }
 
+  completedDirectory(manifest: BundleManifest): string | null {
+    let fingerprint = bundleFingerprint(manifest);
+    let directory = bundleDirectory(this.context, manifest, fingerprint);
+    return WebBundleFetcher.isComplete(manifest, directory, fingerprint) ? directory : null;
+  }
+
   async ensureBundle(manifest: BundleManifest, onProgress?: BundleProgress): Promise<string> {
     validateManifest(manifest);
     let fingerprint = bundleFingerprint(manifest);
@@ -453,7 +472,9 @@ export class WebBundleFetcher {
       // ignore — see downloadAsset
     }
     let file = fs.openSync(`${baseDir}/.complete`, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-    try { fs.writeSync(file.fd, fingerprint); } finally { fs.closeSync(file); }
+    try {
+      if (fs.writeSync(file.fd, fingerprint) !== fingerprint.length) { throw new Error('Incomplete bundle marker write'); }
+    } finally { fs.closeSync(file); }
     return baseDir;
   }
 

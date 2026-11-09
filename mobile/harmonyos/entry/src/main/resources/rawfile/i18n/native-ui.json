@@ -4812,5 +4812,23 @@
     "en": "Could not open the link",
     "zh": "无法打开链接",
     "zh-Hant": "無法開啟連結"
+  },
+  "无法加载此桌面的最新工作区，正在显示上次可用版本。": {
+    "en": "Couldn't load the latest workspace from this host. Showing the last version that worked.",
+    "zh": "无法加载此桌面的最新工作区，正在显示上次可用版本。",
+    "zh-Hant": "無法載入此桌面版的最新工作區，正在顯示上次可用的版本。"
+  },
+  "关闭提示": {
+    "en": "Dismiss notice",
+    "zh": "关闭提示",
+    "zh-Hant": "關閉通知",
+    "ko": "알림 닫기",
+    "ja": "通知を閉じる",
+    "es": "Descartar aviso",
+    "fr": "Masquer l'avis",
+    "pt": "Descartar aviso",
+    "ru": "Закрыть сообщение",
+    "tr": "Bildirimi kapat",
+    "de": "Hinweis verwerfen"
   }
 }

@@ -138,6 +138,28 @@ test('cold offline startup can reopen only the verified bundle for this pairing'
   assert.equal(offline.readPairedBundle(context, hostA, 100), null)
 })
 
+test('a downloaded replacement is ready for the next entry while offline still opens the last painted bundle', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-bundle-cache-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const context = { cacheDir: root }
+  const host = 'a'.repeat(32)
+  const first = fetcher(root, 'working page')
+  const working = await first.fetchManifest()
+  const active = await first.ensureBundle(working)
+  first.constructor.rememberPairedBundle(context, host, 100, working)
+
+  const next = fetcher(root, 'new workspace page')
+  const offered = await next.fetchManifest()
+  assert.equal(next.completedDirectory(offered), null)
+  const staged = await next.ensureBundle(offered)
+  assert.equal(next.completedDirectory(offered), staged)
+  assert.notEqual(staged, active)
+  assert.equal(next.constructor.readPairedBundle(context, host, 100).directory, active)
+  fs.unlinkSync(path.join(staged, 'index.html'))
+  assert.equal(next.completedDirectory(offered), null)
+  assert.equal(next.constructor.readPairedBundle(context, host, 100).directory, active)
+})
+
 test('compatibility distinguishes desktop updates, app updates and stale workspace bundles', async () => {
   let requestedManifest = false
   const noBundle = fetcher('', '', {
