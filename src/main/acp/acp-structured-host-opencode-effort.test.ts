@@ -132,7 +132,7 @@ it.each(['idle', 'busy', 'resting'] as const)(
         const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
         const prompt = framesOf(rig.rig.child(), 'session/prompt').at(-1)!
         rig.rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
-        await waitFor(() => expect(journal.runningTurn()).toBeNull())
+        await waitFor(async () => expect(await journal.reads.runningTurn()).toBeNull())
         await rig.rig.settle()
         await rig.host.flushStreamedEvents(SESSION)
       }

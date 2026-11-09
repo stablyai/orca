@@ -1,3 +1,7 @@
+import {
+  readTestJournalSnapshot,
+  readTestJournalItems
+} from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -32,8 +36,8 @@ function journal() {
   return open
 }
 
-function stopEvents(): JournalStopEvent[] {
-  const mark = journal().stopMarks.latest()
+async function stopEvents(): Promise<JournalStopEvent[]> {
+  const mark = await journal().stopMarks.latest()
   return mark ? [mark.event] : []
 }
 
@@ -62,13 +66,11 @@ describe("a Stop's event", () => {
     rig.cancelTurn.mockImplementationOnce(() => interrupt.promise)
     const stopped = rig.stop()
     try {
-      await eventually(() =>
+      await eventually(async () =>
         expect(
-          journal()
-            .snapshot()
-            .items.filter(
-              (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
-            )
+          (await readTestJournalSnapshot(journal())).items.filter(
+            (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
+          )
         ).toHaveLength(1)
       )
       expect(rig.cancelTurn).toHaveBeenCalledOnce()
@@ -77,11 +79,9 @@ describe("a Stop's event", () => {
       await stopped
     }
     expect(
-      journal()
-        .snapshot()
-        .items.filter(
-          (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
-        )
+      (await readTestJournalItems(journal())).filter(
+        (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
+      )
     ).toHaveLength(1)
   })
 
@@ -91,7 +91,7 @@ describe("a Stop's event", () => {
     await turnRow('turn-1', 'running')
     let atInterrupt: JournalStopEvent[] = []
     rig.cancelTurn.mockImplementationOnce(async () => {
-      atInterrupt = stopEvents()
+      atInterrupt = await stopEvents()
       return { cancelled: true }
     })
     const fields = { turnId: 'turn-1' }

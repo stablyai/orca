@@ -174,9 +174,10 @@ export async function createReceivingCallerFixture() {
   }
   const send = async (text: string, body: AgentJournalMessageItem = hostTestMessage(text)) => {
     const id = await accept(text, body)
-    await vi.waitFor(() =>
+    await vi.waitFor(async () =>
       expect(
-        rig.host.collaboratorsForTests().sessions.get(PARENT)?.journal.submission(id)?.dispatchState
+        (await rig.host.collaboratorsForTests().sessions.get(PARENT)?.journal.reads.submission(id))
+          ?.dispatchState
       ).toBe('accepted')
     )
     return id

@@ -2,8 +2,6 @@
 export type AcpSavedSessionReads = {
   /** Whether any saved turn belongs to the provider session with this native id. */
   hasProviderTurn(sessionId: string, nativeId: string): Promise<boolean>
-  /** The subset of these item IDs the chat has saved. */
-  savedItemIds(sessionId: string, itemIds: readonly string[]): Promise<ReadonlySet<string>>
 }
 
 /** Unreadable journals cannot prove no exchange. */

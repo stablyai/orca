@@ -3,9 +3,11 @@
 
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
 
-/** The chat's journal, which identifies the conversation for as long as it is held. */
-type HandoverJournal = object
+/** Live handles and finite recovery snapshots identify their own handover windows. */
+type HandoverJournal = AgentSessionJournal | Pick<UnopenedSendJournal, 'snapshot' | 'submission'>
 
 type HandoverInput = {
   owner: () => void
@@ -174,7 +176,7 @@ export function beginStructuredAgentSessionHandover(
 
 /** Finite policy snapshots retain their synchronous membership check. Live handles read it in-worker. */
 function hasSubmissionSnapshot(
-  journal: object
-): journal is { submission: (id: string) => AgentJournalSubmission | undefined } {
+  journal: HandoverJournal
+): journal is HandoverJournal & { submission: (id: string) => AgentJournalSubmission | undefined } {
   return 'submission' in journal && typeof journal.submission === 'function'
 }

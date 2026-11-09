@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { openTestChats } from './structured-agent-session-open-test-chats.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -51,8 +52,8 @@ async function exitWithUnwrittenSettlement(
       throw new Error('disk full')
     }
   }
-  const settleDead = open.journal.settleDeadGeneration
-  const settleStale = open.journal.settleStaleState
+  const settleDead = open.journal.settleDeadGeneration.bind(open.journal)
+  const settleStale = open.journal.settleStaleState.bind(open.journal)
   vi.spyOn(open.journal, 'settleDeadGeneration').mockImplementation(async (input) => {
     refuse()
     return settleDead(input)
@@ -80,7 +81,7 @@ async function exitWithUnwrittenSettlement(
 }
 
 async function workingTurnState(): Promise<string | undefined> {
-  const items = (await rig.host.journalSnapshot(SESSION)).items
+  const items = (await readTestHostJournal(rig.host, SESSION)).items
   return items
     .map((item) => readAgentJournalTurn(item.body))
     .find((turn) => turn?.turnId === 'working')?.state
@@ -92,7 +93,7 @@ describe('a turn its gone agent left running', () => {
 
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     expect(await workingTurnState()).toBe('interrupted')
-    const { items } = await rig.host.journalSnapshot(SESSION)
+    const { items } = await readTestHostJournal(rig.host, SESSION)
     expect(JSON.stringify(items)).toContain(
       'Codex stopped while this response was in progress. You can continue in this conversation.'
     )
@@ -111,8 +112,10 @@ describe('a turn its gone agent left running', () => {
 
     expect(await workingTurnState()).toBe('interrupted')
     // Internal death diagnostics must not reach transcript readers.
-    expect(JSON.stringify(reader.events)).toContain(
-      'Codex stopped while this response was in progress. You can continue in this conversation.'
+    await vi.waitFor(() =>
+      expect(JSON.stringify(reader.events)).toContain(
+        'Codex stopped while this response was in progress. You can continue in this conversation.'
+      )
     )
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 // Script only the CLI; verify self-exit attribution through the production runtime/adapter/store/host.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -54,7 +55,7 @@ describe('a started Claude CLI that exits while a response is in progress', () =
 
     await vi.waitFor(async () =>
       expect(
-        (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+        (await readTestHostJournal(host, SESSION)).items.flatMap((item) =>
           item.body.kind === 'status' && item.body.failure
             ? [{ text: item.body.text, kind: item.body.failure.kind }]
             : []

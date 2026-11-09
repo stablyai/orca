@@ -268,3 +268,93 @@ it('uses the visible named opener to preserve historical replay instead of settl
     endedAs: 'interrupted'
   })
 })
+
+it('settles dead and older sends while retaining a continuing handover', async () => {
+  const f = domainLifecycleFixture(cleanups)
+  for (const [id, fence] of [
+    ['old', 1],
+    ['exited', 2],
+    ['continuing', 2]
+  ] as const) {
+    await f.run({
+      kind: 'submission',
+      input: {
+        clientMessageId: id,
+        payloadFingerprint: id,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] },
+        fence
+      }
+    })
+  }
+  await f.run({
+    kind: 'dead-generation-settle',
+    input: {
+      sessionId: 'chat',
+      fence: 3,
+      below: 2,
+      deathEvidence: null,
+      exit: {
+        ownerFence: 2,
+        settlementId: 'exit',
+        verdict: { state: 'interrupted', completedAt: 800 },
+        pendingSubmissionReason: 'provider_exited',
+        showUnexpectedExitOutcome: false
+      },
+      continuingInputs: ['continuing'],
+      finalizingInputs: []
+    }
+  })
+  const entries = f.db
+    .prepare(
+      'SELECT message_id,dispatch_state FROM journal_submission_attempts WHERE current=1 ORDER BY ordinal'
+    )
+    .all()
+  expect(entries).toEqual([
+    { message_id: 'old', dispatch_state: 'unknown' },
+    { message_id: 'exited', dispatch_state: 'unknown' },
+    { message_id: 'continuing', dispatch_state: 'pending' }
+  ])
+})
+
+it('keeps a continuing send pending and avoids an exit notice for an owned finalizer', async () => {
+  const f = domainLifecycleFixture(cleanups)
+  for (const id of ['continuing', 'own-finalizer']) {
+    await f.run({
+      kind: 'submission',
+      input: {
+        clientMessageId: id,
+        payloadFingerprint: id,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] },
+        fence: 1
+      }
+    })
+  }
+  const settled = await f.run({
+    kind: 'dead-generation-settle',
+    input: {
+      sessionId: 'chat',
+      fence: 2,
+      below: 1,
+      deathEvidence: null,
+      exit: {
+        ownerFence: 1,
+        settlementId: 'exit',
+        verdict: { state: 'unverifiable' },
+        pendingSubmissionReason: 'provider_exited'
+      },
+      continuingInputs: ['continuing'],
+      finalizingInputs: [{ clientMessageId: 'own-finalizer', settlementOwner: true }]
+    }
+  })
+  expect(
+    f.db
+      .prepare(
+        'SELECT message_id,dispatch_state FROM journal_submission_attempts WHERE current=1 ORDER BY ordinal'
+      )
+      .all()
+  ).toEqual([
+    { message_id: 'continuing', dispatch_state: 'pending' },
+    { message_id: 'own-finalizer', dispatch_state: 'unknown' }
+  ])
+  expect(settled.publication?.items).toEqual([])
+})

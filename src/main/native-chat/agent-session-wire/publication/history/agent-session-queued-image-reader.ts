@@ -7,16 +7,14 @@ import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-ses
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { compareAgentJournalItems } from '../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import type { QueuedMessageRow } from '../../../agent-session-journal/queued-messages/queued-message-table'
 import {
   agentSessionPublishedWorkFields,
   type AgentSessionPublishedWork
 } from '../../observations/agent-session-published-work'
 import { boundedFrameItem } from './agent-session-bounded-frame-item'
 import { agentJournalItemForWire } from './agent-session-item-wire-form'
-import {
-  readPublishedQueuedMessages,
-  type QueuePublication
-} from '../../delivery/structured-agent-session-queued-publication'
+import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 
 export const queuedCardHoldsImage = (card: Pick<AgentSessionQueuedMessage, 'body'>): boolean =>
   card.body.blocks.some((block) => block.type === 'image-ref')
@@ -32,7 +30,8 @@ const relations = new WeakMap<
 >()
 async function sourceIds(
   journal: AgentSessionJournal,
-  cards: readonly Pick<AgentSessionQueuedMessage, 'body' | 'messageId'>[]
+  cards: readonly Pick<AgentSessionQueuedMessage, 'body' | 'messageId'>[],
+  queueRows?: readonly QueuedMessageRow[]
 ) {
   const cached = relations.get(cards)
   if (cached) {
@@ -43,7 +42,7 @@ async function sourceIds(
   const fingerprints = new Map<string, string>()
   const imageCards = cards.filter(queuedCardHoldsImage)
   const rows = new Map(
-    (imageCards.length ? await journal.queuedMessages.list() : []).map((row) => [
+    (imageCards.length ? (queueRows ?? (await journal.queuedMessages.list())) : []).map((row) => [
       row.messageId,
       row
     ])
@@ -91,92 +90,77 @@ function sourcePresentation(send: AgentJournalSubmission, active: boolean) {
 }
 
 async function queuedImageInputs(journal: AgentSessionJournal, ids: readonly string[]) {
-  const inputs = new Map<
-    string,
-    { submission: AgentJournalSubmission | undefined; ordinal: number }
-  >()
+  const inputs = new Map<string, { submission: AgentJournalSubmission | undefined }>()
   for (let start = 0; start < ids.length; start += 128) {
     const reached = ids.slice(start, start + 128)
     const { results } = await journal.reads.input({
       kind: 'batch',
-      reads: reached.flatMap((id) => [
-        { kind: 'input-for-item' as const, itemId: agentJournalSubmissionKey(id) },
-        { kind: 'input-ordinal' as const, clientMessageId: id }
-      ])
+      reads: reached.map((id) => ({
+        kind: 'input-for-item' as const,
+        itemId: agentJournalSubmissionKey(id)
+      }))
     })
     reached.forEach((id, index) => {
-      const send = results[index * 2]
-      const order = results[index * 2 + 1]
+      const send = results[index]
       inputs.set(id, {
-        submission: 'submission' in send ? send.submission : undefined,
-        ordinal: 'ordinal' in order ? order.ordinal : Infinity
+        submission: 'submission' in send ? send.submission : undefined
       })
     })
   }
   return inputs
 }
 
-export async function queuedImageReaderSnapshot(
+export function queuedImageReaderSnapshot(
   journal: AgentSessionJournal,
   snapshot?: AgentJournalSnapshot,
-  touched?: ReadonlySet<string>
-): Promise<AgentJournalSnapshot> {
-  const cards = await readPublishedQueuedMessages(journal)
-  return journal.readInOrder(async () => {
-    const raw = snapshot ?? {
+  _touched?: ReadonlySet<string>
+): AgentJournalSnapshot {
+  // SQL has already selected membership and presented submissions within the ordered read.
+  return (
+    snapshot ?? {
       sessionId: journal.identity.sessionId,
       cursor: journal.cursor(),
       items: [],
       submissions: []
     }
-    const { ids, imageIds } = await sourceIds(journal, cards)
-    if (imageIds.size === 0) {
-      return raw
-    }
-    const present = (send: AgentJournalSubmission) =>
-      ids.has(send.clientMessageId) || imageIds.has(send.queuedMessageId ?? '')
-        ? sourcePresentation(send, ids.get(send.clientMessageId) === true)
-        : send
-    const reached = [...ids]
-      .filter(
-        ([id, unchanged]) => unchanged && (!touched || touched.has(agentJournalSubmissionKey(id)))
-      )
-      .map(([id]) => id)
-    const inputs = await queuedImageInputs(journal, [
-      ...new Set([...reached, ...raw.submissions.map((send) => send.clientMessageId)])
+  )
+}
+
+export type QueuedImageHistoryPolicy = {
+  ids: readonly (readonly [string, boolean])[]
+  imageIds: readonly string[]
+  links?: readonly (readonly [string, readonly string[]])[]
+}
+
+/** Held read: its caller owns the chat lane through history materialization and presentation. */
+export async function heldQueuedImageHistoryPolicy(
+  journal: AgentSessionJournal
+): Promise<QueuedImageHistoryPolicy> {
+  const rows = await journal.queuedMessages.list()
+  const cards = rows.filter((row) => row.state === 'waiting' || row.state === 'returned')
+  const { ids, imageIds } = await sourceIds(journal, cards, rows)
+  return {
+    ids: [...ids],
+    imageIds: [...imageIds],
+    links: cards.map((row) => [
+      row.messageId,
+      [
+        row.messageId,
+        ...new Set(
+          [row.recovers, row.consumedAs].filter((id): id is string => typeof id === 'string')
+        )
+      ]
     ])
-    const saved = new Set(await journal.reads.savedItemIds(reached.map(agentJournalSubmissionKey)))
-    const retainedIds = reached.filter(
-      (id) =>
-        inputs.get(id)?.submission?.dispatchState !== 'accepted' &&
-        !saved.has(agentJournalSubmissionKey(id))
-    )
-    const retained = retainedIds.length ? await journal.reads.historySourceItems(retainedIds) : []
-    const submissions = new Map(
-      raw.submissions.map((send) => [send.clientMessageId, present(send)])
-    )
-    for (const item of retained) {
-      const id = retainedIds.find((id) => agentJournalSubmissionKey(id) === item.itemId)
-      const send = id && inputs.get(id)?.submission
-      if (send) {
-        submissions.set(send.clientMessageId, present(send))
-      }
-    }
-    return {
-      ...raw,
-      items: retained.length
-        ? [...raw.items, ...retained].sort(compareAgentJournalItems)
-        : raw.items,
-      submissions: retained.length
-        ? [...submissions.values()].sort(
-            (a, b) =>
-              a.submittedAt - b.submittedAt ||
-              (inputs.get(a.clientMessageId)?.ordinal ?? Infinity) -
-                (inputs.get(b.clientMessageId)?.ordinal ?? Infinity)
-          )
-        : raw.submissions.map(present)
-    }
-  })
+  }
+}
+
+export function queuedImageSubmissionPresenter(policy: QueuedImageHistoryPolicy) {
+  const ids = new Map(policy.ids)
+  const imageIds = new Set(policy.imageIds)
+  return (send: AgentJournalSubmission): AgentJournalSubmission =>
+    ids.has(send.clientMessageId) || imageIds.has(send.queuedMessageId ?? '')
+      ? sourcePresentation(send, ids.get(send.clientMessageId) === true)
+      : send
 }
 
 /** Only queue/source semantic changes correct rows; work and pause never replay the population. */
@@ -189,13 +173,17 @@ export async function queuedImageReaderEvent(
 ): Promise<AgentSessionSubscribeEvent> {
   if (
     !current ||
-    event.type !== 'batch' ||
-    (previous?.queuedMessages === current.queuedMessages && event.batch.submissions.length === 0)
+    (event.type === 'batch' &&
+      previous?.queuedMessages === current.queuedMessages &&
+      event.batch.submissions.length === 0)
   ) {
     return event
   }
   return journal.readInOrder(async () => {
     const { ids: now, imageIds, fingerprints } = await sourceIds(journal, current.queuedMessages)
+    if (event.type !== 'batch') {
+      return event
+    }
     const prior = await sourceIds(journal, previous?.queuedMessages ?? [])
     const before = prior.ids
     if (
@@ -270,7 +258,7 @@ export async function queuedImageReaderEvent(
     }
     return {
       ...event,
-      ...(work ? await agentSessionPublishedWorkFields(journal, work) : {}),
+      ...(work ? agentSessionPublishedWorkFields(journal, work) : {}),
       batch: {
         ...event.batch,
         items: [...items.values()].sort(compareAgentJournalItems),

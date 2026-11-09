@@ -1,5 +1,9 @@
 import type * as RuntimeEnvironmentStore from '../../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import '../../unused-default-rpc-methods.test-fixture'
+import {
+  withTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -84,11 +88,7 @@ import {
   store as runtimeStore,
   TEST_WORKTREE_ID
 } from '../../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
-import {
-  openTestJournalHostDatabase,
-  closeTestJournalHostDatabase
-} from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { runtimeStub, setAgentLaunchRecordStore } from './agent-launch.test-fixture'
 import { RuntimeWorktreeLineageController } from '../../../workspaces/lineage/runtime-worktree-lineage-controller'
 import type { RuntimeManagedWorktreeCreateArgs } from '../../../workspaces/creation/runtime-managed-worktree-create-types'
@@ -369,9 +369,11 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
             expect(output.error.message).toHaveLength(637)
             expect(host.publish.mock.calls.length).toBe(effectBefore[2])
           }
-          const row = openTestJournalHostDatabase(stateDirectory)
-            .db.prepare('SELECT row_json FROM agent_session_operations ORDER BY rowid DESC LIMIT 1')
-            .get()
+          const row = await withTestAgentSessionDatabase(stateDirectory, (db) =>
+            db
+              .prepare('SELECT row_json FROM agent_session_operations ORDER BY rowid DESC LIMIT 1')
+              .get()
+          )
           expect(typeof row?.row_json).toBe('string')
           const rowJson = String(row!.row_json)
           expect(JSON.parse(rowJson).outcome.status).toBe(valid ? 'succeeded' : 'failed')
@@ -441,10 +443,12 @@ describe('CLI cwd resource frames, managed receipts and raw-path controls', () =
           const { _meta: _reopenedMeta, ...replyBody } = JSON.parse(replies.at(-1)!)
           expect(replyBody).toEqual(originals.get(operationId)!.reply)
           expect(settledExecution.at(-1)).toEqual(Array(8).fill(0))
-          const persisted = openTestJournalHostDatabase(stateDirectory)
-            .db.prepare('SELECT row_json FROM agent_session_operations')
-            .all()
-            .map((row) => String(row.row_json))
+          const persisted = await withTestAgentSessionDatabase(stateDirectory, (db) =>
+            db
+              .prepare('SELECT row_json FROM agent_session_operations')
+              .all()
+              .map((row) => String(row.row_json))
+          )
           expect(persisted).toContain(originals.get(operationId)!.row)
           expect(result.ok).toBe(index === 0)
           if (index === 1) {

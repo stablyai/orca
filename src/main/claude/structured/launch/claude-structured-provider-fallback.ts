@@ -144,6 +144,7 @@ export function createClaudeProviderFrameFallback(
     /** A Stop at the write position records `stopped` instead; null writes nothing. */
     stopReading?: {
       check: ClaudeStopCheck
+      ran?: null
       stopped: { options?: UnhandledProviderFrameJournalItemOptions } | null
     }
   ) => boolean
@@ -215,7 +216,7 @@ export function createClaudeProviderFrameFallback(
           )
         const stopped = plain ? { identity, body: plain.body } : null
         const readings = {
-          ran: { kind: 'literal' as const, identity, body },
+          ran: stopReading.ran === null ? null : { kind: 'literal' as const, identity, body },
           stopped: stopped && { kind: 'literal' as const, ...stopped },
           reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body) * 2
         }

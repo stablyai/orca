@@ -110,6 +110,15 @@ export function createQueuedRigProvider(
       }
     },
     dispatch,
+    captureMessageSteeringInputs: () => ({
+      kind: 'codex',
+      compiler: {
+        active: reported(),
+        defaults: reported(),
+        models: [],
+        listedServiceTiers: []
+      }
+    }),
     closeSession,
     releaseAcquisition: vi.fn(async () => true),
     compact,

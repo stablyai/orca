@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +12,7 @@ import {
 } from '../../../../../shared/native-chat/native-chat-types'
 import { writeClaudeBackgroundTaskRow } from '../../../../claude/claude-background-task-row-journal'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { StructuredAgentSessionCurrentWork } from '../structured-agent-session-current-work'
+import { heldStructuredAgentSessionCurrentWork } from '../structured-agent-session-host-current-work'
 import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../../host/testing/structured-agent-session-logger.test-fixture'
 import { settleStaleStructuredAgentSessionState } from '../../termination/structured-agent-session-stale-state-settlement'
@@ -64,7 +65,13 @@ it('keeps a resumed subagent and background task working when the run that creat
   const rows = new StructuredAgentSessionSubagentRows({
     journal: () => journal,
     fence: () => fence,
-    currentWork: (_sessionId, open) => new StructuredAgentSessionCurrentWork(open, fence),
+    currentWork: (sessionId, open) =>
+      heldStructuredAgentSessionCurrentWork(
+        { getConversation: () => null, replacedRuntime: () => undefined },
+        sessionId,
+        open,
+        undefined
+      ),
     readChildWork: () => [subagent],
     onWriteFailed: (_sessionId, error) => {
       throw error
@@ -116,24 +123,27 @@ it('keeps a resumed subagent and background task working when the run that creat
   await run()
   await settleRunOne()
   // Epoch rebuild preserves both creation and execution provenance.
-  await journal.replaceEpochItems(
-    'handle_forked',
-    2,
-    journal.snapshot().items.map((item) => {
-      const { ownerFence, executionOwner } = journal.itemProvenance(item.itemId)
-      return {
-        identity: parseAgentJournalItemKey(item.itemId)!,
-        body: journal.itemBody(item.itemId)!,
-        ownerFence: ownerFence ?? 0,
-        ...(executionOwner === undefined ? {} : { executionOwner })
-      }
-    })
-  )
+  await journal.write({
+    kind: 'epoch-replace',
+    reason: 'handle_forked',
+    fence: 2,
+    items: await Promise.all(
+      (await readTestJournalItems(journal)).map(async (item) => {
+        const { ownerFence, executionOwner } = await journal.reads.itemProvenance(item.itemId)
+        return {
+          identity: parseAgentJournalItemKey(item.itemId)!,
+          body: (await journal.reads.itemBody(item.itemId))!,
+          ownerFence: ownerFence ?? 0,
+          ...(executionOwner === undefined ? {} : { executionOwner })
+        }
+      })
+    )
+  })
   await settleRunOne()
 
-  const blocks = journal
-    .snapshot()
-    .items.flatMap((item) => (item.body.kind === 'message' ? item.body.blocks : []))
+  const blocks = (await readTestJournalItems(journal)).flatMap((item) =>
+    item.body.kind === 'message' ? item.body.blocks : []
+  )
   expect(blocks.filter(isSubagentBlock).map((block) => block.state)).toEqual(['working'])
   expect(blocks.filter(isBackgroundTaskBlock).map((block) => block.state)).toEqual(['working'])
 })

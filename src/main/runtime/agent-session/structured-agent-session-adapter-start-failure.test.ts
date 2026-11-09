@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { claudeScriptedChild } from '../../claude/claude-scripted-child.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -14,10 +15,8 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
 import { codexScriptedChild } from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
 import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 
 let directory: string | undefined
 let operations = 0
@@ -106,7 +105,7 @@ async function failedStart(
   }
   const submission = async () => {
     await host.flushStreamedEvents(SESSION)
-    return (await host.journalSnapshot(SESSION)).submissions.find(
+    return (await readTestHostJournal(host, SESSION)).submissions.find(
       (entry) => entry.clientMessageId === sent.value.clientMessageId
     )
   }
@@ -114,7 +113,7 @@ async function failedStart(
     timeout: 5_000
   })
   const settled = await submission()
-  const snapshot = await host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(host, SESSION)
   const failureKind = agent === 'codex' && !unanswered ? 'startFailed' : 'providerStartFailed'
   expect(readWholeAgentSessionFailureFact(settled?.rejection)).toMatchObject({
     kind: failureKind,

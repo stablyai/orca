@@ -145,9 +145,7 @@ function createAcpAdapter(
     const { readers } = context.journalDatabase
     const savedSession: AcpSavedSessionReads = {
       hasProviderTurn: (sessionId, nativeId) =>
-        journalSqlReads(readers, sessionId).hasProviderTurn(nativeId),
-      savedItemIds: async (sessionId, itemIds) =>
-        new Set(await journalSqlReads(readers, sessionId).savedItemIds(itemIds))
+        journalSqlReads(readers, sessionId).hasProviderTurn(nativeId)
     }
     const definition = acpStructuredAgentDefinition(spec)
     const sources = structuredAgentLaunchSources(context)

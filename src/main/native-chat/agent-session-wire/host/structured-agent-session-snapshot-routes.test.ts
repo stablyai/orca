@@ -47,7 +47,7 @@ it("holds reading across an epoch replacement and resumes only on the new epoch'
     }
   )
   const routes = new StructuredAgentSessionSnapshotRoutes(testEventSinkLogging().logger)
-  journal.context.replacements.observe((replaced) =>
+  journal.epochReplacements.observe((replaced) =>
     routes.replacing('orca-session', journal, replaced)
   )
   const reading = { pauseReading: vi.fn(), resumeReading: vi.fn() }
@@ -68,7 +68,12 @@ it("holds reading across an epoch replacement and resumes only on the new epoch'
   expect(live.sink.journalSnapshot?.()).toEqual(saved)
   retired.close()
 
-  const replaced = journal.replaceEpochItems('handle_forked', 0, [])
+  const replaced = journal.write({
+    kind: 'epoch-replace',
+    reason: 'handle_forked',
+    fence: 0,
+    items: []
+  })
   // Reading pauses in the tick the replacement reaches the writer.
   expect(reading.pauseReading).toHaveBeenCalledTimes(1)
   await replaced

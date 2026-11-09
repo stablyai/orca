@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { structuredAgentSessionHandingOver } from '../native-chat/agent-session-wire/delivery/structured-agent-session-handing-over'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
@@ -40,7 +41,11 @@ describe('a Grok model pick Grok never answers during send', () => {
     expect(await invalid).toMatchObject({ ok: false })
     expect(await host.cancel(CALLER, request)).toMatchObject({ ok: true })
     expect(
-      host.collaboratorsForTests().sessions.get(SESSION)?.journal.submissions()[0]?.dispatchState
+      (
+        await readTestJournalSubmissions(
+          host.collaboratorsForTests().sessions.get(SESSION)!.journal
+        )
+      )[0]?.dispatchState
     ).toBe('rejected')
     expect(
       (await rows()).filter(
@@ -79,14 +84,14 @@ describe('a Grok model pick Grok never answers during send', () => {
     rig.child().agent.reply(frame!, { configOptions: GROK_CONFIG_OPTIONS })
     await rig.settle()
     await host.flushStreamedEvents(SESSION)
-    await journal['queue'].drain()
+    await journal.readInOrder(() => undefined)
     expect(framesOf(rig.child(), 'session/prompt')).toEqual([])
     expect(original).toBeDefined()
     expect(structuredAgentSessionHandingOver(journal).has(id)).toBe(false)
-    expect(journal.queuedMessages.list()).toMatchObject([
+    expect(await journal.queuedMessages.list()).toMatchObject([
       { messageId: id, body: { blocks: [{ text: 'hello' }] } }
     ])
-    expect(journal.submission(id)).toMatchObject({
+    expect(await journal.reads.submission(id)).toMatchObject({
       keptAsQueuedMessageId: id,
       rejection: { kind: 'chatClosed' }
     })
@@ -107,9 +112,13 @@ describe('a Grok model pick Grok never answers during send', () => {
     const child = rig.child()
     const [old] = framesOf(child, 'session/set_config_option')
     await vi.advanceTimersByTimeAsync(100)
-    await waitFor(() =>
+    await waitFor(async () =>
       expect(
-        host.collaboratorsForTests().sessions.get(SESSION)?.journal.submissions()[0]?.dispatchState
+        (
+          await readTestJournalSubmissions(
+            host.collaboratorsForTests().sessions.get(SESSION)!.journal
+          )
+        )[0]?.dispatchState
       ).toBe('rejected')
     )
     vi.useRealTimers()
@@ -126,7 +135,11 @@ describe('a Grok model pick Grok never answers during send', () => {
     await rig.settle()
     expect(framesOf(child, 'session/prompt')).toHaveLength(0)
     expect(
-      host.collaboratorsForTests().sessions.get(SESSION)?.journal.submissions()[0]?.dispatchState
+      (
+        await readTestJournalSubmissions(
+          host.collaboratorsForTests().sessions.get(SESSION)!.journal
+        )
+      )[0]?.dispatchState
     ).toBe('rejected')
     expect((await host.readOptions(SESSION)).current.model).toBe(savedModel)
     expect(store.getRecord(SESSION)?.options?.model).toBe(savedModel)

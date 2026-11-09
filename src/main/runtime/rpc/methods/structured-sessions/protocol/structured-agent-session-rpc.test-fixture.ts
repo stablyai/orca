@@ -1,4 +1,4 @@
-import { statusFeed } from './structured-agent-session-rpc-status.test-fixture'
+import { statusFeed, prepareStatusFeed } from './structured-agent-session-rpc-status.test-fixture'
 
 import {
   SESSION,
@@ -214,6 +214,9 @@ export async function openStream(
   runtimeOverrides: Record<string, unknown> = {},
   methods?: readonly RpcAnyMethodDeclaration[]
 ): Promise<RpcResponse[]> {
+  if (method === 'agentSession.subscribeStatus') {
+    await prepareStatusFeed()
+  }
   const replies: RpcResponse[] = []
   await dispatcher(runtimeOverrides, methods).dispatchStreaming(
     request(method, params),

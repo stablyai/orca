@@ -1,7 +1,8 @@
+import { readTestJournalSnapshot } from '../../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemIdentity } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../../../../shared/agent-session/agent-session-background-task-wire'
@@ -9,18 +10,13 @@ import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../../../shared
 import { mobileE2EETextPayloadAdmissionBytes } from '../../../../../runtime/rpc/mobile-e2ee-outbound-admission'
 import {
   type AgentJournalItemBody,
-  AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+  AGENT_JOURNAL_THREAD_SCOPE
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalRow } from '../../../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
-import {
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase,
-  insertTestJournalRow
-} from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { readAgentSessionHistory } from '../../history/agent-session-history-page'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
+import { withTestAgentSessionDatabase } from '../../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'wire-admission-session'
@@ -57,9 +53,9 @@ afterEach(async () => {
 
 describe('structured agent-session outbound admission', () => {
   it('admits bounded initial, background-task, epoch, compaction, and history recovery frames', async () => {
-    expect(Buffer.byteLength(JSON.stringify(journal.snapshot()), 'utf8')).toBeGreaterThan(
-      REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-    )
+    expect(
+      Buffer.byteLength(JSON.stringify(await readTestJournalSnapshot(journal)), 'utf8')
+    ).toBeGreaterThan(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES)
 
     let roster: AgentSessionBackgroundTaskState | null = null
     const subscribers = new AgentSessionSubscribers({ readBackgroundTasks: () => roster })
@@ -71,14 +67,17 @@ describe('structured agent-session outbound admission', () => {
       fence: 1,
       emit: (event) => initial.push(event)
     })
-    expect(initial).toHaveLength(1)
+    await vi.waitFor(() => expect(initial).toHaveLength(1))
     expect(initial[0]).toMatchObject({ type: 'snapshot', page: { hasOlder: true } })
     expectAdmitted(initial[0])
 
     roster = { state: 'monitoring' }
     subscribers.republishBackgroundTasks(SESSION, 2)
-    subscribers.snapshot(SESSION, journal, 2)
-    expect(initial.slice(1)).toHaveLength(2)
+    await vi.waitFor(() =>
+      expect(initial.slice(1)).toContainEqual(
+        expect.objectContaining({ backgroundTasks: { state: 'monitoring' } })
+      )
+    )
     initial.slice(1).forEach(expectAdmitted)
 
     const epochReset: AgentSessionSubscribeEvent[] = []
@@ -90,9 +89,10 @@ describe('structured agent-session outbound admission', () => {
       cursor: { epoch: 'retired-epoch', sequence: 1 },
       emit: (event) => epochReset.push(event)
     })
+    await vi.waitFor(() => expect(epochReset.length).toBeGreaterThan(0))
     expect(epochReset[0]).toMatchObject({ type: 'reset', reset: 'epoch_changed' })
     expectAdmitted(epochReset[0])
-    const epochHistory = readAgentSessionHistory(journal, {
+    const epochHistory = await readAgentSessionHistory(journal, {
       sessionId: SESSION,
       direction: 'before',
       cursor: { epoch: 'retired-epoch', sequence: 1 }
@@ -103,7 +103,7 @@ describe('structured agent-session outbound admission', () => {
     // Epochs no longer shed rows; exercise cursor_compacted via an over-budget legacy page.
     const cursorBefore = journal.cursor()
     const overBudget = await reopenWithOversizedRemoval(cursorBefore.sequence)
-    const history = readAgentSessionHistory(overBudget, {
+    const history = await readAgentSessionHistory(overBudget, {
       sessionId: SESSION,
       direction: 'after',
       cursor: cursorBefore
@@ -114,21 +114,21 @@ describe('structured agent-session outbound admission', () => {
     dispose()
   })
 
-  it('replaces an over-budget catch-up with one admitted newest page', () => {
+  it('replaces an over-budget catch-up with one admitted newest page', async () => {
     const subscribers = new AgentSessionSubscribers()
     const catchup: AgentSessionSubscribeEvent[] = []
-    const firstItemSequence = journal.snapshot().items[0]!.sequence
+    const firstItemSequence = (await readTestJournalSnapshot(journal)).items[0]!.sequence
 
     subscribers.open({
       id: 'catchup',
       sessionId: SESSION,
       journal,
       fence: 2,
-      cursor: { epoch: journal.epoch, sequence: firstItemSequence },
+      cursor: { epoch: journal.physicalCursor().epoch, sequence: firstItemSequence },
       emit: (event) => catchup.push(event)
     })
 
-    expect(catchup).toHaveLength(1)
+    await vi.waitFor(() => expect(catchup).toHaveLength(1))
     catchup.forEach(expectAdmitted)
     expect(catchup[0]).toMatchObject({
       type: 'snapshot',
@@ -156,29 +156,21 @@ function body(text: string): AgentJournalItemBody {
 /** Inject a legacy oversized removal ID to force a cursor_compacted reset. */
 async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentSessionJournal> {
   const hugeItemId = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
-  const base = { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch: journal.epoch, fence: 1, ts: 1 }
-  const rows: JournalRow[] = [
-    {
-      ...base,
-      kind: 'item',
-      itemId: hugeItemId,
-      revision: 1,
-      seq: afterSequence + 1,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'big' }] }
-    },
-    { ...base, kind: 'tombstone', itemId: hugeItemId, revision: 2, seq: afterSequence + 2 }
-  ]
+  const epoch = journal.physicalCursor().epoch
   await journal.close()
-  const opened = openTestJournalHostDatabase(root)
-  try {
-    opened.db.exec('BEGIN IMMEDIATE')
-    for (const row of rows) {
-      insertTestJournalRow(opened.db, SESSION, row)
-    }
-    opened.db.exec('COMMIT')
-  } finally {
-    await opened.close()
-  }
+  await withTestAgentSessionDatabase(root, (db) => {
+    db.prepare('INSERT INTO journal_events VALUES(?,?,?,?,?)').run(
+      SESSION,
+      epoch,
+      afterSequence + 1,
+      1,
+      JSON.stringify({ items: [], removedItemIds: [hugeItemId], submissions: [], cards: [] })
+    )
+    db.prepare('UPDATE journal_chat_state SET last_sequence=? WHERE session_id=?').run(
+      afterSequence + 1,
+      SESSION
+    )
+  })
   return journals.open({
     identity: {
       sessionId: SESSION,

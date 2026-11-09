@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { describe, expect, it } from 'vitest'
 
 import { chat } from '../threads/codex-thread-catch-up-contract-test-fixture'
@@ -42,7 +43,9 @@ describe('codex turn lifecycle rows', () => {
       ].map((turn) => ({ ...turn, itemsView: 'full' }))
     )
 
-    expect(c.journal.snapshot().items.map(({ itemId, body }) => ({ key: itemId, body }))).toEqual([
+    expect(
+      (await readTestJournalItems(c.journal)).map(({ itemId, body }) => ({ key: itemId, body }))
+    ).toEqual([
       {
         key: 'legacy:codex:session-codex-catch-up:turn-lifecycle%3Aturn-done',
         body: {
@@ -109,8 +112,8 @@ describe('codex turn lifecycle rows', () => {
       }
     ])
     expect(c.journal['state'].tombstones.size).toBe(0)
-    const rows = c.journal.snapshot().items
+    const rows = await readTestJournalItems(c.journal)
     await c.reopen()
-    expect(c.journal.snapshot().items).toEqual(rows)
+    expect(await readTestJournalItems(c.journal)).toEqual(rows)
   })
 })

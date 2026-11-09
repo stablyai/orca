@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../agent-session-journal/journal-observation.test-support'
 // Exercise grammar events through the real deferred sink and on-disk journal.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -269,7 +270,7 @@ export async function openProviderTimelineRig(
   const rows = async () => {
     elapse()
     await deferred.drained()
-    return journal.snapshot().items
+    return await readTestJournalItems(journal)
   }
   const turns = async () =>
     (await rows()).flatMap((item) => {

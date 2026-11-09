@@ -34,11 +34,11 @@ import {
   attachParams,
   envelope,
   CALLER
-} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as sessionId
-} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-permission-modes-capability'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'

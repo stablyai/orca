@@ -1,7 +1,8 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionTransition } from '../structured-agent-session-transition'
 
 import {
@@ -36,7 +37,7 @@ it('lands its steps back to back, each resolved after the one before it', async 
   })
   await deferred.drained()
 
-  const items = journal.snapshot().items
+  const items = await readTestJournalItems(journal)
   expect(items.map((item) => item.itemId)).toEqual([
     agentJournalItemKey(turn),
     agentJournalItemKey(identity('later'))
@@ -50,9 +51,11 @@ it('writes nothing after a step whose row the database refused', async () => {
   const { root, journal, deferred, sink, bind } = await rig()
   bind()
   // Fail step two to verify step three never fills its place.
-  openTestJournalHostDatabase(root).db.exec(`CREATE TEMP TRIGGER fail_second_step
-BEFORE INSERT ON main.journal_rows WHEN instr(NEW.row_json, 'refused-step') > 0
+  await withTestAgentSessionDatabase(root, (db) =>
+    db.exec(`CREATE TRIGGER fail_second_step
+BEFORE INSERT ON journal_items WHEN instr(NEW.payload_json, 'refused-step') > 0
 BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
+  )
   const step = (recordId: string) =>
     itemStep({ kind: 'literal', identity: identity(recordId), body: tool(recordId, 'running') })
   sink.tryAppendTransition?.({
@@ -62,7 +65,7 @@ BEGIN SELECT RAISE(ABORT, 'second step refused'); END`)
   })
 
   await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
-  expect(journal.snapshot().items.map((item) => item.itemId)).toEqual([
+  expect((await readTestJournalItems(journal)).map((item) => item.itemId)).toEqual([
     agentJournalItemKey(identity('first'))
   ])
 })

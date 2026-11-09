@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { describe, expect, it, vi } from 'vitest'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -74,10 +75,15 @@ describe('a chat tab across /clear', () => {
   it('replays a lost answer with the same tab and one divider', async () => {
     await createChat(HOST_TEST_SESSION)
     const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
-    const original = journal.context.clear.bind(journal.context)
-    const lost = vi.spyOn(journal.context, 'clear').mockImplementationOnce(async (...args) => {
-      await original(...args)
-      throw new Error('lost acknowledgement')
+    const original = journal.write.bind(journal)
+    let loseClear = true
+    const lost = vi.spyOn(journal, 'write').mockImplementation(async (operation, prepare) => {
+      const result = await original(operation, prepare)
+      if (operation.kind === 'context-clear' && loseClear) {
+        loseClear = false
+        throw new Error('lost acknowledgement')
+      }
+      return result
     })
     const params = {
       command: 'clear',
@@ -87,12 +93,12 @@ describe('a chat tab across /clear', () => {
     }
     expect((await call('agentSession.conversationCommand', params)).result?.ok).not.toBe(true)
     lost.mockRestore()
-    const landed = journal.snapshot()
+    const landed = await readTestJournalSnapshot(journal)
     expect(await call('agentSession.conversationCommand', params)).toMatchObject({
       ok: true,
       result: { ok: true }
     })
-    expect(journal.snapshot()).toEqual(landed)
+    expect(await readTestJournalSnapshot(journal)).toEqual(landed)
     expect((await snapshot()).tabs.map((tab) => tab.id)).toEqual([
       `agent-session:${HOST_TEST_SESSION}`
     ])

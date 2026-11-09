@@ -1,6 +1,8 @@
 import { boundedFrameItem } from '../agent-session-wire/publication/history/agent-session-bounded-frame-item'
-import { agentJournalItemForWire } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
-import { BOUNDED_FRAME_CONTENT_BUDGET_BYTES } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
+import {
+  agentJournalItemForWire,
+  CLIENT_HISTORY_READER
+} from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import type Database from '../../sqlite/sync-database'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
@@ -13,8 +15,8 @@ import type {
   AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
+  BOUNDED_FRAME_CONTENT_BUDGET_BYTES,
   historyContentBytes,
   oversizedHistoryItem,
   resolveHistoryLimit,
@@ -22,12 +24,28 @@ import {
   type HistoryReader
 } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { buildAgentSessionHistoryPage } from '../agent-session-wire/publication/history/agent-session-history-page-result'
-import { CLIENT_HISTORY_READER } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
+import {
+  queuedImageSubmissionPresenter,
+  type QueuedImageHistoryPolicy
+} from '../agent-session-wire/publication/history/agent-session-queued-image-reader'
+import { JournalSqlScope } from './journal-sql-scope'
+import {
+  readJournalDomainSourceHeaders,
+  readJournalDomainSourceBody,
+  isJournalDomainSourceHeader
+} from './journal-domain-source-items'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
-import { readJournalDomainForwardHistory } from './journal-domain-history-after'
+import {
+  latestTurnItem,
+  readJournalDomainForwardHistory,
+  readJournalDomainHistorySnapshot,
+  itemSubmissions
+} from './journal-domain-history-after'
 import { readJournalDomainHistoryRoster } from './journal-domain-history-roster'
 import {
   admitJournalDomainHistoryGroups,
+  readJournalDomainHistoryEnvelope,
+  journalDomainSequenceGroups,
   selectJournalDomainHistoryWindow,
   type JournalDomainHistoryHeader
 } from './journal-domain-history-window'
@@ -37,18 +55,24 @@ export type JournalDomainHistoryRequest = Omit<AgentSessionHistoryRequest, 'dire
   fence?: number
   scope?: 'every-agent' | 'own-agent'
   rowReplay?: boolean
-  reader?: { form: 'client' | 'bounded'; budgetBytes?: number }
+  reader?: {
+    form: 'client' | 'bounded'
+    budgetBytes?: number
+    queuedImages?: QueuedImageHistoryPolicy
+  }
 }
 
 export type JournalDomainHistoryHead = {
   sessionId: string
   epoch: string
   /** Public context identity of the physical epoch. */
-  cursor: AgentJournalCursor
+  cursor: AgentJournalSnapshot['cursor']
   retainedSequence: number
 }
 
-type HistoryReaderForm = Pick<HistoryReader, 'form' | 'budgetBytes'>
+type HistoryReaderForm = Pick<HistoryReader, 'form' | 'budgetBytes'> & {
+  presentSubmission?: (send: AgentJournalSubmission) => AgentJournalSubmission
+}
 
 /** The caller owns a readonly connection; head, headers, bodies and any reset share one snapshot. */
 export function readJournalDomainHistoryPage(
@@ -61,14 +85,17 @@ export function readJournalDomainHistoryPage(
       }
     : {
         ...CLIENT_HISTORY_READER,
-        ...(request.reader?.budgetBytes !== undefined
-          ? { budgetBytes: request.reader.budgetBytes }
-          : {})
+        budgetBytes: request.reader?.budgetBytes ?? CLIENT_HISTORY_READER.budgetBytes
       }
 ): AgentSessionHistoryResult {
   db.exec('BEGIN')
   try {
-    const result = readHistory(db, readHead(db, request.sessionId), request, reader)
+    const result = readHistory(db, readHead(db, request.sessionId), request, {
+      ...reader,
+      ...(request.reader?.queuedImages
+        ? { presentSubmission: queuedImageSubmissionPresenter(request.reader.queuedImages) }
+        : {})
+    })
     db.exec('COMMIT')
     return result
   } catch (error) {
@@ -123,8 +150,16 @@ function readHistory(
       resolveHistoryLimit(request.limit),
       reader,
       latestTurnItem(db, head),
-      (ids) => currentRows(db, head, ids),
-      reset
+      (ids) =>
+        readJournalDomainHistorySnapshot(
+          db,
+          head,
+          ids,
+          queuedImageSourceIds(request),
+          reader.presentSubmission
+        ),
+      reset,
+      request.reader?.queuedImages
     )
   }
   const cursor = request.direction === 'before' ? request.cursor : undefined
@@ -151,19 +186,39 @@ function historyPage(
     request.direction === 'hydrate'
       ? AGENT_SESSION_HISTORY_MAX_LIMIT
       : resolveHistoryLimit(request.limit)
-  const admitted = admitJournalDomainHistoryGroups(
-    selectJournalDomainHistoryWindow(db, where, prefix, end, limit),
-    reader.budgetBytes
-  )
-  const submissions = itemSubmissions(
-    db,
-    head,
-    admitted.groups.flat().map((header) => header.itemId)
-  )
-  const kept = admitted.oversized
-    ? [admitted.groups[0]!.map((header) => oversizedHistoryItem(itemEnvelope(db, prefix, header)))]
-    : formHistoryGroups(db, head, admitted.groups, submissions, reader)
-  const items = kept.toReversed().flat()
+  const sourceWindow = (window: Parameters<typeof readJournalDomainSourceHeaders>[2]) =>
+    readJournalDomainSourceHeaders(
+      new JournalSqlScope(db, ...prefix),
+      queuedImageSourceIds(request) ?? [],
+      { ...window, own: request.scope === 'own-agent' }
+    )
+  let sources = sourceWindow({ before: end, limit: 2 * limit })
+  if (sources.length === 2 * limit) {
+    const boundary = sources.at(-1)!.sequence
+    sources = [
+      ...sources.filter((source) => source.sequence > boundary),
+      ...sourceWindow({ before: boundary + 1, from: boundary })
+    ]
+  }
+  const window = selectJournalDomainHistoryWindow(db, where, prefix, end, limit, sources)
+  const admitted = request.reader?.queuedImages
+    ? { groups: [...journalDomainSequenceGroups(window)], oversized: false }
+    : admitJournalDomainHistoryGroups(window, reader.budgetBytes)
+  const { groups, submissions } = admitted.oversized
+    ? {
+        groups: [
+          admitted.groups[0]!.map((header) =>
+            oversizedHistoryItem(readJournalDomainHistoryEnvelope(db, prefix, header.itemId))
+          )
+        ],
+        submissions: itemSubmissions(
+          db,
+          head,
+          admitted.groups[0]!.map((header) => header.itemId)
+        )
+      }
+    : formHistoryGroups(db, head, admitted.groups, reader)
+  const items = groups.toReversed().flat()
   const oldest = items[0]?.sequence ?? end
   const turn = latestTurnItem(db, head)
   return buildAgentSessionHistoryPage({
@@ -175,14 +230,16 @@ function historyPage(
     },
     direction: request.direction === 'hydrate' ? 'tail' : request.direction,
     items,
-    hasOlder: !!db
-      .prepare(`SELECT 1 FROM journal_items WHERE ${where} AND sequence<? LIMIT 1`)
-      .get(...prefix, oldest),
+    hasOlder:
+      !!db
+        .prepare(`SELECT 1 FROM journal_items WHERE ${where} AND sequence<? LIMIT 1`)
+        .get(...prefix, oldest) || sourceWindow({ before: oldest, limit: 1 }).length > 0,
     hasNewer:
       cursor !== undefined &&
-      !!db
+      (!!db
         .prepare(`SELECT 1 FROM journal_items WHERE ${where} AND sequence>=? LIMIT 1`)
-        .get(...prefix, end),
+        .get(...prefix, end) ||
+        sourceWindow({ from: end, limit: 1 }).length > 0),
     fallbackCursor: cursor ?? { epoch: head.cursor.epoch, sequence: 0 },
     nextCursor: items[0] ? { epoch: head.cursor.epoch, sequence: items[0].sequence } : undefined,
     fence: request.fence,
@@ -190,102 +247,56 @@ function historyPage(
   })
 }
 
-/** The existing byte rule, authoritative over admitted groups only. */
+/** Form only positional candidates through the first exact non-fitting sequence group. */
 function formHistoryGroups(
   db: Database.Database,
   head: JournalDomainHistoryHead,
   groups: readonly JournalDomainHistoryHeader[][],
-  submissions: readonly AgentJournalSubmission[],
   reader: HistoryReaderForm
-): AgentJournalRenderItem[][] {
-  const sizes = submissionBytesByItemId(submissions)
+): { groups: AgentJournalRenderItem[][]; submissions: AgentJournalSubmission[] } {
   const body = db.prepare(
     'SELECT COALESCE(wire_json,payload_json) AS wire_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
   )
   const kept: AgentJournalRenderItem[][] = []
+  const submissions: AgentJournalSubmission[] = []
+  const ordinals = new Map<string, number>()
   let total = 0
   for (const group of groups) {
+    const sends = itemSubmissions(
+      db,
+      head,
+      group.map((header) => header.itemId),
+      reader.presentSubmission,
+      ordinals
+    )
     const formed = group.map((header) =>
       reader.form(
-        JSON.parse(String(body.get(head.sessionId, head.epoch, header.itemId)!.wire_json))
+        isJournalDomainSourceHeader(header)
+          ? readJournalDomainSourceBody(new JournalSqlScope(db, head.sessionId, head.epoch), header)
+          : JSON.parse(String(body.get(head.sessionId, head.epoch, header.itemId)!.wire_json))
       )
     )
-    const bytes = historyContentBytes(formed, [], sizes)
+    const bytes = historyContentBytes(formed, [], submissionBytesByItemId(sends))
     if (kept.length > 0 && total + bytes > reader.budgetBytes) {
       break
     }
     kept.push(
       formed.map(({ item }) => (bytes > reader.budgetBytes ? oversizedHistoryItem(item) : item))
     )
+    submissions.push(...sends)
     total += bytes
     if (bytes > reader.budgetBytes) {
       break
     }
   }
-  return kept
+  submissions.sort(
+    (a, b) =>
+      a.submittedAt - b.submittedAt ||
+      ordinals.get(a.clientMessageId)! - ordinals.get(b.clientMessageId)!
+  )
+  return { groups: kept, submissions }
 }
 
-/** An oversized group's placeholders keep each row's identity and placement, never its body. */
-function itemEnvelope(
-  db: Database.Database,
-  prefix: readonly [string, string],
-  header: JournalDomainHistoryHeader
-): AgentJournalRenderItem {
-  const row = db
-    .prepare(`SELECT placement_json AS envelope,revision,sequence,sequence_index FROM journal_items
-      WHERE session_id=? AND epoch=? AND item_id=?`)
-    .get(...prefix, header.itemId)!
-  // The placeholder replaces the omitted body.
-  return {
-    ...JSON.parse(String(row.envelope)),
-    revision: Number(row.revision),
-    sequence: Number(row.sequence),
-    sequenceIndex: Number(row.sequence_index)
-  }
-}
-
-function latestTurnItem(
-  db: Database.Database,
-  head: JournalDomainHistoryHead
-): AgentJournalRenderItem | null {
-  const row = db
-    .prepare(`SELECT COALESCE(wire_json,payload_json) AS payload_json FROM journal_items WHERE session_id=? AND epoch=? AND hidden=0
-      AND turn_marker=1 ORDER BY sequence DESC, sequence_index DESC, ordinal DESC LIMIT 1`)
-    .get(head.sessionId, head.epoch)
-  return row ? JSON.parse(String(row.payload_json)) : null
-}
-
-/** Current attempts only, in submission order then stable admission ordinal. */
-function itemSubmissions(
-  db: Database.Database,
-  head: JournalDomainHistoryHead,
-  itemIds: readonly string[]
-): AgentJournalSubmission[] {
-  return db
-    .prepare(`SELECT attempt.payload_json FROM json_each(?) wanted
-      CROSS JOIN journal_submission_attempts attempt
-      WHERE attempt.session_id=? AND attempt.epoch=? AND attempt.current=1 AND attempt.item_id=wanted.value
-      ORDER BY attempt.submitted_at, attempt.ordinal`)
-    .all(JSON.stringify(itemIds), head.sessionId, head.epoch)
-    .map((row) => JSON.parse(String(row.payload_json)))
-}
-
-function currentRows(
-  db: Database.Database,
-  head: JournalDomainHistoryHead,
-  ids: ReadonlySet<string>
-): AgentJournalSnapshot {
-  const wanted = [...ids]
-  return {
-    sessionId: head.sessionId,
-    cursor: head.cursor,
-    items: db
-      .prepare(`SELECT COALESCE(item.wire_json,item.payload_json) AS payload_json FROM json_each(?) wanted
-        CROSS JOIN journal_items item
-        WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0
-        ORDER BY item.sequence, item.sequence_index, item.ordinal`)
-      .all(JSON.stringify(wanted), head.sessionId, head.epoch)
-      .map((row) => JSON.parse(String(row.payload_json))),
-    submissions: itemSubmissions(db, head, wanted)
-  }
+function queuedImageSourceIds(request: JournalDomainHistoryRequest): string[] | undefined {
+  return request.reader?.queuedImages?.ids.filter(([, active]) => active).map(([id]) => id)
 }

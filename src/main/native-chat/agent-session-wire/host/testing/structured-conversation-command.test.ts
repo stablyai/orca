@@ -1,3 +1,9 @@
+import {
+  withTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +12,6 @@ import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/age
 import type { AgentSessionConversationCommand } from '../../../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
@@ -17,10 +22,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
@@ -63,7 +65,7 @@ async function openHost(): Promise<void> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(generationRoot()),
+    journalDatabase: await openTestAgentSessionDatabase(generationRoot()),
     claimKeyId: 'key',
     now: () => clock,
     mintSpawnToken: () => `spawn-${acquisitions}`,
@@ -138,7 +140,7 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 const clearRows = async () =>
-  (await host.journalSnapshot(HOST_TEST_SESSION)).items.filter(
+  (await readTestHostJournal(host, HOST_TEST_SESSION)).items.filter(
     (item) => item.body.kind === 'status' && item.body.contextClear
   )
 
@@ -155,20 +157,23 @@ async function clearCommits(params = commandParams('clear'), who = caller) {
 
 describe('same-conversation clear', () => {
   it('rolls back the divider, boundary and ledger success together when storage fails', async () => {
-    const db = openTestJournalHostDatabase(generationRoot()).db
-    db.exec(
-      "CREATE TEMP TRIGGER fail_clear BEFORE UPDATE ON agent_session_records WHEN instr(NEW.record_json, 'providerContextBoundary') > 0 BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+    await withTestAgentSessionDatabase(generationRoot(), (db) =>
+      db.exec(
+        "CREATE TRIGGER fail_clear BEFORE UPDATE ON agent_session_records WHEN instr(NEW.record_json, 'providerContextBoundary') > 0 BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+      )
     )
     const params = commandParams('clear')
-    const before = await host.journalSnapshot(HOST_TEST_SESSION)
+    const before = await readTestHostJournal(host, HOST_TEST_SESSION)
     await expect(host.conversationCommand(caller, params)).rejects.toThrow('disk full')
     expect(await clearRows()).toHaveLength(0)
-    expect((await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch).toBe(before.cursor.epoch)
+    expect((await readTestHostJournal(host, HOST_TEST_SESSION)).cursor.epoch).toBe(
+      before.cursor.epoch
+    )
     expect(store.getRecord(HOST_TEST_SESSION)!.providerContextBoundary).toBeUndefined()
     expect(
       store.getOperationRow(caller.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('pending')
-    db.exec('DROP TRIGGER fail_clear')
+    await withTestAgentSessionDatabase(generationRoot(), (db) => db.exec('DROP TRIGGER fail_clear'))
     await clearCommits(params)
     expect(await clearRows()).toHaveLength(1)
     expect(

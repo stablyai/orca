@@ -124,6 +124,7 @@ CREATE TABLE journal_items (
   provider_turn_id TEXT,
   codex_thread_id TEXT,
   codex_turn_id TEXT,
+  legacy_provider_item_key TEXT,
   opener_item_id TEXT,
   context_clear INTEGER NOT NULL DEFAULT 0,
   goal_transition INTEGER NOT NULL DEFAULT 0,

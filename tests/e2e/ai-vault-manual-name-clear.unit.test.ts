@@ -22,18 +22,16 @@ import {
 } from '../../src/main/ai-vault/structured-session-ownership'
 import {
   openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase,
   seedTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore
 } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store'
-import {
-  openTestJournalHostDatabase,
-  closeTestJournalHostDatabases
-} from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
-import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
+import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createStructuredChatNamingHandler } from '../../src/main/native-chat/structured-chat-naming'
 import { PI_RPC_AGENT } from '../../src/main/pi/rpc-agent-definition'
 import type { AgentSessionStatusEvent } from '../../src/shared/agent-session/agent-session-wire'
@@ -133,8 +131,8 @@ it('detaches a mounted provider History row after clear without losing the nativ
     }
     await seedTestAgentSessionRecordStore(directory, { records: [record] })
     const store = await openTestAgentSessionRecordStore(directory)
-    const database = openTestJournalHostDatabase(directory)
-    const journal = new AgentSessionJournal({
+    const database = await openTestAgentSessionDatabase(directory)
+    const journal = await AgentSessionJournal.open({
       database,
       identity: {
         sessionId: SESSION,
@@ -144,7 +142,6 @@ it('detaches a mounted provider History row after clear without losing the nativ
         providerHandle: null
       }
     })
-    await journal.open()
     await journal.appendItem(
       { provider: 'legacy', agent: 'pi', sessionId: FILE, recordId: 'completed-reply' },
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Inventory checked' }] },

@@ -100,7 +100,12 @@ function writeStep(
   savedAt: number
 ): { commit?: JournalDomainLifecycleCommit; outcome: JournalStepOutcome } {
   const { target } = command
-  const view = journalDomainTimelineReads(db, target, command.facts?.stopSettle)
+  const view = journalDomainTimelineReads(
+    db,
+    target,
+    command.facts?.stopSettle,
+    step.kind === 'settlement' ? undefined : step.options.fence
+  )
   if (step.kind === 'settlement') {
     if (hasJournalDomainSettlement(db, target, step.settlementId)) {
       return { outcome: { kind: 'committed', wrote: false } }
@@ -112,7 +117,7 @@ function writeStep(
       if (
         Atomics.load(resolution.permit, 0) !== 1 ||
         Date.now() >= resolution.deadline ||
-        cursor.epoch !== resolution.expectedCursor.epoch ||
+        target.epoch !== resolution.expectedCursor.epoch ||
         cursor.sequence !== resolution.expectedCursor.sequence
       ) {
         return { outcome: { kind: 'dropped' } }

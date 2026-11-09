@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { isPersistedAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { replaceAgentSessionRecordOptions } from '../runtime/agent-session/records/agent-session-record-options'
-import { agentSessionStoreDraftRowWrites } from '../runtime/agent-session/records/agent-session-store-draft'
+import { agentSessionStoreRowChanges } from '../native-chat/agent-session-journal/journal-writer-store-row-changes'
 import type { AgentSessionStoreState } from '../runtime/agent-session/records/agent-session-store-state'
 import { AcpStructuredOptions } from './acp-structured-options'
 import {
@@ -51,7 +51,7 @@ function writtenOptions(provider: string, reader: AcpStructuredOptions) {
     options,
     now: 3_000
   })
-  const writes = agentSessionStoreDraftRowWrites(published, {
+  const writes = agentSessionStoreRowChanges(published, {
     ...published,
     records: new Map([[record.sessionId, changed]])
   })

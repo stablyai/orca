@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -112,13 +113,12 @@ async function session() {
         on('thread/tokenUsage/updated', { turnId, tokenUsage }, threadId),
       contextUsage: async () => {
         await expect(deferred.drained()).resolves.toEqual({ ok: true })
-        return selectStructuredAgentContextUsage(journal.snapshot().items)
+        return selectStructuredAgentContextUsage(await readTestJournalItems(journal))
       },
       turnRecord: async (turnId: string) => {
         await expect(deferred.drained()).resolves.toEqual({ ok: true })
-        return journal
-          .snapshot()
-          .items.map((item) => readAgentJournalTurn(item.body))
+        return (await readTestJournalItems(journal))
+          .map((item) => readAgentJournalTurn(item.body))
           .find((turn) => turn?.turnId === turnId)
       }
     }

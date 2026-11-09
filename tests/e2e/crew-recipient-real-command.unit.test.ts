@@ -8,8 +8,11 @@ import { randomUUID } from 'node:crypto'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration/orchestration'
 import { TERMINAL_QUERY_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-query-methods'
-import { JournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/database/journal-host-database'
-import { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
+import {
+  openTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import type { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
 import {
   peekOpenedAgentSessionRecordStore,
   retireAgentSessionRecordStore
@@ -93,12 +96,8 @@ it('keeps imported and local peer authority through real CLI import, settlement,
     h.db.db.prepare('SELECT * FROM federation_relay_items ORDER BY direction, sequence').all()
   const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-real-command-'))
   vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(directory)
-  const homeJournal = JournalHostDatabase.open(join(directory, 'home-journal'))
-  const homeStore = AgentSessionRecordStore.open({
-    journalDatabase: homeJournal,
-    hostId: 'local',
-    legacySessionTabIds: []
-  })
+  const homeJournal = await openTestAgentSessionDatabase(join(directory, 'home-journal'))
+  const homeStore = await openTestAgentSessionRecordStore(join(directory, 'home-journal'))
   const localStore = await worker.runtime.openAgentSessionRecordStore()
   const localId = testOrcaSessionId(randomUUID())
   const localAddress = `orca_session_id:${localId}`
@@ -555,7 +554,7 @@ it('keeps imported and local peer authority through real CLI import, settlement,
     if (pendingDone) {
       await pendingDone
     }
-    homeJournal.close()
+    await homeJournal.close()
     await retireAgentSessionRecordStore(async (opened) => {
       await opened?.journalDatabase.close()
     })

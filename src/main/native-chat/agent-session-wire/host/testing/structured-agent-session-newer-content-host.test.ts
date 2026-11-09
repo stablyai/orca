@@ -2,11 +2,11 @@ import { cp, rm } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemBody } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   adapter,
@@ -86,7 +86,7 @@ async function relaunch(): Promise<StructuredAgentSessionHost> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(relaunched),
+    journalDatabase: await openTestAgentSessionDatabase(relaunched),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-next',
     now: () => NOW

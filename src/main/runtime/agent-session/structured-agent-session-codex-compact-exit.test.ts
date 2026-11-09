@@ -1,10 +1,11 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // Exercise real adapter connection exits/Stop during compact; fake only the Codex child, never its compaction result.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../ipc/desktop-renderer-runtime-capabilities'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
-import { ensureStructuredAgentSessionHost } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 import {
   openStructuredCodexRpcHarness,
   SESSION,
@@ -25,7 +26,10 @@ afterEach(async () => {
 })
 
 async function snapshot() {
-  return (await ensureStructuredAgentSessionHost(harness.hostConfig())).journalSnapshot(SESSION)
+  return await readTestHostJournal(
+    await ensureStructuredAgentSessionHost(harness.hostConfig()),
+    SESSION
+  )
 }
 
 /** The connections that received `method`, once per call. */

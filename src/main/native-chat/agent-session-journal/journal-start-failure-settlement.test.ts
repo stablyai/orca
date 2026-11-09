@@ -8,13 +8,10 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/age
 import { recordStructuredAgentSessionStartFailure } from '../agent-session-wire/startup/structured-agent-session-start-failure-row'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
-import { AgentSessionJournal } from './journal-store'
+import type { AgentSessionJournal } from './journal-store'
 import { SqlAgentSessionJournal } from './journal-sql-store'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from './store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from './store-lifecycle/journal-host-database-test-support'
 import {
   journalSqlReaderPath,
   journalSqlWorkerPath
@@ -55,20 +52,6 @@ type Journal = Pick<
   cards(): Promise<readonly QueuedMessageRow[]>
 }
 
-async function memory(root: string): Promise<Journal> {
-  const journal = new AgentSessionJournal({
-    database: openTestJournalHostDatabase(root),
-    identity,
-    now: () => 100
-  })
-  await journal.open()
-  journals.push(journal)
-  return Object.assign(journal, {
-    queued: <T>(run: () => T) => journal.readInOrder(run),
-    cards: async () => journal.queuedMessages.list()
-  })
-}
-
 async function sql(root: string): Promise<Journal> {
   const { journalDatabase } = await openStructuredAgentSessionSqlJournalDatabase({
     stateDirectory: root,
@@ -89,14 +72,11 @@ async function sql(root: string): Promise<Journal> {
   })
 }
 
-describe.each([
-  ['memory', memory],
-  ['sql', sql]
-])('failed-start settlement on the %s writer', (_name, open) => {
+describe('failed-start settlement on the SQL writer', () => {
   async function fixture() {
     const root = await mkdtemp(join(tmpdir(), 'journal-start-failure-'))
     roots.push(root)
-    const journal = await open(root)
+    const journal = await sql(root)
     return {
       journal,
       submit: (clientMessageId: string) =>

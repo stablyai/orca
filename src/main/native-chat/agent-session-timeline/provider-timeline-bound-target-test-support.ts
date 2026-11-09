@@ -1,38 +1,27 @@
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionEventTarget } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { journalSettledTurnItemIds } from '../agent-session-journal/item-lifecycle/journal-settled-turns'
+import { StructuredAgentSessionSettledTurnRoutes } from '../agent-session-wire/host/structured-agent-session-settled-turn-routes'
 
-/** Route each commit's settled turns to bound sinks as the host's conversation owner does. */
 const settledTurnRoutes = new WeakMap<
   AgentSessionJournal,
-  Set<(turnItemIds: readonly string[]) => void>
+  StructuredAgentSessionSettledTurnRoutes
 >()
 
 export function boundTarget(journal: AgentSessionJournal): StructuredAgentSessionEventTarget {
-  let listeners = settledTurnRoutes.get(journal)
-  if (!listeners) {
-    const routed = new Set<(turnItemIds: readonly string[]) => void>()
-    listeners = routed
-    settledTurnRoutes.set(journal, routed)
-    journal.observeCommits((rows) => {
-      const turnItemIds = rows ? journalSettledTurnItemIds(rows) : []
-      if (turnItemIds.length > 0) {
-        for (const listener of routed) {
-          listener(turnItemIds)
-        }
-      }
-    })
+  let routes = settledTurnRoutes.get(journal)
+  if (!routes) {
+    routes = new StructuredAgentSessionSettledTurnRoutes({ warn: () => {}, error: () => {} })
+    settledTurnRoutes.set(journal, routes)
+    const captured = routes
+    journal.observeCommits((commit) =>
+      captured.deliver(journal.identity.sessionId, journal, commit)
+    )
   }
-  const route = listeners
+  const route = routes
   return {
     journal,
     fence: 1,
     publish: () => {},
-    observeSettledTurns: (listener) => {
-      route.add(listener)
-      return () => {
-        route.delete(listener)
-      }
-    }
+    observeSettledTurns: (listener) => route.observe(journal.identity.sessionId, journal, listener)
   }
 }

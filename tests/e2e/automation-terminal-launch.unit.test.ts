@@ -12,7 +12,7 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   HOST_TEST_LOCATION
-} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createQueuedMessageTestRig } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
@@ -551,7 +551,7 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
         )
       }
       const q = automationRunOperationId(current, 'reuse-send')
-      expect(rig.store.readCommandReceipt({ kind: 'global' }, q).verdict).toBe('absent')
+      expect((await rig.store.readCommandReceipt({ kind: 'global' }, q)).verdict).toBe('absent')
       expect(readAutomationRunReceipt(rig.store, current)).toBeNull()
       expect(
         rig.store.getOperationRow(rpcCallerOperationKey(AUTOMATION_AGENT_CALLER), q)?.outcome.status

@@ -1,3 +1,4 @@
+import { openTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type {
   MobileQueuedEditHostFixtureModule,
   MobileCommandMenuHostFixtureModule
@@ -81,7 +82,7 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
     const { StructuredAgentSessionHost } = await import('../structured-agent-session-host')
     const { openTestAgentSessionRecordStore } =
       await import('../../../../runtime/agent-session/records/agent-session-record-store-test-harness')
-    const { openTestJournalHostDatabase, closeTestJournalHostDatabase } =
+    const { closeTestJournalHostDatabase } =
       await import('../../../agent-session-journal/store-lifecycle/journal-host-database-test-support')
     const { bindAtRestCommandContexts, retireAtRestCommandSettings, retireAtRestCommandContext } =
       await import('../../options/at-rest-command-context')
@@ -176,7 +177,7 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
       agents,
       store,
       adapter: new StructuredAgentSessionAdapterRouter(agents, async () => {}),
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestAgentSessionDatabase(root),
       claimKeyId: 'key',
       logger: recordingStructuredAgentSessionLogger().logger,
       probeOwner: async () => ({ outcome: 'pid-absent' })

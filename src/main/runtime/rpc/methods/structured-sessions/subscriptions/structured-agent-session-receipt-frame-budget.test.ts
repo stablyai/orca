@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../../../unused-default-rpc-methods.test-fixture'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -98,7 +99,7 @@ it.each(['snapshot', 'reset', 'batch'] as const)(
         MOBILE_BRIDGE_MAX_FRAME_BYTES
       )
     }
-    expect(journal.snapshot().items).toHaveLength(200)
-    expect(JSON.stringify(journal.snapshot().items)).not.toContain('resolvedByDevice')
+    expect(await readTestJournalItems(journal)).toHaveLength(200)
+    expect(JSON.stringify(await readTestJournalItems(journal))).not.toContain('resolvedByDevice')
   }
 )

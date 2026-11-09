@@ -20,17 +20,17 @@ import {
 } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
 import type { RpcDispatchStreamingOptions } from '../../dispatcher-stream-options'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-sessions/structured-agent-session'
 import { commitStructuredAgentSessionCreate } from '../structured-sessions/creation/structured-agent-session-create'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
@@ -100,7 +100,7 @@ export async function openHost(): Promise<void> {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: providerAdapter(),
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestAgentSessionDatabase(directory),
     claimKeyId: 'key',
     now: () => HOST_TEST_NOW,
     mintSpawnToken: () => `spawn-${acquisitions}`

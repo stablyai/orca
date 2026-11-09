@@ -9,7 +9,8 @@ import type {
   AgentJournalMessageItem,
   AgentJournalProducerLinkage,
   AgentJournalResetReason,
-  AgentJournalRowAttribution
+  AgentJournalRowAttribution,
+  AgentJournalTurnItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentJournalCursor,
@@ -28,7 +29,6 @@ import type { JournalOperationReceipt, JournalRowWriter } from './writing/journa
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type Database from '../../sqlite/sync-database'
 import type { JournalStopEvent } from './durable-rows/journal-row-schema'
-import type { AgentJournalTurnItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import type { StaleStructuredAgentSessionStateInput } from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'

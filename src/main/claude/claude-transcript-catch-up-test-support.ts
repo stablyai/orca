@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 // Shared real disk/journal fixture for catch-up and historical-duration contracts.
 import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -122,6 +123,7 @@ export async function chat(project = '-work', cwd = '/work') {
   })
   const warn: Mock<(...args: unknown[]) => void> = vi.fn()
   return {
+    root,
     identity,
     get journal() {
       return journal
@@ -236,8 +238,8 @@ export async function chat(project = '-work', cwd = '/work') {
       await deferred.drained()
       return covered
     },
-    rows: () =>
-      journal.snapshot().items.flatMap((item) => {
+    rows: async () =>
+      (await readTestJournalItems(journal)).flatMap((item) => {
         const { body } = item
         if (body.kind === 'message') {
           const text = body.blocks.map((block) => (block.type === 'text' ? block.text : ''))

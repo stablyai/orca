@@ -25,7 +25,10 @@ import {
 } from '../../../../claude/claude-at-rest-commands'
 
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
@@ -36,10 +39,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const runtimeMocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
@@ -127,7 +127,7 @@ export async function openHost(
     agents,
     store,
     adapter: deliveryAdapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestAgentSessionDatabase(directory),
     claimKeyId: 'key',
     logger: recordingStructuredAgentSessionLogger().logger,
     now: () => clock,

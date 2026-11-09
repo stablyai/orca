@@ -113,7 +113,7 @@ describe('host prompt delivery and retirement', () => {
               }
             ]
           ]),
-          readStatusState: () => projectStructuredAgentSessionStatusState(items),
+          readStatusState: async () => projectStructuredAgentSessionStatusState(items),
           readChildWork: () => undefined,
           now: () => 42
         })

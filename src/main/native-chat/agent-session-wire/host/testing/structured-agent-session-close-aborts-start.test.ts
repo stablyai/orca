@@ -2,7 +2,6 @@
 
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   adapter,
@@ -24,7 +23,7 @@ function openHost(state: ReturnType<typeof hostTestState>): StructuredAgentSessi
     logger: createStructuredAgentSessionLogger(),
     store: state.store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(state.root),
+    journalDatabase: state.host.deps.journalDatabase,
     recoveryCapsule: new AgentSessionRecoveryCapsule(state.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',

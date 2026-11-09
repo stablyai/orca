@@ -284,7 +284,7 @@ describe('ACP compaction settlement', () => {
       })
     ])
     // The agent's own failure, so cards waiting behind the compaction stay held.
-    expect(rig.rig.journal.inputOrder.newestTurn.failure()).toBeGreaterThan(0)
+    expect(await rig.rig.journal.queuedMessages.failureHolds()).toBe(true)
   })
 
   it('ends a stopped compaction as cancelled, with no result row', async () => {

@@ -1,3 +1,7 @@
+import {
+  readTestJournalItems,
+  readTestJournalSubmissions
+} from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
@@ -74,11 +78,10 @@ describe('ACP recovered history boundaries', () => {
       if (
         steps.some(
           (step) =>
-            step.kind === 'command' &&
-            step.step.kind === 'resolved-item' &&
-            'body' in step.step.resolution &&
-            step.step.resolution.body.kind === 'message' &&
-            step.step.resolution.body.role === 'assistant'
+            step.kind === 'resolved-item' &&
+            'body' in step.resolution &&
+            step.resolution.body.kind === 'message' &&
+            step.resolution.body.role === 'assistant'
         )
       ) {
         return Promise.reject(failure)
@@ -106,7 +109,7 @@ describe('ACP recovered history boundaries', () => {
       exit: { ownerFence: 1, observedAt: 1200 }
     })
     const saved = await fixture.rig.rows()
-    const dispatch = structuredClone(fixture.rig.journal.submissions())
+    const dispatch = structuredClone(await readTestJournalSubmissions(fixture.rig.journal))
     const failed = saved.find(
       (row) => row.body.kind === 'status' && row.body.failure?.kind === 'hostFault'
     )!
@@ -153,9 +156,9 @@ describe('ACP recovered history boundaries', () => {
           dialect: OPENCODE_ACP_DIALECT,
           assertCurrent: () => {}
         })
-        const rows = journal.snapshot().items
+        const rows = await readTestJournalItems(journal)
         expect(rows.slice(0, saved.length)).toEqual(saved)
-        expect(journal.submissions()).toEqual(dispatch)
+        expect(await readTestJournalSubmissions(journal)).toEqual(dispatch)
         expect(
           rows.some(
             (row) =>
@@ -185,14 +188,12 @@ describe('ACP recovered history boundaries', () => {
           expect(await deferred.drained()).toEqual({ ok: true })
           expect((await fixture.rig.turns()).at(-1)?.state).toBe('completed')
           expect(
-            journal
-              .snapshot()
-              .items.some(
-                (row) =>
-                  row.body.kind === 'message' &&
-                  row.body.role === 'assistant' &&
-                  row.body.blocks.some((block) => block.type === 'text' && block.text === 'NEXT')
-              )
+            (await readTestJournalItems(journal)).some(
+              (row) =>
+                row.body.kind === 'message' &&
+                row.body.role === 'assistant' &&
+                row.body.blocks.some((block) => block.type === 'text' && block.text === 'NEXT')
+            )
           ).toBe(true)
         }
       } finally {
@@ -387,7 +388,7 @@ describe('ACP recovered history boundaries', () => {
         }
       }
       plans.length = 0
-      const saved = new Map(journal.snapshot().items.map((row) => [row.itemId, row]))
+      const saved = new Map((await readTestJournalItems(journal)).map((row) => [row.itemId, row]))
       try {
         await catchUpAcpHistory({
           frames: replay,
@@ -401,7 +402,7 @@ describe('ACP recovered history boundaries', () => {
           logger: { warn, error: vi.fn() }
         })
         expect(await deferred.drained()).toEqual({ ok: true })
-        const rows = journal.snapshot().items
+        const rows = await readTestJournalItems(journal)
         expect(rows.slice(0, native.length)).toEqual(native)
         expect(dividers(rows)).toHaveLength(0)
         expect(new Set(resolved).size).toBe(resolved.length)
@@ -486,21 +487,19 @@ describe('ACP recovered history boundaries', () => {
               dialect: OPENCODE_ACP_DIALECT,
               assertCurrent: () => {}
             })
-            expect(dividers(journal.snapshot().items)).toHaveLength(0)
+            expect(dividers(await readTestJournalItems(journal))).toHaveLength(0)
             expect(
-              journal
-                .snapshot()
-                .items.filter(
-                  (row) =>
-                    row.body.kind === 'message' &&
-                    row.body.role === 'assistant' &&
-                    row.body.blocks.some(
-                      (block) => block.type === 'text' && block.text === 'prefix and tail'
-                    )
-                )
+              (await readTestJournalItems(journal)).filter(
+                (row) =>
+                  row.body.kind === 'message' &&
+                  row.body.role === 'assistant' &&
+                  row.body.blocks.some(
+                    (block) => block.type === 'text' && block.text === 'prefix and tail'
+                  )
+              )
             ).toHaveLength(1)
           }
-          first = structuredClone(journal.snapshot().items)
+          first = structuredClone(await readTestJournalItems(journal))
         } else {
           expect(plans).toEqual([])
           expect(resolved).toEqual([])
@@ -567,7 +566,7 @@ describe('ACP recovered history boundaries', () => {
       })
       expect(await deferred.drained()).toEqual({ ok: true })
       expect(appendReopened).not.toHaveBeenCalled()
-      expect(journal.snapshot().items).toEqual(settled)
+      expect(await readTestJournalItems(journal)).toEqual(settled)
     } finally {
       deferred.close()
       await journal.close()

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../../../unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -132,7 +133,7 @@ it('whose settlement write failed is settled by the next send, which is delivere
   await fixture.rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
   expect(fixture.rig.adapter.dispatch).toHaveBeenCalledTimes(2)
   expect(
-    activeStructuredAgentSessionTurnId((await fixture.rig.host.journalSnapshot(SESSION)).items)
+    activeStructuredAgentSessionTurnId((await readTestHostJournal(fixture.rig.host, SESSION)).items)
   ).not.toBe('working')
 })
 

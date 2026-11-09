@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 // Exercise host child-work projections without a renderer. Use literal expectations: comparing with the provider tracker would share the producer's observation bugs.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -22,10 +23,8 @@ import {
   hostTestMessage
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './agent-session/records/agent-session-record-store-test-harness'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { scriptedCodexTransport } from './orca-runtime-tests/scripted-codex-transport.test-fixture'
 import { createScriptedClaudeRuntime } from './agent-session/installation/structured-claude-scripted-runtime-test-support'
@@ -324,7 +323,7 @@ describe('the chat strip and the session list read the same host child records',
     )
     await vi.waitFor(async () =>
       expect(
-        (await host.journalSnapshot(SESSION)).submissions.find(
+        (await readTestHostJournal(host, SESSION)).submissions.find(
           (entry) => entry.clientMessageId === clientOperationId
         )?.handedOverAt
       ).toBeDefined()

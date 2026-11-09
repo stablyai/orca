@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 // @vitest-environment happy-dom
 
 // Round-trip subagent approval through the real translator/journal/status/activity pipeline; answering must preserve done time and read state.
@@ -25,7 +26,7 @@ import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/structured/p
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../src/main/native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
-import { indexedStatusFeedSession } from '../../src/main/native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session'
+import { indexedStatusFeedSession } from '../../src/main/native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session.test-fixture'
 import {
   makeRepo,
   makeWorktree
@@ -67,7 +68,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/components/native-chat/session/status/StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'codex-child-approval'
@@ -187,7 +188,7 @@ async function openHost() {
   /** What the host's answer path commits before it tells Codex. */
   const answer = async (itemId: string): Promise<void> => {
     const identity = parseAgentJournalItemKey(itemId)
-    const asked = journal.snapshot().items.find((item) => item.itemId === itemId)?.body
+    const asked = (await readTestJournalItems(journal)).find((item) => item.itemId === itemId)?.body
     if (!identity || asked?.kind !== 'approval') {
       throw new Error(`approval ${itemId} missing`)
     }

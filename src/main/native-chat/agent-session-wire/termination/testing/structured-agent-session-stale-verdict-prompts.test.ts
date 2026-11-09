@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -52,8 +53,11 @@ it('ends a crashed turn at its last proof of life, not at a send accepted before
       })
     now = 3_600_000
     await settle(null)
-    const turn = () => journal.snapshot().items.map((item) => readAgentJournalTurn(item.body))[0]
-    expect(turn()).toMatchObject({ state: 'unverifiable' })
+    const turn = async () =>
+      (await readTestJournalSnapshot(journal)).items.map((item) =>
+        readAgentJournalTurn(item.body)
+      )[0]
+    expect(await turn()).toMatchObject({ state: 'unverifiable' })
     now = 3_605_000
     await journal.appendSubmission({
       clientMessageId: 'send-1',
@@ -78,7 +82,7 @@ it('ends a crashed turn at its last proof of life, not at a send accepted before
       lastProvenAliveAt: 210
     })
 
-    expect(turn()).toMatchObject({ state: 'interrupted', completedAt: 210 })
+    expect(await turn()).toMatchObject({ state: 'interrupted', completedAt: 210 })
   } finally {
     await journals.closeAll()
     await rm(root, { recursive: true, force: true })

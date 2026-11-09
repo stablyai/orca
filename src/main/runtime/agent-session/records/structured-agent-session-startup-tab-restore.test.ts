@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -29,14 +30,13 @@ import { attachParamsForRecord } from '../../../native-chat/agent-session-wire/h
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type * as AgentSessionRecordRows from './agent-session-record-rows'
 import {
+  ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
+  openTestAgentSessionDatabase,
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -129,7 +129,7 @@ async function seedProfile(
         }
       : {})
   })
-  const database = openTestJournalHostDatabase(root)
+  const database = await openTestAgentSessionDatabase(root)
   for (const record of options.history ?? records) {
     const fence = record.lease.runtimeFence
     const journal = await journalFactory.openAgentSessionJournal({
@@ -285,7 +285,7 @@ describe('restoring the chat tabs open at quit', () => {
       expect(history.page.queuedMessages).toEqual([
         { messageId, position: 0, state: 'waiting', body }
       ])
-      const original = (await host.journalSnapshot(sessionId)).submissions
+      const original = (await readTestHostJournal(host, sessionId)).submissions
       expect(original).toHaveLength(1)
       expect(original[0]).toMatchObject({
         clientMessageId: messageId,
@@ -397,7 +397,7 @@ describe('restoring the chat tabs open at quit', () => {
       }
       expect(delivered.page.queuedMessages).toEqual([])
       expect(
-        (await next.host.journalSnapshot(sessionId)).submissions.filter(
+        (await readTestHostJournal(next.host, sessionId)).submissions.filter(
           (entry) => entry.queuedMessageId === messageId
         )
       ).toEqual([

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -461,12 +462,12 @@ it.each([
     if (command !== 'dispatch') {
       await eventually(async () =>
         expect(
-          (await current.host.journalSnapshot(COORD)).items.filter(
+          (await readTestHostJournal(current.host, COORD)).items.filter(
             (item) => item.body.kind === 'agent-start'
           )
         ).toHaveLength(1)
       )
-      const fact = (await current.host.journalSnapshot(COORD)).items.find(
+      const fact = (await readTestHostJournal(current.host, COORD)).items.find(
         (item) => item.body.kind === 'agent-start'
       )
       if (!fact) {
@@ -518,7 +519,7 @@ it.each([
       expect(output.mock.lastCall?.[0].id).not.toBe(resultBeforeReplay.id)
       expect(placement.placeWorkerAgent).toHaveBeenCalledTimes(placed)
       expect(
-        (await current.host.journalSnapshot(COORD)).items.filter(
+        (await readTestHostJournal(current.host, COORD)).items.filter(
           (item) => item.body.kind === 'agent-start'
         )
       ).toEqual([fact])
@@ -552,8 +553,9 @@ it.each([
       await eventually(async () => {
         // Each message is its own chat message, one per turn: the coordinator accepts the one it was
         // handed so the next is sent, and any still behind a turn wait as cards.
-        for (const { clientMessageId, dispatchState } of (await current.host.journalSnapshot(COORD))
-          .submissions) {
+        for (const { clientMessageId, dispatchState } of (
+          await readTestHostJournal(current.host, COORD)
+        ).submissions) {
           if (dispatchState === 'pending') {
             await current.host.settleLateDispatch({
               sessionId: COORD,
@@ -568,7 +570,7 @@ it.each([
         }
         const page = await current.host.history({ sessionId: COORD, direction: 'tail' })
         const bodies = [
-          ...(await current.host.journalSnapshot(COORD)).items.map(({ body }) => body),
+          ...(await readTestHostJournal(current.host, COORD)).items.map(({ body }) => body),
           ...((page.ok ? page.page.queuedMessages : undefined) ?? []).map(({ body }) => body)
         ]
         const mail = bodies.flatMap((body) =>
@@ -595,11 +597,11 @@ it.each([
           })
         )
       })
-      const saved = (await current.host.journalSnapshot(COORD)).items
+      const saved = (await readTestHostJournal(current.host, COORD)).items
       await current.quitRestartHostProcess()
       await closeTestJournalHostDatabase(current.root)
       current.crashRestartHostProcess()
-      const reopened = (await current.host.journalSnapshot(COORD)).items
+      const reopened = (await readTestHostJournal(current.host, COORD)).items
       expect(
         reopened.filter(
           ({ body }) => body.kind === 'agent-start' || (body.kind === 'message' && body.from)
@@ -611,7 +613,7 @@ it.each([
       )
       return
     }
-    const snapshot = await current.host.journalSnapshot(WORKER)
+    const snapshot = await readTestHostJournal(current.host, WORKER)
     const history = await current.host.history({ sessionId: WORKER, direction: 'tail' })
     if (!history.ok) {
       throw new Error('cannot reload real history')
@@ -677,7 +679,7 @@ it.each([
       const edited = `${raw.slice(0, raw.length - task.length)}Edited task`
       const fields = {
         messageId: queued.messageId,
-        expectedBodyFingerprint: journal.queuedMessages.get(queued.messageId)!.fingerprint,
+        expectedBodyFingerprint: (await journal.queuedMessages.get(queued.messageId))!.fingerprint,
         text: edited
       }
       expect(
@@ -729,7 +731,7 @@ it.each([
       ])
       expect(requests).toContain('orchestration.send')
       await eventually(async () => {
-        const items = (await current.host.journalSnapshot(WORKER)).items
+        const items = (await readTestHostJournal(current.host, WORKER)).items
         const mail = items.filter(
           ({ body }) =>
             body.kind === 'message' &&
@@ -740,14 +742,14 @@ it.each([
           from: { senders: [expect.objectContaining({ agent: 'claude' })] }
         })
       })
-      const saved = (await current.host.journalSnapshot(WORKER)).items.filter(
+      const saved = (await readTestHostJournal(current.host, WORKER)).items.filter(
         ({ body }) => body.kind === 'message' && body.from
       )
       await current.quitRestartHostProcess()
       await closeTestJournalHostDatabase(current.root)
       current.crashRestartHostProcess()
       expect(
-        (await current.host.journalSnapshot(WORKER)).items.filter(
+        (await readTestHostJournal(current.host, WORKER)).items.filter(
           ({ body }) => body.kind === 'message' && body.from
         )
       ).toEqual(saved)

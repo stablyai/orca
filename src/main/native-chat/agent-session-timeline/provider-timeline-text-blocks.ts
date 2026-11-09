@@ -40,7 +40,7 @@ export function splitProviderTimelineTextBlocks(text: string): { ready: string; 
       } else if (
         marker[0] === openFence.marker[0] &&
         marker.length >= openFence.marker.length &&
-        indent <= openFence.indent + 3 &&
+        indent - openFence.indent <= 3 &&
         line.length === indent + marker.length
       ) {
         // CommonMark: a closing fence carries no info string.

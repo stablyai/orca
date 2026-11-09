@@ -13,13 +13,13 @@ import { agentModelCatalogFingerprintForRecord } from '../../../src/main/native-
 import { CLIENT_UI_METHODS } from '../../../src/main/runtime/rpc/methods/client-state/client-ui'
 import { STATUS_METHODS } from '../../../src/main/runtime/rpc/methods/host-management/status'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-sessions/structured-agent-session'
-import { createRestTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { createRestTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
 import {
   HOST_TEST_SESSION as REST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'

@@ -2,7 +2,10 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import type { StructuredAgentSessionLifecycleEvent } from '../providers/structured-agent-session-adapter'
 import type { JournalWriterSettled } from '../../agent-session-journal/journal-sql-failure'
 import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
-import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
+import {
+  structuredAgentSessionHandingOver,
+  finalizingStructuredAgentSessionInput
+} from '../delivery/structured-agent-session-handing-over'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'
 import type {
   StructuredAgentSessionHostDeps,
@@ -181,4 +184,3 @@ export class StructuredAgentSessionEventRecovery {
     await settleStructuredAgentSessionChildExit(this.exitContext, event)
   }
 }
-import { finalizingStructuredAgentSessionInput } from '../delivery/structured-agent-session-handing-over'

@@ -7,6 +7,11 @@ import {
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { agentChildWorkLiveness } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import { conversationCommandBlocked } from '../native-chat/agent-session-wire/operations/structured-conversation-command-admission'
+import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import type {
+  JournalWorkAnswer,
+  JournalWorkRead
+} from '../native-chat/agent-session-journal/journal-work-read'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
 import { RESUMED_BY_MESSAGE } from './claude-captured-task-frames.test-fixture'
 import { hostWithParent, parent, producer } from './claude-child-work-producer-harness.test-fixture'
@@ -17,6 +22,23 @@ afterEach(() => vi.restoreAllMocks())
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only the lease and the command/rewind records, all absent here.
 const RECORD = { lease: {} } as unknown as AgentSessionRecord
+
+/** A live generation with no turn, prompt or owed send: only child work can block. */
+const IDLE_WORK: JournalWorkAnswer<'state'>['state'] = {
+  liveFence: 7,
+  allowsObservation: true,
+  working: false,
+  commandAdmission: { promptPending: false, owesSend: false, handoverOwesSend: false },
+  owesAnySend: false,
+  owedEnteredSubmissions: [],
+  owedSendingSubmissions: [],
+  activeTurn: null,
+  latestTurn: null,
+  actionablePrompts: [],
+  restatedSubmissions: [],
+  viewKey: '',
+  workViewKey: ''
+}
 
 /** Host records retain live work after provider roster removal. */
 async function droppedFromRoster() {
@@ -33,17 +55,11 @@ async function droppedFromRoster() {
       {
         sessionId: 'session-1',
         fence: 7,
-        journal: {
-          itemsRead: () => ({ items: [] }),
-          cursor: () => ({ epoch: 'e', sequence: 0 }),
-          item: () => null,
-          submissions: () => [],
-          inputOrder: { recoverableSubmissions: () => [] },
-          runningTurn: () => null,
-          itemFence: () => undefined,
-          visitItems: () => undefined,
-          wroteBeforeOpen: () => false
-        },
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only through readWork.
+        journal: {} as AgentSessionJournal,
+        readWork: async <K extends JournalWorkRead['kind']>() =>
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: command admission requests only the state answer.
+          ({ kind: 'state', state: IDLE_WORK }) as JournalWorkAnswer<K>,
         adapter: run.adapter
       },
       RECORD,
@@ -55,7 +71,7 @@ async function droppedFromRoster() {
     { membership: 'live', stoppable: true, providerId: 'agent-1', kind: 'agent' }
   ])
   expect(run.adapter.backgroundTaskState('session-1')).toBeNull()
-  expect(blocked()?.message).toBe('Stop background tasks before using this command.')
+  expect((await blocked())?.message).toBe('Stop background tasks before using this command.')
   // Snapshot stop targets before dispatch; settle only acknowledged records.
   const stop = async (taskId?: string) => {
     const targets = agentChildWorkStopTargets(records(), taskId)
@@ -87,7 +103,7 @@ describe('a background Stop acts on the host child records', () => {
     expect(stopCalls()).toEqual([{ subtype: 'stop_task', params: { taskId: 'agent-1' } }])
     expect(records()).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
     expect(basis()).toEqual(['stop-acknowledged'])
-    expect(blocked()).toBeNull()
+    expect(await blocked()).toBeNull()
   })
 
   it('leaves a task that ended on its own frame as it ended: its row offers no stop', async () => {

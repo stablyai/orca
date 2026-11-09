@@ -42,6 +42,7 @@ const workspace = async () => root
 
 function launchWith(settings: Settings) {
   return createAcpStructuredLaunchResolver(acpLaunchSpecFor('opencode')!, {
+    savedSession: { hasProviderTurn: async () => false },
     store: {
       getRecord: () => ({
         ...agentSessionRecordFixture(),
@@ -51,7 +52,6 @@ function launchWith(settings: Settings) {
       }),
       pinLaunchDirectory: vi.fn()
     },
-    readJournal: () => null,
     resolveWorkspacePath: async () => root,
     resolveEnvironment: async () => loginShell.env,
     resolveLaunchEnv: () => settings.agentDefaultEnv?.opencode ?? {},

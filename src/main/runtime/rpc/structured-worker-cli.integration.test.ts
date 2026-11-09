@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import './unused-default-rpc-methods.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -27,7 +28,7 @@ import {
   root,
   savedIds
 } from '../agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
-import { ensureStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../agent-session/records/agent-session-record-store-test-harness'
 import {
   fakeCodex,
   resetProviderFaults
@@ -421,7 +422,7 @@ it.each(['worker-release', 'retry-of'] as const)(
     expect(db.getDispatchContextById(dispatchId)).toMatchObject({ status: 'failed' })
     expect(db.getDispatchContextById(dispatchId)?.capability_revoked_at).not.toBeNull()
     expect(db.getTask(db.getDispatchContextById(dispatchId)!.task_id)?.status).toBe('failed')
-    const snapshot = await host.journalSnapshot(identity.sessionId)
+    const snapshot = await readTestHostJournal(host, identity.sessionId)
     expect(snapshot.submissions).toMatchObject([{ dispatchState: 'rejected' }])
     expect(JSON.stringify(snapshot)).toContain('Refused fixture task')
     structuredWorkerIdentities.clear()

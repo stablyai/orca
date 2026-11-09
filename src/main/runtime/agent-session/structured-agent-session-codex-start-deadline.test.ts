@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // A Codex start has no per-step deadline: a slow `initialize` still delivers the held message, and
 // one that never answers is ended by the start's own overall limit ("never finished starting").
 
@@ -17,10 +18,8 @@ import { recordAgentSessionStartup } from '../../observability/agent-session-ins
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 
 vi.mock('../../observability/agent-session-instrumentation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -113,7 +112,7 @@ it('fails the held message as never finished starting when the start passes its 
 
   await vi.waitFor(async () => {
     await host.flushStreamedEvents(HOST_TEST_SESSION)
-    const [held] = (await host.journalSnapshot(HOST_TEST_SESSION)).submissions
+    const [held] = (await readTestHostJournal(host, HOST_TEST_SESSION)).submissions
     expect(held?.dispatchState).toBe('rejected')
     expect(readWholeAgentSessionFailureFact(held?.rejection)).toMatchObject({ kind: 'hostStopped' })
   })

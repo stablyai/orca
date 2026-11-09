@@ -119,6 +119,7 @@ function chat() {
     if (result.kind !== operation.kind) {
       throw new Error('item read answered a different operation')
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the checked discriminant matches the requested kind; TypeScript cannot narrow a generic union.
     return result as Extract<typeof result, { kind: K }>
   }
   return { db, seed, alias, tombstone, send, read }

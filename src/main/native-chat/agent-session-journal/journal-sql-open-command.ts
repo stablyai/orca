@@ -8,6 +8,12 @@ import { journalDomainQueueAwaitsReopen } from './journal-domain-queue-reads'
 import { finishJournalSqlCommand } from './journal-sql-command-result'
 import { checkpointJournalRequestEvents } from './journal-writer-request-events'
 import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { staleSubagentRosterRevisions } from './item-lifecycle/journal-subagent-liveness'
+import { applyJournalDomainLifecycle } from './journal-domain-lifecycle'
 
 export type JournalOpenRecoveryResult = {
   failures: {
@@ -28,12 +34,10 @@ export function applyJournalSqlOpenCommand(
 ) {
   const opened = applyJournalSqlEditLeaseCommand(db, stateDirectory, command, savedAt)
   const { recover } = command.operation
-  if (!recover) {
-    return opened
-  }
   const { target } = command
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: open returns its physical pre-recovery cursor.
   const openedThrough = opened.value as AgentJournalCursor
+  settleOpeningLiveWork(db, target, savedAt)
   const recovery: JournalOpenRecoveryResult = { failures: [], reopenFloor: null }
   const attempt = <Value>(
     step: JournalOpenRecoveryResult['failures'][number]['step'],
@@ -52,38 +56,40 @@ export function applyJournalSqlOpenCommand(
       return undefined
     }
   }
-  for (const kind of ['pending-unknown', 'hold-unsent'] as const) {
-    const result = attempt(kind, () =>
-      applyJournalDomainInputRecovery(
-        db,
-        target,
-        kind === 'pending-unknown'
-          ? { kind, fence: recover.fence }
-          : { kind, fence: recover.fence, hold: { cause: 'hostRestarted' } },
-        { openedThrough },
-        savedAt
+  if (recover) {
+    for (const kind of ['pending-unknown', 'hold-unsent'] as const) {
+      const result = attempt(kind, () =>
+        applyJournalDomainInputRecovery(
+          db,
+          target,
+          kind === 'pending-unknown'
+            ? { kind, fence: recover.fence }
+            : { kind, fence: recover.fence, hold: { cause: 'hostRestarted' } },
+          { openedThrough },
+          savedAt
+        )
       )
-    )
-    if (result && 'failure' in result.value) {
-      recovery.failures.push({ step: kind, failure: result.value.failure })
+      if (result && 'failure' in result.value) {
+        recovery.failures.push({ step: kind, failure: result.value.failure })
+      }
     }
+    attempt('queue-reopen', () => {
+      if (journalDomainQueueAwaitsReopen(db, target)) {
+        const head = db
+          .prepare('SELECT last_sequence FROM journal_chat_state WHERE session_id=? AND epoch=?')
+          .get(target.sessionId, target.epoch)!
+        recovery.reopenFloor = { epoch: target.epoch, sequence: Number(head.last_sequence) + 1 }
+        applyJournalDomainControlCommand(
+          db,
+          target,
+          { kind: 'queue-reopen-mark', fence: recover.fence },
+          {},
+          savedAt
+        )
+        recovery.reopenFloor = null
+      }
+    })
   }
-  attempt('queue-reopen', () => {
-    if (journalDomainQueueAwaitsReopen(db, target)) {
-      const head = db
-        .prepare('SELECT last_sequence FROM journal_chat_state WHERE session_id=? AND epoch=?')
-        .get(target.sessionId, target.epoch)!
-      recovery.reopenFloor = { epoch: target.epoch, sequence: Number(head.last_sequence) + 1 }
-      applyJournalDomainControlCommand(
-        db,
-        target,
-        { kind: 'queue-reopen-mark', fence: recover.fence },
-        {},
-        savedAt
-      )
-      recovery.reopenFloor = null
-    }
-  })
   const head = db
     .prepare('SELECT last_sequence FROM journal_chat_state WHERE session_id=? AND epoch=?')
     .get(target.sessionId, target.epoch)!
@@ -105,5 +111,49 @@ export function applyJournalSqlOpenCommand(
       []
     ),
     openRecovery: recovery
+  }
+}
+
+function settleOpeningLiveWork(
+  db: Database.Database,
+  target: { sessionId: string; epoch: string },
+  savedAt: number
+): void {
+  let after: [number, string] | undefined
+  for (;;) {
+    const rows = db
+      .prepare(`SELECT ordinal,item_id,payload_json FROM journal_items
+      INDEXED BY journal_items_unsettled WHERE session_id=? AND epoch=? AND hidden=0
+      AND (lifecycle_state IN ('running','pending') OR live_work=1) AND live_work=1
+      ${after ? 'AND (ordinal,item_id)>(?,?)' : ''} ORDER BY ordinal,item_id LIMIT 128`)
+      .all(target.sessionId, target.epoch, ...(after ?? []))
+    const items: AgentJournalRenderItem[] = rows.map((row) => JSON.parse(String(row.payload_json)))
+    const revisions = staleSubagentRosterRevisions(items)
+    if (revisions.length > 0) {
+      const head = db
+        .prepare(`SELECT last_sequence,highest_fence FROM journal_chat_state
+        WHERE session_id=? AND epoch=?`)
+        .get(target.sessionId, target.epoch)!
+      applyJournalDomainLifecycle(
+        db,
+        target,
+        {
+          settlementId: `open-live-work:${Number(head.last_sequence)}`,
+          fence: Number(head.highest_fence),
+          recovered: true,
+          mutations: revisions.map((revision) => ({
+            ...revision,
+            kind: 'item',
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE
+          }))
+        },
+        savedAt
+      )
+    }
+    if (rows.length < 128) {
+      return
+    }
+    const last = rows.at(-1)!
+    after = [Number(last.ordinal), String(last.item_id)]
   }
 }

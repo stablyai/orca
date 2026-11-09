@@ -29,12 +29,10 @@ import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-sess
 import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
 import {
   openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
+  seedTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
 } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
-import {
-  openTestJournalHostDatabase,
-  closeTestJournalHostDatabase
-} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const unused = (): never => {
   throw new Error('declaration fixture must not start or mutate an agent')
@@ -173,7 +171,7 @@ export async function readRecordedAcpOptions(
       adapter,
       agents: declaredEffortAgents(agent, adapter),
       logger,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestAgentSessionDatabase(root),
       claimKeyId: 'test-key',
       modelCatalog: {
         captureRead: hostTestCatalogReadOperation,

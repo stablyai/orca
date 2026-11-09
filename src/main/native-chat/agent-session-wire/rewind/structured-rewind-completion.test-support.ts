@@ -1,0 +1,68 @@
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import { agentSessionRecordFixture } from '../../agent-session-record-test-fixture'
+import {
+  openTestAgentSessionRecordStore,
+  seedTestAgentSessionRecordStore
+} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { testEventSinkLogging } from '../host/testing/structured-agent-session-logger.test-fixture'
+import { recoverStructuredRewind } from './structured-rewind-recovery'
+
+/** Complete the saved provider mutation through the real atomic journal/record receipt. */
+export async function completeTestJournalRewind(
+  root: string,
+  journal: AgentSessionJournal,
+  itemId: string
+): Promise<void> {
+  const { sessionId, agent: provider, providerHandle } = journal.identity
+  if (!providerHandle || (provider !== 'claude' && provider !== 'codex')) {
+    throw new Error('rewind fixture requires a native provider handle')
+  }
+  await seedTestAgentSessionRecordStore(root, {
+    records: [
+      agentSessionRecordFixture({
+        sessionId,
+        provider,
+        providerHandleChain: [
+          {
+            linkId: 'head',
+            handle: providerHandle,
+            origin: 'adopted',
+            mintedAtFence: 1,
+            observedAt: 1
+          }
+        ]
+      })
+    ]
+  })
+  const store = await openTestAgentSessionRecordStore(root)
+  const operationId = '1700000000000-00000000000000000000000000000001'
+  const callerKey = 'rewind-fixture'
+  await store.admitOperation({ callerKey, operationId, fingerprint: 'rewind', now: 1_000 })
+  await store.updateRecord(sessionId, {
+    kind: 'rewind',
+    fence: 1,
+    rewind: {
+      operationId,
+      callerKey,
+      itemId,
+      expectedEpoch: journal.cursor().epoch,
+      phase: 'provider-succeeded',
+      ...(provider === 'claude'
+        ? {
+            providerFork: {
+              sessionId: 'fixture-fork',
+              sourceSessionId: providerHandle.nativeId,
+              replacesSessionId: providerHandle.nativeId,
+              materialized: true
+            }
+          }
+        : {})
+    }
+  })
+  await recoverStructuredRewind(
+    { store, logger: testEventSinkLogging().logger },
+    sessionId,
+    journal,
+    1
+  )
+}

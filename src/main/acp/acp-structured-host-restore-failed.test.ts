@@ -9,7 +9,7 @@ import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { GROK, GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-adapter.test-support'
 import { ACP_HANDLE_TRANSPORT } from './acp-structured-agent-definitions'
-import { restoreJournal } from '../native-chat/agent-session-journal/replay/journal-open'
+import { journalSqlReads } from '../native-chat/agent-session-journal/journal-sql-reads'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import {
@@ -27,13 +27,15 @@ afterEach(async () => {
 
 const FRESH = 'grok-fresh-session'
 const FRESH_2 = 'grok-second-fresh-session'
+const FRESH_3 = 'grok-third-fresh-session'
+const FRESH_4 = 'grok-fourth-fresh-session'
 const keyOf = (nativeId: string) =>
   agentSessionProviderHandleKey({ transport: ACP_HANDLE_TRANSPORT, agent: 'grok', nativeId })
 
 type Lost = Map<string, { code: number; message: string }>
 
 function sessionsLost(loads: string[], lost: Lost) {
-  const opened = [PROVIDER_SESSION, FRESH, FRESH_2]
+  const opened = [PROVIDER_SESSION, FRESH, FRESH_2, FRESH_3, FRESH_4]
   return (agent: AcpScriptedAgent) => {
     agent.on('session/new', (frame) => {
       agent.reply(frame, {
@@ -81,7 +83,10 @@ async function openRestoreRig(code: number, message: string) {
   const { rig, host, store, journalDatabase } = opened
   resolver.resolve = createAcpStructuredLaunchResolver(GROK, {
     store,
-    readJournal: (sessionId) => restoreJournal(journalDatabase.db, sessionId),
+    savedSession: {
+      hasProviderTurn: (sessionId, nativeId) =>
+        journalSqlReads(journalDatabase.readers, sessionId).hasProviderTurn(nativeId)
+    },
     resolveWorkspacePath: async () => '/workspace',
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     resolveCommand: () => '/fake/grok'
@@ -197,7 +202,7 @@ describe('a replacement after its earlier attach failed to open the journal', ()
     const spawnedBefore = [...rig.spawned]
     const chainBefore = structuredClone(store.getRecord(SESSION)?.providerHandleChain)
     // Fail before the spawned child's background handshake can prove a replacement link.
-    vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
+    vi.spyOn(AgentSessionJournal, 'open').mockRejectedValueOnce(
       new Error('journal path unavailable')
     )
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({
@@ -219,7 +224,8 @@ describe('a replacement after its earlier attach failed to open the journal', ()
   }
 
   it('is written when Grok never saved the fresh session and a newer one supersedes it', async () => {
-    const { host, store, fence, loads, lost, warnings, ready } = await failAttachBeforeReplacement()
+    const { host, store, fence, loads, lost, warnings, ready, exchange } =
+      await failAttachBeforeReplacement()
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
     await ready()
     await host.close(SESSION, 'user-close')
@@ -236,11 +242,32 @@ describe('a replacement after its earlier attach failed to open the journal', ()
       replaces: { key: keyOf(PROVIDER_SESSION), reason: 'restore-failed' }
     })
     expect(await warnings()).toHaveLength(1)
+    const firstWarning = (await warnings())[0]
+    await host.close(SESSION, 'user-close')
+
+    for (const missing of [FRESH_2, FRESH_3]) {
+      lost.set(missing, { code: -32002, message: 'Resource not found' })
+      expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
+      await ready()
+      expect(await warnings()).toEqual([firstWarning])
+      if (missing === FRESH_2) {
+        await host.close(SESSION, 'user-close')
+      }
+    }
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
     await ready()
-    expect(loads).toEqual([PROVIDER_SESSION, FRESH, FRESH_2])
-    expect(await warnings()).toHaveLength(1)
+    expect(loads).toEqual([PROVIDER_SESSION, FRESH, FRESH_2, FRESH_3, FRESH_4])
+    expect(await warnings()).toEqual([firstWarning])
+    await exchange('remember this', 'saved', FRESH_4)
+    await host.close(SESSION, 'user-close')
+    lost.set(FRESH_4, { code: -32603, message: 'session file is corrupt' })
+    expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
+    await ready()
+    const afterAnotherLoss = await warnings()
+    expect(afterAnotherLoss).toHaveLength(2)
+    expect(afterAnotherLoss[0]).toEqual(firstWarning)
+    expect(afterAnotherLoss[1]?.itemId).not.toBe(firstWarning?.itemId)
     await host.close(SESSION, 'user-close')
   })
 })

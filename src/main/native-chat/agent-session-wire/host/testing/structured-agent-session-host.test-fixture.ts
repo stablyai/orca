@@ -9,10 +9,13 @@ import type { AgentSessionRecord } from '../../../../../shared/agent-session/lif
 import type { AgentSessionMutationEnvelope } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  closeTestJournalHostDatabase,
+  createTrackedJournalOpener
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type {
   AgentSessionDispatchOutcome,
@@ -169,7 +172,7 @@ beforeEach(async () => {
     logger: log.logger,
     store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestAgentSessionDatabase(root),
     recoveryCapsule,
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
@@ -180,6 +183,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await host.flushAllStreamedEvents()
   await journals.closeAll()
+  await closeTestJournalHostDatabase(root)
   // Replaced hosts may still hold recovery-capsule locks under root.
   await recoveryCapsule.settled()
   await rm(root, { recursive: true, force: true })

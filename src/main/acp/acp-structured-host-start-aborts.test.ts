@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, describe, expect, it } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -88,7 +89,7 @@ describe('a Grok start the host aborts', () => {
     await host.flushStreamedEvents(SESSION)
     expect(rig.spawned.filter((step) => step === 'spawn')).toHaveLength(1)
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    expect(journal.submissions()).toMatchObject([
+    expect(await readTestJournalSubmissions(journal)).toMatchObject([
       { dispatchState: 'rejected', rejection: { kind: 'cancelled' } }
     ])
   })
@@ -157,15 +158,12 @@ async function expectDeliveredAfterStop(
   })
   rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
   const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  await waitFor(() =>
-    expect(
-      journal.submissions().find((entry) => entry.clientMessageId === secondId)?.dispatchState
-    ).toBe('accepted')
+  await waitFor(async () =>
+    expect((await journal.reads.submission(secondId))?.dispatchState).toBe('accepted')
   )
-  expect(journal.submissions().map((entry) => entry.rejection?.kind ?? null)).toEqual([
-    'cancelled',
-    null
-  ])
+  expect(
+    (await readTestJournalSubmissions(journal)).map((entry) => entry.rejection?.kind ?? null)
+  ).toEqual(['cancelled', null])
   await host.flushStreamedEvents(SESSION)
   const rows = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
   expect(rows.flatMap((row) => (row.body.kind === 'status' ? [row.body.text] : []))).toEqual([

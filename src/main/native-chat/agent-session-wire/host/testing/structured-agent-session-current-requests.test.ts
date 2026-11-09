@@ -153,7 +153,7 @@ it('keeps full child requests answerable outside the bounded transcript and clea
   expect((await current.host.currentWork(SESSION))?.requestProjection(SESSION).marker.version).toBe(
     requestVersion
   )
-  await current.host.subscribe({
+  const closeReopened = await current.host.subscribe({
     id: 'reopened',
     sessionId: SESSION,
     boundedFrames: true,
@@ -161,7 +161,10 @@ it('keeps full child requests answerable outside the bounded transcript and clea
     cursor,
     emit
   })
-  coalescer.flush()
+  await vi.waitFor(() => {
+    coalescer.flush()
+    expect(state.cursor).toEqual(journal.cursor())
+  })
   await vi.waitFor(() =>
     expect(state.requestAuthority?.version).toEqual(state.requestMarker?.version)
   )
@@ -200,6 +203,7 @@ it('keeps full child requests answerable outside the bounded transcript and clea
   await vi.waitFor(() => expect(state.currentRequests).toEqual([]))
   expect(journal.cursor()).toEqual(beforeExit)
   expect(selectAgentSessionCurrentRequests(state)).toEqual([])
+  closeReopened()
   reader.invalidate()
   coalescer.dispose()
 })

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../../../unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
 import { readFile, rm } from 'node:fs/promises'
@@ -29,7 +30,7 @@ import {
 
 it('hands off the reduced saved chat after clear and rewind, budgets only the starter and overwrites its file', async () => {
   await restingChat()
-  await fixture.rig.host.journalSnapshot(SESSION)
+  await readTestHostJournal(fixture.rig.host, SESSION)
   let journal = fixture.rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   const fence = fixture.rig.store.getRecord(SESSION)!.lease.runtimeFence
   const receipt = { write: () => {}, committed: () => {} }
@@ -44,17 +45,26 @@ it('hands off the reduced saved chat after clear and rewind, budgets only the st
       }
     )
   await append('PRE_CLEAR_SECRET')
-  await journal.context.clear(
-    { operationId: 'pr-31782-clear', afterFence: fence, clearedAt: fixture.rig.clock.now },
-    receipt
+  await journal.write(
+    {
+      kind: 'context-clear',
+      boundary: {
+        operationId: 'pr-31782-clear',
+        afterFence: fence,
+        clearedAt: fixture.rig.clock.now
+      }
+    },
+    () => ({ receipt: receipt })
   )
   await append('EARLY_SAVED_MARKER')
   for (let index = 0; index < 205; index++) {
     await append(`saved ${index} ${'context '.repeat(60)}`)
   }
-  const floor = journal.cursor()
   await append('DISCARDED_REWIND_SECRET')
-  await journal.context.rewind(floor, fence, [], () => receipt)
+  await journal.appendTombstone(
+    { provider: 'codex', threadId: 'saved-thread', turnId: 'saved-turn', ordinal: ordinal - 1 },
+    { fence }
+  )
   const resolution = (
     state: AgentJournalResolution['state'],
     selectedOptionId: string | null = null
@@ -182,7 +192,7 @@ it('hands off the reduced saved chat after clear and rewind, budgets only the st
   )
   await fixture.rig.restart()
   setStructuredAgentSessionHost(fixture.rig.host)
-  const snapshot = await fixture.rig.host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(fixture.rig.host, SESSION)
   journal = fixture.rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
   await append({ ...question('pending ask'), resolution: resolution('pending') })
   const params = {

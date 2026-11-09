@@ -37,6 +37,9 @@ CREATE INDEX journal_send_receipt_sequence ON journal_send_receipts(session_id,e
 CREATE INDEX journal_queue_order ON journal_queue_cards(session_id, epoch, position, message_id)
   WHERE state IN ('waiting','returned');
 CREATE INDEX journal_queue_last_position ON journal_queue_cards(session_id, epoch, position);
+CREATE INDEX journal_queue_source_metadata ON journal_queue_cards(session_id,epoch,message_id,
+  CASE WHEN json_valid(payload_json) THEN octet_length(json_extract(payload_json,'$.body')) END,
+  CASE WHEN json_valid(payload_json) THEN json_extract(payload_json,'$.queuedAt.sequence') END);
 CREATE INDEX journal_queue_returned_commands ON journal_queue_cards(session_id, epoch, command_turn_item_id)
   WHERE state='returned';
 CREATE INDEX journal_edit_leases_message ON journal_edit_leases(session_id, epoch, message_id);
@@ -69,6 +72,8 @@ CREATE INDEX journal_items_provider_turn ON journal_items(session_id,epoch,provi
   WHERE provider_turn_id IS NOT NULL;
 CREATE INDEX journal_items_codex_turn ON journal_items(session_id,epoch,codex_thread_id,codex_turn_id,sequence,sequence_index,ordinal)
   WHERE hidden=0 AND codex_turn_id IS NOT NULL;
+CREATE INDEX journal_items_visible_provider_key ON journal_items(session_id,epoch,legacy_provider_item_key)
+  WHERE hidden=0 AND legacy_provider_item_key IS NOT NULL;
 CREATE INDEX journal_submission_codex_turn ON journal_submission_attempts(session_id,epoch,codex_thread_id,codex_turn_id,item_id)
   WHERE current=1 AND dispatch_state='accepted';
 CREATE INDEX journal_items_opener ON journal_items(session_id, epoch, opener_item_id, ordinal)

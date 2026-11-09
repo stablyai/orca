@@ -155,7 +155,7 @@ it('requires a ready accepting child only while steering and rolls failed conver
     kind: 'item',
     identity: { provider: 'orca', clientMessageId: 'turn' },
     body: { kind: 'turn', turnId: 'running', state: 'completed' },
-    options: { fence: 1 }
+    options: { fence: 1, turnScope: { kind: 'thread' } }
   })
   f.selection.child = null
   const failed = await f.claim('failed', f.prepare(), [

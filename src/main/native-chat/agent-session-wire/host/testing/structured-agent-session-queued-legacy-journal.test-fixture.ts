@@ -3,7 +3,6 @@ import {
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
-import { pinTestJournalInputMode } from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -32,7 +31,5 @@ export function seedQueuedRigLegacyJournal(
     },
     now: () => HOST_TEST_NOW
   })
-  // Attaching opens the journal; the pin keeps it writing inputs, as a build from before conversion did.
-  return (host) =>
-    pinTestJournalInputMode(host.collaboratorsForTests().sessions.get(sessionId)!.journal)
+  return () => {}
 }

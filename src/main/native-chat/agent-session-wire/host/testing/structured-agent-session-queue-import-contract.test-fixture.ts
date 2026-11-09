@@ -1,166 +1,66 @@
-import { afterEach, beforeEach, expect } from 'vitest'
-import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalAnsweredTurnIdentity,
-  type AgentJournalMessageItem
-} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach } from 'vitest'
+import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { seedTestJournalHistoricalRows } from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
 import {
-  openTestJournalHostDatabase,
-  readTestQueueChanges,
-  seedLegacyTestJournal
+  createTrackedJournalOpener,
+  openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
-import {
-  createQueuedMessageTestRig,
-  type QueuedMessageTestRig
-} from './structured-agent-session-queued-message-rig.test-fixture'
 
-let rig: QueuedMessageTestRig
-
-beforeEach(async () => {
-  rig = await createQueuedMessageTestRig({ restartable: true, rewind: async () => ({ ok: true }) })
-})
-
-afterEach(() => rig.dispose())
-
-export const db = () => openTestJournalHostDatabase(rig.root).db
-
+let root: string
+const journals = createTrackedJournalOpener()
+export const sessionId = 'legacy-queue'
+export const identity = {
+  sessionId,
+  workspaceId: 'workspace-1',
+  hostId: 'local',
+  agent: 'codex' as const,
+  providerHandle: codexProviderHandle('thread')
+}
+export const sourceHandle = { kind: 'codex' as const, threadId: 'thread' }
+export const base = (seq: number) => ({ v: 4, epoch: 'frozen-epoch', seq, fence: 0, ts: 1_000 })
+export const founding: JournalRow = {
+  ...base(1),
+  kind: 'epoch',
+  reason: 'session_created',
+  providerHandle: sourceHandle
+}
 export const message = (text: string): AgentJournalMessageItem => ({
   kind: 'message',
   role: 'user',
-  blocks: [{ type: 'text', text }],
-  ...(text === '/compact' ? { command: { name: 'compact' } } : {})
+  blocks: [{ type: 'text', text }]
 })
-
-export const threadWrite = { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-
-export const words = (fact: 'providerRejected' | 'cancelled') =>
-  agentSessionFailureWords(
-    fact === 'providerRejected'
-      ? agentSessionFailureFact(fact, { detail: { text: 'refused', audience: 'person' } })
-      : agentSessionFailureFact(fact),
-    { surface: 'rejection' }
-  )
-
-export function journalFor(sessionId: string, legacyInputs = false): AgentSessionJournal {
-  const options = {
-    database: openTestJournalHostDatabase(rig.root),
-    identity: {
-      sessionId,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex' as const,
-      providerHandle: activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle
-    }
-  }
-  if (legacyInputs) {
-    seedLegacyTestJournal(options.database, options)
-  }
-  return new AgentSessionJournal(options)
-}
-
-export async function handOff(
-  journal: AgentSessionJournal,
-  attempt: string,
-  card: string,
-  text: string,
-  as: 'providerRejected' | 'cancelled' | 'accepted',
-  fence = 0,
-  beforeAnswer?: () => Promise<void>,
-  answeredInTurn?: AgentJournalAnsweredTurnIdentity
-): Promise<void> {
-  const body = message(text)
-  const payloadFingerprint = agentSessionSendBodyFingerprint(journal.queuedMessages.sessionId, body)
-  await journal.appendSubmission({
-    clientMessageId: attempt,
-    payloadFingerprint,
-    body,
-    fence,
-    handoverRecorded: true,
-    queuedMessageId: card
-  })
-  await journal.resolveDispatch({
-    clientMessageId: attempt,
-    state: 'pending',
-    fence,
-    turnScope: AGENT_JOURNAL_THREAD_SCOPE
-  })
-  await beforeAnswer?.()
-  await journal.resolveDispatch(
-    as === 'accepted'
-      ? { clientMessageId: attempt, state: 'accepted', providerIdentity: null, fence }
-      : { clientMessageId: attempt, state: 'rejected', ...words(as), fence, answeredInTurn }
-  )
-}
-
-export type Legacy = [
-  id: string,
-  state: string,
-  text: string | null,
-  consumedAs?: string,
-  hold?: string
-]
-
-export function seedLegacy(sessionId: string, rows: readonly Legacy[]): void {
-  const insert = db().prepare(
-    `INSERT INTO queued_messages (session_id, message_id, position, body_json, fingerprint,
-       created_at, host_instance, state, hold_reason, returned_reason, consumed_as)
-     VALUES (?, ?, ?, ?, ?, 0, 'earlier', ?, ?, ?, ?)`
-  )
-  rows.forEach(([id, state, text, consumedAs, hold], index) => {
-    const body = text === null ? '{' : JSON.stringify(message(text))
-    const print = text === null ? '' : agentSessionSendBodyFingerprint(sessionId, message(text))
-    const reason = state === 'returned' ? 'refused before' : null
-    insert.run(
-      sessionId,
-      id,
-      index + 1,
-      body,
-      print,
-      state,
-      hold ?? null,
-      reason,
-      consumedAs ?? null
-    )
-  })
-}
-
-export const legacyIds = (sessionId = SESSION) =>
+export const db = () => openTestJournalHostDatabase(root).db
+export const open = () => journals.open({ identity, stateDirectory: root })
+export const seed = (rows: JournalRow[], retained = false) =>
+  seedTestJournalHistoricalRows(db(), identity, rows, retained)
+export function seedLegacyCard(
+  messageId: string,
+  body: AgentJournalMessageItem,
+  consumedAs: string | null = null
+) {
   db()
-    .prepare('SELECT message_id AS id FROM queued_messages WHERE session_id = ? ORDER BY position')
-    .all(sessionId)
-    .map((row) => (typeof row === 'object' && row !== null && 'id' in row ? row.id : null))
-
-export function queueRows(sessionId = SESSION): string[] {
-  return readTestQueueChanges(db(), sessionId).map(
-    ({ messageId, op, returned }) => `${messageId}:${op}${returned ? '+refusal' : ''}`
-  )
+    .prepare(`INSERT INTO queued_messages(session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state,hold_reason,returned_reason,consumed_as)
+    VALUES(?,?,?,?,?,1000,'earlier',?,NULL,NULL,?)`)
+    .run(
+      sessionId,
+      messageId,
+      messageId === 'W' ? 1 : 2,
+      JSON.stringify(body),
+      agentSessionSendBodyFingerprint(sessionId, body),
+      consumedAs ? 'dispatched' : 'waiting',
+      consumedAs
+    )
 }
-
-export async function nothingSentTo(...cards: string[]): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 100))
-  for (const card of cards) {
-    expect(await rig.handoff(card)).toBeUndefined()
-  }
-}
-
-export const retainedHistoryCases = [
-  { adopt: false, proof: 'none' },
-  { adopt: true, proof: 'none' },
-  { adopt: false, proof: 'dispatch' },
-  { adopt: true, proof: 'item' }
-]
-
-export const fixture = {
-  get rig() {
-    return rig
-  },
-  set rig(value: typeof rig) {
-    rig = value
-  }
-}
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-queue-conversion-'))
+})
+afterEach(async () => {
+  await journals.closeAll()
+  await rm(root, { recursive: true, force: true })
+})

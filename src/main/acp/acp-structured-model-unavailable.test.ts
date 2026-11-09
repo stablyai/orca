@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
@@ -145,7 +146,7 @@ it.each(refusals)(
     for (const text of attempts) {
       const messageId = await send(host, text)
       await waitFor(async () => {
-        const snapshot = await host.journalSnapshot(SESSION)
+        const snapshot = await readTestHostJournal(host, SESSION)
         expect(
           snapshot.submissions.find((entry) => entry.clientMessageId === messageId)
         ).toMatchObject({
@@ -165,7 +166,7 @@ it.each(refusals)(
       )
       expect(commands()).toHaveLength(framesOf(rig.child(), 'session/prompt').length)
     }
-    const failed = await host.journalSnapshot(SESSION)
+    const failed = await readTestHostJournal(host, SESSION)
     expect(
       failed.submissions.filter((entry) => entry.rejection?.kind === failure.kind)
     ).toHaveLength(attempts.length)

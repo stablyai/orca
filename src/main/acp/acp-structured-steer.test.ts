@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { DISPATCH_REJECTED_CANCELLED } from '../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
@@ -180,12 +181,14 @@ describe('permission changes with already admitted ACP input', () => {
     expect(framesOf(original, 'session/cancel')).toHaveLength(1)
     expect(framesOf(original, 'session/prompt')).toHaveLength(0)
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    const handoffId = journal.queuedMessages.get(id)?.consumedAs ?? id
+    const handoffId = (await journal.queuedMessages.get(id))?.consumedAs ?? id
     const prompt = await rig.frame('session/prompt')
     expect(promptIdOf(prompt)).toBe(`prompt:${handoffId}`)
     rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'done'))
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
-    await waitFor(() => expect(journal.submission(handoffId)?.dispatchState).toBe('accepted'))
+    await waitFor(async () =>
+      expect((await journal.reads.submission(handoffId))?.dispatchState).toBe('accepted')
+    )
     expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1)
     await host.close(SESSION, 'user-close')
   })
@@ -212,39 +215,51 @@ describe('permission changes with already admitted ACP input', () => {
       ).toMatchObject({ ok: true })
       const c = await send(host, 'C new policy')
       const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-      const handoffId = (id: string) => journal.queuedMessages.get(id)?.consumedAs ?? id
-      expect(journal.queuedMessages.get(c)).toMatchObject({ state: 'waiting', consumedAs: null })
-      expect(journal.submission(handoffId(b))?.dispatchState).toBe('pending')
+      const handoffId = async (id: string) =>
+        (await journal.queuedMessages.get(id))?.consumedAs ??
+        (await journal.reads.input({ kind: 'linked-to', messageId: id })).submissions[0]
+          ?.clientMessageId ??
+        id
+      const dispatchOf = async (id: string) =>
+        (await journal.reads.submission(await handoffId(id)))?.dispatchState
+      expect(await journal.queuedMessages.get(c)).toMatchObject({
+        state: 'waiting',
+        consumedAs: null
+      })
+      expect(await dispatchOf(b)).toBe('pending')
       expect(framesOf(original, 'session/prompt')).toHaveLength(1)
       original.agent.reply(promptA, { stopReason: 'cancelled' })
       const promptB = await rig.frame('session/prompt', 1)
-      expect(promptIdOf(promptB)).toBe(`prompt:${handoffId(b)}`)
+      expect(promptIdOf(promptB)).toBe(`prompt:${await handoffId(b)}`)
       original.agent.notify('session/update', replyChunk(promptIdOf(promptB), 'answered B'))
-      await waitFor(() => expect(journal.submission(handoffId(b))?.dispatchState).toBe('accepted'))
+      await waitFor(async () => expect(await dispatchOf(b)).toBe('accepted'))
       if (outcome === 'deadline') {
-        await waitFor(() =>
-          expect(journal.submission(handoffId(c))?.dispatchState).toBe('rejected')
-        )
-        expect(journal.submission(handoffId(c))?.rejection).toMatchObject({
+        await waitFor(async () => expect(await dispatchOf(c)).toBe('rejected'))
+        expect((await journal.reads.submission(await handoffId(c)))?.rejection).toMatchObject({
           kind: 'restartFailed',
           neverReachedAgent: true
         })
         expect(original.exited).toBe(false)
       }
       original.agent.reply(promptB, { stopReason: 'end_turn' })
-      expect(journal.submission(a)?.dispatchState).toBe('accepted')
+      expect((await journal.reads.submission(a))?.dispatchState).toBe('accepted')
       expect(framesOf(original, 'session/prompt')).toHaveLength(2)
       if (outcome === 'drained') {
         await waitFor(() => expect(original.exited).toBe(true))
+        await waitFor(() => expect(rig.child()).not.toBe(original))
         const promptC = await rig.frame('session/prompt')
-        expect(promptIdOf(promptC)).toBe(`prompt:${handoffId(c)}`)
+        // The restarted agent receives C as its own delivery of the queued card.
+        const deliveredC = promptIdOf(promptC).replace(/^prompt:/, '')
+        expect(await journal.reads.submissionBody(deliveredC)).toMatchObject({
+          blocks: [{ type: 'text', text: 'C new policy' }]
+        })
         rig.child().agent.notify('session/update', replyChunk(promptIdOf(promptC), 'answered C'))
         rig.child().agent.reply(promptC, { stopReason: 'end_turn' })
-        await waitFor(() =>
-          expect(journal.submission(handoffId(c))?.dispatchState).toBe('accepted')
+        await waitFor(async () =>
+          expect((await journal.reads.submission(deliveredC))?.dispatchState).toBe('accepted')
         )
       } else {
-        expect(journal.submission(handoffId(c))?.dispatchState).toBe('rejected')
+        expect(await dispatchOf(c)).toBe('rejected')
       }
       await host.close(SESSION, 'user-close')
     }
@@ -496,7 +511,7 @@ describe('Steer on a Grok card, through the host', () => {
       return history.ok ? history.page : null
     }
     const sends = async () =>
-      (await host.journalSnapshot(SESSION)).submissions
+      (await readTestHostJournal(host, SESSION)).submissions
         .filter((entry) => entry.queuedMessageId === cardId)
         .map((entry) => ({ state: entry.dispatchState, reason: entry.reason }))
     return { cardId, sendNow, page, sends }

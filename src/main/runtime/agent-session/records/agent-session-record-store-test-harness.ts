@@ -1,5 +1,6 @@
 /** Centralize store fixtures in the worker-owned journal DB; closeTestAgentSessionRecordStores owns their cleanup. */
 
+import { resolve } from 'node:path'
 import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
 import {
@@ -19,6 +20,8 @@ import {
 } from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import type Database from '../../../sqlite/sync-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
+import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
+import { ensureStructuredAgentSessionHost } from '../structured-agent-session-runtime'
 import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'
 
 const TEST_HOST_ID = 'local'
@@ -36,18 +39,40 @@ export type PersistedTestAgentSessionStore = {
 
 const databases = new Map<string, Promise<JournalSqlDatabase>>()
 
+export async function ensureTestStructuredAgentSessionHost(
+  deps: Parameters<typeof ensureStructuredAgentSessionHost>[0]
+): ReturnType<typeof ensureStructuredAgentSessionHost> {
+  await openAgentSessionRecordStoreOnce({
+    stateDirectory: deps.stateDirectory,
+    hostId: deps.hostId,
+    logger: deps.logger,
+    legacySessionTabIds: deps.legacySessionTabIds ?? [],
+    writerPath: journalSqlWorkerPath(),
+    readerPath: journalSqlReaderPath()
+  })
+  return ensureStructuredAgentSessionHost(deps)
+}
+
 /** Stores reopened in one directory share its writer, like one runtime's slot. */
 export function openTestAgentSessionDatabase(stateDirectory: string): Promise<JournalSqlDatabase> {
-  let opened = databases.get(stateDirectory)
+  const directory = resolve(stateDirectory)
+  let opened = databases.get(directory)
   if (!opened) {
-    opened = JournalSqlDatabase.open(stateDirectory, {
+    opened = JournalSqlDatabase.open(directory, {
       writerPath: journalSqlWorkerPath(),
       readerPath: journalSqlReaderPath(),
       onMaintenanceError: () => {}
     })
-    databases.set(stateDirectory, opened)
+    databases.set(directory, opened)
   }
   return opened
+}
+
+export async function closeTestAgentSessionDatabase(stateDirectory: string): Promise<void> {
+  const directory = resolve(stateDirectory)
+  const opened = databases.get(directory)
+  databases.delete(directory)
+  await (await opened)?.close()
 }
 
 export async function closeTestAgentSessionRecordStores(): Promise<void> {

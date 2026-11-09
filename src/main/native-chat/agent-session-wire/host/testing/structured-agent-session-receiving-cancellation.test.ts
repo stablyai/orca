@@ -21,13 +21,11 @@ it('finishes an owned ordinary open but direct cancellation publishes no child',
     await f.rig.host.close(PARENT, 'evict')
     f.selectB()
     const original = acquiredAgentSessionAccount(f.rig.store.requireWritableRecord(PARENT))
-    const open = AgentSessionJournal.prototype.open
-    vi.spyOn(AgentSessionJournal.prototype, 'open').mockImplementationOnce(async function (
-      this: AgentSessionJournal
-    ) {
+    const open = AgentSessionJournal.open
+    vi.spyOn(AgentSessionJournal, 'open').mockImplementationOnce(async function (options) {
       opened.resolve()
       await release.promise
-      return open.call(this)
+      return open(options)
     })
     f.rig.adapter.acquire.mockClear()
     const result = f.ensure().then(
@@ -61,7 +59,7 @@ it('ensure and ordinary send share the journal refusal; retry retains history wi
     const before = f.rig.store.requireWritableRecord(PARENT)
     const rows = f.rig.store.listOperationRows()
     const open = vi
-      .spyOn(AgentSessionJournal.prototype, 'open')
+      .spyOn(AgentSessionJournal, 'open')
       .mockRejectedValue(new Error('fixture journal IO unavailable'))
     f.rig.adapter.acquire.mockClear()
     const ensured = await f.ensure()

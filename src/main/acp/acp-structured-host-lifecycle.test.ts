@@ -1,3 +1,7 @@
+import {
+  readTestHostJournal,
+  readTestJournalSubmissions
+} from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
@@ -134,7 +138,7 @@ describe('a Grok crash whose exit is not proven yet', () => {
     const next = await send(host, 'next')
     await waitFor(async () =>
       expect(
-        (await host.journalSnapshot(SESSION)).submissions.find(
+        (await readTestHostJournal(host, SESSION)).submissions.find(
           (entry) => entry.clientMessageId === next
         )
       ).toMatchObject({
@@ -216,7 +220,7 @@ describe('closing or stopping a Grok chat while it starts', () => {
     expect(restarted.exited).toBe(true)
     await host.flushStreamedEvents(SESSION)
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    expect(journal.submissions()).toMatchObject([
+    expect(await readTestJournalSubmissions(journal)).toMatchObject([
       { dispatchState: 'rejected', rejection: { kind: 'cancelled' } }
     ])
     const rows = (await host.history({ sessionId: SESSION, direction: 'tail' })).page.items
@@ -286,7 +290,9 @@ describe('a Grok send whose acceptance could not be written', () => {
     await waitFor(async () => expect((await host.currentWork(SESSION))?.working()).toBe(false))
     // Rejected journal admission leaves the send pending.
     expect(
-      (await host.journalSnapshot(SESSION)).submissions.find((row) => row.clientMessageId === sent)
+      (await readTestHostJournal(host, SESSION)).submissions.find(
+        (row) => row.clientMessageId === sent
+      )
     ).toMatchObject({ dispatchState: 'pending' })
     await host.close(SESSION, 'user-close')
   })

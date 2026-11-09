@@ -10,7 +10,10 @@ import type { AgentJournalSubmission } from '../../../../../shared/agent-session
 import type { AgentSessionQueuePause } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionMessagePayload } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 
@@ -24,10 +27,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
-import {
-  closeTestJournalHostDatabase,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-legacy-journal.test-fixture'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import {
@@ -62,13 +62,14 @@ export async function createQueuedMessageTestRig(
   let store = await openTestAgentSessionRecordStore(root)
   const provider = createQueuedRigProvider(store, options, () => host)
   const { dispatch, compact, cancelTurn, closeSession, setOption } = provider
+  const journalDatabase = await openTestAgentSessionDatabase(root)
   const makeHost = () =>
     new StructuredAgentSessionHost({
       agents: claudeAndCodexDeclared(),
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: provider.adapter,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase,
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-1',
       now: options.now ?? (() => NOW),
@@ -165,15 +166,14 @@ export async function createQueuedMessageTestRig(
   }
 
   async function submission(id: string): Promise<AgentJournalSubmission | undefined> {
-    return (await host.journalSnapshot(SESSION)).submissions.find(
-      (entry) => entry.clientMessageId === id
-    )
+    await host.history({ sessionId: SESSION, direction: 'tail' })
+    return host.collaboratorsForTests().sessions.get(SESSION)!.journal.reads.submission(id)
   }
 
   async function handoff(draftId: string): Promise<AgentJournalSubmission | undefined> {
-    return (await host.journalSnapshot(SESSION)).submissions.findLast(
-      (entry) => entry.queuedMessageId === draftId
-    )
+    await host.history({ sessionId: SESSION, direction: 'tail' })
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    return (await journal.reads.input({ kind: 'linked-to', messageId: draftId })).submissions.at(-1)
   }
 
   /** Handoff submission IDs differ from their draft IDs. */

@@ -1,3 +1,7 @@
+import {
+  readTestHostJournal,
+  readTestJournalItems
+} from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
 import { partialRuntimeStore } from '../../../../orca-runtime-tests/runtime-store-partial-fixture'
@@ -671,7 +675,7 @@ describe('the structured redrive publication edge', () => {
     vi.advanceTimersByTime(300)
 
     expect(onJournalActivity).toHaveBeenCalledExactlyOnceWith(identity.sessionId)
-    expect(journal.snapshot().items).toEqual([])
+    expect(await readTestJournalItems(journal)).toEqual([])
   })
 
   it('still re-evaluates a journal that never goes quiet', async () => {
@@ -688,7 +692,12 @@ describe('the structured redrive publication edge', () => {
     const { identity, journal, fence, onJournalActivity } = await startWatchedWorker()
     const before = journal.cursor()
 
-    await journal.rollEpoch('unreconcilable_prefix', fence)
+    await journal.write({
+      kind: 'epoch-replace',
+      reason: 'unreconcilable_prefix',
+      fence,
+      items: []
+    })
     vi.advanceTimersByTime(300)
 
     expect(journal.cursor().epoch).not.toBe(before.epoch)
@@ -700,7 +709,7 @@ describe('the structured redrive publication edge', () => {
     await reattach(identity.sessionId)
     const snapshot = vi.spyOn(host.collaboratorsForTests().subscribers, 'snapshot')
     await host.close(identity.sessionId, 'evict')
-    await host.journalSnapshot(identity.sessionId)
+    await readTestHostJournal(host, identity.sessionId)
     vi.advanceTimersByTime(300)
     onJournalActivity.mockClear()
 

@@ -138,6 +138,7 @@ export class AgentSessionStoreTransactions {
           }
         }
         this.publish(next, this.published, agentSessionStoreRowChanges(this.published, next))
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: executeMutation preserves the command/result correlation enforced by its typed public entry points.
         return result as T
       }
       if (this.readOnly) {
@@ -156,6 +157,7 @@ export class AgentSessionStoreTransactions {
         }
       ])
       const [store] = this.publishResults([result])
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store effect returns the result of this exact typed mutation.
       return store.value as T
     })
     this.queue = run.catch(() => {})

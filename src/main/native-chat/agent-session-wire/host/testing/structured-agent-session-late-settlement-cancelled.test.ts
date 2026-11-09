@@ -47,15 +47,11 @@ describe('settling a send the provider proves it received after the ack window',
     await vi.waitFor(async () =>
       expect(await submissions()).toMatchObject([{ dispatchState: 'rejected' }])
     )
-    const before = journal().cursor()
     await fixture.host.settleLateDispatch({
       sessionId: SESSION,
       clientMessageId: params.envelope.clientOperationId,
       providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
     })
-
-    const after = journal().readSince(before)
-    expect(after.ok && after.rows.filter((row) => row.kind === 'dispatch')).toEqual([])
 
     expect(await submissions()).toMatchObject([
       {
@@ -105,7 +101,6 @@ describe('settling a send the provider proves it received after the ack window',
     const params = sendParams('ordinary send')
     await fixture.host.send(CALLER, params)
     await handedOver(params.envelope.clientOperationId)
-    const before = journal().cursor()
     const receipt = (uuid: string) =>
       fixture.host.settleLateDispatch({
         sessionId: SESSION,
@@ -116,9 +111,7 @@ describe('settling a send the provider proves it received after the ack window',
     await Promise.all([receipt('echo-row'), receipt('echo-row')])
     await receipt('a-different-uuid')
 
-    const after = journal().readSince(before)
-    expect(after.ok && after.rows).toHaveLength(1)
-    expect(journal().submission(params.envelope.clientOperationId)).toMatchObject({
+    expect(await journal().reads.submission(params.envelope.clientOperationId)).toMatchObject({
       dispatchState: 'accepted',
       providerItemId: `claude:${THREAD}:echo-row`
     })

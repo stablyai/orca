@@ -41,7 +41,8 @@ export function decideItem(
         lifecycle: change !== 'update',
         options: { ...event.producer, turnScope: scope },
         resolution: {
-          kind: 'guarded-item',
+          kind:
+            event.type === 'item.update' && event.lossWarning ? 'acp-loss-warning' : 'guarded-item',
           identity: row.identity,
           body: event.body,
           change,

@@ -54,7 +54,7 @@ it('keeps exact image controls and pause for older readers, on history and the s
     nextQueuedMessageId: 'image'
   }
   hostCalls.history.mockReturnValue({ ok: true, page: { items: [], ...queue } })
-  hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
+  hostCalls.subscribe.mockImplementation(async (input: AgentSessionSubscribeInput) => {
     const event: AgentSessionSubscribeEvent = {
       type: 'batch',
       sessionId: SESSION,
@@ -65,15 +65,17 @@ it('keeps exact image controls and pause for older readers, on history and the s
         submissions: []
       }
     }
-    for (const frame of buildSubscriberFrame(
-      { readQueuePublication: () => queue },
-      {
-        sessionId: SESSION,
-        boundedFrames: input.boundedFrames === true,
-        projectQueuePublication: input.projectQueuePublication
-      },
-      event,
-      false
+    for (const frame of (
+      await buildSubscriberFrame(
+        { readQueuePublication: () => queue },
+        {
+          sessionId: SESSION,
+          boundedFrames: input.boundedFrames === true,
+          projectQueuePublication: input.projectQueuePublication
+        },
+        event,
+        false
+      )
     ).frames) {
       input.emit(frame)
     }
@@ -140,7 +142,7 @@ it('compacts old image controls before bounding to retain the head and following
     nextQueuedMessageId: null
   }
   expect(boundedQueuePublication(queue).queuedMessages).not.toContain(text)
-  hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
+  hostCalls.subscribe.mockImplementation(async (input: AgentSessionSubscribeInput) => {
     const subscriber: SubscriberFieldState = {
       sessionId: SESSION,
       boundedFrames: input.boundedFrames === true,
@@ -152,13 +154,15 @@ it('compacts old image controls before bounding to retain the head and following
       batch: { cursor: { epoch: 'a', sequence: 0 }, items: [], removedItemIds: [], submissions: [] }
     }
     const context = { readQueuePublication: () => queue }
-    const built = buildSubscriberFrame(context, subscriber, event, false)
+    const built = await buildSubscriberFrame(context, subscriber, event, false)
     for (const frame of built.frames) {
       input.emit(frame)
     }
     expect(built.queued).toBe(queue)
     subscriber.queuePublication = built.queued
-    expect(buildSubscriberFrame(context, subscriber, event, false).attachedQueued).toBe(false)
+    expect((await buildSubscriberFrame(context, subscriber, event, false)).attachedQueued).toBe(
+      false
+    )
     return () => {}
   })
   expect(

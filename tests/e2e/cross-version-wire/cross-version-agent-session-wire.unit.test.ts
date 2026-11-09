@@ -8,10 +8,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { emptyAgentSessionBatch } from '../../../src/main/native-chat/agent-session-wire/publication/subscribers/agent-session-empty-batch'
-import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-support'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
@@ -53,10 +56,11 @@ import {
   type RpcClientIdentity,
   type RpcReply
 } from './versioned-agent-session-wire'
+import { readTestHostJournal } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import * as journalHostDatabase from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
 const SUITE_TIMEOUT_MS = 180_000
@@ -357,7 +361,7 @@ describe('cross-version structured agent sessions', () => {
           spawnToken: 'spawn-vault',
           host: () => host
         }),
-        journalDatabase: journalHostDatabase.openTestJournalHostDatabase(root),
+        journalDatabase: await openTestAgentSessionDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => 'spawn-vault',
         now: () => NOW
@@ -585,7 +589,7 @@ describe('cross-version structured agent sessions', () => {
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter: adapter(() => host),
-        journalDatabase: journalHostDatabase.openTestJournalHostDatabase(root),
+        journalDatabase: await openTestAgentSessionDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => `spawn-${generation}`,
         // The provider died with the host that spawned it, which is what makes
@@ -757,7 +761,7 @@ describe('cross-version structured agent sessions', () => {
       open()
       await vi.waitFor(async () =>
         expect(
-          (await restarted.journalSnapshot(SESSION)).submissions.every(
+          (await readTestHostJournal(restarted, SESSION)).submissions.every(
             (row) => row.dispatchState !== 'pending' || row.handedOverAt
           )
         ).toBe(true)

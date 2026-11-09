@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -123,14 +124,15 @@ async function acquire(journal: AgentSessionJournal) {
   return { translator, bind, settle, exit }
 }
 
-const proseRow = (journal: AgentSessionJournal, text: string): AgentJournalRenderItem | undefined =>
-  journal
-    .snapshot()
-    .items.find(
-      (item) =>
-        item.body.kind === 'message' &&
-        item.body.blocks.some((block) => block.type === 'text' && block.text === text)
-    )
+const proseRow = async (
+  journal: AgentSessionJournal,
+  text: string
+): Promise<AgentJournalRenderItem | undefined> =>
+  (await readTestJournalItems(journal)).find(
+    (item) =>
+      item.body.kind === 'message' &&
+      item.body.blocks.some((block) => block.type === 'text' && block.text === text)
+  )
 
 describe('a Claude subagent resumed after its provider restarted', () => {
   it('keeps the canonical id its first run was given, so one child stays one child', async () => {
@@ -161,7 +163,7 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     first.translator.handle(taskFailed('agent-a', 'toolu_spawn_a'))
     first.translator.handle(result('result-a'))
     await first.exit()
-    expect(proseRow(journal, 'A reads the rig recipes')).toMatchObject({ agentId: 'agent-a' })
+    expect(await proseRow(journal, 'A reads the rig recipes')).toMatchObject({ agentId: 'agent-a' })
 
     // The acquisition's saved answers apply before its sink binds.
     const second = await acquire(journal)
@@ -182,18 +184,18 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     second.bind()
     await second.settle()
 
-    expect(proseRow(journal, 'A restarts the receiver')).toMatchObject({
+    expect(await proseRow(journal, 'A restarts the receiver')).toMatchObject({
       agentId: 'agent-a',
       providerParentRef: 'toolu_spawn_a',
       producerKind: 'agent'
     })
-    expect(proseRow(journal, 'B checks the rig')).toMatchObject({
+    expect(await proseRow(journal, 'B checks the rig')).toMatchObject({
       agentId: 'agent-b',
       providerParentRef: 'toolu_spawn_b'
     })
-    expect(proseRow(journal, 'A reads the rig recipes')?.attempt).toBeUndefined()
-    expect(proseRow(journal, 'A restarts the receiver')?.attempt).toBe(2)
-    expect(proseRow(journal, 'B checks the rig')?.attempt).toBe(2)
+    expect((await proseRow(journal, 'A reads the rig recipes'))?.attempt).toBeUndefined()
+    expect((await proseRow(journal, 'A restarts the receiver'))?.attempt).toBe(2)
+    expect((await proseRow(journal, 'B checks the rig'))?.attempt).toBe(2)
     await second.exit()
   })
 })

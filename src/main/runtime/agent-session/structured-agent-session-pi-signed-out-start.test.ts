@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -12,10 +13,8 @@ import { createTestParams } from '../../native-chat/agent-session-wire/host/test
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
 import { peekOpenedAgentSessionRecordStore } from './records/agent-session-record-store-slot'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 
 let directory: string | undefined
 let operations = 0
@@ -72,7 +71,7 @@ it('settles the held message once, closes Pi, and starts afresh for a later send
   script.releaseHandshake()
   const submission = async () => {
     await host.flushStreamedEvents(SESSION)
-    return (await host.journalSnapshot(SESSION)).submissions.find(
+    return (await readTestHostJournal(host, SESSION)).submissions.find(
       (entry) => entry.clientMessageId === firstMessage.clientMessageId
     )
   }

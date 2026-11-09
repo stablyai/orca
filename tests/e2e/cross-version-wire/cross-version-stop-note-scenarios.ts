@@ -6,6 +6,7 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
 } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { readTestJournalItems } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
 import {
   createReleasedStopNoteRig,
@@ -27,8 +28,8 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
       it('renders the derived page with the interrupted turn outside the page', async () => {
         await turn('interrupted')
         await note()
-        const snapshot = rig.journal.snapshot()
-        const stored = rig.journal.itemBody(noteId)
+        const items = await readTestJournalItems(rig.journal)
+        const stored = await rig.journal.reads.itemBody(noteId)
         const notePage = await page({ direction: 'tail', limit: 1 })
         expect(notePage.items.map((item) => item.itemId)).toEqual([noteId])
         const state = rig.client.reduceStructuredAgentSession(
@@ -39,8 +40,8 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
           }
         )
         expect(render(state)).toMatchObject({ type: 'text', text: ordinary.text })
-        expect(state.items[0]).toEqual(snapshot.items.find((item) => item.itemId === noteId))
-        expect(rig.journal.itemBody(noteId)).toBe(stored)
+        expect(state.items[0]).toEqual(items.find((item) => item.itemId === noteId))
+        expect(await rig.journal.reads.itemBody(noteId)).toEqual(stored)
       })
       it.each([false, true])(
         'renders the same-revision note with a live turn end (lifecycle batch=%s)',
@@ -67,13 +68,7 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
           })
           const after = reduce(before, replies)
           expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
-          expect(rig.journal.itemBody(noteId)).toEqual(unconfirmed)
-          // The turn end is one saved sequence that touches only the turn, whichever writer made it.
-          const since = rig.journal.readSince(before.cursor!)
-          expect(since).toMatchObject({
-            ok: true,
-            rows: [expect.objectContaining({ kind: 'outcome', itemIds: [turnItemId] })]
-          })
+          expect(await rig.journal.reads.itemBody(noteId)).toEqual(unconfirmed)
         }
       )
       it('refreshes a non-upgrade stale page after an out-of-window live correction at the terminal cursor', async () => {

@@ -6,6 +6,7 @@ import type {
   AgentSessionHistoryPage
 } from '../../../../../shared/agent-session/agent-session-wire'
 import type { HistoryReader } from './agent-session-history-page-bounds'
+import { heldQueuedImageHistoryPolicy } from './agent-session-queued-image-reader'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 
 export type AgentSessionHistoryScope = 'every-agent' | 'own-agent'
@@ -24,21 +25,30 @@ export async function readAgentSessionHistory(
     rowReplay?: boolean
   } = {}
 ): Promise<AgentSessionHistoryResult> {
-  const result = await journal.history({
-    ...request,
-    scope,
-    rowReplay,
-    reader: { form: reader.wireForm ?? 'client', budgetBytes: reader.budgetBytes }
-  })
-  return {
-    ...result,
-    page: await projectPage(
-      journal,
-      result.page,
-      reader,
-      request.direction === 'after' && result.ok
-    )
+  const read = async (): Promise<AgentSessionHistoryResult> => {
+    const result = await journal.history({
+      ...request,
+      scope,
+      rowReplay,
+      reader: {
+        form: reader.wireForm ?? 'client',
+        budgetBytes: reader.budgetBytes,
+        ...(reader.queueSourceIds
+          ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
+          : {})
+      }
+    })
+    return {
+      ...result,
+      page: await projectPage(
+        journal,
+        result.page,
+        reader,
+        request.direction === 'after' && result.ok
+      )
+    }
   }
+  return reader.queueSourceIds ? journal.readInOrder(read) : read()
 }
 
 export function createAgentSessionCatchUpReader(
@@ -53,12 +63,21 @@ export async function readAgentSessionHydrationPage(
   fence?: number,
   reader: HistoryReader = CLIENT_HISTORY_READER
 ): Promise<AgentSessionHistoryPage> {
-  const result = await journal.history({
-    direction: 'hydrate',
-    fence,
-    reader: { form: reader.wireForm ?? 'client', budgetBytes: reader.budgetBytes }
-  })
-  return projectPage(journal, result.page, reader, false)
+  const read = async () => {
+    const result = await journal.history({
+      direction: 'hydrate',
+      fence,
+      reader: {
+        form: reader.wireForm ?? 'client',
+        budgetBytes: reader.budgetBytes,
+        ...(reader.queueSourceIds
+          ? { queuedImages: await heldQueuedImageHistoryPolicy(journal) }
+          : {})
+      }
+    })
+    return projectPage(journal, result.page, reader, false)
+  }
+  return reader.queueSourceIds ? journal.readInOrder(read) : read()
 }
 
 async function projectPage(

@@ -203,7 +203,7 @@ export async function initializeAcpStructuredSession(
   }
   // Include warning rows missed by earlier failed starts.
   const lost = [
-    ...((await launch.resume?.unannouncedLosses()) ?? []),
+    ...(launch.resume?.lossKeys ?? []),
     ...(takeover?.replaces ? [takeover.replaces.key] : [])
   ]
   for (const key of lost) {

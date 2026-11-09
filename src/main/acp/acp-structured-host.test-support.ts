@@ -3,7 +3,6 @@ import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { messageText } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
@@ -19,7 +18,10 @@ import {
   hostTestAttachParams
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { AgentSessionRecoveryCapsule } from '../runtime/agent-session/records/agent-session-recovery-capsule'
-import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import {
   GROK,
@@ -73,8 +75,8 @@ export function launch(resume: () => boolean, spec = GROK): () => Promise<AcpStr
             agent: spec.agent,
             nativeId: PROVIDER_SESSION
           }),
-          mayBeUnsaved: () => false,
-          unannouncedLosses: () => []
+          mayBeUnsaved: async () => false,
+          lossKeys: []
         }
       : null
   })
@@ -96,7 +98,7 @@ export async function openHostRig(
   let generation = 0
   // Forward lifecycle and late-send settlements as the runtime does.
   const hosted: { host: StructuredAgentSessionHost | null } = { host: null }
-  const journalDatabase = openTestJournalHostDatabase(state.root)
+  const journalDatabase = await openTestAgentSessionDatabase(state.root)
   const rig = await openAcpAdapterRig({
     ...options,
     deps: {

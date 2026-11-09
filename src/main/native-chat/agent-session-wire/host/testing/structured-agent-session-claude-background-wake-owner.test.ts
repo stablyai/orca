@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -19,7 +20,7 @@ import {
 async function turns() {
   await laneDrained()
   await fixture.host.flushStreamedEvents(SESSION)
-  return (await fixture.host.journalSnapshot(SESSION)).items.flatMap((item) => {
+  return (await readTestHostJournal(fixture.host, SESSION)).items.flatMap((item) => {
     const turn = readAgentJournalTurn(item.body)
     return turn ? [turn] : []
   })

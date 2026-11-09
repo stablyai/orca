@@ -3,9 +3,12 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session/jour
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionProviderContextBoundary } from '../../../shared/agent-session/agent-session-provider-context'
-import type { AgentJournalEpochReason, JournalEpochRow } from './durable-rows/journal-row-schema'
+import type {
+  AgentJournalEpochReason,
+  JournalEpochRow,
+  JournalStopEvent
+} from './durable-rows/journal-row-schema'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
-import type * as ids from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { QueuedMessageHoldReason } from './queued-messages/queued-message-table'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { JournalSubmissionSelector } from './journal-submission-selector'
@@ -23,18 +26,15 @@ import type {
   JournalStaleSettlementInput,
   JournalPromptMutationInput,
   JournalUnheldTurnsSettlementInput,
-  JournalStartFailureSettlementInput
+  JournalStartFailureSettlementInput,
+  JournalItemAppendInput,
+  JournalLifecycleBatchInput,
+  ResolveDispatchInput
 } from './journal-store-contracts'
 import type {
   AgentJournalCursor,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type {
-  JournalItemAppendInput,
-  JournalLifecycleBatchInput,
-  ResolveDispatchInput
-} from './journal-store-contracts'
-import type { JournalStopEvent } from './durable-rows/journal-row-schema'
 import type { JournalWriterEffect } from './journal-writer-effects'
 import type { JournalWriterHostFacts } from './journal-writer-host-facts'
 import type { JournalWriterStep } from './writing/journal-writer-step'
@@ -132,10 +132,10 @@ export type JournalWriterInputOperation =
       /** The host's current-work answer, read on its lane just before this command. */
       liveTurnId: string | null
     }
-  | { kind: 'goal-withdraw'; identity: ids.AgentJournalItemIdentity; fence: number }
+  | { kind: 'goal-withdraw'; identity: AgentJournalItemIdentity; fence: number }
   | {
       kind: 'item-claiming'
-      identity: ids.AgentJournalItemIdentity
+      identity: AgentJournalItemIdentity
       body: AgentJournalMessageItem
       options: JournalItemAppendOptions
     }

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import '../../unused-default-rpc-methods.test-fixture'
 /** An agent's own `orca agent launch` leaves one card in its chat; nothing else does, and the card never gates the launch. */
 
@@ -107,7 +108,7 @@ function nextOperationId(): string {
 }
 
 async function cards() {
-  return (await rig.host.journalSnapshot(CALLER)).items.filter(
+  return (await readTestHostJournal(rig.host, CALLER)).items.filter(
     (item) => item.body.kind === 'agent-handoff'
   )
 }

@@ -9,15 +9,13 @@ import { journalDatabasePath } from '../../native-chat/agent-session-journal/dat
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type * as AgentSessionRecordRows from './records/agent-session-record-rows'
 import {
+  ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { OrcaRuntimeService } from '../orca-runtime'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 const writes = vi.hoisted(() => ({ failing: false }))

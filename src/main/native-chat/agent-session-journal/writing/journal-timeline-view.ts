@@ -8,11 +8,14 @@ import { readJournalInputItem } from '../input-order/journal-input-obligations'
 import { journalItemLifecycleState } from '../journal-item-status-metadata'
 import { lostLiveWorkJournalBody } from '../item-lifecycle/journal-subagent-liveness'
 import { personStopDecidesTurn } from '../context-epochs/journal-stop-turn-end'
+import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { spelledProviderTimelineItemKey } from '../../../../shared/provider-timeline-item-key'
 
 /** Named selections a timeline resolution reads at its write position; never the whole chat. */
 export type JournalTimelineView = {
   item(itemId: string): AgentJournalRenderItem | null
   itemBody(itemId: string): AgentJournalItemBody | null
+  hasVisibleProviderItemKey(key: string): boolean
   /** The most recently written turn row. */
   newestTurn(): AgentJournalRenderItem | null
   newestWithKeyPrefix(prefix: string): AgentJournalRenderItem | null
@@ -35,6 +38,8 @@ export function journalTimelineView(state: JournalReducerState): JournalTimeline
   return {
     item,
     itemBody: (itemId) => item(itemId)?.body ?? null,
+    hasVisibleProviderItemKey: (key) =>
+      hasProviderItemKey(state.queries.itemsWithKeyPrefix(state, 'legacy:'), key),
     newestTurn: () => state.queries.newestTurnItem(state),
     newestWithKeyPrefix: (prefix) => state.queries.newestItemWithKeyPrefix(state, prefix),
     withKeyPrefix: (prefix) => state.queries.itemsWithKeyPrefix(state, prefix),
@@ -53,6 +58,7 @@ export function journalTimelineItemsView(
   return {
     item,
     itemBody: (itemId) => item(itemId)?.body ?? null,
+    hasVisibleProviderItemKey: (key) => hasProviderItemKey(items(), key),
     newestTurn: () => newestJournalTimelineTurn(items()),
     withKeyPrefix: function* (prefix) {
       for (const item of items()) {
@@ -74,6 +80,19 @@ export function journalTimelineItemsView(
     unsettled: (turnItemId) => unsettledJournalTimelineItems(items(), turnItemId),
     stopDecidesTurn
   }
+}
+
+function hasProviderItemKey(items: Iterable<AgentJournalRenderItem>, key: string): boolean {
+  for (const item of items) {
+    const identity = parseAgentJournalItemKey(item.itemId)
+    if (
+      identity?.provider === 'legacy' &&
+      spelledProviderTimelineItemKey(identity.recordId) === key
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 export function newestJournalTimelineTurn(

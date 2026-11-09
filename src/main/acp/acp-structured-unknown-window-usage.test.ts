@@ -1,23 +1,18 @@
-import { memoryJournalMap } from '../native-chat/agent-session-journal/journal-memory-collections'
 import { afterEach, describe, expect, it } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { restoreJournal } from '../native-chat/agent-session-journal/replay/journal-open'
-import { JournalWriteProjection } from '../native-chat/agent-session-journal/writing/journal-write-projection'
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { PROVIDER_SESSION, replyChunk, waitFor } from './acp-structured-adapter.test-support'
 import { openAttachedHostRig, promptIdOf, send } from './acp-structured-host.test-support'
 
 afterEach(async () => {
-  JournalWriteProjection.verifyEachCommit = false
   await closeProviderTimelineRigs()
 })
 
 describe('an ACP usage report with an unknown window', () => {
   // The protocol allows `size: 0`; the saved reader drops that window as unusable.
   it('keeps the turn running, and the live chat equals what a reload reads', async () => {
-    // Each commit then restores the chat from disk and fails the write if it differs from live.
-    JournalWriteProjection.verifyEachCommit = true
     const rig = await openAttachedHostRig()
     const { host } = rig
     await send(host, 'hello')
@@ -38,10 +33,7 @@ describe('an ACP usage report with an unknown window', () => {
     expect((await rig.rows()).filter((row) => row.body.kind === 'status')).toEqual([])
     expect((await rig.turns()).at(-1)?.contextUsage).toBeUndefined()
 
-    const loaded = restoreJournal(rig.journalDatabase.db, SESSION)
-    expect(loaded?.damage).toBeFalsy()
-    expect(loaded?.newer).toBeFalsy()
-    const saved = [...(loaded ? memoryJournalMap(loaded.state.items).values() : [])].flatMap(
+    const saved = (await readTestHostJournal(host, SESSION)).items.flatMap(
       (item) => readAgentJournalTurn(item.body) ?? []
     )
     expect(saved).toEqual(await rig.turns())

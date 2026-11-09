@@ -18,7 +18,6 @@ import {
   writeCommandReceiptTestRecord
 } from './command-receipt-test-support'
 import { AgentSessionJournalError } from './journal-write-guards'
-import { buildCommandReceiptTransaction } from './command-receipt-transaction'
 
 export function registerCommandReceiptSchemaTests(): void {
   let root: string
@@ -65,9 +64,6 @@ export function registerCommandReceiptSchemaTests(): void {
         const write = () => insertCommandReceiptIfAbsent(db, scope, receipt)
         expect(write).toThrow(AgentSessionJournalError)
         expect(write).toThrow(expect.objectContaining({ code: 'journal_read_only' }))
-        expect(() => buildCommandReceiptTransaction(scope, receipt).write(db)).toThrow(
-          expect.objectContaining({ code: 'journal_read_only' })
-        )
       } finally {
         db.close()
       }

@@ -920,7 +920,6 @@
 1 test-timeout-needs-reason:tests/e2e/completed-worker-retirement-resume.spec.ts
 2 test-timeout-needs-reason:tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts
 2 test-timeout-needs-reason:tests/e2e/cross-version-wire/agent-session-newer-chat-refusal.unit.test.ts
-1 test-timeout-needs-reason:tests/e2e/cross-version-wire/agent-session-stop-event-downgrade.unit.test.ts
 1 test-timeout-needs-reason:tests/e2e/cross-version-wire/cross-version-agent-session-send.unit.test.ts
 3 test-timeout-needs-reason:tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 4 test-timeout-needs-reason:tests/e2e/cross-version-wire/legacy-relay-bridge.unit.test.ts

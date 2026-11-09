@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import { openAttachedHostRig, send, hello, framesOf } from './acp-structured-host.test-support'
 import { PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
@@ -35,7 +36,7 @@ it('queues mail behind an answerable ACP question without interrupting it', asyn
       orchestration: { message: 'mail-notice', mailbox: 'run:r1', dispatchId: null, messages: [] }
     }
   }
-  const before = await host.journalSnapshot(SESSION)
+  const before = await readTestHostJournal(host, SESSION)
   const questions = before.items.filter((row) => row.body.kind === 'question')
   expect(questions).toHaveLength(1)
   const operationId = mintAgentSessionOperationId(Date.now())
@@ -50,7 +51,7 @@ it('queues mail behind an answerable ACP question without interrupting it', asyn
       stillOwed: () => true
     })
   ).toEqual({ kind: 'queued' })
-  const after = await host.journalSnapshot(SESSION)
+  const after = await readTestHostJournal(host, SESSION)
   expect(before.submissions).toHaveLength(1)
   expect(after.submissions).toEqual(before.submissions)
   expect(after.items.filter((row) => row.body.kind === 'question')).toEqual(questions)
