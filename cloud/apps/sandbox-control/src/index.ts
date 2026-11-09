@@ -629,13 +629,25 @@ async function memberIdentityFor(env: Env, deps: Deps): Promise<LifecycleDeps['m
   }
 }
 
+/**
+ * Model keys stay out of the VM by default (egress swap): unset or `on` = every account, `off` = no
+ * account, `accounts:<id>,<id>` = only those. SECRETS_EGRESS_PLACEHOLDERS_OFF (comma account ids) is
+ * the per-team kill switch back to plain env injection.
+ */
+export function secretsEgressMode(env: Pick<Env, 'SECRETS_EGRESS_PLACEHOLDERS' | 'SECRETS_EGRESS_PLACEHOLDERS_OFF'>) {
+  const value = env.SECRETS_EGRESS_PLACEHOLDERS?.trim()
+  const egressPlaceholders = value === undefined || value === '' ? true : value === 'off' ? false : egressPlaceholderMode(value)
+  const off = new Set((env.SECRETS_EGRESS_PLACEHOLDERS_OFF ?? '').split(',').map((id) => id.trim()).filter(Boolean))
+  return { egressPlaceholders, egressPlaceholdersOff: off }
+}
+
 async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
   const keyring = keyringFor(env)
   if (!keyring) {
     return undefined
   }
   try {
-    return { keyring: await keyring, egressPlaceholders: egressPlaceholderMode(env.SECRETS_EGRESS_PLACEHOLDERS) }
+    return { keyring: await keyring, ...secretsEgressMode(env) }
   } catch {
     // A malformed KEK must not block sandbox starts; the secrets routes surface it as 503.
     console.log(JSON.stringify({ event: 'secrets_kek_invalid' }))
