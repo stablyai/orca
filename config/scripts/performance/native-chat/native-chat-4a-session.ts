@@ -1,10 +1,10 @@
 // Chat operations through the host RPC surface both arms serve, with envelopes built by each arm's own protocol bundle.
-// Declares the window.__store and window.api globals these page.evaluate callbacks use.
-import type {} from '../../../../tests/e2e/helpers/runtime-types'
+// Its AppStore import also declares the window.__store and window.api globals these page.evaluate callbacks use.
+import type { AppStore } from '../../../../tests/e2e/helpers/runtime-types'
 import { randomUUID } from 'node:crypto'
 import type { Page } from '@stablyai/playwright-test'
 import { operationId, type Arm } from './native-chat-4a-arm'
-import { rpc, visibleChatState } from './native-chat-4a-probes'
+import { rendererTime, rpc, visibleChatState } from './native-chat-4a-probes'
 
 type HistoryItem = { itemId: string; body?: { kind?: string; role?: string; state?: string } }
 export type HistoryPage = {
@@ -184,11 +184,15 @@ export async function openChatTab(
     { worktreeId, sessionId },
     { timeout: 60_000 }
   )
-  const id = (await tabId.jsonValue()) as string
+  const id = await tabId.jsonValue()
+  if (typeof id !== 'string') {
+    throw new Error(`${sessionId}: no tab id for the chat`)
+  }
   // Unified chat tabs activate through their group; a worktree switch can restore another tab first, so re-apply until it holds.
   await page.waitForFunction(
     ({ worktreeId, id }) => {
-      const state = window.__store!.getState()
+      const store: AppStore = window.__store!
+      const state = store.getState()
       const group = (state.groupsByWorktree[worktreeId] ?? []).find((candidate) =>
         candidate.tabOrder.includes(id)
       )
@@ -198,7 +202,7 @@ export async function openChatTab(
       if (state.activeWorktreeId !== worktreeId) {
         state.setActiveWorktree(worktreeId)
       }
-      window.__store!.getState().activateTab(id, { worktreeId })
+      store.getState().activateTab(id, { worktreeId })
       return false
     },
     { worktreeId, id },
@@ -248,5 +252,5 @@ export async function waitForWorking(
         }
       )
     })
-  return (await handle.jsonValue()) as number
+  return rendererTime(handle)
 }

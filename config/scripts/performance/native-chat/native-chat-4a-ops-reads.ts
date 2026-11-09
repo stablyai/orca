@@ -1,7 +1,7 @@
 // 4a read rows on the retained large chat: history pages, item detail, outline, fork, and record operations on the many-chat profile.
 import { randomUUID } from 'node:crypto'
 import { operationId } from './native-chat-4a-arm'
-import { rpc } from './native-chat-4a-probes'
+import { rendererTime, rpc } from './native-chat-4a-probes'
 import type { Sample } from './native-chat-4a-report'
 import {
   addRow,
@@ -65,7 +65,7 @@ export async function historyRows(ctx: RunContext): Promise<void> {
   }
 
   // Whatever the streaming rows left on the tail; named shapes are verified rows of their own (native-chat-4a-ops-shapes.ts).
-  const items = [...tail.page.items, ...older.page.items] as Item[]
+  const items: Item[] = [...tail.page.items, ...older.page.items]
   const sized = items
     .map((item) => ({ item, bytes: bytesOf(item) }))
     .sort((a, b) => b.bytes - a.bytes)
@@ -157,7 +157,7 @@ export async function recordRows(ctx: RunContext): Promise<void> {
           name,
           { timeout: 60_000, polling: 16 }
         )
-        .then(async (handle) => (await handle.jsonValue()) as number)
+        .then(rendererTime)
         .catch(() => Number.NaN)
       return {
         hostMs: answer.hostMs,

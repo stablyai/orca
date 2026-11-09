@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import { createChatRendererBridge } from './automation-chat-renderer-test-harness'
 import { expect, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../src/shared/runtime-client-target'
@@ -110,7 +111,7 @@ export async function createReopenRig(
       capturedAt: Date.now()
     }
   })
-  const beforeJournal = await rig.host.journalSnapshot(CHAT)
+  const beforeJournal = await readTestHostJournal(rig.host, CHAT)
   const beforeRecord = rig.store.getConversation(CHAT)
   const send = vi.spyOn(rig.host, 'send'),
     create = vi.spyOn(rig.host, 'create')
@@ -138,7 +139,7 @@ export async function createReopenRig(
   }
   const unchanged = async () => {
     expect(rig.profile.listAutomationRuns(automation.id)).toEqual([run])
-    expect(await rig.host.journalSnapshot(CHAT)).toEqual(beforeJournal)
+    expect(await readTestHostJournal(rig.host, CHAT)).toEqual(beforeJournal)
     expect(rig.store.getConversation(CHAT)).toEqual(beforeRecord)
     expect(send).not.toHaveBeenCalled()
     expect(create).not.toHaveBeenCalled()

@@ -27,6 +27,7 @@ type QueueRead = JournalSqlQueueRead extends infer R
     : never
   : never
 const target = { sessionId: 'chat', epoch: 'epoch' }
+const now = 1_800_000_000_000
 const cleanups: (() => void)[] = []
 const body = (text: string): AgentJournalMessageItem => ({
   kind: 'message',
@@ -116,7 +117,7 @@ function fixture() {
             providerHandle: codexProviderHandle('thread')
           }
         },
-        1_800_000_000_000
+        now
       )
     )
   const hold = (messageId: string) =>
@@ -132,7 +133,7 @@ function fixture() {
           messageId,
           fingerprint: agentSessionSendBodyFingerprint('chat', body(messageId))
         },
-        Date.now()
+        now
       )
     )
   const read = (operation: QueueRead, facts: Partial<JournalSqlQueueFacts> = {}) =>
@@ -162,7 +163,7 @@ it('lists current and still-owed handoff cards, and selects past persisted holds
 
   const next = (automatic: boolean, unavailable?: boolean) =>
     f.read(
-      { kind: 'next-input-card', automatic, steer: false, now: Date.now() },
+      { kind: 'next-input-card', automatic, steer: false, now },
       unavailable === undefined
         ? {}
         : { mail: [[journalMailSenderKey(from), unavailable ? 'unavailable' : 'owed']] }
@@ -181,7 +182,7 @@ it('lists current and still-owed handoff cards, and selects past persisted holds
       }
     },
     () => null,
-    Date.now,
+    () => now,
     'epoch:11'
   )
   queue.mailOwed = () => 'unavailable'

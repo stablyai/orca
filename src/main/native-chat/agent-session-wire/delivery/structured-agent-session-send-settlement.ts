@@ -1,10 +1,12 @@
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
-import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import type {
+  SqlAgentSessionJournal,
+  SqlAgentSessionJournal as AgentSessionJournal
+} from '../../agent-session-journal/journal-sql-store'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
-import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { isStructuredAgentSessionCommandTurnId } from '../operations/structured-agent-session-command-turn'
 
 /** Scope active turns to the live generation so ended commands cannot hold delivery waits. */

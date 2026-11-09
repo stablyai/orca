@@ -3,7 +3,7 @@ import { readTestHostJournal } from '../../native-chat/agent-session-journal/jou
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
-import { ensureStructuredAgentSessionHost } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 import {
   openStructuredCodexRpcHarness,
   SESSION,

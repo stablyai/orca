@@ -7,7 +7,6 @@ import { cleanup, screen } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalMessageItem
 } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../src/shared/agent-session/journal/agent-session-journal-identity'
@@ -35,11 +34,7 @@ import {
   type StructuredAgentSessionState
 } from '../../src/shared/agent-session/structured-agent-session-reducer'
 import { selectStructuredAgentSettledTurns } from '../../src/shared/agent-session/view/structured-agent-session-turn-timing'
-import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { restoreJournal } from '../../src/main/native-chat/agent-session-journal/replay/journal-open'
-import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format'
-import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-write'
-import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import { AgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store'
 import {
   hostTestAttachParams,
   HOST_TEST_SESSION as SESSION
@@ -48,9 +43,9 @@ import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-ses
 import {
   createRestTestRig,
   REST_TEST_CALLER
-} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
-import type { RestTestRig } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import type { RestTestRig } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
@@ -103,9 +98,8 @@ const clients = [
   ['current paired desktop', currentDesktop, false, true],
   ['legacy paired desktop', STRUCTURED_CLIENT, false, false]
 ] as const
-// A new chat holds only records; an existing (mixed) chat holds old input rows up to the restart
-// and records after its marker, so catch-up from a cursor inside the old rows crosses into records.
-const cases = (['new', 'mixed'] as const).flatMap((kind) =>
+// Cover a converted source and a new chat through the same runtime read path.
+const cases = (['new', 'converted'] as const).flatMap((kind) =>
   clients.map(
     ([name, client, bounded, snapshotCatchUp]) =>
       [kind, name, client, bounded, snapshotCatchUp] as const
@@ -207,7 +201,7 @@ it.each(cases)(
     const active = await createRestTestRig({ idleSweep: { intervalMs: MAX_TIMER_DELAY_MS } })
     rig = active
     setStructuredAgentSessionHost(active.host)
-    const pinInputs = kind === 'mixed' ? seedQueuedRigLegacyJournal(active.root, SESSION) : null
+    const pinInputs = kind === 'converted' ? seedQueuedRigLegacyJournal(active.root, SESSION) : null
     const attached = await active.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
     if (!attached.ok) {
       throw new Error('Fixture attach refused')
@@ -282,8 +276,8 @@ it.each(cases)(
       )
     }
     // The mixed reader resumes from here, inside the old rows.
-    const crossing = kind === 'mixed' ? await history({ direction: 'tail' }) : null
-    const { response, turnScope } = await completedTurn('current', PROMPT, STALE)
+    const crossing = kind === 'converted' ? await history({ direction: 'tail' }) : null
+    const { turnScope } = await completedTurn('current', PROMPT, STALE)
     const disposable = await journal.appendItem(
       { provider: 'orca', clientMessageId: 'disposable' },
       { kind: 'status', text: REMOVED },
@@ -301,52 +295,30 @@ it.each(cases)(
     }
     await active.host.close(SESSION, 'evict')
     expect(active.host.hasSession(SESSION)).toBe(false)
-    const database = openTestJournalHostDatabase(active.root)
-    const saved = restoreJournal(database.db, SESSION)?.state
-    if (!saved) {
-      throw new Error('Missing usable projection before tail append')
-    }
-    const prefix = { epoch: saved.epoch, sequence: saved.lastSequence }
+    const stored = await AgentSessionJournal.open({
+      database: active.host.deps.journalDatabase,
+      identity: journal.identity,
+      now: () => active.clock.now
+    })
+    const prefix = stored.cursor()
     expect(prefix.sequence).toBeGreaterThanOrEqual(resumeCursor.sequence)
-    database.transaction(
-      (db) => {
-        const rows: JournalRow[] = []
-        for (let offset = 1; offset <= AGENT_SESSION_HISTORY_MAX_LIMIT; offset += 1) {
-          rows.push({
-            v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-            epoch: prefix.epoch,
-            seq: prefix.sequence + offset,
-            fence: attached.fence,
-            ts: active.clock.now + offset,
-            kind: 'item',
-            itemId: response.itemId,
-            revision: response.revision + offset,
-            body: message(
-              offset === AGENT_SESSION_HISTORY_MAX_LIMIT ? ANSWER : `Answer revision ${offset}`
-            ),
-            turnScope
-          })
-        }
-        rows.push({
-          v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-          epoch: prefix.epoch,
-          seq: prefix.sequence + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
-          fence: attached.fence,
-          ts: active.clock.now + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
-          kind: 'tombstone',
-          itemId: disposable.itemId,
-          revision: disposable.revision + 1
-        })
-        return prepareJournalOutcomeWrite(db, saved, rows, active.clock.now)
-      },
-      (result) => {
-        result.adopt()
+    try {
+      for (let offset = 1; offset <= AGENT_SESSION_HISTORY_MAX_LIMIT; offset += 1) {
+        await stored.appendItem(
+          { provider: 'orca', clientMessageId: 'current-answer' },
+          message(
+            offset === AGENT_SESSION_HISTORY_MAX_LIMIT ? ANSWER : `Answer revision ${offset}`
+          ),
+          { ...options, turnScope }
+        )
       }
-    )
-    // Anti-vacuous: the mixed chat's rows end at the restart and its records follow the marker.
-    expect(journalOutcomeSource(database.db, SESSION, prefix.epoch)?.prefix).toBe(
-      kind === 'mixed' ? prefix.sequence : 0
-    )
+      await stored.appendTombstone(
+        { provider: 'orca', clientMessageId: 'disposable' },
+        { fence: attached.fence }
+      )
+    } finally {
+      await stored.close()
+    }
     const restoredPage = await history({ direction: 'tail' })
     expect(restoredPage.liveCursor?.sequence).toBeGreaterThan(prefix.sequence)
     expect(active.adapter.acquire).toHaveBeenCalledTimes(1)
@@ -387,7 +359,7 @@ it.each(cases)(
     const resumed = await stream(resumeCursor)
     if (snapshotCatchUp) {
       expect(resumed.events.some((event) => event.type === 'snapshot')).toBe(true)
-    } else if (kind === 'mixed') {
+    } else if (kind === 'converted') {
       expect(resumed.events.every((event) => event.type === 'batch')).toBe(true)
       // Old rows after the cursor, then records after the marker.
       const batches = resumed.events.flatMap((event) =>

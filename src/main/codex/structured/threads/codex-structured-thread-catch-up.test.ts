@@ -1,4 +1,7 @@
-import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  withTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   readTestJournalItems,
   readTestJournalSnapshot
@@ -15,7 +18,6 @@ import { writeFile } from 'node:fs/promises'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { join } from 'node:path'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { openTestAgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { recoverStructuredRewind } from '../../../native-chat/agent-session-wire/rewind/structured-rewind-recovery'
 import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { describe, expect, it } from 'vitest'

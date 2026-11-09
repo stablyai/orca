@@ -28,7 +28,7 @@ import {
   root,
   savedIds
 } from '../agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
-import { ensureStructuredAgentSessionHost } from '../agent-session/structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../agent-session/records/agent-session-record-store-test-harness'
 import {
   fakeCodex,
   resetProviderFaults

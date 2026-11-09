@@ -23,7 +23,7 @@ export async function refreshDerivedStopNotes(
   work?: AgentSessionPublishedWork
 ): Promise<void> {
   const { form, budgetBytes } = subscriberHistoryReader(subscriber)
-  const fields = work ? await agentSessionPublishedWorkFields(journal, work) : {}
+  const fields = work ? agentSessionPublishedWorkFields(journal, work) : {}
   let pending: AgentJournalRenderItem[] = []
   let bytes = 0
   const emit = async (): Promise<void> => {

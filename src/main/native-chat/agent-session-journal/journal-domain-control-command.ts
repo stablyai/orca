@@ -13,9 +13,8 @@ import { agentTurnVerdict } from '../../../shared/agent-status/lifecycle/agent-t
 import type { JournalWriterOperation } from './journal-writer-command'
 import type { JournalWriterCoordinate } from './journal-writer-effects'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
-import type { JournalAppendResult } from './journal-store-contracts'
+import type { JournalAppendResult, JournalStopAcceptance } from './journal-store-contracts'
 import type { JournalStopEvent } from './durable-rows/journal-row-schema'
-import type { JournalStopAcceptance } from './journal-store-contracts'
 import {
   foldJournalQueuePauseMark,
   journalManualStop,

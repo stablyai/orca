@@ -1,7 +1,9 @@
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type Database from '../../sqlite/sync-database'
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type {
+  AgentJournalCursor,
+  AgentSessionJournalProviderHandle
+} from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   journalHistoryOrigin,
   sameJournalConversation,
@@ -62,16 +64,15 @@ export function readJournalDomainContextHead(db: Database.Database, target: Targ
   if (!head) {
     throw new Error('journal context command targets a retired chat epoch')
   }
+  const historyOrigin: JournalHistoryOrigin | null =
+    head.history_origin_json === null ? null : JSON.parse(String(head.history_origin_json))
   return {
     lastSequence: Number(head.last_sequence),
     highestFence: Number(head.highest_fence),
     contextBoundary: Number(head.context_boundary),
     cleared: head.queue_clear_operation_id !== null,
     failureBoundary: Number(head.queue_failure_boundary),
-    historyOrigin:
-      head.history_origin_json === null
-        ? null
-        : (JSON.parse(String(head.history_origin_json)) as JournalHistoryOrigin)
+    historyOrigin
   }
 }
 

@@ -25,7 +25,7 @@ export async function refreshPublishedWork(
     return
   }
   const view = work.workViewKey()
-  const fields = await agentSessionPublishedWorkFields(journal, work)
+  const fields = agentSessionPublishedWorkFields(journal, work)
   const { budgetBytes } = subscriberHistoryReader(subscriber)
   let pending: AgentJournalSubmission[] = []
   let bytes = 0

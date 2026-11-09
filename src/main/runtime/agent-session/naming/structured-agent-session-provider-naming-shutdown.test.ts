@@ -11,11 +11,11 @@ import { closeTestJournalHostDatabase } from '../../../native-chat/agent-session
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-router'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
 import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../structured-agent-session-runtime'
+  ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
+  seedTestAgentSessionRecordStore
+} from '../records/agent-session-record-store-test-harness'
+import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
 
 vi.mock('../model-catalog/structured-agent-model-catalog-wiring', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelCatalogWiring>()
@@ -93,12 +93,13 @@ it('stops naming admission and joins native helper finalization before runtime c
     ]
   })
   await closeTestJournalHostDatabase(root)
+  const logger = createStructuredAgentSessionLogger()
   const resolveLaunchArgs = vi.fn(() => argumentsReady.promise)
   const host = await ensureStructuredAgentSessionHost({
     stateDirectory: root,
     hostId: 'local',
     claimKeyId: 'key-1',
-    logger: createStructuredAgentSessionLogger(),
+    logger,
     resolveWorkspacePath: async () => root,
     resolveCodexCommand: () => ({ command: process.execPath, prefixArgs: [] }),
     resolveEnvironment: async () => ({}),

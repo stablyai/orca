@@ -15,10 +15,11 @@ import {
   type StructuredAgentSessionWatchedExit
 } from './structured-agent-session-stale-turn-verdict'
 import type { UnopenedSendJournal } from '../delivery/structured-agent-session-unopened-send-withdrawal'
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 
 export type DeadGenerationJournal = UnopenedSendJournal & {
-  handoverJournal?: object
+  handoverJournal?: AgentSessionJournal
   pendingSubmissions?: () => AgentJournalSubmission[]
   itemFence: (itemId: string) => number | undefined
 }

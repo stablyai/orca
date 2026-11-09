@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import { makeWorkspaceLineage } from '../../src/main/persistence/persistence-test-harness'
 import * as folderTeardown from '../../src/main/runtime/workspaces/removal/folder-workspace-pty-teardown'
@@ -180,7 +181,7 @@ it.each([true, false])(
     }
     await rig.runtime.restoreStructuredAgentSessionTabs()
     await chatTabCommandsSettled()
-    const transcript = (await rig.host.journalSnapshot(B)).items
+    const transcript = (await readTestHostJournal(rig.host, B)).items
     expect(transcript).toHaveLength(1)
     expect(rig.runtime.live(B)).toBe(true)
     expect(await rig.runtime.deleteFolderWorkspace(rig.folderId)).toEqual({ deleted: true })
@@ -201,7 +202,7 @@ it.each([true, false])(
     expect(rig.profile.getAllWorkspaceLineage()).toEqual({ [lineage.childWorkspaceKey]: lineage })
     expect(rig.store.getRecord(B)?.providerHandleChain).toEqual(record.providerHandleChain)
     expect(rig.store.getRecord(B)?.location).toEqual(record.location)
-    expect((await rig.host.journalSnapshot(B)).items).toEqual(transcript)
+    expect((await readTestHostJournal(rig.host, B)).items).toEqual(transcript)
     expect(result).toMatchObject({
       ok: true,
       result: {

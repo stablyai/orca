@@ -9,10 +9,8 @@ import {
   hostTestMessage
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../runtime/agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { acpScriptedChild } from './acp-scripted-child.test-fixture'
 
 let stateDirectory: string | undefined

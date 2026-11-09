@@ -35,7 +35,7 @@ async function corpusChat(ctx: RunContext, prompts: string[]): Promise<string> {
   return chat.sessionId
 }
 
-const itemsOf = (read: Page): WireItem[] => read.items as WireItem[]
+const itemsOf = (read: Page): WireItem[] => read.items
 const byProviderId = (items: WireItem[], id: string): WireItem | undefined =>
   items.find((item) => JSON.stringify(item).includes(`"${id}"`))
 

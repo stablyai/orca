@@ -20,6 +20,8 @@ import {
 } from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import type Database from '../../../sqlite/sync-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
+import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
+import { ensureStructuredAgentSessionHost } from '../structured-agent-session-runtime'
 import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'
 
 const TEST_HOST_ID = 'local'
@@ -36,6 +38,20 @@ export type PersistedTestAgentSessionStore = {
 }
 
 const databases = new Map<string, Promise<JournalSqlDatabase>>()
+
+export async function ensureTestStructuredAgentSessionHost(
+  deps: Parameters<typeof ensureStructuredAgentSessionHost>[0]
+): ReturnType<typeof ensureStructuredAgentSessionHost> {
+  await openAgentSessionRecordStoreOnce({
+    stateDirectory: deps.stateDirectory,
+    hostId: deps.hostId,
+    logger: deps.logger,
+    legacySessionTabIds: deps.legacySessionTabIds ?? [],
+    writerPath: journalSqlWorkerPath(),
+    readerPath: journalSqlReaderPath()
+  })
+  return ensureStructuredAgentSessionHost(deps)
+}
 
 /** Stores reopened in one directory share its writer, like one runtime's slot. */
 export function openTestAgentSessionDatabase(stateDirectory: string): Promise<JournalSqlDatabase> {

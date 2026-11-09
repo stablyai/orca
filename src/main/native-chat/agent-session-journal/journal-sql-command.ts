@@ -271,8 +271,6 @@ export class JournalSqlCommand {
       }
       case 'steps':
         return applyJournalSqlStepCommand(db, stateDirectory, { ...command, operation }, savedAt)
-      default:
-        throw new Error('Unknown journal command')
     }
   }
 }

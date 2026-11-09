@@ -1,5 +1,8 @@
 import { boundedFrameItem } from '../agent-session-wire/publication/history/agent-session-bounded-frame-item'
-import { agentJournalItemForWire } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
+import {
+  agentJournalItemForWire,
+  CLIENT_HISTORY_READER
+} from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import type Database from '../../sqlite/sync-database'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
@@ -21,7 +24,6 @@ import {
   type HistoryReader
 } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { buildAgentSessionHistoryPage } from '../agent-session-wire/publication/history/agent-session-history-page-result'
-import { CLIENT_HISTORY_READER } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import {
   queuedImageSubmissionPresenter,
   type QueuedImageHistoryPolicy
