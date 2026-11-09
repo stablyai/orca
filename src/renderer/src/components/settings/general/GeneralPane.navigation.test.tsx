@@ -21,11 +21,9 @@ afterEach(() => {
 
 function NavigationHarness({
   initialPage = 'editor',
-  initialQuery = 'worktree',
   onWrite = vi.fn()
 }: {
   initialPage?: GeneralSubPage
-  initialQuery?: string
   onWrite?: (updates: Partial<ReturnType<typeof getDefaultSettings>>) => void
 }) {
   const [settings, setSettings] = useState(() => ({
@@ -35,14 +33,6 @@ function NavigationHarness({
   const [generalSubPage, setGeneralSubPage] = useState<GeneralSubPage | null>(initialPage)
   const [activeSectionId, setActiveSectionId] = useState('general')
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
-  const initialized = useRef(false)
-  if (!initialized.current) {
-    initialized.current = true
-    useAppStore.setState({
-      settingsSearchQuery: initialQuery,
-      settingsSearchInputQuery: initialQuery
-    })
-  }
   const query = useAppStore((state) => state.settingsSearchQuery)
   const setQuery = useAppStore((state) => state.setSettingsSearchQuery)
   const pendingNavSectionRef = useRef<string | null>(null)
@@ -118,10 +108,21 @@ function NavigationHarness({
   )
 }
 
+function renderNavigationHarness({
+  initialQuery = 'worktree',
+  ...props
+}: Parameters<typeof NavigationHarness>[0] & { initialQuery?: string } = {}) {
+  useAppStore.setState({
+    settingsSearchQuery: initialQuery,
+    settingsSearchInputQuery: initialQuery
+  })
+  return render(<NavigationHarness {...props} />)
+}
+
 it('finds controls across General destinations and opens the actual setting for editing', async () => {
   const onWrite = vi.fn()
   const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
-  render(<NavigationHarness onWrite={onWrite} />)
+  renderNavigationHarness({ onWrite })
   expect(screen.getByRole('button', { name: /Workspace directory/i })).toBeTruthy()
   expect(screen.getByRole('button', { name: /External worktrees/i })).toBeTruthy()
   expect(screen.getByRole('switch', { name: 'Deleting a workspace' })).toBeTruthy()
@@ -145,7 +146,7 @@ it('finds controls across General destinations and opens the actual setting for 
 
 it('opens an old subsection link from another child with a conflicting query, including repeated selection', async () => {
   const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
-  const { container } = render(<NavigationHarness initialQuery="font" />)
+  const { container } = renderNavigationHarness({ initialQuery: 'font' })
   fireEvent.click(screen.getByRole('button', { name: 'Open app settings link' }))
   const add = await screen.findByRole('button', { name: 'Add app' })
   const target = container.querySelector('#general-open-in-apps')
@@ -158,7 +159,7 @@ it('opens an old subsection link from another child with a conflicting query, in
 
 it('keeps an incomplete Open in draft when search temporarily replaces its form', async () => {
   const onWrite = vi.fn()
-  render(<NavigationHarness initialPage="open-in" initialQuery="" onWrite={onWrite} />)
+  renderNavigationHarness({ initialPage: 'open-in', initialQuery: '', onWrite })
   fireEvent.keyDown(screen.getByRole('button', { name: 'Add app' }), { key: 'ArrowDown' })
   fireEvent.click(await screen.findByRole('menuitem', { name: /Custom/ }))
   fireEvent.change(screen.getByPlaceholderText('App name'), { target: { value: 'Draft editor' } })

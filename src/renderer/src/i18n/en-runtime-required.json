@@ -786,11 +786,6 @@
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
         },
-        "general": {
-          "search": {
-            "4469b6fa4e": "save"
-          }
-        },
         "repository": {
           "search": {
             "keepForkUpToDate": "Keep Fork Up to Date"
