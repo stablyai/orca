@@ -1,5 +1,6 @@
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/nested-removal'
+import { composeWorktreeId } from '../../../shared/worktree/id'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import { assertWorktreeUnlockedForRemoval } from '../../../shared/worktree/removal'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
@@ -74,7 +75,7 @@ export async function removeNestedWorktreePlanChildren(
 ): Promise<NestedPreservedBranches> {
   const preserved: NestedPreservedBranches = []
   for (const child of plan.slice(0, -1)) {
-    const worktreeId = `${repoId}::${child.path}`
+    const worktreeId = composeWorktreeId(repoId, child.path)
     try {
       const result = await removeChild(worktreeId, child)
       if (result.preservedBranch) {

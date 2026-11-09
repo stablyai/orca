@@ -4,12 +4,15 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { Toaster } from '../../../ui/sonner'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import type { GitWorktreeInfo } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
 
 const PARENT = '/home/neil/orca/workspaces/orca/react-use-effects'
 const CHILD = `${PARENT}/.context/wt-safe-merge`
 const WORKTREE_ID = `orca::${PARENT}`
-const REMOTE_HOST = 'runtime:omarchy' as ExecutionHostId
+const REMOTE_HOST: ExecutionHostId = toRuntimeExecutionHostId('omarchy')
 
 const plan: GitWorktreeInfo[] = [
   {
