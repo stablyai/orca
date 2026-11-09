@@ -83,6 +83,24 @@ export const CreateCloudApiApprovalInputSchema = z
   .strict()
 export type CreateCloudApiApprovalInput = z.infer<typeof CreateCloudApiApprovalInputSchema>
 
+/** A connected MCP app (an OAuth grant family). */
+export const CloudApiGrantSchema = z.object({
+  id: Id,
+  clientId: z.string().max(200).nullable(),
+  clientName: z.string().max(200).nullable(),
+  userId: Id,
+  scopes: Scopes,
+  approvedWith: z.union([
+    z.object({ apiKeyPrefix: z.string().max(64) }),
+    z.object({ approvalCode: z.literal(true) })
+  ]),
+  grantedAt: Millis,
+  lastUsedAt: Millis.nullable(),
+  expiresAt: Millis.nullable()
+})
+export type CloudApiGrant = z.infer<typeof CloudApiGrantSchema>
+export const CloudApiGrantListSchema = z.object({ grants: z.array(CloudApiGrantSchema).max(500) })
+
 export const CloudApiSettingsSchema = z.object({
   settings: z.object({ vmCliEnabled: z.boolean() }),
   canEdit: z.boolean()

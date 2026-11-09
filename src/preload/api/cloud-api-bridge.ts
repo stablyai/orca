@@ -4,6 +4,7 @@ import type {
   CloudApiAuditPage,
   CloudApiAvailability,
   CloudApiCreatedKey,
+  CloudApiGrant,
   CloudApiInstallation,
   CloudApiKeyList,
   CloudApiMe,
@@ -29,6 +30,8 @@ export type CloudApiBridge = {
   createApiKey: (input: CreateCloudApiKeyInput) => Promise<CloudApiResult<CloudApiCreatedKey>>
   revokeApiKey: (id: string) => Promise<CloudApiResult<unknown>>
   createApproval: (input?: CreateCloudApiApprovalInput) => Promise<CloudApiResult<CloudApiApproval>>
+  listGrants: () => Promise<CloudApiResult<{ grants: CloudApiGrant[] }>>
+  revokeGrant: (id: string) => Promise<CloudApiResult<unknown>>
   getSettings: () => Promise<CloudApiResult<CloudApiSettings>>
   putSettings: (input: { vmCliEnabled: boolean }) => Promise<CloudApiResult<CloudApiSettings>>
   listAudit: (query?: {
@@ -58,6 +61,8 @@ export const cloudApiBridge: CloudApiBridge = {
   createApiKey: invoke('cloudApi:createApiKey'),
   revokeApiKey: invoke('cloudApi:revokeApiKey'),
   createApproval: invoke('cloudApi:createApproval'),
+  listGrants: invoke('cloudApi:listGrants'),
+  revokeGrant: invoke('cloudApi:revokeGrant'),
   getSettings: invoke('cloudApi:getSettings'),
   putSettings: invoke('cloudApi:putSettings'),
   listAudit: invoke('cloudApi:listAudit'),

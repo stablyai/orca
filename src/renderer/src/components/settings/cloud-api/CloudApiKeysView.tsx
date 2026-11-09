@@ -7,6 +7,7 @@ import type {
   CloudApiApproval,
   CloudApiAuditPage,
   CloudApiCreatedKey,
+  CloudApiGrant,
   CloudApiKey,
   CloudApiKeyList,
   CloudApiMe,
@@ -19,6 +20,7 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { ApproveAppDialog } from './ApproveAppDialog'
 import { AccessLinks, AuditLog, OrgSettings } from './CloudApiKeysSections'
 import { CloudConfirmDialog } from './CloudConfirmDialog'
+import { CloudConnectedApps } from './CloudConnectedApps'
 import type { CloudLoadState } from './cloud-load-state'
 import { CreateApiKeyDialog } from './CreateApiKeyDialog'
 import { formatAbsoluteTime, formatKeyPrefix, formatRelativeFromNow } from './cloud-api-format'
@@ -45,6 +47,9 @@ export type CloudApiKeysViewProps = {
   onRevoke: (key: CloudApiKey) => Promise<string | null>
   onToggleVmCli: (enabled: boolean) => Promise<string | null>
   onLoadAudit: () => void
+  grants: CloudLoadState<CloudApiGrant[]>
+  onRevokeGrant: (grant: CloudApiGrant) => Promise<string | null>
+  onRefreshGrants: () => void
   onCreateApproval: (
     input: CreateCloudApiApprovalInput
   ) => Promise<CloudApiResult<CloudApiApproval>>
@@ -56,6 +61,7 @@ export type CloudApiKeysViewProps = {
     auditOpen?: boolean
     approve?: boolean
     approval?: CloudApiApproval
+    revokeGrantId?: string
   }
 }
 
@@ -167,6 +173,16 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
       </SettingsGroup>
 
       <AccessLinks controlPlaneUrl={props.controlPlaneUrl} onApprove={() => setApproveOpen(true)} />
+
+      <CloudConnectedApps
+        grants={props.grants}
+        viewer={viewer}
+        now={props.now}
+        onApprove={() => setApproveOpen(true)}
+        onRevoke={props.onRevokeGrant}
+        onRetry={props.onRefreshGrants}
+        initialRevokeId={initial?.revokeGrantId}
+      />
 
       <OrgSettings settings={props.settings} onToggle={props.onToggleVmCli} />
 

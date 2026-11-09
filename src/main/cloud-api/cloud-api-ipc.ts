@@ -50,6 +50,8 @@ const HANDLERS: Record<string, Handler> = {
   'cloudApi:createApproval': call([CreateCloudApiApprovalInputSchema.optional()], (c, input) =>
     c.createApproval(input ?? {})
   ),
+  'cloudApi:listGrants': call([], (c) => c.listGrants()),
+  'cloudApi:revokeGrant': call([Id], (c, id) => c.revokeGrant(id)),
   'cloudApi:getSettings': call([], (c) => c.getSettings()),
   'cloudApi:putSettings': call([SettingsInput], (c, input) => c.putSettings(input)),
   'cloudApi:listAudit': call([AuditQuery.optional()], (c, q) => c.listAudit(q ?? {})),

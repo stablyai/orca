@@ -6,6 +6,7 @@ import {
   CloudApiApprovalSchema,
   CloudApiAuditPageSchema,
   CloudApiCreatedKeySchema,
+  CloudApiGrantListSchema,
   CloudApiInstallationListSchema,
   CloudApiKeyListSchema,
   CloudApiMeSchema,
@@ -169,6 +170,13 @@ export function createCloudApiClient(deps: CloudApiClientDeps) {
         body: input,
         notFoundMeansUnavailable: true
       }),
+    listGrants: () =>
+      request('GET', 'v1/oauth-grants', CloudApiGrantListSchema, {
+        notFoundMeansUnavailable: true
+      }),
+    revokeGrant: async (id: string): Promise<void> => {
+      await request('DELETE', `v1/oauth-grants/${encodeURIComponent(id)}`, z.unknown())
+    },
     getSettings: () => request('GET', 'v1/settings', CloudApiSettingsSchema),
     putSettings: (settings: { vmCliEnabled: boolean }) =>
       request('PUT', 'v1/settings', CloudApiSettingsSchema, { body: settings }),

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   CloudApiAuditPage,
+  CloudApiGrant,
   CloudApiKeyList,
   CloudApiMe,
   CloudApiSettings
@@ -20,6 +21,7 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
   const [signedOut, setSignedOut] = useState(false)
   const [keys, setKeys] = useState<CloudLoadState<CloudApiKeyList>>({ status: 'loading' })
   const [settings, setSettings] = useState<CloudLoadState<CloudApiSettings>>({ status: 'loading' })
+  const [grants, setGrants] = useState<CloudLoadState<CloudApiGrant[]>>({ status: 'loading' })
   const [audit, setAudit] = useState<CloudLoadState<CloudApiAuditPage>>({ status: 'loading' })
   const [now, setNow] = useState(() => Date.now())
 
@@ -38,7 +40,14 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
     }
     setKeys({ status: 'loading' })
     setSettings({ status: 'loading' })
-    const [me, list, current] = await Promise.all([api.me(), api.listApiKeys(), api.getSettings()])
+    setGrants({ status: 'loading' })
+    const [me, list, current, apps] = await Promise.all([
+      api.me(),
+      api.listApiKeys(),
+      api.getSettings(),
+      api.listGrants()
+    ])
+    setGrants(toCloudLoadState(apps.ok ? { ok: true, data: apps.data.grants } : apps, word))
     setSignedOut(!me.ok && me.error === 'signed-out')
     setViewer(me.ok ? me.data : null)
     setKeys(toCloudLoadState(list, word))
@@ -111,6 +120,26 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
       }}
       onLoadAudit={() => void loadAudit()}
       onCreateApproval={(input) => api.createApproval(input)}
+      grants={grants}
+      onRefreshGrants={() =>
+        void api
+          .listGrants()
+          .then((apps) =>
+            setGrants(toCloudLoadState(apps.ok ? { ok: true, data: apps.data.grants } : apps, word))
+          )
+      }
+      onRevokeGrant={async (grant) => {
+        const result = await api.revokeGrant(grant.id)
+        if (!result.ok && result.error !== 'not-found') {
+          return word(result)
+        }
+        setGrants((current) =>
+          current.status === 'ok'
+            ? { status: 'ok', data: current.data.filter((g) => g.id !== grant.id) }
+            : current
+        )
+        return null
+      }}
     />
   )
 }

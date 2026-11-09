@@ -1,5 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type {
+  CloudApiGrant,
   CloudApiAuditPage,
   CloudApiKeyList,
   CloudApiMe,
@@ -90,6 +91,31 @@ const AUDIT: CloudApiAuditPage = {
   ]
 }
 
+const GRANTS: CloudApiGrant[] = [
+  {
+    id: 'fam_claude',
+    clientId: 'cl_9x',
+    clientName: 'Claude Desktop',
+    userId: 'u_ada',
+    scopes: ['workspaces:read', 'workspaces:write', 'messages:write', 'routines:read'],
+    approvedWith: { approvalCode: true },
+    grantedAt: NOW - 2 * DAY,
+    lastUsedAt: NOW - 12 * MIN,
+    expiresAt: NOW + 88 * DAY
+  },
+  {
+    id: 'fam_cursor',
+    clientId: 'cl_4q',
+    clientName: 'Cursor',
+    userId: 'grace@acme.dev',
+    scopes: ['workspaces:read', 'projects:read'],
+    approvedWith: { apiKeyPrefix: 'orca_sk_Q9zL' },
+    grantedAt: NOW - 9 * DAY,
+    lastUsedAt: null,
+    expiresAt: NOW + 81 * DAY
+  }
+]
+
 const base: CloudApiKeysViewProps = {
   controlPlaneUrl: 'https://api.orca.dev',
   viewer: ADMIN,
@@ -102,12 +128,26 @@ const base: CloudApiKeysViewProps = {
   onRevoke: async () => null,
   onToggleVmCli: async () => null,
   onLoadAudit: () => {},
-  onCreateApproval: async () => ({ ok: false, error: 'server' })
+  onCreateApproval: async () => ({ ok: false, error: 'server' }),
+  grants: { status: 'ok', data: [] },
+  onRevokeGrant: async () => null,
+  onRefreshGrants: () => {}
 }
 
 export const list = defineFixture({
   width: 760,
-  render: () => <CloudApiKeysView {...base} />
+  render: () => <CloudApiKeysView {...base} grants={{ status: 'ok', data: GRANTS }} />
+})
+
+export const disconnectAppConfirm = defineFixture({
+  width: 760,
+  render: () => (
+    <CloudApiKeysView
+      {...base}
+      grants={{ status: 'ok', data: GRANTS }}
+      initial={{ revokeGrantId: 'fam_cursor' }}
+    />
+  )
 })
 
 export const listWithActivity = defineFixture({
@@ -133,6 +173,7 @@ export const loading = defineFixture({
     <CloudApiKeysView
       {...base}
       keys={{ status: 'loading' }}
+      grants={{ status: 'loading' }}
       settings={{ status: 'loading' }}
       audit={null}
     />
