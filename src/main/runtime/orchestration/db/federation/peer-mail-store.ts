@@ -47,6 +47,7 @@ export function openHomePeerMailConversation(
       params.localParty,
       params.localPaneKey
     )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly its row shape.
   return this.db
     .prepare(
       `SELECT * FROM peer_mail_conversations
@@ -59,37 +60,37 @@ export function getPeerMailConversation(
   this: OrchestrationDb,
   conversationId: string
 ): PeerMailConversationRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly its row shape.
   return this.db
     .prepare('SELECT * FROM peer_mail_conversations WHERE conversation_id = ?')
     .get(conversationId) as PeerMailConversationRow | undefined
 }
 
 export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
-  return (
-    this.db
-      .prepare(
-        `SELECT DISTINCT environment_id FROM peer_mail_conversations
-         WHERE role = 'home' AND environment_id IS NOT NULL`
-      )
-      .all() as { environment_id: string }[]
-  ).map((row) => row.environment_id)
+  const statement = this.db.prepare(
+    `SELECT DISTINCT environment_id FROM peer_mail_conversations
+     WHERE role = 'home' AND environment_id IS NOT NULL`
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
+  const rows = statement.all() as { environment_id: string }[]
+  return rows.map((row) => row.environment_id)
 }
 
 export function listPeerConversationIds(this: OrchestrationDb, peerFingerprint: string): string[] {
-  return (
-    this.db
-      .prepare(
-        `SELECT conversation_id FROM peer_mail_conversations
-         WHERE role = 'peer' AND peer_fingerprint = ?`
-      )
-      .all(peerFingerprint) as { conversation_id: string }[]
-  ).map((row) => row.conversation_id)
+  const statement = this.db.prepare(
+    `SELECT conversation_id FROM peer_mail_conversations
+     WHERE role = 'peer' AND peer_fingerprint = ?`
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
+  const rows = statement.all(peerFingerprint) as { conversation_id: string }[]
+  return rows.map((row) => row.conversation_id)
 }
 
 export function getPeerMailMessage(
   this: OrchestrationDb,
   messageId: string
 ): PeerMailMessageRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly its row shape.
   return this.db.prepare('SELECT * FROM peer_mail_messages WHERE message_id = ?').get(messageId) as
     | PeerMailMessageRow
     | undefined
