@@ -21,7 +21,12 @@ export function createWorktreeTabBucketProjection<T, P>(args: {
 
       const changes = previousSource ? readRecordChanges(source, previousSource) : null
       const knownKeys = changes?.kind === 'addressed' ? changes.keys : null
-      const sourceKeys = knownKeys ? [...knownKeys] : Object.keys(source)
+      const sourceKeys =
+        changes?.kind === 'addressed'
+          ? [...changes.keys]
+              .filter((key) => Object.hasOwn(previousSource!, key))
+              .concat(changes.added)
+          : Object.keys(source)
       let changed =
         previousProjection === null ||
         (!knownKeys && sourceKeys.length !== Object.keys(previousProjection).length)

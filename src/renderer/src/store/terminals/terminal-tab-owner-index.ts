@@ -67,10 +67,12 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
     }
 
     const changes = source ? readTabMapChanges(tabsByWorktree, source) : null
-    const knownKeys = changes?.kind === 'addressed' ? changes.workspaceIds : null
-    if (knownKeys && source) {
+    if (changes?.kind === 'addressed' && source) {
       const affectedTabIds = new Set<string>()
-      for (const worktreeId of knownKeys) {
+      for (const worktreeId of changes.addedWorkspaceIds) {
+        bucketOrder.set(worktreeId, nextBucketOrder++)
+      }
+      for (const worktreeId of changes.workspaceIds) {
         const indexed = bucketByWorktreeId.get(worktreeId)
         const tabs = tabsByWorktree[worktreeId]
         if (indexed?.source === tabs) {
@@ -86,9 +88,6 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
           bucketByWorktreeId.delete(worktreeId)
           bucketOrder.delete(worktreeId)
           continue
-        }
-        if (!indexed) {
-          bucketOrder.set(worktreeId, nextBucketOrder++)
         }
         const tabIds = new Set(tabs.map((tab) => tab.id))
         bucketByWorktreeId.set(worktreeId, { source: tabs, tabIds })

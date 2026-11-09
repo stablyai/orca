@@ -48,6 +48,11 @@ export function createSleepingAgentRecordIndex() {
       keysByTabPrefix.clear()
       recordsByProviderSession.clear()
     }
+    if (changes?.kind === 'addressed') {
+      for (const key of changes.added) {
+        orderByKey.set(key, nextOrder++)
+      }
+    }
     const changedKeys = keys ?? Object.keys(records)
     for (const key of changedKeys) {
       const before = keys ? previous?.[key] : undefined

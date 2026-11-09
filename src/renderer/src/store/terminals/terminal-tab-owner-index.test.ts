@@ -74,4 +74,18 @@ describe('terminal tab owner index', () => {
     expect(index.getFirstOwner(next, 'duplicate-tab')).toBe('1')
     expect(index.getOwner(next, 'duplicate-tab')).toBe('workspace')
   })
+
+  it('uses final addition order after a newly added workspace is removed and added again', () => {
+    const duplicate = [{ id: 'duplicate-tab' }]
+    const initial = { existing: [{ id: 'unrelated-tab' }] }
+    const index = createTerminalTabOwnerIndex()
+    index.getOwners(initial)
+    const first = replaceTabBuckets(initial, [['temporary', duplicate]])
+    const second = replaceTabBuckets(first, [['later', duplicate]])
+    const removed = replaceTabBuckets(second, [['temporary', null]])
+    const next = replaceTabBuckets(removed, [['temporary', duplicate]])
+
+    expect(index.getFirstOwner(next, 'duplicate-tab')).toBe('later')
+    expect(index.getOwner(next, 'duplicate-tab')).toBe('temporary')
+  })
 })
