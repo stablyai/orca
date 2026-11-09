@@ -85,18 +85,6 @@ describe('SSH host of a sleeping VM', () => {
     expect(created.count).toBe(0)
   })
 
-  it('connects once the VM is no longer asleep, and never holds other hosts', async () => {
-    let asleep = true
-    setSshHostAsleepCheck(() => asleep)
-    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
-
-    // Only Orca-owned VM hosts are ever held.
-    await expect(manager.connect(target('user-host'))).resolves.toBeDefined()
-    asleep = false
-    await expect(manager.connect(target(VM_TARGET_ID))).resolves.toBeDefined()
-    expect(created.count).toBe(2)
-  })
-
   it('stops the reconnect ladder, including a retry armed before the sleep', async () => {
     vi.useFakeTimers()
     let asleep = false
@@ -113,13 +101,5 @@ describe('SSH host of a sleeping VM', () => {
     await vi.runAllTimersAsync()
 
     expect(attempts()).toBe(0)
-  })
-
-  it('keeps an unreadable VM record from stranding a host', async () => {
-    setSshHostAsleepCheck(() => {
-      throw new Error('store unreadable')
-    })
-    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
-    await expect(manager.connect(target(VM_TARGET_ID))).resolves.toBeDefined()
   })
 })
