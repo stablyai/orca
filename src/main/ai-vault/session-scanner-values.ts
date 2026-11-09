@@ -191,6 +191,21 @@ export function primeAgentSessionsDirFromEnv(env: NodeJS.ProcessEnv = process.en
   return agentDir ? normalizePrimeAgentSessionsDir(agentDir) : defaultPrimeAgentSessionsDir()
 }
 
+function defaultPiAgentSessionsDir(): string {
+  return join(homedir(), '.pi', 'agent', 'sessions')
+}
+
+// Pi resolves its own session location as CLI flag, then PI_CODING_AGENT_SESSION_DIR, then the
+// agent home. A relative override resolves against the writer's working directory, which the
+// scanner has no single answer for, so it falls back instead of guessing.
+export function piSessionsDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  const sessionDir = env.PI_CODING_AGENT_SESSION_DIR?.trim()
+  if (sessionDir) {
+    return absoluteConfiguredDir(sessionDir) ?? defaultPiAgentSessionsDir()
+  }
+  return normalizeAgentSessionsDir(env.PI_CODING_AGENT_DIR?.trim() ?? '', '.pi')
+}
+
 export function clampPositiveInteger(value: number | undefined, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback
 }
