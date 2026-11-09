@@ -211,7 +211,7 @@ export class MobileNotificationDismissalStore {
         this.scheduleRetry()
       }
     }, delay)
-    this.retryTimer.unref?.()
+    unrefTimer(this.retryTimer)
   }
 }
 
@@ -225,4 +225,11 @@ function readLegacyHistory(text: string, receipt: string): LegacyHistory {
   }
   const entries = readDismissalEntries(Array.isArray(value) ? value : [])
   return { entries, rows: dismissalRows(entries), receipt }
+}
+
+/** Mobile programs type global timers as numbers; Node timers may release the event loop. */
+function unrefTimer(timer: unknown): void {
+  if (typeof timer === 'object' && timer && 'unref' in timer && typeof timer.unref === 'function') {
+    timer.unref()
+  }
 }
