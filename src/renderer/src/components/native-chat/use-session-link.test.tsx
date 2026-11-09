@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type * as SessionHostCapabilityModule from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import type * as SessionHostSupportModule from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SessionLinkSnapshot, LinkCreateParams } from '../../../../shared/session-link'
@@ -11,9 +11,9 @@ vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: rpc.call
 }))
 vi.mock(
-  '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability',
+  '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support',
   async (importOriginal) => ({
-    ...(await importOriginal<typeof SessionHostCapabilityModule>()),
+    ...(await importOriginal<typeof SessionHostSupportModule>()),
     structuredAgentSessionHostSupports: rpc.supports
   })
 )
