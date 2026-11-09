@@ -114,6 +114,7 @@ export type ClaudeControlSurface = {
   getContextUsage: (options?: ClaudeControlOptions) => Promise<unknown>
   /** Names `sessionId` as the user's rename; refused once the CLI has moved to another session. */
   renameSession: (title: string, sessionId: string, options?: ClaudeControlOptions) => Promise<void>
+  generateSessionTitle?: (description: string) => Promise<unknown>
 }
 
 type InterruptingQuery = {
@@ -123,7 +124,16 @@ type InterruptingQuery = {
 }
 
 export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
+  const title = 'generateSessionTitle' in query ? query.generateSessionTitle : null
   return {
+    ...(typeof title === 'function'
+      ? {
+          generateSessionTitle: (description: string) =>
+            runClaudeControl('generate_session_title', () =>
+              Promise.resolve(title.call(query, description, { persist: true }))
+            )
+        }
+      : {}),
     interrupt: (options) =>
       runClaudeControl(
         'interrupt',

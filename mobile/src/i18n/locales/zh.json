@@ -2194,7 +2194,11 @@
       "waitForBackgroundTasks": "请等待后台任务完成",
       "waitForStart": "请等待智能体完成启动",
       "writeFailed": "Orca 无法将此消息交给智能体，因此消息未发送",
-      "pluginInputRequired": "{{agent}} 已停止，因为“{{plugin}}”插件正在终端窗格中等待输入。请为聊天会话禁用该插件，或在 {{agent}} 终端中运行任务。"
+      "pluginInputRequired": "{{agent}} 已停止，因为“{{plugin}}”插件正在终端窗格中等待输入。请为聊天会话禁用该插件，或在 {{agent}} 终端中运行任务。",
+      "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
+      "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
+      "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
+      "selectedModel": "所选模型"
     },
     "fileReader": {
       "copyReviewNotes": "复制评审备注",

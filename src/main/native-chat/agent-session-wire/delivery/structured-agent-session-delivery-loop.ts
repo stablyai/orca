@@ -299,6 +299,10 @@ export class StructuredAgentSessionDeliveryLoop {
 
   /** Clear under serialization so the next accept can wake a new loop. */
   private stop(sessionId: string): 'stop' {
+    const journal = this.deps.sessions.get(sessionId)?.journal
+    if (journal && this.running.has(sessionId)) {
+      this.deps.captureTitleSourceUnavailable?.(sessionId, journal)?.()
+    }
     this.running.delete(sessionId)
     this.deps.deliveryOrder.parkSends(sessionId)
     return 'stop'

@@ -150,7 +150,7 @@ describe('structured agent launch persistence', () => {
 
     expect(
       retireAbsentStructuredAgentLaunchCancellationTombstonesPersisted(new Set(), 'local')
-    ).toBe(true)
+    ).toEqual(['local_session'])
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('local_session')).toBe(false)
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('remote_session')).toBe(true)
   })

@@ -15,6 +15,8 @@ export type SttRecognizerEvent =
   | { type: 'chunk'; streamId: string; text: string; samples: number }
   /** Pause-cut streams only: speech was heard that no chunk has committed yet. */
   | { type: 'speech-pending'; streamId: string; pending: boolean }
+  /** A load step finished, so a slow load is told apart from a hung GPU. */
+  | { type: 'loading' }
 
 export type SttRecognizerPost = (event: SttRecognizerEvent) => void
 
