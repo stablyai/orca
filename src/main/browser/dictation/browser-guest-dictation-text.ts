@@ -1,17 +1,21 @@
 import { dictationSeparators } from '../../../shared/dictation-transcript-spacing'
 
-// Reads the text around the caret of the focused frame's editable field, or null when none is focused.
+// The focused text field of this frame's document, looking through open shadow roots, or null.
+const FOCUSED_FIELD_EXPRESSION = `(() => {
+  let field = document.activeElement
+  while (field?.shadowRoot?.activeElement) field = field.shadowRoot.activeElement
+  const typedInto = field instanceof HTMLTextAreaElement ||
+    (field instanceof HTMLInputElement && ['text', 'search', 'url', 'tel', 'email'].includes(field.type))
+  if (typedInto) return field.readOnly || field.disabled ? null : field
+  return field instanceof HTMLElement && field.isContentEditable ? field : null
+})()`
+
+// Text around the caret of the focused field, so dictated words are spaced from their neighbours.
 const READ_FOCUSED_FIELD_SCRIPT = `(() => {
   const limit = 200
-  const field = document.activeElement
-  const textInputTypes = ['text', 'search', 'url', 'tel', 'email', 'password']
-  if (
-    field instanceof HTMLTextAreaElement ||
-    (field instanceof HTMLInputElement && textInputTypes.includes(field.type))
-  ) {
-    if (field.readOnly || field.disabled) {
-      return null
-    }
+  const field = ${FOCUSED_FIELD_EXPRESSION}
+  if (!field) return null
+  if (!field.isContentEditable) {
     const start = field.selectionStart ?? field.value.length
     const end = field.selectionEnd ?? start
     return {
@@ -19,13 +23,9 @@ const READ_FOCUSED_FIELD_SCRIPT = `(() => {
       after: field.value.slice(end, end + limit)
     }
   }
-  if (!(field instanceof HTMLElement) || !field.isContentEditable) {
-    return null
-  }
-  const selection = document.getSelection()
-  if (!selection || selection.rangeCount === 0) {
-    return { before: '', after: '' }
-  }
+  const root = field.getRootNode()
+  const selection = root.getSelection ? root.getSelection() : document.getSelection()
+  if (!selection || selection.rangeCount === 0) return { before: '', after: '' }
   const caret = selection.getRangeAt(0)
   const before = document.createRange()
   before.selectNodeContents(field)
@@ -36,14 +36,15 @@ const READ_FOCUSED_FIELD_SCRIPT = `(() => {
   return { before: before.toString().slice(-limit), after: after.toString().slice(0, limit) }
 })()`
 
+// execCommand types into the frame that owns the field; webContents.insertText only reaches the top frame.
+const typeIntoFocusedFieldScript = (text: string): string => `(() => {
+  const field = ${FOCUSED_FIELD_EXPRESSION}
+  return field ? document.execCommand('insertText', false, ${JSON.stringify(text)}) : false
+})()`
+
 type FocusedFieldText = { before: string; after: string }
 type ScriptFrame = { executeJavaScript(code: string): Promise<unknown> }
-type DictationGuest = {
-  focusedFrame: ScriptFrame | null
-  mainFrame: ScriptFrame
-  isDestroyed(): boolean
-  insertText(text: string): Promise<void>
-}
+type DictationGuest = { focusedFrame: ScriptFrame | null; mainFrame: ScriptFrame }
 
 function isFocusedFieldText(value: unknown): value is FocusedFieldText {
   return (
@@ -61,13 +62,14 @@ export async function insertDictationTextIntoGuest(
   guest: DictationGuest,
   text: string
 ): Promise<boolean> {
-  // A field inside an iframe belongs to that frame's document, not the top page's.
   const frame = guest.focusedFrame ?? guest.mainFrame
-  const field: unknown = await frame.executeJavaScript(READ_FOCUSED_FIELD_SCRIPT).catch(() => null)
-  if (!isFocusedFieldText(field) || guest.isDestroyed()) {
+  const field = await frame.executeJavaScript(READ_FOCUSED_FIELD_SCRIPT)
+  if (!isFocusedFieldText(field)) {
     return false
   }
   const { leading, trailing } = dictationSeparators(field.before, text, field.after)
-  await guest.insertText(`${leading}${text}${trailing}`)
-  return true
+  const typed = await frame.executeJavaScript(
+    typeIntoFocusedFieldScript(`${leading}${text}${trailing}`)
+  )
+  return typed === true
 }
