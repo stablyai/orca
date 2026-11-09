@@ -19802,7 +19802,9 @@
         "readFailed": "Unable to read this attachment on its host. Reconnect and try again. The file may have been removed or changed."
       },
       "install": {
-        "checking": "Checking whether {{agent}} is ready on this host…"
+        "checking": "Checking whether {{agent}} is ready on this host…",
+        "cliInstall": "Install",
+        "cliRecheck": "Check again"
       },
       "reasoning": "Reasoning",
       "failureWords": {
