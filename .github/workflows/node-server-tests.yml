@@ -1,4 +1,4 @@
-name: Windows native report boundary diagnostic
+name: Windows Linux-only report acquisition diagnostic
 
 on:
   workflow_dispatch:
@@ -38,15 +38,40 @@ jobs:
         with:
           arches: x64
       - uses: ./.github/actions/build-mobile-web-bundle
+      - name: Apply authenticated diagnostic-only source guard before build
+        shell: bash
+        env:
+          ORCA_DIAGNOSTIC_TRACE_DIR: ${{ runner.temp }}/conpty-diagnostic
+        run: |
+          node --input-type=module <<'JS'
+          import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+          import { createHash } from 'node:crypto'
+          import { execFileSync } from 'node:child_process'
+          const path = 'src/main/orcad/native-host-abi.ts'
+          const before = readFileSync(path, 'utf8')
+          const sha = (text) => createHash('sha256').update(text).digest('hex')
+          if (sha(before) !== "8ccfe9023dddea4ccb3ba60973724871c3d1612bc4527f9a2e685ed9dea7d6db") throw new Error('Unexpected original source bytes')
+          const after = before.replace("  try {\n    header = (process.report?.getReport?.() as { header?: unknown } | undefined)?.header\n  } catch {\n    header = undefined\n  }\n", "  if (process.platform === 'linux') {\n    try {\n      header = (process.report?.getReport?.() as { header?: unknown } | undefined)?.header\n    } catch {\n      header = undefined\n    }\n  }\n")
+          if (sha(after) !== "85b4dba2b07c3f00bcbb449fcc73079c91e3e74b41f90e7ec74054843b4f7618") throw new Error('Unexpected guard patch bytes')
+          writeFileSync(path, after)
+          const dir = process.env.ORCA_DIAGNOSTIC_TRACE_DIR
+          mkdirSync(dir, { recursive: true })
+          writeFileSync(dir + '/source-before.ts', before)
+          writeFileSync(dir + '/source-after.ts', after)
+          writeFileSync(dir + '/applied-source.patch', execFileSync('git', ['diff', '--binary', '--', path]))
+          writeFileSync(dir + '/source-policy.json', JSON.stringify({ source: '2a9d86a4f3d7ccd29c335df6922c06455b6e99f8', beforeSha256: sha(before), afterSha256: sha(after), sourceChanged: true, change: 'Linux-only report acquisition', appliedBeforeBuild: true, testSource: 'guarded host TypeScript', compiledArtifact: 'built after guard; JavaScript may differ; native modules unchanged' }, null, 2))
+          execFileSync('git', ['diff', '--exit-code', '--', '.', ':(exclude)' + path], { stdio: 'inherit' })
+          JS
       - run: pnpm build:orcad
         env:
           ORCA_REUSE_PREPARED_WINDOWS_SECURITY: ${{ steps.dependencies.outcome == 'success' }}
-      - name: Record exact source and built native identities
+      - name: Record base source plus guarded artifact and native identities
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/conpty-diagnostic" | Out-Null
           git rev-parse HEAD | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/source.txt"
           if ((git rev-parse HEAD) -ne '2a9d86a4f3d7ccd29c335df6922c06455b6e99f8') { throw 'Unexpected source SHA' }
+          Get-FileHash out/orcad/orcad.js -Algorithm SHA256 | Format-Table -AutoSize | Out-String -Width 4096 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/guarded-artifact-sha256.txt"
           Get-ChildItem out/orcad -Recurse -File | Where-Object { $_.Extension -in '.node', '.dll', '.exe' } | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-String -Width 4096 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/native-sha256.txt"
       - name: Generate diagnostic-only worker trace and config
         shell: bash
@@ -58,7 +83,7 @@ jobs:
           import { createHash } from 'node:crypto'
           const dir = '.build/conpty-diagnostic'
           mkdirSync(dir, { recursive: true })
-          const setup = "import { appendFileSync } from 'node:fs'\nimport { join } from 'node:path'\nimport { afterAll, beforeAll, beforeEach, expect } from 'vitest'\n\nconst tracePath = join(process.env.ORCA_DIAGNOSTIC_TRACE_DIR, `worker-${process.pid}.jsonl`)\nfunction record(event) {\n  appendFileSync(tracePath, JSON.stringify({\n    event,\n    file: expect.getState().testPath,\n    test: expect.getState().currentTestName,\n    pid: process.pid,\n    ppid: process.ppid,\n    worker: process.env.VITEST_WORKER_ID,\n    pool: process.env.VITEST_POOL_ID,\n    monotonicNs: process.hrtime.bigint().toString()\n  }) + '\\n')\n}\nrecord('setup')\nbeforeAll(() => record('file-start'))\nbeforeEach(() => record('test-start'))\nafterAll(() => record('file-end'))\n\nif (expect.getState().testPath?.endsWith('/orcad-windows-conpty-breakaway.integration.test.ts')) {\n  const report = process.report\n  const originalGetReport = report?.getReport\n  if (typeof originalGetReport === 'function') {\n    function tracedGetReport(...args) {\n      record('report-enter')\n      let result\n      try {\n        result = Reflect.apply(originalGetReport, this, args)\n      } catch (error) {\n        record('report-throw')\n        throw error\n      }\n      record('report-return')\n      return result\n    }\n    report.getReport = tracedGetReport\n    record('report-wrapper-installed')\n    afterAll(() => {\n      if (report.getReport === tracedGetReport) {\n        report.getReport = originalGetReport\n      }\n      record('report-wrapper-restored')\n    })\n  } else {\n    record('report-function-missing')\n  }\n}\n";
+          const setup = "import { appendFileSync } from 'node:fs'\nimport { join } from 'node:path'\nimport { afterAll, beforeAll, beforeEach, expect } from 'vitest'\n\nconst tracePath = join(process.env.ORCA_DIAGNOSTIC_TRACE_DIR, `worker-${process.pid}.jsonl`)\nfunction record(event) {\n  appendFileSync(tracePath, JSON.stringify({\n    event,\n    file: expect.getState().testPath,\n    test: expect.getState().currentTestName,\n    pid: process.pid,\n    ppid: process.ppid,\n    worker: process.env.VITEST_WORKER_ID,\n    pool: process.env.VITEST_POOL_ID,\n    monotonicNs: process.hrtime.bigint().toString()\n  }) + '\\n')\n}\nrecord('setup')\nbeforeAll(() => record('file-start'))\nbeforeEach(() => record('test-start'))\nafterAll(() => record('file-end'))\n";
           const config = "import { resolve } from 'node:path'\nimport base from '../../config/vitest.config'\n\nconst traceSetup = resolve('.build/conpty-diagnostic/worker-trace.mjs')\nexport default {\n  ...base,\n  test: {\n    ...base.test,\n    projects: base.test.projects.map((project) => ({\n      ...project,\n      test: {\n        ...project.test,\n        setupFiles: [...project.test.setupFiles, traceSetup]\n      }\n    }))\n  }\n}\n";
           writeFileSync(dir + '/worker-trace.mjs', setup)
           writeFileSync(dir + '/vitest.config.mts', config)
@@ -73,7 +98,8 @@ jobs:
             console.log(name, createHash('sha256').update(body).digest('hex'))
           }
           JS
-          git diff --exit-code
+          git diff --exit-code -- . ':(exclude)src/main/orcad/native-host-abi.ts'
+          node --input-type=module -e "import { readFileSync } from 'node:fs'; import { createHash } from 'node:crypto'; if (createHash('sha256').update(readFileSync('src/main/orcad/native-host-abi.ts')).digest('hex') !== '85b4dba2b07c3f00bcbb449fcc73079c91e3e74b41f90e7ec74054843b4f7618') throw new Error('Guard source drifted')"
       - name: Full original artifact suite with worker identity tracing
         shell: pwsh
         env:
