@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/managed-account-types'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { getProviderAccountActiveIdForView } from '@/components/provider-accounts/provider-account-visibility'
 
 const READ_BUDGET_MS = 1_500
 
@@ -15,7 +16,7 @@ export function selectedAccountEmail(
   if (!state) {
     return null
   }
-  const selectedId = state.activeAccountIdsByRuntime?.host ?? state.activeAccountId
+  const selectedId = getProviderAccountActiveIdForView(state, { runtime: 'host' })
   if (selectedId) {
     return state.accounts.find((account) => account.id === selectedId)?.email ?? null
   }

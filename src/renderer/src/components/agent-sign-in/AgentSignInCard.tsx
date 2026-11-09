@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { PasteCodeForm } from './AgentSignInPasteCodeForm'
 import type { AgentSignInGate } from '@/lib/agent-sign-in/agent-sign-in-gate'
+import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
 
 export type AgentSignInCardActions = {
   signIn: () => void
@@ -18,7 +19,7 @@ export type AgentSignInCardActions = {
   skip?: () => void
 }
 
-const AGENT_NAME = { claude: 'Claude', codex: 'Codex' } as const
+const AGENT_NAME = HOST_AGENT_SIGN_IN_AGENT_NAME
 const SIGN_IN_SITE = { claude: 'claude.ai', codex: 'chatgpt.com' } as const
 
 function QueuedPrompt({

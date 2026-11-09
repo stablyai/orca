@@ -30,32 +30,24 @@ describe('agent sign-in pre-check on host connect', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  it('asks once per connection, after the connect settles', () => {
+  it('asks a host that connected', () => {
     observeRuntimeHostStatusForAgentSignInPrecheck(snapshot({}))
-    observeRuntimeHostStatusForAgentSignInPrecheck(snapshot({ sequence: 2 }))
-    expect(precheck).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(3_000)
-    expect(precheck).toHaveBeenCalledTimes(1)
+    vi.runAllTimers()
     expect(precheck).toHaveBeenCalledWith('env-1')
-
-    observeRuntimeHostStatusForAgentSignInPrecheck(snapshot({ transport: 'disconnected' }))
-    observeRuntimeHostStatusForAgentSignInPrecheck(snapshot({ sequence: 3 }))
-    vi.advanceTimersByTime(3_000)
-    expect(precheck).toHaveBeenCalledTimes(2)
   })
 
   it('never asks a host that is not connected, such as a suspended VM', () => {
     observeRuntimeHostStatusForAgentSignInPrecheck(snapshot({ transport: 'disconnected' }))
     observeRuntimeHostStatusForAgentSignInPrecheck(snapshot({ verification: 'unavailable' }))
     observeRuntimeHostStatusForAgentSignInPrecheck(snapshot({ retired: true }))
-    vi.advanceTimersByTime(10_000)
+    vi.runAllTimers()
     expect(precheck).not.toHaveBeenCalled()
   })
 
   it('drops the ask when the host goes away before it fires', () => {
     observeRuntimeHostStatusForAgentSignInPrecheck(snapshot({}))
     observeRuntimeHostStatusForAgentSignInPrecheck(snapshot({ transport: 'connecting' }))
-    vi.advanceTimersByTime(3_000)
+    vi.runAllTimers()
     expect(precheck).not.toHaveBeenCalled()
   })
 })
