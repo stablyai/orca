@@ -114,6 +114,9 @@ export class ShellDocument {
   readonly source: string;
   readonly baseDir: string;
   readonly manifest: BundleManifest;
+  // The shared page lifts its input dock while preserving the desktop terminal size.
+  readonly keyboardMode: WebKeyboardAvoidMode = AppStorage.get<boolean>('shellKeyboardOverlay')
+    ? WebKeyboardAvoidMode.OVERLAYS_CONTENT : WebKeyboardAvoidMode.RESIZE_CONTENT;
   readonly scripts: ScriptItem[] = [{ script: BRIDGE_SHIM, scriptRules: [SHELL_ORIGIN] }];
   private node: BuilderNode<ShellDocument[]> | null = null;
   private bridge: BridgeHost | null = null;
@@ -209,7 +212,7 @@ export class ShellDocument {
 @Builder
 function renderShellWeb(document: ShellDocument) {
   Web({ src: document.source, controller: document.controller })
-    .keyboardAvoidMode(WebKeyboardAvoidMode.RESIZE_CONTENT)
+    .keyboardAvoidMode(document.keyboardMode)
     .javaScriptProxy({ object: document.channel, name: 'orcaNative',
       methodList: ['postMessage', 'notifyOnMessageSet'], controller: document.controller })
     .javaScriptOnDocumentStart(document.scripts)

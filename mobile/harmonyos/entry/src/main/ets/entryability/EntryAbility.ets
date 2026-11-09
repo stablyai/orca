@@ -11,6 +11,22 @@ export default class EntryAbility extends UIAbility {
   private windowReady: boolean = false;
   private mainWindow: window.Window | null = null;
   private appliedColorMode: number = -99;
+  private readonly keyboardAreaChanged = (change: window.AvoidAreaOptions): void => {
+    if (change.type === window.AvoidAreaType.TYPE_KEYBOARD) { this.publishKeyboardArea(change.area); }
+  };
+  private publishKeyboardArea(area?: window.AvoidArea): void {
+    let current = this.mainWindow;
+    if (!current) { return; }
+    let rect = area?.bottomRect;
+    let top = rect && rect.height > 0 ? current.getUIContext().px2vp(rect.top) : -1;
+    AppStorage.setOrCreate('shellKeyboardTop', Number.isFinite(top) ? top : -1);
+  }
+  private refreshKeyboardArea(): void {
+    let current = this.mainWindow;
+    if (!current || !AppStorage.get<boolean>('shellKeyboardOverlay')) { return; }
+    try { this.publishKeyboardArea(current.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD)); }
+    catch (e) { this.publishKeyboardArea(); }
+  }
   private styleSystemBars(): void {
     if (!this.mainWindow) { return; }
     let light = AppStorage.get<string>('themeScheme') === 'light';
@@ -52,14 +68,20 @@ export default class EntryAbility extends UIAbility {
     }
   }
   onWindowStageCreate(windowStage: window.WindowStage): void {
-    windowStage.getMainWindow().then((mainWindow: window.Window): void => {
-      this.mainWindow = mainWindow;
-      setAppearanceListener((): void => { this.styleSystemBars(); this.context.eventHub.emit('orcaAppearanceChanged'); }); this.styleSystemBars();
-    }).catch(() => {});
     windowStage.loadContent('pages/Home', (err) => {
       if (err.code) { hilog.error(0x0000, 'OrcaEntry', 'loadContent failed'); return; }
+      let mainWindow = windowStage.getMainWindowSync();
+      this.mainWindow = mainWindow;
+      setAppearanceListener((): void => { this.styleSystemBars(); this.context.eventHub.emit('orcaAppearanceChanged'); });
+      this.styleSystemBars();
       try {
-        windowStage.getMainWindowSync().getUIContext().getFont().registerFont({
+        let area = mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_KEYBOARD);
+        mainWindow.on('avoidAreaChange', this.keyboardAreaChanged);
+        this.publishKeyboardArea(area);
+        AppStorage.setOrCreate('shellKeyboardOverlay', true);
+      } catch (e) { AppStorage.setOrCreate('shellKeyboardOverlay', false); }
+      try {
+        mainWindow.getUIContext().getFont().registerFont({
           familyName: 'Geist', familySrc: $rawfile('fonts/Geist-Variable.ttf')
         });
       } catch (e) { hilog.warn(0x0000, 'OrcaEntry', 'Custom font could not be registered'); }
@@ -67,8 +89,18 @@ export default class EntryAbility extends UIAbility {
     });
   }
   onConfigurationUpdate(config: Configuration): void { applyUiLanguage(); if (config.colorMode !== undefined) { setSystemAppearance(config.colorMode); } }
-  onWindowStageDestroy(): void { closeIdleDesktopConnections(); dropHomePrewarm(); this.windowReady = false; this.mainWindow = null; setAppearanceListener(null); setUiLocaleListener(null); }
-  onForeground(): void { reviveDesktopConnections(); this.context.eventHub.emit('orcaForeground'); this.styleSystemBars(); }
-  onBackground(): void { closeIdleDesktopConnections(); dropHomePrewarm(); this.context.eventHub.emit('orcaBackground'); }
+  onWindowStageDestroy(): void {
+    closeIdleDesktopConnections(); dropHomePrewarm(); this.windowReady = false;
+    try { this.mainWindow?.off('avoidAreaChange', this.keyboardAreaChanged); } catch (e) {}
+    this.mainWindow = null;
+    AppStorage.setOrCreate('shellKeyboardOverlay', false); AppStorage.setOrCreate('shellKeyboardTop', -1);
+    setAppearanceListener(null); setUiLocaleListener(null);
+  }
+  onForeground(): void {
+    reviveDesktopConnections(); this.refreshKeyboardArea(); this.context.eventHub.emit('orcaForeground'); this.styleSystemBars();
+  }
+  onBackground(): void {
+    closeIdleDesktopConnections(); dropHomePrewarm(); this.context.eventHub.emit('orcaBackground'); this.publishKeyboardArea();
+  }
   onMemoryLevel(_level: AbilityConstant.MemoryLevel): void { dropPrewarmForMemoryPressure(); }
 }

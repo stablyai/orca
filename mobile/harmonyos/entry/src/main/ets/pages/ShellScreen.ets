@@ -20,6 +20,7 @@ import { HostMeta } from '../storage/HostStore';
 struct ShellScreen {
   @StorageProp('uiLocale') @Watch('onLocaleChanged') uiLocale: string = 'en';
   @StorageProp('themeScheme') @Watch('onThemeChanged') scheme: string = 'dark';
+  @StorageProp('shellKeyboardTop') @Watch('publishKeyboardInset') keyboardTop: number = -1;
   @StorageProp('themeBg') themeBg: string = '#111111';
   @StorageProp('themeSurface') themeSurface: string = '#1c1c1c';
   @StorageProp('themeBorder') themeBorder: string = '#353a42';
@@ -38,10 +39,10 @@ struct ShellScreen {
   @State downloadPercent: number = -1;
   @State logs: string[] = [];
   @State hasDocument: boolean = false;
+  @State painted: boolean = false;
   @State showLog: boolean = false;
   private startup: ShellStartup = new ShellStartup((message: string): void => this.failStartup(message));
   private startupGeneration: number = 0;
-  private painted: boolean = false;
   private routePathname: string = '';
   private routeParams: Record<string, string> = {};
   private desktop: DesktopConnectionLease | null = null;
@@ -51,8 +52,10 @@ struct ShellScreen {
   private disposed: boolean = false;
   private pageVisible: boolean = true;
   private foreground: boolean = true;
+  private viewportTop: number = 0;
+  private viewportHeight: number = 0;
   private foregroundListener: () => void = (): void => {
-    this.foreground = true; this.updateViewing();
+    this.foreground = true; this.publishKeyboardInset(); this.updateViewing();
   };
   private generation: number = 0;
   private backgroundListener: () => void = (): void => {
@@ -109,11 +112,16 @@ struct ShellScreen {
     return this.bridge ? this.bridge.handleBack() : false;
   }
   onPageShow(): void {
-    this.pageVisible = true; this.updateViewing();
+    this.pageVisible = true; this.publishKeyboardInset(); this.updateViewing();
   }
   onPageHide(): void {
     this.pageVisible = false; this.clearViewing();
     if (this.nativeDevice) { this.nativeDevice.pause().catch(() => {}); }
+  }
+  private publishKeyboardInset(): void {
+    if (!this.pageVisible || !this.foreground || !this.bridge) { return; }
+    let covered = this.keyboardTop < 0 ? 0 : this.viewportTop + this.viewportHeight - this.keyboardTop;
+    this.bridge.setKeyboardInset(Math.max(0, Math.min(this.viewportHeight, covered)));
   }
   private clearViewing(): void { this.desktop?.connection.clearViewing(this.viewingOwner); }
   private updateViewing(): void {
@@ -265,6 +273,7 @@ struct ShellScreen {
       bridge.setFaultSink((_message: string): void => this.failStartup('会话页面发生错误，请重试'));
       bridge.setLogSink((line: string): void => this.appendLog(line));
       this.bridge = bridge;
+      this.publishKeyboardInset();
       document.onReady = (): void => {};
       document.allowExternal = (): boolean => this.pageVisible && this.foreground && this.document === document;
       document.onLoaded = (): void => {
@@ -287,7 +296,8 @@ struct ShellScreen {
 
   build() {
     Column() {
-      if (!this.hasDocument || this.phase !== '已连接' || this.showLog) {
+      // A painted page owns reconnect status and keeps its viewport during recovery.
+      if (!this.hasDocument || !this.painted || this.phase === '已断开' || this.phase.startsWith('失败') || this.showLog) {
       Row({ space: 10 }) {
         Button(uiText('返回', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).backgroundColor(Color.Transparent)
           .onClick(() => router.back())
@@ -325,6 +335,10 @@ struct ShellScreen {
       // reloads the shell document and bounces the page back to the host root.
       Stack() {
         NodeContainer(this.documentMount).width('100%').height('100%').backgroundColor(this.themeBg)
+          .onAreaChange((_previous: Area, area: Area): void => {
+            this.viewportTop = Number(area.globalPosition.y); this.viewportHeight = Number(area.height);
+            this.publishKeyboardInset();
+          })
         if (!this.hasDocument) {
           Column({ space: 12 }) {
             Text(uiText(this.phase, this.uiLocale))
