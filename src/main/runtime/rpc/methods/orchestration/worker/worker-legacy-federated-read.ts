@@ -6,11 +6,11 @@ import {
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
 } from '../../../../orchestration/workers/transcripts/worker-output-cursor'
-import type { resolvePinnedFederatedServer } from './worker-observation'
+import type { callFederatedWorkerShow, resolvePinnedFederatedServer } from './worker-observation'
 
 // Old peers expose only terminal reads; retain fences and cursor scope instead of silently degrading transcript cursors.
 export async function readLegacyFederatedTerminal(args: {
-  runtime: Parameters<typeof resolvePinnedFederatedServer>[0]
+  runtime: Parameters<typeof callFederatedWorkerShow>[0]
   server: ReturnType<typeof resolvePinnedFederatedServer>
   federated: Parameters<typeof resolvePinnedFederatedServer>[1]
   workerState: string

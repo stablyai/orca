@@ -23,7 +23,8 @@ export function beginRemoteAttachmentStop(
   }
   // Enforced here, on the worker's own host, so a coordinator of any version is refused.
   refuseStopWhileKeptOpen(this, dispatchId)
-  if (!['ready', 'start_unknown'].includes(attachment.state)) {
+  // A stop whose close was not proven may be asked again; one still in flight may not.
+  if (!['ready', 'start_unknown', 'stop_unknown'].includes(attachment.state)) {
     throw new OrchestrationError(
       'dispatch_inactive',
       `Remote Dispatch ${dispatchId} cannot stop from ${attachment.state}.`
@@ -34,7 +35,7 @@ export function beginRemoteAttachmentStop(
       `UPDATE remote_dispatch_attachments
        SET state = 'stopping', stage = 'stop_requested', capability_hash = NULL,
            updated_at = datetime('now')
-       WHERE dispatch_id = ? AND state IN ('ready', 'start_unknown')`
+       WHERE dispatch_id = ? AND state IN ('ready', 'start_unknown', 'stop_unknown')`
     )
     .run(dispatchId)
   return this.getRemoteDispatchAttachment(dispatchId) as RemoteDispatchAttachmentRow

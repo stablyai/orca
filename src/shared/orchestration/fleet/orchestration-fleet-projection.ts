@@ -107,7 +107,8 @@ export type OrchestrationFleetWorker = {
   role: 'worker'
   parent: { taskId: string } | null
   provider: { id: string; model: string | null } | null
-  host: { kind: 'local' | 'remote'; id: string }
+  /** `name` is a paired server's, as the home knows it. */
+  host: { kind: 'local' | 'remote'; id: string; name?: string }
   workspace: { id: string; kind: 'folder_or_worktree' } | null
   stage: {
     worker: string

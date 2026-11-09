@@ -1,7 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { keptOpenStopRefusal } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
 import { callFederatedWorkerShow } from './worker-observation'
@@ -75,7 +74,7 @@ function resolveWorkerPaneKey(
 /** Stop changes this side before the worker's host can refuse a kept worker, so the host is asked first;
  *  without an answer nothing is stopped. Hosts that predate Keep open answer without `keptOpen`. */
 export async function refuseFederatedStopWhileKeptOpen(
-  runtime: WorkerTerminalReleaseRuntime,
+  runtime: Parameters<typeof callFederatedWorkerShow>[0],
   federated: FederatedDispatchRow
 ): Promise<void> {
   const shown = await callFederatedWorkerShow(runtime, federated).catch((error: unknown) => {

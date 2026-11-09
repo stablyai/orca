@@ -28,6 +28,23 @@ export type FederatedFleetObservation = {
   autoReleaseAt?: string
 }
 
+export type FederatedFleetHost = { id: string; name: string }
+
+/** Each listed worker's paired server, from the home's own record: no server call. */
+export function federatedFleetHosts(
+  db: OrchestrationDb,
+  dispatchIds: readonly string[]
+): Map<string, FederatedFleetHost> {
+  const hosts = new Map<string, FederatedFleetHost>()
+  for (const federated of db.listFederatedDispatchesByIds(dispatchIds)) {
+    hosts.set(federated.dispatch_id, {
+      id: federated.environment_id,
+      name: federated.environment_name
+    })
+  }
+  return hosts
+}
+
 export type FederatedFleetHostError = {
   environmentId: string
   name: string
@@ -42,7 +59,7 @@ export async function readFederatedFleetSnapshots(args: {
 }): Promise<{
   observations: Map<string, FederatedFleetObservation>
   errors: FederatedFleetHostError[]
-  hosts: Map<string, string>
+  hosts: Map<string, FederatedFleetHost>
   homeAutoReleases: Map<string, string>
 }> {
   const groups = groupFederatedDispatches(args)
@@ -150,11 +167,11 @@ export async function readFederatedFleetSnapshots(args: {
   })
   const observations = new Map<string, FederatedFleetObservation>()
   const errors: FederatedFleetHostError[] = []
-  const hosts = new Map<string, string>()
+  const hosts = new Map<string, FederatedFleetHost>()
   const homeAutoReleases = new Map<string, string>()
   for (const group of groups) {
     for (const dispatch of group.dispatches) {
-      hosts.set(dispatch.dispatch_id, group.environmentId)
+      hosts.set(dispatch.dispatch_id, { id: group.environmentId, name: group.name })
       const homeAutoReleaseAt = liveFederatedHomeAutoReleaseAt(dispatch)
       if (homeAutoReleaseAt) {
         homeAutoReleases.set(dispatch.dispatch_id, homeAutoReleaseAt)
@@ -213,9 +230,9 @@ export function applyFederatedFleetObservations(
     )
   )
   for (const worker of fleet.workers) {
-    const hostId = federated.hosts.get(worker.dispatchId)
-    if (hostId) {
-      worker.host = { kind: 'remote', id: hostId }
+    const host = federated.hosts.get(worker.dispatchId)
+    if (host) {
+      worker.host = { kind: 'remote', ...host }
     }
     const observation = federated.observations.get(worker.dispatchId)
     if (!observation) {

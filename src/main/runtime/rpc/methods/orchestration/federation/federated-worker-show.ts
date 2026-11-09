@@ -16,6 +16,7 @@ import {
   resolvePinnedFederatedServer
 } from '../worker/worker-observation'
 import { applyFederatedFleetObservations } from './federated-fleet-snapshot'
+import { isServerUnreachable } from './federated-worker-stop'
 import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
 /** Query host evidence: push-fed fleet snapshots cover only local panes and would fabricate unverifiable for federated workers. */
@@ -23,8 +24,9 @@ export function projectFederatedFleetWorker(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchId: string
-  environmentId: string
-  observation: { status?: string; exactWorker: boolean; reason?: string }
+  host: { id: string; name: string }
+  /** Null: the server could not be reached, so only the home's record speaks. */
+  observation: { status?: string; exactWorker: boolean; reason?: string } | null
   autoReleaseAt: string | null
 }): OrchestrationFleetWorker | null {
   const fleet = projectFleetWorkerPage(args.runtime, args.db, args.dispatchId)
@@ -35,23 +37,37 @@ export function projectFederatedFleetWorker(args: {
   applyFederatedFleetObservations(
     fleet,
     {
-      observations: new Map([
-        [
-          args.dispatchId,
-          {
-            // A non-exact identity can never prove either liveness or exit.
-            status:
-              observed.exactWorker && (observed.status === 'live' || observed.status === 'exited')
-                ? observed.status
-                : ('unverifiable' as const),
-            exactWorker: observed.exactWorker,
-            ...(observed.reason ? { reason: observed.reason } : {}),
-            ...(args.autoReleaseAt ? { autoReleaseAt: args.autoReleaseAt } : {})
-          }
-        ]
-      ]),
-      errors: [],
-      hosts: new Map([[args.dispatchId, args.environmentId]])
+      observations: new Map(
+        observed
+          ? [
+              [
+                args.dispatchId,
+                {
+                  // A non-exact identity can never prove either liveness or exit.
+                  status:
+                    observed.exactWorker &&
+                    (observed.status === 'live' || observed.status === 'exited')
+                      ? observed.status
+                      : ('unverifiable' as const),
+                  exactWorker: observed.exactWorker,
+                  ...(observed.reason ? { reason: observed.reason } : {}),
+                  ...(args.autoReleaseAt ? { autoReleaseAt: args.autoReleaseAt } : {})
+                }
+              ]
+            ]
+          : []
+      ),
+      errors: observed
+        ? []
+        : [
+            {
+              environmentId: args.host.id,
+              name: args.host.name,
+              code: 'host_unavailable',
+              dispatchIds: [args.dispatchId]
+            }
+          ],
+      hosts: new Map([[args.dispatchId, args.host]])
     },
     fleet.durable
   )
@@ -81,7 +97,15 @@ export async function showFederatedWorker(args: {
   }
   const server = resolvePinnedFederatedServer(runtime, args.federated)
   runtime.ensureOrchestrationFederationRelay(args.dispatch.run_id)
-  const remote = await callFederatedWorkerShow(runtime, args.federated)
+  const remote = await callFederatedWorkerShow(runtime, args.federated).catch((error: unknown) => {
+    if (isServerUnreachable(error)) {
+      return null
+    }
+    throw error
+  })
+  if (!remote) {
+    return showFederatedWorkerFromHomeRecord({ ...args, server })
+  }
   const attachment = remote.attachment
   const settlementQueued =
     attachment.state === 'succeeded' ||
@@ -111,7 +135,7 @@ export async function showFederatedWorker(args: {
       runtime,
       db,
       dispatchId,
-      environmentId: server.environmentId,
+      host: { id: server.environmentId, name: server.name },
       observation,
       autoReleaseAt
     }),
@@ -121,6 +145,44 @@ export async function showFederatedWorker(args: {
       (observationProjected ? remote.runtimeEpoch : null),
     terminal: observationProjected ? remote.terminal : null,
     observation,
+    autoReleaseAt
+  }
+}
+
+/** A server that is off or off the network leaves the home's own record, with what it cannot know said plainly. */
+function showFederatedWorkerFromHomeRecord(args: {
+  runtime: OrcaRuntimeService
+  db: OrchestrationDb
+  dispatchId: string
+  dispatch: DispatchContextRow
+  federated: FederatedDispatchRow
+  server: { environmentId: string; name: string }
+}) {
+  const { runtime, db, dispatchId, server } = args
+  const worker = db.getWorkerDispatch(dispatchId)
+  if (!worker) {
+    throw new OrchestrationError(
+      'dispatch_not_found',
+      `Worker Dispatch ${dispatchId} was not found.`
+    )
+  }
+  const reason = `${server.name} could not be reached, so this is this computer's own record of the worker. Make sure Orca is running on ${server.name}, then run worker-show again.`
+  const autoReleaseAt = liveFederatedHomeAutoReleaseAt(args.federated)
+  return {
+    dispatch: exposeDispatchContext(args.dispatch),
+    worker: exposeWorker(worker),
+    projection: projectFederatedFleetWorker({
+      runtime,
+      db,
+      dispatchId,
+      host: { id: server.environmentId, name: server.name },
+      observation: null,
+      autoReleaseAt
+    }),
+    server: { environmentId: server.environmentId, name: server.name, reachable: false },
+    remoteRuntimeEpoch: args.federated.remote_runtime_epoch,
+    terminal: null,
+    observation: { status: 'unverifiable', exactWorker: false, reason },
     autoReleaseAt
   }
 }

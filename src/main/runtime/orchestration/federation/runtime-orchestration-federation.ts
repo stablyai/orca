@@ -22,6 +22,7 @@ import {
   releaseFederationAckCheckpoint
 } from './synchronization/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './synchronization/federation-sync'
+import { resendOwedFederatedStop } from '../../rpc/methods/orchestration/federation/federated-worker-stop'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { FederationRuntime } from './federation-runtime'
 import {
@@ -186,6 +187,7 @@ export class RuntimeOrchestrationFederation {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
           this.relays.noteSynced(dispatchId)
+          this.resendOwedStop(dispatchId, db)
         }
       })
       .catch((error: unknown) => {
@@ -206,6 +208,29 @@ export class RuntimeOrchestrationFederation {
       })
     this.syncs.set(dispatchId, { db, promise: sync })
     return sync
+  }
+
+  /** The server answered, so a stop it never answered is asked again; not awaited, as the stop resyncs this
+   *  Dispatch. The stop module keeps one stop in flight per Dispatch. */
+  private resendOwedStop(dispatchId: string, db: OrchestrationDb): void {
+    if (db.getWorkerDispatch(dispatchId)?.stage !== 'stop_owed') {
+      return
+    }
+    const runtime = this.runtime
+    const generation = this.relayGeneration
+    void resendOwedFederatedStop(
+      {
+        getOrchestrationDb: () => runtime.getOrchestrationDb(),
+        resolveOrchestrationWorkerServer: (selector) =>
+          runtime.resolveOrchestrationWorkerServer(selector),
+        callOrchestrationWorkerServer: (...args) => runtime.callOrchestrationWorkerServer(...args),
+        syncOrchestrationFederatedDispatchAfterCurrent: (id) => this.syncDispatchAfterCurrent(id)
+      },
+      dispatchId,
+      () => generation === this.relayGeneration
+    ).catch((error: unknown) => {
+      console.warn(`[orchestration] Resending the stop for ${dispatchId} failed:`, error)
+    })
   }
 
   async syncDispatchAfterCurrent(dispatchId: string): Promise<void> {
