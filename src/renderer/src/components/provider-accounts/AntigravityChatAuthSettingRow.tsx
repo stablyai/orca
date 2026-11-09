@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Label } from '../ui/label'
 
 /** Label and short description on the left, its control on the right. */
-export function SettingRow(props: {
+export function AntigravityChatAuthSettingRow(props: {
   htmlFor: string
   label: string
   description?: string | null

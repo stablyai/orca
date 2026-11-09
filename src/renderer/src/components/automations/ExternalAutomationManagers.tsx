@@ -2,7 +2,7 @@ import React from 'react'
 import { Play, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { SettingsSwitch } from '@/components/settings/form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type {
   ExternalAutomationAction,
@@ -182,13 +182,13 @@ export function ExternalAutomationManagers({
                               runningActionKey === actionKey('resume') ? (
                                 <RefreshCw className="size-3.5 animate-spin" />
                               ) : null}
-                              <SettingsSwitch
+                              <Switch
                                 checked={job.enabled}
-                                onChange={() =>
+                                onCheckedChange={() =>
                                   onAction(manager, job, job.enabled ? 'pause' : 'resume', scope)
                                 }
                                 disabled={disabledMessage !== null}
-                                ariaLabelledBy={nameId}
+                                aria-labelledby={nameId}
                               />
                             </span>
                           </TooltipTrigger>

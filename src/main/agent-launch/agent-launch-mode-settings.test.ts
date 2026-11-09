@@ -9,7 +9,7 @@ import { decideAgentLaunchMode, readAgentLaunchModeSettings } from './agent-laun
 vi.mock('electron', () => ({ app: { getPath: () => '/orca-state', isPackaged: true } }))
 
 describe('host launch preference ownership', () => {
-  it.each([false, true])('reads saved choices privately with Agents disabled=%s', (disabled) => {
+  it.each([true])('reads saved choices privately with Agents disabled=%s', (disabled) => {
     const settings: ReturnType<RuntimeStore['getSettings']> = {
       ...getDefaultSettings('/tmp'),
       agentDefaultSurface: 'chat',

@@ -5796,7 +5796,10 @@
           "69f5b5380d": "Clonage...",
           "cloneOnHostDescription": "Saisissez l'URL Git et choisissez où le cloner sur {{value0}}.",
           "cloneParentFolder": "Dossier parent",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Nom du dossier",
+          "cloneFolderTakenByRepo": "« {{value0}} » dans ce dossier est déjà un autre dépôt, ce clone a donc besoin de son propre dossier.",
+          "cloneFolderNotEmpty": "« {{value0}} » existe déjà dans ce dossier, ce clone a donc besoin de son propre dossier."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Fermer",
@@ -19401,6 +19404,7 @@
         "noCommands": "Aucune commande correspondante",
         "commands": "Commandes",
         "skills": "Skills",
+        "checkingSkills": "Recherche de nouvelles compétences…",
         "loadingSkills": "Chargement des skills...",
         "skillsLoaded": "Skills chargées",
         "clearDescription": "Effacer le contexte de la conversation",

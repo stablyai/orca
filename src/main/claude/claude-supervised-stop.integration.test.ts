@@ -11,7 +11,7 @@ import {
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
 } from '../provider-process/provider-process-supervisor'
-import { proveClaudeChildExit } from './claude-agent-sdk-exit-proof'
+import { createClaudeChildTreeReaper, proveClaudeChildExit } from './claude-agent-sdk-exit-proof'
 import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 
 // EOF leaves the turn running; SIGTERM reaps a detached tool but preserves a double-forked daemon.
@@ -193,6 +193,26 @@ describe.runIf(process.platform !== 'win32')('Claude under the POSIX provider su
     expect(elapsed).toBeLessThan(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
     await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM', processless: false })
     expect(alive(pids.claude)).toBe(false)
+  })
+
+  it('forces a Claude that ignores SIGTERM soon after a brief close, with its exit proven', async () => {
+    const { managed, exit, pids } = await spawnClaude({ ORCA_TEST_CLAUDE_IGNORES_SIGTERM: '1' })
+    const tree = createClaudeChildTreeReaper(managed.child, {
+      exited: () => managed.rootVerdict === 'exited'
+    })
+
+    // ast-grep-ignore: test-no-wall-clock -- the brief grace is the behaviour under test
+    const startedAt = Date.now()
+    await expect(managed.close(tree, { grace: 'brief' })).resolves.toEqual({
+      root: 'exited',
+      tree: 'exited'
+    })
+
+    // ast-grep-ignore: test-no-wall-clock -- the full SIGTERM grace is 3 s; a brief close must not wait it out
+    expect(Date.now() - startedAt).toBeLessThan(2_500)
+    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM', processless: false })
+    expect(alive(pids.claude)).toBe(false)
+    expect(alive(pids.tool)).toBe(false)
   })
 
   it("stops Claude and its tool when Orca's main dies, and leaves a daemon that left its tree alone", async () => {

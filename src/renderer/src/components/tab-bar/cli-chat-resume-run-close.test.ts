@@ -98,6 +98,7 @@ import { runCliChatResume } from './cli-chat-resume-run'
 
 import {
   SOURCE,
+  refuse,
   resetCliChatResumeRun,
   showAgentInSource,
   tabs
@@ -140,6 +141,24 @@ describe('close terminal then continue on capable hosts', () => {
     await main?.settle()
     expect(creates()).toHaveLength(1)
     expect(resolveWebSessionVisibleTabId(useAppStore.getState(), 'wt-1')).toBe('picked')
+  })
+
+  it('starts the chat anew when the closed terminal never saved its conversation', async () => {
+    const answer = mocks.call.getMockImplementation()
+    mocks.call.mockImplementationOnce(async (_target, method) => {
+      expect(method).toBe('agentSession.create')
+      return { ok: false, refusal: refuse('transcriptNotFound') }
+    })
+    await runCliChatResume(SOURCE)
+    await vi.waitFor(() => expect(creates()).toHaveLength(2))
+    const [first, second] = creates().map(([, , params]) => params)
+    expect(first.resumeFrom?.providerSessionId).toBe(SOURCE.providerSessionId)
+    expect(second.resumeFrom).toBeUndefined()
+    expect(second.envelope.sessionId).toBe(first.envelope.sessionId)
+    mocks.call.mockImplementation(answer!)
+    await main?.settle()
+    expect(tabs().map((tab) => tab.entityId)).toEqual([first.envelope.sessionId])
+    expect(mocks.toast).not.toHaveBeenCalled()
   })
 
   // Joining it would re-send an unconfirmed chat's create beside the still-running CLI.

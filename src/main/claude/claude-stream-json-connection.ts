@@ -24,6 +24,7 @@ import type { ClaudeStructuredSdkOptions } from './structured/launch/claude-stru
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { claudeStreamJsonExitError } from './claude-stream-json-exit-error'
 import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
+import type { ProviderProcessCloseOptions } from '../provider-process/provider-process-close'
 
 export { ClaudeControlRequestError }
 
@@ -95,7 +96,7 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   resumeReading?: () => void
   send: (message: Record<string, unknown>, beforeDispatch?: () => Promise<void>) => Promise<void>
   /** Resolves true after processless settlement, or root exit plus observed tree exit. */
-  close: () => Promise<boolean>
+  close: (options?: ProviderProcessCloseOptions) => Promise<boolean>
 }
 
 export async function openClaudeStreamJsonConnection(
@@ -270,14 +271,14 @@ export async function openClaudeStreamJsonConnection(
     return inbox.push(message as unknown as SDKUserMessage, beforeDispatch)
   }
 
-  const close = (): Promise<boolean> => {
+  const close = (options?: ProviderProcessCloseOptions): Promise<boolean> => {
     closePromise ??= (async () => {
       closing = true
       resumeReading()
       // Capture before stopping: exited roots can leave reparented descendants undiscoverable.
       await (tree.refresh?.() ?? tree.capture())
       inbox.end()
-      const result = await managed.closeWriter(tree)
+      const result = await managed.closeWriter(tree, options)
       const proven = claudeChildCloseProven(result) || result.killDelivered === true
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {
