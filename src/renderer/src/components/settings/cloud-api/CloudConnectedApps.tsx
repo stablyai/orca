@@ -108,12 +108,9 @@ export function CloudConnectedApps({
                 key={grant.id}
                 data-grant-id={grant.id}
                 data-settings-row=""
-                className="flex items-start gap-3 py-3.5"
+                className="flex items-start gap-3 py-3"
               >
-                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/40 text-muted-foreground">
-                  <Plug className="size-3.5" aria-hidden />
-                </div>
-                <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex min-w-0 items-baseline gap-2">
                     <p className="truncate text-sm font-medium" title={appName(grant, t)}>
                       {appName(grant, t)}
