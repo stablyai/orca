@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceSleepOutcome } from '../../../../../../shared/workspace-sleep'
 import { workspaceSleepTarget } from './workspace-sleep-target'
+import { dismissOrcaCloudRestartWarning } from '@/lib/orca-cloud-session-toasts'
 
 /** One per host asked to stop the workspace's chats. */
 export type WorkspaceSleepResult = {
@@ -73,6 +74,12 @@ export async function runSleepWorktrees(
     { markChatsAsleep: true }
   )
   toastSleepFailures(new Set(worktreeIds).size, errors, vmStillRunningIds.length > 0)
+  // A slept Orca Cloud sandbox won't restart, so its restart warning no longer applies.
+  for (const result of results) {
+    if (result.completed) {
+      dismissOrcaCloudRestartWarning(result.workspaceId)
+    }
+  }
   return results
 }
 

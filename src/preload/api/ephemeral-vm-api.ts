@@ -1,6 +1,8 @@
 import type { OrcaCloudAvailability, OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type {
   HostedSessionIdleSleepEvent,
+  HostedSessionRestartResult,
+  HostedSessionStateEvent,
   HostedSessionWarningEvent
 } from '../../shared/hosted-sandbox/hosted-session-events'
 import type { PublicKnownRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -78,10 +80,14 @@ export type EphemeralVmApi = {
   onProvisionEvent: (
     callback: (event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void
   ) => () => void
-  /** Orca Cloud: the session nears its cap (60/15 min left); running agents resume after the restart. */
+  /** Orca Cloud: the session nears its cap (60/15/5 min left); running agents resume after the restart. */
   onCloudSessionWarning: (callback: (event: HostedSessionWarningEvent) => void) => () => void
   /** Orca Cloud: the workspace has been idle long enough to sleep through the ordinary Sleep flow. */
   onCloudIdleSleepRequested: (callback: (event: HostedSessionIdleSleepEvent) => void) => () => void
+  /** Orca Cloud: a session rollover is restarting the workspace's machine, or it is back. */
+  onCloudSessionState: (callback: (event: HostedSessionStateEvent) => void) => () => void
+  /** Orca Cloud: roll the workspace's session over now instead of at the cap. */
+  restartCloudSession: (args: { workspaceId: string }) => Promise<HostedSessionRestartResult>
   listRuntimes: () => Promise<EphemeralVmRuntimeRecord[]>
   /** Orca Cloud: runtime environment ids that are Orca Cloud VMs. Absent in the web client. */
   cloudEnvironmentIds?: () => Promise<string[]>

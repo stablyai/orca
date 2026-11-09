@@ -13,6 +13,7 @@ import {
   showWorktreeCreationError
 } from '@/lib/workspace/creation/worktree-creation-surface'
 import { executeWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow-execute'
+import { isOrcaCloudCreateRequest, trackOrcaCloudCreateStep } from '@/lib/orca-cloud-cancel-cleanup'
 import {
   getInitialWorktreeCreationPhase,
   getWorktreeCreationIndeterminate
@@ -22,6 +23,18 @@ import {
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
 
+/** A cancel's cleanup toast waits for an Orca Cloud create run. */
+function trackOrcaCloudCreate(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  run: Promise<void>
+): Promise<void> {
+  if (!isOrcaCloudCreateRequest(request)) {
+    return run
+  }
+  return trackOrcaCloudCreateStep(creationId, run)
+}
+
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
 }
@@ -29,7 +42,11 @@ type ContinueBackgroundWorktreeCreationOptions = {
 // Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
 function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
   const originView = useAppStore.getState().activeView
-  executeWorktreeCreation(creationId, request, originView).catch((error: unknown) => {
+  trackOrcaCloudCreate(
+    creationId,
+    request,
+    executeWorktreeCreation(creationId, request, originView)
+  ).catch((error: unknown) => {
     console.error('worktree create: unhandled failure', creationId, error)
     const store = useAppStore.getState()
     if (!store.pendingWorktreeCreations[creationId]) {

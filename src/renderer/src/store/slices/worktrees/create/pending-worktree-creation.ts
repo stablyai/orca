@@ -12,6 +12,10 @@ import {
 import { deleteNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
 import { clearNativeChatPendingAttachments } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import { releaseNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import {
+  beginOrcaCloudCancelCleanup,
+  isOrcaCloudCreateRequest
+} from '@/lib/orca-cloud-cancel-cleanup'
 
 export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,
@@ -127,19 +131,41 @@ export function createRemovePendingWorktreeCreation(
         .cancelProvision({ provisionId: creationId })
         .catch(() => undefined)
     }
-    if (!removedEntry.request.ephemeralVmRuntimeId || !window.api?.ephemeralVm?.cleanup) {
-      return
+    const cleanup = cleanUpCancelledVm(creationId, removedEntry.request, get)
+    if (removedEntry.status === 'creating' && isOrcaCloudCreateRequest(removedEntry.request)) {
+      beginOrcaCloudCancelCleanup(
+        creationId,
+        cleanup ? [cleanup] : [],
+        {
+          runtimeId: removedEntry.request.ephemeralVmRuntimeId,
+          createStartedAt: removedEntry.startedAt
+        },
+        () => get().openSettingsTarget({ pane: 'servers', repoId: null })
+      )
     }
-    void cleanupFailedEphemeralVmWorkspace(removedEntry.request, {
-      deleteProjectHostSetup: (setupId, hostId) =>
-        get().deleteProjectHostSetup({ setupId, hostId }),
-      cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
-      reportSetupError: (error) =>
-        console.error('Failed to remove cancelled provisioned-root project setup:', error),
-      reportRuntimeError: (error) =>
-        console.error('Failed to clean up cancelled ephemeral VM runtime:', error)
-    }).then((cleanedUp) => settleVmCreateCheckoutAfterCleanup(creationId, cleanedUp))
   }
+}
+
+/** Resolves false when the VM may still be running; null when the cancel owns no VM yet. */
+function cleanUpCancelledVm(
+  creationId: string,
+  request: PendingWorktreeCreation['request'],
+  get: WorktreeSliceGet
+): Promise<boolean> | null {
+  if (!request.ephemeralVmRuntimeId || !window.api?.ephemeralVm?.cleanup) {
+    return null
+  }
+  return cleanupFailedEphemeralVmWorkspace(request, {
+    deleteProjectHostSetup: (setupId, hostId) => get().deleteProjectHostSetup({ setupId, hostId }),
+    cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
+    reportSetupError: (error) =>
+      console.error('Failed to remove cancelled provisioned-root project setup:', error),
+    reportRuntimeError: (error) =>
+      console.error('Failed to clean up cancelled ephemeral VM runtime:', error)
+  }).then((cleanedUp) => {
+    settleVmCreateCheckoutAfterCleanup(creationId, cleanedUp)
+    return cleanedUp
+  })
 }
 
 export function createSetActivePendingWorktreeCreation(

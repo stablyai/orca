@@ -37,6 +37,7 @@ import {
 import { prepareCreatedWorktreeActivation } from '@/lib/workspace/creation/worktree-creation-initial-tabs'
 import type { UISlice } from '@/store/slices/ui/ui-slice-contract'
 import { hostSignInCheck, signedInHostLaunch } from '@/lib/agent-sign-in/host-agent-launch-sign-in'
+import { takeQueuedVmCreationPrompt } from '@/lib/workspace/creation/vm-creation-queued-prompt'
 
 export async function executeWorktreeCreation(
   creationId: string,
@@ -47,11 +48,11 @@ export async function executeWorktreeCreation(
   const trustedRequest = request.hookPreparation
     ? await prepareWorktreeCreationHooks(creationId, request)
     : request
-  const preparedRequest =
-    trustedRequest && (await prepareRequestForCreate(creationId, trustedRequest))
-  if (!preparedRequest) {
+  const prepared = trustedRequest && (await prepareRequestForCreate(creationId, trustedRequest))
+  if (!prepared) {
     return
   }
+  const preparedRequest = takeQueuedVmCreationPrompt(creationId, prepared)
 
   const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
   const creationHostId =

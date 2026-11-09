@@ -10,6 +10,8 @@ import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtime
 import {
   ORCAD_WORK_VERDICT_METHOD,
   type HostedSessionIdleSleepEvent,
+  type HostedSessionRestartResult,
+  type HostedSessionStateEvent,
   type HostedSessionWarningEvent
 } from '../../shared/hosted-sandbox/hosted-session-events'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
@@ -36,12 +38,18 @@ const WorkVerdict = z.object({
   lastPtyInputAt: z.number().nullable()
 })
 
-type Running = { scheduler: HostedSessionLeaseScheduler; runtimeId: string }
+type Running = {
+  scheduler: HostedSessionLeaseScheduler
+  runtimeId: string
+  workspaceId: string | null
+}
 
 export type HostedSessionRegistry = {
   /** Start schedulers for running Orca Cloud runtimes, stop the rest. Cheap; call after any lifecycle change. */
   sync(): Promise<void>
   stopEnvironment(environmentId: string): void
+  /** "Restart now" on the cap warning: roll the workspace's session over at once. */
+  restartWorkspace(workspaceId: string): Promise<HostedSessionRestartResult>
   dispose(): void
 }
 
@@ -130,6 +138,10 @@ export function createHostedSessionRegistry(deps: {
         )
       },
       resumeAgents: (drainStartedAt) => autoResumeAgentsAfterRollover(call, drainStartedAt),
+      onRolloverStateChange: (state) => {
+        const event: HostedSessionStateEvent = { workspaceId: runtime.workspaceId ?? null, state }
+        broadcast('orcaCloud:sessionState', event)
+      },
       // The window runs its ordinary Sleep, so the sidebar, chats and VM suspend stay one path.
       onSuspended: () =>
         log(`[orca-cloud] idle sleep requested for ${runtime.workspaceName ?? runtime.id}`),
@@ -141,7 +153,11 @@ export function createHostedSessionRegistry(deps: {
         broadcast('orcaCloud:idleSleepRequested', event)
       }
     })
-    running.set(environmentId, { scheduler, runtimeId: runtime.id })
+    running.set(environmentId, {
+      scheduler,
+      runtimeId: runtime.id,
+      workspaceId: runtime.workspaceId ?? null
+    })
     scheduler.start()
     log(`[orca-cloud] lease scheduler started for ${runtime.workspaceName ?? runtime.id}`)
   }
@@ -181,6 +197,18 @@ export function createHostedSessionRegistry(deps: {
       }
     },
     stopEnvironment,
+    async restartWorkspace(workspaceId) {
+      const entry = [...running.values()].find((item) => item.workspaceId === workspaceId)
+      if (!entry) {
+        return { status: 'not-running' }
+      }
+      try {
+        return { status: (await entry.scheduler.restartNow()) ? 'restarted' : 'not-running' }
+      } catch (error) {
+        log(`[orca-cloud] restart now failed: ${String(error)}`)
+        return { status: 'failed' }
+      }
+    },
     dispose() {
       for (const environmentId of running.keys()) {
         stopEnvironment(environmentId)

@@ -1,6 +1,6 @@
 import { cloudDevSigningAllowed, withCloudBuildDefaults } from '../cloud-build-defaults'
 // Wires Orca Cloud into the desktop when this build has a control plane configured (off by default).
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { readFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
@@ -33,6 +33,7 @@ import {
   setCloudArchiveCheck
 } from './hosted-workspace-runtime'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import type { HostedSessionRestartResult } from '../../shared/hosted-sandbox/hosted-session-events'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
 export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
@@ -49,6 +50,10 @@ export function installHostedSandbox(): void {
   if (installed) {
     return
   }
+  ipcMain.removeHandler('orcaCloud:restartNow')
+  ipcMain.handle('orcaCloud:restartNow', (_event, args: { workspaceId: string }) =>
+    restartHostedWorkspace(args.workspaceId)
+  )
   const userDataPath = app.getPath('userData')
   const config = getHostedSandboxConfig(
     userDataPath,
@@ -141,6 +146,13 @@ export function installHostedSandbox(): void {
     offline.dispose()
     setCloudOfflineService(null)
   })
+}
+
+/** "Restart now" from the window's session-cap toast. */
+export function restartHostedWorkspace(workspaceId: string): Promise<HostedSessionRestartResult> {
+  return installed
+    ? installed.registry.restartWorkspace(workspaceId)
+    : Promise.resolve({ status: 'not-running' })
 }
 
 /**

@@ -22,7 +22,7 @@ const idleSince = (at: number): HostedActivitySample => ({
   lastPtyInputAt: null
 })
 
-function decide(now: number, activity: HostedActivitySample, warned: (60 | 15)[] = []) {
+function decide(now: number, activity: HostedActivitySample, warned: (60 | 15 | 5)[] = []) {
   return decideHostedLeaseAction({
     now,
     capabilities: HOSTED_SANDBOX_CAPABILITIES,
@@ -56,6 +56,10 @@ describe('hosted session lease policy', () => {
     expect(decide(session.deadlineAt - 14 * MIN, busy, [60])).toEqual({
       kind: 'warn',
       minutesLeft: 15
+    })
+    expect(decide(session.deadlineAt - 4 * MIN, busy, [60, 15])).toEqual({
+      kind: 'warn',
+      minutesLeft: 5
     })
     expect(decide(session.deadlineAt, busy)).toEqual({ kind: 'rollover', reason: 'forced' })
     expect(decide(session.deadlineAt, idleSince(session.deadlineAt - 3 * MIN))).toEqual({
@@ -101,6 +105,40 @@ describe('hosted session lease scheduler', () => {
     expect(resumeAgents).toHaveBeenCalledWith(created.session.deadlineAt)
     // The new session is far from its cap, so the next tick does nothing drastic.
     expect((await scheduler.tick()).kind).not.toBe('rollover')
+  })
+})
+
+describe('hosted session restart now', () => {
+  it('rolls the session over before its cap and reports the restart around it', async () => {
+    const now = T0
+    const plane = createFakeHostedControlPlane({ now: () => now })
+    const driver = createHostedSandboxDriver(
+      createHostedSandboxControlPlaneClient({
+        baseUrl: 'https://sandbox.cloud.test',
+        getAccessToken: async () => plane.token,
+        fetch: plane.fetch
+      })
+    )
+    const created = await driver.create({ workspaceId: 'ws-1' })
+    const reconnect = vi.fn(async (_ready: HostedEnvironmentReady) => {})
+    const states: string[] = []
+    const scheduler = new HostedSessionLeaseScheduler({
+      driver,
+      handle: created.handle,
+      session: created.session,
+      readActivity: async () => busy,
+      warn: () => {},
+      reconnect,
+      resumeAgents: async () => ({ offered: 0, continued: 0, skipped: 0, unsupported: false }),
+      onSuspended: () => {},
+      onRolloverStateChange: (state) => states.push(state),
+      now: () => now
+    })
+    expect(await scheduler.restartNow()).toBe(true)
+    expect(reconnect).toHaveBeenCalledTimes(1)
+    expect(states).toEqual(['restarting', 'running'])
+    scheduler.stop()
+    expect(await scheduler.restartNow()).toBe(false)
   })
 })
 
