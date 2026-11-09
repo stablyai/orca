@@ -137,13 +137,7 @@ export function VmBuildAgentSignInRowView({
             {t('agentSignIn.openAgain', 'Open again')}
           </Button>
         ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="text-muted-foreground"
-          onClick={actions.cancel}
-        >
+        <Button type="button" variant="ghost" size="xs" onClick={actions.cancel}>
           {t('agentSignIn.cancel', 'Cancel')}
         </Button>
       </>

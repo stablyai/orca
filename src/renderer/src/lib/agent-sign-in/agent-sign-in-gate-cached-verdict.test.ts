@@ -4,10 +4,16 @@ type Report = { checkedAt: number; agents: { agent: string; state: string }[] }
 const signedOut: Report = { checkedAt: 0, agents: [{ agent: 'claude', state: 'signedOut' }] }
 const signedIn: Report = { checkedAt: 0, agents: [{ agent: 'claude', state: 'signedIn' }] }
 
-const status = vi.hoisted(() => ({
-  fresh: null as Report | null,
-  refresh: vi.fn<() => Promise<Report | null>>()
-}))
+const status = vi.hoisted(() => {
+  const state: {
+    fresh: Report | null
+    refresh: ReturnType<typeof vi.fn<() => Promise<Report | null>>>
+  } = {
+    fresh: null,
+    refresh: vi.fn<() => Promise<Report | null>>()
+  }
+  return state
+})
 
 vi.mock('@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client', () => ({
   readHostAgentSignInReport: () => status.fresh,
