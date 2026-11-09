@@ -107,7 +107,7 @@ export function AgentLaunchSetupButton({
             const current =
               picked && mode === 'select' && !entry.textGeneration ? setup.getDraft() : undefined
             const selected = current && acceptAgentPickerArguments(entry, current)
-            if (selected && setup.select(selected)) {
+            if (selected && setup.accept(selected, true)) {
               onSelect?.(selected)
             }
           }}

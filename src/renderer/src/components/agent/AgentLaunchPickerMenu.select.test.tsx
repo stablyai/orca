@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import { useAgentPickerDraftScope } from './agent-launch-picker-drafts'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,9 +39,10 @@ const entry: AgentPickerEntry = {
   rows: [{ kind: 'cli', agent: 'codex', chat: true }]
 }
 
-// A form that re-derives each entry's draft from what it saved, as Automations and settings do.
+// A form that re-derives each entry's draft from what it saved and resets its draft scope, as Automations do.
 function Form({ query, onPick }: { query: string; onPick: (draft?: AgentPickerDraft) => void }) {
   const [saved, setSaved] = useState<AgentPickerDraft['choices']>({})
+  const draftScope = useAgentPickerDraftScope(saved.model)
   return (
     <TooltipProvider>
       <DropdownMenu defaultOpen modal={false}>
@@ -49,6 +51,7 @@ function Form({ query, onPick }: { query: string; onPick: (draft?: AgentPickerDr
           <AgentLaunchPickerMenu
             entries={[entry]}
             mode="select"
+            draftScope={draftScope}
             initialQuery={query}
             draftForEntry={() => ({ agent: 'codex', surface: 'terminal', choices: { ...saved } })}
             runLaunch={(_row, draft) => {
@@ -68,12 +71,11 @@ it.each([
   ['an agent row', ''],
   ['a search-result row', 'astra low']
 ])(
-  'applies each model and effort picked in %s setup to the form while the panel stays put',
+  'applies each model and effort picked in %s setup to the form and keeps the panel on them',
   (_row, query) => {
     const onPick = vi.fn()
     render(<Form query={query} onPick={onPick} />)
     fireEvent.click(screen.getAllByRole('button', { name: 'Configure Codex' })[0])
-    const search = screen.getByLabelText('Search models')
     fireEvent.click(screen.getByRole('option', { name: 'Luna' }))
     expect(onPick).toHaveBeenLastCalledWith(
       expect.objectContaining({ choices: expect.objectContaining({ model: 'luna' }) })
@@ -85,6 +87,13 @@ it.each([
         choices: expect.objectContaining({ model: 'luna', options: { effort: 'high' } })
       })
     )
-    expect(screen.getByLabelText('Search models')).toBe(search)
+    // Typed Arguments stay staged in the panel across a close, after the form took its picks.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+      target: { value: '--search' }
+    })
+    fireEvent.keyDown(screen.getByRole('menu', { name: 'Configure Codex' }), { key: 'Escape' })
+    expect(screen.queryByRole('menu', { name: 'Configure Codex' })).toBeNull()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Configure Codex' })[0])
+    expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--search')
   }
 )
