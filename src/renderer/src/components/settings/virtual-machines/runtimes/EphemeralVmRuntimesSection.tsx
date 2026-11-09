@@ -237,7 +237,7 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.EphemeralVmRuntimesSection.removeFromListFailed',
                 'Couldn’t remove Cloud VM runtime from the list.'
               )

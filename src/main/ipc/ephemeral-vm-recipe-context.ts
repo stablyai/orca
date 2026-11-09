@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import type { Store } from '../persistence/loading-store/store'
 import { loadHooks } from '../workspace-hooks/hooks'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
@@ -110,7 +109,7 @@ export function getRuntimeRecipeContext(
     // path are everything destroy needs (stablyai/orca#17293). Only trust the path while it still
     // holds the same recipe, so a different checkout later placed there can't run its scripts.
     const fallback = runtime.recipe && runtime.repoPath ? runtime.recipe : null
-    if (fallback && runtime.repoPath && existsSync(runtime.repoPath)) {
+    if (fallback && runtime.repoPath) {
       const sameRecipe = (loadHooks(runtime.repoPath)?.environmentRecipes ?? []).some(
         (entry) => entry.id === fallback.id && entry.create === fallback.create
       )

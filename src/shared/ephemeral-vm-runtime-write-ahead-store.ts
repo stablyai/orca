@@ -1,4 +1,3 @@
-import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { readNodeFileSyncWithinLimit } from './file-content/node-bounded-file-reader'
@@ -39,24 +38,30 @@ function readWriteAheadRuntimes(userDataPath: string): EphemeralVmRuntimeRecord[
   return readWriteAheadFile(getEphemeralVmWriteAheadRuntimeStorePath(userDataPath)).runtimes
 }
 
+type WriteAheadFileState = 'missing' | 'readable' | 'unreadable'
+
 function readWriteAheadFile(path: string): {
   runtimes: EphemeralVmRuntimeRecord[]
-  readable: boolean
+  state: WriteAheadFileState
 } {
-  if (!existsSync(path)) {
-    return { runtimes: [], readable: true }
+  let text: string
+  try {
+    text = readNodeFileSyncWithinLimit(path, MAX_WRITE_AHEAD_STORE_FILE_BYTES).buffer.toString(
+      'utf8'
+    )
+  } catch (error) {
+    const missing = (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT'
+    return { runtimes: [], state: missing ? 'missing' : 'unreadable' }
   }
   try {
     hardenExistingSecureFile(path)
-    const runtimes = WriteAheadRuntimeStoreSchema.parse(
-      JSON.parse(
-        readNodeFileSyncWithinLimit(path, MAX_WRITE_AHEAD_STORE_FILE_BYTES).buffer.toString('utf8')
-      )
-    ).runtimes.filter((entry) => !hasEphemeralVmRecipeResult(entry))
-    return { runtimes, readable: true }
+    const runtimes = WriteAheadRuntimeStoreSchema.parse(JSON.parse(text)).runtimes.filter(
+      (entry) => !hasEphemeralVmRecipeResult(entry)
+    )
+    return { runtimes, state: 'readable' }
   } catch {
     // Why: an unreadable sidecar must not block cleanup of tracked VMs in the main file.
-    return { runtimes: [], readable: false }
+    return { runtimes: [], state: 'unreadable' }
   }
 }
 
@@ -65,13 +70,8 @@ export function writeWriteAheadRuntimes(
   runtimes: readonly EphemeralVmRuntimeRecord[]
 ): void {
   const path = getEphemeralVmWriteAheadRuntimeStorePath(userDataPath)
-  if (!existsSync(path)) {
-    if (runtimes.length > 0) {
-      writeWriteAheadFile(path, runtimes)
-    }
-    return
-  }
-  if (!readWriteAheadFile(path).readable) {
+  const existing = readWriteAheadFile(path)
+  if (existing.state === 'unreadable') {
     // Why: never overwrite records this build cannot read (corrupt, or from a newer build); they
     // may be the only trace of a VM. Refuse new records instead, before their create starts.
     if (runtimes.length > 0) {
@@ -79,14 +79,10 @@ export function writeWriteAheadRuntimes(
     }
     return
   }
-  if (runtimes.length === 0) {
-    rmSync(path, { force: true })
+  // Most store writes touch only tracked VMs; skip the durable write when there is nothing to change.
+  if (runtimes.length === 0 && existing.runtimes.length === 0) {
     return
   }
-  writeWriteAheadFile(path, runtimes)
-}
-
-function writeWriteAheadFile(path: string, runtimes: readonly EphemeralVmRuntimeRecord[]): void {
   writeSecureJsonFileWithinLimit(path, { version: 1, runtimes }, MAX_WRITE_AHEAD_STORE_FILE_BYTES, {
     durable: true
   })

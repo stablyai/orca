@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -147,8 +147,10 @@ describe('ephemeral VM runtime store rollback projection', () => {
       }),
       expect.objectContaining({ id: 'ordinary-runtime' })
     ])
-    // An empty sidecar is removed rather than rewritten on every store write.
-    expect(existsSync(getEphemeralVmWriteAheadRuntimeStorePath(userDataPath))).toBe(false)
+    expect(
+      JSON.parse(readFileSync(getEphemeralVmWriteAheadRuntimeStorePath(userDataPath), 'utf8'))
+        .runtimes
+    ).toEqual([])
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([running, ordinary])
     expect(running).toEqual(provisionedRootRecord())
   })
