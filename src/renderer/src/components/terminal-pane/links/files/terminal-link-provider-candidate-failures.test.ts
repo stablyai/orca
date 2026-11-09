@@ -19,7 +19,9 @@ import {
 const doubles = createTerminalLinkTestDoubles()
 const { storeState, fsPathExistsMock, runtimeEnvironmentCallMock, statMock } = doubles
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeState } }))
-vi.mock('@/lib/language-detect', () => ({ detectLanguage: () => 'plaintext' }))
+vi.mock('../../../../../../shared/editor-language/editor-language-detect', () => ({
+  detectLanguage: () => 'plaintext'
+}))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()

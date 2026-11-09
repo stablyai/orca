@@ -16,11 +16,11 @@ import {
   type BrowserPaletteSearchResult,
   type SearchableBrowserPage
 } from '@/lib/browser/palette/browser-palette-search'
-import {
-  searchSimulatorTabs,
-  type SearchableSimulatorTab,
-  type SimulatorPaletteSearchResult
-} from '@/lib/simulator-palette-search'
+import { searchSimulatorTabs } from '@/lib/simulator/search/simulator-palette-search'
+import type {
+  SearchableSimulatorTab,
+  SimulatorPaletteSearchResult
+} from '@/lib/simulator/search/simulator-palette-search-types'
 import { getUnifiedTabPaletteExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import '@/lib/workspace/search/tabs/workspace-tab-search-types'

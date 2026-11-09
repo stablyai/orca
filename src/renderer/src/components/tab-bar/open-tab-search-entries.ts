@@ -2,12 +2,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from '@/lib/browser/palette/browser-palette-page-entries'
 import type { SearchableBrowserPage } from '@/lib/browser/palette/browser-palette-search'
-import {
-  buildSearchableSimulatorTabs,
-  type SearchableSimulatorTab
-} from '@/lib/simulator-palette-search'
+import { buildSearchableSimulatorTabs } from '@/lib/simulator/search/simulator-palette-search'
+import type { SearchableSimulatorTab } from '@/lib/simulator/search/simulator-palette-search-types'
 import '@/lib/workspace/search/tabs/workspace-tab-search-types'
-import { buildSearchableWorkspaceTabEntries as buildSearchableWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
+import { buildSearchableWorkspaceTabEntries } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
 import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
 import type { AppState } from '@/store/types'
 import {
@@ -213,7 +211,7 @@ export function buildOpenTabSearchEntries(
   const scope = openTabSearchScope(state)
 
   return {
-    workspaceTabs: buildSearchableWorkspaceTabs({
+    workspaceTabs: buildSearchableWorkspaceTabEntries({
       ...scope,
       unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       tabsByWorktree: state.tabsByWorktree,

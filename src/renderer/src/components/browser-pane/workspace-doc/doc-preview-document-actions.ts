@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import {
   buildWorkspaceFileContextForFile,
   canClientOsOpenWorkspaceFile

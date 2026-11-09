@@ -7,7 +7,7 @@ import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-fi
 import {
   acquireEditorFileOperation,
   getEditorFileOperationContext
-} from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
