@@ -208,11 +208,17 @@ export async function provisionRecipeEnvironment(
   } catch (error) {
     return cleanupAndFail(error)
   }
-  const runtime = requireEphemeralVmRecipeResult(
-    updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-      runtimeEnvironmentId: environment.id
-    })
-  )
+  let runtime: EphemeralVmProvisionedRuntimeRecord
+  try {
+    runtime = requireEphemeralVmRecipeResult(
+      updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+        runtimeEnvironmentId: environment.id
+      })
+    )
+  } catch (error) {
+    // The create step already started a VM; a failed record update must still destroy it.
+    return cleanupAndFail(error)
+  }
   return {
     ok: true,
     connectionType: 'orca-server',

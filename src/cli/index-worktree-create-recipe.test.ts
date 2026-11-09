@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -46,6 +46,15 @@ import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 import { agentLaunchFixture, agentLaunchHostFixture } from './agent-launch-test-fixtures'
 import { WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY } from '../shared/host-runtime-capabilities'
+
+// main() never clears exitCode, so a failing test would otherwise satisfy later exitCode checks.
+const originalExitCode = process.exitCode
+beforeEach(() => {
+  process.exitCode = undefined
+})
+afterEach(() => {
+  process.exitCode = originalExitCode
+})
 
 describe('CLI worktree create --recipe', () => {
   useWorktreeAwarenessEnvironment({
