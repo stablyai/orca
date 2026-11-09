@@ -262,7 +262,20 @@ it('does not confirm restored work from an older relay startup or redate a submi
         hookRows: desktop.getStatusSnapshot()
       })?.mainAgentWorkingStartedAt
     ).toBeNull()
+    vi.spyOn(Date, 'now').mockReturnValue(stopped.receivedAt + 31 * 60_000)
+    desktop.ingestRemote(
+      { ...event, hookEventName: 'SessionStart', hasExplicitPrompt: true, isReplay: true },
+      'ssh-connection'
+    )
+    expect(
+      selectFreshExplicitAgentStatus({
+        handle: 'fixture',
+        paneKey: PANE,
+        hookRows: desktop.getStatusSnapshot()
+      })
+    ).toBeNull()
   } finally {
+    vi.restoreAllMocks()
     first.stop()
     desktop.stop()
     rmSync(directory, { recursive: true, force: true })
