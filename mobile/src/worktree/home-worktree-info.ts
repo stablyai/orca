@@ -53,6 +53,7 @@ export type HostWorktreeInfo = {
   countsProvenAt?: number
 }
 
+/** One entry per listed workspace, named the way its rows show it. */
 export function homeWorkspaceEntries(
   worktrees: readonly HomeWorktreeSummary[]
 ): HomeWorkspaceEntry[] {
@@ -64,6 +65,7 @@ export function homeWorkspaceEntries(
   }))
 }
 
+/** Every agent the list read returned, with the workspace it runs in. */
 export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): HomeAgentEntry[] {
   return worktrees.flatMap((worktree) =>
     Array.isArray(worktree.agents)

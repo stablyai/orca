@@ -36,6 +36,7 @@ export type HostWorktreeInfoSetter = (
   updater: (prev: Record<string, HostWorktreeInfo>) => Record<string, HostWorktreeInfo>
 ) => void
 
+/** Reads a host's workspaces and agents for the home tabs and stores them under its id. */
 export function fetchHomeHostWorktreeInfo(
   client: RpcClient,
   hostId: string,

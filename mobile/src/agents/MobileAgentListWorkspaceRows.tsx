@@ -32,6 +32,7 @@ export function MobileAgentListWorkspaceRows(props: {
   )
 }
 
+/** One matched workspace: its name, then "No agent", repo, branch and desktop. */
 function WorkspaceRow(props: {
   match: AgentListWorkspaceMatch
   host: HostProfile | null
