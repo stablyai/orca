@@ -92,6 +92,25 @@ describe('workspace registry', () => {
     expect(w.cost).toMatchObject({ computeMs: 90 * MIN, computeUsdMicros: 1_125_000, tokenUsdMicros: 2_500_000, totalUsdMicros: 3_625_000 })
   })
 
+  it('labels owners and present teammates with the name claim from their own tokens', async () => {
+    const t = await team()
+    const named = async (who: { sub: string; org: string }, name: string, method: string, path: string, body?: unknown) =>
+      t.h.call(method, path, { bearer: await t.h.token(who.sub, who.org, 'sandbox', { org_role: 'member', name }), body })
+    await named(t.alice, 'Alice  Lovelace\u0007', 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    // Before Bob sends a named request, his id has no label (the roster or the id stands in).
+    const before = await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}`)
+    expect(before.body.workspace.memberNames).toEqual({ alice: 'Alice Lovelace' })
+    await named(t.bob, 'Bob B', 'POST', `/v1/team/workspaces/${t.id}/presence`, { clientId: 'b-1', state: 'viewing' })
+    const after = await t.req(t.alice, 'GET', '/v1/team/workspaces')
+    expect(after.body.workspaces[0].memberNames).toMatchObject({ bob: 'Bob B' })
+    expect(after.body.workspaces[0].memberNames.alice).not.toContain('\u0007')
+    // Another org never sees these labels.
+    const other = await t.as('alice', 'member', 'globex')
+    await t.req(other, 'POST', '/v1/sandboxes', { workspaceId: 'ws-x', machineSize: 'standard' })
+    const theirs = await t.req(other, 'GET', '/v1/team/workspaces?scope=mine')
+    expect(theirs.body.workspaces[0].memberNames).toEqual({})
+  })
+
   it('tracks live presence per member device and expires it', async () => {
     const t = await team()
     await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })

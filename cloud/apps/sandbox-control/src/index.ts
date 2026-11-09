@@ -148,6 +148,7 @@ import {
   resolveLink,
   workspaceViews
 } from './workspaces'
+import { rememberCallerName } from './member-names'
 import type { SandboxCaller } from './auth'
 
 const MAX_JSON_BYTES = 16 * 1024
@@ -1175,6 +1176,8 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const db = env.SANDBOX_DB
   const clock = deps.now ?? Date.now
   const now = clock()
+  // Labels for teammates' lists; a failure here must never fail the request itself.
+  await rememberCallerName(db, caller, now).catch((error: unknown) => console.warn('member_name_write_failed', String(error)))
   if (url.pathname === '/v1/team/links/resolve' && request.method === 'GET') {
     return json(await resolveLink(db, caller, url, now))
   }
