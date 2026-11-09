@@ -11121,7 +11121,10 @@
               "modelUnloadTitle": "卸載語音模型",
               "modelUnloadDescription": "選擇何時從記憶體中卸載本機語音模型。",
               "modelUnloadKeyword": "卸載",
-              "modelMemoryKeyword": "記憶體"
+              "modelMemoryKeyword": "記憶體",
+              "fillerWordsTitle": "移除語氣詞",
+              "fillerWordsDescription": "從聽寫文字中移除「嗯」「呃」之類的語氣詞。",
+              "fillerWordsKeyword": "語氣詞"
             }
           }
         },
@@ -20348,6 +20351,10 @@
           "cloud": "雲端模型在服務商的伺服器上執行，因此這裡不會載入任何內容。",
           "never": "從不",
           "immediately": "立即"
+        },
+        "fillerWords": {
+          "title": "移除語氣詞",
+          "description": "依聽寫語言，從聽寫文字中移除「嗯」「呃」之類的語氣詞。"
         }
       }
     },

@@ -11616,7 +11616,10 @@
               "modelUnloadTitle": "Unload Speech Model",
               "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
               "modelUnloadKeyword": "unload",
-              "modelMemoryKeyword": "memory"
+              "modelMemoryKeyword": "memory",
+              "fillerWordsTitle": "Remove Filler Words",
+              "fillerWordsDescription": "Drop “um”, “uh” and similar sounds from dictated text.",
+              "fillerWordsKeyword": "filler words"
             }
           }
         },
@@ -21320,6 +21323,10 @@
           "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
           "never": "Never",
           "immediately": "Immediately"
+        },
+        "fillerWords": {
+          "title": "Remove Filler Words",
+          "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
         }
       }
     },
@@ -21538,7 +21545,16 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "New Agent"
+        "browser": "Browser",
+        "chooseAgent": "Choose agent",
+        "closePane": "Close pane",
+        "goToFile": "Go to file",
+        "heading": "Open in this pane",
+        "markdown": "Markdown",
+        "mobileEmulator": "Mobile emulator",
+        "newAgent": "New Agent",
+        "reopenClosedTab": "Reopen closed tab",
+        "terminal": "Terminal"
       }
     }
   },

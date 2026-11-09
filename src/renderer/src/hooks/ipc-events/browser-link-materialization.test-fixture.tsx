@@ -86,6 +86,7 @@ export function installBrowserLinkMaterializationProbe() {
         modelsDir: '',
         dictationLanguage: 'auto',
         dictationMode: 'hold',
+        removeFillerWords: true,
         terminalConfirmBeforeInsert: true,
         userModels: [],
         openAiApiKeyConfigured: false,

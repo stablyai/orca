@@ -14,7 +14,7 @@ import {
   isCodexMethodNotFoundError,
   isCodexAppServerUnsupportedError
 } from '../../../../../codex/app-server/codex-app-server-session'
-import { CodexUsageApiKeyAuthError } from '../../../../../rate-limits/codex-rpc-rate-limit-mapper'
+import { CodexUsageApiKeyAuthError } from '../../../../../rate-limits/providers/codex/codex-rpc-rate-limit-mapper'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
 import { OptionsParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
