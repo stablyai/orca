@@ -123,7 +123,7 @@ function ensureInlineCompletionProvider(monaco: MonacoApi): void {
         return { items: [] }
       }
     },
-    freeInlineCompletions() {}
+    disposeInlineCompletions() {}
   })
 }
 

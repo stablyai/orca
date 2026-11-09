@@ -52,6 +52,8 @@ function fakeToken(): { token: CancellationToken; cancel: () => void } {
   }
 }
 
+let lastProvider: languages.InlineCompletionsProvider | undefined
+
 function mountProvider() {
   let provider: languages.InlineCompletionsProvider | undefined
   const model = fakeModel()
@@ -66,6 +68,7 @@ function mountProvider() {
       registerInlineCompletionsProvider: vi.fn(
         (_selector: string, next: languages.InlineCompletionsProvider) => {
           provider = next
+          lastProvider = next
           return { dispose() {} }
         }
       )
@@ -102,6 +105,12 @@ describe('inline completion provider', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('implements the dispose hook Monaco calls when a suggestion is accepted', () => {
+    mountProvider()
+
+    expect(typeof lastProvider?.disposeInlineCompletions).toBe('function')
   })
 
   it('asks the plugin after a pause and offers its suggestion at the cursor', async () => {
