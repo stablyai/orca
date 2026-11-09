@@ -1347,7 +1347,9 @@
           "pendingRemovalRefused": "Sunucu, çevrimdışı olduğu sırada kaldırdığınız bir projeyi tutmaya devam etti",
           "removeProjectHostUnreachable": "Projenin sunucusuna ulaşılamıyor. Şimdi bu masaüstünden kaldırın; Orca yeniden bağlandığında sunucudan da kaldırır.",
           "removeProjectLocallyNow": "Şimdi bu masaüstünden kaldır",
-          "removeProjectHostDisconnected": "Projenin sunucusunun bağlantısı kesildi. Şimdi bu masaüstünden kaldırın; yeniden bağlandığınızda Orca sunucudan da kaldırır."
+          "removeProjectHostDisconnected": "Projenin sunucusunun bağlantısı kesildi. Şimdi bu masaüstünden kaldırın; yeniden bağlandığınızda Orca sunucudan da kaldırır.",
+          "moveProjectGroupFailed": "Proje grubu taşınamadı",
+          "moveProjectGroupFailedDesc": "Grubun ana bilgisayarı yeni üst grubu uygulamadı. O bilgisayarda Orca’yı güncelleyip tekrar deneyin."
         },
         "settings": {
           "e12dab333b": "Sunucular arasında geçiş yapılamadı"
@@ -6295,7 +6297,8 @@
         },
         "SidebarHeader": {
           "92154beb7e": "Yeni çalışma alanı",
-          "addProject": "Proje ekle"
+          "addProject": "Proje ekle",
+          "newProjectGroup": "Yeni grup"
         },
         "SidebarNav": {
           "80611a8b10": "Ara",
@@ -6625,7 +6628,15 @@
           "childCount_one": "{{count}} alt öğe",
           "groupProjectsRemained_other": "Grup silindikten sonra içerdiği {{count}} projeden {{remaining}} tanesi kaldı.",
           "groupProjectsRemained_one": "Grup silindikten sonra içerdiği {{count}} projeden {{remaining}} tanesi kaldı.",
-          "hostServerReplaced": "Farklı sunucu: unutun, ardından bağlanın"
+          "hostServerReplaced": "Farklı sunucu: unutun, ardından bağlanın",
+          "newSubgroup": "Yeni alt grup",
+          "newSubgroupTitle": "Yeni Alt Grup",
+          "newSubgroupDesc": "{{group}} içinde bir alt grup oluşturun.",
+          "newEmptyGroupDesc": "Kenar çubuğunda boş bir grup oluşturun.",
+          "groupCreateFailed": "Grup oluşturulamadı",
+          "groupCreateFailedDesc": "Orca yeni grubu ana bilgisayarıyla doğrulayamadı. Bağlantıyı kontrol edip tekrar deneyin.",
+          "moveProjectToParentGroup": "Üst gruba taşı ({{group}})",
+          "moveGroupToTopLevel": "En üst düzeye taşı"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "İptal",

@@ -39,6 +39,7 @@ export type GroupHeaderRow = {
   repo?: Repo
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
+  hasChildGroups?: boolean
   hostId?: ExecutionHostId
   /** A project checked out on several hosts: each host's own registration, one header per host section. */
   hostRepos?: ReadonlyMap<ExecutionHostId, Repo>

@@ -1,9 +1,14 @@
-import { measureSidebarHeaderDragRect } from './sidebar-header-drag-geometry'
 import { getEffectiveProjectGroupManualRank } from '../../../../../../shared/project-groups'
 import {
   computeWorktreeSidebarHeaderDropPreview,
   type WorktreeSidebarHeaderDropPreview
 } from './worktree-sidebar-header-drop-preview'
+import {
+  getHeaderVirtualRowInfo,
+  getOptionalNumberAttribute,
+  indexMountedVirtualRowBounds,
+  resolveMeasuredSectionBottom
+} from './header-drag-dom-measurement'
 import { getHeaderDragRepo, type Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 
@@ -94,7 +99,8 @@ export function measureProjectHeaderDragRects(
   container: HTMLElement,
   bucketKey?: ProjectHeaderDragBucketKey
 ): ProjectHeaderDragRect[] {
-  const containerRect = container.getBoundingClientRect()
+  const containerTop = container.getBoundingClientRect().top
+  const mountedRows = indexMountedVirtualRowBounds(container)
   const rects: ProjectHeaderDragRect[] = []
   container.querySelectorAll<HTMLElement>('[data-repo-header-id]').forEach((element) => {
     const repoId = element.getAttribute('data-repo-header-id')
@@ -107,16 +113,21 @@ export function measureProjectHeaderDragRects(
     if (bucketKey !== undefined && elementBucketKey !== bucketKey) {
       return
     }
+    const { top, height, rowIndex } = getHeaderVirtualRowInfo(element, container, containerTop)
+    const bottom = top + height
     rects.push({
       repoId,
       bucketKey: elementBucketKey,
       headerIndex,
-      ...measureSidebarHeaderDragRect(
-        element,
-        container,
-        containerRect,
-        'data-repo-header-section-end'
-      )
+      top,
+      bottom,
+      sectionBottom: resolveMeasuredSectionBottom({
+        headerRowIndex: rowIndex,
+        headerBottom: bottom,
+        sectionEndIndex: getOptionalNumberAttribute(element, 'data-repo-header-section-end-index'),
+        estimatedSectionBottom: getOptionalNumberAttribute(element, 'data-repo-header-section-end'),
+        mountedRows
+      })
     })
   })
   rects.sort((left, right) => left.top - right.top)

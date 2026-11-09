@@ -525,8 +525,6 @@
 1 src/renderer/src/components/sidebar/workspace-visibility/dialog/HiddenWorktreeRecoveryList.tsx
 3 src/renderer/src/components/sidebar/workspace-visibility/dialog/WorktreeVisibilityDialog.tsx
 4 src/renderer/src/components/sidebar/worktree-list/drag/host-header-drag.ts
-5 src/renderer/src/components/sidebar/worktree-list/drag/project-group-header-drag.ts
-8 src/renderer/src/components/sidebar/worktree-list/drag/project-header-drag.ts
 2 src/renderer/src/components/sidebar/worktree-list/drag/use-native-autoscroll.ts
 2 src/renderer/src/components/sidebar/worktree-list/drag/use-native-drag.ts
 2 src/renderer/src/components/sidebar/worktree-list/drag/use-pointer-autoscroll.ts

@@ -1,4 +1,10 @@
 import { measureSidebarHeaderDragRect } from './sidebar-header-drag-geometry'
+import {
+  getHeaderVirtualRowInfo,
+  getOptionalNumberAttribute,
+  indexMountedVirtualRowBounds,
+  resolveMeasuredSectionBottom
+} from './header-drag-dom-measurement'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
@@ -48,6 +54,30 @@ export function getRootProjectHeaderDragKeys(
     end += 1
   }
   return keys.slice(start, end)
+}
+
+export function getRootProjectHeaderSectionKeysForHost(
+  keys: readonly string[] | undefined,
+  hostId?: string
+): readonly string[] | undefined {
+  if (!keys || keys.length === 0) {
+    return undefined
+  }
+  if (!keys.some((key) => key.startsWith('host:'))) {
+    return keys
+  }
+  if (!hostId) {
+    return undefined
+  }
+  const hostIndex = keys.indexOf(`host:${hostId}`)
+  if (hostIndex === -1) {
+    return undefined
+  }
+  let end = hostIndex + 1
+  while (end < keys.length && !keys[end].startsWith('host:')) {
+    end += 1
+  }
+  return keys.slice(hostIndex + 1, end)
 }
 
 export function getRootProjectHeaderKey(row: GroupHeaderRow): string | undefined {
@@ -116,6 +146,7 @@ export function measureRootProjectHeaderDragRects(
 ) {
   const indexByKey = new Map(keys.map((key, index) => [key, index]))
   const containerRect = container.getBoundingClientRect()
+  const mountedRows = indexMountedVirtualRowBounds(container)
   return [...container.querySelectorAll<HTMLElement>('[data-root-project-header-key]')]
     .flatMap((element) => {
       if (hostId !== undefined && element.dataset.rootProjectHeaderHost !== hostId) {
@@ -126,17 +157,29 @@ export function measureRootProjectHeaderDragRects(
       if (key === undefined || headerIndex === undefined) {
         return []
       }
+      const baseRect = measureSidebarHeaderDragRect(
+        element,
+        container,
+        containerRect,
+        'data-root-project-header-section-end'
+      )
+      const { rowIndex } = getHeaderVirtualRowInfo(element, container, containerRect.top)
+      const sectionEndIndex =
+        getOptionalNumberAttribute(element, 'data-repo-header-section-end-index') ??
+        getOptionalNumberAttribute(element, 'data-project-group-header-section-end-index')
       return [
         {
           key,
           headerIndex,
           bucketKey: 'root',
-          ...measureSidebarHeaderDragRect(
-            element,
-            container,
-            containerRect,
-            'data-root-project-header-section-end'
-          )
+          ...baseRect,
+          sectionBottom: resolveMeasuredSectionBottom({
+            headerRowIndex: rowIndex,
+            headerBottom: baseRect.bottom,
+            sectionEndIndex,
+            estimatedSectionBottom: baseRect.sectionBottom,
+            mountedRows
+          })
         }
       ]
     })

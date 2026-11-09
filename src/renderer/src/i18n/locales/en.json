@@ -1729,7 +1729,9 @@
           "pendingRemovalRefused": "The server kept a project you removed while it was offline",
           "removeProjectHostUnreachable": "Its server can’t be reached. Remove it from this desktop now, and Orca removes it from the server when it reconnects.",
           "removeProjectLocallyNow": "Remove from this desktop now",
-          "removeProjectHostDisconnected": "Its server is disconnected. Remove it from this desktop now, and Orca removes it from the server when you reconnect."
+          "removeProjectHostDisconnected": "Its server is disconnected. Remove it from this desktop now, and Orca removes it from the server when you reconnect.",
+          "moveProjectGroupFailed": "Could not move project group",
+          "moveProjectGroupFailedDesc": "The group's host did not apply the new parent group. Update Orca on that computer and try again."
         },
         "settings": {
           "e12dab333b": "Failed to switch servers"
@@ -6906,7 +6908,8 @@
           "92154beb7e": "New workspace",
           "addProject": "Add project",
           "expandAllProjects": "Expand all projects",
-          "collapseAllProjects": "Collapse all projects"
+          "collapseAllProjects": "Collapse all projects",
+          "newProjectGroup": "New group"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -7250,7 +7253,15 @@
           "hostVmSetupFailed": "Setup failed",
           "hostVmSuspended": "Suspended",
           "hostVmWaking": "Waking…",
-          "hostVmProvisioning": "Provisioning…"
+          "hostVmProvisioning": "Provisioning…",
+          "newSubgroup": "New subgroup",
+          "newSubgroupTitle": "New Subgroup",
+          "newSubgroupDesc": "Create a subgroup inside {{group}}.",
+          "newEmptyGroupDesc": "Create an empty group in the sidebar.",
+          "groupCreateFailed": "Failed to create group",
+          "groupCreateFailedDesc": "Orca could not confirm the new group with its host. Recheck the host connection and try again.",
+          "moveProjectToParentGroup": "Move to parent group ({{group}})",
+          "moveGroupToTopLevel": "Move to top level"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",

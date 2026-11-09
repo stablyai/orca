@@ -7,25 +7,20 @@ import { translate } from '@/i18n/i18n'
 import { selectProjectGroupRemovalTargets } from '@/store/project-groups/project-group-removal-targets'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import {
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { refreshFolderProjectGroup } from './project-group-folder-refresh'
+import {
+  resolveSubgroupCreationHostId,
+  submitProjectGroupNameDialog,
+  type ProjectGroupNameDialogState,
+  type ProjectGroupNameSubmitErrorKind
+} from './project-group-name-submit'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 
-export type ProjectGroupNameDialogState =
-  | { type: 'create-from-repo'; repo: Repo }
-  // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
-  | {
-      type: 'rename'
-      groupId: string
-      currentName: string
-      hostId?: ExecutionHostId
-    }
+export type { ProjectGroupNameDialogState }
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -35,6 +30,34 @@ export type ProjectGroupDeleteDialogState = {
 }
 
 export type ProjectGroupDialogs = ReturnType<typeof useProjectGroupDialogs>
+
+function reportProjectGroupNameSubmitError(kind: ProjectGroupNameSubmitErrorKind): void {
+  if (kind === 'move-failed') {
+    return
+  }
+  if (kind === 'create-failed') {
+    toast.error(
+      translate('auto.components.sidebar.WorktreeList.groupCreateFailed', 'Failed to create group'),
+      {
+        description: translate(
+          'auto.components.sidebar.WorktreeList.groupCreateFailedDesc',
+          'Orca could not confirm the new group with its host. Recheck the host connection and try again.'
+        )
+      }
+    )
+    return
+  }
+  toast.error(
+    translate('auto.components.sidebar.WorktreeList.groupRenameFailed', 'Failed to rename group'),
+    {
+      description: translate(
+        'auto.components.sidebar.WorktreeList.groupRenameFailedDesc',
+        // Why: a falsy result also covers RPC timeout/disconnect, so the copy must not assert the host refused.
+        "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting."
+      )
+    }
+  )
+}
 
 function reportProjectGroupDeleteFailures(result: {
   status: string
@@ -81,8 +104,10 @@ export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
   repoMap: Map<string, Repo>
   projectGroups: readonly ProjectGroup[]
+  defaultHostId: ExecutionHostId
+  onExpandGroupKey?: (groupKey: string) => void
 }) {
-  const { repos, repoMap, projectGroups } = args
+  const { repos, repoMap, projectGroups, defaultHostId, onExpandGroupKey } = args
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
@@ -96,6 +121,22 @@ export function useProjectGroupDialogs(args: {
   const handleCreateGroupFromRepo = useCallback((repo: Repo) => {
     setNameDialog({ type: 'create-from-repo', repo })
   }, [])
+
+  const handleCreateEmptyProjectGroup = useCallback(() => {
+    setNameDialog({ type: 'create-empty', hostId: defaultHostId, parentGroupId: null })
+  }, [defaultHostId])
+
+  const handleCreateProjectSubgroup = useCallback(
+    (parentGroupId: string, parentGroupName: string, hostId?: ExecutionHostId) => {
+      setNameDialog({
+        type: 'create-empty',
+        hostId: resolveSubgroupCreationHostId(projectGroups, parentGroupId, hostId),
+        parentGroupId,
+        parentGroupName
+      })
+    },
+    [projectGroups]
+  )
 
   const handleMoveProjectToGroup = useCallback(
     (repo: Repo, groupId: string) => {
@@ -165,35 +206,15 @@ export function useProjectGroupDialogs(args: {
       if (!nameDialog) {
         return
       }
-      if (nameDialog.type === 'create-from-repo') {
-        const group = await createProjectGroup(name, getRepoExecutionHostId(nameDialog.repo))
-        if (group) {
-          await moveProjectToGroup(nameDialog.repo, group.id)
-        }
-        return
-      }
-      const renamed = await updateProjectGroup(
-        nameDialog.groupId,
-        { name },
-        { hostId: nameDialog.hostId }
-      )
-      if (!renamed) {
-        toast.error(
-          translate(
-            'auto.components.sidebar.WorktreeList.groupRenameFailed',
-            'Failed to rename group'
-          ),
-          {
-            description: translate(
-              'auto.components.sidebar.WorktreeList.groupRenameFailedDesc',
-              // Why: a falsy result also covers RPC timeout/disconnect, so the copy must not assert the host refused.
-              "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting."
-            )
-          }
-        )
-      }
+      await submitProjectGroupNameDialog(nameDialog, name, {
+        createProjectGroup,
+        moveProjectToGroup,
+        updateProjectGroup,
+        onExpandGroupKey,
+        onError: reportProjectGroupNameSubmitError
+      })
     },
-    [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup]
+    [createProjectGroup, moveProjectToGroup, nameDialog, onExpandGroupKey, updateProjectGroup]
   )
 
   const deleteTargets = useMemo(() => {
@@ -274,6 +295,8 @@ export function useProjectGroupDialogs(args: {
     removeContainedProjects,
     deleteUnsavedTargets,
     handleCreateGroupFromRepo,
+    handleCreateEmptyProjectGroup,
+    handleCreateProjectSubgroup,
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
     handleRefreshProjectGroup,

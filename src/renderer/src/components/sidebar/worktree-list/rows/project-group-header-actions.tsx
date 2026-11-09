@@ -1,11 +1,15 @@
 import React from 'react'
-import { Ellipsis, Plus, RefreshCw } from 'lucide-react'
+import { CornerLeftUp, Ellipsis, FolderInput, FolderTree, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
@@ -15,6 +19,10 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getFolderProjectGroupRefreshHandler } from './project-group-folder-refresh'
+import {
+  buildReparentableProjectGroupMenuEntries,
+  resolveProjectGroupParentMenuTargets
+} from './project-group-menu-tree'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import {
   handleRepoHeaderActionPointerDown,
@@ -22,26 +30,46 @@ import {
   stopRepoHeaderMenuEvent
 } from './header-event-guards'
 
+const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
+
 export function ProjectGroupHeaderMenu({
   groupId,
   hostId,
   label,
   projectGroup,
+  projectGroups = EMPTY_PROJECT_GROUPS,
   onRefreshProjectGroup,
+  onCreateSubgroup,
+  onMoveGroup,
   onRename,
   onDelete
 }: {
   groupId: string
-  /** Owner host of the group row, so rename/delete route to the host that holds it. */
+  /** Owner host of the group row, so mutations route to the host that holds it. */
   hostId?: ExecutionHostId
   label: string
   projectGroup: ProjectGroup | null
+  projectGroups?: readonly ProjectGroup[]
   onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
+  onCreateSubgroup?: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  onMoveGroup?: (groupId: string, parentGroupId: string | null, hostId?: ExecutionHostId) => void
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const onRefresh = getFolderProjectGroupRefreshHandler(projectGroup, onRefreshProjectGroup)
+  const reparentableEntries = React.useMemo(
+    () =>
+      onMoveGroup ? buildReparentableProjectGroupMenuEntries(groupId, hostId, projectGroups) : [],
+    [groupId, hostId, onMoveGroup, projectGroups]
+  )
+  const parentTargets = React.useMemo(
+    () =>
+      onMoveGroup
+        ? resolveProjectGroupParentMenuTargets(groupId, hostId, projectGroups)
+        : { isNested: false, grandparentGroup: null },
+    [groupId, hostId, onMoveGroup, projectGroups]
+  )
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -81,9 +109,55 @@ export function ProjectGroupHeaderMenu({
             {t('auto.components.sidebar.WorktreeList.refreshProjectGroup', 'Refresh projects')}
           </DropdownMenuItem>
         ) : null}
+        {onCreateSubgroup ? (
+          <DropdownMenuItem onSelect={() => onCreateSubgroup(groupId, label, hostId)}>
+            <FolderTree className="size-3.5" />
+            {t('auto.components.sidebar.WorktreeList.newSubgroup', 'New subgroup')}
+          </DropdownMenuItem>
+        ) : null}
+        {onMoveGroup && reparentableEntries.length > 0 ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <FolderInput className="size-3.5" />
+              {t('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent scrollable>
+              {reparentableEntries.map(({ group, depth, disabled, pathLabel }) => (
+                <DropdownMenuItem
+                  key={group.id}
+                  disabled={disabled}
+                  aria-label={depth > 0 ? pathLabel : undefined}
+                  style={depth > 0 ? { paddingLeft: 8 + Math.min(depth, 6) * 12 } : undefined}
+                  onSelect={() => onMoveGroup(groupId, group.id, hostId)}
+                >
+                  <span className="max-w-48 truncate">{group.name}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
+        {onMoveGroup && parentTargets.grandparentGroup ? (
+          <DropdownMenuItem
+            onSelect={() => onMoveGroup(groupId, parentTargets.grandparentGroup!.id, hostId)}
+          >
+            <CornerLeftUp className="size-3.5" />
+            {t(
+              'auto.components.sidebar.WorktreeList.moveProjectToParentGroup',
+              'Move to parent group ({{group}})',
+              { group: parentTargets.grandparentGroup.name }
+            )}
+          </DropdownMenuItem>
+        ) : null}
+        {onMoveGroup && parentTargets.isNested ? (
+          <DropdownMenuItem onSelect={() => onMoveGroup(groupId, null, hostId)}>
+            <CornerLeftUp className="size-3.5" />
+            {t('auto.components.sidebar.WorktreeList.moveGroupToTopLevel', 'Move to top level')}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
           {t('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
           {t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
         </DropdownMenuItem>

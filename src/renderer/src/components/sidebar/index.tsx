@@ -82,6 +82,9 @@ function Sidebar({
     null
   )
   const [agentBadgeTarget, setAgentBadgeTarget] = React.useState<HTMLSpanElement | null>(null)
+  const [newProjectGroupTarget, setNewProjectGroupTarget] = React.useState<HTMLDivElement | null>(
+    null
+  )
   const agentsScrollTopRef = React.useRef(0)
   // Retain collapse state and scroll geometry across Agents-list unmounts.
   const [agentsCollapsedGroupKeys, setAgentsCollapsedGroupKeys] = React.useState<
@@ -186,6 +189,7 @@ function Sidebar({
                 onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
                 activityOptionsTarget={setAgentOptionsTarget}
                 projectsCollapseTarget={setProjectsCollapseTarget}
+                newProjectGroupTarget={setNewProjectGroupTarget}
               />
               <SeveredTerminalDaemonBanner />
               <StalledTerminalDaemonBanner />
@@ -220,6 +224,7 @@ function Sidebar({
                     onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
                     onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
                     projectsCollapseTarget={projectsCollapseTarget}
+                    newProjectGroupTarget={newProjectGroupTarget}
                   />
                   <WslMovedProjectsSection />
                 </>

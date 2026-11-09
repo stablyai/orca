@@ -378,3 +378,39 @@ it('preserves a renamed paired host and marks the default local label', () => {
   expect(hosts.find((host) => host.id === 'runtime:a')?.label).toBe('Local Mac')
   expect(hosts.find((host) => host.id === 'local')?.isDefaultLocalLabel).toBe(true)
 })
+
+describe('buildSidebarFeedRows project group child-group affordance', () => {
+  it('marks a parent project group header as having child groups even when all subgroups are empty', () => {
+    const parentGroup = projectGroup('g-parent', null)
+    const childGroup = projectGroup('g-child', 'g-parent')
+    const r1 = repo('r1')
+    const workspaces = buildWorkspaceRows({
+      worktrees: [worktree('r1::/r1/main')],
+      folderWorkspaces: [],
+      repos: [r1],
+      lineageById: {}
+    })
+    const rows = buildSidebarFeedRows(
+      domains({ workspaces }),
+      catalog([r1], [parentGroup, childGroup]),
+      view({ groupBy: 'repo' })
+    ).sectionRows
+
+    const parentHeader = rows.find(
+      (row) => row.type === 'header' && row.projectGroup?.id === 'g-parent'
+    )
+    const childHeader = rows.find(
+      (row) => row.type === 'header' && row.projectGroup?.id === 'g-child'
+    )
+    expect(parentHeader).toMatchObject({
+      type: 'header',
+      count: 0,
+      hasChildGroups: true
+    })
+    expect(childHeader).toMatchObject({
+      type: 'header',
+      count: 0,
+      hasChildGroups: false
+    })
+  })
+})

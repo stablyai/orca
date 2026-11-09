@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import { createProjectGroup } from '../../../shared/project-groups'
+import { ProjectGroupUpdate } from '../../../shared/rpc-contract/repo-params'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { ProjectGroupUpdateArgs } from '../../ipc/repos/repo-ipc-arg-schemas'
 import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
 import { ProjectGroupPersistenceOperations } from './project-group-operations'
 
@@ -120,5 +122,92 @@ describe('project group session removal', () => {
     expect(setup.state.projectGroups?.map((group) => group.id)).toEqual(['other'])
     expect(setup.state.folderWorkspaces.map((entry) => entry.id)).toEqual(['kept'])
     expect(setup.selected).toEqual(new Set([folderWorkspaceKey('kept')]))
+  })
+
+  it('reparents groups cleanly and refuses self-parenting, descendant cycles, or missing parents', () => {
+    const setup = fixture(0)
+
+    // Move 'other' inside 'child' (valid depth-2 reparenting)
+    const nested = setup.operations.updateProjectGroup('other', {
+      parentGroupId: 'child',
+      tabOrder: 5
+    })
+    expect(nested?.parentGroupId).toBe('child')
+    expect(nested?.tabOrder).toBe(5)
+
+    // Refuse moving 'root' inside itself or inside its descendant 'other' without mutating tabOrder
+    expect(
+      setup.operations.updateProjectGroup('root', { parentGroupId: 'root', tabOrder: 99 })
+    ).toBeNull()
+    expect(
+      setup.operations.updateProjectGroup('root', { parentGroupId: 'other', tabOrder: 99 })
+    ).toBeNull()
+    expect(
+      setup.operations.updateProjectGroup('root', { parentGroupId: 'missing-id', tabOrder: 99 })
+    ).toBeNull()
+    expect(setup.state.projectGroups?.find((group) => group.id === 'root')?.tabOrder).toBe(0)
+
+    // Move 'other' back to root (parentGroupId: null)
+    const promoted = setup.operations.updateProjectGroup('other', {
+      parentGroupId: null,
+      tabOrder: 3
+    })
+    expect(promoted?.parentGroupId).toBeNull()
+    expect(promoted?.tabOrder).toBe(3)
+
+    // Normalize empty string parentGroupId to null across persistence, IPC, and RPC schemas
+    const promotedFromEmpty = setup.operations.updateProjectGroup('child', {
+      parentGroupId: '   '
+    })
+    expect(promotedFromEmpty?.parentGroupId).toBeNull()
+    expect(
+      ProjectGroupUpdateArgs.parse({
+        groupId: 'child',
+        updates: { parentGroupId: '' }
+      }).updates.parentGroupId
+    ).toBe('')
+    expect(
+      ProjectGroupUpdate.parse({
+        groupId: 'child',
+        updates: { parentGroupId: '' }
+      }).updates.parentGroupId
+    ).toBeNull()
+  })
+
+  it('rejects subgroup creation when parentGroupId does not exist', () => {
+    const setup = fixture(0)
+    const beforeIds = setup.state.projectGroups?.map((group) => group.id)
+
+    expect(() =>
+      setup.operations.createProjectGroup({
+        name: 'Orphan',
+        parentGroupId: 'deleted-parent',
+        createdFrom: 'manual'
+      })
+    ).toThrow('project_group_parent_not_found')
+    expect(setup.state.projectGroups?.map((group) => group.id)).toEqual(beforeIds)
+  })
+
+  it('inherits SSH connectionId and executionHostId from parent group when creating a subgroup and rejects cross-host reparenting', () => {
+    const setup = fixture(0)
+    const sshParent = setup.operations.createProjectGroup({
+      name: 'SSH Parent',
+      connectionId: 'ssh-box-1',
+      createdFrom: 'manual'
+    })
+    const subgroup = setup.operations.createProjectGroup({
+      name: 'SSH Sub',
+      connectionId: null,
+      parentGroupId: sshParent.id,
+      createdFrom: 'manual'
+    })
+
+    expect(subgroup.connectionId).toBe('ssh-box-1')
+    expect(
+      setup.operations.updateProjectGroup('root', { parentGroupId: sshParent.id, tabOrder: 5 })
+    ).toBeNull()
+    expect(
+      setup.operations.updateProjectGroup(subgroup.id, { parentGroupId: 'root', tabOrder: 5 })
+    ).toBeNull()
   })
 })

@@ -1,17 +1,18 @@
 import { z } from 'zod'
+import {
+  OptionalBoolean,
+  OptionalFiniteNumber,
+  OptionalString,
+  TriStateNullableString,
+  requiredString
+} from './rpc-param-primitives'
+import { createRepoUpdateSchema } from './repo-update-params'
+import { RepoSelector } from './github-repo-target-params'
 
 // Opt-in: a caller holding afterSnapshotId's repos gets `unchanged`; older hosts take no params and ignore it.
 export const RepoList = z.object({
   afterSnapshotId: z.string().min(1).max(128).nullable().optional()
 })
-import {
-  OptionalBoolean,
-  OptionalFiniteNumber,
-  OptionalString,
-  requiredString
-} from './rpc-param-primitives'
-import { createRepoUpdateSchema } from './repo-update-params'
-import { RepoSelector } from './github-repo-target-params'
 
 export const RepoPath = z.object({
   path: requiredString('Missing repo path'),
@@ -73,7 +74,8 @@ export const ProjectGroupUpdate = z.object({
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
     rootProjectOrder: z.number().finite().nullable().optional(),
-    color: OptionalString.nullable().optional()
+    color: OptionalString.nullable().optional(),
+    parentGroupId: TriStateNullableString
   })
 })
 
