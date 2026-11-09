@@ -50,7 +50,11 @@ export class CloudApiClient {
           : `Could not reach Orca Cloud at ${this.credentials.apiUrl}: ${error instanceof Error ? error.message : String(error)}`,
         {
           apiUrl: this.credentials.apiUrl,
-          nextSteps: ['Check the network and the control-plane URL, then retry.']
+          nextSteps: this.credentials.token.startsWith('orca_ws_')
+            ? [
+                "Inside an Orca Cloud workspace the control plane must be on the VM's egress allowlist; restart the workspace after a control-plane update."
+              ]
+            : ['Check the network and the control-plane URL, then retry.']
         }
       )
     }

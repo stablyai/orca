@@ -211,6 +211,19 @@ export function publicOrigin(env: Env, url?: URL): string | undefined {
   return configured?.replace(/\/+$/, '') ?? url?.origin
 }
 
+/**
+ * Hosts every VM may reach beyond the defaults: EGRESS_EXTRA_HOSTS plus this control plane's public
+ * host, which the in-VM `orca cloud` CLI calls with its workspace token (credentials.json apiUrl).
+ */
+export function extraEgressHostsFor(env: Env): string[] {
+  const hosts = (env.EGRESS_EXTRA_HOSTS ?? '').split(',').map((host) => host.trim()).filter(Boolean)
+  const origin = publicOrigin(env)
+  if (origin) {
+    hosts.push(new URL(origin).hostname)
+  }
+  return [...new Set(hosts)]
+}
+
 function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => Promise<ProxiedRoute[]> {
   const broker = deps.credentials ?? egressCredentials(env)
   const memberGit = memberGitEnabled(env)
@@ -492,7 +505,7 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
     config: {
       pool: poolConfigFromEnv(env),
       shareLinkSecret: shareSecret(env),
-      extraEgressHosts: (env.EGRESS_EXTRA_HOSTS ?? '').split(',').map((host) => host.trim()).filter(Boolean),
+      extraEgressHosts: extraEgressHostsFor(env),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1
