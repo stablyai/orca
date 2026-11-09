@@ -3,9 +3,17 @@ valid:
   - const party = resolveOrchestrationParty(address, db)
   - if (party.terminalHandle === undefined) { return }
   - const local = target.startsWith('run:')
+  - const id = party.orcaSessionId ?? fallback
+  - 'send({ handle: party.terminalHandle })'
 invalid:
   - if (to.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) { return }
   - const session = parseOrcaSessionAddress(to)
   - if (party.orcaSessionId !== null) { notify() }
   - if (agent.kind === 'structured') { inject() }
   - const chat = !isTuiAgent(agent)
+  - if (agent.kind !== 'structured') { inject() }
+  - if (party.orcaSessionId) { inject() }
+  - if (party.orcaSessionId != null) { inject() }
+  - const terminal = !party.orcaSessionId
+  - const handle = party.terminalHandle && pointer(party.terminalHandle)
+  - "const route = caller.orcaSessionId ? 'chat' : 'terminal'"

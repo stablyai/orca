@@ -21,16 +21,14 @@ const CELL = /^(?:supported(?:: .+)?|refused `([a-z_]+)`: .+|n\/a: .+)$/
 
 // Both catalog lists are generated from the registry: methods with shared params, then those without.
 export function registeredMethods(catalogText) {
-  return new Set(
-    [...catalogText.matchAll(/^\s*'(orchestration\.[A-Za-z]+)'[:,\n]/gm)].map((m) => m[1])
-  )
+  return new Set([...catalogText.matchAll(/^\s*'(orchestration\.[^']+)'[:,\n]/gm)].map((m) => m[1]))
 }
 
 /** Each `## \`orchestration.x\`` section, as its `- <label>: <cell>` lines. */
 export function declaredSections(markdown) {
   const sections = []
   for (const line of markdown.split('\n')) {
-    const method = /^## `(orchestration\.[A-Za-z]+)`$/.exec(line)?.[1]
+    const method = /^## `(orchestration\.[^`]+)`$/.exec(line)?.[1]
     if (method) {
       sections.push({ method, cells: [] })
       continue
@@ -43,7 +41,7 @@ export function declaredSections(markdown) {
   return sections
 }
 
-/** `codeExists` says whether a refusal code is a real string literal in the source. */
+/** `codeExists` says whether Orca throws a refusal code. */
 export function censusProblems(methods, sections, codeExists) {
   const problems = []
   const declared = new Set()
@@ -66,7 +64,7 @@ export function censusProblems(methods, sections, codeExists) {
           `${method}: "${value}" is not supported, refused \`<code>\`: <reason>, or n/a: <reason>.`
         )
       } else if (match[1] && !codeExists(match[1])) {
-        problems.push(`${method}: refusal code ${match[1]} appears nowhere in src.`)
+        problems.push(`${method}: Orca never throws refusal code ${match[1]}.`)
       }
     }
   }
@@ -78,12 +76,33 @@ export function censusProblems(methods, sections, codeExists) {
   return problems
 }
 
+// Codes Orca throws: an OrchestrationError's code, an RPC errorResponse's code, or a shared orchestration code table.
+const THROWN_CODE = [
+  /OrchestrationError\(\s*'([a-z_]+)'/g,
+  /errorResponse\(\s*[^,()]+,\s*[^,()]+,\s*'([a-z_]+)'/g
+]
+
+export function thrownRefusalCodes(sources) {
+  const codes = new Set()
+  for (const [rel, text] of sources) {
+    const patterns = /^src\/shared\/orchestration\/.+-codes\.ts$/.test(rel)
+      ? [...THROWN_CODE, /:\s*'([a-z_]+)'/g]
+      : THROWN_CODE
+    for (const pattern of patterns) {
+      for (const match of text.matchAll(pattern)) {
+        codes.add(match[1])
+      }
+    }
+  }
+  return codes
+}
+
 export function main(root = process.cwd()) {
   const read = (rel) => readFileSync(path.join(root, rel), 'utf8')
-  const sources = [
-    ...readTrackedSources(root, ['src/main', 'src/shared'], (rel) => rel.endsWith('.ts')).values()
-  ]
-  const codeExists = (code) => sources.some((text) => text.includes(`'${code}'`))
+  const codes = thrownRefusalCodes(
+    readTrackedSources(root, ['src/main', 'src/shared'], (rel) => /(?<!\.test)\.ts$/.test(rel))
+  )
+  const codeExists = (code) => codes.has(code)
   const problems = censusProblems(
     registeredMethods(read(CATALOG)),
     declaredSections(read(DECLARATION)),
