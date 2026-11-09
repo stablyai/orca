@@ -65,8 +65,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('restores input to a Codex pane whose restart notice the user dismissed', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
@@ -106,8 +107,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('restores input through the tab fallback when the dismissed pane has no live PTY binding', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport(null)
       transportFactoryQueue.push(transport)
@@ -146,8 +148,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('keeps a dismissed split pane typing while a sibling still holds the prompt', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport('pty-dismissed')
       transportFactoryQueue.push(transport)
@@ -192,8 +195,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('keeps blocking a pane with its own unanswered notice next to a dismissed sibling', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport('pty-stale')
       transportFactoryQueue.push(transport)
@@ -236,8 +240,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('keeps a bound pane with no notice typing while a sibling holds a queued restart', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport('pty-plain-shell')
       transportFactoryQueue.push(transport)
@@ -284,8 +289,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('keeps blocking input on a pane whose restart is requested but not yet run', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport('pty-live')
       transportFactoryQueue.push(transport)
@@ -325,8 +331,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('blocks input to stale Codex panes until they restart', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks10 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       vi.useFakeTimers()
       vi.setSystemTime(1_100)
@@ -388,8 +395,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('blocks terminal writes while mobile presence lock owns the PTY', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
       vi.useFakeTimers()
@@ -450,8 +458,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('drops xterm protocol replies from live TUI output while mobile presence lock is active', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks12 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
       const ptyId = 'pty-mobile-tui-query'
@@ -504,8 +513,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('blocks remote locked terminal input before it reaches the runtime transport', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks13 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks13 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
       const ptyId = 'remote:env-1@@terminal-1'
@@ -547,8 +557,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('does not infer interrupts when the transport rejects terminal input', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks14 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks14 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       vi.useFakeTimers()
       vi.setSystemTime(1_100)
@@ -596,8 +607,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('does not infer interrupts when the main process rejects acknowledged input', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks15 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks15 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       vi.useFakeTimers()
       vi.setSystemTime(1_100)
@@ -646,8 +658,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('requests a connected pane remount when main reports its daemon write unavailable', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks16 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks16 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { _resetTerminalPaneRecoveryForTests } =
         await import('../../render-health/recovery/terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
@@ -679,8 +692,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('quarantines the interrupted line after a write-unavailable remount, but never device replies', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks17 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks17 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { _resetTerminalPaneRecoveryForTests } =
         await import('../../render-health/recovery/terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
@@ -723,8 +737,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     it('recovers a wedged write pipeline after accepted input without renderer output', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks18 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks18 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { settleTerminalWriteStallWatch, WRITE_PIPELINE_STALL_CHECK_MS } =
         await import('@/lib/pane-manager/terminal-write-pipeline-health')
       const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
@@ -755,8 +770,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
     it('does not arm the wedge probe when acknowledged input is rejected', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks19 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks19 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { WRITE_PIPELINE_STALL_CHECK_MS } =
         await import('@/lib/pane-manager/terminal-write-pipeline-health')
       const transport = createMockTransport('pty-rejected')
@@ -784,8 +800,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
 
     it('blocks input when tab-level ptyId is stale even if panePtyId is null', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks20 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks20 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
 
       const transport = createMockTransport(null)
       transportFactoryQueue.push(transport)

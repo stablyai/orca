@@ -3,7 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
+import { publishPageDeviceStore } from '../../mobile-web-shell/bridge/page-device-store'
 import { mobileNativeChatTranscriptCache } from './mobile-native-chat-transcript-cache'
+import { encodeStoredChatTranscript } from './mobile-native-chat-transcript-encode'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
@@ -543,5 +546,64 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     )
 
     expect(renders.at(-1)).toMatchObject({ status: 'loading', ids: ['a-1'] })
+  })
+})
+
+describe('useMobileNativeChatSession after a relaunch', () => {
+  let renderer: ReactTestRenderer | null = null
+  let stored: string | null = null
+
+  beforeEach(() => {
+    publishPageDeviceStore({
+      available: () => true,
+      read: async (_table, keys) => ({
+        status: 'ok',
+        values: keys.map((key) => (key.startsWith('transcript:') ? stored : null))
+      }),
+      write: async () => ({ written: true })
+    })
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    publishPageDeviceStore(null)
+  })
+
+  it('paints the stored rows and subscribes after the newest one', async () => {
+    // What an earlier launch's page saved when this chat's turn settled.
+    stored = await encodeStoredChatTranscript({
+      kind: 'terminal',
+      savedAt: 1_700_000_000_000,
+      messages: [
+        { ...message('m1'), transcriptOrder: 100 },
+        { ...message('m2'), transcriptOrder: 200 }
+      ],
+      hasMore: false,
+      beforeOffset: null
+    })
+    const subscribe = vi.fn<RpcClient['subscribe']>(() => () => {})
+    const client = stubRpcClient({ subscribe })
+    const seen: { state: MobileNativeChatSession | null } = { state: null }
+    function Harness(): null {
+      seen.state = useMobileNativeChatSession({
+        client,
+        sourceIdentity: 'host-a\0relaunched',
+        agent: 'claude',
+        sessionId: 'session',
+        transcriptPath: null
+      })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+
+    expect(subscribe).toHaveBeenCalledTimes(1)
+    expect(subscribe.mock.calls[0]?.[1]).toMatchObject({
+      resumeAfter: { id: 'm2', transcriptOrder: 200, timestamp: 1 }
+    })
+    expect(seen.state?.messages.map((entry) => entry.id)).toEqual(['m1', 'm2'])
+    expect(seen.state?.savedAt).toBe(1_700_000_000_000)
   })
 })

@@ -83,15 +83,15 @@ export function VoiceSpeechModelSection({
           {catalog.map((manifest) => {
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
+            const isCloud = manifest.provider === 'openai'
             const isRetired = !isOfferedSpeechModel(manifest)
-            // Retired models stay listed only while downloaded, so their files can be deleted.
-            if (isRetired && !isReady) {
+            // Retired local models stay listed only while downloaded, so their files can be deleted.
+            if (isRetired && (isCloud || !isReady)) {
               return null
             }
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
-            const isCloud = manifest.provider === 'openai'
             // Only the old sherpa-onnx files are on disk; downloading replaces them.
             const needsUpdate = mState?.needsUpdate === true && !isDownloading
             const deletePending = pendingDeleteModelIds.has(manifest.id)

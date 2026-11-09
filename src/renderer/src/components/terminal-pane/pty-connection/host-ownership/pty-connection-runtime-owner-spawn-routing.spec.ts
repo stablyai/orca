@@ -54,8 +54,9 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('fails closed when the same SSH worktree id is projected by two HUBs', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { createRemoteRuntimePtyTransport } =
         await import('../../pty-transport/remote-runtime/remote-runtime-pty-transport')
       const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
@@ -104,8 +105,9 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('fails a missing paired-client owner closed instead of creating a local PTY', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { createRemoteRuntimePtyTransport } =
         await import('../../pty-transport/remote-runtime/remote-runtime-pty-transport')
       const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
@@ -137,8 +139,9 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('spawns fresh PTYs through the worktree owner runtime when focus differs', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { createRemoteRuntimePtyTransport } =
         await import('../../pty-transport/remote-runtime/remote-runtime-pty-transport')
       const transport = createMockTransport('remote:owner-runtime@@terminal-1')
@@ -191,8 +194,9 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
 
     it('spawns fresh PTYs locally for explicitly local worktrees while a runtime is focused', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { createRemoteRuntimePtyTransport } =
         await import('../../pty-transport/remote-runtime/remote-runtime-pty-transport')
       const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')

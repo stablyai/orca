@@ -102,7 +102,7 @@ export default function OnboardingFlow({
   }, [requestSkipConfirmation, skipConfirmOpen, languagePickerOpen])
 
   return (
-    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+    <TooltipProvider skipDelayDuration={0}>
       <div
         className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground"
         data-onboarding-overlay

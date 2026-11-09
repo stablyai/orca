@@ -38,6 +38,8 @@ export type RuntimeClientEvent =
     }
   /** An agent row changed (coalesced, no ids); phones re-read worktree.ps. Sent only while the sidebar feed is off. */
   | { type: 'worktreeRowsChanged' }
+  /** What mobileRelay.hosts.list answers changed; phones re-read it instead of polling. */
+  | { type: 'relayHostsChanged' }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */

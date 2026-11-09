@@ -5,7 +5,7 @@ import type { TaskProvider } from '../../../../../../shared/work-items/task-prov
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../../shared/workspace-source'
 import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
-import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { AgentSessionLaunchRequest } from '../../../agent-session/launch/routing/agent-session-launch-plan'
 
 export type DirectWorkItemLaunchInputs = AgentLaunchInputViews &

@@ -23,7 +23,7 @@ vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
     }),
   cancelRuntimeGenerateCommitMessage: () => host.cancel()
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({ getConnectionId: () => null }))
 
 import { useSourceControlCommitMessageGeneration } from './use-commit-message-generation'
 

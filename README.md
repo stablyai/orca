@@ -32,20 +32,6 @@
 <tr>
 <td width="50%" valign="middle">
 
-### Orchestrate Agents
-
-Hand a big task to one agent. It splits the work, starts worker agents in their own workspaces, and brings their results back to you.
-
-[Docs →](https://www.onorca.dev/docs/cli/orchestration)
-
-</td>
-<td width="50%">
-  <a href="https://www.onorca.dev/docs/cli/orchestration"><picture><source srcset="docs/assets/readme-features/orchestration.webp" type="image/webp"><img src="docs/assets/readme-features/orchestration.poster.jpg" alt="A coordinator agent splitting a task between two worker agents and reporting their results" width="100%" /></picture></a>
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
 ### Chat or Terminal
 
 Run any agent in Chat UI or as the raw CLI, and move a conversation between the two without losing context.
@@ -55,6 +41,20 @@ Run any agent in Chat UI or as the raw CLI, and move a conversation between the 
 </td>
 <td width="50%">
   <a href="https://www.onorca.dev/docs/agents/native-chat"><picture><source srcset="docs/assets/readme-features/chat-or-terminal.webp" type="image/webp"><img src="docs/assets/readme-features/chat-or-terminal.poster.jpg" alt="The same agent conversation in Chat UI and in the terminal, side by side" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Orchestrate Agents
+
+Hand a big task to one agent. It splits the work, starts worker agents in their own workspaces, and brings their results back to you.
+
+[Docs →](https://www.onorca.dev/docs/cli/orchestration)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/cli/orchestration"><picture><source srcset="docs/assets/readme-features/orchestration.webp" type="image/webp"><img src="docs/assets/readme-features/orchestration.poster.jpg" alt="A coordinator agent splitting a task between two worker agents and reporting their results" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>

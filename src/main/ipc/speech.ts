@@ -1,4 +1,10 @@
-import { ipcMain, BrowserWindow, systemPreferences, type MessagePortMain } from 'electron'
+import {
+  ipcMain,
+  BrowserWindow,
+  systemPreferences,
+  type IpcMainInvokeEvent,
+  type MessagePortMain
+} from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { join } from 'node:path'
 import { writeFile, unlink } from 'node:fs/promises'
@@ -260,12 +266,16 @@ export function registerSpeechHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('speech:stopDictation', async (_event, sessionId = 'desktop') => {
-    const owner = getDesktopOwner(_event.sender.id, sessionId)
-    const listener = dictationListeners.get(_event.sender.id)
-    await getSpeechSttService(store).stopDictation(owner)
-    if (listener?.owner === owner) {
-      listener.cleanup()
+  const handleStop =
+    (discard: boolean) =>
+    async (event: IpcMainInvokeEvent, sessionId = 'desktop'): Promise<void> => {
+      const owner = getDesktopOwner(event.sender.id, sessionId)
+      const listener = dictationListeners.get(event.sender.id)
+      await getSpeechSttService(store).stopDictation(owner, { discard })
+      if (listener?.owner === owner) {
+        listener.cleanup()
+      }
     }
-  })
+  ipcMain.handle('speech:stopDictation', handleStop(false))
+  ipcMain.handle('speech:cancelDictation', handleStop(true))
 }

@@ -17,6 +17,7 @@ import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import { terminalProviderAllowsParking } from './terminal/terminal-provider-snapshot-capability'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
+import { isUnboundRestoredTerminalTab } from './terminal/unbound-restored-terminal-tab'
 
 export function applyTerminalColdActivation(controller: TerminalParkingFoundation) {
   const {
@@ -102,6 +103,15 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
       executionHostId: activeWorktreeDeferralHostId,
       pairedRuntimeParkingEnvironmentIds
     })
+    // Unbound saved tabs have no output to watch, so they wait regardless of parking support (#39166).
+    const storeState = useAppStore.getState()
+    const heldUnboundTabIds = new Set(
+      worktreeTabs
+        .filter(
+          (tab) => !immediateTabIds.has(tab.id) && isUnboundRestoredTerminalTab(tab, storeState)
+        )
+        .map((tab) => tab.id)
+    )
     const isColdActivationPtyEligible = (ptyId: string): boolean =>
       isRemoteRuntimePtyId(ptyId)
         ? isParkRestorableTerminalPty(ptyId, renderedActiveWorktreeId, {
@@ -119,6 +129,9 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
         isTabLive: (tabId, worktreeId) => hasRegisteredRuntimeTerminalTab(tabId, worktreeId),
         // Why the coverage gate: parked byte watchers own an unmounted tab's bells/titles/completions, so a tab they can't cover must mount immediately.
         isTabDeferrable: (tabId) => {
+          if (heldUnboundTabIds.has(tabId)) {
+            return true
+          }
           const tab = tabById.get(tabId)
           return (
             coldActivationDeferralEnabled &&
@@ -137,12 +150,20 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
       if (installedDeferralPlan) {
         activationDeferralPlanRevisionRef.current += 1
       }
-    } else if (!coldActivationDeferralEnabled || !activationHostSupportsDeferral) {
+    } else if (
+      (!coldActivationDeferralEnabled || !activationHostSupportsDeferral) &&
+      heldUnboundTabIds.size === 0
+    ) {
       backgroundMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
       activationDeferredMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
     } else {
+      const parkingDeferralEnabled = coldActivationDeferralEnabled && activationHostSupportsDeferral
       for (const tab of worktreeTabs) {
+        if (heldUnboundTabIds.has(tab.id)) {
+          continue
+        }
         if (
+          !parkingDeferralEnabled ||
           !canWatcherCoverParkedTerminalTab(
             renderedActiveWorktreeId,
             tab,

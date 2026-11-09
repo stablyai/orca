@@ -157,17 +157,21 @@ export function MobileNativeChatNoticeRow({
     case 'settled-permission': {
       const agent = names.agentName ?? look.agent
       const summary =
-        look.decision === 'denied'
-          ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
+        look.decision === 'approved'
+          ? t('chat.notice.safetyReviewApproved', '{{agent}} approved this action. View details.', {
               agent
             })
-          : t(
-              'chat.notice.safetyReview',
-              '{{agent}} reported a safety review warning. View details.',
-              {
+          : look.decision === 'denied'
+            ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
                 agent
-              }
-            )
+              })
+            : t(
+                'chat.notice.safetyReview',
+                '{{agent}} reported a safety review warning. View details.',
+                {
+                  agent
+                }
+              )
       return (
         <View>
           <MobileNativeChatNoticeDisclosure

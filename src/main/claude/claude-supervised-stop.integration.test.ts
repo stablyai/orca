@@ -198,6 +198,7 @@ describe.runIf(process.platform !== 'win32')('Claude under the POSIX provider su
   it('forces a Claude that ignores SIGTERM soon after a brief close, with its exit proven', async () => {
     const { managed, exit, pids } = await spawnClaude({ ORCA_TEST_CLAUDE_IGNORES_SIGTERM: '1' })
     const tree = createClaudeChildTreeReaper(managed.child, {
+      site: 'claude-structured-child-close',
       exited: () => managed.rootVerdict === 'exited'
     })
 

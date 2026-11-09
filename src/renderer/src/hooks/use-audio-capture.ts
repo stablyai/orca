@@ -27,6 +27,8 @@ type StartAudioCaptureOptions = {
   onCaptureLost?: () => void
   /** Fires when the host's session accepts no more audio (cloud upload cap) */
   onAudioLimitReached?: () => void
+  /** Sees every 16 kHz frame as it's captured, before any buffering */
+  onFrame?: (samples: Float32Array) => void
 }
 
 export type StartAudioCaptureResult = {
@@ -202,6 +204,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
             return
           }
           capturedChunkCountRef.current += 1
+          options.onFrame?.(data.samples)
           deliverFrame(data.samples, options.onAudioLimitReached)
         }
 

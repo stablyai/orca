@@ -179,6 +179,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
   }
 
+  /** What mobileRelay.hosts.list answers changed. */
+  notifyRelayHostsChanged(): void {
+    this.emitClientEvent({ type: 'relayHostsChanged' })
+  }
+
   private structuredAgentAvailability?: ReturnType<typeof installAvailability>
 
   /** Subscribe from first use; returns the release function. */

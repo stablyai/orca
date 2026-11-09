@@ -275,10 +275,10 @@ export function processDeviceStore(): DeviceStore {
   return processStore
 }
 
-// Once per process, after the splash: nothing reads the store before first paint, and its keychain and
-// AsyncStorage reads would otherwise compete with the launch work that holds the splash. Loads the key,
-// runs the launch sweeps and index seed in idle slices, and on each return to the foreground retries an
-// unavailable store and a pass that missed files.
+// Once per process, after the splash: the sweeps' AsyncStorage and file reads would otherwise compete with
+// the launch work that holds the splash. Native Home's first read may have loaded the key already. Runs the launch sweeps
+// and index seed in idle slices, and on each return to the foreground retries an unavailable store and a
+// pass that missed files.
 export function startDeviceStore(): void {
   if (started) {
     return

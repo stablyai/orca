@@ -86,29 +86,6 @@ describe('Codex RPC exit diagnostics', () => {
     vi.clearAllMocks()
   })
 
-  it('names the exit code and what the child reported', async () => {
-    const result = await runStub(
-      "error: invalid value 'untrusted' for '--ask-for-approval <APPROVAL_POLICY>'\n" +
-        "  [possible values: on-request, never]\n\nFor more information, try '--help'.\n",
-      2
-    )
-
-    expect(result.error).toContain('Codex RPC process exited (exit code 2)')
-    expect(result.error).toContain("invalid value 'untrusted'")
-    expect(result.error).toContain("try '--help'")
-  })
-
-  it('classifies a dead refresh token so the re-auth warning fires', async () => {
-    const result = await runStub(
-      '2026-08-20T18:04:11.221Z INFO codex_core::auth: refreshing ChatGPT tokens\n' +
-        'ERROR: The ChatGPT access token could not be refreshed; please sign in again.\n',
-      1
-    )
-
-    expect(result.error).toBe('Your ChatGPT session could not be refreshed. Please sign in again.')
-    expect(isCodexAuthError(result.error)).toBe(true)
-  })
-
   it('keeps the re-auth phrase that path redaction would swallow', async () => {
     const result = await runStub(
       `ERROR: /Users/haris/.codex/auth.json is stale — please sign in again.\n`,

@@ -3,9 +3,10 @@ import { useAppStore } from '../../store'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-detection-target-inventory'
+import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import {
   DropdownMenu,
   DropdownMenuContent,
