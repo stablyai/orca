@@ -2,7 +2,7 @@
 // presets filled in, and with egress placeholders on, model keys swapped for placeholders. The same
 // answer drives the egress allowlist and the proxy's credential routes, at boot and on refresh.
 import type { LifecycleDeps } from './lifecycle'
-import { deriveProviderEnv, providerHosts } from './provider-env'
+import { deriveProviderEnv, deriveProviderScopes, providerHosts } from './provider-env'
 import { applySecretPlaceholders, encodeEgressSecretHosts } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
 import type { Keyring } from './secrets-crypto'
@@ -34,8 +34,9 @@ export async function sessionSecretEnv(
   if (!deps.secrets) {
     return EMPTY
   }
-  const { env: stored, skipped } = await resolveSandboxSecrets(deps.db, deps.secrets.keyring, row)
+  const { env: stored, scopes: storedScopes, skipped } = await resolveSandboxSecrets(deps.db, deps.secrets.keyring, row)
   const env = deriveProviderEnv(stored)
+  const scopes = deriveProviderScopes(stored, env, storedScopes)
   const egressAllowHosts = providerHosts(env).join(',') || null
   // Counts only.
   console.log(JSON.stringify({ event: 'session_secrets', sandboxId: row.id, injected: Object.keys(env).length, skipped }))
@@ -44,7 +45,7 @@ export async function sessionSecretEnv(
   if (!swap || !deps.config.egressProxyUrl) {
     return { env, egressSecretHosts: null, egressAllowHosts }
   }
-  const swapped = applySecretPlaceholders(row, env)
+  const swapped = applySecretPlaceholders(row, env, scopes)
   return { env: swapped.env, egressSecretHosts: encodeEgressSecretHosts(swapped.targets), egressAllowHosts }
 }
 

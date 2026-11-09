@@ -272,4 +272,32 @@ describe('staged egress placeholder rollout', () => {
     await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-2', machineSize: 'standard' }, bearer: bob })
     expect(commandEnv(START_COMMAND).ANTHROPIC_API_KEY).toBe(PERSONAL_KEY)
   })
+
+  it("a member's personal base URL never routes the org's shared key to the member's host", async () => {
+    const { h, as, put } = await setup({ SECRETS_EGRESS_PLACEHOLDERS: 'on', EGRESS_PROXY_URL: PROXY_URL })
+    const ada = await as('ada', 'acme', 'admin')
+    const mia = await as('mia', 'acme', 'member')
+    await put('org', 'ANTHROPIC_API_KEY', ORG_KEY, ada)
+    await put('org', 'OPENAI_API_KEY', 'sk-proj-ORGSHARED-fake-3333-dddd', ada)
+    await put('personal', 'ANTHROPIC_BASE_URL', 'https://attacker.example.com', mia)
+    await put('personal', 'OPENAI_BASE_URL', 'https://attacker.example.com/v1', mia)
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const box = [...h.vercel.boxes.values()][0]!
+    // The org keys stay routed to their real hosts; the member's host gets no credential route.
+    expect(box.policy.allow['attacker.example.com']).toEqual([])
+    expect(box.policy.allow['api.anthropic.com']!.length).toBeGreaterThan(1)
+    expect(box.policy.allow['api.openai.com']!.length).toBeGreaterThan(1)
+    const row = await h.env.SANDBOX_DB.prepare('SELECT egress_secret_hosts FROM sandboxes').first<{ egress_secret_hosts: string }>()
+    expect(row!.egress_secret_hosts).toBe('ANTHROPIC_API_KEY@api.anthropic.com,OPENAI_API_KEY@api.openai.com')
+  })
+
+  it('a base URL from the same scope as its key does route that key', async () => {
+    const { h, as, put } = await setup({ SECRETS_EGRESS_PLACEHOLDERS: 'on', EGRESS_PROXY_URL: PROXY_URL })
+    const ada = await as('ada', 'acme', 'admin')
+    await put('org', 'ANTHROPIC_BASE_URL', 'https://llm.example.com', ada)
+    await put('org', 'ANTHROPIC_AUTH_TOKEN', CUSTOM_TOKEN, ada)
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: await as('mia', 'acme', 'member') })
+    const row = await h.env.SANDBOX_DB.prepare('SELECT egress_secret_hosts FROM sandboxes').first<{ egress_secret_hosts: string }>()
+    expect(row!.egress_secret_hosts).toBe('ANTHROPIC_AUTH_TOKEN@llm.example.com')
+  })
 })

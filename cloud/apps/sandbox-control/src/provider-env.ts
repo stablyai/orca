@@ -36,6 +36,21 @@ export function baseUrlHost(value: string): string | null {
   return host
 }
 
+/** Provenance for derived names: they inherit the scope of the preset key that produced them. */
+export function deriveProviderScopes(
+  stored: Record<string, string>,
+  derived: Record<string, string>,
+  scopes: ValueScopes
+): Record<string, string> {
+  const next: Record<string, string> = { ...scopes }
+  for (const name of Object.keys(derived)) {
+    if (!(name in stored) && scopes.AI_GATEWAY_API_KEY) {
+      next[name] = scopes.AI_GATEWAY_API_KEY
+    }
+  }
+  return next
+}
+
 /**
  * Fills in what a preset implies, never overriding what the user set. An AI Gateway key alone
  * makes Claude Code and Codex both use the gateway; a provider pair the user configured stays put.
@@ -67,9 +82,22 @@ export type CredentialTarget = {
 const bearer = (value: string) => `Bearer ${value}`
 const raw = (value: string) => value
 
-function hostFor(env: Record<string, string>, baseName: string, fallback: string): string | null {
+/** Where each value came from; names absent here (derived by a preset) carry their source's host. */
+export type ValueScopes = Readonly<Record<string, string>>
+
+/**
+ * A base URL only redirects a credential from the same scope: a member's personal base URL must
+ * never route the org's shared key to a host the member picked (the proxy would hand it over).
+ */
+function hostFor(env: Record<string, string>, baseName: string, secret: string, fallback: string, scopes?: ValueScopes): string | null {
   const base = env[baseName]
-  return base ? baseUrlHost(base) : fallback
+  if (!base) {
+    return fallback
+  }
+  if (scopes && scopes[baseName] !== scopes[secret]) {
+    return fallback
+  }
+  return baseUrlHost(base)
 }
 
 /**
@@ -77,20 +105,21 @@ function hostFor(env: Record<string, string>, baseName: string, fallback: string
  * only. Clients differ: Claude Code sends ANTHROPIC_API_KEY as x-api-key and ANTHROPIC_AUTH_TOKEN as
  * a Bearer token; OpenAI clients send Bearer.
  */
-export function credentialTargets(env: Record<string, string>): CredentialTarget[] {
+export function credentialTargets(env: Record<string, string>, scopes?: ValueScopes): CredentialTarget[] {
   const targets: CredentialTarget[] = []
-  const anthropicHost = hostFor(env, 'ANTHROPIC_BASE_URL', DEFAULT_HOSTS.anthropic)
-  if (anthropicHost && env.ANTHROPIC_API_KEY) {
-    targets.push({ secret: 'ANTHROPIC_API_KEY', host: anthropicHost, headers: { 'x-api-key': raw, authorization: bearer } })
+  const apiKeyHost = hostFor(env, 'ANTHROPIC_BASE_URL', 'ANTHROPIC_API_KEY', DEFAULT_HOSTS.anthropic, scopes)
+  if (apiKeyHost && env.ANTHROPIC_API_KEY) {
+    targets.push({ secret: 'ANTHROPIC_API_KEY', host: apiKeyHost, headers: { 'x-api-key': raw, authorization: bearer } })
   }
-  if (anthropicHost && env.ANTHROPIC_AUTH_TOKEN) {
-    targets.push({ secret: 'ANTHROPIC_AUTH_TOKEN', host: anthropicHost, headers: { authorization: bearer, 'x-api-key': raw } })
+  const authTokenHost = hostFor(env, 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', DEFAULT_HOSTS.anthropic, scopes)
+  if (authTokenHost && env.ANTHROPIC_AUTH_TOKEN) {
+    targets.push({ secret: 'ANTHROPIC_AUTH_TOKEN', host: authTokenHost, headers: { authorization: bearer, 'x-api-key': raw } })
   }
   if (env.AI_GATEWAY_API_KEY) {
     // AI SDK clients read the gateway key directly.
     targets.push({ secret: 'AI_GATEWAY_API_KEY', host: AI_GATEWAY_HOST, headers: { authorization: bearer, 'x-api-key': raw } })
   }
-  const openaiHost = hostFor(env, 'OPENAI_BASE_URL', DEFAULT_HOSTS.openai)
+  const openaiHost = hostFor(env, 'OPENAI_BASE_URL', 'OPENAI_API_KEY', DEFAULT_HOSTS.openai, scopes)
   if (openaiHost && env.OPENAI_API_KEY) {
     targets.push({ secret: 'OPENAI_API_KEY', host: openaiHost, headers: { authorization: bearer } })
   }

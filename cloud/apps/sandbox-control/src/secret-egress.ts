@@ -4,7 +4,7 @@
 // Codex) hang under Vercel transform rules, so these hosts always take the forwardURL path through
 // /v1/egress/proxy, the same path api.github.com uses. Placeholders are not secrets: the proxy
 // authenticates the sandbox by Vercel's OIDC token, the placeholder only marks which header to swap.
-import { credentialTargets, type CredentialTarget } from './provider-env'
+import { credentialTargets, type CredentialTarget, type ValueScopes } from './provider-env'
 import type { SandboxRow } from './store'
 
 export type SecretEgressHost = CredentialTarget
@@ -51,10 +51,11 @@ export function egressSecretHosts(row: Pick<SandboxRow, 'egress_secret_hosts'>):
  */
 export function applySecretPlaceholders(
   row: Pick<SandboxRow, 'id'>,
-  env: Record<string, string>
+  env: Record<string, string>,
+  scopes?: ValueScopes
 ): { env: Record<string, string>; targets: CredentialTarget[] } {
   const next = { ...env }
-  const targets = credentialTargets(env)
+  const targets = credentialTargets(env, scopes)
   for (const target of targets) {
     next[target.secret] = secretPlaceholder(row, target.secret)
   }

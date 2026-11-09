@@ -283,7 +283,8 @@ const RANK: Record<SecretKind, Record<SecretScope, number>> = {
   agent_key: { org: 3, repo: 2, personal: 1 }
 }
 
-export type ResolvedSecrets = { env: Record<string, string>; skipped: number }
+/** `scopes`: which scope each injected name came from (provenance for egress routing). */
+export type ResolvedSecrets = { env: Record<string, string>; scopes: Record<string, SecretScope>; skipped: number }
 
 /** Decrypts every secret the session should see and applies precedence; unreadable rows are skipped. */
 export async function resolveSandboxSecrets(
@@ -313,6 +314,7 @@ export async function resolveSandboxSecrets(
     }
   }
   const env: Record<string, string> = {}
+  const scopes: Record<string, SecretScope> = {}
   let bytes = 0
   let skipped = 0
   for (const record of [...winners.values()].sort((a, b) => a.name.localeCompare(b.name))) {
@@ -337,8 +339,9 @@ export async function resolveSandboxSecrets(
       continue
     }
     env[record.name] = value
+    scopes[record.name] = record.scope
   }
-  return { env, skipped }
+  return { env, scopes, skipped }
 }
 
 export type EffectiveSecret = {
