@@ -33,7 +33,6 @@ export const WorktreeCreate = z
     /** Scope same-ID repo copies by host; absent retains legacy selector lookup, which refuses ambiguous IDs. */
     repoHostId: OptionalExecutionHostId,
     name: OptionalString,
-    recipeId: z.string().min(1).optional(),
     /** Generated names may skip/retire candidates; absent means user-typed and bypasses that policy. */
     nameWasGenerated: z.boolean().optional(),
     baseBranch: OptionalString,

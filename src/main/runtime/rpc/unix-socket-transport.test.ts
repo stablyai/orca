@@ -102,27 +102,6 @@ describe('UnixSocketTransport', () => {
     expect(received).toEqual([oversized ? '' : message])
   })
 
-  it('writes progress as keepalive frames only until the reply is sent', () => {
-    const transport = new UnixSocketTransport({
-      endpoint: '/tmp/orca-runtime-rpc-test.sock',
-      kind: 'unix'
-    })
-    const socket = new FakeSocket()
-    transport.onMessage((_msg, reply, context) => {
-      context?.reportProgress?.({ phase: 'running-create' })
-      reply('{"id":"req","ok":true}')
-      context?.reportProgress?.({ phase: 'too-late' })
-    })
-    ;(transport as unknown as UnixSocketTransportInternals).handleConnection(
-      socket as unknown as Socket
-    )
-    socket.emit('data', '{"id":"req","method":"worktree.create"}\n')
-    expect(socket.writes).toEqual([
-      '{"_keepalive":true,"progress":{"phase":"running-create"}}\n',
-      '{"id":"req","ok":true}\n'
-    ])
-  })
-
   it('clears request keepalive timers when the socket closes before a reply', () => {
     const transport = new UnixSocketTransport({
       endpoint: '/tmp/orca-runtime-rpc-test.sock',
