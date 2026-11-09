@@ -32,6 +32,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { prepareOpenCodeWslReaders } from './scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
+import { SessionListScopeCache } from './session-list-scope-cache'
 import {
   attachAiVaultScopeCwdAliases,
   resolveAiVaultScopeRealPaths
@@ -43,8 +44,7 @@ import {
 import {
   aiVaultCachedDepthServes,
   requestedAiVaultSessionDepth,
-  truncateAiVaultListResult,
-  type AiVaultSessionDepth
+  truncateAiVaultListResult
 } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 
 // Desktop and runtime RPC share this cache to avoid duplicate scans when mobile and desktop open together.
@@ -64,14 +64,7 @@ export type AiVaultSessionSources = {
   getAdditionalCodexHomePaths?: () => readonly string[]
 }
 
-type CachedAiVaultList = {
-  key: string
-  depth: AiVaultSessionDepth
-  result: AiVaultListResult
-  expiresAt: number
-}
-
-let cachedList: CachedAiVaultList | null = null
+const cachedLists = new SessionListScopeCache()
 let scanCoordinator = new AiVaultScanCoordinator()
 let sources: AiVaultSessionSources = {}
 // Reject cache writes from scans that began before invalidation, or late results can resurrect deleted sessions.
@@ -147,6 +140,7 @@ export async function listAiVaultSessions(
   }
   // A full list for the same paths holds every row a scope-only one would, so All -> Project needs no rescan.
   const fullKey = args?.scopeOnly ? aiVaultLocalScanScopeKey({ ...args, scopeOnly: false }) : key
+  const cachedList = cachedLists.get(key, now) ?? cachedLists.get(fullKey, now)
   if (
     args?.force !== true &&
     (cachedList?.key === key || cachedList?.key === fullKey) &&
@@ -195,19 +189,24 @@ export async function listAiVaultSessions(
       )
       // Return pre-invalidation results to their caller, but never repopulate the cache with them.
       if (!scanSignal.aborted && startGeneration === cacheGeneration) {
-        const current = cachedList
+        if (args?.force === true) {
+          // A fresh host scan invalidates other scopes and fences older in-flight cache writes.
+          cacheGeneration++
+          cachedLists.clear()
+        }
+        const current = cachedLists.get(key, Date.now())
         if (
           args?.force === true ||
           current?.key !== key ||
           current.expiresAt <= Date.now() ||
           !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
-          cachedList = {
+          cachedLists.set({
             key,
             depth,
             result,
             expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
-          }
+          })
         }
       }
       return result
@@ -252,7 +251,7 @@ export function aiVaultSessionListCacheGeneration(): number {
 // Invalidate cached results and disarm in-flight cache writes after deletion.
 export function invalidateAiVaultSessionListCache(): void {
   cacheGeneration++
-  cachedList = null
+  cachedLists.clear()
   // A deleted WSL session must not come back as a carried-over row.
   resetAiVaultWslSessionCarryover()
 }
