@@ -1,5 +1,8 @@
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { resolveImportedFolderProjectLink } from '../../../shared/imported-folder-project-identity'
+import {
+  assertImportedFolderRemoteMatchesProject,
+  resolveImportedFolderProjectLink
+} from '../../../shared/imported-folder-project-identity'
 import {
   getProjectIdentityKey,
   getProjectIdForProviderIdentity,
@@ -66,36 +69,42 @@ export async function linkImportedFolderToProject(
   if (needsEvidence) {
     metadataFinished = await metadata.resolveRepositoryMetadata(repo)
     repo = currentRow()
-    folderRemote = await readCurrentGitRemoteIdentity(repo)
+    folderRemote = await readCurrentGitRemoteIdentity({ ...repo, ...folderRemote })
     repo = currentRow()
   }
   const updates: Partial<Repo> = {
     projectHostSetupMethod: args.setupMethod ?? 'imported-existing-folder'
   }
-  if (needsEvidence && !repo.upstream) {
+  const keepsCurrentIdentity =
+    repo.upstream !== undefined && getProjectIdentityKey(repo) === args.projectId
+  if (needsEvidence && !keepsCurrentIdentity) {
     updates.gitRemoteIdentity = folderRemote.gitRemoteIdentity
   }
-  const projectedId = getProjectIdentityKey(
-    needsEvidence && !repo.upstream ? { ...repo, ...folderRemote, repoIcon: undefined } : repo
-  )
-  const localProvider = getGitRemoteProviderIdentity(folderRemote)
+  const candidate = { ...repo, ...updates }
+  const projectedId = getProjectIdentityKey(candidate)
+  if (
+    projectedId === args.projectId &&
+    needsEvidence &&
+    repo.upstream === undefined &&
+    selectedProvider
+  ) {
+    assertImportedFolderRemoteMatchesProject(folderRemote, selectedProvider)
+  }
   if (projectedId !== args.projectId) {
     Object.assign(
       updates,
       resolveImportedFolderProjectLink(
-        { ...repo, ...folderRemote },
+        { ...candidate, ...folderRemote },
         args.projectId,
         selectedProvider
       )
     )
-  } else if (
-    needsEvidence &&
-    repo.upstream === undefined &&
-    localProvider &&
-    getProjectIdForProviderIdentity(localProvider) === args.projectId
-  ) {
+  } else if (needsEvidence && repo.upstream === undefined) {
     // This successful explicit origin choice is terminal; ordinary failed probes stay unknown.
     updates.upstream = null
+  }
+  if (getProjectIdentityKey({ ...repo, ...updates }) !== args.projectId) {
+    throw new Error('Imported folder does not match the selected project identity.')
   }
   const updated = store.updateRepo(repo, updates)
   if (!updated) {

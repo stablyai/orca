@@ -125,6 +125,39 @@ describe('OrcaRuntimeService project setup of an existing folder (#30663)', () =
 
 describe('explicit fork project setup with deferred ordinary metadata', () => {
   it.each([
+    ['git@gh-personal:me/repo-a.git', 'github:me/repo-a', undefined, null],
+    [
+      'https://code.corp.example/me/repo-a.git',
+      'github:code.corp.example/me/repo-a',
+      'code.corp.example',
+      undefined
+    ]
+  ] as const)(
+    'keeps a resolved origin nonfork through setup when its local hostname needs resolution: %s',
+    async (url, projectId, host, upstream) => {
+      const repos: Repo[] = []
+      const origin = { owner: 'me', repo: 'repo-a', ...(host ? { host } : {}) }
+      parentProbe.mockResolvedValue({ upstream, origin })
+      const runtime = createRuntime(repos)
+      await withGitFolder({ origin: url }, async (path) => {
+        const result = await runtime.setupProjectExistingFolder({
+          projectId,
+          projectProviderIdentity: { provider: 'github', ...origin },
+          hostId: 'runtime:env-1',
+          path,
+          kind: 'git'
+        })
+        expect(result.project.id).toBe(projectId)
+        expect(result.repo.upstream).toBeNull()
+        expect(
+          projectHostSetupProjectionFromRepos(JSON.parse(JSON.stringify(repos))).setups[0].projectId
+        ).toBe(projectId)
+        expect(parentProbe).toHaveBeenCalledTimes(1)
+      })
+    }
+  )
+
+  it.each([
     ['github:acme/repo-a', { owner: 'acme', repo: 'repo-a' }],
     ['github:me/repo-a', { owner: 'me', repo: 'repo-a' }]
   ] as const)(
@@ -275,6 +308,102 @@ it.each([false, true])(
     })
   }
 )
+
+it.each([
+  [
+    'older automatic avatar',
+    {
+      type: 'image',
+      source: 'github',
+      src: 'https://ghe.corp.example/old.png?size=64',
+      label: 'old/repo-a'
+    },
+    { host: 'ghe.corp.example', owner: 'new', repo: 'repo-a' }
+  ],
+  [
+    'protected image',
+    {
+      type: 'image',
+      source: 'file',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+    },
+    null
+  ]
+] as const)(
+  'links a current enterprise remote despite unavailable metadata and a retained %s',
+  async (_label, repoIcon, upstream) => {
+    await withGitFolder({ origin: 'https://ghe.corp.example/new/repo-a.git' }, async (path) => {
+      const repos: Repo[] = [
+        {
+          id: 'selected',
+          path: realpathSync(path),
+          displayName: 'repo-a',
+          badgeColor: 'blue',
+          addedAt: 1,
+          kind: 'git',
+          executionHostId: 'runtime:env-1',
+          gitRemoteIdentity: {
+            canonicalKey: 'ghe.corp.example/old/repo-a',
+            remoteName: 'origin',
+            remoteUrl: 'https://ghe.corp.example/old/repo-a.git'
+          },
+          repoIcon
+        }
+      ]
+      const runtime = createRuntime(repos)
+      const result = await runtime.setupProjectExistingFolder({
+        projectId: 'github:ghe.corp.example/new/repo-a',
+        projectProviderIdentity: {
+          provider: 'github',
+          host: 'ghe.corp.example',
+          owner: 'new',
+          repo: 'repo-a'
+        },
+        hostId: 'runtime:env-1',
+        path,
+        kind: 'git'
+      })
+      expect(result.project.id).toBe('github:ghe.corp.example/new/repo-a')
+      expect(repos[0].upstream).toEqual(upstream)
+      expect(repos[0].repoIcon).toEqual(repoIcon)
+      expect(
+        projectHostSetupProjectionFromRepos(JSON.parse(JSON.stringify(repos))).setups[0].projectId
+      ).toBe('github:ghe.corp.example/new/repo-a')
+    })
+  }
+)
+
+it('retains matching null authority when a nonfork result settles during setup', async () => {
+  await withGitFolder({ origin: 'https://github.com/me/repo-a.git' }, async (path) => {
+    const repos: Repo[] = []
+    const runtime = createRuntime(repos)
+    const gate = Promise.withResolvers<forkMetadata.RepoUpstreamProbe>()
+    const started = Promise.withResolvers<void>()
+    parentProbe.mockImplementationOnce(() => {
+      started.resolve()
+      return gate.promise
+    })
+    const setup = runtime.setupProjectExistingFolder({
+      projectId: 'github:me/repo-a',
+      projectProviderIdentity: { provider: 'github', owner: 'me', repo: 'repo-a' },
+      hostId: 'runtime:env-1',
+      path,
+      kind: 'git'
+    })
+    await started.promise
+    execFileSync('git', ['remote', 'set-url', 'origin', 'https://github.com/other/repo-a.git'], {
+      cwd: path,
+      stdio: 'ignore'
+    })
+    gate.resolve({ upstream: null, origin: { owner: 'me', repo: 'repo-a' } })
+    const result = await setup
+    expect(result.project.id).toBe('github:me/repo-a')
+    expect(result.repo.upstream).toBeNull()
+    expect(
+      projectHostSetupProjectionFromRepos(JSON.parse(JSON.stringify(repos))).setups[0].projectId
+    ).toBe('github:me/repo-a')
+  })
+})
 
 it('publishes metadata retained on a pre-existing row after explicit setup fails', async () => {
   await withGitFolder({ origin: 'https://github.com/me/repo-a.git' }, async (path) => {
