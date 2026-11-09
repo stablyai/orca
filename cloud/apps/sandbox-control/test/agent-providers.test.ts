@@ -299,6 +299,18 @@ describe('staged egress placeholder rollout', () => {
     expect(commandEnv(START_COMMAND).ANTHROPIC_API_KEY).toBe(PERSONAL_KEY)
   })
 
+  it('is on by default for every team, with a per-team kill switch', async () => {
+    const { h, as, put, commandEnv } = await setup({ SECRETS_EGRESS_PLACEHOLDERS_OFF: 'org:legacy', EGRESS_PROXY_URL: PROXY_URL })
+    const ada = await as('ada', 'acme', 'admin')
+    await put('personal', 'ANTHROPIC_API_KEY', PERSONAL_KEY, ada)
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: ada })
+    expect(commandEnv(START_COMMAND).ANTHROPIC_API_KEY).toMatch(/^orca-ph-anthropic-api-key-sbx_/)
+    const lee = await as('lee', 'legacy', 'admin')
+    await put('personal', 'ANTHROPIC_API_KEY', PERSONAL_KEY, lee)
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-2', machineSize: 'standard' }, bearer: lee })
+    expect(commandEnv(START_COMMAND).ANTHROPIC_API_KEY).toBe(PERSONAL_KEY)
+  })
+
   it("a member's personal base URL never routes the org's shared key to the member's host", async () => {
     const { h, as, put } = await setup({ SECRETS_EGRESS_PLACEHOLDERS: 'on', EGRESS_PROXY_URL: PROXY_URL })
     const ada = await as('ada', 'acme', 'admin')

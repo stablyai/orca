@@ -59,8 +59,15 @@ export type LifecycleDeps = {
   /** GitHub App installation tokens for the workspace repo; absent until the app is configured. */
   github?: GitHubAppMinter
   /** Secret store; absent (no SECRETS_KEK) means sessions start without injected secrets. */
-  /** egressPlaceholders: every account (`true`) or only the listed account ids (staged rollout). */
-  secrets?: { keyring: Keyring; egressPlaceholders: boolean | ReadonlySet<string> }
+  /**
+   * egressPlaceholders: every account (`true`) or only the listed account ids (staged rollout);
+   * egressPlaceholdersOff: per-account kill switch that wins over both.
+   */
+  secrets?: {
+    keyring: Keyring
+    egressPlaceholders: boolean | ReadonlySet<string>
+    egressPlaceholdersOff?: ReadonlySet<string>
+  }
   now: () => number
   /** A member's GitHub identity (user token) for git-as-sender; absent = app identity only. */
   memberIdentity?: (row: SandboxRow, userId: string) => Promise<MemberGitIdentity | null>
