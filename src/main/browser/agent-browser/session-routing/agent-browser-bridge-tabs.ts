@@ -1,7 +1,7 @@
 import type {
   BrowserTabInfo,
   BrowserTabListResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 import type { ResolvedBrowserCommandTarget } from './agent-browser-command-target'
 import { AgentBrowserBridgeState } from './agent-browser-bridge-state'
@@ -118,6 +118,9 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
     } catch {
       return null
     }
+  }
+  getRemoteTabFaviconUrl(browserPageId: string): string | null {
+    return this.browserManager.getBrowserPageRemoteTabFaviconUrl(browserPageId)
   }
   onTabChanged(webContentsId: number, worktreeId?: string): void {
     this.selectForPerson(webContentsId, worktreeId)

@@ -160,7 +160,9 @@ function buildStructuredAgentSessionLaunchIntent(
 /** A definitive refusal consumed its operation id, but the provisional tab still owns its session. */
 export function retryStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent,
-  retainOpening = false
+  retainOpening = false,
+  /** Starts a new conversation instead of resuming one the agent never saved. */
+  fresh = false
 ): StructuredAgentSessionLaunchIntent {
   if (retainOpening) {
     const { beforeCreate: _beforeCreate, createAfter: _createAfter, ...retained } = intent
@@ -181,7 +183,7 @@ export function retryStructuredAgentSessionLaunchIntent(
       intent,
       intent.agent,
       intent.sessionId,
-      intent.params.resumeFrom,
+      fresh ? undefined : intent.params.resumeFrom,
       intent.seedOptions,
       intent.params.forkFrom
     ),

@@ -66,7 +66,7 @@ vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOr
   moveFocusToRendererBeforeWebviewDetach: () => undefined
 }))
 
-vi.mock('@/lib/execution-host-display-label', () => ({
+vi.mock('@/runtime/hosts/display/execution-host-display-label', () => ({
   selectWorktreeHostDisplayLabel: () => 'Studio Mac mini'
 }))
 
@@ -78,13 +78,13 @@ const store = vi.hoisted(() => ({
 }))
 
 // The document lives only on its workspace’s SSH host.
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: () => 'ssh-1',
   getConnectionIdForFile: () => 'ssh-1',
   getConnectionIdFromState: () => 'ssh-1'
 }))
 
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => 'ssh-1',
   getConnectionIdFromState: () => 'ssh-1'
 }))

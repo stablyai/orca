@@ -22,7 +22,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/lib/resolve-owner', () => ({
+vi.mock('@/lib/workspace/ownership/resolve-owner', () => ({
   runtimeEnvironmentIdUnlessTwin: () => mocks.ownerEnvironmentId,
   runtimeEnvironmentIdForWorkspaceOwner: () => ({
     kind: 'resolved',

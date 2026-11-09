@@ -102,7 +102,8 @@ describe('launchAgentInNewTab main-window surface', () => {
     const { settleAgentTabLaunch } = await import('./launch-agent-in-new-tab-host-agents')
     const { activateAndRevealWorkspaceWithOutcome } =
       await import('@/lib/workspace/activation/worktree-activation')
-    const { reportAgentWorkspaceActivation } = await import('@/lib/worktree-activation-outcome')
+    const { reportAgentWorkspaceActivation } =
+      await import('@/lib/workspace/activation/worktree-activation-outcome')
     const reveal = vi.fn(() =>
       reportAgentWorkspaceActivation(
         activateAndRevealWorkspaceWithOutcome(id, {

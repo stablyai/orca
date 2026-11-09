@@ -113,7 +113,7 @@ function PdfDocumentViewer({
           viewerDiv,
           doc,
           scrollCacheKey,
-          scalePreference: scalePreferenceRef.current,
+          getScalePreference: () => scalePreferenceRef.current,
           scaleBounds: SCALE_BOUNDS,
           onScaleChanging: setScale,
           onWheelZoom: recordScalePreference

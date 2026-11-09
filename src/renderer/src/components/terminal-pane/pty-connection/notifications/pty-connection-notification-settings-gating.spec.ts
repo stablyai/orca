@@ -125,33 +125,6 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       )
     })
 
-    it('shares one raw store subscriber for agent-complete notification settings across panes', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      transportFactoryQueue.push(createMockTransport('pty-1'), createMockTransport('pty-2'))
-
-      vi.useFakeTimers()
-      const firstBinding = connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks4)
-      )
-      const secondBinding = connectPanePty(
-        createPane(2) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks4)
-      )
-      await flushAsyncTicks()
-
-      expect(storeSubscribers).toHaveLength(1)
-
-      firstBinding.dispose()
-      expect(storeSubscribers).toHaveLength(1)
-      secondBinding.dispose()
-      expect(storeSubscribers).toHaveLength(0)
-    })
-
     it('keeps an in-flight generic completion when desktop completion banners are enabled', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks6 =

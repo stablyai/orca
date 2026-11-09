@@ -8,7 +8,7 @@ import {
   MIXED_FOLDER,
   MIXED_GROUP
 } from '../../../../shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
-import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
+import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
 import { resolveTerminalPaneOwnerContext } from '@/components/terminal-pane/host-state/terminal-pane-owner-context'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))

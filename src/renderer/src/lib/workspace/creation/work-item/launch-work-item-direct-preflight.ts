@@ -16,7 +16,7 @@ import { getLocalRepoProjectExecutionRuntimeContext } from '../../../local-prefl
 import {
   refineLocalLaunchPlatform,
   resolveRepoExecutionHostPlatform
-} from '../../../execution-host-facts'
+} from '../../../../runtime/hosts/platform/execution-host-facts'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveDefaultAgentForWorkspace } from '../../../agent-tab-shortcuts'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'

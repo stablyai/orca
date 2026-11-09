@@ -1,3 +1,4 @@
+import './session-search-worker.test-fixture'
 import { mkdirSync, rmSync } from 'node:fs'
 import { appendFile, chmod, mkdir, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -39,7 +40,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  indexer?.close()
+  await indexer?.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
   await harness.cleanup()
@@ -203,11 +204,11 @@ it('widens history by constructing a new instance and narrows by purging on its 
   expect(sessionsMatching('recent')).toEqual([SESSION_ID])
   expect(sessionsMatching('ancient')).toEqual([])
 
-  indexer?.close()
+  await indexer?.close()
   await newIndexer({ historyDays: null, recentPerAgent: 1 }).start()
   expect(sessionsMatching('ancient')).toEqual([OTHER_SESSION_ID])
 
-  indexer?.close()
+  await indexer?.close()
   await newIndexer({ historyDays: 30, recentPerAgent: 1 }).start()
   expect(sessionsMatching('ancient')).toEqual([])
   expect(sessionsMatching('recent')).toEqual([SESSION_ID])
@@ -288,13 +289,13 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
   }
 })
 
-it('releases the database path when the open itself throws', () => {
+it('releases the database path when the open itself throws', async () => {
   // A directory at the database path makes opening fail without leaving an ownership claim.
   mkdirSync(harness.databasePath, { recursive: true })
-  expect(() => newIndexer()).toThrow()
+  await expect(newIndexer().initialize()).rejects.toThrow()
 
   rmSync(harness.databasePath, { recursive: true, force: true })
-  expect(() => newIndexer()).not.toThrow()
+  await expect(newIndexer().initialize()).resolves.toBeUndefined()
 })
 
 it('re-reads a file a chunked read left half written, and settles it in one pass', async () => {
@@ -303,7 +304,7 @@ it('re-reads a file a chunked read left half written, and settles it in one pass
   await newIndexer().start()
   const whole = (await stat(path)).size
   expect(indexedByteOffset(path)).toBe(whole)
-  indexer?.close()
+  await indexer?.close()
 
   plantPartialCursor(path)
   await newIndexer().start()
@@ -311,7 +312,7 @@ it('re-reads a file a chunked read left half written, and settles it in one pass
   expect(indexedByteOffset(path)).toBe(whole)
   expect(fileState(path)).toBe('current')
   expect(indexer?.status().phase).toBe('current')
-  indexer?.close()
+  await indexer?.close()
 
   // Growing a partially indexed file must force a whole read rather than offer a declined append.
   plantPartialCursor(path)
@@ -351,7 +352,7 @@ it('reads a declined file at its current stat, not the one it was recorded with'
   await newIndexer().start()
 
   // Retain the session-list cursor while deleting the index to force an append the consumer must decline.
-  indexer?.close()
+  await indexer?.close()
   removeSessionSearchDatabase(harness.databasePath)
   newIndexer()
   await appendFile(path, `${claudeLines(['declined turn'], SESSION_ID, 10).join('\n')}\n`)
@@ -391,7 +392,7 @@ it.skipIf(!CAN_DENY_READ)(
 it('keeps a root that is gone at the first sweep after a restart', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
   await newIndexer().start()
-  indexer?.close()
+  await indexer?.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
 
@@ -429,7 +430,7 @@ it('keeps rows under no configured root, and retires them only when gone', async
   const moved = transcriptPath()
   await writeClaudeTranscript(moved, ['a session in the old profile'], SESSION_ID)
   await newIndexer().start()
-  indexer?.close()
+  await indexer?.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
 
@@ -448,7 +449,7 @@ it('stops everything on close, including work already queued', async () => {
   await newIndexer().start()
 
   const queued = indexer?.reconcile({ full: true })
-  indexer?.close()
+  await indexer?.close()
   await queued
 
   expect(errors).toEqual([])
@@ -492,7 +493,7 @@ it.skipIf(!CAN_DENY_READ)('retires a deleted file behind a block of unreadable r
   await writeClaudeTranscript(transcriptPath(), ['a live conversation'], SESSION_ID)
   const locked = join(harness.roots.claudeProjectsDir ?? '', 'locked')
   await mkdir(locked, { recursive: true })
-  newIndexer()
+  await newIndexer().initialize()
 
   // Put 520 unreadable rows ahead of the deleted row to catch limits counted by rows instead of directories.
   harness.write((db: SyncDatabase) => {
@@ -518,4 +519,31 @@ it.skipIf(!CAN_DENY_READ)('retires a deleted file behind a block of unreadable r
   } finally {
     await chmod(locked, 0o700)
   }
+})
+
+it('holds out a repeatedly rejected write while other files continue indexing', async () => {
+  const broken = transcriptPath()
+  await writeClaudeTranscript(broken, ['rejectedneedle'], SESSION_ID)
+  await writeClaudeTranscript(transcriptPath(OTHER_SESSION_ID), ['healthyneedle'], OTHER_SESSION_ID)
+  const subject = newIndexer()
+  await subject.initialize()
+  harness.write((db) =>
+    db.exec(`CREATE TRIGGER reject_one_file BEFORE INSERT ON messages
+    WHEN (SELECT file_path FROM sessions WHERE id=NEW.session_row_id) LIKE '%${SESSION_ID}%'
+    BEGIN SELECT RAISE(ABORT, 'rejected fixture write'); END`)
+  )
+  await subject.start()
+  for (let pass = 0; pass < 3; pass++) {
+    await subject.reconcile({ full: true })
+  }
+  expect(rowFor(broken)).toEqual({ state: 'failed', failCount: 3 })
+  expect(sessionsMatching('healthyneedle')).toEqual([OTHER_SESSION_ID])
+  expect(sessionsMatching('rejectedneedle')).toEqual([])
+  await appendFile(
+    transcriptPath(OTHER_SESSION_ID),
+    `${claudeLines(['continuedneedle'], OTHER_SESSION_ID, 10).join('\n')}\n`
+  )
+  await subject.reconcile({ full: true })
+  expect(sessionsMatching('continuedneedle')).toEqual([OTHER_SESSION_ID])
+  expect(rowFor(broken)).toEqual({ state: 'failed', failCount: 3 })
 })

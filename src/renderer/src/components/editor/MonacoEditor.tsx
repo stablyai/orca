@@ -13,7 +13,10 @@ import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-emb
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
 import { toEditorModelUri } from './model-lifetime/identity/editor-model-uri'
 import { getEditorModelOwnerKey } from './model-lifetime/identity/editor-model-owner'
-import { NO_RESOURCE_EVIDENCE, type WorkspaceResource } from '@/lib/workspace-copy-owner'
+import {
+  NO_RESOURCE_EVIDENCE,
+  type WorkspaceResource
+} from '@/lib/workspace/ownership/workspace-copy-owner'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
 import { buildEditorUnicodeHighlightOptions } from './editor-unicode-highlight-options'

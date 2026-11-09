@@ -1,4 +1,4 @@
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'

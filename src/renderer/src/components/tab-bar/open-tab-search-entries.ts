@@ -19,7 +19,7 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
+import { getPaletteOwnershipWorktreeIds } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { Translate } from '@/i18n/use-translate'
 
