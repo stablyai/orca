@@ -781,7 +781,7 @@
             "agent.tool.before": "1.4.248",
             "agent.tool.after": "1.4.248",
             "editor.save.before": "1.4.248",
-            "editor.inlineCompletion": "1.4.255"
+            "editor.inlineCompletion": "1.4.256"
           }
         },
         "onError": {
