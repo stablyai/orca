@@ -24,7 +24,7 @@ import { AgentsTab } from '../home/AgentsTab';
 import { DesktopActions } from '../home/DesktopActions';
 import { describeDesktopConnection, DesktopConnectionVerdict, endpointLabel } from '../diagnostics/ConnectionDiagnostics';
 import { appendLog, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
-import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, readHomeUsage, readHomeAutomations,
+import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, homeUsageEventType, readHomeUsage, readHomeAutomations,
   readHomeAutomationRuns, homeAutomationToggleParams } from '../home/HomeAccountUsage';
 import { homeAutomationSchedule, homeUsageResetCountdown } from '../home/HomeTabPresentation';
 import { SETTINGS_LINK_ITEMS, SETTINGS_MENU_ITEMS, SettingsMenuItem } from '../settings/SettingsMenu';
@@ -111,6 +111,7 @@ interface HostRuntime {
   catalogState: string;
   catalogPending: Promise<void> | null;
   catalogRefetch: Promise<void> | null;
+  usageRevision: number;
   automationPending: Promise<void> | null;
   automationFetchedAt: number;
 }
@@ -481,9 +482,10 @@ struct Home {
 
   private clearLiveDesktopData(hostId: string, removed: boolean = false): void {
     this.agentActivityWrites.forget(hostId);
+    this.usageByHost = withoutDesktop(this.usageByHost, hostId);
+    this.quotaOffers = withoutDesktop(this.quotaOffers, hostId);
     if (removed) {
       this.desktopMachines = withoutDesktop(this.desktopMachines, hostId);
-      this.usageByHost = withoutDesktop(this.usageByHost, hostId);
       this.automationsByHost = withoutDesktop(this.automationsByHost, hostId);
       this.automationRunsByHost = withoutDesktop(this.automationRunsByHost, hostId);
     }
@@ -496,7 +498,7 @@ struct Home {
     let lease = retainDesktopConnection(context, hostId);
     let runtime: HostRuntime = { lease: lease, unobserve: (): void => {}, client: null, online: false,
       connecting: false, refreshTimer: -1, catalogState: 'initial', catalogPending: null, catalogRefetch: null,
-      automationPending: null, automationFetchedAt: 0 };
+      usageRevision: 0, automationPending: null, automationFetchedAt: 0 };
     this.runtimes.set(hostId, runtime);
     let epoch = this.epoch;
     runtime.unobserve = lease.connection.observe((phase: SessionPhase): void => {
@@ -511,7 +513,7 @@ struct Home {
         this.clearLiveDesktopData(hostId);
         runtime.client = client;
         if (client && runtime.online) {
-          this.subscribeUsage(client, hostId, epoch);
+          this.subscribeUsage(client, hostId, runtime, epoch);
           this.fetchDesktopStatus(client, hostId, epoch);
           if (this.visible) {
             this.fetchCatalog(client, hostId, epoch);
@@ -577,9 +579,7 @@ struct Home {
 
   private applyQuotaOffer(hostId: string, json: string): void {
     let value = readHomeQuotaOffer(json);
-    let next: Record<string, HomeQuotaOffer> = {};
-    let keys = Object.keys(this.quotaOffers);
-    for (let i = 0; i < keys.length; i++) { if (keys[i] !== hostId) { next[keys[i]] = this.quotaOffers[keys[i]]; } }
+    let next = withoutDesktop(this.quotaOffers, hostId);
     if (value) { next[hostId] = value; }
     this.quotaOffers = next;
   }
@@ -608,17 +608,10 @@ struct Home {
         buttons: [{ text: uiText('取消', this.uiLocale), color: this.pal().textSecondary }, { text: uiText('使用一次', this.uiLocale), color: this.pal().accentBlue }] });
       if (answer.index !== 1 || epoch !== this.epoch || this.runtimes.get(host.id)?.client !== client) { return; }
       attempted = true;
+      let revision = ++rt.usageRevision;
       let result = await consumeHomeQuotaReset(client, frozen);
       if (epoch !== this.epoch || this.runtimes.get(host.id)?.client !== client) { return; }
-      let json = `{"result":{"type":"snapshot","snapshot":${result.snapshot}}}`;
-      let cards = readHomeUsage(json);
-      if (cards) {
-        let next: Record<string, HomeUsageCard[]> = {};
-        let keys = Object.keys(this.usageByHost);
-        for (let i = 0; i < keys.length; i++) { next[keys[i]] = this.usageByHost[keys[i]]; }
-        next[host.id] = cards; this.usageByHost = next;
-      }
-      this.applyQuotaOffer(host.id, json);
+      if (rt.usageRevision === revision) { this.applyUsageSnapshot(host.id, rt, result.snapshot); }
       let message = result.outcome === 'reset' ? '额度已重置'
         : result.outcome === 'nothingToReset' ? '当前额度无需重置'
         : result.outcome === 'noCredit' ? '已无可用重置次数'
@@ -631,24 +624,40 @@ struct Home {
     }
   }
 
-  private subscribeUsage(client: SpikeRpcClient, hostId: string, epoch: number): void {
+  private applyUsageSnapshot(hostId: string, runtime: HostRuntime, json: string): void {
+    runtime.usageRevision++;
+    let rows = readHomeUsage(json);
+    let next = withoutDesktop(this.usageByHost, hostId);
+    if (rows !== null) { next[hostId] = rows; }
+    this.usageByHost = next;
+    if (rows !== null) { this.applyQuotaOffer(hostId, json); }
+    else { this.quotaOffers = withoutDesktop(this.quotaOffers, hostId); }
+    this.setHostError('usageErrors', hostId, rows !== null ? '' : '账户用量暂不可用，可打开账户页重试。');
+  }
+
+  private subscribeUsage(client: SpikeRpcClient, hostId: string, runtime: HostRuntime, epoch: number): void {
     let id = `home-accounts-${hostId}`;
     let wire = JSON.stringify({ id: id, deviceToken: client.deviceToken, method: 'accounts.subscribe' });
     let started = client.subscribeWithId(id, wire, (json: string): void => {
       if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
-      this.applyQuotaOffer(hostId, json);
-      let rows = readHomeUsage(json);
-      if (rows !== null) {
-        let next: Record<string, HomeUsageCard[]> = {};
-        let keys = Object.keys(this.usageByHost);
-        for (let i = 0; i < keys.length; i++) { next[keys[i]] = this.usageByHost[keys[i]]; }
-        next[hostId] = rows; this.usageByHost = next;
-        this.setHostError('usageErrors', hostId, '');
-      } else {
-        this.setHostError('usageErrors', hostId, '账户用量暂不可用，可打开账户页重试。');
+      let event = homeUsageEventType(json);
+      if (event === 'snapshot') { this.applyUsageSnapshot(hostId, runtime, json); }
+      if (event === 'error') {
+        this.readUsage(client, hostId, runtime, epoch, false).catch(() => {});
       }
     });
-    if (!started) { this.setHostError('usageErrors', hostId, '账户用量订阅失败。'); }
+    if (!started) { this.readUsage(client, hostId, runtime, epoch, false).catch(() => {}); }
+  }
+
+  private async readUsage(client: SpikeRpcClient, hostId: string, runtime: HostRuntime,
+    epoch: number, refresh: boolean): Promise<void> {
+    let revision = ++runtime.usageRevision;
+    let result = await client.request('accounts.list', refresh ? '{"refreshUsage":true}' : '{}');
+    if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client || runtime.usageRevision !== revision) { return; }
+    if (result instanceof RpcSuccess) { this.applyUsageSnapshot(hostId, runtime, result.result); }
+    else if (this.usageByHost[hostId] === undefined) {
+      this.setHostError('usageErrors', hostId, '账户用量暂不可用，可打开账户页重试。');
+    }
   }
 
   private async refreshUsage(hostId: string): Promise<void> {
@@ -656,7 +665,7 @@ struct Home {
     let client = runtime?.client;
     if (!runtime?.online || !client || this.usageRefreshing.includes(hostId)) { return; }
     this.usageRefreshing = this.usageRefreshing.concat(hostId);
-    try { await client.request('accounts.list', '{"refreshUsage":true}'); }
+    try { await this.readUsage(client, hostId, runtime, this.epoch, true); }
     finally { this.usageRefreshing = this.usageRefreshing.filter((id: string): boolean => id !== hostId); }
   }
 

@@ -29,14 +29,23 @@ function readWindows(limits: Record<string, Object> | null): HomeUsageWindow[] {
   return result;
 }
 
-// Read the same ready/snapshot envelope as accounts-snapshot-stream.ts, never turn a refused read into an empty account list.
+export function homeUsageEventType(json: string): string {
+  try {
+    let envelope = record(JSON.parse(json) as Object);
+    if (!envelope) { return ''; }
+    let event = record(envelope['result']);
+    if (envelope['ok'] === false || event?.['type'] === 'error') { return 'error'; }
+    return event?.['type'] === 'ready' || event?.['type'] === 'snapshot' ? 'snapshot' : '';
+  } catch (e) { return ''; }
+}
+
 export function readHomeUsage(json: string): HomeUsageCard[] | null {
   try {
     let envelope = record(JSON.parse(json) as Object);
-    if (!envelope) { return null; }
+    if (!envelope || envelope['ok'] === false) { return null; }
     let event = record(envelope['result']);
-    if (!event || (event['type'] !== 'ready' && event['type'] !== 'snapshot')) { return null; }
-    let snapshot = record(event['snapshot']);
+    let snapshot = event ? record(event['snapshot']) : envelope;
+    if (event && event['type'] !== 'ready' && event['type'] !== 'snapshot') { return null; }
     if (!snapshot) { return null; }
     let limits = record(snapshot['rateLimits']);
     if (!limits) { return null; }

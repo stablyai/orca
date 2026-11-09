@@ -306,41 +306,35 @@ test('the worktree wire keeps each host identity and flags an archived twin befo
 })
 
 test('usage follows the selected WSL account without assigning its quota to another login', () => {
-  const cards = readHomeUsage(
-    JSON.stringify({
-      result: {
-        type: 'snapshot',
-        snapshot: {
-          claude: { accounts: [], activeAccountId: null },
-          codex: {
-            accounts: [
-              { id: 'host', email: 'host@example.test' },
-              { id: 'wsl', email: 'wsl@example.test' }
-            ],
-            activeAccountId: 'host',
-            activeAccountIdsByRuntime: { host: 'host', wsl: { Ubuntu: 'wsl' } }
-          },
-          rateLimits: {
-            claude: null,
-            codexTarget: { runtime: 'wsl', wslDistro: 'Ubuntu' },
-            codex: { status: 'ok', session: { usedPercent: 35, resetsAt: 1000 } },
-            inactiveCodexAccounts: [
-              { accountId: 'host', rateLimits: { status: 'ok', session: { usedPercent: 10 } } }
-            ]
-          }
-        }
-      }
-    })
-  )
-  assert.deepEqual(
-    Array.from(cards, (card) => [card.key, card.active]),
-    [
-      ['codex:wsl', true],
-      ['codex:host', false]
-    ]
-  )
-  assert.equal(cards.find((card) => card.key === 'codex:wsl').windows[0].usedPercent, 35)
-  assert.equal(cards.find((card) => card.key === 'codex:host').windows[0].usedPercent, 10)
+  const snapshot = {
+    claude: { accounts: [], activeAccountId: null },
+    codex: {
+      accounts: [
+        { id: 'host', email: 'host@example.test' },
+        { id: 'wsl', email: 'wsl@example.test' }
+      ],
+      activeAccountId: 'host',
+      activeAccountIdsByRuntime: { host: 'host', wsl: { Ubuntu: 'wsl' } }
+    },
+    rateLimits: {
+      claude: null,
+      codexTarget: { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      codex: { status: 'ok', session: { usedPercent: 35, resetsAt: 1000 } },
+      inactiveCodexAccounts: [
+        { accountId: 'host', rateLimits: { status: 'ok', session: { usedPercent: 10 } } }
+      ]
+    }
+  }
+  for (const payload of [snapshot, { result: { type: 'snapshot', snapshot } }]) {
+    const cards = readHomeUsage(JSON.stringify(payload))
+    assert.deepEqual(
+      Array.from(cards, (card) => [card.key, card.active, card.windows[0]?.usedPercent]),
+      [
+        ['codex:wsl', true, 35],
+        ['codex:host', false, 10]
+      ]
+    )
+  }
   assert.equal(readHomeUsage('{"result":{"type":"error"}}'), null)
 })
 
