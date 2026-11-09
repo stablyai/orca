@@ -183,6 +183,12 @@
     }
   },
   "dictation": {
+    "controls": {
+      "durationMinutes_one": "{{count}} minute",
+      "durationMinutes_other": "{{count}} minutes",
+      "durationSeconds_one": "{{count}} second",
+      "durationSeconds_other": "{{count}} seconds"
+    },
     "setup": {
       "alreadyActive": "Dictation is already in use on the computer or another phone. Update Orca on the computer to dictate from several devices at once.",
       "modelBusy": "Another device is dictating with a different speech model. Try again when it finishes.",

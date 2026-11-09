@@ -1,6 +1,6 @@
 import type { GitHistoryRefs } from './git/history/git-history-types'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
-import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
+import type { BrowserDevToolsDockLayout } from './browser/devtools/browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
@@ -198,6 +198,8 @@ export type PersistedUIState = {
   codexTerminalServerIsolationNoticeSeen?: boolean
   /** Windows one-shot toast for Codex moving onto ~/.codex; set when shown, so absent means not yet seen. */
   codexSharedSettingsNoticeSeen?: boolean
+  /** One-shot card offering the speech model download the transcribe-cpp engine needs; set on the first check. */
+  speechModelUpdateNoticeSeen?: boolean
   /** One-shot pane banner explaining Claude Code's own diff panel; set when the user closes it. */
   claudeDiffPanelNoticeSeen?: boolean
   /** Retired one-shot Claude sign-in toast; kept because a paired client from that build still sends it. */

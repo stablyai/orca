@@ -4,7 +4,7 @@ import {
   getHostedReviewPushTargetLookup,
   hostedReviewPushTargetLookupsInFlight
 } from './hosted-review-push-target'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 
 export function createEnsureHostedReviewPushTarget(
   _set: WorktreeSliceSet,

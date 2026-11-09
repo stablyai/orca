@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
-import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import {
+  chatProviderAgents,
+  useHostStructuredAgentsVersion
+} from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { recomputeOn } from '@/lib/recompute-on'
 import { getNativeChatAgentProfile } from '../../../shared/native-chat/native-chat-agent-profiles'
 import { isSkillInstallProviderId } from '../../../shared/skill-install-providers'

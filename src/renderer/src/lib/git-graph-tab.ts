@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation-generation'
+import { captureWorktreeOperationGenerationSnapshot } from './workspace/ownership/worktree-operation-generation'
 import { useAppStore } from '@/store'
 import {
   findFirstIndexedWorktree,
@@ -16,7 +16,7 @@ import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost,
   type WorktreeOperationRouteState
-} from './worktree-operation-route'
+} from './workspace/ownership/worktree-operation-route'
 import { openWorkspaceEditorItem } from '@/store/slices/editor/tabs/workspace-editor-item'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { translate } from '@/i18n/i18n'

@@ -39,6 +39,7 @@ it('keeps a selected language visible when the chosen model does not support it'
     type: 'whisper',
     provider: 'local',
     language: 'multilingual',
+    languages: ['en', 'es'],
     sampleRate: 16000,
     streaming: false,
     dictationLanguages: ['en', 'es']
@@ -67,6 +68,7 @@ it('keeps the language control disabled for models that ignore language settings
     type: 'transducer',
     provider: 'local',
     language: 'multilingual',
+    languages: ['en', 'es'],
     sampleRate: 16000,
     streaming: false
   }

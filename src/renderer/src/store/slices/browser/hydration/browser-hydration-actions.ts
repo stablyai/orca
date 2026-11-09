@@ -10,7 +10,7 @@ import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/browser/clie
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
 import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-record-fields'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 
 export function createBrowserHydrationActions(
   set: BrowserSliceSet,

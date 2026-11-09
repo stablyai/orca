@@ -56,7 +56,9 @@ export type StructuredAgentSessionLaunchLifecycle =
   | 'cancelled'
 
 const structuredLaunchesBySessionId = new Map<string, StructuredLaunchState>()
-const structuredLaunchListeners = new Set<() => void>()
+/** Null when the writer can't name its sessions, so subscribers re-read every launch. */
+type StructuredLaunchListener = (sessionIds: readonly string[] | null) => void
+const structuredLaunchListeners = new Set<StructuredLaunchListener>()
 
 export function resetStructuredAgentLaunchRegistryForTests(): void {
   for (const sessionId of structuredLaunchesBySessionId.keys()) {
@@ -68,23 +70,26 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   resetStructuredAgentLocalLaunchCancelsForTests()
 }
 
-export function notifyStructuredLaunchListeners(): void {
+export function notifyStructuredLaunchListeners(sessionIds?: string | readonly string[]): void {
   function* changes(): Generator<readonly [string, StructuredAgentLaunchPersistedRecord | null]> {
     for (const state of structuredLaunchesBySessionId.values()) {
       yield [state.intent.sessionId, structuredLaunchRecord(state)]
     }
   }
   updateStructuredAgentLaunchRecords(changes())
-  publishStructuredLaunchChange()
+  publishStructuredLaunchChange(sessionIds)
 }
 
-export function publishStructuredLaunchChange(): void {
+export function publishStructuredLaunchChange(sessionIds?: string | readonly string[]): void {
+  const changed = typeof sessionIds === 'string' ? [sessionIds] : (sessionIds ?? null)
   for (const listener of structuredLaunchListeners) {
-    listener()
+    listener(changed)
   }
 }
 
-export function subscribeStructuredAgentLaunchStatus(listener: () => void): () => void {
+export function subscribeStructuredAgentLaunchStatus(
+  listener: StructuredLaunchListener
+): () => void {
   structuredLaunchListeners.add(listener)
   return () => structuredLaunchListeners.delete(listener)
 }
@@ -251,7 +256,7 @@ export function retireStructuredAgentSessionLaunchCancellationTombstone(
     return false
   }
   retireStructuredAgentLaunchCancellation(sessionId)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
   return true
 }
 
@@ -260,13 +265,13 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
   authoritativeInventory: number,
   executionHostId: ExecutionHostId
 ): boolean {
-  const changed = retireAbsentStructuredAgentLaunchCancellations(
+  const retired = retireAbsentStructuredAgentLaunchCancellations(
     publishedSessionIds,
     authoritativeInventory,
     executionHostId
   )
-  if (changed) {
-    notifyStructuredLaunchListeners()
+  if (retired.length) {
+    notifyStructuredLaunchListeners(retired)
   }
-  return changed
+  return retired.length > 0
 }

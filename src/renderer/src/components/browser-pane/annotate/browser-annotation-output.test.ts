@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
+import type { BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import {
   BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH,
   formatBrowserAnnotationsAsMarkdown

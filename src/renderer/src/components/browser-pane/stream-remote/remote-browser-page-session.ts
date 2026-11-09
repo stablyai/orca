@@ -2,7 +2,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
+import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type {
   RemoteBrowserOperationToken,

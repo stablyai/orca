@@ -6,7 +6,7 @@ import {
   formatMarkdownReviewNotes,
   sortMarkdownReviewNotes,
   type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import type { NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import { useTranslate } from '@/i18n/use-translate'

@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { useAudioCapture } from '@/hooks/use-audio-capture'
 import { DictationIndicator } from './DictationIndicator'
 import { captureInsertionTarget } from './dictation-insertion-target'
+import { captureDictationContext } from './dictation-context'
 import { dictationPillAnchorFor, type DictationPillAnchor } from './dictation-pill-anchor'
 import {
   canRetryDictation,
@@ -11,6 +12,7 @@ import {
   type DictationKeptRecording
 } from './dictation-kept-recording'
 import { useDictationControls } from './use-dictation-controls'
+import { useDictationQueuedSend } from './use-dictation-queued-send'
 import { createDictationTranscriptDelivery } from './dictation-transcript-delivery'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import {
@@ -29,6 +31,7 @@ import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { publishDictationMeter } from './dictation-meter-store'
 import { useDictationSilenceStop } from './use-dictation-silence-stop'
 import { useDictationSpeechEvents } from './use-dictation-speech-events'
+import { NO_DICTATION_LIVE_TEXT } from '@/store/slices/dictation/dictation'
 import {
   canStartDictation,
   initialDictationSession,
@@ -41,7 +44,7 @@ import {
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
   const setDictationState = useAppStore((s) => s.setDictationState)
-  const setPartialTranscript = useAppStore((s) => s.setPartialTranscript)
+  const setLiveText = useAppStore((s) => s.setLiveText)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
@@ -70,6 +73,8 @@ export function DictationController() {
   const [failure, setFailure] = useState<DictationFailureKind | null>(null)
   // A new recording gets a fresh pill (timer and all); a retry keeps the one it failed in.
   const [recordingKey, setRecordingKey] = useState(0)
+  const queuedSend = useDictationQueuedSend(sessionRef, keptRef)
+  const { clear: clearQueuedSend, release: releaseQueuedSend } = queuedSend
 
   const dispatch = useCallback(
     (event: DictationSessionEvent): DictationSession => {
@@ -79,14 +84,17 @@ export function DictationController() {
       if (next.sessionId === null) {
         deliverRef.current = null
       }
+      if (next.sessionId !== previous.sessionId) {
+        setLiveText(NO_DICTATION_LIVE_TEXT)
+      }
       if (next.phase !== previous.phase) {
         setDictationState(next.phase)
-        if (next.phase !== 'listening' && next.phase !== 'stopping') {
-          setPartialTranscript('')
-        }
         if (next.phase === 'idle') {
           setPillAnchor(null)
           keptRef.current = null
+        }
+        if (next.phase === 'idle' || next.phase === 'error') {
+          clearQueuedSend()
         }
         if (next.phase !== 'error') {
           setFailure(null)
@@ -94,7 +102,7 @@ export function DictationController() {
       }
       return next
     },
-    [setDictationState, setPartialTranscript]
+    [setDictationState, setLiveText, clearQueuedSend]
   )
 
   const drainStoppedSession = useCallback((sessionId: string) => {
@@ -125,9 +133,12 @@ export function DictationController() {
         showNoSpeechDetectedToast()
       }
       beforeEnd?.()
-      dispatch({ type: 'ended' })
+      await releaseQueuedSend(run)
+      if (sessionRef.current.run === run) {
+        dispatch({ type: 'ended' })
+      }
     },
-    [dispatch, finishCapture, getCapturedChunkCount]
+    [dispatch, finishCapture, getCapturedChunkCount, releaseQueuedSend]
   )
 
   /** The error pill when the recording can be retried; otherwise the toast, as nothing is left to retry. */
@@ -197,7 +208,8 @@ export function DictationController() {
     const insertionTarget = captureInsertionTarget()
     const deliver = createDictationTranscriptDelivery()
     deliverRef.current = (text) => deliver(text, insertionTarget)
-    const kept = createDictationKeptRecording(insertionTarget, deliver)
+    const context = captureDictationContext()
+    const kept = createDictationKeptRecording(insertionTarget, deliver, context)
     keptRef.current = kept
     setRecordingKey((key) => key + 1)
     setCaptureLive(false)
@@ -260,7 +272,7 @@ export function DictationController() {
       }
       setCaptureLive(true)
 
-      await window.api.speech.startDictation(modelId, undefined, sessionId)
+      await window.api.speech.startDictation(modelId, context, sessionId)
       if (!isCurrent()) {
         await releaseStart(true)
         return
@@ -346,6 +358,7 @@ export function DictationController() {
     cancel: cancelDictation,
     toggle: toggleDictation,
     retry: () => void retryDictation(),
+    enterQueues: (event) => queuedSend.queueTerminalEnter(event.target),
     // The error pill leaves Esc to Settings and dialogs; only its ✕ discards the recording.
     escCancels: () =>
       isDictationUnderway(sessionRef.current.phase) || sessionRef.current.phase === 'stopping'
@@ -369,9 +382,8 @@ export function DictationController() {
 
   useDictationSpeechEvents({
     currentSessionId: () => sessionRef.current.sessionId,
-    onPartial: setPartialTranscript,
+    onLiveText: setLiveText,
     onFinal: (text) => {
-      setPartialTranscript('')
       dispatch({ type: 'final-text' })
       deliverRef.current?.(text)
     },
@@ -398,6 +410,7 @@ export function DictationController() {
       captureLive={captureLive}
       anchor={pillAnchor}
       failure={failure}
+      queued={queuedSend.queuedKind}
     />
   )
 }

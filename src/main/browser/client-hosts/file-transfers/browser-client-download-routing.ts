@@ -1,4 +1,4 @@
-import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser-guest-events'
+import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 
 export type BrowserClientDownloadRoute = {
   transferId: string

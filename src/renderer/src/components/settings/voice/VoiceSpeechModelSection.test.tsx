@@ -64,6 +64,7 @@ const localModel: SpeechModelManifest = {
   description: 'Runs offline',
   provider: 'local',
   language: 'en',
+  languages: ['en'],
   type: 'transducer',
   streaming: true,
   sampleRate: 16000,
@@ -106,7 +107,7 @@ function renderSection(args: {
         catalog={catalog}
         modelStates={modelStates}
         onUpdateVoiceSettings={vi.fn()}
-        onOpenOpenAiDialog={vi.fn()}
+        onOpenCloudSetup={vi.fn()}
         onRefreshModelStates={args.refreshModelStates ?? vi.fn()}
       />
     )

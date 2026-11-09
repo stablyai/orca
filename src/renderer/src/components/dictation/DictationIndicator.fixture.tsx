@@ -3,13 +3,16 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { DictationIndicator } from './DictationIndicator'
 import { publishDictationMeter, resetDictationMeter } from './dictation-meter-store'
 import type { DictationFailureKind } from './dictation-toasts'
+import type { DictationQueuedSendKind } from './use-dictation-queued-send'
 
 function PaneWithPill({
   captureLive = true,
-  failure = null
+  failure = null,
+  queued = null
 }: {
   captureLive?: boolean
   failure?: DictationFailureKind | null
+  queued?: DictationQueuedSendKind | null
 }) {
   const [pane, setPane] = useState<HTMLElement | null>(null)
   const anchor = useMemo(
@@ -19,7 +22,12 @@ function PaneWithPill({
   return (
     <div ref={setPane} className="relative h-28 w-full bg-background">
       {anchor ? (
-        <DictationIndicator captureLive={captureLive} anchor={anchor} failure={failure} />
+        <DictationIndicator
+          captureLive={captureLive}
+          anchor={anchor}
+          failure={failure}
+          queued={queued}
+        />
       ) : null}
     </div>
   )
@@ -43,8 +51,49 @@ export const liveText = defineFixture({
   width: 520,
   store: {
     dictationState: 'listening',
-    partialTranscript:
-      'It should go back to the page you came from. Check where returnTo gets dropped'
+    liveText: {
+      committed: 'It should go back to the page you came from.',
+      tentative: 'Check where returnTo gets dropped',
+      speechPending: false
+    }
+  },
+  setup: () => publishDictationMeter({ level: 0.6, isSpeaking: true, isClipping: false }),
+  render: () => <PaneWithPill />
+})
+
+export const committedText = defineFixture({
+  width: 520,
+  store: {
+    dictationState: 'listening',
+    liveText: {
+      committed: 'It should go back to the page you came from. Check where returnTo gets dropped.',
+      tentative: '',
+      speechPending: false
+    }
+  },
+  setup: () => publishDictationMeter({ level: 0.2, isSpeaking: false, isClipping: false }),
+  render: () => <PaneWithPill />
+})
+
+export const pendingSpeech = defineFixture({
+  width: 520,
+  store: {
+    dictationState: 'listening',
+    liveText: {
+      committed: 'It should go back to the page you came from.',
+      tentative: '',
+      speechPending: true
+    }
+  },
+  setup: () => publishDictationMeter({ level: 0.6, isSpeaking: true, isClipping: false }),
+  render: () => <PaneWithPill />
+})
+
+export const pendingFirstWords = defineFixture({
+  width: 520,
+  store: {
+    dictationState: 'listening',
+    liveText: { committed: '', tentative: '', speechPending: true }
   },
   setup: () => publishDictationMeter({ level: 0.6, isSpeaking: true, isClipping: false }),
   render: () => <PaneWithPill />
@@ -74,4 +123,18 @@ export const modelFailed = defineFixture({
   width: 520,
   store: { dictationState: 'error' },
   render: () => <PaneWithPill failure="settings" />
+})
+
+export const queuedChatSend = defineFixture({
+  width: 520,
+  store: { dictationState: 'stopping' },
+  setup: resetDictationMeter,
+  render: () => <PaneWithPill queued="chat" />
+})
+
+export const queuedTerminalEnter = defineFixture({
+  width: 520,
+  store: { dictationState: 'stopping' },
+  setup: resetDictationMeter,
+  render: () => <PaneWithPill queued="terminal" />
 })

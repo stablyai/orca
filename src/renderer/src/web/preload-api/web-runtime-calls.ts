@@ -1,4 +1,7 @@
-import { RuntimeConnectionChangedBeforeSendError } from '../../runtime/rpc/calls/runtime-rpc-result'
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  unwrapRuntimeRpcResult
+} from '../../runtime/rpc/calls/runtime-rpc-result'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { WebRuntimeSubscribeOptions } from '../web-runtime-subscription-contract'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
@@ -159,12 +162,7 @@ export async function callRuntimeResult<TResult>(
   params?: unknown,
   timeoutMs?: number
 ): Promise<TResult> {
-  const response = await callRuntimeEnvelope(method, params, timeoutMs)
-  if (!response.ok) {
-    // Preserve error codes for recoverable-failure classification; human messages need not contain the token.
-    throw Object.assign(new Error(response.error.message), { code: response.error.code })
-  }
-  return response.result as TResult
+  return unwrapRuntimeRpcResult(await callRuntimeEnvelope<TResult>(method, params, timeoutMs))
 }
 
 export async function callRuntimeResultWithOwner<TResult>(

@@ -222,14 +222,14 @@
 2 src/renderer/src/lib/browser/workspace/workspace-browser-tab-open.ts
 1 src/renderer/src/lib/client-creation-action-error.ts
 2 src/renderer/src/lib/client-creation-action-policy.ts
-1 src/renderer/src/lib/default-creation-host.ts # the sanctioned reader of the default host
+1 src/renderer/src/runtime/hosts/selection/default-creation-host.ts # the sanctioned reader of the default host
 1 src/renderer/src/lib/launch-ai-vault-session.ts
 1 src/renderer/src/lib/local-preflight-context.ts
 2 src/renderer/src/runtime/hosts/observations/provider-runtime-context.ts
-2 src/renderer/src/lib/repo-runtime-owner.ts
-1 src/renderer/src/lib/runtime-session-mirror-owners.ts
+2 src/renderer/src/lib/workspace/ownership/repo-runtime-owner.ts
+1 src/renderer/src/lib/workspace/ownership/runtime-session-mirror-owners.ts
 1 src/renderer/src/lib/runtime-session-mirror-targets.ts
-1 src/renderer/src/lib/single-runtime-legacy-owner.ts
+1 src/renderer/src/lib/workspace/ownership/single-runtime-legacy-owner.ts
 1 src/renderer/src/lib/skill-runtime-command.ts
 1 src/renderer/src/lib/terminal-close-route.ts
 4 src/renderer/src/lib/terminal-worktree-route.ts # resolveTerminalPtyOwner: teardown, close and PTY identity read spawn's attribution (round 3 F8), which retired the deprecated resolver's readers
@@ -239,7 +239,7 @@
 1 src/renderer/src/lib/work-items/linear/linear-issue-write.ts
 1 src/renderer/src/lib/workspace/activation/worktree-activation.ts
 1 src/renderer/src/lib/workspace/ownership/worktree-runtime-owner.ts # a setup terminal with no row spawns on the focused runtime
-1 src/renderer/src/lib/worktree-jump-navigation.ts
+1 src/renderer/src/lib/workspace/activation/worktree-jump-navigation.ts
 17 src/renderer/src/runtime/jira/runtime-jira-client.ts
 2 src/renderer/src/runtime/jira/runtime-jira-summary-client.ts
 5 src/renderer/src/runtime/jira/runtime-jira-user-fields-client.ts
