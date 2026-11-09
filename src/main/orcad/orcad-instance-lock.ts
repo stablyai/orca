@@ -142,11 +142,11 @@ export function acquireOrcadInstanceLock(
   const platform = hooks.platform ?? process.platform
   const self = orcadLockSelf(record, Date.parse(record.acquiredAt), hooks.bootStartedAtMs?.())
 
-  // Stage then hard-link so canonical records are always complete.
-  const publish = (): boolean => {
+  // Stage then hard-link so canonical records are always complete and never overwrite a holder.
+  const publishContents = (contents: string): boolean => {
     const staged = `${lockPath}.staged-${process.pid}-${randomUUID()}`
     try {
-      writeFileSync(staged, serialized, { flag: 'wx', mode: 0o600 })
+      writeFileSync(staged, contents, { flag: 'wx', mode: 0o600 })
       linkSync(staged, lockPath)
       return true
     } catch (error) {
@@ -161,10 +161,23 @@ export function acquireOrcadInstanceLock(
       unlinkQuietly(staged)
     }
   }
+  const publish = (): boolean => publishContents(serialized)
 
-  const lockFor = (previousUnexpectedExit: OrcadUnexpectedExit | null = null): OrcadInstanceLock =>
+  const lockFor = (
+    previousUnexpectedExit: OrcadUnexpectedExit | null = null,
+    reclaimedContents?: string
+  ): OrcadInstanceLock =>
     holdOrcadInstanceLock(lockPath, record, publish, {
       previousUnexpectedExit,
+      restoreReclaimedRecord: reclaimedContents
+        ? () => {
+            try {
+              publishContents(reclaimedContents)
+            } catch {
+              // Losing the notice is better than failing the caller's release.
+            }
+          }
+        : undefined,
       onExclusivityLost: hooks.onExclusivityLost ?? (() => {})
     })
   if (publish()) {
@@ -257,7 +270,7 @@ export function acquireOrcadInstanceLock(
     )
   }
   reclaimAndPublish(lockPath, dataRoot, existingContents, publish, recoveryOwner)
-  return lockFor(reclaimedUnexpectedExit(existing, record, self.bootStartedAtMs))
+  return lockFor(reclaimedUnexpectedExit(existing, record, self.bootStartedAtMs), existingContents)
 }
 
 function possiblyReusedPidError(
