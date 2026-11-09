@@ -83,10 +83,13 @@ it('saves, cancels and reopens a question whose previews make it larger than one
   await journal.close()
 
   const reopened = await open()
-  const saved = reopened.snapshot().items.find((item) => item.body.kind === 'question')?.body
+  const saved = reopened
+    .snapshot()
+    .items.map((item) => item.body)
+    .find((item): item is AgentJournalQuestionItem => item.kind === 'question')
   await reopened.close()
   expect(saved).toMatchObject({ kind: 'question', resolution: { state: 'cancelled' } })
-  const previews = (saved as AgentJournalQuestionItem).questions!.flatMap((question) =>
+  const previews = saved!.questions!.flatMap((question) =>
     question.options.map((option) => option.preview)
   )
   expect(previews).toEqual(PREVIEWS.flat())
