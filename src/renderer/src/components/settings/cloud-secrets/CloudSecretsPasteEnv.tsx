@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { AlertCircle, CircleCheck, Loader2, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -26,13 +26,25 @@ import { isOwnKeyEvent } from './CloudSecretEditor'
 import { SecretValueInput } from './SecretValueInput'
 
 type PasteRow = {
-  id: number
+  /** Paste number and line: unique across several pastes. */
+  id: string
   line: number
   name: string
   value: string
   /** A problem only the parser can see (an unreadable line, a missing closing quote). */
   parseIssue: DotenvPasteIssue | null
   serverError: CloudSecretsErrorCode | null
+}
+
+function toRows(text: string, paste: number): PasteRow[] {
+  return parseDotenvPaste(text).map((entry) => ({
+    id: `${paste}:${entry.line}`,
+    line: entry.line,
+    name: entry.name,
+    value: entry.value,
+    parseIssue: entry.issue,
+    serverError: null
+  }))
 }
 
 function rowIssue(row: PasteRow, overridden: boolean): DotenvPasteIssue | null {
@@ -148,17 +160,8 @@ export function CloudSecretsPasteEnv({
 }): React.JSX.Element {
   const t = useTranslate()
   const formId = useId()
-  const nextId = useRef(0)
-  const toRows = (text: string): PasteRow[] =>
-    parseDotenvPaste(text).map((entry) => ({
-      id: nextId.current++,
-      line: entry.line,
-      name: entry.name,
-      value: entry.value,
-      parseIssue: entry.issue,
-      serverError: null
-    }))
-  const [rows, setRows] = useState<PasteRow[]>(() => (initialText ? toRows(initialText) : []))
+  const [rows, setRows] = useState<PasteRow[]>(() => (initialText ? toRows(initialText, 0) : []))
+  const [pastes, setPastes] = useState(1)
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<CloudSecretsErrorCode | null>(null)
   const existing = useMemo(() => new Set(existingNames), [existingNames])
@@ -186,7 +189,7 @@ export function CloudSecretsPasteEnv({
         Number(b.issue === null || b.issue === 'overridden')
     )
 
-  const update = (id: number, patch: Partial<PasteRow>): void => {
+  const update = (id: string, patch: Partial<PasteRow>): void => {
     setFailure(null)
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)))
   }
@@ -265,7 +268,8 @@ export function CloudSecretsPasteEnv({
           onChange={() => undefined}
           onPaste={(event) => {
             event.preventDefault()
-            const pasted = toRows(event.clipboardData.getData('text'))
+            const pasted = toRows(event.clipboardData.getData('text'), pastes)
+            setPastes(pastes + 1)
             if (pasted.length > 0) {
               setFailure(null)
               setRows((current) => [...current, ...pasted])
