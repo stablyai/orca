@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { resolveDefaultAgentForWorktree } from '@/lib/agent-tab-shortcuts'
+import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { agentTabLaunchStore } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

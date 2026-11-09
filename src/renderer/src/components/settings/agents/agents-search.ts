@@ -3,7 +3,7 @@ import {
   getClaudeSubagentNavigationDescription,
   getClaudeSubagentNavigationSearchKeywords
 } from './behavior/claude-subagent-navigation-copy'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
   getAgentAwakeDescription,
   getAgentAwakeSearchKeywords,

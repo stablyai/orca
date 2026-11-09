@@ -1,5 +1,5 @@
 /** Keep mounted-pane bell/title/completion/PR-link policy active while parking unmounts TerminalPane. */
-import { isClaudeIdleEdge } from '@/lib/agent-idle-edge'
+import { isClaudeIdleEdge } from '@/components/terminal-pane/agent-status/agent-idle-edge'
 import type { AgentIdleEdgeMeta } from '../../../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
 import type { NotificationWorkspaceOwner } from '../../../../../../shared/notification-source'

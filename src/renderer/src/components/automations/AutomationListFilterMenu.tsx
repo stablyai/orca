@@ -16,8 +16,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
-import { searchAgentPickerEntries } from '@/lib/agent-picker-search'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { searchAgentPickerEntries } from '@/lib/agent-catalog/agent-picker-search'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBoundedHostRows } from '@/components/host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '@/components/host-picker/HostListSearchField'

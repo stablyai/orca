@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
-import type { AgentCatalogEntry } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
