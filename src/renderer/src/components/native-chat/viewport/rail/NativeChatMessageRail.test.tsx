@@ -78,11 +78,11 @@ describe('message rail interaction', () => {
     await user.tab()
     expect(document.activeElement).toBe(tick('Prompt 1'))
     await waitFor(() => expect(preview()).not.toBeNull())
-    expect(preview()?.textContent).toBe('Prompt 1')
+    expect(preview()?.textContent).toBe('Prompt 1Reply 1')
 
     await user.keyboard('{ArrowUp}')
     expect(document.activeElement).toBe(tick('Prompt 0'))
-    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0'))
+    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0Reply 0'))
     await user.keyboard('{End}{Enter}')
     expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'prompt-2' }))
 
@@ -103,7 +103,7 @@ describe('message rail interaction', () => {
     expect(document.activeElement).toBe(tick('Prompt 0'))
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(tick('Prompt 1'))
-    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 1'))
+    await waitFor(() => expect(preview()?.textContent).toBe('Prompt 1Reply 1'))
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(tick('Prompt 2'))
   })
