@@ -7,6 +7,7 @@ import {
   resetRemoteRuntimeMocks
 } from '../github-slice-test-harness'
 import type { AppState } from '../../types'
+import type { WorkspaceAttachment } from '../../../../../shared/worktree/types'
 import { getHostedReviewCacheKey } from '../../slices/hosted-review/hosted-review-cache-identity'
 
 describe('createGitHubSlice.fetchPRForBranch', () => {
@@ -25,7 +26,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     vi.useRealTimers()
   })
 
-  it.each([
+  it.each<{ change: string; linkedPR: number | null; linkedItems: WorkspaceAttachment[] }>([
     { change: 'unlinked', linkedPR: null, linkedItems: [] },
     {
       change: 'linked to the same PR number in another repository',
@@ -83,26 +84,17 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         worktreeId,
         linkedPRNumber: 12
       })
-      store.setState({
+      store.setState((state) => ({
         worktreesByRepo: {
-          [repoId]: [
-            {
-              id: worktreeId,
-              repoId,
-              path: '/repo/worktrees/unlinked-direct-pr',
-              branch,
-              displayName: 'unlinked-direct-pr',
-              isMainWorktree: false,
-              isBare: false,
-              isArchived: false,
-              linkedPR,
-              linkedItems
-            }
-          ]
+          [repoId]: (state.worktreesByRepo[repoId] ?? []).map((worktree) => ({
+            ...worktree,
+            linkedPR,
+            linkedItems
+          }))
         },
         hostedReviewCache: {},
         prCache: {}
-      } as unknown as Partial<AppState>)
+      }))
       resolveRefresh({
         kind: 'found',
         pr: makePR({ number: 12, title: 'Stale exact linked PR' }),

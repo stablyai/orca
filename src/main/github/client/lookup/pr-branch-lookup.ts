@@ -22,8 +22,7 @@ import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
 import type { PRProviderReadOptions } from './shared-pr-provider-reads'
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
-import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
-import { sameOwnerRepo } from '../github-exec-scope'
+import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
 import { getRepositoryForkParent } from '../fetch/repo-slug-upstream'
 
 // Why: GitHub lists a branch's PRs newest first, so with a page of one a closed PR opened after

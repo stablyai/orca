@@ -5,6 +5,7 @@ import { iterateProcessOutputLines } from '../../../shared/process-output-field-
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import {
+  parseGitRemoteFetchUrls,
   parseGitRemoteVerboseLine,
   findGitRemoteNameByPushedUrl
 } from '../../../shared/git/remotes/git-remote-url-index'
@@ -30,6 +31,8 @@ export async function adoptPublishedPRBranch(args: {
   execGit: GitExec
   /** The GitHub repository a configured remote names, github.com or an authenticated Enterprise host. */
   resolveRemote: (remoteName: string) => Promise<GitHubOwnerRepo | null>
+  /** The repository a separate `pushurl` names; only compared, never contacted. */
+  resolvePushUrl: (pushUrl: string) => Promise<GitHubOwnerRepo | null>
   update: (
     updates: {
       pushTarget: GitPushTarget
@@ -59,12 +62,17 @@ export async function adoptPublishedPRBranch(args: {
     if (!published.headRepo) {
       return null
     }
+    const fetchUrls = parseGitRemoteFetchUrls(stdout)
     for (const line of iterateProcessOutputLines(stdout)) {
       const entry = parseGitRemoteVerboseLine(line)
       if (entry?.direction !== 'push' || (pushTarget && entry.name !== pushTarget.remoteName)) {
         continue
       }
-      const repository = await args.resolveRemote(entry.name)
+      // A remote that fetches upstream but pushes to a fork names the fork only in its pushurl.
+      const repository =
+        fetchUrls.get(entry.name) === entry.url
+          ? await args.resolveRemote(entry.name)
+          : await args.resolvePushUrl(entry.url)
       if (
         repository &&
         githubRepoIdentityKey(repository) === githubRepoIdentityKey(published.headRepo)

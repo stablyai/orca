@@ -23,6 +23,7 @@ async function adopt(
     branch?: string
     publishedFrom?: string
     checkoutAfterRemote?: { head: string; branch: string }
+    remotes?: string
   } = {}
 ) {
   const worktree: PublishedBranchWorkspace = {
@@ -46,13 +47,20 @@ async function adopt(
         : { remoteUrl: `github.com:${options.owner ?? 'stablyai'}/orca.git` })
     },
     execGit: async (args) => ({
-      stdout: args[0] === 'rev-parse' ? `${checkout.head}\n${checkout.branch}\n` : REMOTES
+      stdout:
+        args[0] === 'rev-parse'
+          ? `${checkout.head}\n${checkout.branch}\n`
+          : (options.remotes ?? REMOTES)
     }),
     resolveRemote: async (remoteName) => {
       checkout = options.checkoutAfterRemote ?? checkout
       return remoteName === 'fork'
         ? { owner: 'me', repo: 'orca' }
         : { owner: 'stablyai', repo: 'orca' }
+    },
+    resolvePushUrl: async (pushUrl) => {
+      const owner = /github\.com:([^/]+)\//u.exec(pushUrl)?.[1]
+      return owner ? { owner, repo: 'orca' } : null
     },
     update: async (updates) => Object.assign(worktree, updates)
   })
@@ -79,6 +87,21 @@ describe('adoptPublishedPRBranch', () => {
       linkedItems: [
         { provider: 'github', type: 'pr', number: 42, url: 'https://github.com/me/orca/pull/42' }
       ]
+    })
+  })
+
+  it('adopts an opened fork PR through a remote that fetches upstream and pushes to the fork', async () => {
+    const worktree = await adopt({
+      owner: 'me',
+      opened: true,
+      remotes: [
+        'origin\tgit@github.com:stablyai/orca.git (fetch)',
+        'origin\tgit@github.com:me/orca.git (push)'
+      ].join('\n')
+    })
+    expect(worktree).toMatchObject({
+      pushTarget: { remoteName: 'origin', branchName: 'review' },
+      linkedPR: 42
     })
   })
 

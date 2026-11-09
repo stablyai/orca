@@ -1,4 +1,6 @@
 import { getGitHubApiRepositoryForRemote } from '../../github/github-api-repository'
+import { classifyGitHubOwnerRepoFromRemoteUrl } from '../../github/github-ssh-host-alias-resolution'
+import { parseGitHubRemoteIdentity } from '../../github/github-remote-identity-parsing'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import { HOSTED_REVIEW_LINK_KEYS } from '../../../shared/worktree/hosted-review-links'
@@ -95,6 +97,19 @@ export function prWatchWorkspaceSources(
             null,
             getLocalProjectGhExecOptions(runtime.store(), repo)
           ),
+        resolvePushUrl: async (pushUrl) => {
+          const resolution = await classifyGitHubOwnerRepoFromRemoteUrl(pushUrl, {
+            repoPath: worktree.path,
+            ...getLocalProjectWorktreeGitOptions(runtime.store(), repo)
+          })
+          // Thrown, so the intent stays and the PR's next read retries the alias.
+          if (resolution.kind === 'indeterminate') {
+            throw new Error('Push URL SSH host alias could not be resolved.')
+          }
+          return resolution.kind === 'github'
+            ? resolution.ownerRepo
+            : parseGitHubRemoteIdentity(pushUrl)
+        },
         update: (updates, validateCheckout) =>
           withCheckoutLock(worktree.path, () =>
             runtime.updateManagedWorktreeMeta(selector, updates, {
