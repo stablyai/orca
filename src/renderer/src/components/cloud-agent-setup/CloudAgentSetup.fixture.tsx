@@ -49,6 +49,7 @@ function sheet(
         <VmBuildSheet
           creationId="fixture"
           entry={ENTRY}
+          now={24_000}
           elapsedLabel="0:24"
           error={null}
           onCancel={noop}
