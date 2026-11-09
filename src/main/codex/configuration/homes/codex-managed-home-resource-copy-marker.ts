@@ -33,6 +33,7 @@ function parseCopiedResourceSourcePath(text: string): string | null {
   }
 }
 
+/** Missing or unreadable markers cannot establish ownership of a copied resource. */
 export function readCopiedResourceSourcePath(
   managedHomePath: string,
   entryName: string
