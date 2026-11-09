@@ -1,10 +1,11 @@
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import '../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
+import { RpcIncompatibleReplyError } from '../transport/rpc/rpc-incompatible-reply-error'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../src/shared/project-runtime-repair-message'
 import { SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY } from '../../../src/shared/session-tabs-runtime-capabilities'
-import type { RpcResponse } from '../transport/types'
-import { createdTerminalDesktopWarning } from './session-write-reply-schema'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import { createdTerminalDesktopWarning } from '../terminal/session/mobile-session-terminal-reply-schema'
 
 export function hostSupportsMobileChatFork(
   hostCapabilities: readonly string[] | undefined

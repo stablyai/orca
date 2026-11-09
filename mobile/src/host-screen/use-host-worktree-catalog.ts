@@ -7,9 +7,9 @@ import { AppState } from 'react-native'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { useFocusEffect } from 'expo-router'
 import { useQueryClient } from '@tanstack/react-query'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
-import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { RpcIncompatibleReplyError } from '../transport/rpc/rpc-incompatible-reply-error'
 import { startHostWorktreeRefresh } from '../worktree/host-worktree-refresh'
 import type { HostSidebarFeedTriggers } from './host-sidebar-feed-connection'
 import { areWorktreeListsEqual } from '../worktree/worktree-list-snapshot'
@@ -19,14 +19,14 @@ import {
 } from '../worktree/worktree-host-row-identity'
 import { savePinnedIds } from '../storage/preferences'
 import type { HostScreenState } from './use-host-screen-state'
-import { relaysToServers } from '../transport/execution-host-scoped-rpc-client'
+import { relaysToServers } from '../worktree/execution-host-scoped-rpc-client'
 import { NO_SERVER_WORKSPACES } from '../worktree/server-workspaces'
 import { WorktreeCatalogReadError } from '../worktree/worktree-catalog-snapshot-client'
 import { useHostQuery } from '../query/host-query'
 import { hostReadClient } from '../query/host-read-client'
 import { hostScopeKey } from '../query/host-query-key'
 import { isHostNotConnectedError } from '../query/host-query-errors'
-import { refetchHostQueryAfterInFlight, useHostEventRouter } from '../query/host-event-router'
+import { refetchHostQueryAfterInFlight } from '../query/host-event-router'
 import {
   isHostListQuery,
   HOST_LIST_BACKSTOP_POLL_MS,
@@ -97,7 +97,6 @@ export function useHostWorktreeCatalog(args: {
     }, [])
   )
   const subscribed = embedded || focused
-  useHostEventRouter(hostId, client)
 
   const host = { hostId: hostId ?? '', client }
   // The host's sidebar feed replaces the poll: its notices say when a row changed.

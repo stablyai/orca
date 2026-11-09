@@ -8,7 +8,7 @@ import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
-import { ORCHESTRATION_UNBOUND_RUN_ID as UNBOUND_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_UNBOUND_RUN_ID as UNBOUND_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
 const WORKER_DONE_MESSAGE_SAVEPOINT = 'worker_done_message_commit'

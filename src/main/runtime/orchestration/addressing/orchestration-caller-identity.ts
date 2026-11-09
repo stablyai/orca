@@ -5,7 +5,7 @@ import {
   formatOrcaSessionAddress,
   type OrcaSessionId
 } from '../../../../shared/orca-session-address'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../shared/orchestration/mailbox/orchestration-party-identity'
 
 /** The part of a caller a Run binding stores and matches. */
 export type OrchestrationCoordinatorKey = Pick<

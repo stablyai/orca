@@ -10,7 +10,7 @@ import type {
   ZcodeAppServerLaunch,
   openZcodeAppServerConnection
 } from './zcode-app-server-connection'
-import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { ZcodeStructuredSessionAdapter } from './zcode-structured-session-adapter'
 import type { ZcodeStructuredSessionAdapterDeps } from './zcode-structured-session-state'
 

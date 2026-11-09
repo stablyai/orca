@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items'
+import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
 
 // Recover the PR slug from this repo’s cache only; sibling forks may share an issue source but differ in PR origin.
 export function WorkItemIssueSourceIndicator({

@@ -3,9 +3,9 @@
 // acquire/close/prompt modules share one state shape.
 
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ZcodeAppServerConnection } from './zcode-app-server-connection-types'
 import type { openZcodeAppServerConnection } from './zcode-app-server-connection'
 import type { ZcodeJournalTranslator } from './zcode-structured-journal-translation'

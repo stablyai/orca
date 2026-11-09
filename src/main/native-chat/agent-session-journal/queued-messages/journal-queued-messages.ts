@@ -27,12 +27,8 @@ import type {
   JournalQueuedMessagesDeps,
   JournalSubmissionConsume
 } from '../journal-store-contracts'
-import {
-  deriveQueuePauses,
-  journalUserStopInForce,
-  type DerivedQueuePause,
-  type JournalQueuePauseMarks
-} from './queued-message-pause'
+import { deriveQueuePauses, type DerivedQueuePause } from './queued-message-pause'
+import { journalUserStopInForce, type JournalQueuePauseMarks } from './queued-message-pause-marks'
 import {
   isUnsettledQueuedMessage,
   type QueuedMessageHoldReason,

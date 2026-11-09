@@ -5,7 +5,7 @@
 // the host has a phone to reach at all.
 
 import type { StructuredAttentionMobileDelivery } from './agent-session/structured-agent-session-mobile-attention'
-import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 
 /** Subscribes the host's turn completions to phone delivery. Lives exactly as long as the host:
  *  teardown drops the host and its subscribers together. */

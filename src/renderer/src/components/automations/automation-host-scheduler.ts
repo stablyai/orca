@@ -1,15 +1,15 @@
 /** Fetch through four pooled calls, share each legacy authority answer across its entries, and publish only responses that pass the cache fence. */
 
-import type { Automation } from '../../../../shared/automations-types'
-import type { AutomationListScopeSelector } from '../../../../shared/automation-list-scope'
-import type { LegacyAutomationPartitionContext } from '../../../../shared/automation-legacy-list-partition'
-import { hostStableKey } from '../../../../shared/automation-owner-key'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationListScopeSelector } from '../../../../shared/automations/ownership/automation-list-scope'
+import type { LegacyAutomationPartitionContext } from '../../../../shared/automations/ownership/automation-legacy-list-partition'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef,
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import {
   automationAuthorityCatalogKey,
   type AutomationHostQuerySupport

@@ -23,14 +23,17 @@ import {
 import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'
 import { OPENCODE_ACP_DIALECT } from '../acp-dialects/opencode-dialect'
 import '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import '../acp-turn-messages'
+import '../timeline/acp-turn-messages'
 import '../../native-chat/agent-session-timeline/provider-timeline-history'
 import '../../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
 import '../../native-chat/agent-session-wire/termination/structured-agent-session-unfinished-work'
 import '../../native-chat/agent-session-wire/termination/structured-agent-session-dead-generation-settlement'
 import './acp-history-replay'
-import { asReattachHistory } from '../acp-structured-session'
-import { readAcpFixture, type AcpFixtureFrame } from '../acp-timeline-fixture.test-support'
+import { asReattachHistory } from './acp-reattach-history'
+import {
+  readAcpFixture,
+  type AcpFixtureFrame
+} from '../timeline/testing/acp-timeline-fixture.test-support'
 
 afterEach(async () => {
   vi.restoreAllMocks()

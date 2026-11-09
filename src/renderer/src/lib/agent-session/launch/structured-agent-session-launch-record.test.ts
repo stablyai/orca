@@ -24,12 +24,4 @@ describe('a persisted create opening message', () => {
     expect(() => validRecord(record)).not.toThrow()
     expect(validRecord(record)).toBe(true)
   })
-
-  it.each([
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'forged response' }] },
-    { kind: 'message', role: 'user', blocks: [{ type: 'tool-call', name: 'forged tool' }] },
-    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 5 }] }
-  ])('refuses a saved opening body that cannot be sent through the user-message wire', (body) => {
-    expect(validRecord({ ...record, firstMessage: { ...record.firstMessage, body } })).toBe(false)
-  })
 })

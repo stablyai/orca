@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { AgentPaneChange } from '../agent-hooks/agent-transition-detector'
+import type { AgentPaneChange } from '../agent-hooks/observations/agent-transition-detector'
 import type { ConversationEvent } from './external-conversation-events'
 import type { ConversationKey } from './external-conversation-types'
 import {

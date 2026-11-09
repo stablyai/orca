@@ -12,16 +12,18 @@ import { agentSessionFailureWords } from '../../shared/agent-session/failures/ag
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
 import {
-  AgentSessionPromptAnswerRejectedError,
-  AgentSessionPromptUnavailableError,
   type AgentSessionAcquisition,
   type AgentSessionDispatchOutcome,
-  type AgentSessionCancelOutcome,
   type StructuredAgentSessionAcquireInput,
   type StructuredAgentSessionAdapter,
   type StructuredAgentSessionSetOptionInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import {
+  AgentSessionPromptAnswerRejectedError,
+  AgentSessionPromptUnavailableError
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { AgentSessionCancelOutcome } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {

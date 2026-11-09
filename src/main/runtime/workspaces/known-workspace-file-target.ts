@@ -1,5 +1,5 @@
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
-import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
+import { createRepoRowExecutionHostLookup } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
 import type { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'

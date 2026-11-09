@@ -13,16 +13,16 @@ import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/a
 import {
   boundInlineText,
   JOURNAL_RUNNING_PREVIEW_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
-import { journalReasoningBody } from '../native-chat/agent-session-journal/journal-reasoning-row'
+} from '../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { journalReasoningBody } from '../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   AGENT_SESSION_DELTA_COALESCE_MS,
   createAgentSessionDeltaCoalescer
-} from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+} from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 
 export type ZcodeStreamTranslatorDeps = {
   sink: StructuredAgentSessionEventSink

@@ -2,7 +2,7 @@ import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-st
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
 import type { GitPushTarget } from '../../../../shared/worktree/types'

@@ -21,14 +21,14 @@ import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope
-} from '../../../../shared/task-source-context'
-import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
+} from '../../../../shared/work-items/task-source-context'
+import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host/execution-host-registry-entry'
 import {
   getAccountBackedTaskSourceSummary,
   type TaskSourceContextSummary,
   type TaskSourceHostAvailability
 } from '../task-source-context-summary'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { cn } from '@/lib/utils'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import type { Translate } from '@/i18n/use-translate'

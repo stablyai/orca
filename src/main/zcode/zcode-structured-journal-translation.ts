@@ -14,7 +14,7 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session/journa
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   appendZcodeItemAndPublish,
   ZCODE_JOURNAL_ADMITTED,

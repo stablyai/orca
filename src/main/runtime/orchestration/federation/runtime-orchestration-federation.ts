@@ -1,7 +1,7 @@
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
-} from '../../../../shared/orchestration-runtime-capabilities'
+} from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -9,7 +9,7 @@ import type {
 import {
   isOrchestrationMutation,
   orchestrationMigrationData
-} from '../../../../shared/orchestration-rpc-contract'
+} from '../../../../shared/orchestration/orchestration-rpc-contract'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import type {
   OrchestrationEnvironmentCallOptions,

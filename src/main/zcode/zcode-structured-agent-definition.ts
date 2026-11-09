@@ -1,4 +1,4 @@
-import type { DirectoryAccountAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
+import type { DirectoryAccountAgentDefinition } from '../native-chat/agent-session-wire/providers/structured-agent-definition'
 import { ZCODE_STRUCTURED_HANDLE_NAMESPACE } from './zcode-provider-handle'
 
 /** The only session option a ZCode chat takes: which model its turns run on. */

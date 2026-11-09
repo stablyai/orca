@@ -27,7 +27,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDefaultArgsInput } from '../../agent/launch-settings/AgentLaunchDefaultsEditor'
-import { AgentPermissionMenu } from '../../agent/launch-settings/AgentPermissionChoiceControls'
+import { AgentPermissionMenu } from '../../agent/launch-settings/AgentPermissionMenu'
 
 export function SourceControlActionArguments({
   agent,

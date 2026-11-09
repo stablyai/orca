@@ -6,12 +6,12 @@ import { randomUUID } from 'node:crypto'
 import { zcodeProviderHandle } from './zcode-provider-handle'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
-  AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionPreSpawnError,
   type AgentSessionAcquisition,
   type StructuredAgentSessionAcquireInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionExitUnprovenError } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { openZcodeAppServerConnection } from './zcode-app-server-connection'
 import {
   readZcodeSessionEvent,

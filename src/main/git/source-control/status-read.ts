@@ -48,11 +48,10 @@ export async function getStatus(
   )
 }
 
+// Led by the worktree's line-stats key so an outside change can detach just that checkout's reads.
 function getStatusReadKey(worktreePath: string, options: GetStatusOptions): string {
   const limit = resolveGitStatusLimit(options.limit)
-  return stableInFlightKey([
-    worktreePath,
-    options.wslDistro ?? '',
+  return `${getStatusLineStatsCacheKey(worktreePath, options)}\0${stableInFlightKey([
     options.admissionTier ?? 'status',
     options.includeIgnored === true,
     options.includeLineStats !== false,
@@ -63,7 +62,7 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
     limit,
     // Filtering options affect which rows survive and must participate in the cache key.
     options.sharedLinkPaths ?? []
-  ])
+  ])}`
 }
 
 /** Hide only configured, real, untracked shared symlinks; directory-only Git ignore rules cannot hide them. */

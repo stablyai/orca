@@ -26,7 +26,7 @@ vi.mock('@orca/process-host', async (original) => ({
 }))
 
 // Exercise the existing hook installer on one isolated target; do not discover installed agents.
-vi.mock('../../main/agent-hooks/managed-agent-hook-controls', async () => {
+vi.mock('../../main/agent-hooks/installation/managed-agent-hook-controls', async () => {
   const { claudeHookService } = await import('../../main/claude/hook-service.js')
   return {
     applyAgentStatusHooksEnabled: vi.fn(async (enabled: boolean) => [
