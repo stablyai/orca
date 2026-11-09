@@ -6550,6 +6550,10 @@
           "selectedProjects_one": "{{count}} project",
           "selectedProjects_other": "{{count}} projects"
         },
+        "SidebarAccountMenu": {
+          "account": "Account",
+          "signIn": "Sign in"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",
           "29c56f30ee": "Check for Updates",

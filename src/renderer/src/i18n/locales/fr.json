@@ -6115,6 +6115,10 @@
           "selectedProjects_other": "{{count}} projets",
           "selectedProjects_many": "{{count}} projets"
         },
+        "SidebarAccountMenu": {
+          "account": "Compte",
+          "signIn": "Se connecter"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Redémarrer Orca",
           "29c56f30ee": "Rechercher des mises à jour",

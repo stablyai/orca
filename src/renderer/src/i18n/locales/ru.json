@@ -6562,6 +6562,10 @@
           "selectedProjects_few": "{{count}} проекта",
           "selectedProjects_many": "{{count}} проектов"
         },
+        "SidebarAccountMenu": {
+          "account": "Аккаунт",
+          "signIn": "Войти"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Перезапустить Orca",
           "29c56f30ee": "Проверить наличие обновлений",
