@@ -19,7 +19,7 @@ let renderer: ReactTestRenderer | null = null
 let screen: Screen | null = null
 
 function Tasks(props: { item: ActionableTaskItem | null }) {
-  screen = { comment: useTaskCommentDraft(props.item), create: useTaskCreateDraft() }
+  screen = { comment: useTaskCommentDraft(props.item), create: useTaskCreateDraft(true) }
   return null
 }
 

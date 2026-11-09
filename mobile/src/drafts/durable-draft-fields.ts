@@ -2,6 +2,7 @@ import { useCallback, useSyncExternalStore, type SetStateAction } from 'react'
 import * as z from 'zod'
 import {
   durableDraftRow,
+  fitsDeviceStore,
   pageDraftRowBackend,
   resetDurableDraftRowsForTests,
   type DurableDraftRow
@@ -16,6 +17,8 @@ type Slot = {
   fields: DraftFields
   // Fields set on this page, cleared ones included; a read that lands later never overwrites them.
   touched: Set<string>
+  // The shortest JSON length found over the store's cap: longer text is not encoded again on every save.
+  overCap: number
   listeners: Set<() => void>
   row: DurableDraftRow
 }
@@ -37,10 +40,25 @@ function slotFor(key: string): Slot {
   const slot: Slot = {
     fields: {},
     touched: new Set(),
+    overCap: Infinity,
     listeners: new Set(),
     row: durableDraftRow(key, {
       backend: () => pageDraftRowBackend(key),
-      snapshot: () => (Object.keys(slot.fields).length > 0 ? slot.fields : null),
+      // Text too big for the store stays in memory and removes the row, so an older, smaller draft can't come back.
+      snapshot: () => {
+        if (Object.keys(slot.fields).length === 0) {
+          return null
+        }
+        const length = JSON.stringify(slot.fields).length
+        if (length >= slot.overCap) {
+          return null
+        }
+        if (fitsDeviceStore(slot.fields)) {
+          return slot.fields
+        }
+        slot.overCap = length
+        return null
+      },
       restore: (saved) => {
         const parsed = savedFieldsSchema.safeParse(saved)
         if (!parsed.success) {

@@ -84,10 +84,10 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
   const navigation = useNewWorktreeDrawerNavigation(visible)
-  // Kept per desktop until a create succeeds. The host is in the key because the tablet sidebar's
-  // native host list has no shell to bind it.
+  // Kept per desktop until a create succeeds, and read only once the form shows. The host is in the key
+  // because the tablet sidebar's native host list has no shell to bind it.
   const [note, setNote] = useDurableDraftField(
-    durableDraftRowKey('workspaceCreate', '', hostId ?? ''),
+    visible ? durableDraftRowKey('workspaceCreate', '', hostId ?? '') : null,
     'note'
   )
   const [error, setError] = useState('')

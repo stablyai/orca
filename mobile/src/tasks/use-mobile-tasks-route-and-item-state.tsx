@@ -166,7 +166,8 @@ export function useMobileTasksRouteAndItemState() {
   const [showGitHubPagePicker, setShowGitHubPagePicker] = useState(false)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [showCreateTargetPicker, setShowCreateTargetPicker] = useState(false)
-  const { createTitle, setCreateTitle, createBody, setCreateBody } = useTaskCreateDraft()
+  const { createTitle, setCreateTitle, createBody, setCreateBody } =
+    useTaskCreateDraft(showCreateTask)
   const [createRepoId, setCreateRepoId] = useState<string | null>(null)
   const [createTeamId, setCreateTeamId] = useState<string | null>(null)
   const [linearTeams, setLinearTeams] = useState<LinearTeam[]>([])

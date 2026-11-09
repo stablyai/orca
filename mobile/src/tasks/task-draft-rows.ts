@@ -26,9 +26,10 @@ export function useProjectRowCommentDraft(row: GitHubProjectRow | null) {
   return useDurableDraftField(taskCommentDraftKey(row && `githubProject:${row.id}`), 'text')
 }
 
-/** The New issue sheet's title and body, kept until a create succeeds. */
-export function useTaskCreateDraft() {
-  const [createTitle, setCreateTitle] = useDurableDraftField(TASK_CREATE_DRAFT_KEY, 'title')
-  const [createBody, setCreateBody] = useDurableDraftField(TASK_CREATE_DRAFT_KEY, 'body')
+/** The New issue sheet's title and body, kept until a create succeeds and read only once the sheet opens. */
+export function useTaskCreateDraft(open: boolean) {
+  const key = open ? TASK_CREATE_DRAFT_KEY : null
+  const [createTitle, setCreateTitle] = useDurableDraftField(key, 'title')
+  const [createBody, setCreateBody] = useDurableDraftField(key, 'body')
   return { createTitle, setCreateTitle, createBody, setCreateBody }
 }

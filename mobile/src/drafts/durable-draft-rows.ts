@@ -3,6 +3,7 @@ import {
   type PageDeviceStore
 } from '../mobile-web-shell/bridge/page-device-store'
 import {
+  DEVICE_STORE_MAX_VALUE_LENGTH,
   decodeDeviceStoreValue,
   encodeDeviceStoreValue
 } from '../device-store/device-store-value-codec'
@@ -39,6 +40,8 @@ type Row = {
   // Every read and write of the row runs in order, the load first.
   chain: Promise<void>
   state: 'pending' | 'loaded'
+  // A row whose read fails twice stays in memory for the page, so every hook and save doesn't read again.
+  failedReads: number
   // What the backend holds; undefined after a failed write, so the next save cannot match it.
   written: string | undefined
   timer: ReturnType<typeof setTimeout> | null
@@ -46,6 +49,18 @@ type Row = {
 }
 
 const rows = new Map<string, Row>()
+
+const MAX_FAILED_READS = 2
+
+/** A value past the store's cap is refused and would leave an older value behind, so owners keep none instead. */
+export function fitsDeviceStore(value: unknown): boolean {
+  const json = JSON.stringify(value)
+  // At most 3 UTF-8 bytes per code unit, gzip barely grows any input, base64 adds a third: most values skip the encode.
+  if (json.length * 4 + 1024 <= DEVICE_STORE_MAX_VALUE_LENGTH) {
+    return true
+  }
+  return encodeDeviceStoreValue(value).length <= DEVICE_STORE_MAX_VALUE_LENGTH
+}
 
 // The store refuses keys past 512 characters; a long worktree path or id is hashed instead.
 const MAX_KEY_LENGTH = 512
@@ -116,13 +131,14 @@ function enqueue(row: Row, step: () => Promise<void>): Promise<void> {
 }
 
 async function load(row: Row): Promise<void> {
-  if (row.state !== 'pending') {
+  if (row.state !== 'pending' || row.failedReads >= MAX_FAILED_READS) {
     return
   }
   row.backend ??= row.owner.backend()
   const read = await row.backend.read()
   if (!read.ok) {
-    // A dropped or refused read is retried, backend re-picked, at the next save; until then the text stays in memory.
+    // A dropped or refused read is retried once, backend re-picked; until then the text stays in memory.
+    row.failedReads += 1
     row.backend = null
     return
   }
@@ -186,6 +202,7 @@ export function durableDraftRow(key: string, owner: DurableDraftRowOwner): Durab
     backend: null,
     chain: Promise.resolve(),
     state: 'pending',
+    failedReads: 0,
     written: undefined,
     timer: null,
     handle: {
