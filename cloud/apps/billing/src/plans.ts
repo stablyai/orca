@@ -6,6 +6,7 @@
 // included hour is one hour on the Standard 4 vCPU / 8 GB box and a Large box burns 2x.
 // Included hours are a MONTHLY per-seat allowance pooled across the org, for annual plans too.
 import { z } from 'zod'
+import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import type { Env } from './env'
 
 export const PLAN_IDS = ['team'] as const
@@ -65,7 +66,8 @@ export const DEFAULT_PLANS: PlanCatalog = {
     includedHoursPerSeat: 60,
     concurrentSandboxesPerSeat: 3,
     machineSizes: ['standard', 'large'],
-    idleSleepMinutes: 15,
+    // Same constant the control plane enforces and serves (GET /v1/config); never a literal here.
+    idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
     overageCentsPerHour: 75,
     defaultSpendCapCents: 2500,
     maxSpendCapCents: 500_000,

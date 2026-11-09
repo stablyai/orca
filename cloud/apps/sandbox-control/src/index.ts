@@ -30,6 +30,7 @@
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
+import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { z } from 'zod'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { authenticateDesktop } from './auth'
@@ -750,6 +751,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
           readJson: () => readJson(request)
         })) ?? fail('not_found', 404)
       )
+    }
+    if (url.pathname === '/v1/config' && request.method === 'GET') {
+      // Public product constants (no auth): every client reads these instead of hardcoding them.
+      return json({ idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES })
     }
     if (url.pathname === '/v1/github/dev-connect' && env.SANDBOX_ENV !== 'prod') {
       // Dev-only, link-shareable start of the user flow: mints a fresh 10-min state per click for a dev:<sub>

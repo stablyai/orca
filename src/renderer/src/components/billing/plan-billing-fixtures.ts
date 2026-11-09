@@ -1,5 +1,6 @@
 // Shared sample entitlements for billing tests and component fixtures.
 import type { OrcaBillingEntitlement, OrcaBillingOffers } from '../../../../shared/orca-billing'
+import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 const HOUR = 3600
 
@@ -13,7 +14,7 @@ export const sampleOffers: OrcaBillingOffers = {
     largeMachineWeight: 2,
     includedHoursPerSeat: 60,
     concurrentSandboxesPerSeat: 3,
-    idleSleepMinutes: 15,
+    idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
     overageCentsPerHour: 75,
     defaultSpendCapCents: 2500
   },

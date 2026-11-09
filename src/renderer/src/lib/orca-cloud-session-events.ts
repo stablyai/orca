@@ -87,7 +87,7 @@ export function showOrcaCloudPlanUpsell(message: string): void {
   })
 }
 
-/** "<name> slept after 20 minutes idle · Wake": the quiet receipt for an automatic sleep. */
+/** "<name> slept after {{n}} minutes idle · Wake" (n = ORCA_CLOUD_IDLE_SLEEP_MINUTES, via the event): the quiet receipt for an automatic sleep. */
 export function showIdleSleepNotice(
   workspaceId: string,
   name: string,
