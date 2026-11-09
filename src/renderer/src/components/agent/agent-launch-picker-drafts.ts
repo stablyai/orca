@@ -32,6 +32,8 @@ import { writeLaunchSetupOptions } from '../native-chat/drafts/native-chat-compo
 export type AgentPickerSetupIdentity = { model: string; effort?: string }
 const appSession: AgentPickerDraftOwner = {}
 const sessionDrafts = new WeakMap<AgentPickerDraftOwner, Map<string, RetainedSetup>>()
+// Why: a form re-derives its source from each pick; the open panel stays the authority until it closes.
+const selectedSetups = new WeakSet<RetainedSetup>()
 
 export function invalidateAgentPickerDrafts(scope: AgentPickerDraftOwner) {
   sessionDrafts.set(scope, new Map())
@@ -150,8 +152,9 @@ export function useAgentPickerSetup({
   )
   useSyncExternalStore(subscribe, () => read()?.draft)
   const matches = useCallback(
-    (record: RetainedSetup) => sameSource(record.source, initial),
-    [initial]
+    (record: RetainedSetup) =>
+      (open && selectedSetups.has(record)) || sameSource(record.source, initial),
+    [open, initial]
   )
   const lifetime = useMemo(
     () => ({
@@ -260,6 +263,23 @@ export function useAgentPickerSetup({
       store(draft)
     }
   }
+  const accept = (draft: AgentPickerDraft) => {
+    if (!getDraft()) {
+      return false
+    }
+    if (mode === 'launch' && !record) {
+      return true
+    }
+    record!.source = draft.recipeEdits ? draft : initial
+    const accepted = draft.recipeEdits
+      ? {
+          ...draft,
+          recipeEdits: { ...draft.recipeEdits, changed: false, argumentsAuthored: false }
+        }
+      : draft
+    store(accepted)
+    return true
+  }
   return {
     ready: mode === 'launch' || !!record,
     draft: currentDraft(record?.draft ?? seed ?? agentPickerDraft(entry)),
@@ -277,21 +297,13 @@ export function useAgentPickerSetup({
         publish()
       }
     },
-    accept: (draft: AgentPickerDraft) => {
-      if (!getDraft()) {
+    accept,
+    /** Select mode: accepts a pick the form applies while the panel stays open. */
+    select: (draft: AgentPickerDraft) => {
+      if (!accept(draft)) {
         return false
       }
-      if (mode === 'launch' && !record) {
-        return true
-      }
-      record!.source = draft.recipeEdits ? draft : initial
-      const accepted = draft.recipeEdits
-        ? {
-            ...draft,
-            recipeEdits: { ...draft.recipeEdits, changed: false, argumentsAuthored: false }
-          }
-        : draft
-      store(accepted)
+      selectedSetups.add(record!)
       return true
     }
   }

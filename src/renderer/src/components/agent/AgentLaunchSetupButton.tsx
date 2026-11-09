@@ -103,10 +103,11 @@ export function AgentLaunchSetupButton({
           terminalBlocked={terminalBlocked}
           onDraftChange={(draft, picked) => {
             setup.change(draft)
-            // Why: the form's trigger and Create read its selection, so a pick applies without closing the panel.
-            const current = picked && mode === 'select' ? setup.getDraft() : undefined
+            // Why: a launch form's trigger and Create read its selection, so a pick applies without closing the panel; text cards stage until Use.
+            const current =
+              picked && mode === 'select' && !entry.textGeneration ? setup.getDraft() : undefined
             const selected = current && acceptAgentPickerArguments(entry, current)
-            if (selected && setup.accept(selected)) {
+            if (selected && setup.select(selected)) {
               onSelect?.(selected)
             }
           }}
