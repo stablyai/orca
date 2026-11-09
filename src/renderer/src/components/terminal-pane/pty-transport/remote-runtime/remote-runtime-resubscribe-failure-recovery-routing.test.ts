@@ -1,3 +1,4 @@
+import { stubRuntimeHostStatusSubscriptions } from '../remote/remote-runtime-pty-transport-test-harness'
 /** Nonrecoverable resubscribe errors still need central lifecycle routing: stale handles recover, gone/exit retire, SSH expiry delegates to the HUB, and oversized snapshots remain informational. Inject after a connected stream closes. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const appStore = vi.hoisted(() => ({
@@ -165,6 +166,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
 
   beforeEach(() => {
     vi.resetModules()
+    stubRuntimeHostStatusSubscriptions()
     vi.doUnmock(
       '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
     )

@@ -43,11 +43,11 @@ function publish(retired = false, pairingRevision = 1) {
   }
   fixture.publishHostSnapshot(snapshot)
 }
-async function createTransport() {
+async function createTransport(tabId = 'tab-1') {
   const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
   const transport = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',
-    tabId: 'tab-1',
+    tabId,
     leafId: 'pane:1'
   })
   transports.push(transport)
@@ -91,7 +91,7 @@ it.each(['success', 'refusal'] as const)(
   'retires an awaited recovery iteration and fences its late %s before a verified legacy host revives it',
   async (settlement) => {
     publish()
-    const transport = await createTransport()
+    const transport = await createTransport('web-terminal-tab-1')
     const onExit = vi.fn()
     const onDisconnect = vi.fn()
     await transport.connect({ url: '', callbacks: { onExit, onDisconnect } })
@@ -102,6 +102,7 @@ it.each(['success', 'refusal'] as const)(
     fixture.runtimeCall.mockImplementation((args) =>
       args.method === 'session.tabs.activate' ? request.promise : dispatch(args)
     )
+    fixture.runtimeCall.mockClear()
     callbacks?.onClose?.()
     await vi.waitFor(() =>
       expect(
@@ -140,7 +141,7 @@ it.each(['success', 'refusal'] as const)(
 )
 
 it('terminates a current manual-disconnect refusal inside the production activate/list poll', async () => {
-  const transport = await createTransport()
+  const transport = await createTransport('web-terminal-tab-1')
   await transport.connect({ url: '', callbacks: {} })
   await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
   const dispatch = fixture.runtimeCall.getMockImplementation()!
