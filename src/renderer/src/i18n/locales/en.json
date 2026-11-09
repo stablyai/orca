@@ -20726,7 +20726,7 @@
         "private": "Private",
         "privateTooltip": "Private — only {{name}} can open it",
         "privateTooltipYou": "Private — only you can see it",
-        "reassignBody": "They can then share, archive or hand it on.",
+        "reassignBody": "They can then change who can see it, archive it or make someone else the owner.",
         "reassignLosesManagement": "You won't be able to manage this workspace after this.",
         "reassignOwner": "Reassign owner",
         "reassignTitle": "Make {{name}} the owner?",
