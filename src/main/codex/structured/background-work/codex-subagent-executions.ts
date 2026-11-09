@@ -30,6 +30,7 @@ export class CodexSubagentExecutions {
   private readonly children = new Map<string, CodexExecutionChild>()
   private readonly settledTurns = new Map<string, NativeChatSubagentState>()
   private readonly working = new Map<string, CodexExecutionChild>()
+  private readonly workingOrder: CodexExecutionChild[] = []
   private readonly workingBySpawner = new Map<string, Set<CodexExecutionChild>>()
   private readonly changed = new Set<string>()
 
@@ -151,7 +152,7 @@ export class CodexSubagentExecutions {
   }
 
   workingChildren(): CodexExecutionChild[] {
-    return [...this.working.values()].sort((a, b) => a.observationOrder - b.observationOrder)
+    return [...this.workingOrder]
   }
 
   workingSpawnedBy(threadId: string): CodexExecutionChild[] {
@@ -168,6 +169,7 @@ export class CodexSubagentExecutions {
     this.children.clear()
     this.settledTurns.clear()
     this.working.clear()
+    this.workingOrder.length = 0
     this.workingBySpawner.clear()
     this.changed.clear()
   }
@@ -201,8 +203,13 @@ export class CodexSubagentExecutions {
       this.changed.add(child.agentThreadId)
       if (working) {
         this.working.set(child.agentThreadId, child)
+        const next = this.workingOrder.findIndex(
+          (other) => other.observationOrder > child.observationOrder
+        )
+        this.workingOrder.splice(next === -1 ? this.workingOrder.length : next, 0, child)
       } else {
         this.working.delete(child.agentThreadId)
+        this.workingOrder.splice(this.workingOrder.indexOf(child), 1)
       }
     }
     const spawner = child.spawnerThreadId
