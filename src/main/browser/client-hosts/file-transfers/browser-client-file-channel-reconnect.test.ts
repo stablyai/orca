@@ -1,3 +1,4 @@
+import type { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -143,7 +144,9 @@ function mockAttempts(): {
     sendRequest: ReturnType<typeof vi.fn>
   }[] = []
   subscribeRemoteRuntimeRequestMock.mockImplementation(
-    async (...args: unknown[]): Promise<RemoteRuntimeTransportSubscription> => {
+    async (
+      ...args: Parameters<typeof subscribeRemoteRuntimeTransport>
+    ): Promise<RemoteRuntimeTransportSubscription> => {
       const close = vi.fn()
       const sendRequest = vi.fn().mockResolvedValue({
         id: 'file-channel',
@@ -152,7 +155,7 @@ function mockAttempts(): {
         _meta: { runtimeId: 'runtime-a' }
       })
       attempts.push({
-        callbacks: args[4] as RemoteRuntimeTransportSubscriptionCallbacks,
+        callbacks: args[4],
         close,
         sendRequest
       })

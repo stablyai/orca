@@ -1,3 +1,4 @@
+import type { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { once } from 'node:events'
 import { connect, type Socket } from 'node:net'
@@ -12,9 +13,9 @@ import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/cli
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
   RemoteRuntimeTransportSubscription,
-  RemoteRuntimeTransportSubscriptionCallbacks
+  RemoteRuntimeTransportSubscriptionCallbacks,
+  RemoteRuntimeSubscriptionOptions
 } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
-import type { RemoteRuntimeSubscriptionOptions } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
@@ -80,8 +81,10 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     let callbacks: RemoteRuntimeTransportSubscriptionCallbacks | undefined
     const closeSubscription = vi.fn()
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
-      async (...args: unknown[]): Promise<RemoteRuntimeTransportSubscription> => {
-        callbacks = args[4] as RemoteRuntimeTransportSubscriptionCallbacks
+      async (
+        ...args: Parameters<typeof subscribeRemoteRuntimeTransport>
+      ): Promise<RemoteRuntimeTransportSubscription> => {
+        callbacks = args[4]
         return {
           requestId: 'waiting-subscription',
           close: closeSubscription,
@@ -121,12 +124,14 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
 
   it('binds and releases the exact browser-host outbound memory lease', async () => {
     let callbacks: RemoteRuntimeTransportSubscriptionCallbacks | undefined
-    let subscriptionOptions: Record<string, unknown> | undefined
+    let subscriptionOptions: RemoteRuntimeSubscriptionOptions | undefined
     const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
-      async (...args: unknown[]): Promise<RemoteRuntimeTransportSubscription> => {
-        callbacks = args[4] as RemoteRuntimeTransportSubscriptionCallbacks
-        subscriptionOptions = args[5] as Record<string, unknown>
+      async (
+        ...args: Parameters<typeof subscribeRemoteRuntimeTransport>
+      ): Promise<RemoteRuntimeTransportSubscription> => {
+        callbacks = args[4]
+        subscriptionOptions = args[5]
         return { requestId: 'budgeted', close: vi.fn(), sendBinary: () => true }
       }
     )
@@ -432,11 +437,13 @@ type SubscriptionAttempt = {
 function mockSubscriptionAttempts(): SubscriptionAttempt[] {
   const attempts: SubscriptionAttempt[] = []
   subscribeRemoteRuntimeRequestMock.mockImplementation(
-    async (...args: unknown[]): Promise<RemoteRuntimeTransportSubscription> => {
+    async (
+      ...args: Parameters<typeof subscribeRemoteRuntimeTransport>
+    ): Promise<RemoteRuntimeTransportSubscription> => {
       const attempt: SubscriptionAttempt = {
         method: args[1],
         params: args[2],
-        callbacks: args[4] as RemoteRuntimeTransportSubscriptionCallbacks,
+        callbacks: args[4],
         options: args[5],
         close: vi.fn(),
         sent: []

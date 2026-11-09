@@ -1,3 +1,4 @@
+import type { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
@@ -209,16 +210,17 @@ async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn>
           _meta: { runtimeId: 'runtime-a' }
         })
   subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
-    async (...args: unknown[]): Promise<RemoteRuntimeTransportSubscription> => {
-      callbacks.current = args[4] as RemoteRuntimeTransportSubscriptionCallbacks
+    async (
+      ...args: Parameters<typeof subscribeRemoteRuntimeTransport>
+    ): Promise<RemoteRuntimeTransportSubscription> => {
+      callbacks.current = args[4]
       return {
         requestId: 'browser-host',
         close,
         sendBinary: () => false,
         ...(sendRequest
           ? {
-              sendRequest:
-                sendRequest as unknown as RemoteRuntimeTransportSubscription['sendRequest']
+              sendRequest: sendRequest
             }
           : {})
       }
