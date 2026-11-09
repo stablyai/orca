@@ -1,0 +1,5 @@
+{
+  "_comment": "Integration-branch only (stablyai/orca-private cloud/integration). Public dev endpoints baked into packaged builds; no secrets. ORCA_BUILD_BILLING_API_URL / ORCA_BUILD_CLOUD_SANDBOX_URL at build time, or ORCA_BILLING_API_URL / ORCA_CLOUD_SANDBOX_URL at run time, override them.",
+  "billingApiUrl": "https://orca-billing-dev.lovecast.workers.dev",
+  "cloudSandboxUrl": "https://orca-sandbox-control-dev.lovecast.workers.dev"
+}

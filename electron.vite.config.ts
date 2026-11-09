@@ -20,6 +20,7 @@ import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-no
 import { createDevServeConfig } from './config/build-plugins/dev-serve-config'
 import { reactPluginOptions } from './config/build-plugins/react-compiler'
 import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
+import { cloudBuildDefaultsDefine } from './config/build-plugins/cloud-build-defaults'
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
   'stream-json',
@@ -252,6 +253,7 @@ export const electronViteConfig: UserConfig = {
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
       ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
       ORCA_BUILD_COMMIT: ORCA_BUILD_COMMIT_LITERAL,
+      ORCA_CLOUD_BUILD_DEFAULTS: cloudBuildDefaultsDefine(),
       ...DARK_BUILD_DEFINES
     },
     // @xterm/headless declares exports:null; point Vite directly at its published CJS main to permit inlining.

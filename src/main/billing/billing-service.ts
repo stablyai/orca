@@ -1,3 +1,4 @@
+import { withCloudBuildDefaults } from '../cloud-build-defaults'
 // Plan & billing for the active Orca profile's signed-in account. Results are values, never
 // throws, so the renderer can show a precise state. A billing-service refusal never signs the
 // user out; only Orca Cloud auth rejecting the session does (via runWithFreshOrcaCloudSession).
@@ -37,7 +38,11 @@ function prepare(userDataPath: string): Ready {
   if (!auth.configured) {
     return { ok: false, status: 'unconfigured' }
   }
-  const endpoints = getBillingEndpoints(auth.config, process.env, app.isPackaged)
+  const endpoints = getBillingEndpoints(
+    auth.config,
+    withCloudBuildDefaults(process.env),
+    app.isPackaged
+  )
   if (!endpoints) {
     return { ok: false, status: 'unconfigured' }
   }

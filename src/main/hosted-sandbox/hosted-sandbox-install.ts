@@ -1,3 +1,4 @@
+import { withCloudBuildDefaults } from '../cloud-build-defaults'
 // Wires Orca Cloud into the desktop when this build has a control plane configured (off by default).
 import { app, BrowserWindow } from 'electron'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
@@ -25,7 +26,11 @@ export function installHostedSandbox(): void {
     return
   }
   const userDataPath = app.getPath('userData')
-  const config = getHostedSandboxConfig(userDataPath, process.env, app.isPackaged)
+  const config = getHostedSandboxConfig(
+    userDataPath,
+    withCloudBuildDefaults(process.env),
+    app.isPackaged
+  )
   if (!config) {
     return
   }
