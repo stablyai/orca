@@ -151,7 +151,12 @@ export function createTeamFailureCopy(
     case 'created':
       return null
     case 'invalid':
-      return t('auto.components.billing.team.createInvalid', 'Choose a different team name.')
+      return t(
+        'auto.components.billing.team.createInvalid2',
+        'Use letters, numbers, spaces or underscores (up to 64).'
+      )
+    case 'name-taken':
+      return t('auto.components.billing.team.nameTaken', 'That team name is taken. Try another.')
     case 'unsupported':
       return t(
         'auto.components.billing.team.createUnavailable',

@@ -14,6 +14,7 @@ import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-sou
 import { getSetupConfig, getSetupTrustContent } from '../../../shared/orca-hook-setup-config'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import { isFolderRepo } from '../../../shared/repo-kind'
+import { isEnvironmentBuildCheckout } from '../../workspace-hooks/environment-build-checkout'
 import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-setup/setup-script-imports'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
@@ -88,7 +89,9 @@ export class RuntimeRepositoryHooksCommands {
       status: 'ok' as const,
       hasHooks: has,
       hooks,
-      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path),
+      // Dependencies come from an Orca Cloud environment build: no setup-script nudge.
+      ...(isEnvironmentBuildCheckout(repo.path) ? { environmentProvisioned: true as const } : {})
     }
   }
 

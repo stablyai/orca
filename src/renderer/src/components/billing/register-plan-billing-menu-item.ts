@@ -36,7 +36,8 @@ export function registerPlanBillingMenuItem(): () => void {
     label: () => translate('auto.components.billing.team.menuItem', 'Team'),
     icon: Users,
     order: 10,
-    requiredCapability: BILLING_CAPABILITY,
+    // Team management doesn't depend on billing or a flag: any signed-in account can open it.
+    requiresSignIn: true,
     onSelect: () => openTeamPage()
   })
 

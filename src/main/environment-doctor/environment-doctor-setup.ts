@@ -9,6 +9,7 @@ import {
   type EnvironmentDoctorDeps
 } from './environment-doctor-check'
 import type { GitCheckoutProbe } from './environment-doctor-git'
+import { hasEnvironmentBuildMarker } from '../workspace-hooks/environment-build-checkout'
 
 // Orca writes .cmd or .sh on Windows depending on the script's shell, so look for both.
 const SETUP_RUNNER_NAMES = ['orca/setup-runner.sh', 'orca/setup-runner.cmd'] as const
@@ -26,6 +27,19 @@ export async function checkSetup(
   const yaml = await context.readRepoFile('orca.yaml')
   const script = yaml ? parseOrcaYaml(yaml)?.scripts.setup?.trim() : undefined
   if (!script) {
+    if (
+      context.checkout.kind === 'checkout' &&
+      hasEnvironmentBuildMarker(context.checkout.commonDir, context.root)
+    ) {
+      return [
+        check(
+          'setup',
+          'setup.script',
+          'pass',
+          'Dependencies come from the Orca Cloud environment build.'
+        )
+      ]
+    }
     return [
       context.impliesInstall
         ? check('setup', 'setup.script', 'warn', 'orca.yaml has no setup script.', {

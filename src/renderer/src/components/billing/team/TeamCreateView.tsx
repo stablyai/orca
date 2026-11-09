@@ -1,4 +1,4 @@
-import { ORCA_ORG_NAME_MAX_LENGTH } from '../../../../../shared/orca-org-management'
+import { isValidOrgName, ORCA_ORG_NAME_MAX_LENGTH } from '../../../../../shared/orca-org-management'
 import { useId, useState } from 'react'
 import { ArrowRight, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,8 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
   const id = useId()
   const [name, setName] = useState('')
   const trimmed = name.trim()
+  const nameValid = isValidOrgName(trimmed)
+  const showRule = trimmed.length > 0 && !nameValid
   return (
     <div className="space-y-6">
       <section
@@ -53,7 +55,7 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
           className="mt-4 space-y-2"
           onSubmit={(event) => {
             event.preventDefault()
-            if (trimmed && !props.creating && !props.unavailable) {
+            if (nameValid && !props.creating && !props.unavailable) {
               props.onCreate(trimmed)
             }
           }}
@@ -70,8 +72,8 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
                 'auto.components.billing.team.teamNamePlaceholder',
                 'Acme Engineering'
               )}
-              aria-invalid={props.error ? true : undefined}
-              aria-describedby={props.error ? `${id}-error` : undefined}
+              aria-invalid={props.error || showRule ? true : undefined}
+              aria-describedby={props.error ? `${id}-error` : showRule ? `${id}-rule` : undefined}
               onChange={(event) => setName(event.target.value)}
               readOnly={props.creating}
               aria-disabled={props.creating || undefined}
@@ -79,7 +81,7 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
             />
             <Button
               type="submit"
-              disabled={!props.creating && (!trimmed || props.unavailable)}
+              disabled={!props.creating && (!nameValid || props.unavailable)}
               aria-disabled={props.creating || undefined}
             >
               {props.creating ? <LoadingSpinner className="size-3.5" /> : null}
@@ -94,6 +96,14 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
               {t(
                 'auto.components.billing.team.createUnavailable',
                 'Team creation isn’t available yet. Ask a teammate to invite you.'
+              )}
+            </p>
+          ) : null}
+          {showRule && !props.error ? (
+            <p id={`${id}-rule`} className="text-xs text-muted-foreground">
+              {t(
+                'auto.components.billing.team.createInvalid2',
+                'Use letters, numbers, spaces or underscores (up to 64).'
               )}
             </p>
           ) : null}

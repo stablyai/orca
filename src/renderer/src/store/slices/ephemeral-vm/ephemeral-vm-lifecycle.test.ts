@@ -48,6 +48,27 @@ describe('ephemeral VM workspace projection', () => {
   })
 })
 
+describe('Orca Cloud environment builds', () => {
+  it('exposes the environment build an Orca Cloud workspace booted from', () => {
+    const fromBuild = {
+      ...result,
+      userData: {
+        environmentDriver: {
+          driverId: 'orca-cloud',
+          environmentId: 'sbx_1',
+          driverState: { sandboxId: 'sbx_1', environmentBuildId: 'bld_0123456789' }
+        }
+      }
+    } as EphemeralVmRuntimeRecord['recipeResult']
+    const built = project([record('vm', 'running', { recipeResult: fromBuild })])
+    expect(built.ephemeralVmRuntimesByWorkspaceId['ws-1']?.environmentBuildId).toBe(
+      'bld_0123456789'
+    )
+    const plain = project([record('vm', 'running', { recipeResult: result })])
+    expect(plain.ephemeralVmRuntimesByWorkspaceId['ws-1']?.environmentBuildId).toBeUndefined()
+  })
+})
+
 describe('refreshEphemeralVmRuntimes', () => {
   afterEach(() => {
     vi.unstubAllGlobals()

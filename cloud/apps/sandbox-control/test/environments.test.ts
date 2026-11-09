@@ -93,6 +93,37 @@ describe('org environments', () => {
     expect([...h.vercel.boxes.keys()].filter((name) => name.includes('envbuild'))).toEqual([])
   })
 
+  it('bills build sandbox time to the member who started it, retrying when billing is down, and refuses blocked orgs', async () => {
+    const { h, adminCall, envId, build } = await setup()
+    await adminCall('PATCH', `/v1/environments/${envId}`, { machineSize: 'large' })
+    h.billing.down = true
+    const first = await build(0)
+    expect(h.billing.usage).toEqual([])
+    const unreported = h.raw.prepare('SELECT usage_reported_at FROM environment_builds WHERE id = ?').get(first.id) as { usage_reported_at: number | null }
+    expect(unreported.usage_reported_at).toBeNull()
+    h.billing.down = false
+    const { advanceAllBuilds } = await import('../src/environment-builds')
+    await advanceAllBuilds({
+      db: h.env.SANDBOX_DB,
+      provider: h.vercel,
+      entitlements: { checkStart: async () => h.billing.decision, reportUsage: async (s) => { h.billing.usage.push(s); return h.billing.usageAnswer }, listSuspensions: async () => [] },
+      now: h.now,
+      config: { environment: 'test', goldenSnapshotId: 'snap_golden', region: 'iad1' }
+    })
+    expect(h.billing.usage).toEqual([
+      expect.objectContaining({ usageId: `build:${first.id}`, sandboxId: first.id, machineSize: 'large', userId: 'alice', accountId: 'org:acme' })
+    ])
+    const failed = await build(20)
+    expect(h.billing.usage.at(-1)).toMatchObject({ usageId: `build:${failed.id}`, userId: 'alice' })
+    const usage = h.billing.usage.at(-1)!
+    expect(usage.endedAt).toBeGreaterThan(usage.startedAt)
+    // Out of sandbox hours / payment failed: builds are refused like starts.
+    h.billing.decision = { allow: false, reason: 'hours_exhausted', suspendRunning: false }
+    const refused = await adminCall('POST', `/v1/environments/${envId}/builds`)
+    expect(refused.status).toBe(403)
+    expect(refused.body.reason).toBe('hours_exhausted')
+  })
+
   it('refuses a second concurrent build and can cancel one', async () => {
     const { adminCall, envId } = await setup()
     const started = await adminCall('POST', `/v1/environments/${envId}/builds`)
