@@ -1,13 +1,13 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import { prepareAutomationLaunchSetup } from './automation-capability-probe'
 import type {
   Automation,
   AutomationCreateInput,
-  AutomationRun,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
-import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { StableAutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
@@ -128,13 +128,14 @@ export async function listAutomationsForTarget(
 /** Fetch one automation’s history; list usage comes from authority projections so page cost cannot scale with all retained runs. */
 export async function listAutomationRunsForTarget(
   target: AutomationHostTarget,
-  automationId: string
+  automationId: string,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<AutomationRun[]> {
   const result = await callRuntimeRpc<{ runs: AutomationRun[] }>(
     target,
     'automation.runs',
     { automationId },
-    { timeoutMs: 15_000 }
+    { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
   )
   return result.runs
 }

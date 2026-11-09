@@ -16,9 +16,10 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
-import { searchAgentPickerEntries } from '@/lib/agent-picker-search'
-import { translate } from '@/i18n/i18n'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { searchAgentPickerEntries } from '@/lib/agent-catalog/agent-picker-search'
+import { useTranslate } from '@/i18n/use-translate'
 import { useBoundedHostRows } from '@/components/host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '@/components/host-picker/HostListSearchField'
 import { HostListOverflowNote } from '@/components/host-picker/HostListOverflowNote'
@@ -40,6 +41,7 @@ function FilterPill({
   value: string
   onClear: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/50 pl-2 pr-1 text-[11px] text-foreground">
       <span className="text-muted-foreground">{label}:</span>
@@ -53,7 +55,7 @@ function FilterPill({
       </Tooltip>
       <button
         type="button"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.automations.AutomationListFilterMenu.removeFilter',
           'Remove {{value0}} filter',
           { value0: label }
@@ -79,24 +81,22 @@ export function AutomationListFilterPills({
   hostLabel?: string | null
   onClearHost?: () => void
 }): React.JSX.Element | null {
-  const statusLabel = translate('auto.components.automations.AutomationsPage.tableStatus', 'Status')
-  const lastRunLabel = translate(
-    'auto.components.automations.AutomationListFilterMenu.lastRun',
-    'Last run'
-  )
+  const t = useTranslate()
+  const statusLabel = t('auto.components.automations.AutomationsPage.tableStatus', 'Status')
+  const lastRunLabel = t('auto.components.automations.AutomationListFilterMenu.lastRun', 'Last run')
   const statusValueLabel =
     filter.status === 'enabled'
-      ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
+      ? t('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
       : filter.status === 'paused'
-        ? translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')
+        ? t('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')
         : null
   const lastRunValueLabel =
     filter.lastRun === 'failed'
-      ? translate('auto.components.automations.AutomationListFilterMenu.failed', 'Failed')
+      ? t('auto.components.automations.AutomationListFilterMenu.failed', 'Failed')
       : filter.lastRun === 'succeeded'
-        ? translate('auto.components.automations.AutomationListFilterMenu.succeeded', 'Succeeded')
+        ? t('auto.components.automations.AutomationListFilterMenu.succeeded', 'Succeeded')
         : filter.lastRun === 'never'
-          ? translate('auto.components.automations.AutomationListFilterMenu.neverRan', 'Never ran')
+          ? t('auto.components.automations.AutomationListFilterMenu.neverRan', 'Never ran')
           : null
   const agentValueLabel = filter.agentIds.length
     ? filter.agentIds
@@ -111,7 +111,7 @@ export function AutomationListFilterPills({
     <>
       {hostPillLabel && onClearHost ? (
         <FilterPill
-          label={translate('auto.components.automations.AutomationsPage.tableHost', 'Host')}
+          label={t('auto.components.automations.AutomationsPage.tableHost', 'Host')}
           value={hostPillLabel}
           onClear={onClearHost}
         />
@@ -132,7 +132,7 @@ export function AutomationListFilterPills({
       ) : null}
       {agentValueLabel ? (
         <FilterPill
-          label={translate('auto.components.automations.AutomationListFilterMenu.agent', 'Agent')}
+          label={t('auto.components.automations.AutomationListFilterMenu.agent', 'Agent')}
           value={agentValueLabel}
           onClear={() => onChange({ ...filter, agentIds: [] })}
         />
@@ -186,6 +186,7 @@ export function AutomationListFilterMenu({
   /** Reuses the host catalog so this menu can never disagree with the row data. */
   hostEntries?: readonly AutomationHostCatalogEntry[]
 }): React.JSX.Element {
+  const t = useTranslate()
   const activeCount = countAutomationListFilters(filter)
   const selectedHostKeys = filter.hostStableKeys ?? []
 
@@ -195,15 +196,9 @@ export function AutomationListFilterMenu({
       : [...selectedHostKeys, stableKey]
     onChange({ ...filter, hostStableKeys: nextHostKeys })
   }
-  const statusLabel = translate('auto.components.automations.AutomationsPage.tableStatus', 'Status')
-  const lastRunLabel = translate(
-    'auto.components.automations.AutomationListFilterMenu.lastRun',
-    'Last run'
-  )
-  const agentLabel = translate(
-    'auto.components.automations.AutomationListFilterMenu.agent',
-    'Agent'
-  )
+  const statusLabel = t('auto.components.automations.AutomationsPage.tableStatus', 'Status')
+  const lastRunLabel = t('auto.components.automations.AutomationListFilterMenu.lastRun', 'Last run')
+  const agentLabel = t('auto.components.automations.AutomationListFilterMenu.agent', 'Agent')
   const agents = getAgentCatalog()
   const selectedAgentIds = filter.agentIds
   const [agentQuery, setAgentQuery] = React.useState('')
@@ -226,7 +221,7 @@ export function AutomationListFilterMenu({
           className="h-8 shrink-0 gap-1.5 border border-border bg-background px-2.5 text-xs shadow-none hover:bg-muted/50 focus-visible:border-ring/70 focus-visible:ring-0"
         >
           <ListFilter className="size-3.5" />
-          {translate('auto.components.automations.AutomationListFilterMenu.filters', 'Filters')}
+          {t('auto.components.automations.AutomationListFilterMenu.filters', 'Filters')}
           {activeCount > 0 ? (
             <span className="rounded-full bg-foreground px-1.5 text-[10px] font-semibold leading-4 text-background">
               {activeCount}
@@ -239,7 +234,7 @@ export function AutomationListFilterMenu({
           <>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                {translate('auto.components.automations.AutomationsPage.tableHost', 'Host')}
+                {t('auto.components.automations.AutomationsPage.tableHost', 'Host')}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="max-h-80 overflow-y-auto scrollbar-sleek">
                 <DropdownMenuCheckboxItem
@@ -247,7 +242,7 @@ export function AutomationListFilterMenu({
                   onCheckedChange={() => onChange({ ...filter, hostStableKeys: [] })}
                   onSelect={(event) => event.preventDefault()}
                 >
-                  {translate('auto.components.automations.hostPicker.allHosts', 'All hosts')}
+                  {t('auto.components.automations.hostPicker.allHosts', 'All hosts')}
                 </DropdownMenuCheckboxItem>
                 <AutomationHostFilterRows
                   entries={hostEntries}
@@ -269,13 +264,13 @@ export function AutomationListFilterMenu({
               }
             >
               <DropdownMenuRadioItem value="all">
-                {translate('auto.components.automations.AutomationListFilterMenu.all', 'All')}
+                {t('auto.components.automations.AutomationListFilterMenu.all', 'All')}
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="enabled">
-                {translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')}
+                {t('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')}
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="paused">
-                {translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+                {t('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
@@ -291,22 +286,16 @@ export function AutomationListFilterMenu({
               }
             >
               <DropdownMenuRadioItem value="all">
-                {translate('auto.components.automations.AutomationListFilterMenu.all', 'All')}
+                {t('auto.components.automations.AutomationListFilterMenu.all', 'All')}
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="failed">
-                {translate('auto.components.automations.AutomationListFilterMenu.failed', 'Failed')}
+                {t('auto.components.automations.AutomationListFilterMenu.failed', 'Failed')}
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="succeeded">
-                {translate(
-                  'auto.components.automations.AutomationListFilterMenu.succeeded',
-                  'Succeeded'
-                )}
+                {t('auto.components.automations.AutomationListFilterMenu.succeeded', 'Succeeded')}
               </DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="never">
-                {translate(
-                  'auto.components.automations.AutomationListFilterMenu.neverRan',
-                  'Never ran'
-                )}
+                {t('auto.components.automations.AutomationListFilterMenu.neverRan', 'Never ran')}
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
@@ -325,11 +314,11 @@ export function AutomationListFilterMenu({
                   }
                 }}
                 onPointerDown={(event) => event.stopPropagation()}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.automations.AutomationListFilterMenu.926e785e4d',
                   'Search agents...'
                 )}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.automations.AutomationListFilterMenu.926e785e4d',
                   'Search agents...'
                 )}
@@ -341,7 +330,7 @@ export function AutomationListFilterMenu({
               onCheckedChange={() => onChange({ ...filter, agentIds: [] })}
               onSelect={(event) => event.preventDefault()}
             >
-              {translate('auto.components.automations.AutomationListFilterMenu.all', 'All')}
+              {t('auto.components.automations.AutomationListFilterMenu.all', 'All')}
             </DropdownMenuCheckboxItem>
             {filteredAgents.map((agent) => (
               <DropdownMenuCheckboxItem
@@ -358,7 +347,7 @@ export function AutomationListFilterMenu({
             ))}
             {filteredAgents.length === 0 ? (
               <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.automations.AutomationListFilterMenu.491043ee45',
                   'No agents match your search.'
                 )}
@@ -370,10 +359,7 @@ export function AutomationListFilterMenu({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => onChange(EMPTY_AUTOMATION_LIST_FILTER)}>
-              {translate(
-                'auto.components.automations.AutomationListFilterMenu.clear',
-                'Clear filters'
-              )}
+              {t('auto.components.automations.AutomationListFilterMenu.clear', 'Clear filters')}
             </DropdownMenuItem>
           </>
         ) : null}

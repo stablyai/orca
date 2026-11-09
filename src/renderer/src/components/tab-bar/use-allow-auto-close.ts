@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { collectLeafIdsInOrder } from '../terminal-pane/layout/terminal-layout-leaf-traversal'
 import {
   readWorkerAutoClose,
   setWorkerKeptOpen,
   type WorkerAutoCloseSubject
 } from '@/lib/worker-auto-close'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 function tabWorkerSubjects(tabId: string, sessionId: string | undefined): WorkerAutoCloseSubject[] {

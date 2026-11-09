@@ -1,29 +1,21 @@
-import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
+import { resolveTerminalCreatedShell } from './terminal-created-shell'
+import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/provider-notices/zcode-capability/zcode-missing-tui-notice'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   isValidHostTerminalTabId,
   isValidMirroredHostTerminalTabId
-} from '../../../../shared/terminal-tab-id'
+} from '../../../../shared/workspace-layout/terminal-tab-id'
 import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-tab-ordinal'
-import { singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import {
-  buildOrphanTerminalCleanupPatch,
-  getOrphanTerminalIds
-} from '../slices/terminal-orphan-helpers'
-import {
-  ensureGroup,
-  findTabByEntityInGroup,
-  pushRecentTabId,
-  sanitizeRecentTabIds,
-  updateGroup
-} from '../slices/tab-group-state'
+import { singlePaneLayoutSnapshot } from './terminal-single-pane-layout'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
+import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-cleanup'
+import { ensureGroup, findTabByEntityInGroup, updateGroup } from '../slices/tabs/tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from '../slices/tabs/tab-selection-history'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, insertSplitGroup } from '../slices/tabs/tabs-group-actions'
-import { ownsGlobalSelection } from '../global-selection-owner'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { ownsGlobalSelection } from '../workspaces/selection/global-selection-owner'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -31,24 +23,8 @@ import {
   terminalTabCreateCommand,
   withMainTerminalFacts
 } from './terminal-tab-create-through-layout-owner'
-import {
-  getRemoteConnectionIdForWorktree,
-  resolveCreatedTabShellOverride,
-  worktreeUsesWslPath
-} from './terminal-workspace-routing'
 import type { AppState } from '../types'
-type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
-
-function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
-  // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
-  const launchToken = startup.launchConfig
-    ? (startup.launchToken ?? createBrowserUuid())
-    : undefined
-  return {
-    ...startup,
-    ...(launchToken ? { launchToken } : {})
-  }
-}
+import { normalizeTabStartupCommand } from './terminal-startup-queues'
 
 export function createTerminalTabCreationActions(
   set: TerminalStoreSet,
@@ -107,23 +83,13 @@ export function createTerminalTabCreationActions(
         const defaultTitle = `Terminal ${nextOrdinal}`
         const quickCommandLabel = options?.quickCommandLabel?.trim()
         const startupCwd = options?.startupCwd
-        const remoteConnectionId = getRemoteConnectionIdForWorktree(s, worktreeId)
-        const isRemoteWorktree = Boolean(remoteConnectionId)
-        const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
-        const createdShellOverride = resolveCreatedTabShellOverride(
+        const facts = options?.executionFacts
+        const { folder, createdShellOverride } = resolveTerminalCreatedShell(
+          s,
+          worktreeId,
           shellOverride,
-          s.settings?.terminalWindowsShell,
-          // Why: SSH PTYs ignore local Windows shell selection; a local shell icon would mislabel a remote terminal.
-          isRemoteWorktree,
-          remoteConnectionId
-            ? ((s.sshConnectionStates.get(remoteConnectionId)
-                ?.remotePlatform as NodeJS.Platform | null) ?? null)
-            : null,
-          // Why: new terminals enter the worktree's repo-scoped WSL distro even when the global Windows shell is PowerShell/cmd.exe.
-          isWslWorktree,
-          isRemoteWorktree || options?.forceHostRuntime
-            ? undefined
-            : getLocalProjectExecutionRuntimeContext(s, worktreeId)
+          options,
+          facts
         )
         tab = {
           id,
@@ -213,6 +179,7 @@ export function createTerminalTabCreationActions(
           groupId: group.id,
           worktreeId,
           contentType: 'terminal' as const,
+          ...(facts || folder ? { executionHostId: facts?.hostId ?? folder?.hostId } : {}),
           label: tab.title,
           ...(tab.quickCommandLabel?.trim()
             ? { quickCommandLabel: tab.quickCommandLabel.trim() }

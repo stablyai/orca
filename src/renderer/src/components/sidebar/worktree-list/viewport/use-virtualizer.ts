@@ -14,7 +14,7 @@ import {
 } from './virtual-rows'
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
-import { WORKTREE_SIDEBAR_REVEAL_TOP_INSET } from '../../worktree-sidebar-reveal'
+import { WORKTREE_SIDEBAR_REVEAL_TOP_INSET } from '../navigation/worktree-sidebar-reveal'
 import {
   shouldAdjustWorktreeSidebarMeasuredRowScroll,
   USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS

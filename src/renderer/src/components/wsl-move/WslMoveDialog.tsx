@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -26,7 +26,7 @@ import {
 } from './wsl-move-dialog-store'
 import { collectWslMoveSleptPaneBindings } from './wsl-move-slept-pane-bindings'
 import { followWslMoveOrchestratorStatus } from './wsl-move-orchestrator-status'
-import { findWorktreeById } from '@/store/github/worktree-refresh'
+import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { getWslDistroFromPath } from '@/lib/local-preflight-context'
 import {
   wslMoveBlockerProjects,
@@ -35,7 +35,10 @@ import {
   type WslMoveCatalog
 } from './wsl-move-scope-rows'
 import type { WslMoveBlockerView } from './WslMoveBlockerList'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { adoptWslMoveProgress } from './wsl-move-run-adoption'
 import { closeWslMoveDialog, reloadAfterWslMove } from './wsl-move-dialog-close'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
@@ -123,6 +126,7 @@ export function WslMoveDialogHost(): React.JSX.Element | null {
 }
 
 function WslMoveDialog(): React.JSX.Element | null {
+  const t = useTranslate()
   const dialog = useWslMoveDialogStore((s) => s.dialog)
   const catalog = useMoveCatalog()
   if (dialog.stage === 'closed') {
@@ -136,11 +140,11 @@ function WslMoveDialog(): React.JSX.Element | null {
   let body: React.JSX.Element
   switch (dialog.stage) {
     case 'loading':
-      title = translate('wslMove.title', 'Move projects to the {{distro}} host', { distro })
+      title = t('wslMove.title', 'Move projects to the {{distro}} host', { distro })
       body = (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <LoadingSpinner className="size-4" />
-          {translate('wslMove.loading', 'Checking the projects in {{distro}}…', { distro })}
+          {t('wslMove.loading', 'Checking the projects in {{distro}}…', { distro })}
         </div>
       )
       break
@@ -153,7 +157,7 @@ function WslMoveDialog(): React.JSX.Element | null {
           ref.kind === 'repo' ? [ref.id] : [],
           ref.kind === 'folder' ? [ref.id] : []
         )[0].name
-      title = translate('wslMove.title', 'Move projects to the {{distro}} host', { distro })
+      title = t('wslMove.title', 'Move projects to the {{distro}} host', { distro })
       body = (
         <WslMovePreviewBody
           distro={distro}
@@ -161,7 +165,7 @@ function WslMoveDialog(): React.JSX.Element | null {
           selected={selected}
           counts={wslMoveCounts(catalog, selected)}
           preview={preview}
-          notMoving={wslMoveNotMovingLines(dialog.distroPreview, nameOf, distro)}
+          notMoving={wslMoveNotMovingLines(dialog.distroPreview, nameOf, distro, t)}
           blockers={
             preview?.outcome === 'ready' ? blockerViews(catalog, preview.blockers, selected) : []
           }
@@ -181,7 +185,7 @@ function WslMoveDialog(): React.JSX.Element | null {
       break
     }
     case 'running':
-      title = translate('wslMove.runningTitle', 'Moving to the {{distro}} host', { distro })
+      title = t('wslMove.runningTitle', 'Moving to the {{distro}} host', { distro })
       body = (
         <WslMoveProgressBody
           progress={dialog.progress}
@@ -192,7 +196,7 @@ function WslMoveDialog(): React.JSX.Element | null {
       break
     case 'result': {
       const { result } = dialog
-      title = wslMoveResultTitle(result, distro)
+      title = wslMoveResultTitle(result, distro, t)
       body = (
         <WslMoveResultBody
           distro={distro}

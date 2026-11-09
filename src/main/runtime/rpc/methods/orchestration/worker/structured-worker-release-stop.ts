@@ -1,8 +1,8 @@
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
-import { stopStructuredWorker } from '../../orchestration-structured-worker-lifecycle'
-import type { StructuredWorkerIdentity } from '../../../../structured-worker-identity'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import { stopStructuredWorker } from '../structured-workers/orchestration-structured-worker-lifecycle'
+import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'
 
@@ -20,7 +20,6 @@ export async function stopStructuredWorkerForRelease(args: {
   // Only an automatic release can be refused; an explicit one keeps cutting through a hung start.
   const stop = await stopStructuredWorker(
     structured,
-    dispatchId,
     runtime,
     resource.auto_release_at
       ? () => db.admitWorkerChatReleaseClose(resource.id, (row) => runtime.isWorkerAgentInTurn(row))

@@ -1,8 +1,9 @@
 import type { SessionMemory } from '../../../../shared/process-stats-types'
-import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey as parseStablePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree/id'
 import { translate } from '@/i18n/i18n'
-import type { DaemonSession, MergeContext } from './resource-usage-merge-types'
+import type { MergeContext } from './resource-usage-merge-types'
+import type { PtyListedSession as DaemonSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import type { ResourceSessionBindingIndex } from './resource-session-bindings'
 
 export function deriveWorktreeNameFromWorktreeId(worktreeId: string): string {

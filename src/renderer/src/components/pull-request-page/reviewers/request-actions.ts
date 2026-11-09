@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
@@ -13,7 +13,7 @@ import type {
   GitHubOwnerRepo
 } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
@@ -42,6 +42,7 @@ type ReviewerRequestActionsArgs = {
     options?: { sourceContext?: TaskSourceContext | null }
   ) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+  onMutated: () => void
   scheduleReviewerInputFocus: () => void
 }
 
@@ -156,6 +157,8 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       if (args.reviewerPanelMountedRef.current) {
         args.setSubmitting(false)
       }
+      // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+      args.onMutated()
     }
   }
 
@@ -256,6 +259,7 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       if (args.reviewerPanelMountedRef.current) {
         args.setSubmitting(false)
       }
+      args.onMutated()
     }
   }
 

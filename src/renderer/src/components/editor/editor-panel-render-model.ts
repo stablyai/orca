@@ -1,29 +1,34 @@
-import { detectLanguage } from '@/lib/language-detect'
-import { canPreviewLanguage } from '@/lib/file-preview'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
+import { canPreviewLanguage } from '@/lib/browser/documents/file-preview'
 import type { useAppStore } from '@/store'
-import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
+import type { MarkdownDefaultViewMode } from '../../../../shared/markdown-default-view-mode'
 import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,
   getEditorToggleModes,
+  getEditorViewLanguage,
   getMarkdownViewModes
-} from './markdown-preview-controls'
+} from './view-mode/markdown-preview-controls'
 import { getEditorHeaderOpenFileState } from './editor-header'
-import type { EditorToggleValue } from './EditorViewToggle'
+import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import type { FileContent } from './editor-panel-content-types'
-import { canUseChangesModeForFile } from './editor-panel-file-mode'
-import { getMarkdownRenderMode, type MarkdownRenderState } from './markdown-render-mode'
-import { getCachedMarkdownRichModeEligibility } from './markdown-rich-mode-eligibility-cache'
-import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
+import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
+import {
+  getMarkdownRenderMode,
+  type MarkdownRenderState
+} from './markdown/render-mode/markdown-render-mode'
+import { getCachedMarkdownRichModeEligibility } from './markdown/render-mode/markdown-rich-mode-eligibility-cache'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown/render-mode/markdown-rich-size-limit'
 import {
   customEditorToggleValue,
   resolveCustomEditorToggle,
   type CustomEditorToggle
-} from './custom-editor-toggle'
+} from './view-mode/custom-editor-toggle'
 import type {
   ActivePluginCustomEditor,
   CustomEditorViewChoice
-} from '@/store/plugin-custom-editors'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 
@@ -34,6 +39,7 @@ type EditorPanelRenderModelParams = {
   gitStatusEntries: StoreState['gitStatusByWorktree'][string] | undefined
   gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
+  markdownDefaultViewMode?: MarkdownDefaultViewMode
   markdownRichModeSizeOverridden: boolean
   isChangesMode: boolean
   canOpenWorkspaceFileBrowser: boolean
@@ -49,6 +55,7 @@ export function getEditorPanelRenderModel({
   gitStatusEntries,
   gitBranchEntries,
   markdownViewMode,
+  markdownDefaultViewMode,
   markdownRichModeSizeOverridden,
   isChangesMode,
   canOpenWorkspaceFileBrowser,
@@ -78,7 +85,9 @@ export function getEditorPanelRenderModel({
         )
   // Read-only artifact tabs require raw source viewers; retain real-language tokenization while suppressing rich/preview modes and their editing affordances.
   const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
-  const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
+  const viewerLanguage = rawReadOnly
+    ? 'plaintext'
+    : getEditorViewLanguage(activeFile.filePath, resolvedLanguage)
   const worktreeEntries = gitStatusEntries ?? []
   const branchEntries = gitBranchEntries ?? []
   const matchingWorktreeEntry =
@@ -107,11 +116,10 @@ export function getEditorPanelRenderModel({
     diffSource: activeFile.diffSource
   })
   const hasViewModeToggle = markdownViewModes.length > 0
-  const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
-    language: viewerLanguage,
-    mode: activeFile.mode,
-    diffSource: activeFile.diffSource
-  })
+  const defaultMarkdownViewMode = getDefaultMarkdownViewMode(
+    { language: viewerLanguage, mode: activeFile.mode, diffSource: activeFile.diffSource },
+    markdownDefaultViewMode
+  )
   const storedMarkdownViewMode = markdownViewMode[activeFile.id]
   const mdViewMode: MarkdownViewMode =
     hasViewModeToggle &&
@@ -228,10 +236,11 @@ export function getEditorPanelRenderModel({
     openFileState,
     isMarkdown: viewerLanguage === 'markdown',
     isMermaid: viewerLanguage === 'mermaid',
+    isSvg: viewerLanguage === 'svg',
     isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
     isNotebook: viewerLanguage === 'notebook',
     // Preview reads disk; exclude deleted modified sides and historical commit snapshots that may not match it.
-    canOpenPreviewToSide:
+    canOpenPreview:
       canOpenWorkspaceFileBrowser &&
       canPreviewLanguage(viewerLanguage) &&
       (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen)),

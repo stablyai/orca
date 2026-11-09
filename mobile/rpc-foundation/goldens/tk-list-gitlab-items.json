@@ -142,6 +142,11 @@
         }
       ]
     },
+    "ba411b67de4b": {
+      "name": "taskListSettled",
+      "ordinal": 9,
+      "value": true
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -175,7 +180,8 @@
             "a2f93be0d571",
             "f1dcb0c02c92",
             "5ac1816a09df",
-            "411aee2eccd9"
+            "411aee2eccd9",
+            "ba411b67de4b"
           ]
         }
       }

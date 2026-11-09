@@ -1,5 +1,5 @@
-import { OrcaRuntimeWithAgentTransitions } from '../orca-runtime-agent-transitions'
-import type { PtyLivenessVerdict } from '../../../shared/pty-liveness-verdict'
+import { OrcaRuntimeWithAgentTransitions } from '../construction/orca-runtime-agent-transitions'
+import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type {
   WorkspaceActivityFactsSnapshot,
   WorkspaceTerminalLiveness

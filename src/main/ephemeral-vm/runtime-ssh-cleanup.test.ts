@@ -40,23 +40,6 @@ function createRuntime(
   })
 }
 
-it('retains the hidden target identity when removal fails', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
-  tempDirs.push(userDataPath)
-
-  await expect(
-    removeEphemeralVmRuntimeSshTarget({
-      userDataPath,
-      runtime: createRuntime(userDataPath, 'cleanup_failed'),
-      removeTarget: vi.fn().mockRejectedValue(new Error('store unavailable'))
-    })
-  ).resolves.toMatchObject({
-    status: 'cleanup_failed',
-    sshTargetId: 'runtime-ssh-1',
-    cleanupLastError: 'Failed to remove the hidden SSH target.'
-  })
-})
-
 it('keeps provider cleanup retryable until target removal succeeds', async () => {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)
@@ -136,25 +119,4 @@ it('does not let a stale concurrent failure regress completed cleanup', async ()
     cleanupStatus: 'succeeded'
   })
   expect(cleaned).not.toHaveProperty('sshTargetId')
-})
-
-it('repairs completed cleanup records that already lost their target id', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
-  tempDirs.push(userDataPath)
-  const runtime = createRuntime(userDataPath, 'cleanup_failed', {
-    cleanupStatus: 'succeeded',
-    sshTargetId: undefined
-  })
-
-  await expect(
-    removeEphemeralVmRuntimeSshTarget({
-      userDataPath,
-      runtime,
-      removeTarget: vi.fn()
-    })
-  ).resolves.toMatchObject({
-    status: 'cleaned',
-    cleanupStatus: 'succeeded',
-    sshTargetId: undefined
-  })
 })

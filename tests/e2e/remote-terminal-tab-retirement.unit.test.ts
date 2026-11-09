@@ -1,16 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
-import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
-import {
-  acceptReplayedWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'
+import type { WorkspaceSessionState } from '../../src/shared/workspace-session/workspace-session-state-types'
+import { acceptReplayedWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
 import { shouldApplyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions'
 import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { withDurableRuntimeStore } from '../../src/main/runtime/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../src/main/runtime/orca-runtime-tests/runtime-durable-store-fixture'
 
 vi.mock('../../src/renderer/src/store', () => ({
   useAppStore: { setState: vi.fn() }

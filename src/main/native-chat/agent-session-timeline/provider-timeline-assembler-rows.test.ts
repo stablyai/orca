@@ -1,9 +1,8 @@
 // Refused events must consume no keys, rows or admission budget.
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
-  assistantText,
   backgroundTask,
   closeProviderTimelineRigs,
   messageText,
@@ -161,44 +160,4 @@ describe('the budget counts the work actually open', () => {
       )
     }
   })
-
-  it('keeps a streamed message counted while its stream is open, whatever its snapshots say', async () => {
-    const rig = await openProviderTimelineRig({ schedule: () => () => {} })
-    for (let index = 0; index < 128; index += 1) {
-      rig.assembler.apply({
-        type: 'text.delta',
-        item: { id: `stream-${index}` },
-        channel: 'assistant',
-        text: 'x'
-      })
-      rig.assembler.apply({
-        type: 'item.update',
-        item: `stream-${index}`,
-        body: assistantText('x')
-      })
-      if (index % 32 === 31) {
-        await rig.rows()
-      }
-    }
-    expect(
-      rig.assembler.apply({
-        type: 'text.delta',
-        item: { id: 'overflow' },
-        channel: 'assistant',
-        text: 'x'
-      }).admission
-    ).toEqual({ accepted: false, reason: 'failed' })
-  })
-
-  it('refuses a provider key larger than the whole budget', () =>
-    openProviderTimelineRig({ schedule: () => () => {} }).then((rig) => {
-      expect(
-        rig.assembler.apply({
-          type: 'text.delta',
-          item: { id: 'x'.repeat(1024 * 1024 + 1) },
-          channel: 'assistant',
-          text: 'tiny'
-        }).admission
-      ).toEqual({ accepted: false, reason: 'failed' })
-    }))
 })

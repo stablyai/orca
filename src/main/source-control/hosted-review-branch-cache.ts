@@ -1,5 +1,14 @@
+import type {
+  CacheEntry,
+  HostedReviewBranchCacheIdentity,
+  HostedReviewBranchCacheOptions
+} from './hosted-review-branch-cache-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type {
+  HostedReviewForBranchOutcome,
+  HostedReviewInfo
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import { cachedHostedReviewOutcome } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   __resetHostedReviewActiveClaimsForTests,
   isActiveBranch,
@@ -19,6 +28,7 @@ import {
   getInflightLookup,
   releaseInflight,
   retireInflightWithPrefix,
+  retireInflightLookup,
   trackInflight,
   type InflightToken
 } from './hosted-review-inflight-lookups'
@@ -35,6 +45,7 @@ import {
   dropFailuresWithPrefix,
   noteFailure
 } from './hosted-review-lookup-backoff'
+import { observeProviderRead } from './hosted-review-provider-read'
 import {
   ACTIVE_REFRESH_INTERVAL_MS,
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
@@ -48,38 +59,9 @@ import {
 const FOUND_REVIEW_TTL_MS = 60_000
 const MAX_ENTRIES = MAX_BRANCH_MAP_ENTRIES
 
-type CacheEntry = {
-  review: HostedReviewInfo | null
-  fetchedAt: number
-  headOid: string | null
-  /** When the lookup that produced this answer began, for straggler ordering. */
-  startedAt: number
-}
-
 const entries = new Map<string, CacheEntry>()
 // NUL cannot occur in paths/branches, preventing invalidation prefixes from crossing identity components.
 const KEY_SEPARATOR = '\0'
-
-export type HostedReviewBranchCacheIdentity = {
-  repoPath: string
-  executionHostId: ExecutionHostId
-  branch: string
-  linkedGitHubPR?: number | null
-  fallbackGitHubPR?: number | null
-  linkedGitLabMR?: number | null
-  linkedBitbucketPR?: number | null
-  linkedAzureDevOpsPR?: number | null
-  linkedGiteaPR?: number | null
-  localGitExecOptions?: unknown
-}
-
-export type HostedReviewBranchCacheOptions = {
-  /** The worktree's checked-out HEAD oid, for merged-at-head visibility. */
-  headOid: string | null
-  /** Set by surfaces that only ever render the selected worktree. */
-  active?: boolean
-  force?: boolean
-}
 
 export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIdentity): string {
   return [
@@ -180,16 +162,18 @@ function startLookup(
   key: string,
   scope: string,
   headOid: string | null,
+  revisionScope: string,
   lookup: () => Promise<HostedReviewInfo | null>
-): Promise<HostedReviewInfo | null> {
+): Promise<HostedReviewForBranchOutcome> {
   const startedAt = Date.now()
   const generation = scopeGeneration(scope)
+  const revision = scopeGeneration(revisionScope)
   const token: InflightToken = {}
   let timedOut = false
   let completed = false
-  let release: (review: HostedReviewInfo | null) => void = () => {}
+  let release: (read: HostedReviewForBranchOutcome) => void = () => {}
   let fail: (error: unknown) => void = () => {}
-  const promise = new Promise<HostedReviewInfo | null>((resolve, reject) => {
+  const promise = new Promise<HostedReviewForBranchOutcome>((resolve, reject) => {
     release = resolve
     fail = reject
   })
@@ -209,11 +193,6 @@ function startLookup(
     }
     // Detached work remains uninterruptible; count it process-wide until completion.
     noteDetachedLookup()
-    const stale = entries.get(key)
-    if (stale) {
-      release(stale.review)
-      return
-    }
     fail(
       new Error(
         `Hosted review lookup timed out after ${Math.round(
@@ -234,10 +213,11 @@ function startLookup(
 
   void (async () => {
     try {
-      const review = await lookup()
+      const { value: review, answeredFromProviderCache } = await observeProviderRead(lookup)
       // Generation invalidates pre-creation answers; without key ownership, stragglers must prove their result still outranks the cache.
       const stored =
         generation === scopeGeneration(scope) &&
+        revision === scopeGeneration(revisionScope) &&
         (getInflightLookup(key)?.token === token || canAdoptDetachedAnswer(key, startedAt))
       if (stored) {
         storeEntry(key, { review, fetchedAt: Date.now(), headOid, startedAt })
@@ -246,7 +226,7 @@ function startLookup(
       if (stored && !timedOut) {
         clearFailures(key)
       }
-      release(review)
+      release({ review, readOutcome: stored && !answeredFromProviderCache ? 'provider' : 'cached' })
     } catch (error) {
       // Deadline already counted failure; never count late rejection twice.
       if (timedOut) {
@@ -255,12 +235,6 @@ function startLookup(
       // Size-evicted stragglers must not back off their successor's branch.
       if (getInflightLookup(key)?.token === token) {
         noteFailure(key)
-      }
-      // Keep last-good data on failure to avoid blinking cards; invalidation still removes obsolete answers.
-      const stale = entries.get(key)
-      if (stale) {
-        release(stale.review)
-        return
       }
       fail(error)
     } finally {
@@ -279,12 +253,18 @@ function startLookup(
   return promise
 }
 
-/** Share fresh answers/in-flight lookups across clients and back off failed branches. */
 export async function withHostedReviewBranchCache(
+  ...args: Parameters<typeof readHostedReviewBranchCache>
+): Promise<HostedReviewInfo | null> {
+  return (await readHostedReviewBranchCache(...args)).review
+}
+
+/** Share fresh answers/in-flight lookups across clients and back off failed branches. */
+export async function readHostedReviewBranchCache(
   identity: HostedReviewBranchCacheIdentity,
   options: HostedReviewBranchCacheOptions,
   lookup: () => Promise<HostedReviewInfo | null>
-): Promise<HostedReviewInfo | null> {
+): Promise<HostedReviewForBranchOutcome> {
   const key = hostedReviewBranchCacheKey(identity)
   const headOid = options.headOid
   // Sweep wall-clock deadlines before joining so suspended timers cannot pin a branch after sleep.
@@ -296,28 +276,53 @@ export async function withHostedReviewBranchCache(
   const active = isActiveBranch(key)
 
   const cached = entries.get(key)
-  if (!options.force && cached && isFresh(cached, headOid, active)) {
-    return cached.review
+  if (!options.userRefresh && !options.force && cached && isFresh(cached, headOid, active)) {
+    return cachedHostedReviewOutcome(cached.review)
   }
 
-  const pending = getInflightLookup(key)
-  if (pending) {
-    return pending.promise
-  }
-
-  const unavailable = lookupUnavailableReason(key)
+  // Admission is keyed independently of revision; a refused click cannot retire an admitted owner.
+  const unavailable = options.userRefresh ? lookupCapacityRefusal(key) : null
   if (unavailable !== null) {
-    // Serve stale answers on backoff, but without cached evidence report error rather than no review.
-    if (cached) {
-      return cached.review
-    }
     throw new Error(unavailable)
   }
+  const revisionScope = `branch-refresh${KEY_SEPARATOR}${key}`
+  if (options.userRefresh) {
+    bumpScopeGeneration(revisionScope)
+    retireInflightLookup(key)
+  }
 
-  return startLookup(
-    key,
-    hostedReviewRepoScope(identity.repoPath, identity.executionHostId),
-    headOid,
-    lookup
+  const settleForCaller = async (promise: Promise<HostedReviewForBranchOutcome>) => {
+    try {
+      return await promise
+    } catch (error) {
+      const stale = entries.get(key)
+      if (!options.userRefresh && stale) {
+        return cachedHostedReviewOutcome(stale.review)
+      }
+      throw error
+    }
+  }
+  const pending = getInflightLookup(key)
+  if (pending) {
+    // The owner began before this caller asked, so its answer can't prove a read after this caller's failure.
+    return settleForCaller(pending.promise.then(({ review }) => cachedHostedReviewOutcome(review)))
+  }
+
+  const refusal = options.userRefresh ? null : lookupUnavailableReason(key)
+  if (refusal !== null) {
+    if (cached) {
+      return cachedHostedReviewOutcome(cached.review)
+    }
+    throw new Error(refusal)
+  }
+
+  return settleForCaller(
+    startLookup(
+      key,
+      hostedReviewRepoScope(identity.repoPath, identity.executionHostId),
+      headOid,
+      revisionScope,
+      lookup
+    )
   )
 }

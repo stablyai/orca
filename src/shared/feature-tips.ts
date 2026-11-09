@@ -3,18 +3,30 @@ import {
   type FeatureInteractionId,
   type FeatureInteractionState
 } from './feature-interactions'
+import type { TelemetrySettings } from './telemetry-settings-types'
 
 export type FeatureTipId =
-  | 'native-chat-upgrade'
+  | 'chat-ui-here'
   | 'voice-dictation'
   | 'orca-cli'
   | 'cmd-j-palette'
   | 'agent-session-search'
 
+export type FeatureTipSeenId = FeatureTipId | 'chat-ui-here-rollout-v1'
+
+export function getFeatureTipSeenId(
+  id: FeatureTipId,
+  telemetry: Pick<TelemetrySettings, 'chatUiLaunchTipRolloutCohort'> | undefined
+): FeatureTipSeenId {
+  return id === 'chat-ui-here' && telemetry?.chatUiLaunchTipRolloutCohort
+    ? 'chat-ui-here-rollout-v1'
+    : id
+}
+
 export type FeatureTipPriority = 'new' | 'unseen'
 
 export type FeatureTipAction =
-  | 'learn-native-chat-upgrade'
+  | 'use-chat-ui'
   | 'enable-voice'
   | 'setup-cli'
   | 'learn-cmd-j-palette'
@@ -36,22 +48,21 @@ export type CompletedFeatureTipState = {
   voiceDictationEnabled: boolean
   /** Search is on, or this client cannot turn it on. */
   sessionSearchTipCompleted: boolean
-  /** Main's once-decided record; only profiles with Chat UI on before the chat upgrade are in it. */
-  inNativeChatUpgradeTipAudience: boolean
+  /** Main's once-decided record leaves this profile out, or this client has no such profile. */
+  chatUiLaunchTipCompleted: boolean
   featureInteractions?: FeatureInteractionState
 }
 
 export const FEATURE_TIPS = [
   {
-    // Show the upgrade tip first for its audience’s first launch.
-    id: 'native-chat-upgrade',
+    // First, so upgraded profiles meet it on their first launch after Chat UI left Experimental.
+    id: 'chat-ui-here',
     priority: 'new',
     eyebrow: 'New',
-    title: 'Native chat got an upgrade',
-    description:
-      'New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open Agent Session History in the right sidebar:',
-    action: 'learn-native-chat-upgrade',
-    ctaLabel: 'Got it',
+    title: 'Chat UI is here',
+    description: 'Agents can now open as a chat, with rich messages, visuals and images.',
+    action: 'use-chat-ui',
+    ctaLabel: 'Use Chat UI',
     completedByFeatureInteractions: []
   },
   {
@@ -100,19 +111,27 @@ export const FEATURE_TIPS = [
 ] as const satisfies readonly FeatureTip[]
 
 export const FEATURE_TIP_IDS = FEATURE_TIPS.map((tip) => tip.id)
+export const FEATURE_TIP_SEEN_IDS: readonly FeatureTipSeenId[] = [
+  ...FEATURE_TIP_IDS,
+  'chat-ui-here-rollout-v1'
+]
 
 export function isFeatureTipId(value: unknown): value is FeatureTipId {
   return typeof value === 'string' && FEATURE_TIP_IDS.includes(value as FeatureTipId)
 }
 
-export function normalizeFeatureTipIds(value: unknown): FeatureTipId[] {
+export function isFeatureTipSeenId(value: unknown): value is FeatureTipSeenId {
+  return value === 'chat-ui-here-rollout-v1' || isFeatureTipId(value)
+}
+
+export function normalizeFeatureTipIds(value: unknown): FeatureTipSeenId[] {
   if (!Array.isArray(value)) {
     return []
   }
 
-  const seen = new Set<FeatureTipId>()
+  const seen = new Set<FeatureTipSeenId>()
   for (const item of value) {
-    if (isFeatureTipId(item)) {
+    if (isFeatureTipSeenId(item)) {
       seen.add(item)
     }
   }
@@ -130,8 +149,8 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   if (state.sessionSearchTipCompleted) {
     completedIds.add('agent-session-search')
   }
-  if (!state.inNativeChatUpgradeTipAudience) {
-    completedIds.add('native-chat-upgrade')
+  if (state.chatUiLaunchTipCompleted) {
+    completedIds.add('chat-ui-here')
   }
   for (const tip of FEATURE_TIPS) {
     if (
@@ -146,12 +165,15 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
 }
 
 export function getOrderedUnseenFeatureTips(args: {
-  seenTipIds: ReadonlySet<FeatureTipId>
+  seenTipIds: ReadonlySet<FeatureTipSeenId>
   completedTipIds?: ReadonlySet<FeatureTipId>
+  telemetry?: Pick<TelemetrySettings, 'chatUiLaunchTipRolloutCohort'>
 }): FeatureTip[] {
   const completedTipIds = args.completedTipIds ?? new Set<FeatureTipId>()
   const unseenTips = FEATURE_TIPS.filter(
-    (tip) => !args.seenTipIds.has(tip.id) && !completedTipIds.has(tip.id)
+    (tip) =>
+      !args.seenTipIds.has(getFeatureTipSeenId(tip.id, args.telemetry)) &&
+      !completedTipIds.has(tip.id)
   )
   return [
     ...unseenTips.filter((tip) => tip.priority === 'new'),

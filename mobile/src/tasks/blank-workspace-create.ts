@@ -1,5 +1,5 @@
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import type { RpcClient } from '../transport/rpc-client'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
 import type { WorktreeCreateAgentLaunch } from './agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'

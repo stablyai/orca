@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import * as shell from './tui-agent-startup-shell'
+import * as shell from './agent-launch/startup/tui-agent-startup-shell'
 import type { GlobalSettings } from './global-settings-types'
 import { getDefaultVoiceSettings } from './constants'
 import { getDefaultNotificationSettings } from './notification-settings-defaults'
@@ -18,6 +18,7 @@ export function createGlobalSettingsFixture(
       primarySelectionMiddleClickPaste: false,
       primarySelectionDefaultedForLinux: false,
       terminalFontFamily: 'JetBrains Mono',
+      terminalFontWeight: 500,
       terminalInactivePaneOpacity: 0.5,
       terminalRightClickToPaste: false,
       notifications: getDefaultNotificationSettings(),

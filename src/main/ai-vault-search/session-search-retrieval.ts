@@ -1,6 +1,9 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchRoute, SessionSearchScope } from './session-search-engine-types'
-import type { MessageRow, SessionRow } from './session-search-hit-ranking'
+import type { SessionSearchFrozenHit } from './session-search-ranked-cursor'
+import { SessionSearchCursorError } from './session-search-page-cursor'
+import { readIndexGeneration } from './session-search-index-generation'
+import type { RankedSession, MessageRow, SessionRow } from './session-search-hit-ranking'
 import {
   andExpression,
   orExpression,
@@ -10,7 +13,11 @@ import {
   type SessionSearchQueryPlan
 } from './session-search-query-planner'
 import type { SessionRowFilter } from './session-search-row-filter'
-import { SessionSearchTypoRepair } from './session-search-typo-repair'
+import {
+  SessionSearchTypoRepair,
+  SessionSearchVocabularyBudget
+} from './session-search-typo-repair'
+import { SessionSearchPostings, SESSION_SEARCH_MESSAGE_CANDIDATES } from './session-search-postings'
 
 const RECENT_PAGE_ROWS = 512
 // Leave SQLite parameter capacity for filter values as well as session IDs.
@@ -21,7 +28,7 @@ const RECENT_SCAN_FACTOR = 20
 const FULL_WEIGHTS = '3.0, 2.0, 1.0, 1.0'
 const CONVERSATION_WEIGHTS = '3.0, 2.0, 0.0, 0.0'
 
-// Keep SQL text stable for statement-cache reuse; tests pin the projected schema.
+// Keep SQL text stable for statement-cache reuse.
 const SESSION_COLUMN_LIST = (
   [
     'id',
@@ -73,39 +80,52 @@ export class SessionSearchRetrieval {
     this.typoRepair = new SessionSearchTypoRepair(db)
   }
 
-  /** Try typo repair before OR so common words cannot mask a misspelled term. */
+  /** Preserve original OR hits before spending the remaining allowance on optional repair. */
   run(plan: SessionSearchQueryPlan, scope: RetrievalScope): Retrieved {
     let incomplete = false
-    let sessions: SessionRow[] = []
+    const sessionCache = new Map<number, SessionRow | null>()
+    const postings = new SessionSearchPostings(this.db, scope.scope, (id) => {
+      if (!sessionCache.has(id)) {
+        sessionCache.set(id, this.loadSessions([id], scope)[0] ?? null)
+      }
+      return sessionCache.get(id) !== null
+    })
     const match = (expression: string): MessageRow[] => {
-      const rows = this.match(expression, scope)
-      // Only the route returned to the caller determines whether candidates were truncated.
-      incomplete = rows.length >= scope.candidateLimit
-      sessions = this.loadSessions(
-        rows.map((row) => row.session_row_id),
-        scope
-      )
-      const eligible = new Set(sessions.map((row) => row.id))
-      return rows.filter((row) => eligible.has(row.session_row_id))
+      const rows = this.match(expression, scope, postings)
+      incomplete ||= rows.length >= SESSION_SEARCH_MESSAGE_CANDIDATES
+      return rows
     }
+    const sessionsFor = (rows: MessageRow[]): SessionRow[] =>
+      [...new Set(rows.map((row) => row.session_row_id))].flatMap(
+        (id) => sessionCache.get(id) ?? []
+      )
     const exact = this.phraseThenAnd(plan, match)
     if (exact) {
-      return { ...exact, plan, incomplete, sessions }
+      return {
+        ...exact,
+        plan,
+        incomplete: incomplete || postings.exhausted,
+        sessions: sessionsFor(exact.rows)
+      }
     }
-    const repaired = this.repair(plan, scope.scope)
-    const effective = repaired ?? plan
-    const literal = repaired ? this.phraseThenAnd(repaired, match) : null
-    const found = literal ?? {
-      rows: match(orExpression(effective.terms)),
-      route: 'or' as const
-    }
+    const original = { rows: match(orExpression(plan.terms)), route: 'or' as const }
+    const vocabulary = new SessionSearchVocabularyBudget()
+    const repaired = this.repair(plan, scope.scope, postings, vocabulary)
+    const attempted = repaired
+      ? (this.phraseThenAnd(repaired, match) ?? {
+          rows: match(orExpression(repaired.terms)),
+          route: 'or' as const
+        })
+      : null
+    const successfulRepair = attempted && attempted.rows.length > 0 ? repaired : null
+    const found = successfulRepair && attempted ? attempted : original
     return {
-      sessions,
+      sessions: sessionsFor(found.rows),
       rows: found.rows,
-      incomplete,
-      route: repaired ? (`typo+${found.route}` as SessionSearchRoute) : found.route,
-      plan: effective,
-      ...(repaired ? { repairedTerms: repaired.body } : {})
+      incomplete: incomplete || postings.exhausted || vocabulary.exhausted,
+      route: successfulRepair ? `typo+${found.route}` : found.route,
+      plan: successfulRepair ?? plan,
+      ...(successfulRepair ? { repairedTerms: successfulRepair.body } : {})
     }
   }
 
@@ -141,16 +161,55 @@ export class SessionSearchRetrieval {
     return { sessions, incomplete: incomplete || sessions.length >= scope.candidateLimit }
   }
 
+  /** Hydrate only the frozen slice; reapply scope and message ownership to untrusted cursor IDs. */
+  hydrate(hits: readonly SessionSearchFrozenHit[], scope: RetrievalScope): RankedSession[] {
+    const sessions = new Map(
+      this.loadSessions(
+        hits.map((hit) => hit.s),
+        scope
+      ).map((row) => [row.id, row])
+    )
+    const ids = hits.flatMap((hit) => (hit.m === null ? [] : [hit.m]))
+    const messages = new Map<number, MessageRow>()
+    if (ids.length) {
+      const rows = this.db
+        .prepare(`SELECT id AS rowid, session_row_id, role, ts FROM messages
+        WHERE id IN (${ids.map(() => '?').join(',')}) AND role != 'tool'`)
+        .all(...ids)
+      for (const row of rows) {
+        messages.set(Number(row.rowid), {
+          rowid: Number(row.rowid),
+          session_row_id: Number(row.session_row_id),
+          role: String(row.role),
+          ts: typeof row.ts === 'string' ? row.ts : null,
+          score: 0
+        })
+      }
+    }
+    return hits.map((hit) => {
+      const session = sessions.get(hit.s)
+      const message = hit.m === null ? null : messages.get(hit.m)
+      if (!session || message === undefined || (message && message.session_row_id !== hit.s)) {
+        throw new SessionSearchCursorError('malformed', readIndexGeneration(this.db))
+      }
+      return { session, message, score: hit.score, duplicateCount: hit.d }
+    })
+  }
+
   /** Bound SQL parameters independently of the configurable candidate limit. */
   private loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
     const rows: SessionRow[] = []
+    const { conditions: predicates, values } = scope.filter.candidate
     for (let start = 0; start < ids.length; start += SESSION_ID_BATCH) {
       const batch = ids.slice(start, start + SESSION_ID_BATCH)
-      const conditions = [`id IN (${batch.map(() => '?').join(',')})`, ...scope.filter.conditions]
+      const conditions = [`id IN (${batch.map(() => '?').join(',')})`, ...predicates]
       const sessionRows = this.db
         .prepare(`SELECT ${SESSION_COLUMN_LIST} FROM sessions WHERE ${conditions.join(' AND ')}`)
-        .all(...batch, ...scope.filter.values)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private sessions schema defines SessionRow; tests compare every projected column and value with that schema.
+        .all(...batch, ...values)
+        .filter((row) =>
+          scope.filter.matchesScope(typeof row.cwd_key === 'string' ? row.cwd_key : null)
+        )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The selected columns match the private sessions schema defining SessionRow.
       rows.push(...(sessionRows as SessionRow[]))
     }
     return rows.filter((row) => scope.matchesOperators(row))
@@ -158,7 +217,9 @@ export class SessionSearchRetrieval {
 
   private repair(
     plan: SessionSearchQueryPlan,
-    scope: SessionSearchScope
+    scope: SessionSearchScope,
+    postings: SessionSearchPostings,
+    vocabulary: SessionSearchVocabularyBudget
   ): SessionSearchQueryPlan | null {
     const typoRepair = this.typoRepair
     let changed = false
@@ -169,7 +230,7 @@ export class SessionSearchRetrieval {
         return token
       }
       // Tool-only vocabulary must neither suppress nor supply a conversation-scoped repair.
-      const fix = typoRepair.correct(token, scope)
+      const fix = typoRepair.correct(token, scope, postings, vocabulary)
       if (fix && fix !== token.toLowerCase()) {
         changed = true
         return fix
@@ -201,24 +262,35 @@ export class SessionSearchRetrieval {
     return and.length > 0 ? { rows: and, route: 'and' } : null
   }
 
-  private match(expression: string, scope: RetrievalScope): MessageRow[] {
-    const { filter, sort, candidateLimit } = scope
-    const eligible = filter.conditions.length
-      ? ` AND m.session_row_id IN (SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')})`
-      : ''
-    const matched = `SELECT messages_fts.rowid AS rowid,
-      -bm25(messages_fts, ${scopedWeights(scope.scope)}) AS score,
-      m.session_row_id, m.role, m.ts, s.updated_at
-      FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid
-      JOIN sessions s ON s.id = m.session_row_id WHERE messages_fts MATCH ?${eligible}`
-    // Group before limiting so one long session cannot consume the candidate budget.
-    // SQLite’s max(score) selects the best matching row for the other projected columns.
-    const order = sort === 'newest' ? 'updated_at DESC, score DESC' : 'score DESC'
-    const sql = `WITH matched AS MATERIALIZED (${matched})
-      SELECT rowid, max(score) AS score, session_row_id, role, ts FROM matched
-      GROUP BY session_row_id ORDER BY ${order} LIMIT ${candidateLimit}`
-    return this.db
-      .prepare(sql)
-      .all(scopedExpression(scope.scope, expression), ...filter.values) as MessageRow[]
+  private match(
+    expression: string,
+    scope: RetrievalScope,
+    postings: SessionSearchPostings
+  ): MessageRow[] {
+    const rows: MessageRow[] = []
+    for (const row of postings.matching(expression)) {
+      rows.push(row)
+      if (rows.length >= SESSION_SEARCH_MESSAGE_CANDIDATES) {
+        break
+      }
+    }
+    if (!rows.length) {
+      return []
+    }
+    const admitted = new Map(rows.map((row) => [row.rowid, row]))
+    const ids = [...admitted.keys()]
+    // Why: one range cursor retains BM25's corpus statistics across all admitted rows.
+    const scores = this.db
+      .prepare(`SELECT rowid, -bm25(messages_fts, ${scopedWeights(scope.scope)}) AS score
+        FROM messages_fts WHERE messages_fts MATCH ?
+        AND rowid >= CAST(? AS INTEGER) AND rowid <= CAST(? AS INTEGER)`)
+      .iterate(scopedExpression(scope.scope, expression), Math.min(...ids), Math.max(...ids))
+    for (const score of scores) {
+      const row = admitted.get(Number(score.rowid))
+      if (row) {
+        row.score = Number(score.score)
+      }
+    }
+    return rows
   }
 }

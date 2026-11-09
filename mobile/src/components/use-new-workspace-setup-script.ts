@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { normalizeSetupHookTrust, readRepoHooksSetupCommand } from '../tasks/setup-hook-trust'
 import { newWorkspaceSetupHooksRead } from './new-workspace-operations'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'

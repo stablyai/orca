@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { runPullRequestStateUpdate } from '@/components/github/github-work-item-edit-mutations'
@@ -15,7 +15,7 @@ import type {
   GitHubPRMergeMethod
 } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { translate } from '@/i18n/i18n'
 import type { GitHubPRMergeStatePresentation } from '@/components/github-pr-merge-state'
@@ -85,7 +85,6 @@ export async function changePullRequestState(args: {
         ? translate('auto.components.PullRequestPage.7aa3b5f706', 'Pull request closed')
         : translate('auto.components.PullRequestPage.710e47aa06', 'Pull request reopened')
     )
-    args.onMutated()
   } catch (err) {
     args.applyStatePatch(previousState)
     // Why: full sentences per state — interpolating the localized verb into a template mangles other locales.
@@ -104,6 +103,8 @@ export async function changePullRequestState(args: {
     )
   } finally {
     args.setStatePending(false)
+    // Why: a failed response doesn't prove the host kept the old state; reread after the revert so the page shows what landed.
+    args.onMutated()
   }
 }
 
@@ -181,7 +182,6 @@ export async function mergePullRequest(args: {
       )
     }
     toast.success(translate('auto.components.PullRequestPage.c57873d721', 'Pull request merged'))
-    args.onMutated()
   } catch (err) {
     toast.error(
       err instanceof Error
@@ -190,6 +190,8 @@ export async function mergePullRequest(args: {
     )
   } finally {
     args.setMergePending(false)
+    // Why: a failed response doesn't prove the host kept the old state; reread on every attempted write.
+    args.onMutated()
   }
 }
 
@@ -256,7 +258,6 @@ export async function setPullRequestAutoMerge(args: {
         ? translate('auto.components.PullRequestPage.5edbe7eefa', 'Auto-merge enabled')
         : translate('auto.components.PullRequestPage.0f5821b035', 'Auto-merge disabled')
     )
-    args.onMutated()
   } catch (err) {
     toast.error(
       err instanceof Error
@@ -267,5 +268,6 @@ export async function setPullRequestAutoMerge(args: {
     )
   } finally {
     args.setMergePending(false)
+    args.onMutated()
   }
 }

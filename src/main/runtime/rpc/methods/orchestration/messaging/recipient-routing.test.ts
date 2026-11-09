@@ -1,14 +1,17 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
-import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-types'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-terminal-contracts'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext, RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+
+import {
+  createRootDispatch,
+  reattachDispatchConsumer
+} from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 type SendWarning = { code: string; recipient: string; message: string }
 type SendResult = {
@@ -94,6 +97,38 @@ describe('orchestration recipient routing oracle', () => {
       messages: { id: string }[]
     }
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
+  })
+
+  it('keeps a reply to a live terminal-only sender readable there and reports its limitation', async () => {
+    setup()
+    mockTerminalPaneKeys((handle) =>
+      handle === 'term_coord'
+        ? harness.coordinatorPaneKey
+        : handle === 'term_live'
+          ? 'tab_live:leaf_live'
+          : null
+    )
+    const note = db.insertMessage({
+      from: 'term_live',
+      to: `run:${senderRunId}`,
+      subject: 'Pull-mail note',
+      runId: senderRunId
+    })
+
+    const reply = await harness.call(
+      'orchestration.reply',
+      { id: note.id, from: 'term_coord', body: 'Got it' },
+      ctx
+    )
+
+    const [stored] = db.getAllMessagesForHandle('term_live')
+    expect(reply).toMatchObject({
+      message: { id: stored!.id, to_handle: 'term_live' },
+      warnings: [{ code: 'legacy_terminal_recipient', recipient: 'term_live' }]
+    })
+    expect(await harness.call('orchestration.check', { terminal: 'term_live' }, ctx)).toMatchObject(
+      { messages: [{ id: stored!.id }], count: 1 }
+    )
   })
 
   it('normalizes a cross-Run coordinator handle to the recipient Run mailbox', async () => {
@@ -245,6 +280,50 @@ describe('orchestration recipient routing oracle', () => {
     expect(check.messages.map((message) => message.id)).toEqual([result.message.id])
   })
 
+  it('reaches a terminal still bound to an older Run through its Dispatch in the named Run', async () => {
+    setup()
+    const pane = 'tab_former:leaf_former'
+    const olderRun = db.createRun({
+      objective: 'Older Run this terminal coordinated',
+      coordinatorHandle: 'term_former',
+      coordinatorPaneKey: pane
+    })
+    const dispatch = createRootDispatch(
+      db,
+      db.createTask({ spec: 'now a worker', runId: senderRunId }).id,
+      'term_former',
+      pane
+    )
+    mockTerminalPaneKeys((handle) =>
+      handle === 'term_coord' ? harness.coordinatorPaneKey : handle === 'term_former' ? pane : null
+    )
+
+    const sent = await call({
+      from: 'term_coord',
+      to: 'term_former',
+      run: senderRunId,
+      subject: 'instructions'
+    })
+
+    expect(sent).toMatchObject({
+      message: { run_id: olderRun.id, to_handle: `run:${olderRun.id}` },
+      warnings: [{ code: 'recipient_run_bound_redirect' }]
+    })
+    expect(
+      await harness.call('orchestration.check', { terminal: 'term_former', peek: true }, ctx)
+    ).toMatchObject({ messages: [{ subject: 'instructions' }] })
+
+    // A replaced process no longer holds that Dispatch, so nothing would read the mail.
+    reattachDispatchConsumer(db, {
+      dispatchId: dispatch.id,
+      paneKey: pane,
+      processIncarnation: 'replaced:pty:1'
+    })
+    await expect(
+      call({ from: 'term_coord', to: 'term_former', run: senderRunId, subject: 'lost' })
+    ).rejects.toMatchObject({ code: 'recipient_run_mismatch' })
+  })
+
   it('keeps same-Run historical coordinator routing from the canonical mailbox change', async () => {
     setup()
     db.bindRun({
@@ -283,39 +362,6 @@ describe('orchestration recipient routing oracle', () => {
       call({ from: 'term_coord', to: 'term_ambiguous', subject: 'ambiguous' })
     ).rejects.toMatchObject({ code: 'recipient_ambiguous' })
     expect(db.getInbox(100)).toEqual([])
-  })
-
-  it('partially delivers @worktree:<id> when a listed recipient disappears before routing', async () => {
-    setup()
-    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
-      terminals: [terminal('term_coord'), terminal('term_live'), terminal('term_disappeared')],
-      totalCount: 3,
-      truncated: false
-    })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_coord'
-        ? harness.coordinatorPaneKey
-        : handle === 'term_live'
-          ? 'tab_live:leaf_live'
-          : null
-    )
-    const adoptionLookup = vi.spyOn(db, 'getLegacyAdoptedRunMailboxOwner')
-
-    const result = (await call({
-      from: 'term_coord',
-      to: '@worktree:wt_target',
-      subject: 'fan-out'
-    })) as GroupSendResult
-
-    expect(result.messages).toHaveLength(1)
-    expect(result.messages[0]).toMatchObject({ to_handle: 'term_live' })
-    expect(result.recipients).toBe(1)
-    expect(result.warnings?.map((warning) => warning.code).sort()).toEqual([
-      'legacy_terminal_recipient',
-      'recipient_unreachable'
-    ])
-    expect(db.getInbox(100)).toHaveLength(1)
-    expect(adoptionLookup).toHaveBeenCalledTimes(1)
   })
 
   it('addresses @all recipients by Dispatch, so a vanished worker terminal still gets durable mail', async () => {

@@ -11,6 +11,7 @@ import {
 import { buildPluginWorkerSpawnSpec, pluginWorkerSpawnSpecsEqual } from './plugin-worker-spawn-spec'
 import type { PluginWorkerHandle } from './plugin-host-process'
 import type { PluginRunState } from './plugin-supervisor'
+import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
 
 export type PluginWorkerControllerOptions = {
   entryPath: string
@@ -25,8 +26,10 @@ export type PluginWorkerControllerOptions = {
   executeHostCall: (
     pluginKey: string,
     method: string,
-    params: unknown
+    params: unknown,
+    signal?: AbortSignal
   ) => Promise<PluginHostCallOutcome>
+  onPanelPost?: (pluginKey: string, post: PluginWorkerPanelPost) => void
   log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
   onStateChanged: (pluginKey: string) => void
 }
@@ -44,9 +47,14 @@ export class PluginWorkerController {
       idleReapMs: options.idleReapMs,
       workerFactory: options.workerFactory,
       executeHostCall: options.executeHostCall,
+      onPanelPost: options.onPanelPost,
       log: options.log,
       onWorkerStateChange: options.onStateChanged
     })
+  }
+
+  runningHandle(pluginKey: string): PluginWorkerHandle | null {
+    return this.manager.runningHandle(pluginKey)
   }
 
   state(pluginKey: string): { state: PluginRunState; restarts: number } {

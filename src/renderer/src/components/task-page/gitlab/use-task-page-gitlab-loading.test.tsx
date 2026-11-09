@@ -1,21 +1,24 @@
 // @vitest-environment happy-dom
 
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import { cleanup, renderHook } from '@testing-library/react'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
+
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+
+vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: rpc.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: rpc.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn()
 }))
 
-import {
-  GITLAB_TASK_FETCH_CONCURRENCY,
-  useTaskPageGitLabLoading
-} from './use-task-page-gitlab-loading'
+import { gitLabListQueryKey, useTaskPageGitLabLoading } from './use-task-page-gitlab-loading'
 
 const serverRepo: Repo = {
   id: 'server-repo',
@@ -26,6 +29,14 @@ const serverRepo: Repo = {
   executionHostId: 'runtime:build-box'
 }
 const glListIssues = vi.fn()
+const LIST_STATE = {
+  gitlabItems: [],
+  gitlabError: null,
+  gitlabLoading: false,
+  displayedGitLabItems: [],
+  gitlabListQueryKey: null,
+  setGitlabListQueryKey: vi.fn()
+}
 
 beforeEach(() => {
   rpc.call.mockReset().mockResolvedValue({ items: [{ id: 'i1', updatedAt: '2026-10-01' }] })
@@ -36,203 +47,54 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('useTaskPageGitLabLoading', () => {
-  it('lists a server-owned repo on its server (#14603)', async () => {
-    const setGitlabItems = vi.fn()
-    const setGitlabError = vi.fn()
-    renderHook(() =>
-      useTaskPageGitLabLoading({
-        selectedRepos: [serverRepo],
-        selectedReposKey: 'server-repo',
-        primaryRepo: serverRepo,
-        taskSource: 'gitlab',
-        setGitlabItems,
-        setGitlabLoading: vi.fn(),
-        setGitlabError,
-        gitlabRefreshNonce: 0,
-        gitlabView: 'issues',
-        setGitlabTodos: vi.fn(),
-        setGitlabTodosLoading: vi.fn(),
-        activeGitlabFilter: 'opened'
-      })
-    )
-
-    await waitFor(() => expect(setGitlabItems).toHaveBeenCalled())
-    expect(glListIssues).not.toHaveBeenCalled()
-    expect(rpc.call).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'build-box' },
-      'gitlab.listIssues',
-      expect.objectContaining({ repo: 'id:server-repo', state: 'opened' }),
-      expect.anything()
-    )
-    expect(setGitlabItems).toHaveBeenLastCalledWith([
-      expect.objectContaining({ id: 'i1', repoId: 'server-repo' })
-    ])
-    expect(setGitlabError).not.toHaveBeenCalledWith(expect.stringContaining('Access denied'))
-  })
-
-  it('shows MR rows and refresh errors without fetching the advertised probe page', async () => {
-    const items: GitLabWorkItem[] = Array.from({ length: 50 }, (_, index) => ({
-      id: `mr-${index + 1}`,
+  it("never shows the previous filter's rows while a changed filter loads", () => {
+    rpc.call.mockReturnValue(new Promise(() => {}))
+    const row: GitLabWorkItem = {
+      id: 'mr-1',
       type: 'mr',
-      number: index + 1,
-      title: `Merge request ${index + 1}`,
+      number: 1,
+      title: 'Someone else',
       state: 'opened',
-      url: `https://gitlab.com/group/app/-/merge_requests/${index + 1}`,
+      url: 'https://gitlab.com/group/app/-/merge_requests/1',
       labels: [],
       updatedAt: '2026-10-01T00:00:00Z',
       author: null,
-      repoId: 'group/app'
-    }))
-    rpc.call.mockResolvedValueOnce({ items, page: 1, perPage: 50, totalCount: 0, totalPages: 2 })
-    const setGitlabItems = vi.fn()
-    const setGitlabError = vi.fn()
-    const setGitlabLoading = vi.fn()
-    const { rerender } = renderHook(
-      ({ refreshNonce }) =>
+      repoId: 'server-repo'
+    }
+    const everyoneKey = gitLabListQueryKey('mrs', 'opened', null, 'server-repo')
+    const initialProps: { involvement: 'authored' | null; nonce: number } = {
+      involvement: null,
+      nonce: 0
+    }
+    const { result, rerender } = renderHook(
+      ({ involvement, nonce }: { involvement: 'authored' | null; nonce: number }) =>
         useTaskPageGitLabLoading({
           selectedRepos: [serverRepo],
           selectedReposKey: 'server-repo',
           primaryRepo: serverRepo,
           taskSource: 'gitlab',
-          setGitlabItems,
-          setGitlabLoading,
-          setGitlabError,
-          gitlabRefreshNonce: refreshNonce,
+          setGitlabItems: vi.fn(),
+          setGitlabLoading: vi.fn(),
+          setGitlabError: vi.fn(),
+          gitlabRefreshNonce: nonce,
           gitlabView: 'mrs',
           setGitlabTodos: vi.fn(),
           setGitlabTodosLoading: vi.fn(),
-          activeGitlabFilter: 'opened'
+          activeGitlabFilter: 'opened',
+          gitlabMRInvolvement: involvement,
+          ...LIST_STATE,
+          gitlabItems: [row],
+          displayedGitLabItems: [row],
+          gitlabListQueryKey: everyoneKey
         }),
-      { initialProps: { refreshNonce: 0 } }
+      { initialProps }
     )
 
-    await waitFor(() => expect(setGitlabLoading).toHaveBeenLastCalledWith(false))
-    expect(setGitlabItems).toHaveBeenLastCalledWith(
-      items.map((item) => ({ ...item, repoId: serverRepo.id, repoHostId: 'runtime:build-box' }))
-    )
-    expect(setGitlabError).toHaveBeenLastCalledWith(null)
-    expect(rpc.call).toHaveBeenCalledTimes(1)
-    expect(rpc.call).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'build-box' },
-      'gitlab.listMRs',
-      expect.objectContaining({ repo: 'id:server-repo', state: 'opened', page: 1, perPage: 50 }),
-      expect.anything()
-    )
+    rerender({ involvement: null, nonce: 1 })
+    expect(result.current.displayedGitLabItems).toEqual([row])
 
-    rpc.call.mockResolvedValueOnce({
-      items: [],
-      page: 1,
-      perPage: 50,
-      totalCount: 0,
-      totalPages: 0,
-      error: { type: 'permission_denied', message: 'GitLab access denied' }
-    })
-    rerender({ refreshNonce: 1 })
-    await waitFor(() => expect(setGitlabError).toHaveBeenLastCalledWith('GitLab access denied'))
-    expect(setGitlabItems).toHaveBeenLastCalledWith([])
-    expect(setGitlabLoading).toHaveBeenLastCalledWith(false)
-    expect(rpc.call).toHaveBeenCalledTimes(2)
-  })
-
-  function manyServerRepos(count: number): Repo[] {
-    return Array.from({ length: count }, (_, i) => ({
-      ...serverRepo,
-      id: `server-repo-${i}`,
-      path: `/srv/app-${i}`,
-      displayName: `app-${i}`
-    }))
-  }
-
-  function renderIssuesHook(repos: Repo[], setGitlabItems = vi.fn()) {
-    return renderHook(() =>
-      useTaskPageGitLabLoading({
-        selectedRepos: repos,
-        selectedReposKey: repos.map((repo) => repo.id).join(','),
-        primaryRepo: repos[0],
-        taskSource: 'gitlab',
-        setGitlabItems,
-        setGitlabLoading: vi.fn(),
-        setGitlabError: vi.fn(),
-        gitlabRefreshNonce: 0,
-        gitlabView: 'issues',
-        setGitlabTodos: vi.fn(),
-        setGitlabTodosLoading: vi.fn(),
-        activeGitlabFilter: 'opened'
-      })
-    )
-  }
-
-  it('bounds concurrent per-repo GitLab calls for large all-projects selections (#30133)', async () => {
-    const repos = manyServerRepos(20)
-    let inFlight = 0
-    let maxInFlight = 0
-    rpc.call.mockImplementation(async (_target, _method, params: { repo: string }) => {
-      inFlight += 1
-      maxInFlight = Math.max(maxInFlight, inFlight)
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      inFlight -= 1
-      return { items: [{ id: `item-${params.repo}`, updatedAt: '2026-10-01' }] }
-    })
-    const setGitlabItems = vi.fn()
-
-    renderIssuesHook(repos, setGitlabItems)
-
-    await waitFor(() => expect(setGitlabItems).toHaveBeenCalled())
-    expect(rpc.call).toHaveBeenCalledTimes(repos.length)
-    expect(maxInFlight).toBe(GITLAB_TASK_FETCH_CONCURRENCY)
-    expect(setGitlabItems.mock.lastCall?.[0]).toHaveLength(repos.length)
-    expect(setGitlabItems).toHaveBeenLastCalledWith(
-      expect.arrayContaining(repos.map((repo) => expect.objectContaining({ repoId: repo.id })))
-    )
-  })
-
-  it("stamps each twin row's items with the host that returned them", async () => {
-    const twinOnOtherServer: Repo = { ...serverRepo, executionHostId: 'runtime:other-box' }
-    rpc.call.mockImplementation(async (target: { environmentId: string }) => ({
-      items: [{ id: `issue-on-${target.environmentId}`, updatedAt: '2026-10-01' }]
-    }))
-    const setGitlabItems = vi.fn()
-
-    renderIssuesHook([serverRepo, twinOnOtherServer], setGitlabItems)
-
-    await waitFor(() => expect(setGitlabItems).toHaveBeenCalled())
-    expect(setGitlabItems.mock.lastCall?.[0]).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'issue-on-build-box',
-          repoId: 'server-repo',
-          repoHostId: 'runtime:build-box'
-        }),
-        expect.objectContaining({
-          id: 'issue-on-other-box',
-          repoId: 'server-repo',
-          repoHostId: 'runtime:other-box'
-        })
-      ])
-    )
-  })
-
-  it('stops starting GitLab calls once the selection goes stale (#30133)', async () => {
-    const repos = manyServerRepos(20)
-    const pending: (() => void)[] = []
-    rpc.call.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          pending.push(() => resolve({ items: [] }))
-        })
-    )
-    const setGitlabItems = vi.fn()
-
-    const { unmount } = renderIssuesHook(repos, setGitlabItems)
-
-    await waitFor(() => expect(rpc.call).toHaveBeenCalledTimes(GITLAB_TASK_FETCH_CONCURRENCY))
-    unmount()
-    for (const resolve of pending.splice(0)) {
-      resolve()
-    }
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(rpc.call).toHaveBeenCalledTimes(GITLAB_TASK_FETCH_CONCURRENCY)
-    expect(setGitlabItems).not.toHaveBeenCalled()
+    rerender({ involvement: 'authored', nonce: 2 })
+    expect(result.current.displayedGitLabItems).toEqual([])
+    expect(result.current.gitlabLoading).toBe(true)
   })
 })

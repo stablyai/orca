@@ -1,5 +1,6 @@
-import type { ConnectionState, RpcResponse } from '../transport/types'
-import { BridgeCapExceededError, BridgeReplyUndeliverableError } from './bridge-host-errors'
+import type { ConnectionState } from '../transport/connection/connection-state'
+
+import { BridgeCapExceededError } from './bridge-host-errors'
 import { createNativeVerbServer } from './bridge-host-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
@@ -9,18 +10,18 @@ import {
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
   readBridgeClientMessage,
-  type BridgeClientMessage,
-  type BridgeConnectionSnapshot
+  type BridgeClientMessage
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
 import { createBridgeInitFrame } from './bridge/bridge-init-frame'
-import { splitBridgeReply } from './bridge/bridge-reply-chunking'
+import { createBridgeHostReplySender } from './bridge-host-reply-sender'
 import { createBridgeHostFrames } from './bridge-host-frames'
 import { createBridgeHostBack } from './bridge-host-back'
 import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
 import { pageStorageForReader } from './page-storage-keys'
 import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/bridge-terminal-key'
+import { createBridgeVerdictHold, isDesktopBound } from './bridge-host-verdict-hold'
 import type { BridgeHost, BridgeHostOptions } from './bridge-host-contract'
 
 export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
@@ -65,6 +66,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // What the page's init reader accepts, carried across a rebuild because the page does not
   // re-handshake. Null is a page older than `storageKeys`, which gets the legacy keys only.
   let pageStorageKeys: readonly string[] | null = options.sessionBack?.storageKeys ?? null
+  let pageReadsConnectionPath = options.sessionBack?.connectionPathFrames === true
 
   const frames = createBridgeHostFrames({
     post: options.post,
@@ -73,8 +75,10 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
   const { postJson, sendJson, send, sendError } = frames
 
+  const verdict = createBridgeVerdictHold(options.readHostStatus, sendError)
   const subscriptions = new BridgeHostSubscriptions({
     client,
+    holdReplay: verdict.holdReplay,
     post: sendJson,
     onBinaryFrameDropped: ({ id, bytes, droppedOnStream }) => {
       options.onDiagnostic?.({ kind: 'binary-frame-dropped', id, bytes, dropped: droppedOnStream })
@@ -87,15 +91,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   })
 
   // Use the event’s state; listeners can run before the mirrored getter updates.
-  function snapshot(state?: ConnectionState): BridgeConnectionSnapshot {
-    return {
-      state: state ?? client.getState(),
-      reconnectAttempt: client.getReconnectAttempt(),
-      lastConnectedAt: client.getLastConnectedAt(),
-      lastInboundAt: client.getLastInboundAt?.() ?? null,
-      generation: client.getGeneration?.() ?? null
-    }
-  }
+  const snapshot = (state?: ConnectionState) => verdict.snapshot(client, state)
 
   /**
    * Posts `init`, and answers nothing (ruling 34).
@@ -119,6 +115,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       return
     }
     initSent = true
+    verdict.noteInit()
     void postJson(
       JSON.stringify(
         createBridgeInitFrame({
@@ -140,6 +137,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           granted,
           host,
           ownsHostArea: options.ownsHostArea === true,
+          hostStatus: options.readHostStatus?.() ?? null,
           ...pageStorageForReader(options.readStorage(), pageStorageKeys),
           refreshTerminalShortcuts
         })
@@ -147,16 +145,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     )
   }
 
-  function sendReply(id: string, payload: RpcResponse): void {
-    const split = splitBridgeReply(id, payload)
-    if (!split.ok) {
-      sendError(id, new BridgeReplyUndeliverableError(split.refusal))
-      return
-    }
-    for (const frame of split.frames) {
-      send(frame)
-    }
-  }
+  const sendReply = createBridgeHostReplySender(sendJson, sendError)
 
   const requests = new BridgeHostRequests({
     client,
@@ -210,6 +199,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   function settleAll(notify: boolean): void {
     requests.closeAll(notify)
     subscriptions.closeAll(notify ? 'closed' : null)
+    verdict.settle(notify)
   }
 
   function dispose(): void {
@@ -219,6 +209,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     settleAll(true)
     closed = true
     unsubscribeState()
+    unsubscribeConnectionPath()
   }
 
   function dispatch(message: BridgeClientMessage): void {
@@ -226,6 +217,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     if (message.type === 'ready') {
       serving = true
       pageStorageKeys = message.storageKeys ?? null
+      pageReadsConnectionPath = message.connectionPathFrames === true
       back.readReady()
       // Dropped like the Back claim: a page still showing a terminal claims again on this `init`.
       reportRailClaim(false)
@@ -241,9 +233,12 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       return
     }
     // A session with no handshake has no grants/caps; refuse requests and streams too. Inherited handshake state keeps client-rebuilt hosts serving live pages.
-    if (!initSent && (message.type === 'request' || message.type === 'subscribe')) {
+    if (!initSent && isDesktopBound(message)) {
       options.onDiagnostic?.({ kind: 'notify-refused', name: message.method, why: 'before-ready' })
       sendError(message.id, new BridgeCapExceededError('before-ready'))
+      return
+    }
+    if (!verdict.admit(message)) {
       return
     }
     switch (message.type) {
@@ -280,6 +275,13 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const unsubscribeState = client.onStateChange((state) => {
     send({ v: BRIDGE_PROTOCOL_VERSION, type: 'state', connection: snapshot(state) })
   })
+  // A relay dial can start or fail without a state change; the page labels the dial from these.
+  const unsubscribeConnectionPath =
+    client.onConnectionPathChange?.(() => {
+      if (pageReadsConnectionPath) {
+        send({ v: BRIDGE_PROTOCOL_VERSION, type: 'connectionPath', connection: snapshot() })
+      }
+    }) ?? (() => {})
 
   if (routes.current() === null) {
     // Report invalid routes at construction so recovery does not depend on a blank page producing a frame.
@@ -307,6 +309,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishKeyboardInset: (next) => routes.publishKeyboardInset(next, deliverable()),
     publishStorage: () => sendInit(true),
+    publishHostStatus: () => verdict.publish(() => deliverable() && sendInit(), dispatch),
     publishPageGeometry: (next) => routes.publishPageGeometry(next, deliverable()),
     publishFoldDivision: (next) => routes.publishFoldDivision(next, deliverable()),
     publishTerminalKeyRail: (next) => routes.publishTerminalKeyRail(next, deliverable()),
@@ -332,6 +335,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     readSessionBack: () => ({
       ...back.read(),
       ...(pageStorageKeys === null ? {} : { storageKeys: pageStorageKeys }),
+      ...(pageReadsConnectionPath ? { connectionPathFrames: true as const } : {}),
       ...(railClaimed ? { terminalKeyRailClaim: { inputOwner: railOwner } } : {})
     }),
     dispose

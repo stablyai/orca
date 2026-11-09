@@ -9,7 +9,7 @@ import {
   realpathSync,
   statSync
 } from 'node:fs'
-import { isSafeDescendCandidate, mirrorEntry } from '../pty/overlay-mirror'
+import { isSafeDescendCandidate, mirrorEntry } from '../pty/scrollback/overlay-mirror'
 import {
   getOpenCode2PluginSource,
   getOpenCodeFamilyPluginSource,

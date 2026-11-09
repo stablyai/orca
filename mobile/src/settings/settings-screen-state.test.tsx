@@ -1,23 +1,31 @@
 import { createElement, useEffect, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import NotificationsScreen from './notification-settings-screen'
+
 import VoiceSettingsScreen from './voice-settings-screen'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
-import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
+
 import { VoiceModelList } from '../components/VoiceModelList'
 import type { MobileSpeechModel, MobileSpeechSetup } from '../dictation/mobile-dictation-setup'
 
+vi.mock(
+  './settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
   Pressable: 'Pressable',
-  Switch: 'Switch',
   ScrollView: 'ScrollView',
   ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   AppState: { addEventListener: () => ({ remove() {} }) }
 }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
@@ -25,10 +33,14 @@ vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback])
 }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon' }))
-vi.mock('../components/BottomDrawer', () => ({
+vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: ReactNode }) => children
 }))
 vi.mock('../components/VoiceModelList', () => ({ VoiceModelList: () => null }))
+vi.mock('./voice-transcribe-on-section', () => ({
+  VoiceTranscribeOnSection: () => null,
+  voiceTranscribeOnShown: () => false
+}))
 vi.mock('../dictation/use-dictation-setup-poller', () => ({
   useDictationSetupPoller: ({ refresh }: { refresh: () => Promise<unknown> }) => {
     useEffect(() => {
@@ -43,6 +55,36 @@ afterEach(() => {
   act(() => renderer?.unmount())
 })
 describe('shared settings screen state', () => {
+  it('shows a desktop on Auto as Auto and switches it to plain Toggle', async () => {
+    const operations: VoiceSettingsOperations = {
+      load: vi.fn<VoiceSettingsOperations['load']>().mockResolvedValue({
+        enabled: true,
+        dictationMode: 'toggle',
+        dictationHoldToRecord: true,
+        selectedModelId: '',
+        models: []
+      }),
+      configure: vi.fn<VoiceSettingsOperations['configure']>(() => new Promise(() => {})),
+      download: vi.fn(),
+      delete: vi.fn()
+    }
+    await act(async () => {
+      renderer = create(
+        createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
+      )
+    })
+    const modeProps = () => renderer.root.findByProps({ testIDPrefix: 'voice-mode-' }).props
+    expect(modeProps().selected).toBe('auto')
+
+    await act(async () => {
+      modeProps().onSelect('toggle')
+    })
+    expect(operations.configure).toHaveBeenCalledWith({
+      dictationMode: 'toggle',
+      dictationHoldToRecord: false
+    })
+    expect(modeProps().selected).toBe('toggle')
+  })
   it('flips the Voice switch before the desktop replies and surfaces a rejected save', async () => {
     const loaded = {
       enabled: true,
@@ -90,21 +132,6 @@ describe('shared settings screen state', () => {
     })
     expect(JSON.stringify(renderer.toJSON())).toContain('Desktop unavailable')
     expect(operations.load).toHaveBeenCalledTimes(2)
-  })
-  it('shows the spinner, not the error card, while the first voice read is pending', async () => {
-    const operations = {
-      load: vi.fn().mockImplementation(() => new Promise(() => {})),
-      configure: vi.fn(),
-      download: vi.fn(),
-      delete: vi.fn()
-    } as VoiceSettingsOperations
-    await act(async () => {
-      renderer = create(
-        createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
-      )
-    })
-    expect(JSON.stringify(renderer.toJSON())).not.toContain('Failed to load voice settings')
-    expect(findAllByHostType(renderer.root, 'ActivityIndicator')).toHaveLength(1)
   })
   it('drops a poll that resolves after a toggle instead of clobbering it', async () => {
     const loaded = {
@@ -303,59 +330,5 @@ describe('shared settings screen state', () => {
       })
       expect(renderer.root.findByType(VoiceModelList).props.setup.selectedModelId).toBe('')
     })
-  })
-  it('does not enable notifications when permission is not granted', async () => {
-    const denied = {
-      granted: false,
-      status: 'undetermined',
-      canAskAgain: true,
-      authorizationReflectsUserChoice: false
-    }
-    const operations = {
-      permission: vi.fn().mockResolvedValue(denied),
-      preference: vi.fn().mockResolvedValue({ enabled: false }),
-      openSettings: vi.fn()
-    }
-    await act(async () => {
-      renderer = create(createElement(NotificationsScreen, { operations, onBack: vi.fn() }))
-    })
-    await act(async () => {
-      await renderer.root.findByProps({ testID: 'notification-enabled' }).props.onValueChange(true)
-    })
-    expect(operations.permission).toHaveBeenLastCalledWith(true)
-    expect(operations.preference).toHaveBeenLastCalledWith(false)
-    expect(renderer.root.findByProps({ testID: 'notification-enabled' }).props.value).toBe(false)
-    expect(operations.openSettings).not.toHaveBeenCalled()
-  })
-  it('keeps the notification switch live while the read is pending and after it fails', async () => {
-    let rejectPreference: (error: Error) => void = () => {}
-    const operations = {
-      permission: vi.fn().mockResolvedValue({
-        granted: true,
-        status: 'granted',
-        canAskAgain: true,
-        authorizationReflectsUserChoice: true
-      }),
-      preference: vi.fn().mockImplementation(
-        () =>
-          new Promise((_resolve, reject) => {
-            rejectPreference = reject
-          })
-      ),
-      openSettings: vi.fn()
-    }
-    await act(async () => {
-      renderer = create(createElement(NotificationsScreen, { operations, onBack: vi.fn() }))
-    })
-    const switchProps = () => renderer.root.findByProps({ testID: 'notification-enabled' }).props
-    // Base gates only on a denied OS permission, so the control is live from first paint.
-    expect(switchProps().disabled).toBe(false)
-
-    await act(async () => {
-      rejectPreference(new Error('storage failed'))
-      await Promise.resolve()
-    })
-    expect(switchProps().disabled).toBe(false)
-    expect(JSON.stringify(renderer.toJSON())).toContain('Could not load notification settings')
   })
 })

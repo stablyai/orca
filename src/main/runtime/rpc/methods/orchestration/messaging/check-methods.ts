@@ -1,13 +1,14 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { CheckParams } from '../schemas'
+import { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
+import { checkedMailboxes, withReportFollowUps } from './mailbox-message-receipt'
 import { withRunCheckNext } from '../receipt-next'
-import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
-import { hasRunBindingKey } from '../../../../orchestration/orchestration-caller-identity'
+import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
+import { hasRunBindingKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import {
   callerHoldsDispatchPane,
@@ -45,6 +46,13 @@ export const ORCHESTRATION_CHECK_METHODS = [
       const paneKey = caller.paneKey ?? undefined
       const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
       const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
+      // Mail this check takes may still wait as a card in a chat's queue; that card must not run too.
+      const releasing = <T>(result: T): T => {
+        if (consumingCheck) {
+          runtime.withdrawStaleChatMail(checkedMailboxes(result))
+        }
+        return withReportFollowUps(db, result)
+      }
       if (params.run || boundRun) {
         const result = await checkRunMailbox({
           params,
@@ -60,9 +68,11 @@ export const ORCHESTRATION_CHECK_METHODS = [
           orchestrationCompatibilityEvidence,
           recordMutationReceipt
         })
-        return consumingCheck && !(params.ack && !params.wait)
-          ? withRunCheckNext(runtime, result)
-          : result
+        return releasing(
+          consumingCheck && !(params.ack && !params.wait)
+            ? await withRunCheckNext(runtime, result)
+            : result
+        )
       }
 
       const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey)
@@ -86,19 +96,21 @@ export const ORCHESTRATION_CHECK_METHODS = [
         )
       }
       if (activeDispatch || remoteAttachment) {
-        return checkWorkerMailbox({
-          params,
-          runtime,
-          db,
-          handle,
-          paneKey,
-          typeFilter,
-          signal,
-          activeDispatch,
-          remoteAttachment,
-          recordMutationReceipt,
-          acknowledgeOnly: !params.wait
-        })
+        return releasing(
+          await checkWorkerMailbox({
+            params,
+            runtime,
+            db,
+            handle,
+            paneKey,
+            typeFilter,
+            signal,
+            activeDispatch,
+            remoteAttachment,
+            recordMutationReceipt,
+            acknowledgeOnly: !params.wait
+          })
+        )
       }
       // A superseded Attempt must receive a stop signal, not an empty checkpoint; this outranks pane rebind advice.
       const settledDispatch = consumingCheck ? db.getLatestDispatchForTerminal(handle) : undefined
@@ -113,7 +125,9 @@ export const ORCHESTRATION_CHECK_METHODS = [
           orchestrationSkillRecoveryData()
         )
       }
-      return checkDirectMailbox({ params, runtime, db, handle, typeFilter, signal })
+      return releasing(
+        await checkDirectMailbox({ params, runtime, db, handle, typeFilter, signal })
+      )
     }
   })
 ]

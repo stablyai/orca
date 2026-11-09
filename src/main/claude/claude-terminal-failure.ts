@@ -1,15 +1,14 @@
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { isRootAgentJournalItem } from '../../shared/agent-session-journal-producer'
-import { readAgentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionRevisionJournal
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
+import {
+  readAgentSessionFailureFact,
+  providerDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionRevisionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
   agentJournalTurnRowReservedBytes,
   resolveAgentJournalTurnRowWrite,

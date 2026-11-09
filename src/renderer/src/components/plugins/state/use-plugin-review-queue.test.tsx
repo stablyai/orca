@@ -47,9 +47,9 @@ describe('usePluginReviewQueue', () => {
     expect(queue?.reviewKey).toBe('a')
 
     // Why: "b" was approved elsewhere meanwhile, so only "c" still needs review.
-    await act(async () => queue?.advance([pending('c')]))
+    await act(async () => queue?.advance('a', [pending('c')]))
     expect(queue?.reviewKey).toBe('c')
-    await act(async () => queue?.advance([]))
+    await act(async () => queue?.advance('c', []))
     expect(queue?.reviewKey).toBeNull()
   })
 })

@@ -1,4 +1,4 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { readTranscriptSlice, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import {
   CLAUDE_CWD_BUCKET_LAYOUT,
@@ -6,15 +6,22 @@ import {
   PI_CWD_BUCKET_LAYOUT,
   type CwdBucketLayout
 } from './session-cwd-bucket-layouts'
-import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
+import type {
+  AiVaultScanOptions,
+  FileWithMtime,
+  SessionFileCandidate
+} from './session-scanner-types'
 import { asRecord } from './session-scanner-record-value'
 import { extractString, parseJsonObject } from './session-scanner-values'
-import { clineManifestCwd } from './session-scanner-cline-parser'
-import { cursorChatMetaUnavailable, readCursorChatMeta } from './session-scanner-cursor-chat-meta'
-import { rovoSessionCwd } from './session-scanner-graph-parsers'
-import { grokSessionCwd } from './session-scanner-grok-parser'
-import { listedKiroMetadata } from './session-scanner-kiro-parser'
-import { openCodeSessionCwd } from './session-scanner-opencode-parser'
+import { clineManifestCwd } from './scanners/cline/session-scanner-cline-parser'
+import {
+  cursorChatMetaUnavailable,
+  readCursorChatMeta
+} from './scanners/cursor/session-scanner-cursor-chat-meta'
+import { rovoSessionCwd } from './scanners/session-scanner-graph-parsers'
+import { grokSessionCwd } from './scanners/grok/session-scanner-grok-parser'
+import { listedKiroMetadata } from './scanners/kiro/session-scanner-kiro-parser'
+import { openCodeSessionCwd } from './scanners/opencode/session-scanner-opencode-parser'
 
 type HeadRecord = Record<string, unknown>
 
@@ -141,6 +148,13 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
   kimi: PARSE,
   muse: PARSE,
   jcode: PARSE
+}
+
+/** Answer from scope sources alone, without the global recency pass (Workspace and Project). */
+export function scopeOnlyScan(
+  options: Pick<AiVaultScanOptions, 'scopePaths' | 'scopeOnly'>
+): boolean {
+  return options.scopeOnly === true && (options.scopePaths?.length ?? 0) > 0
 }
 
 export function scopeWalksAgentFiles(

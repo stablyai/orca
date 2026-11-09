@@ -10,13 +10,15 @@ import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-p
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
 import { useWorktreeCreateBasePrefetch } from '../tasks/use-worktree-create-base-prefetch'
-import { useHostDescriptor } from '../transport/host-descriptor-store'
+import { useHostDescriptor } from '../transport/hosts/host-descriptor-store'
 import { isSameMobileWorkspaceRepo } from '../worktree/new-workspace-dialog-repo-selection'
 import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
 } from '../worktree/use-retired-worktree-names'
-import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
+import { durableDraftRowKey } from '../drafts/durable-draft-rows'
+import { useDurableDraftField } from '../drafts/durable-draft-fields'
+import { BottomDrawerModalHost } from './bottom-drawer/bottom-drawer-modal-host'
 import {
   getMobileWorkspaceRepoBadgeColor,
   type MobileWorkspaceRepo,
@@ -71,17 +73,23 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     onCreated,
     onClose
   } = props
-  const { repos, allRepos, selectedRepo, setSelectedRepo, loading } = useNewWorkspaceRepositories({
-    client: desktopClient,
-    serverClients,
-    hostId,
-    visible
-  })
+  const { repos, allRepos, selectedRepo, setSelectedRepo, loading, loadError, retryLoad } =
+    useNewWorkspaceRepositories({
+      client: desktopClient,
+      serverClients,
+      hostId,
+      visible
+    })
   // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
   const navigation = useNewWorktreeDrawerNavigation(visible)
-  const [note, setNote] = useState('')
+  // Kept per desktop until a create succeeds, and read only once the form shows. The host is in the key
+  // because the tablet sidebar's native host list has no shell to bind it.
+  const [note, setNote] = useDurableDraftField(
+    visible ? durableDraftRowKey('workspaceCreate', '', hostId ?? '') : null,
+    'note'
+  )
   const [error, setError] = useState('')
   const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId, repoServer)
   const repoRuntime = useNewWorktreeRuntimeCapabilities(client, visible)
@@ -102,6 +110,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     visible
   })
   const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
+  // A kept note opens Options until the user folds them, so it isn't sent unseen.
+  const [noteOptions, setNoteOptions] = useState<'closed' | 'open' | 'folded'>('closed')
+  if (note && noteOptions === 'closed') {
+    setNoteOptions('open')
+  }
+  const showOptions = setupScript.showAdvanced || noteOptions === 'open'
   const selectedRepoWorktreeBranches = useMemo(
     () => getComposerRepoWorktreeBranches(existingWorktrees ?? [], selectedRepo?.id ?? null),
     [existingWorktrees, selectedRepo]
@@ -160,7 +174,11 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     getAgentLaunchSupport,
     transitionDrawer: navigation.transitionDrawer,
     setError,
-    onCreated: (worktreeId, name, warning) => onCreated(worktreeId, name, warning, repoServer),
+    onCreated: (worktreeId, name, warning) => {
+      // A note typed in a reopened form while this create ran is not the one it sent.
+      setNote((current) => (current === note ? '' : current))
+      onCreated(worktreeId, name, warning, repoServer)
+    },
     onClose
   })
 
@@ -239,6 +257,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         interactive={navigation.formSheetInteractive}
         loading={loading}
         hasRepos={repos.length > 0}
+        loadError={loadError}
+        onRetryLoad={retryLoad}
         project={selectedProject}
         runTarget={selectedRunTarget}
         projectBadgeColor={selectedRepo ? getMobileWorkspaceRepoBadgeColor(selectedRepo) : null}
@@ -251,7 +271,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         sshGate={executionTarget.sshGate}
         composer={composer}
         selectedAgent={agentSelection.selectedAgent}
-        showAdvanced={setupScript.showAdvanced}
+        showAdvanced={showOptions}
         note={note}
         setupCommand={setupScript.setupCommand}
         setupSource={setupScript.setupSource}
@@ -269,7 +289,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         onClearError={() => setError('')}
         onConnect={() => void executionTarget.connect()}
         onOpenAgent={() => openPicker('agent')}
-        onShowAdvancedChange={setupScript.setShowAdvanced}
+        onShowAdvancedChange={(show) => {
+          if (!show) {
+            setNoteOptions('folded')
+          }
+          setupScript.setShowAdvanced(show)
+        }}
         onNoteChange={setNote}
         onSetupDecisionChange={setupScript.setSetupDecisionChoice}
         onRunSetupChange={setupScript.setRunSetup}

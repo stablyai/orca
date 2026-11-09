@@ -1,9 +1,10 @@
 import { formatNativeChatFileReference } from '../../../../../src/shared/agent-image-paste'
+import { chatTextAttachmentName } from '../../../../../src/shared/native-chat-text-attachment-references'
 import {
   MobileFileTooLargeError,
   type PickedMobileFile
 } from '../../../platform/media-picker-contract'
-import type { AgentSessionAttachmentUploadCommitResult } from '../../../../../src/shared/agent-session-attachments'
+import type { AgentSessionAttachmentUploadCommitResult } from '../../../../../src/shared/agent-session/agent-session-attachments'
 
 export type PendingNativeChatFile = {
   readonly id: string
@@ -28,7 +29,9 @@ function nativeChatFileAttachFailureMessage(error: unknown, fileName?: string): 
   if (error instanceof MobileFileTooLargeError) {
     return error.message
   }
-  return fileName ? `Couldn't upload ${fileName}` : "Couldn't attach that file"
+  return fileName
+    ? `Couldn't upload ${chatTextAttachmentName(fileName)}`
+    : "Couldn't attach that file"
 }
 
 // Keep successfully uploaded files when a later pick/upload fails; only the failing chip is removed.

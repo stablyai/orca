@@ -1,0 +1,49 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+
+export async function persistDeleteWorktreeConfirmSkipPreference({
+  updateSettingsOrThrow,
+  openSettingsPage,
+  openSettingsTarget
+}: {
+  updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => Promise<unknown>
+  openSettingsPage: () => void
+  openSettingsTarget: (target: {
+    pane: SettingsNavTarget
+    repoId: string | null
+    sectionId?: string
+    intent?: 'add-quick-command'
+  }) => void
+}): Promise<void> {
+  await updateSettingsOrThrow({ skipDeleteWorktreeConfirm: true })
+  // Link the saved preference to its exact toggle so destructive confirmation can be restored quickly.
+  toast.success(
+    translate(
+      'auto.components.sidebar.DeleteWorktreeDialog.dd3a45bbbd',
+      "We'll skip this confirmation next time."
+    ),
+    {
+      description: translate(
+        'auto.components.sidebar.DeleteWorktreeDialog.2b56b35f53',
+        'You can change this in Settings.'
+      ),
+      duration: 8000,
+      action: {
+        label: translate(
+          'auto.components.sidebar.DeleteWorktreeDialog.5cc1a6701c',
+          'Open Settings'
+        ),
+        onClick: () => {
+          openSettingsPage()
+          openSettingsTarget({
+            pane: 'general',
+            repoId: null,
+            sectionId: 'general-skip-delete-worktree-confirm'
+          })
+        }
+      }
+    }
+  )
+}

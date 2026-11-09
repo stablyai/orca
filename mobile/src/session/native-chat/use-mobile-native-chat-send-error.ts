@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
-import type { StructuredAgentSessionCommandRefusalCause } from '../../../../src/shared/structured-agent-session-composer'
+import type { StructuredAgentSessionCommandRefusalCause } from '../../../../src/shared/agent-session/view/structured-agent-session-composer'
 
 // Keep command-refusal causes only while the chat still shows the work that caused them.
 export type MobileNativeChatSendErrorDetails = {

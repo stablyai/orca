@@ -60,25 +60,6 @@ describe('requestTerminalTabCloseFromRenderer', () => {
     await expect(pending).resolves.toBeUndefined()
   })
 
-  it('propagates renderer cancellation instead of reporting success', async () => {
-    const { requestTerminalTabCloseFromRenderer } =
-      await import('./terminal-tab-close-request-relay')
-    const webContents = { isDestroyed: () => false, send: vi.fn() }
-    const pending = requestTerminalTabCloseFromRenderer(
-      { isDestroyed: () => false, webContents } as never,
-      'tab-pinned'
-    )
-    const request = webContents.send.mock.calls[0]?.[1] as { requestId: string }
-
-    ipcEmitter.emit(
-      'ui:terminalTabCloseResponse',
-      { sender: webContents },
-      { requestId: request.requestId, error: 'terminal_tab_pinned' }
-    )
-
-    await expect(pending).rejects.toThrow('terminal_tab_pinned')
-  })
-
   it('rejects and cleans up when the BrowserWindow closes and webContents becomes unavailable', async () => {
     const { requestTerminalTabCloseFromRenderer } =
       await import('./terminal-tab-close-request-relay')

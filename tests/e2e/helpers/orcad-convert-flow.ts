@@ -1,7 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import { readPersistedProfileState } from './persisted-profile-state'
-import { findOrcadMigrationSourceCutoverForTarget } from '../../../src/main/ssh/orcad-migration-cutover-journal'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../../src/main/persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
 import { RuntimeClient } from '../../../src/cli/runtime/client'
 
 const CONVERT_TIMEOUT_MS = 8 * 60_000

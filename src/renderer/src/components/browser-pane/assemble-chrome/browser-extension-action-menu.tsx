@@ -1,5 +1,5 @@
-import { Check, Pin, PinOff, Settings2, Trash2 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { Check, Pin, PinOff, Settings2, Trash2, type LucideIcon } from 'lucide-react'
+
 import { toast } from 'sonner'
 import {
   ContextMenuItem,
@@ -17,11 +17,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { browserExtensionRemovalDescription } from '@/components/browser-extension-removal-description'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import type { BrowserExtensionContextMenuItem } from '../../../../../shared/browser-extension-context-menu-types'
-import type { BrowserExtensionActionResult } from '../../../../../shared/browser-extension-types'
-import type { BrowserExtensionToolbarAction } from '../../../../../shared/browser-extension-toolbar-types'
+import type { BrowserExtensionContextMenuItem } from '../../../../../shared/browser/extensions/browser-extension-context-menu-types'
+import type { BrowserExtensionActionResult } from '../../../../../shared/browser/extensions/browser-extension-types'
+import type { BrowserExtensionToolbarAction } from '../../../../../shared/browser/extensions/browser-extension-toolbar-types'
 import { useBrowserExtensionActionContextMenu } from './browser-extension-action-context-items'
 
 export type BrowserExtensionMenuEntry =
@@ -78,6 +78,7 @@ export function useBrowserExtensionActionMenuEntries(
   action: BrowserExtensionToolbarAction,
   browserPageId: string
 ): BrowserExtensionMenuEntry[] {
+  const t = useTranslate()
   const confirm = useConfirmationDialog()
   const { extensionId } = action
   const contextMenu = useBrowserExtensionActionContextMenu(profileId, extensionId, browserPageId)
@@ -99,11 +100,11 @@ export function useBrowserExtensionActionMenuEntries(
 
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({
-      title: translate('settings.browser.extensions.removeTitle', 'Remove {{name}}?', {
+      title: t('settings.browser.extensions.removeTitle', 'Remove {{name}}?', {
         name: action.name
       }),
       description: browserExtensionRemovalDescription(action.source),
-      confirmLabel: translate('settings.browser.extensions.remove', 'Remove'),
+      confirmLabel: t('settings.browser.extensions.remove', 'Remove'),
       confirmVariant: 'destructive',
       surface: 'security'
     })
@@ -116,8 +117,8 @@ export function useBrowserExtensionActionMenuEntries(
     {
       key: 'pin',
       label: action.pinned
-        ? translate('browser.extensions.unpin', 'Unpin from toolbar')
-        : translate('browser.extensions.pin', 'Pin to toolbar'),
+        ? t('browser.extensions.unpin', 'Unpin from toolbar')
+        : t('browser.extensions.pin', 'Pin to toolbar'),
       icon: action.pinned ? PinOff : Pin,
       onSelect: () =>
         void reportFailure(
@@ -128,7 +129,7 @@ export function useBrowserExtensionActionMenuEntries(
       ? [
           {
             key: 'options',
-            label: translate('settings.browser.extensions.options', 'Options'),
+            label: t('settings.browser.extensions.options', 'Options'),
             icon: Settings2,
             onSelect: () =>
               void reportFailure(
@@ -142,7 +143,7 @@ export function useBrowserExtensionActionMenuEntries(
     { key: 'remove-separator', separator: true },
     {
       key: 'remove',
-      label: translate('browser.extensions.remove', 'Remove…'),
+      label: t('browser.extensions.remove', 'Remove…'),
       icon: Trash2,
       destructive: true,
       onSelect: () => void remove()

@@ -2,7 +2,7 @@ import { HOOK_REQUEST_MAX_BYTES } from '../../shared/agent-hook-listener/request
 import {
   POSIX_HOOK_JSON_STDIN_FIRST_BYTE_TIMEOUT_SECONDS,
   POSIX_HOOK_JSON_STDIN_IDLE_TIMEOUT_SECONDS
-} from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 
 // curl reads payload@- before starting its timeout; agy can keep that pipe open.
 export const WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT = String.raw`

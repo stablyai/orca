@@ -14,8 +14,8 @@ const EXACT_FORMS = {
   },
   worktree: {
     forms:
-      'identity:<identity.key> (host-qualified), or id:<repo-id>::<absolute-path> when only one host has that checkout',
-    list: 'orca worktree list --json',
+      'identity:<identity.key> (host-qualified), id:<repo-id>::<absolute-path> when only one host has that checkout, or folder:<folder-id> for a folder workspace',
+    list: 'orca worktree ps --json',
     noun: 'workspace'
   }
 } as const
@@ -50,4 +50,30 @@ export function selectorAmbiguityRecovery(selectors: {
       ]
     })
   }
+}
+
+type WorkspaceChoice = { id: string; path: string; hostId: string; selector: string }
+
+/** The workspace rows a selector_ambiguous error carries, only when every row is complete. */
+export function ambiguousWorkspaceChoices(data: unknown): WorkspaceChoice[] | undefined {
+  if (!data || typeof data !== 'object' || !('workspaces' in data)) {
+    return undefined
+  }
+  const rows: unknown = data.workspaces
+  return Array.isArray(rows) && rows.every(isWorkspaceChoice) ? rows : undefined
+}
+
+function isWorkspaceChoice(row: unknown): row is WorkspaceChoice {
+  return (
+    row !== null &&
+    typeof row === 'object' &&
+    'id' in row &&
+    typeof row.id === 'string' &&
+    'path' in row &&
+    typeof row.path === 'string' &&
+    'hostId' in row &&
+    typeof row.hostId === 'string' &&
+    'selector' in row &&
+    typeof row.selector === 'string'
+  )
 }

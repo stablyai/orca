@@ -1,5 +1,5 @@
 import type { ManagedPane } from './pane-manager-types'
-import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
+import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 
 /** The xterm options whose writes make the renderer clear, resize and full-refresh. */
 export type PaneMetricOptions = {

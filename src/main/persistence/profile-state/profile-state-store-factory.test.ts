@@ -1,23 +1,14 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openProfileStateDatabase, profileStateDatabaseFile } from './profile-state-database'
 import {
   createProfileStateStore as createProfileStateStoreImpl,
   type ProfileStateStoreFactoryOptions
 } from './profile-state-store-factory'
-import {
-  profileStateJsonExportPath,
-  profileStateJsonExportPaths
-} from './legacy-json/profile-state-export-path'
-import { ProfileStateRecoveryRequiredError } from './profile-state-authority-bootstrap'
-import { acquireProfileStateMaintenance } from './profile-state-access'
-import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
-import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
-import { LoadedStateParsingOperations } from '../loading-store/loaded-state-parsing'
-import { hashProfileStateJson, importProfileStateJson } from './profile-state-documents'
-import { PROFILE_STATE_DATABASE_SCHEMA_VERSION } from './profile-state-database-schema'
+import { getRepoMainWorktreeId } from '../../../shared/worktree/id'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 
 vi.mock('electron', () => ({
   app: {
@@ -84,203 +75,9 @@ function createOptions(): ProfileStateStoreFactoryOptions & { directory: string 
   }
 }
 
-describe('profile state Store authority factory', () => {
-  it.each([false, true])(
-    'refuses future schemas without changing storage (retained JSON=%s)',
-    (keepJson) => {
-      const options = createOptions()
-      const source = '{"settings":{"theme":"dark"},"futureDomain":{"keep":true}}'
-      const { db } = openProfileStateDatabase(options.databaseFile, options.profileId)
-      try {
-        importProfileStateJson(db, source, { acceptedLegacyJsonHash: hashProfileStateJson(source) })
-        db.pragma(`user_version = ${PROFILE_STATE_DATABASE_SCHEMA_VERSION + 1}`)
-      } finally {
-        db.close()
-      }
-      if (keepJson) {
-        writeFileSync(options.dataFile, source)
-      }
-      const databaseBefore = readFileSync(options.databaseFile)
-
-      expect(() => createProfileStateStore({ ...options })).toThrow(
-        expect.objectContaining({ code: 'newer-schema' })
-      )
-      expect(readFileSync(options.databaseFile)).toEqual(databaseBefore)
-      expect(existsSync(options.dataFile)).toBe(keepJson)
-      if (keepJson) {
-        expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
-      }
-    }
-  )
-
-  it('closes a migrated authority when Store normalization fails', () => {
-    const options = createOptions()
-    writeFileSync(options.dataFile, '{"settings":{"theme":"dark"}}')
-    const close = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'close')
-    const readInitialState = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'readInitialState')
-    vi.spyOn(LoadedStateParsingOperations.prototype, 'loadParsedFromAuthority').mockImplementation(
-      () => {
-        throw new Error('injected normalization failure')
-      }
-    )
-
-    expect(() => createProfileStateStore({ ...options })).toThrow('injected normalization failure')
-    expect(close).toHaveBeenCalledOnce()
-    expect(readInitialState).toHaveBeenCalledOnce()
-    const initial = readInitialState.mock.results[0]
-    if (initial?.type !== 'return') {
-      throw new Error('Expected a startup token before normalization')
-    }
-    expect(() => initial.value.takeParsedState?.()).toThrow('already been consumed')
-  })
-
-  it('imports legacy state by default and preserves its original bytes', () => {
-    const options = createOptions()
-    const source = JSON.stringify({ settings: { theme: 'dark' }, unknownDomain: { keep: true } })
-    writeFileSync(options.dataFile, source)
-
-    const result = createProfileStateStore(options)
-
-    expect(result.backend).toBe('sqlite')
-    expect(result.classification).toBe('json-only')
-    expect(result.migrated).toBe(true)
-    expect(result.store.getSettings().theme).toBe('dark')
-    expect(existsSync(options.databaseFile)).toBe(true)
-    expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
-  })
-
-  it.each([0, 1, 2, 3, 4])(
-    'requires selected recovery when only legacy backup slot %s remains',
-    (slot) => {
-      const options = createOptions()
-      const backup = `${options.dataFile}.bak.${slot}`
-      const source = '{"settings":{"theme":"dark"},"futureDomain":{"preserved":true}}'
-      writeFileSync(backup, source)
-
-      expect(() => createProfileStateStore({ ...options })).toThrow('restore a selected backup')
-      expect(existsSync(options.databaseFile)).toBe(false)
-      expect(existsSync(options.dataFile)).toBe(false)
-      expect(readFileSync(backup, 'utf8')).toBe(source)
-
-      restoreProfileStateJsonExport({
-        maintenance: acquireProfileStateMaintenance(dirname(dirname(options.directory))),
-        databasePath: options.databaseFile,
-        dataFile: options.dataFile,
-        profileId: options.profileId,
-        exportPath: backup
-      })
-      const recovered = createProfileStateStore({ ...options })
-      expect(recovered.backend).toBe('sqlite')
-      expect(JSON.parse(recovered.store.prepareProfileStateExport().json)).toMatchObject({
-        settings: { theme: 'dark' },
-        futureDomain: { preserved: true }
-      })
-      expect(readFileSync(backup, 'utf8')).toBe(source)
-    }
-  )
-
-  it('reuses the candidate authority after the legacy export is removed', () => {
-    const options = createOptions()
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    createProfileStateStore({ ...options })
-    rmSync(options.dataFile)
-
-    const result = createProfileStateStore({ ...options })
-
-    expect(result.backend).toBe('sqlite')
-    expect(result.classification).toBe('sqlite-only')
-    expect(result.migrated).toBe(false)
-    expect(result.store.getSettings().theme).toBe('dark')
-  })
-
-  it('reopens JSON after an explicit rollback removes the SQLite export marker', () => {
-    const options = createOptions()
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    const migrated = createProfileStateStore({ ...options })
-    const exportPath = profileStateJsonExportPath(options.dataFile, 1)
-    migrated.store.freezeWrites()
-
-    restoreProfileStateJsonExport({
-      maintenance: acquireProfileStateMaintenance(dirname(dirname(options.directory))),
-      databasePath: options.databaseFile,
-      dataFile: options.dataFile,
-      exportPath,
-      profileId: options.profileId
-    })
-
-    const result = createProfileStateStore({ ...options })
-    expect(result.backend).toBe('sqlite')
-    expect(result.store.getSettings().theme).toBe('dark')
-  })
-
-  it('keeps a migrated profile on SQLite across mutation and restart', () => {
-    const options = createOptions()
-    const source = JSON.stringify({
-      settings: { theme: 'light' },
-      unknownDomain: { preserved: true }
-    })
-    writeFileSync(options.dataFile, source)
-    const first = createProfileStateStore({ ...options })
-
-    first.store.updateSettings({ theme: 'dark' })
-    first.store.flushOrThrow()
-
-    expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
-    rmSync(options.dataFile)
-    const restarted = createProfileStateStore({ ...options })
-
-    expect(restarted.store.getSettings().theme).toBe('dark')
-    expect(JSON.parse(restarted.store.prepareProfileStateExport().json)).toMatchObject({
-      settings: { theme: 'dark' },
-      unknownDomain: { preserved: true }
-    })
-  })
-
-  it.each([
-    [
-      { experimentalNativeChat: true, openAgentTabsInChatByDefault: true },
-      false,
-      'standard',
-      'chat-ui-on'
-    ],
-    [
-      { experimentalNativeChat: true, openAgentTabsInChatByDefault: false },
-      true,
-      'keep-terminal',
-      'chat-ui-on-terminal-default'
-    ],
-    [
-      { experimentalNativeChat: false, openAgentTabsInChatByDefault: false },
-      true,
-      'none',
-      'chat-ui-off'
-    ]
-  ])(
-    'decides the native chat upgrade tip audience once from the startup snapshot (%o)',
-    (settings, laterChatUi, variant, basis) => {
-      const options = createOptions()
-      writeFileSync(options.dataFile, JSON.stringify({ settings }))
-      const first = createProfileStateStore({ ...options })
-      expect(first.store.getNativeChatUpgradeTipVariant()).toBe(variant)
-
-      // Later Chat UI changes must not alter the profile's upgrade-tip audience.
-      first.store.updateSettings({ experimentalNativeChat: laterChatUi })
-      first.store.flushOrThrow()
-      rmSync(options.dataFile)
-      const restarted = createProfileStateStore({ ...options })
-
-      expect(restarted.store.getNativeChatUpgradeTipVariant()).toBe(variant)
-      expect(JSON.parse(restarted.store.prepareProfileStateExport().json)).toMatchObject({
-        nativeChatUpgradeTipAudience: {
-          membership: variant === 'none' ? 'excluded' : 'eligible',
-          basis
-        }
-      })
-    }
-  )
-
+describe('initial desktop workspace authority admission', () => {
   it('initializes a valid empty SQLite profile instead of falling back to legacy JSON', () => {
-    const options = createOptions()
+    const options = { ...createOptions(), initializeHomeWorkspace: true }
     const opened = openProfileStateDatabase(options.databaseFile, options.profileId)
     opened.db.close()
 
@@ -289,6 +86,9 @@ describe('profile state Store authority factory', () => {
     expect(result.backend).toBe('sqlite')
     expect(result.classification).toBe('sqlite-only')
     expect(result.store.getSettings()).toBeDefined()
+    expect(result.store.getRepos()).toEqual([
+      expect.objectContaining({ kind: 'folder', path: homedir() })
+    ])
     result.store.updateSettings({ theme: 'dark' })
     result.store.flushOrThrow()
 
@@ -296,94 +96,49 @@ describe('profile state Store authority factory', () => {
     expect(verifier.store.getSettings().theme).toBe('dark')
   })
 
-  it('establishes SQLite for a fresh candidate profile before its first write', () => {
-    const options = createOptions()
+  it('initializes and restores Home only when desktop startup opts in', () => {
+    const options = { ...createOptions(), initializeHomeWorkspace: true }
+    const first = createProfileStateStore(options)
+    const [home] = first.store.getRepos()
 
-    const result = createProfileStateStore({ ...options })
+    expect(first.store.getRepos()).toHaveLength(1)
+    expect(home).toMatchObject({ path: homedir(), kind: 'folder' })
+    const worktreeId = getRepoMainWorktreeId(home)
+    expect(first.store.getWorkspaceSession()).toMatchObject({
+      activeRepoId: home.id,
+      activeWorktreeId: worktreeId,
+      activeWorkspaceKey: worktreeWorkspaceKey(worktreeId),
+      activeWorkspaceExecutionHostId: 'local',
+      activeTabId: null,
+      tabsByWorktree: {}
+    })
+    first.store.flushOrThrow()
+    first.store.freezeWrites()
 
-    expect(result.backend).toBe('sqlite')
-    expect(result.classification).toBe('neither')
-    expect(result.migrated).toBe(false)
-    expect(existsSync(options.databaseFile)).toBe(true)
-    result.store.updateSettings({ theme: 'dark' })
-    result.store.flushOrThrow()
-    result.store.freezeWrites()
-
-    const restarted = createProfileStateStore({ ...options })
-    expect(restarted.backend).toBe('sqlite')
-    expect(restarted.store.getSettings().theme).toBe('dark')
+    const restarted = createProfileStateStore(options)
+    expect(restarted.store.getRepos()).toEqual([home])
+    expect(restarted.store.getWorkspaceSession().activeWorktreeId).toBe(worktreeId)
+    restarted.store.removeProjectForHost({ id: home.id })
+    restarted.store.flushOrThrow()
     restarted.store.freezeWrites()
+
+    expect(createProfileStateStore(options).store.getRepos()).toEqual([])
   })
 
-  it('refuses a stale JSON mirror when candidate mode sees both files', () => {
-    const options = createOptions()
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    createProfileStateStore({ ...options })
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'light' } }))
+  it('does not initialize Home in an existing empty document or generic host profile', () => {
+    const imported = createOptions()
+    writeFileSync(imported.dataFile, JSON.stringify({ repos: [] }))
+    expect(
+      createProfileStateStore({ ...imported, initializeHomeWorkspace: true }).store.getRepos()
+    ).toEqual([])
 
-    expect(() => createProfileStateStore({ ...options })).toThrow('matching acceptance marker')
-  })
-
-  it.each([false, true])(
-    'refuses an incapable first writer before mutation (JSON=%s)',
-    (hasJson) => {
-      const options = createOptions()
-      const source = '{"settings":{"theme":"dark"}}'
-      if (hasJson) {
-        writeFileSync(options.dataFile, source)
-      }
-      const original = process.getBuiltinModule
-      vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
-        id === 'node:sqlite' ? undefined : original(id)
-      )
-      expect(() => createProfileStateStore(options)).toThrow('Writable profiles require SQLite')
-      expect(existsSync(options.databaseFile)).toBe(false)
-      expect(existsSync(options.dataFile)).toBe(hasJson)
-      if (hasJson) {
-        expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
-      }
-    }
-  )
-
-  describe('missing database recovery', () => {
-    it.each([
-      { hasJson: true, artifact: 'export' },
-      { hasJson: false, artifact: 'export' },
-      { hasJson: true, artifact: 'backup' },
-      { hasJson: false, artifact: 'backup' }
-    ])(
-      'fails closed with a retained $artifact and JSON present=$hasJson',
-      ({ hasJson, artifact }) => {
-        const options = createOptions()
-        const source = JSON.stringify({ settings: { theme: 'dark' } })
-        writeFileSync(options.dataFile, source)
-        const migrated = createProfileStateStore({
-          ...options
-        })
-        migrated.store.freezeWrites()
-        rmSync(options.databaseFile)
-        if (artifact === 'backup') {
-          for (const path of profileStateJsonExportPaths(options.dataFile)) {
-            rmSync(path)
-          }
-          writeFileSync(
-            `${options.databaseFile}.backup.1789999999999-00000000-0000-4000-8000-000000000000.db`,
-            'reserved recovery artifact'
-          )
-        }
-        if (!hasJson) {
-          rmSync(options.dataFile)
-        }
-
-        expect(() => createProfileStateStore(options)).toThrowError(
-          ProfileStateRecoveryRequiredError
-        )
-        expect(existsSync(options.databaseFile)).toBe(false)
-        expect(existsSync(options.dataFile)).toBe(hasJson)
-        if (hasJson) {
-          expect(readFileSync(options.dataFile, 'utf8')).toBe(source)
-        }
-      }
-    )
+    const generic = createOptions()
+    const first = createProfileStateStore(generic)
+    expect(first.store.getRepos()).toEqual([])
+    first.store.flushOrThrow()
+    first.store.freezeWrites()
+    expect(
+      createProfileStateStore({ ...generic, initializeHomeWorkspace: true }).store.getRepos()
+    ).toEqual([])
   })
 })

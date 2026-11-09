@@ -2,39 +2,42 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import {
-  buildWindowsAgentHookCurlPostCommand,
-  writeHooksJson,
-  writeManagedScript
-} from '../agent-hooks/installer-utils'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
   readTextFileRemote,
-  writeManagedScriptRemote,
   writeTextFileRemoteAtomic
-} from '../agent-hooks/installer-utils-remote'
+} from '../agent-hooks/installation/remote/hook-text-files-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
-import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
+import { buildPosixAgentHookPostCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   buildPosixScrubSafeEnvRestoreLines,
   buildWindowsScrubSafeEnvRestoreLines
-} from '../../shared/agent-hook-scrub-safe-env'
+} from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import {
   applyManagedDshPatch,
   isDshPatchFileUnappendable,
   readManagedDshHooksConfigPath,
   removeManagedDshPatch
 } from './dsh-home-patch'
+import { describeDshProfilesMissingHookPackages } from './dsh-hook-packages'
 import {
   buildDshManagedHooksFile,
   DSH_HOOK_EVENTS,
   getDshConfigPath,
+  getDshHome,
   getDshManagedCommand,
   getDshManagedCommandMatcher,
   getDshManagedHooksPath,
@@ -146,7 +149,14 @@ function buildStatus(
   )
   const missing = DSH_HOOK_EVENTS.filter((event) => !present.has(event))
   if (missing.length === 0) {
-    return status(configPath, 'installed', null, true)
+    // Orca's files alone do not activate the row: DSH must also load the package it names.
+    const packagesDetail = describeDshProfilesMissingHookPackages(getDshHome())
+    return status(
+      configPath,
+      packagesDetail === null ? 'installed' : 'partial',
+      packagesDetail,
+      true
+    )
   }
   return present.size === 0
     ? status(configPath, 'not_installed', null)

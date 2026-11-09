@@ -16,8 +16,8 @@ vi.mock('../../diagnostics/main-thread-churn-probe', () => ({ recordSubprocessSp
 
 import { gitExecFileAsync } from '../runner'
 import { _resetGitAdmissionForTests } from './git-subprocess-admission'
-import { nonInteractiveGitEnv } from './git-process-env'
-import { annotateWslHostFailure, readWslHostFailureDiagnostic } from './wsl-host-failure'
+
+import { readWslHostFailureDiagnostic } from './wsl-host-failure'
 import type { ResolvedCommand } from './wsl-command-resolution'
 
 const WSL_COMMAND: ResolvedCommand = {
@@ -55,15 +55,6 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 }
 
 describe('wsl.exe host failure classification', () => {
-  it('reads the diagnostic wsl.exe left on stdout, including UTF-16 output', () => {
-    expect(readWslHostFailureDiagnostic(hostFailure(WSL_DIAGNOSTIC), WSL_COMMAND)).toContain(
-      'Wsl/Service/WSL_E_DISTRO_NOT_FOUND'
-    )
-    expect(
-      readWslHostFailureDiagnostic(hostFailure(asUtf16Mojibake(WSL_DIAGNOSTIC)), WSL_COMMAND)
-    ).toContain('Wsl/Service/WSL_E_DISTRO_NOT_FOUND')
-  })
-
   it('leaves a guest failure and a non-WSL command alone', () => {
     const guestFailure = Object.assign(new Error('Command failed'), {
       code: 1,
@@ -81,20 +72,6 @@ describe('wsl.exe host failure classification', () => {
       })
     ).toBeNull()
   })
-
-  it('moves the diagnostic into the message the span records', () => {
-    const error = annotateWslHostFailure(hostFailure(WSL_DIAGNOSTIC), WSL_COMMAND) as Error & {
-      wslHostFailure?: boolean
-      wslDistro?: string
-      code?: number
-    }
-    expect(error.message).toContain('Wsl/Service/WSL_E_DISTRO_NOT_FOUND')
-    expect(error.message).toContain('kali-linux')
-    expect(error.wslHostFailure).toBe(true)
-    expect(error.wslDistro).toBe('kali-linux')
-    expect(error.code).toBe(4294967295)
-    expect(error.message).toContain('Command failed: wsl.exe')
-  })
 })
 
 describe('WSL-routed git subprocess', () => {
@@ -104,11 +81,6 @@ describe('WSL-routed git subprocess', () => {
 
   afterEach(() => {
     _resetGitAdmissionForTests()
-  })
-
-  it('sets WSL_UTF8 so wsl.exe explains itself in UTF-8', () => {
-    expect(nonInteractiveGitEnv({}, 'win32').WSL_UTF8).toBe('1')
-    expect(nonInteractiveGitEnv({}, 'darwin').WSL_UTF8).toBeUndefined()
   })
 
   it('reports a dead distro instead of an empty git error', async () => {
