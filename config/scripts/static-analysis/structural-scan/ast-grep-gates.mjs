@@ -1,4 +1,4 @@
-// One ast-grep scan for both gates: the lint gate (warning and up) and the flaky-test ratchet (`test-*` rules).
+// One ast-grep scan for every gate: the lint gate (warning and up) and the info-severity ratchets.
 import { spawnSync } from 'node:child_process'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
@@ -9,6 +9,7 @@ import {
   scanAstGrep
 } from './ast-grep-scan.mjs'
 import { main as checkFlakyTestPatterns } from '../ratchets/test-quality/check-flaky-test-pattern-ratchet.mjs'
+import { main as checkOrchestrationAgentKind } from '../ratchets/orchestration/check-orchestration-agent-kind-ratchet.mjs'
 
 const LINT_SEVERITIES = new Set(['error', 'warning'])
 // Windows caps a command line near 32K characters; past this, rescan the whole tree.
@@ -58,7 +59,8 @@ export function main(root = process.cwd(), argv = []) {
   const files = lintFindingFiles(matches)
   const lint = files.length > 0 ? reportLintFindings(root, files, format) : 0
   const flaky = checkFlakyTestPatterns(root, undefined, matches)
-  return Math.max(lint, flaky)
+  const agentKind = checkOrchestrationAgentKind(root, undefined, matches)
+  return Math.max(lint, flaky, agentKind)
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

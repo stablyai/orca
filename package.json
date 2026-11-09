@@ -53,6 +53,8 @@
     "check:react-compiler-compat-ratchet": "node config/scripts/static-analysis/ratchets/react-compiler/check-react-compiler-compat-ratchet.mjs",
     "check:render-path-translate-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-render-path-translate-ratchet.mjs",
     "check:flaky-test-pattern-ratchet": "node config/scripts/static-analysis/ratchets/test-quality/check-flaky-test-pattern-ratchet.mjs",
+    "check:orchestration-parity": "node config/scripts/static-analysis/orchestration-parity/check-orchestration-parity-declarations.mjs",
+    "check:orchestration-agent-kind-ratchet": "node config/scripts/static-analysis/ratchets/orchestration/check-orchestration-agent-kind-ratchet.mjs",
     "check:path-literal-ratchet": "node config/scripts/static-analysis/ratchets/source-budget/check-path-literal-ratchet.mjs",
     "check:legacy-relay-fence-ratchet": "node config/scripts/static-analysis/process-boundaries/check-legacy-relay-fence-ratchet.mjs",
     "check:unproven-pty-retirement-ratchet": "node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-unproven-pty-retirement-ratchet.mjs",
