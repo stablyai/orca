@@ -1,11 +1,12 @@
-import { KeyRound, RefreshCw } from 'lucide-react'
+import { KeyRound } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   CloudSecretScope,
   CloudSecretsEffective
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Badge } from '../../ui/badge'
-import { Button } from '../../ui/button'
+import { InlineError } from '../../ui/inline-error'
+import { Skeleton } from '../../ui/skeleton'
 import {
   cloudSecretKindLabel,
   cloudSecretScopeLabel,
@@ -69,8 +70,8 @@ export function CloudSecretsEffectiveView({
       <div className="space-y-px rounded-md border border-border/60" aria-busy="true">
         {[0, 1].map((row) => (
           <div key={row} className="flex items-center gap-3 px-3 py-2.5">
-            <div className="h-3 w-40 rounded bg-muted motion-safe:animate-pulse" />
-            <div className="ml-auto h-3 w-20 rounded bg-muted motion-safe:animate-pulse" />
+            <Skeleton className="h-3 w-40" />
+            <Skeleton className="ml-auto h-3 w-20" />
           </div>
         ))}
         <span className="sr-only">{t('cloudSecrets.list.loading', 'Loading secrets…')}</span>
@@ -79,15 +80,11 @@ export function CloudSecretsEffectiveView({
   }
   if (effective.status === 'failed') {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-3">
-        <p role="alert" className="text-xs text-muted-foreground">
-          {cloudSecretsErrorCopy(effective.error, t)}
-        </p>
-        <Button variant="outline" size="xs" onClick={onRetry}>
-          <RefreshCw />
-          {t('cloudSecrets.list.retry', 'Try again')}
-        </Button>
-      </div>
+      <InlineError
+        title={cloudSecretsErrorCopy(effective.error, t)}
+        retryLabel={t('cloudSecrets.list.retry', 'Try again')}
+        onRetry={onRetry}
+      />
     )
   }
   const { secrets, precedence } = effective.value

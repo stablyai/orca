@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ClipboardPaste, KeyRound, Plus, RefreshCw } from 'lucide-react'
+import { Check, ClipboardPaste, KeyRound, Plus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import type {
@@ -7,6 +7,8 @@ import type {
   CloudSecretsErrorCode
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Badge } from '../../ui/badge'
+import { InlineError } from '../../ui/inline-error'
+import { Skeleton } from '../../ui/skeleton'
 import { Button } from '../../ui/button'
 import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
 import { CloudSecretEditor, type CloudSecretEditorTarget } from './CloudSecretEditor'
@@ -235,8 +237,8 @@ export function CloudSecretList({
       <div className="space-y-px rounded-md border border-border/60" aria-busy="true">
         {[0, 1, 2].map((row) => (
           <div key={row} className="flex items-center gap-3 px-3 py-2.5">
-            <div className="h-3 w-40 rounded bg-muted motion-safe:animate-pulse" />
-            <div className="ml-auto h-3 w-12 rounded bg-muted motion-safe:animate-pulse" />
+            <Skeleton className="h-3 w-40" />
+            <Skeleton className="ml-auto h-3 w-12" />
           </div>
         ))}
         <span className="sr-only">{t('cloudSecrets.list.loading', 'Loading secrets…')}</span>
@@ -246,17 +248,15 @@ export function CloudSecretList({
 
   if (model.list.status === 'failed') {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-3">
-        <p role="alert" className="text-xs text-muted-foreground">
-          {model.list.error === 'unauthorized' || model.list.error === 'not_configured'
+      <InlineError
+        title={
+          model.list.error === 'unauthorized' || model.list.error === 'not_configured'
             ? cloudSecretsErrorCopy(model.list.error, t)
-            : t('cloudSecrets.list.loadFailed', 'Couldn’t load secrets.')}
-        </p>
-        <Button variant="outline" size="xs" onClick={model.reload}>
-          <RefreshCw />
-          {t('cloudSecrets.list.retry', 'Try again')}
-        </Button>
-      </div>
+            : t('cloudSecrets.list.loadFailed', 'Couldn’t load secrets.')
+        }
+        retryLabel={t('cloudSecrets.list.retry', 'Try again')}
+        onRetry={model.reload}
+      />
     )
   }
 

@@ -6,6 +6,7 @@ import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs'
+import { SettingsGroupHeader } from '../section-layout/SettingsGroup'
 import { cloudSecretScopeLabel } from './cloud-secrets-copy'
 import { CloudSecretList, type CloudSecretPeople } from './CloudSecretList'
 import { CloudSecretsEffectiveView } from './CloudSecretsEffectiveView'
@@ -161,15 +162,14 @@ export function CloudSecretsPane({
 
   return (
     <div className="space-y-4 border-t border-border/60 pt-5" data-settings-section="cloud-secrets">
-      <div className="space-y-1">
-        <h3 className="text-sm font-medium">{t('cloudSecrets.title', 'Cloud secrets')}</h3>
-        <p className="max-w-xl text-xs leading-5 text-muted-foreground">
-          {t(
-            'cloudSecrets.description',
-            'API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.'
-          )}
-        </p>
-      </div>
+      <SettingsGroupHeader
+        className="px-0"
+        title={t('cloudSecrets.title', 'Cloud secrets')}
+        description={t(
+          'cloudSecrets.description',
+          'API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.'
+        )}
+      />
 
       <Tabs
         value={tab}
