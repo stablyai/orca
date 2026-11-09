@@ -91,6 +91,7 @@ export function TerminalShortcutSettings({
     adoptStored: adoptStoredCustomKeys
   } = useSerializedStoredState<CustomKey[]>([], loadCustomKeys, saveCustomKeys)
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
+  const [editingCustomKey, setEditingCustomKey] = useState<CustomKey | null>(null)
   const {
     value: shortcutLayout,
     setValue: setShortcutLayout,
@@ -268,15 +269,29 @@ export function TerminalShortcutSettings({
             onReorder={reorderCustomKeys}
             renderRow={(key) => (
               <View style={styles.reorderRowContent}>
-                <View style={styles.keycap}>
-                  <Text style={styles.keycapText}>{key.label}</Text>
-                </View>
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>{key.label}</Text>
-                  <Text style={styles.rowSublabel} numberOfLines={1} ellipsizeMode="tail">
-                    {key.bytes.replace(/\r/g, ' ↵')}
-                  </Text>
-                </View>
+                <Pressable
+                  style={({ pressed }) => [styles.editTarget, pressed && styles.editTargetPressed]}
+                  onPress={() => {
+                    setEditingCustomKey(key)
+                    setShowCustomKeyModal(true)
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    'components.terminalShortcutSettings.editShortcut',
+                    'Edit {{label}}',
+                    { label: key.label }
+                  )}
+                >
+                  <View style={styles.keycap}>
+                    <Text style={styles.keycapText}>{key.label}</Text>
+                  </View>
+                  <View style={styles.rowContent}>
+                    <Text style={styles.rowLabel}>{key.label}</Text>
+                    <Text style={styles.rowSublabel} numberOfLines={1} ellipsizeMode="tail">
+                      {key.bytes.replace(/\r/g, ' ↵')}
+                    </Text>
+                  </View>
+                </Pressable>
                 <MobileSwitch
                   accessibilityLabel={t(
                     'components.terminalShortcutSettings.showShortcut',
@@ -324,13 +339,20 @@ export function TerminalShortcutSettings({
             'Create key combo or text macro'
           )}
           navigates
-          onPress={() => setShowCustomKeyModal(true)}
+          onPress={() => {
+            setEditingCustomKey(null)
+            setShowCustomKeyModal(true)
+          }}
         />
       </SettingsSection>
 
       <CustomKeyModal
         visible={showCustomKeyModal}
-        onClose={() => setShowCustomKeyModal(false)}
+        editingKey={editingCustomKey}
+        onClose={() => {
+          setShowCustomKeyModal(false)
+          setEditingCustomKey(null)
+        }}
         onKeysChanged={adoptStoredCustomKeys}
       />
     </>
