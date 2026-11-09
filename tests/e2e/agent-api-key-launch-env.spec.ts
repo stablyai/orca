@@ -22,6 +22,11 @@ test('a stored API key is handed to the agent launch only', async ({ orcaPage, e
   try {
     await waitForSessionReady(orcaPage)
     const worktreeId = await waitForActiveWorktree(orcaPage)
+    // Headless Linux CI has no keyring; Orca correctly refuses to store keys there.
+    const protection = await orcaPage.evaluate(
+      async () => (await window.api.agentApiKeys!.list()).protection
+    )
+    test.skip(!protection.available, 'no OS keychain that really seals on this runner')
 
     const saved = await orcaPage.evaluate(
       (value) =>
