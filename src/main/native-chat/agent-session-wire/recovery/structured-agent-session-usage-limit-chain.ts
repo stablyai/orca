@@ -5,8 +5,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { commandTurnsOf } from '../../../../shared/agent-session/structured-agent-session-command-entry'
-import { isStructuredAgentSessionNonRequestRow } from '../../../../shared/agent-session/requests/structured-agent-session-latest-request'
+import type { AgentSessionUsageLimit } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { restoreJournal } from '../../agent-session-journal/replay/journal-open'
 import { renderJournalStatus } from '../../agent-session-journal/projection/journal-public-read'
@@ -40,71 +39,92 @@ export function usageLimitContinueMessageId(at: number, tag: string, random: str
 const tagOfMessageId = (clientMessageId: string): string | null =>
   /^\d{13}-([0-9a-f]{16})[0-9a-f]{16}$/.exec(clientMessageId)?.[1] ?? null
 
-/** The request turn just before `before`, skipping steers and command turns as the latest-turn read does. */
-function previousTurn(
-  items: readonly AgentJournalRenderItem[],
-  before: number,
-  commandTurns: Pick<ReadonlySet<string>, 'has'>
-): AgentJournalRenderItem | null {
+/** The submission whose user row opened a turn: output-first turns key the submission placeholder,
+ *  echo-first turns key the provider's item. Searched newest first, where an opener sits. */
+function openerOf(
+  submissions: readonly ChainSubmission[],
+  userItemId: string,
+  before: number
+): number {
   for (let index = before - 1; index >= 0; index -= 1) {
-    const item = items[index]!
+    const submission = submissions[index]!
     if (
-      !isRootAgentJournalItem(item) ||
-      isStructuredAgentSessionNonRequestRow(item, commandTurns)
+      agentJournalSubmissionKey(submission.clientMessageId) === userItemId ||
+      submission.providerItemId === userItemId
     ) {
-      continue
-    }
-    if (item.body.kind === 'message' && item.body.role === 'user') {
-      return null
-    }
-    if (readAgentJournalTurn(item.body)) {
-      return item
+      return index
     }
   }
-  return null
+  return -1
+}
+
+/** The root turn just before the user row that opened `turnIndex`; null when another request intervenes. */
+function previousTurnIndex(
+  items: readonly AgentJournalRenderItem[],
+  turnIndex: number,
+  openerKeys: ReadonlySet<string>
+): number {
+  for (let index = turnIndex - 1; index >= 0; index -= 1) {
+    const item = items[index]!
+    if (!isRootAgentJournalItem(item) || openerKeys.has(item.itemId)) {
+      continue
+    }
+    if (readAgentJournalTurn(item.body)) {
+      return index
+    }
+    if (item.body.kind === 'message' && item.body.role === 'user') {
+      return -1
+    }
+  }
+  return -1
+}
+
+/** A turn's usage limit, read only from the rows between it and the next turn. */
+function usageLimitBetween(
+  items: readonly AgentJournalRenderItem[],
+  turnIndex: number,
+  end: number
+): AgentSessionUsageLimit | null {
+  const turnItemId = items[turnIndex]!.itemId
+  return nativeChatTurnUsageLimit(items.slice(turnIndex + 1, end), turnItemId)
 }
 
 /** How many automatic continues in a row ended in another usage limit, read from the journal so a
  *  restart or reopen agrees. Each step needs the exact join: the turn opened by a host submission
- *  whose message id names the cut before it. */
+ *  whose message id names the cut before it. Walks back from the end, so the work is the chain's
+ *  own tail, never the conversation's length. */
 export function usageLimitContinueChain(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly ChainSubmission[],
   cut: Pick<NativeChatUsageLimitCut, 'turnItemId'>
 ): number {
-  const position = new Map(items.map((item, index) => [item.itemId, index]))
-  const commandTurns = commandTurnsOf(items, undefined)
-  let turnItemId = cut.turnItemId
+  let turnIndex = items.length - 1
+  while (turnIndex >= 0 && items[turnIndex]!.itemId !== cut.turnItemId) {
+    turnIndex -= 1
+  }
+  let submissionBound = submissions.length
   let chain = 0
-  while (chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT) {
-    const turnIndex = position.get(turnItemId)
-    const userItemId =
-      turnIndex === undefined ? undefined : readAgentJournalTurn(items[turnIndex]!.body)?.userItemId
-    if (turnIndex === undefined || !userItemId) {
+  while (chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT && turnIndex >= 0) {
+    const userItemId = readAgentJournalTurn(items[turnIndex]!.body)?.userItemId
+    const openerIndex = userItemId ? openerOf(submissions, userItemId, submissionBound) : -1
+    const opener = openerIndex >= 0 ? submissions[openerIndex]! : null
+    const tag = opener?.origin === 'host' ? tagOfMessageId(opener.clientMessageId) : null
+    if (!opener || !tag || !userItemId) {
       break
     }
-    // Output-first turns key the submission placeholder; echo-first turns key the provider's item.
-    const opener = submissions.find(
-      (submission) =>
-        agentJournalSubmissionKey(submission.clientMessageId) === userItemId ||
-        submission.providerItemId === userItemId
-    )
-    const tag = opener?.origin === 'host' ? tagOfMessageId(opener.clientMessageId) : null
-    const userIndex =
-      position.get(userItemId) ??
-      (opener ? position.get(agentJournalSubmissionKey(opener.clientMessageId)) : undefined) ??
-      turnIndex
-    const previous = tag ? previousTurn(items, Math.min(userIndex, turnIndex), commandTurns) : null
-    const limit = previous ? nativeChatTurnUsageLimit(items, previous.itemId) : null
+    const openerKeys = new Set([userItemId, agentJournalSubmissionKey(opener.clientMessageId)])
+    const previous = previousTurnIndex(items, turnIndex, openerKeys)
+    const limit = previous >= 0 ? usageLimitBetween(items, previous, turnIndex) : null
     if (
-      !previous ||
       limit?.resetsAt === undefined ||
-      usageLimitContinueTag({ turnItemId: previous.itemId, resetsAt: limit.resetsAt }) !== tag
+      usageLimitContinueTag({ turnItemId: items[previous]!.itemId, resetsAt: limit.resetsAt }) !==
+        tag
     ) {
       break
     }
     chain += 1
-    turnItemId = previous.itemId
+    turnIndex = previous
+    submissionBound = openerIndex
   }
   return chain
 }

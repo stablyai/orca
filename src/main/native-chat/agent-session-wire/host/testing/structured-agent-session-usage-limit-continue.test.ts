@@ -7,11 +7,14 @@ import {
   appendRewindUsageLimitedTurn,
   appendUsageLimitedTurn
 } from './structured-agent-session-rewind-usage-limit.test-fixture'
+import { RestartContinuationSupersededError } from '../../recovery/structured-agent-session-restart-continuation'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { StructuredAgentSessionUsageLimitContinue } from '../../recovery/structured-agent-session-usage-limit-continue'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   HOST_TEST_SESSION as SESSION,
-  HOST_TEST_NOW
+  HOST_TEST_NOW,
+  hostTestRestingOptionsRecord
 } from './structured-agent-session-host-test-data'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 
@@ -99,7 +102,7 @@ it('continues every chat whose limit reset in the same pass', async () => {
   const sent: string[] = []
   const sweep = new StructuredAgentSessionUsageLimitContinue({
     host: {
-      logger: { warn: () => {} } as never,
+      logger: recordingStructuredAgentSessionLogger().logger,
       usageLimitAutoContinue: {
         isEnabled: () => true,
         isWorkspaceAsleep: () => false,
@@ -109,22 +112,19 @@ it('continues every chat whose limit reset in the same pass', async () => {
         hostId: 'local',
         listVisibleSessionIds: () => ids,
         isSessionTabVisible: () => true,
-        cancelUsageLimitContinue: async () => ({}) as never,
-        getRecord: () =>
-          ({
-            location: { executionHostId: 'local', workspaceId: 'ws' },
-            lease: { runtimeFence: 1 }
-          }) as never
+        cancelUsageLimitContinue: async (id) => hostTestRestingOptionsRecord(id),
+        getRecord: (id) => hostTestRestingOptionsRecord(id)
       }
     },
     sessions: new Map(ids.map((id) => [id, {}])),
     readSavedCut: () => null,
     readLoadedCut: cut,
     serialize: (_id, run) => run(),
+    // Each send is answered as superseded, which spends no budget; only who was sent matters here.
     send: async (params) => {
       params.beforeRun?.()
       sent.push(params.envelope.sessionId)
-      return { ok: true } as never
+      throw new RestartContinuationSupersededError()
     },
     publish: () => {},
     now: () => now
