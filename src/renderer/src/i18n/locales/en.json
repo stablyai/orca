@@ -20187,7 +20187,8 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "effortSummary": "{{value0}} effort"
       },
       "tool": {
         "exitCode": "exit {{value0}}",

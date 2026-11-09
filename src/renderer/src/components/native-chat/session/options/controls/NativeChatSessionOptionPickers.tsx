@@ -1,12 +1,15 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, use, useEffect, useRef, useState } from 'react'
 import { ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { agentTypeToIconAgent } from '../../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
@@ -27,6 +30,8 @@ import { NativeChatModelCombobox } from './NativeChatModelCombobox'
 import { useNativeChatPickerFocusReturn } from '../../../composer/focus/native-chat-picker-focus-return'
 import { NativeChatSessionOptionRows } from './NativeChatSessionOptionRows'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { NativeChatComposerCompactContext } from '../../../composer/controls/NativeChatComposerToolbar'
+import { compactSelectionDetail } from './native-chat-compact-selection-detail'
 
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
@@ -35,6 +40,8 @@ export type NativeChatSessionOptionPickersProps = {
   pickerRequest?: NativeChatOptionPickerRequest | null
   /** Where focus lands after a visit that changed something; see `useNativeChatPickerFocusReturn`. */
   focusComposer?: () => void
+  /** The chat's agent, whose logo stands in for the labels in a compact composer. */
+  agent?: string
 }
 
 /** A descriptor write in flight; its value shows until it settles. */
@@ -81,6 +88,11 @@ function PickerTrigger(props: {
   /** The options' values, shown after the model; empty when there are none to show. */
   optionsLabel: string
   accessibleName: string
+  /** What the compact icon stands for: the model name and `compactSelectionDetail`. */
+  compactDetail: string
+  compactAccessibleName: string
+  agent?: string
+  pickerOpen: boolean
   disabled: boolean
   disabledReason: string | null
   dispatched: boolean
@@ -88,11 +100,13 @@ function PickerTrigger(props: {
   onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>
 }): React.JSX.Element {
   const t = useTranslate()
+  const compact = use(NativeChatComposerCompactContext)
   const [tooltipOpen, setTooltipOpen] = useState(false)
   // Keep the tooltip mounted but closed unless informative; changing wrapper identity would detach the open picker.
-  const informative = props.disabledReason !== null || props.dispatched
+  const informative = compact || props.disabledReason !== null || props.dispatched
+  const iconAgent = props.agent ? agentTypeToIconAgent(props.agent) : null
   return (
-    <Tooltip open={informative && tooltipOpen} onOpenChange={setTooltipOpen}>
+    <Tooltip open={informative && tooltipOpen && !props.pickerOpen} onOpenChange={setTooltipOpen}>
       <TooltipTrigger asChild>
         <PopoverTrigger asChild disabled={props.disabled}>
           <Button
@@ -100,7 +114,7 @@ function PickerTrigger(props: {
             type="button"
             variant="ghost"
             size="xs"
-            aria-label={props.accessibleName}
+            aria-label={compact ? props.compactAccessibleName : props.accessibleName}
             disabled={props.disabled}
             className="max-w-64"
             onKeyDown={props.onKeyDown}
@@ -110,12 +124,26 @@ function PickerTrigger(props: {
               {props.optionsLabel ? <span className="shrink-0">{props.optionsLabel}</span> : null}
               <ChevronDown className="size-3" />
             </span>
-            <SlidersHorizontal data-composer-compact-icon className="hidden size-3.5" />
+            <span data-composer-compact-icon aria-hidden className="hidden">
+              {iconAgent ? (
+                <AgentIcon agent={iconAgent} size={14} className="size-3.5" />
+              ) : (
+                <SlidersHorizontal className="size-3.5" />
+              )}
+            </span>
           </Button>
         </PopoverTrigger>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         <div className="space-y-0.5">
+          {compact ? (
+            <div>
+              <div>{props.modelLabel}</div>
+              {props.compactDetail ? (
+                <div className="text-background/70">{props.compactDetail}</div>
+              ) : null}
+            </div>
+          ) : null}
           {props.disabledReason ? <div>{props.disabledReason}</div> : null}
           {props.dispatched ? (
             <div>
@@ -135,6 +163,9 @@ function SessionOptionPopover(props: {
   demandModelCatalog?: () => void
   model: SessionOptionDescriptor
   options: readonly SessionOptionDescriptor[]
+  /** Named in the compact summary only; its own picker sets it. */
+  permission: SessionOptionDescriptor | undefined
+  agent?: string
   isWorking: boolean
   /** Only the descriptor being saved holds its write controls. */
   pendingIds: ReadonlySet<string>
@@ -176,6 +207,7 @@ function SessionOptionPopover(props: {
   const modelName = pillAccessibleName(modelTitle, modelLabel, t)
   const optionsTitle = nativeChatOptionsPillTitle(options, say)
   const optionsLabel = nativeChatOptionValuesLabel(options, say)
+  const compactDetail = compactSelectionDetail(options, props.permission, t)
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason, say)
   const optionsReason =
     options.length > 0 && options.every((descriptor) => !descriptor.settable)
@@ -222,6 +254,10 @@ function SessionOptionPopover(props: {
             ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel, t)}`
             : modelName
         }
+        compactDetail={compactDetail}
+        compactAccessibleName={compactDetail ? `${modelName}, ${compactDetail}` : modelName}
+        {...(props.agent ? { agent: props.agent } : {})}
+        pickerOpen={open}
         disabled={!canOpen}
         disabledReason={modelReason ?? optionsReason}
         dispatched={
@@ -319,7 +355,8 @@ function NativeChatSessionOptionPickersInner({
   snapshot,
   isWorking,
   pickerRequest,
-  focusComposer
+  focusComposer,
+  agent
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
   useUiLanguageRevision()
   const [pending, setPending] = useState<ReadonlyMap<string, PendingPick>>(() => new Map())
@@ -352,6 +389,10 @@ function NativeChatSessionOptionPickersInner({
         demandModelCatalog={surface.demandModelCatalog}
         model={model}
         options={options}
+        permission={snapshot.find(
+          (descriptor) => descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
+        )}
+        {...(agent ? { agent } : {})}
         isWorking={isWorking}
         pendingIds={new Set(pending.keys())}
         request={pickerRequest ?? null}

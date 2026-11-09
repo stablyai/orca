@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import {
   AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
+  isAgentChatPermissionMode,
   type AgentChatPermissionMode,
   type AgentChatPermissionModeIconName
 } from '../../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -36,6 +37,20 @@ export function nativeChatPermissionModeLabel(
     case 'full-access':
       return t('components.native-chat.composer.permissionFullAccess', 'Full access')
   }
+}
+
+/** The current permission value's name; null when neither Orca nor the host names it. */
+export function nativeChatPermissionCurrentLabel(
+  current: string | undefined,
+  hostLabel: string | undefined,
+  t: Translate = translate
+): string | null {
+  if (isAgentChatPermissionMode(current)) {
+    return nativeChatPermissionModeLabel(current, t)
+  }
+  return current === 'own'
+    ? t('settings.agents.permissionOwnAll', "Agents' own settings")
+    : (hostLabel ?? null)
 }
 
 /** `agent` absent describes the mode for every agent, as the new-chat setting does. */

@@ -1,4 +1,11 @@
-import { useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import { Ellipsis } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -14,6 +21,9 @@ export type NativeChatComposerControl = {
 }
 
 type Layout = { compact: boolean; hidden: string[]; terminal: boolean }
+
+/** True while the toolbar shows controls as icons, so a control can name what its hidden label said. */
+export const NativeChatComposerCompactContext = createContext(false)
 
 export function NativeChatComposerToolbar({
   left,
@@ -178,68 +188,73 @@ export function NativeChatComposerToolbar({
   }
   const more = layout.hidden.length > 0 || open
   return (
-    <div
-      ref={root}
-      data-compact={layout.compact}
-      data-terminal={layout.terminal}
-      className="group/toolbar flex w-full items-center justify-between gap-2 text-chat-foreground-faint data-[terminal=true]:flex-wrap data-[terminal=true]:justify-end data-[terminal=true]:[&_[data-composer-primary-label]]:hidden data-[terminal=true]:[&_[data-composer-primary-icon]]:block data-[terminal=false]:[&_[data-composer-primary-icon]]:hidden data-[compact=true]:[&_[data-composer-label]]:invisible data-[compact=true]:[&_[data-composer-label]]:absolute data-[compact=true]:[&_[data-composer-label]]:w-max data-[compact=true]:[&_[data-composer-compact-icon]]:block data-[compact=false]:[&_[data-composer-compact-icon]]:hidden"
-    >
-      <div className="flex shrink-0 items-center gap-0.5 group-data-[terminal=true]/toolbar:contents">
-        {left.map(renderControl)}
-        <Popover
-          open={open}
-          onOpenChange={(value) => {
-            menuControls.current = value ? layout.hidden : []
-            setOpen(value)
-          }}
-        >
-          <div
-            ref={moreRef}
-            inert={!more || undefined}
-            aria-hidden={!more || undefined}
-            className={more ? 'inline-flex shrink-0' : 'pointer-events-none invisible absolute'}
+    <NativeChatComposerCompactContext value={layout.compact}>
+      <div
+        ref={root}
+        data-compact={layout.compact}
+        data-terminal={layout.terminal}
+        className="group/toolbar flex w-full items-center justify-between gap-2 text-chat-foreground-faint data-[terminal=true]:flex-wrap data-[terminal=true]:justify-end data-[terminal=true]:[&_[data-composer-primary-label]]:hidden data-[terminal=true]:[&_[data-composer-primary-icon]]:block data-[terminal=false]:[&_[data-composer-primary-icon]]:hidden data-[compact=true]:[&_[data-composer-label]]:invisible data-[compact=true]:[&_[data-composer-label]]:absolute data-[compact=true]:[&_[data-composer-label]]:w-max data-[compact=true]:[&_[data-composer-compact-icon]]:block data-[compact=false]:[&_[data-composer-compact-icon]]:hidden"
+      >
+        <div className="flex shrink-0 items-center gap-0.5 group-data-[terminal=true]/toolbar:contents">
+          {left.map(renderControl)}
+          <Popover
+            open={open}
+            onOpenChange={(value) => {
+              menuControls.current = value ? layout.hidden : []
+              setOpen(value)
+            }}
           >
-            <PopoverTrigger asChild>
-              <Button
-                ref={focusReturn.triggerRef}
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label={t('components.native-chat.composer.moreControls', 'More chat controls')}
-              >
-                <Ellipsis className="size-4" />
-              </Button>
-            </PopoverTrigger>
-          </div>
-          <PopoverContent
-            side="top"
-            align="start"
-            className="w-72"
-            onInteractOutside={focusReturn.onInteractOutside}
-            onCloseAutoFocus={focusReturn.onCloseAutoFocus}
-          >
-            <div className="flex flex-col gap-2">
-              {controls
-                .filter((item) => layout.hidden.includes(item.id))
-                .map((item) => (
-                  <div key={item.id} className="flex items-center">
-                    {item.overflow?.(() => {
-                      focusReturn.notePick()
-                      menuControls.current = []
-                      setOpen(false)
-                    }) ?? item.content}
-                  </div>
-                ))}
+            <div
+              ref={moreRef}
+              inert={!more || undefined}
+              aria-hidden={!more || undefined}
+              className={more ? 'inline-flex shrink-0' : 'pointer-events-none invisible absolute'}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  ref={focusReturn.triggerRef}
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t(
+                    'components.native-chat.composer.moreControls',
+                    'More chat controls'
+                  )}
+                >
+                  <Ellipsis className="size-4" />
+                </Button>
+              </PopoverTrigger>
             </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-      <div className="ml-auto flex shrink-0 items-center gap-1.5 group-data-[terminal=true]/toolbar:contents">
-        {right.map(renderControl)}
-        <div ref={primaryRef} className="inline-flex shrink-0">
-          {primary}
+            <PopoverContent
+              side="top"
+              align="start"
+              className="w-72"
+              onInteractOutside={focusReturn.onInteractOutside}
+              onCloseAutoFocus={focusReturn.onCloseAutoFocus}
+            >
+              <div className="flex flex-col gap-2">
+                {controls
+                  .filter((item) => layout.hidden.includes(item.id))
+                  .map((item) => (
+                    <div key={item.id} className="flex items-center">
+                      {item.overflow?.(() => {
+                        focusReturn.notePick()
+                        menuControls.current = []
+                        setOpen(false)
+                      }) ?? item.content}
+                    </div>
+                  ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 group-data-[terminal=true]/toolbar:contents">
+          {right.map(renderControl)}
+          <div ref={primaryRef} className="inline-flex shrink-0">
+            {primary}
+          </div>
         </div>
       </div>
-    </div>
+    </NativeChatComposerCompactContext>
   )
 }
