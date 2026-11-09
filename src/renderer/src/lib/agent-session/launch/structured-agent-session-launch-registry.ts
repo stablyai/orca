@@ -56,8 +56,8 @@ export type StructuredAgentSessionLaunchLifecycle =
   | 'cancelled'
 
 const structuredLaunchesBySessionId = new Map<string, StructuredLaunchState>()
-/** Null when the writer can't name one session, so subscribers re-read every launch. */
-type StructuredLaunchListener = (sessionId: string | null) => void
+/** Null when the writer can't name its sessions, so subscribers re-read every launch. */
+type StructuredLaunchListener = (sessionIds: readonly string[] | null) => void
 const structuredLaunchListeners = new Set<StructuredLaunchListener>()
 
 export function resetStructuredAgentLaunchRegistryForTests(): void {
@@ -70,19 +70,20 @@ export function resetStructuredAgentLaunchRegistryForTests(): void {
   resetStructuredAgentLocalLaunchCancelsForTests()
 }
 
-export function notifyStructuredLaunchListeners(sessionId?: string): void {
+export function notifyStructuredLaunchListeners(sessionIds?: string | readonly string[]): void {
   function* changes(): Generator<readonly [string, StructuredAgentLaunchPersistedRecord | null]> {
     for (const state of structuredLaunchesBySessionId.values()) {
       yield [state.intent.sessionId, structuredLaunchRecord(state)]
     }
   }
   updateStructuredAgentLaunchRecords(changes())
-  publishStructuredLaunchChange(sessionId)
+  publishStructuredLaunchChange(sessionIds)
 }
 
-export function publishStructuredLaunchChange(sessionId?: string): void {
+export function publishStructuredLaunchChange(sessionIds?: string | readonly string[]): void {
+  const changed = typeof sessionIds === 'string' ? [sessionIds] : (sessionIds ?? null)
   for (const listener of structuredLaunchListeners) {
-    listener(sessionId ?? null)
+    listener(changed)
   }
 }
 
@@ -264,13 +265,13 @@ export function retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
   authoritativeInventory: number,
   executionHostId: ExecutionHostId
 ): boolean {
-  const changed = retireAbsentStructuredAgentLaunchCancellations(
+  const retired = retireAbsentStructuredAgentLaunchCancellations(
     publishedSessionIds,
     authoritativeInventory,
     executionHostId
   )
-  if (changed) {
-    notifyStructuredLaunchListeners()
+  if (retired.length) {
+    notifyStructuredLaunchListeners(retired)
   }
-  return changed
+  return retired.length > 0
 }

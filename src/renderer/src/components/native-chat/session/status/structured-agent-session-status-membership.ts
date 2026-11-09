@@ -30,6 +30,20 @@ export type Member = {
   captured?: ProjectionInput
 }
 
+/** The tab fields a status projection reads; focus, preview and order metadata never change it. */
+export function sameSemanticTab(previous: StructuredTab, next: StructuredTab): boolean {
+  return (
+    previous === next ||
+    (previous.id === next.id &&
+      previous.entityId === next.entityId &&
+      previous.worktreeId === next.worktreeId &&
+      previous.label === next.label &&
+      previous.agentSessionAgent === next.agentSessionAgent &&
+      previous.createdAt === next.createdAt &&
+      previous.executionHostId === next.executionHostId)
+  )
+}
+
 /** Which chat tabs the status bridge projects, updated per changed tab rather than rebuilt. */
 export function createStructuredSessionMembership() {
   const members = new Map<string, Member>()
@@ -70,7 +84,7 @@ export function createStructuredSessionMembership() {
       }
     }
   }
-  /** Same tab and host keep their member (null: nothing to capture); a new host rebinds the pane. */
+  /** Same host keeps the member, null when nothing it projects changed; a new host rebinds the pane. */
   const place = (
     tab: StructuredTab,
     paneKey: string,
@@ -79,10 +93,12 @@ export function createStructuredSessionMembership() {
   ): Member | null => {
     const old = members.get(paneKey)
     let member: Member
+    let semanticChange = true
     if (old?.group === group) {
       if (old.tab === tab) {
         return null
       }
+      semanticChange = !sameSemanticTab(old.tab, tab)
       member = old
     } else {
       if (old) {
@@ -98,7 +114,7 @@ export function createStructuredSessionMembership() {
     } else {
       legacy.add(member)
     }
-    return member
+    return semanticChange ? member : null
   }
   const clear = (): void => {
     members.clear()

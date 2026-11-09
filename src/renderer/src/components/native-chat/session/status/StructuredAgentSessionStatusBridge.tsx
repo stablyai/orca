@@ -24,13 +24,15 @@ import {
   createStructuredSessionMembership,
   type HostGroup,
   type Member,
-  type ProjectionInput
+  type ProjectionInput,
+  sameSemanticTab
 } from './structured-agent-session-status-membership'
 
 /** Unchanged feed facts for an unchanged tab cannot change its projection or companions. */
 function sameCapturedInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
-    previous?.tab === next.tab &&
+    previous !== undefined &&
+    sameSemanticTab(previous.tab, next.tab) &&
     previous.summary === next.summary &&
     previous.observation === next.observation &&
     previous.failedAt === next.failedAt &&
@@ -41,7 +43,8 @@ function sameCapturedInput(previous: ProjectionInput | undefined, next: Projecti
 
 function sameStatusInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
-    previous?.tab === next.tab &&
+    previous !== undefined &&
+    sameSemanticTab(previous.tab, next.tab) &&
     previous.summary === next.summary &&
     previous.observation === next.observation &&
     previous.failedAt === next.failedAt
@@ -97,7 +100,7 @@ function installStatusProjection(): () => void {
     const target =
       tab && structuredAgentSessionTargetForHost(ownerForTab(useAppStore.getState(), tab))
     return (
-      tab === input.tab &&
+      sameSemanticTab(tab, input.tab) &&
       (target ? structuredAgentSessionStatusFeedKey(target) : null) === input.member.hostKey
     )
   }
@@ -331,18 +334,21 @@ function installStatusProjection(): () => void {
       boundary(() => reconcile(ownersChanged))
     }
   })
-  const unsubscribeLaunch = subscribeStructuredAgentLaunchStatus((sessionId) =>
+  const unsubscribeLaunch = subscribeStructuredAgentLaunchStatus((sessionIds) =>
     boundary(() => {
       if (disposed) {
         return
       }
-      if (sessionId === null) {
+      // Full resync: the writer could not name its sessions.
+      if (sessionIds === null) {
         capture(members.values())
         return
       }
       const selected = new Set<Member>()
       for (const group of groups.values()) {
-        group.membersBySession.get(sessionId)?.forEach((member) => selected.add(member))
+        for (const sessionId of sessionIds) {
+          group.membersBySession.get(sessionId)?.forEach((member) => selected.add(member))
+        }
       }
       capture(withOwed(selected))
     })
