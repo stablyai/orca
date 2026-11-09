@@ -8,6 +8,8 @@ import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
 import type { PluginService } from '../plugins/plugin-service'
 import { getHostedSandboxConfig } from './hosted-sandbox-config'
+import { createHostedSandboxDeviceEnroller } from './hosted-sandbox-device-enrollment'
+import { registerOrcaCloudDeviceEnroller } from '../runtime/rpc/methods/orca-cloud/orca-cloud-device-enrollment'
 import {
   ORCA_CLOUD_RECIPE,
   createHostedSandboxRecipeClient,
@@ -86,6 +88,7 @@ export function installHostedSandbox(): void {
       })
   })
   installed = { registry }
+  registerOrcaCloudDeviceEnroller(createHostedSandboxDeviceEnroller(config))
   setHostedSessionSync(() => void registry.sync())
   schedule(0)
   app.once('will-quit', () => {

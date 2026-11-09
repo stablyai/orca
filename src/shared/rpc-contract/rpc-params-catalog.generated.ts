@@ -33,6 +33,7 @@ import {
 } from '../desktop-browser-bridge-protocol'
 import { OrcadWorkVerdictParamsSchema } from '../hosted-sandbox/hosted-session-events'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
+import { OrcaCloudEnrollDeviceParamsSchema } from '../orca-cloud-device-enrollment-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
@@ -1334,6 +1335,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'notifications.testPush': null,
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
+  'orcaCloud.enrollDevice': OrcaCloudEnrollDeviceParamsSchema,
   'orcad.migration.abortCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.abortCatalogByReference': OrcadMigrationCatalogReferenceParams,
   'orcad.migration.catalogState': OrcadMigrationCatalogParams,

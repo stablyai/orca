@@ -16,6 +16,9 @@
 //   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 //   POST   /v1/github/connect -> {installUrl, authorizeUrl}  (bind a GitHub App installation to the account)
 //   GET    /v1/github/installations                          -> {installations}
+//   POST   /v1/device-sessions | GET | DELETE /:id  per-phone access (see device-sessions.ts)
+// Phones sign their own EdDSA tokens (device-sessions.ts) and act as their user, except that they
+// cannot enroll devices, manage secrets or connect GitHub.
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
@@ -30,6 +33,7 @@ import { retryPendingMessages } from './api/messages'
 import { revokeWorkspaceTokens } from './api/keys'
 import { provisionWorkspaceToken } from './api/settings'
 import { docsPage, openApiDocument } from './api/openapi'
+import { handleDeviceSessionsRoute } from './device-sessions'
 import { advanceGoldenImages, currentGoldenSnapshotId } from './golden-images'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
@@ -119,6 +123,8 @@ export type Deps = {
   apiExtensions?: ApiExtension[]
   /** Long-poll sleep (tests advance a fake clock). */
   sleep?: (ms: number) => Promise<void>
+  /** Workspace-grant cleanup for a revoked device session (wired by the workspace registry). */
+  onDeviceSessionRevoked?: (deviceSessionId: string) => Promise<void>
 }
 
 function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
@@ -520,10 +526,27 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       const state = await createConnectState(env.SANDBOX_DB, connect.stateSecret, { accountId: `dev:${sub}`, userId: sub }, (deps.now ?? Date.now)())
       return Response.redirect(authorizeUrl(connect, url.origin, state), 302)
     }
+    if (url.pathname === '/v1/device-sessions' || url.pathname.startsWith('/v1/device-sessions/')) {
+      const now = (deps.now ?? Date.now)()
+      const caller = await authenticateDesktop(env, request, now)
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      return await handleDeviceSessionsRoute(request, url, {
+        db: env.SANDBOX_DB,
+        caller,
+        now,
+        readJson: () => readJson(request),
+        onRevoked: deps.onDeviceSessionRevoked
+      })
+    }
     if (url.pathname === '/v1/github/connect' || url.pathname === '/v1/github/installations') {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
         return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
       }
       if (url.pathname === '/v1/github/installations' && request.method === 'GET') {
         const rows = await listAccountInstallations(env.SANDBOX_DB, caller.accountId)
@@ -583,6 +606,9 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
         return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
       }
       const secrets = await secretsDeps(env)
       if (!secrets) {

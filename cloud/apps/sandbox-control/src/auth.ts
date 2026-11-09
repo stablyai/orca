@@ -8,6 +8,7 @@ import {
   type JWTVerifyGetKey
 } from 'jose'
 import { z } from 'zod'
+import { authenticateDeviceToken, isDeviceToken } from './device-sessions'
 import type { Env } from './env'
 
 const ID = z
@@ -32,6 +33,8 @@ export type SandboxCaller = {
   orgRole?: OrgRole
   /** Dev operator token: every id lives under the `dev:` namespace. */
   dev?: boolean
+  /** Set when a companion device (phone) signed this request with its own enrolled key. */
+  deviceSessionId?: string
 }
 
 const keySets = new Map<string, JWTVerifyGetKey>()
@@ -96,6 +99,9 @@ export async function authenticateDesktop(
   const token = readBearer(request.headers.get('authorization'))
   if (!token) {
     return null
+  }
+  if (isDeviceToken(token)) {
+    return authenticateDeviceToken(env.SANDBOX_DB, token, env.SANDBOX_JWT_AUDIENCE, now)
   }
   const caller = await verify(token, keysFor(env), env, env.SANDBOX_AUTH_ISSUER, now)
   if (caller || !env.SANDBOX_DEV_JWKS || env.SANDBOX_ENV === 'prod') {
