@@ -286,7 +286,8 @@ export default function RichMarkdownEditor({
   })
 
   const handleLocalImagePick = useLocalImagePick(editor, filePath, worktreeId, runtimeEnvironmentId)
-  handleLocalImagePickRef.current = () => void handleLocalImagePick()
+  // oxlint-disable-next-line typescript/no-misused-promises -- useLocalImagePick catches its own failures
+  handleLocalImagePickRef.current = handleLocalImagePick
 
   const {
     handleLinkSave,
