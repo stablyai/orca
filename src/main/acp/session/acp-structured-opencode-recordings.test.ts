@@ -229,18 +229,30 @@ describe('OpenCode 2 recordings through the adapter', () => {
       parentSessionId: PROVIDER_SESSION,
       depth: 1
     }
-    let notify: (status: string) => void = () => {}
+    let notify: (status: string, id?: string) => void = () => {}
+    let closeLate = false
     const rig = await openAcpAdapterRig({
       spec: acpLaunchSpecFor('opencode2')!,
       initialize: { agentCapabilities: { loadSession: true, sessionCapabilities: { close: {} } } },
       script: (agent) => {
-        notify = (status) =>
-          agent.notify('opencode/session/child_update', { ...child, type: 'status', status })
+        notify = (status, id = 'child-1') =>
+          agent.notify('opencode/session/child_update', {
+            ...child,
+            childSessionId: id,
+            type: 'status',
+            status
+          })
         agent.on('session/prompt', (frame) => {
           notify('created')
           agent.reply(frame, { stopReason: 'end_turn' })
         })
-        agent.on('session/close', (frame) => agent.reply(frame, {}))
+        agent.on('session/close', (frame) => {
+          if (closeLate) {
+            notify('running', 'child-2')
+            notify('interrupted', 'child-2')
+          }
+          agent.reply(frame, {})
+        })
       }
     })
     await rig.acquire()
@@ -256,5 +268,13 @@ describe('OpenCode 2 recordings through the adapter', () => {
     await expect(stop()).resolves.toEqual({ cancelled: false, stillRunning: true })
     notify('running')
     await waitFor(() => expect(stop()).resolves.toEqual({ cancelled: true }))
+    // A child that starts and reports itself interrupted while the close is out was stopped.
+    notify('created', 'child-2')
+    closeLate = true
+    await waitFor(() =>
+      expect(
+        rig.adapter.stopBackgroundTasks!({ sessionId: SESSION, fence: 1, taskIds: ['child-2'] })
+      ).resolves.toEqual({ cancelled: true })
+    )
   })
 })

@@ -89,8 +89,9 @@ async function closeAcpChildSession(
   session: AcpStructuredSession,
   id: string
 ): Promise<ChildStopResult> {
+  const { children } = session.lane.translator
   // Closing a child that has not started running interrupts nothing, so Stop stays available.
-  const started = session.lane.translator.children.started(id)
+  const started = children.started(id)
   try {
     await session.connection.closeSession(id)
   } catch (error) {
@@ -99,7 +100,10 @@ async function closeAcpChildSession(
     }
     throw error
   }
-  return started ? { cancelled: true } : { cancelled: false, stillRunning: true }
+  // An ending the child reported while the request was out also confirms the Stop.
+  return started || !children.live().includes(id)
+    ? { cancelled: true }
+    : { cancelled: false, stillRunning: true }
 }
 
 /** A user's Stop also ends subagents that outlive the cancelled turn. */
