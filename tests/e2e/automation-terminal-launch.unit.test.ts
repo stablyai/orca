@@ -32,7 +32,16 @@ const mocks = vi.hoisted(() => {
     hostAvailable: true,
     readChat: vi.fn<typeof callStructuredAgentSession>().mockResolvedValue({}),
     launch: vi.fn(),
-    host: { journalSnapshot: vi.fn(), currentWork: vi.fn(), send: vi.fn() }
+    host: {
+      journalSnapshot: vi.fn(),
+      currentWork: vi.fn(),
+      send: vi.fn(),
+      revealSession: vi.fn(async (sessionId: string) => ({
+        workspaceId: 'wt-1',
+        sessionId,
+        agent: 'claude'
+      }))
+    }
   }
 })
 vi.mock('../../src/main/runtime/rpc/methods/agent-launch/agent-launch', () => ({
@@ -151,7 +160,8 @@ function fixture() {
     getTerminalHandleForPaneKey: vi.fn(() => 'term-prev'),
     getAgentStatusRowsForPane: vi.fn(() => [{ state: 'done', agentType: 'claude', receivedAt: 1 }]),
     ensureStructuredAgentSessionHost: vi.fn(),
-    openAgentSessionRecordStore: vi.fn(async () => records)
+    openAgentSessionRecordStore: vi.fn(async () => records),
+    publishStructuredAgentSessionTab: vi.fn()
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime boundaries above are reached; the ordinary launch is mocked separately.
   return { runtime: runtime as unknown as OrcaRuntimeService, records }
@@ -310,7 +320,7 @@ it.each(['terminal', 'chat'] as const)(
   }
 )
 
-it.each(['normal', 'lost-reply', 'restart'] as const)(
+it.each(['normal', 'lost-reply', 'refused-reply', 'restart'] as const)(
   'keeps busy Chat Q→S through %s, exact persisted output and normal Details',
   (mode) =>
     exerciseBusyChatReuse(mode, automation, target, {

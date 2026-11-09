@@ -16870,10 +16870,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Captura el contexto de la página para los agentes",
-                      "body": "Usa la herramienta de captura para copiar el contexto de un elemento de la página para los agentes."
-                    },
                     "annotate": {
                       "title": "Marca el feedback de diseño sobre la página",
                       "body": "Anota elementos y envía esas notas a un agente."
@@ -17006,7 +17002,6 @@
             "244266c122": "Importar…",
             "e52a955e6f": "Siempre puedes encontrar esto en Configuración > Navegador.",
             "4f5ffaa6a1": "Importar datos del navegador",
-            "b24fef25be": "Importar",
             "02e89014c5": "Se importaron {{value0}} cookies de {{value1}}{{value2}}.",
             "d40d584769": "Se importaron {{value0}} cookies del archivo."
           },
@@ -17086,7 +17081,6 @@
             "4328a0a062": "Captura fallida: {{value0}}",
             "759f32af29": "Descargando",
             "4300f38145": "Descargando desde {{value0}}{{value1}}",
-            "acbe79fd01": "Tomar elemento de página ({{value0}})",
             "cc4a071d3a": "Anotar elemento de la página ({{value0}})",
             "572046436a": "Navegador remoto",
             "b313a7275b": "Abrir navegador remoto",
@@ -19413,6 +19407,8 @@
         "toggleDetails": "Alternar detalles del turno"
       },
       "jumpToLatest": "Saltar a lo último",
+      "newRowsAnnouncement": "Llegaron mensajes nuevos mientras no estabas",
+      "newRowsMarker": "Nuevo",
       "find": {
         "label": "Buscar en el chat",
         "noResults": "Sin resultados",
@@ -20395,6 +20391,9 @@
         "scrollToLatestOnSendTitle": "Desplazar a lo último al enviar",
         "scrollToLatestOnSendCopy": "Enviar con el chat desplazado hacia arriba salta al último mensaje y sigue la respuesta. Desactívalo para mantener tu posición.",
         "scrollToLatestOnSendSearchPosition": "posición",
+        "markNewMessagesTitle": "Marcar los mensajes nuevos al volver a un chat",
+        "markNewMessagesCopy": "Al volver a un chat aparece una línea Nuevo encima de lo que llegó mientras no estabas, y el chat se desplaza hasta ella si estabas leyendo lo más reciente.",
+        "markNewMessagesSearchUnread": "no leído",
         "followUpBehaviorCopy": "Los mensajes enviados mientras el agente trabaja esperan como tarjetas hasta que termina el turno, en lugar de entrar en el turno en curso. Cmd/Ctrl+Intro hace lo contrario para un mensaje y, si no hay texto escrito, dirige la primera tarjeta en espera al turno en curso. Los mensajes con imágenes también esperan como tarjetas.",
         "inlineVisualsTitle": "Elementos visuales inline",
         "inlineVisualsCopy": "Permite que el agente muestre gráficos, diagramas y maquetas dentro de sus respuestas. Se aplica a los chats nuevos.",

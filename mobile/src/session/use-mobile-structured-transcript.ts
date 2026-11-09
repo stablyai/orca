@@ -5,7 +5,8 @@ import {
   latestAgentSessionContextClearSequence
 } from '../../../src/shared/agent-session/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import type { StructuredAgentSessionOptimisticMessage } from '../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import { createStructuredAgentSessionMessageProjection } from '../../../src/shared/agent-session/view/structured-agent-session-message-stream'
 import { tuiAgentDisplayName } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { omitNativeChatThreadGoalRows } from '../../../src/shared/native-chat/transcript/native-chat-thread-goal-rows'
@@ -22,7 +23,7 @@ const mobileStructuredTranscript = createStructuredQuestionProjection(
 export function useMobileStructuredTranscript(
   agent: string | null,
   state: Pick<StructuredAgentSessionState, 'epoch' | 'items' | 'submissions'>,
-  optimistic: Parameters<typeof projectStructuredAgentSessionMessages>[1],
+  optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   sessionKey: string
 ) {
   const [clearSent, setClearSent] = useState<{
@@ -61,24 +62,22 @@ export function useMobileStructuredTranscript(
       }),
     [agent, floor, state.items]
   )
+  const projectMessages = useMemo(
+    () => createStructuredAgentSessionMessageProjection(mobileStructuredTranscript.messages),
+    []
+  )
+  const questionTranscript = useMemo(() => mobileStructuredTranscript.stream(), [])
   const messages = useMemo(
     () =>
       // The goal strip on the composer shows goal state, as on desktop.
-      omitNativeChatThreadGoalRows(
-        projectStructuredAgentSessionMessages(
-          transcriptItems,
-          optimistic,
-          state.submissions,
-          mobileStructuredTranscript.messages
-        )
-      ),
-    [transcriptItems, optimistic, state.submissions]
+      omitNativeChatThreadGoalRows(projectMessages(transcriptItems, optimistic, state.submissions)),
+    [transcriptItems, optimistic, state.submissions, projectMessages]
   )
   return {
     clearing,
     onClearSent,
     transcriptItems,
     messages,
-    receipts: mobileStructuredTranscript.transcript(transcriptItems).receipts
+    receipts: questionTranscript(transcriptItems).receipts
   }
 }

@@ -17113,10 +17113,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Récupérez le contexte de la page pour les agents",
-                      "body": "Utilisez l’outil de capture pour copier le contexte d’un élément de la page pour les agents."
-                    },
                     "annotate": {
                       "title": "Annotez vos retours de design sur place",
                       "body": "Annotez des éléments et envoyez ces notes à un agent."
@@ -17249,7 +17245,6 @@
             "244266c122": "Importer…",
             "e52a955e6f": "Vous retrouverez toujours cette option dans Paramètres > Navigateur.",
             "4f5ffaa6a1": "Importer les données du navigateur",
-            "b24fef25be": "Importer",
             "02e89014c5": "{{value0}} cookies importés depuis {{value1}}{{value2}}.",
             "d40d584769": "{{value0}} cookies importés depuis un fichier."
           },
@@ -17330,7 +17325,6 @@
             "4328a0a062": "Échec de la capture : {{value0}}",
             "759f32af29": "Téléchargement",
             "4300f38145": "Téléchargement depuis {{value0}}{{value1}}",
-            "acbe79fd01": "Capturer un élément de la page ({{value0}})",
             "cc4a071d3a": "Annoter un élément de la page ({{value0}})",
             "572046436a": "Navigateur distant",
             "b313a7275b": "Ouverture du navigateur distant",
@@ -19652,6 +19646,8 @@
         "toggleDetails": "Basculer les détails du tour"
       },
       "jumpToLatest": "Aller au dernier message",
+      "newRowsAnnouncement": "De nouveaux messages sont arrivés en votre absence",
+      "newRowsMarker": "Nouveau",
       "find": {
         "label": "Rechercher dans le chat",
         "noResults": "Aucun résultat",
@@ -20743,6 +20739,9 @@
         "scrollToLatestOnSendTitle": "Défiler jusqu’au dernier message à l’envoi",
         "scrollToLatestOnSendCopy": "Envoyer après avoir remonté le fil fait défiler jusqu’au dernier message et suit la réponse. Désactivez cette option pour garder votre position.",
         "scrollToLatestOnSendSearchPosition": "position",
+        "markNewMessagesTitle": "Signaler les nouveaux messages au retour dans un chat",
+        "markNewMessagesCopy": "En revenant dans un chat, une ligne Nouveau s'affiche au-dessus de ce qui est arrivé pendant votre absence, et le chat y défile si vous lisiez les derniers messages.",
+        "markNewMessagesSearchUnread": "non lu",
         "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour, au lieu d’entrer dans le tour en cours. Cmd/Ctrl+Entrée fait l’inverse pour un message et, si rien n’est saisi, dirige la première carte en attente vers le tour en cours. Les messages contenant des images attendent aussi sous forme de cartes.",
         "inlineVisualsTitle": "Visuels intégrés",
         "inlineVisualsCopy": "Laissez l'agent afficher des graphiques, des diagrammes et des maquettes dans ses réponses. S'applique aux nouveaux chats.",

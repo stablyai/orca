@@ -13,6 +13,8 @@ const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.ho
     terminated = false
     emitStoppedOnStop = true
     answerDiscard = true
+    /** False: a decode for the canceled stream never ends, so the queue never reaches its discard. */
+    reachDiscard = true
     emitReadyOnInit = HoistedMockWorker.emitReadyOnInit
     emitExitOnTerminate = true
     terminatePromise: Promise<number> | null = null
@@ -63,6 +65,11 @@ const { MockWorker, getCreatedWorkerCount, getLastWorker, resetWorkers } = vi.ho
         (message.type === 'discard' && this.answerDiscard)
       ) {
         queueMicrotask(() => this.emit('message', { type: 'stopped', streamId: message.streamId }))
+      }
+      if (message.type === 'discard' && this.answerDiscard && this.reachDiscard) {
+        queueMicrotask(() =>
+          this.emit('message', { type: 'discarded', streamId: message.streamId })
+        )
       }
     }
 
@@ -462,6 +469,41 @@ describe('SttService', () => {
     service.feedAudio(new Float32Array([1]), 16000, 'desktop:1')
 
     expect(worker!.messages.filter((message) => message.type === 'feed')).toHaveLength(0)
+  })
+
+  it('ends a finishing dictation at once when it is canceled, without waiting for its decode', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+    const sink = vi.fn()
+    await service.startDictation('model-a', sink, undefined, 'desktop')
+    const worker = getLastWorker()!
+    worker.emitStoppedOnStop = false
+
+    const finishing = service.stopDictation('desktop')
+    await service.stopDictation('desktop', { discard: true })
+    await finishing
+
+    expect(worker.terminated).toBe(false)
+    expect(sink).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }))
+  })
+
+  it('restarts the speech process when a canceled decode is still running as the next dictation starts', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new SttService(readyModels(), spawnMockWorker)
+      await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+      const hung = getLastWorker()!
+      hung.reachDiscard = false
+      await service.stopDictation('desktop', { discard: true })
+
+      const next = service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+      await vi.advanceTimersByTimeAsync(2_000)
+      await next
+
+      expect(hung.terminated).toBe(true)
+      expect(getLastWorker()).not.toBe(hung)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('drops in-flight audio while stop is waiting for the worker', async () => {

@@ -29,4 +29,6 @@ export type SttRecognizer = {
   finish(streamId: string): Promise<void>
   /** Drop the stream's audio undecoded. */
   discard(streamId: string): void
+  /** Called on a cancel's arrival, ahead of the queue: skip the stream's remaining chunks; the running decode finishes. */
+  cancel(streamId: string): void
 }
