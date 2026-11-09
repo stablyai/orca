@@ -385,7 +385,12 @@ export default function TabGroupPanel({
           )}
 
         {showsSplitLanding ? (
-          <SplitPaneLanding worktreeId={worktreeId} groupId={groupId} autoFocus={isFocused} />
+          <SplitPaneLanding
+            worktreeId={worktreeId}
+            groupId={groupId}
+            autoFocus={isFocused}
+            onClosePane={hasSplitGroups ? commands.closeGroup : undefined}
+          />
         ) : null}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
