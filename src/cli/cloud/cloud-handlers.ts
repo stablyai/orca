@@ -18,6 +18,7 @@ import {
 } from './cloud-credentials'
 import {
   formatCloudMessage,
+  formatCloudMessageList,
   formatCloudProjects,
   formatCloudSessions,
   formatCloudWhoami,
@@ -241,11 +242,19 @@ export function createCloudHandlers(
         formatCloudMessage
       )
     },
-    'cloud message status': async ({ flags, json }) => {
+    'cloud messages': async ({ flags, json }) => {
       const deps = getDeps()
       const api = cloudClient(deps)
       const id = await resolveCloudWorkspaceId(api, getRequiredStringFlag(flags, 'workspace'))
-      const messageId = getRequiredStringFlag(flags, 'message')
+      const messageId = getOptionalStringFlag(flags, 'message')
+      if (!messageId) {
+        const result = await api.request<{ messages: CloudMessage[] }>(
+          'GET',
+          workspacePath(id, '/messages')
+        )
+        printCloudResult(result, json, formatCloudMessageList)
+        return
+      }
       const result = await api.request<{ message: CloudMessage }>(
         'GET',
         workspacePath(id, `/messages/${encodeURIComponent(messageId)}`)

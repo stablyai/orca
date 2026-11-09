@@ -479,7 +479,7 @@ describe('orca cloud handlers', () => {
     ).rejects.toMatchObject({
       code: 'cloud_message_timeout',
       data: expect.objectContaining({
-        nextSteps: ['Check later: orca cloud message status sbx_1 msg_1']
+        nextSteps: ['Check later: orca cloud messages sbx_1 msg_1']
       })
     })
   })

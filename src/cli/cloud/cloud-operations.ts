@@ -234,7 +234,7 @@ export async function waitForCloudMessage(
         `Message ${current.id} is still ${current.status} after ${Math.round(timeoutMs / 1000)}s (the workspace may be waking).`,
         {
           message: current,
-          nextSteps: [`Check later: orca cloud message status ${current.workspaceId} ${current.id}`]
+          nextSteps: [`Check later: orca cloud messages ${current.workspaceId} ${current.id}`]
         }
       )
     }

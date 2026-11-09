@@ -153,6 +153,18 @@ export function formatCloudMessage(value: { message: CloudMessage; waitedMs?: nu
   ].join('\n')
 }
 
+export function formatCloudMessageList(value: { messages: CloudMessage[] }): string {
+  if (value.messages.length === 0) {
+    return 'No messages.'
+  }
+  return value.messages
+    .map(
+      (m) =>
+        `${m.id}  ${m.status}  ${m.agent}${m.session ? `  ${m.session}` : ''}${m.error ? `  error: ${m.error}` : ''}`
+    )
+    .join('\n')
+}
+
 export function formatCloudSessions(
   value: { workspaceStatus: string; sessions: CloudSession[] },
   now = Date.now()

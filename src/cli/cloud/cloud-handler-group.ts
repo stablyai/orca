@@ -15,7 +15,7 @@ export const CLOUD_HANDLER_GROUP: HandlerGroup = {
     'cloud workspace archive',
     'cloud workspace destroy',
     'cloud message',
-    'cloud message status',
+    'cloud messages',
     'cloud sessions',
     'cloud projects list'
   ],

@@ -98,7 +98,7 @@ export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
       'prompt'
     ],
     notes: [
-      'Returns once the VM is running. --prompt queues a first message for --agent (default claude), delivered as soon as the VM is up; follow it with `orca cloud message status`.',
+      'Returns once the VM is running. --prompt queues a first message for --agent (default claude), delivered as soon as the VM is up; follow it with `orca cloud messages`.',
       'Inside a workspace (workspace token) the new workspace is recorded with origin "vm" and is visible to the workspace that created it.',
       CREDENTIALS_NOTE,
       JSON_NOTE
@@ -139,12 +139,17 @@ export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
-    path: ['cloud', 'message', 'status'],
-    summary: 'Show the delivery status of a message sent to an Orca Cloud workspace',
-    usage: 'orca cloud message status <workspace> <message-id> [--json]',
+    path: ['cloud', 'messages'],
+    summary: 'List recent messages sent to an Orca Cloud workspace, or show one',
+    usage: 'orca cloud messages <workspace> [<message-id>] [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'workspace', 'message'],
     positionalArgs: ['workspace', 'message'],
-    notes: [WORKSPACE_ARG_NOTE, JSON_NOTE]
+    notes: [
+      'Shows delivery status (queued, delivering, delivered, failed) and the session handle.',
+      WORKSPACE_ARG_NOTE,
+      JSON_NOTE
+    ],
+    examples: ['orca cloud messages my-ws', 'orca cloud messages sbx_0123abcd msg_abc --json']
   },
   {
     path: ['cloud', 'sessions'],
