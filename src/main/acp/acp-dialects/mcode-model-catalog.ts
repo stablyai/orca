@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
@@ -99,13 +98,17 @@ export async function parseMcodeModelCatalogFromConfigFile(
 
 /**
  * mcode's ACP initialize carries no model list (its extension methods are all session-scoped),
- * so the CLI's config.yaml is the only session-free model source; a read or parse failure
- * surfaces as a discovery error instead of a silent fallback.
+ * so the CLI's config.yaml is the only session-free model source. `home` is the account home the
+ * launch pins through MINIMAX_DATA_DIR, so the listing matches the config the session will read;
+ * a read or parse failure surfaces as a discovery error instead of a silent fallback.
  */
 export async function readMcodeModelCatalog(
   _initialized: InitializeResponse,
-  _connection: { requestSessionFreeExtension(method: string, params: unknown): Promise<unknown> }
+  _connection: { requestSessionFreeExtension(method: string, params: unknown): Promise<unknown> },
+  home: string | null
 ): Promise<AgentSessionModelOption[]> {
-  const dataDir = process.env.MINIMAX_DATA_DIR?.trim() || join(homedir(), '.minimax')
-  return parseMcodeModelCatalogFromConfigFile(join(dataDir, 'config.yaml'))
+  if (!home) {
+    throw new Error('mcode discovery requires the pinned MINIMAX_DATA_DIR account home')
+  }
+  return parseMcodeModelCatalogFromConfigFile(join(home, 'config.yaml'))
 }

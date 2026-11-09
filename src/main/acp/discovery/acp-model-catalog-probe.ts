@@ -14,6 +14,7 @@ import {
 import { AgentModelCatalogListingStoppedError } from '../../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { createAcpAgentConnection } from '../process/acp-agent-connection'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import {
@@ -165,7 +166,7 @@ export function createAcpModelCatalogProbe(
           const initialized = await connection.initialize()
           assertStructuredAgentResolutionCurrent(operation)
           observeAcpForkSupport(spec.agent, initialized)
-          return listing.read(initialized, connection)
+          return listing.read(initialized, connection, agentSessionAccountHomePath(accountHome))
         },
         run
       )
