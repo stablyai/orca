@@ -1450,6 +1450,22 @@
       "branchMoved_other": "{{branch}} is {{count}} commits ahead of build #{{number}}"
     }
   },
+  "cloudMcpSync": {
+    "summary": {
+      "found": "{{count}} found",
+      "found_one": "{{count}} found",
+      "found_other": "{{count}} found",
+      "notSynced": "{{count}} found, not synced yet",
+      "notSynced_one": "{{count}} found, not synced yet",
+      "notSynced_other": "{{count}} found, not synced yet",
+      "skipped": "{{count}} skipped",
+      "skipped_one": "{{count}} skipped",
+      "skipped_other": "{{count}} skipped",
+      "synced": "{{count}} synced",
+      "synced_one": "{{count}} synced",
+      "synced_other": "{{count}} synced"
+    }
+  },
   "cloudSecrets": {
     "paste": {
       "blocked": "{{count}} need a fix and will be skipped",
@@ -2178,7 +2194,6 @@
   },
   "orcaCloudWorkspace": {
     "overlay": {
-      "pendingInput": "Sending when awake",
       "pendingKeys_one": "{{count}} key waiting · goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · go to the terminal when it’s up"
     }

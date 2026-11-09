@@ -1,9 +1,27 @@
 import { expect, it } from 'vitest'
-import { getCreationProgressLabel, type PendingWorktreeCreation } from './pending-worktree-creation'
+import {
+  getCreationProgressLabel,
+  type PendingWorktreeCreation,
+  type WorktreeCreationRequest
+} from './pending-worktree-creation'
+import type { Translate } from '@/i18n/use-translate'
 
-const t = ((_key: string, fallback: string) => fallback) as Parameters<
-  typeof getCreationProgressLabel
->[1]
+const t: Translate = (_key, fallback) => fallback
+
+function request(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
+  return {
+    repoId: 'r',
+    name: 'fix-login',
+    setupDecision: 'skip',
+    agent: null,
+    pendingFirstAgentMessageRename: false,
+    note: '',
+    startupPlan: null,
+    quickPrompt: '',
+    quickTelemetry: null,
+    ...overrides
+  }
+}
 
 function label(
   provider: 'orca-cloud' | undefined,
@@ -15,10 +33,9 @@ function label(
       phase: 'provisioning-vm',
       indeterminate: false,
       environmentCheck,
-      request: {
-        name: 'fix-login',
+      request: request({
         ephemeralVmRecipe: { sourceRepoId: 'r', recipeId: 'cloud', projectId: 'p', provider }
-      } as PendingWorktreeCreation['request']
+      })
     },
     t
   )
@@ -26,11 +43,6 @@ function label(
 
 it('speaks of a sandbox for Orca Cloud and keeps VM wording for bring-your-own recipes', () => {
   expect(label('orca-cloud')).toBe('Starting sandbox…')
-  expect(
-    label('orca-cloud', {
-      status: 'running',
-      startedAt: 1
-    } as PendingWorktreeCreation['environmentCheck'])
-  ).toBe('Preparing environment…')
+  expect(label('orca-cloud', { status: 'running', startedAt: 1 })).toBe('Preparing environment…')
   expect(label(undefined)).toBe('Provisioning VM…')
 })

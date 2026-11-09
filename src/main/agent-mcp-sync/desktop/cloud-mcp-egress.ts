@@ -1,6 +1,6 @@
 // Opens the sandbox's network allowlist for the remote MCP servers a sync sends. The control plane
 // keeps the list on the workspace, so it applies to the running sandbox now and on every later boot.
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { mergeMcpEgressHosts } from '../../../shared/agent-mcp-sync/mcp-egress-hosts'
@@ -31,11 +31,11 @@ export function createCloudMcpEgress(deps: {
   // Which hosts MCP sync added, per sandbox, so a removed server's host can be taken back
   // without touching hosts any other tool declared.
   const ledgerPath = join(deps.userDataPath, 'cloud-mcp-egress.json')
-  const readLedger = (): OwnedLedger => {
+  const readLedger = async (): Promise<OwnedLedger> => {
     try {
       const parsed = z
         .record(z.string(), z.array(z.string()))
-        .safeParse(JSON.parse(readFileSync(ledgerPath, 'utf8')))
+        .safeParse(JSON.parse(await readFile(ledgerPath, 'utf8')))
       return parsed.success ? parsed.data : {}
     } catch {
       return {}
@@ -45,7 +45,7 @@ export function createCloudMcpEgress(deps: {
   return {
     async apply(sandboxId, wanted) {
       const path = `v1/sandboxes/${encodeURIComponent(sandboxId)}/egress/hosts`
-      const ledger = readLedger()
+      const ledger = await readLedger()
       const owned = ledger[sandboxId] ?? []
       if (wanted.length === 0 && owned.length === 0) {
         return { hosts: [], dropped: [] }

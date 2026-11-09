@@ -14,6 +14,7 @@
 14 src/main/agent-launch/trust/agent-trust-presets.ts
 2 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
 1 src/main/agent-launch/trust/execution-host-workspace-trust.ts
+2 src/main/agent-mcp-sync/desktop/cloud-mcp-sync.ts
 1 src/main/ai-vault-search/session-search-worker-client.ts
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
 2 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts

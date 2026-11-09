@@ -45,13 +45,13 @@ const SETTLE_AFTER_REPORT_MS = 2_000
 
 const armedByWorkspace = new Map<string, ArmedTurn[]>()
 
-/** Dev builds only: what the continue logic decided, for e2e drivers. */
+/** Dev builds only: what the continue logic decided, for e2e drivers (window.__orcaContinueTrace). */
+const devTrace: string[] | null = import.meta.env?.DEV && typeof window !== 'undefined' ? [] : null
+if (devTrace) {
+  Reflect.set(window, '__orcaContinueTrace', devTrace)
+}
 function trace(event: string): void {
-  if (import.meta.env?.DEV && typeof window !== 'undefined') {
-    const log = ((window as unknown as { __orcaContinueTrace?: string[] }).__orcaContinueTrace ??=
-      [])
-    log.push(`${Date.now()} ${event}`)
-  }
+  devTrace?.push(`${Date.now()} ${event}`)
 }
 const sentTurns = new Set<string>()
 
@@ -76,10 +76,7 @@ function paneWorkspaceId(entry: StatusEntry, tabWorkspace: Map<string, string>):
 
 /** Snapshot the agents working in this workspace as its host restart begins. */
 export function armInterruptedTurnsForHostRestart(workspaceId: string, now = Date.now()): number {
-  const state = useAppStore.getState() as unknown as {
-    agentStatusByPaneKey: Record<string, StatusEntry | undefined>
-    tabsByWorktree?: Record<string, { id: string }[] | undefined>
-  }
+  const state = useAppStore.getState()
   const tabWorkspace = new Map<string, string>()
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree ?? {})) {
     for (const tab of tabs ?? []) {
@@ -87,20 +84,20 @@ export function armInterruptedTurnsForHostRestart(workspaceId: string, now = Dat
     }
   }
   const armed: ArmedTurn[] = []
-  for (const entry of Object.values(state.agentStatusByPaneKey ?? {})) {
+  for (const entry of Object.values<StatusEntry | undefined>(state.agentStatusByPaneKey ?? {})) {
+    const agent = entry?.agentType
     if (
       !entry ||
       entry.state !== 'working' ||
       now - entry.updatedAt > AGENT_STATUS_STALE_AFTER_MS ||
-      !entry.agentType ||
-      !isResumableTuiAgent(entry.agentType as TuiAgent) ||
+      !isResumableTuiAgent(agent) ||
       paneWorkspaceId(entry, tabWorkspace) !== workspaceId
     ) {
       continue
     }
     armed.push({
       paneKey: entry.paneKey,
-      agent: entry.agentType as TuiAgent,
+      agent,
       turnKey: interruptedTurnKey(entry, entry.paneKey),
       armedAt: now,
       terminalHandle: entry.terminalHandle ?? null,
@@ -124,7 +121,7 @@ export function disarmInterruptedTurns(workspaceId: string): void {
 }
 
 function statusSince(paneKey: string, armedAt: number): StatusEntry | null {
-  const entry = useAppStore.getState().agentStatusByPaneKey[paneKey] as StatusEntry | undefined
+  const entry: StatusEntry | undefined = useAppStore.getState().agentStatusByPaneKey[paneKey]
   return entry && entry.updatedAt > armedAt ? entry : null
 }
 
@@ -178,7 +175,10 @@ async function continueOne(turn: ArmedTurn, deps: ContinueDeps): Promise<boolean
         deps.now() - reported.updatedAt >= SETTLE_AFTER_REPORT_MS &&
         (await deps.agentInForeground(ptyId, turn.agent)) &&
         !isInterruptedTurnContinued(turn.turnKey) &&
-        (await deps.submit({ ptyId, content: INTERRUPTED_TURN_CONTINUE_PROMPT }))
+        (await deps.submit({
+          ptyId,
+          content: INTERRUPTED_TURN_CONTINUE_PROMPT
+        }))
       ) {
         sentTurns.add(turn.turnKey)
         markInterruptedTurnContinued(turn.turnKey)

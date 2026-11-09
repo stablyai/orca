@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { classifyVmBuildFailure, isAccountGate, type VmBuildFailure } from './vm-build-failure'
 import { vmBuildFailureCopy } from './vm-build-failure-copy'
 import { orcaCloudRepoName } from './vm-build-repo-actions'
+import type { Translate } from '@/i18n/use-translate'
 
 // English defaults with {{slots}} filled, like i18next with no catalog.
-const t = ((_key: string, fallback: string, params?: Record<string, unknown>) =>
-  fallback.replace(/\{\{(\w+)\}\}/g, (_slot, name: string) =>
-    String(params?.[name] ?? '')
-  )) as Parameters<typeof vmBuildFailureCopy>[2]
+const t: Translate = (_key, fallback, params) =>
+  fallback.replace(/\{\{(\w+)\}\}/g, (_slot, name: string) => {
+    const value: unknown = params?.[name]
+    return value === undefined || value === null ? '' : String(value)
+  })
 
 function classify(
   errorCode: string | undefined,
@@ -117,8 +119,12 @@ describe('orcaCloudRepoName', () => {
     expect(
       orcaCloudRepoName({
         displayName: 'web',
-        gitRemoteIdentity: { remoteUrl: 'git@github.com:acme/web.git' }
-      } as never)
+        gitRemoteIdentity: {
+          canonicalKey: 'github.com/acme/web',
+          remoteName: 'origin',
+          remoteUrl: 'git@github.com:acme/web.git'
+        }
+      })
     ).toBe('acme/web')
     expect(orcaCloudRepoName({ displayName: 'web', gitRemoteIdentity: null })).toBe('web')
   })

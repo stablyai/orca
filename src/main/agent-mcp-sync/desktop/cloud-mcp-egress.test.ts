@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import type { HostedSandboxRequest } from '../../hosted-sandbox/hosted-sandbox-request'
 import { createCloudMcpEgress } from './cloud-mcp-egress'
 
@@ -14,13 +15,13 @@ function fakeControlPlane(initial: string[]): {
 } {
   let hosts = [...initial]
   const calls: Call[] = []
-  const request = (async (method, path, schema, init) => {
+  const request: HostedSandboxRequest = async (method, path, schema, init) => {
     calls.push({ method, path, ...(init.body === undefined ? {} : { body: init.body }) })
     if (method === 'PUT') {
-      hosts = [...(init.body as { hosts: string[] }).hosts]
+      hosts = [...z.object({ hosts: z.array(z.string()) }).parse(init.body).hosts]
     }
     return schema.parse({ hosts })
-  }) as HostedSandboxRequest
+  }
   return { request, calls, hosts: () => hosts }
 }
 

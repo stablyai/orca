@@ -142,10 +142,8 @@ export class AuthCallbackForward {
   ) {
     // A generic loopback relay (an MCP server's OAuth redirect, no sign-in flow) lives briefly:
     // the browser hits it within seconds of the user approving.
-    this.ttl = setTimeout(
-      () => this.close(),
-      request.flowId === null ? GENERIC_RELAY_TTL_MS : TTL_MS
-    )
+    const ttlMs = request.flowId === null ? GENERIC_RELAY_TTL_MS : TTL_MS
+    this.ttl = setTimeout(() => this.close(), ttlMs)
   }
 
   async start(openTunnel: AuthCallbackTunnelOpener): Promise<AuthCallbackForwardResult> {
