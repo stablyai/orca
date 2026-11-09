@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import {
+  SKILL_SHARE_LINK_CHANGED_ERROR,
   SKILL_SHARE_NAME_TAKEN_ERROR,
   type SkillSharePreview,
   type SkillShareProgress
@@ -120,7 +121,7 @@ export function SkillShareDialog({
         }
         retainedPreparationId = nextPreview.preparationId
         setPreview(nextPreview)
-        setPublishingNewVersion(managedInstall !== null)
+        setPublishingNewVersion(managedInstall !== null || Boolean(nextPreview.sharedLinkUrl))
         const cloud = auth.cloud
         setHasCloudAccount(Boolean(cloud?.displayName || cloud?.email))
       })
@@ -219,15 +220,20 @@ export function SkillShareDialog({
     } catch (cause) {
       console.warn('[skills] publish failed:', cause)
       setError(
-        cancellationRequested.current
+        String(cause).includes(SKILL_SHARE_LINK_CHANGED_ERROR)
           ? t(
-              'auto.components.skills.SkillShareDialog.publishCancelled',
-              'Upload cancelled. The prepared copy is still available to retry.'
+              'auto.components.skills.SkillShareDialog.linkChanged',
+              'This link was stopped or changed elsewhere. Close and share again.'
             )
-          : t(
-              'auto.components.skills.SkillShareDialog.publishFailed',
-              'Could not publish this skill. The prepared copy is still available to retry.'
-            )
+          : cancellationRequested.current
+            ? t(
+                'auto.components.skills.SkillShareDialog.publishCancelled',
+                'Upload cancelled. The prepared copy is still available to retry.'
+              )
+            : t(
+                'auto.components.skills.SkillShareDialog.publishFailed',
+                'Could not publish this skill. The prepared copy is still available to retry.'
+              )
       )
     } finally {
       cancellationRequested.current = false
@@ -263,6 +269,14 @@ export function SkillShareDialog({
     await window.api.ui.writeClipboardText(shareUrl)
     toast.success(t('auto.components.skills.SkillShareDialog.copied', 'Share link copied'))
   }
+
+  const publishLabel = preview?.sharedLinkUrl
+    ? t('auto.components.skills.SkillShareDialog.updateLink', 'Update link')
+    : publishingNewVersion
+      ? t('auto.components.skills.SkillShareDialog.7aa4ba0dba', 'Publish new version')
+      : selectedSkills.length > 1
+        ? t('auto.components.skills.SkillShareDialog.publishBundle', 'Publish bundle')
+        : t('auto.components.skills.SkillShareDialog.0f07fa2a79', 'Publish skill')
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !publishing && void close()}>
@@ -348,11 +362,7 @@ export function SkillShareDialog({
                   onClick={() => void publish()}
                 >
                   <Share2 className="size-4" />
-                  {publishingNewVersion
-                    ? t('auto.components.skills.SkillShareDialog.7aa4ba0dba', 'Publish new version')
-                    : selectedSkills.length > 1
-                      ? t('auto.components.skills.SkillShareDialog.publishBundle', 'Publish bundle')
-                      : t('auto.components.skills.SkillShareDialog.0f07fa2a79', 'Publish skill')}
+                  {publishLabel}
                 </Button>
               )
             ) : null}

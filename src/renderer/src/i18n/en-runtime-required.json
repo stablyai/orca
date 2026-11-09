@@ -1020,6 +1020,10 @@
           "placementsChecked_one": "{{count}} placement checked.",
           "placementsChecked_other": "{{count}} placements checked."
         },
+        "SkillSharedLinkRow": {
+          "olderLinks_one": "+{{count}} older link",
+          "olderLinks_other": "+{{count}} older links"
+        },
         "count": {
           "deleteFolder_one": "{{count}} folder",
           "deleteFolder_other": "{{count}} folders",

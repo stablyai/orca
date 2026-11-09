@@ -565,6 +565,7 @@
     "auto.components.skills.install.reviewRunnableFiles",
     "auto.components.skills.install.reviewSupportingFiles",
     "auto.components.skills.install.runnableWarningOfSelected",
+    "auto.components.skills.install.shareUpdated",
     "auto.components.skills.install.singleRunnableWarning",
     "auto.components.skills.install.supportingFileWarning",
     "auto.components.skills.installResult.cancelled",

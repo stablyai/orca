@@ -2,11 +2,20 @@ import { resolveArtifactCloudApiUrl } from '../../artifacts/artifact-cloud-confi
 import { createSkillCloudDeadline } from './skill-cloud-deadline'
 import { SkillCloudRequestError } from './skill-cloud-request-error'
 
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
+
+export function skillCloudPathId(value: string): string {
+  if (!ID_PATTERN.test(value)) {
+    throw new Error('skill-cloud-id-invalid')
+  }
+  return encodeURIComponent(value)
+}
+
 export async function skillCloudRequest<T>(input: {
   apiUrl?: string
   authToken?: string
   path: string
-  method?: 'DELETE' | 'GET' | 'POST' | 'PUT'
+  method?: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT'
   body?: unknown
   signal?: AbortSignal
   idempotencyKey?: string

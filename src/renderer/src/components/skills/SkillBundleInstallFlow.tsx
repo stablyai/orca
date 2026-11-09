@@ -48,6 +48,7 @@ export function SkillBundleInstallFlow(props: {
   version: BundleVersion
   onClose(): void
   onBusyChange(busy: boolean): void
+  onVersionChanged(): void
 }): React.JSX.Element {
   const t = useTranslate()
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
@@ -193,7 +194,9 @@ export function SkillBundleInstallFlow(props: {
               : ('keep-local' as const)
           }))
       })
-      if (operation.status === 'unsupported') {
+      if (operation.status === 'version-changed') {
+        props.onVersionChanged()
+      } else if (operation.status === 'unsupported') {
         setError(operation.message)
       } else if (operation.status !== 'ok') {
         setError(

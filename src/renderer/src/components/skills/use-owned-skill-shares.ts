@@ -22,6 +22,8 @@ export type OwnedSkillShares = {
   busyShareId: string | null
   refresh: () => void
   revoke: (share: SkillCloudOwnedShare) => Promise<void>
+  /** Stops several links of one package; busy shows on the first. */
+  revokeMany: (shares: SkillCloudOwnedShare[]) => Promise<void>
 }
 
 export function useOwnedSkillShares(): OwnedSkillShares {
@@ -63,16 +65,18 @@ export function useOwnedSkillShares(): OwnedSkillShares {
     }
   }, [load])
 
-  const revoke = useCallback(async (share: SkillCloudOwnedShare): Promise<void> => {
-    setBusyShareId(share.id)
+  const revokeMany = useCallback(async (targets: SkillCloudOwnedShare[]): Promise<void> => {
+    setBusyShareId(targets[0]?.id ?? null)
     setError(null)
     try {
-      const operation = await window.api.skills.revokeShare(share.id)
-      if (operation.status !== 'ok') {
-        setError(inventoryError(operation.status))
-        return
+      for (const share of targets) {
+        const operation = await window.api.skills.revokeShare(share.id)
+        if (operation.status !== 'ok') {
+          setError(inventoryError(operation.status))
+          return
+        }
+        setShares((current) => current.filter((candidate) => candidate.id !== share.id))
       }
-      setShares((current) => current.filter((candidate) => candidate.id !== share.id))
       toast.success(translate('auto.components.settings.shareSkills.linkRevoked', 'Link revoked'))
     } catch {
       setError(
@@ -85,6 +89,10 @@ export function useOwnedSkillShares(): OwnedSkillShares {
       setBusyShareId(null)
     }
   }, [])
+  const revoke = useCallback(
+    (share: SkillCloudOwnedShare): Promise<void> => revokeMany([share]),
+    [revokeMany]
+  )
 
   return {
     shares,
@@ -92,6 +100,7 @@ export function useOwnedSkillShares(): OwnedSkillShares {
     error,
     busyShareId,
     refresh: () => void load(),
-    revoke
+    revoke,
+    revokeMany
   }
 }

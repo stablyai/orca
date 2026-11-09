@@ -138,8 +138,8 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
               </h3>
               <p className="text-xs leading-relaxed text-muted-foreground">
                 {t(
-                  'auto.components.settings.shareSkills.activeLinksDescription',
-                  'Only people with a link can open it. Unshare a link to block future inspection and installs.'
+                  'auto.components.settings.shareSkills.activeLinksStopDescription',
+                  'Only people with a link can open it. Stop sharing a link to block future inspection and installs.'
                 )}
               </p>
             </div>

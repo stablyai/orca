@@ -78,7 +78,8 @@ export class RuntimeSkillCommands
         {
           findOwnedPackageId: (name, input) => cloud.findOwnedPackageId(name, input),
           publishVersion: (input) => cloud.publishVersion(input),
-          createShare: (packageId, input) => cloud.createShare(packageId, input)
+          shareTarget: (packageId, input) => cloud.shareTarget(packageId, input),
+          shareVersion: (version, target, input) => cloud.shareVersion(version, target, input)
         },
         { installStateDirectory: join(this.userDataPath(), 'skill-installs') }
       )
@@ -158,21 +159,17 @@ export class RuntimeSkillCommands
     }
   }
 
-  publishSkillPackage(request: SkillCloudPublishRequest) {
-    return this.requireCloud().publish(request)
-  }
-
   publishSkillPackageVersion(request: SkillCloudPublishRequest) {
     return this.requireCloud().publishVersion(request)
   }
   findOwnedSkillPackageId(name: string, options: SkillCloudOptions) {
     return this.requireCloud().findOwnedPackageId(name, options)
   }
-  createSkillPackageShare(
-    packageId: string,
-    request: SkillCloudOptions & { pinnedVersionId?: string; idempotencyKey?: string }
-  ) {
-    return this.requireCloud().createShare(packageId, request)
+  skillShareTarget(...args: Parameters<SkillCloudService['shareTarget']>) {
+    return this.requireCloud().shareTarget(...args)
+  }
+  shareSkillVersion(...args: Parameters<SkillCloudService['shareVersion']>) {
+    return this.requireCloud().shareVersion(...args)
   }
   resolveSkillShare(shareId: string, options: SkillCloudOptions) {
     return this.requireCloud().resolveShare(shareId, options)

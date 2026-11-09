@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { SkillSharedLinkRow } from './SkillSharedLinkRow'
+import { skillSharedLinkGroups } from './skill-shared-link-groups'
 import type { OwnedSkillShares } from './use-owned-skill-shares'
 
 function matchesQuery(name: string, query: string): boolean {
@@ -9,14 +10,14 @@ function matchesQuery(name: string, query: string): boolean {
 
 export function SkillSharedLinksView({
   query,
-  shares: { shares, loading, error, busyShareId, revoke, refresh }
+  shares: { shares, loading, error, busyShareId, revoke, revokeMany, refresh }
 }: {
   query: string
   shares: OwnedSkillShares
 }): React.JSX.Element {
   const t = useTranslate()
   const visible = useMemo(
-    () => shares.filter((share) => matchesQuery(share.name, query)),
+    () => skillSharedLinkGroups(shares).filter(({ share }) => matchesQuery(share.name, query)),
     [query, shares]
   )
 
@@ -59,17 +60,19 @@ export function SkillSharedLinksView({
     <>
       <p className="pb-2 text-xs text-muted-foreground">
         {t(
-          'auto.components.settings.shareSkills.activeLinksDescription',
-          'Only people with a link can open it. Unshare a link to block future inspection and installs.'
+          'auto.components.settings.shareSkills.activeLinksStopDescription',
+          'Only people with a link can open it. Stop sharing a link to block future inspection and installs.'
         )}
       </p>
       <ul className="divide-y divide-border rounded-md border border-border">
-        {visible.map((share) => (
+        {visible.map(({ share, olderShares }) => (
           <SkillSharedLinkRow
             key={share.id}
             share={share}
-            busy={busyShareId === share.id}
+            olderShares={olderShares}
+            busy={[share, ...olderShares].some((link) => link.id === busyShareId)}
             onRevoke={() => void revoke(share)}
+            onRevokeLinks={(links) => void revokeMany(links)}
             onDeleted={refresh}
           />
         ))}

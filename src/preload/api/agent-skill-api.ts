@@ -10,6 +10,7 @@ import type {
   SkillBundleInstallPreviewOperation,
   SkillBundlePackageVersionInstallInput,
   SkillBundleShareInstallInput,
+  SkillBundlePackageVersionInstallOperation,
   SkillBundleShareInstallOperation,
   SkillInstallCancelInput,
   SkillInstallPreviewInput,
@@ -19,6 +20,7 @@ import type {
   SkillRemoveInput,
   SkillRemoveOperation,
   SkillShareInstallInput,
+  SkillPackageVersionInstallOperation,
   SkillShareInstallOperation,
   SkillSharePreview,
   SkillShareProgress,
@@ -63,10 +65,10 @@ export type SkillsApi = {
   ) => Promise<SkillBundleShareInstallOperation>
   installBundlePackageVersion: (
     input: SkillBundlePackageVersionInstallInput
-  ) => Promise<SkillBundleShareInstallOperation>
+  ) => Promise<SkillBundlePackageVersionInstallOperation>
   installPackageVersion: (
     input: SkillPackageVersionInstallInput
-  ) => Promise<SkillShareInstallOperation>
+  ) => Promise<SkillPackageVersionInstallOperation>
   cancelInstall: (input: SkillInstallCancelInput) => Promise<{ cancelled: boolean }>
   previewInstall: (input: SkillInstallPreviewInput) => Promise<SkillInstallPreviewOperation>
   previewBundleInstall: (

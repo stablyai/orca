@@ -37,7 +37,26 @@ export type SkillCloudOwnedShare = SkillCloudShare & {
   description: string
   createdAt: string
   expiresAt?: string
+  pinnedVersionId?: string
+  /** Present only on clouds that keep one link per package; true on that link. */
+  canonical?: boolean
 }
+
+/** The package's one link, re-pointed to each new version instead of replaced. */
+export type SkillCloudCanonicalShare = SkillCloudShare & { pinnedVersionId: string }
+
+/**
+ * How a publish links its version: `legacy` clouds mint a new link each time; otherwise the
+ * package's canonical link is created, or `update` moves the known one (failing, never re-minting,
+ * if it was stopped or moved meanwhile).
+ */
+export type SkillCloudShareTarget =
+  | { kind: 'legacy' }
+  | { kind: 'canonical' }
+  | { kind: 'update'; share: SkillCloudCanonicalShare }
+
+/** Error code when a share link no longer serves the version the client expected. */
+export const SKILL_SHARE_VERSION_CHANGED_CODE = 'share_version_changed'
 
 export type SkillCloudDownloadGrant = {
   grant: { url: string; expiresAt: string }

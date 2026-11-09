@@ -108,7 +108,8 @@ function runtimeWithCloud(options: {
       }
     }
   })
-  const createShare = vi.fn(async () => ({
+  const shareTarget = vi.fn(async () => ({ status: 'ok' as const, value: { kind: 'legacy' } }))
+  const shareVersion = vi.fn(async () => ({
     status: 'ok' as const,
     value: { id: 'share-id', url: 'https://share.onorca.dev/skills/share/share-id' }
   }))
@@ -124,9 +125,11 @@ function runtimeWithCloud(options: {
     }
     return { status: 'ok' as const, value: null }
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent sharing calls only these three cloud methods.
-  runtime.setSkillCloudService({ findOwnedPackageId, publishVersion, createShare } as never)
-  return { runtime, publishVersion, createShare, manifests, started }
+  runtime.setSkillCloudService(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent sharing calls only these four cloud methods.
+    { findOwnedPackageId, publishVersion, shareTarget, shareVersion } as never
+  )
+  return { runtime, publishVersion, manifests, started }
 }
 
 beforeEach(async () => {

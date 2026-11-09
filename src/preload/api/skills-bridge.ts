@@ -15,6 +15,7 @@ import type {
   SkillBundleInstallPreviewOperation,
   SkillBundlePackageVersionInstallInput,
   SkillBundleShareInstallInput,
+  SkillBundlePackageVersionInstallOperation,
   SkillBundleShareInstallOperation,
   SkillInstallPreviewInput,
   SkillInstallPreviewOperation,
@@ -23,6 +24,7 @@ import type {
   SkillRemoveInput,
   SkillRemoveOperation,
   SkillShareInstallInput,
+  SkillPackageVersionInstallOperation,
   SkillShareInstallOperation,
   SkillInstallCancelInput,
   SkillInstallProgress,
@@ -73,11 +75,11 @@ export const skillsApi = {
     ipcRenderer.invoke('skills:installBundleShare', input),
   installBundlePackageVersion: (
     input: SkillBundlePackageVersionInstallInput
-  ): Promise<SkillBundleShareInstallOperation> =>
+  ): Promise<SkillBundlePackageVersionInstallOperation> =>
     ipcRenderer.invoke('skills:installBundlePackageVersion', input),
   installPackageVersion: (
     input: SkillPackageVersionInstallInput
-  ): Promise<SkillShareInstallOperation> =>
+  ): Promise<SkillPackageVersionInstallOperation> =>
     ipcRenderer.invoke('skills:installPackageVersion', input),
   cancelInstall: (input: SkillInstallCancelInput): Promise<{ cancelled: boolean }> =>
     ipcRenderer.invoke('skills:cancelInstall', input),
