@@ -164,6 +164,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Restore the optimistically hidden error if navigation aborts.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
+  // Offscreen pages have no renderer to hold their icon for session-tab rows.
+  protected readonly remoteTabFaviconUrlByGuestId = new Map<number, string>()
   protected browserGuestStateChangedListener: ((worktreeId: string) => void) | null = null
   protected offscreenTabOpener: ((request: OffscreenBrowserTabOpenRequest) => void) | null = null
   protected certificateTrustController: BrowserCertificateTrustController | null = null

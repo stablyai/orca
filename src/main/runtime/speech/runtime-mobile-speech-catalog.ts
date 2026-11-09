@@ -60,6 +60,7 @@ export class RuntimeMobileSpeechCatalog {
       enabled: voice.enabled === true,
       selectedModelId: voice.sttModel ?? '',
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
+      removeFillerWords: voice.removeFillerWords !== false,
       models
     }
   }

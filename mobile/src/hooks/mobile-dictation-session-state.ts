@@ -11,6 +11,8 @@ export type UseMobileDictationOptions = {
   enabled: boolean
   onTranscript: (text: string) => void
   onError?: (error: Error) => void
+  // The computer's filler switch, for text the phone recognizes itself; unknown means on.
+  removeFillerWords?: boolean
 }
 
 export type UseMobileDictationResult = {

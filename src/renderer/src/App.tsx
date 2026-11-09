@@ -103,7 +103,7 @@ function App(): React.JSX.Element {
         } as React.CSSProperties
       }
     >
-      <TooltipProvider delayDuration={400}>
+      <TooltipProvider>
         <ConfirmationDialogProvider>
           <BrowserPagePrompts />
           <AddToChatPointMenuHost />

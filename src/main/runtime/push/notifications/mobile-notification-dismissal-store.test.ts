@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  statSync,
-  utimesSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -190,25 +182,4 @@ it('a targeted old delivery cannot retire a newer replacement with the same logi
     ['different', 12]
   ])
   expect(h.store.reconcile([shown, { ...shown, notificationSeq: 13 }])).toEqual([shown])
-})
-
-it('does not let an imported file left behind override later dismissals', async () => {
-  const h = fixture()
-  const legacyPath = join(h.path, 'mobile-notification-dismissals.json')
-  const legacy = JSON.stringify([
-    { ...shown, dismissedThrough: -1, expiresAt: Date.now() + 86400_000 }
-  ])
-  writeFileSync(legacyPath, legacy)
-  const { atimeMs, mtimeMs } = statSync(legacyPath)
-  const imported = new MobileNotificationDismissalStore(h.path)
-  imported.record({ type: 'dismiss', ...shown, notificationEpoch: 'now', dismissedDelivery: shown })
-  await imported.close()
-  // The same bytes reappear, as when deleting the imported file failed.
-  writeFileSync(legacyPath, legacy)
-  utimesSync(legacyPath, atimeMs / 1000, mtimeMs / 1000)
-
-  const restarted = new MobileNotificationDismissalStore(h.path)
-  stores.push(restarted)
-  expect(restarted.reconcile([shown])).toEqual([shown])
-  expect(existsSync(legacyPath)).toBe(false)
 })

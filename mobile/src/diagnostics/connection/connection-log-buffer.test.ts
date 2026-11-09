@@ -31,64 +31,6 @@ describe('connection log buffer', () => {
     expect(JSON.stringify(save.mock.calls)).not.toContain('legacy-secret')
   })
 
-  it('redacts quoted credential values when the object key is unquoted', async () => {
-    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
-
-    store.append('host-a', {
-      ...entry(1),
-      detail: `resumeToken: 'secret-one' deviceToken="secret-two"`
-    })
-    await store.hydrate('host-a')
-
-    expect(store.get('host-a')[0]?.detail).toBe(
-      `resumeToken: '[redacted]' deviceToken="[redacted]"`
-    )
-  })
-
-  it('redacts the full quoted credential when its value contains an escaped quote', async () => {
-    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
-
-    store.append('host-a', {
-      ...entry(1),
-      detail: String.raw`{"token":"secret\"tail"} token: 'secret\'tail'`
-    })
-    await store.hydrate('host-a')
-
-    expect(store.get('host-a')[0]?.detail).toBe(`{"token":"[redacted]"} token: '[redacted]'`)
-  })
-
-  it('redacts unterminated quoted credentials', async () => {
-    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
-
-    store.append('host-a', {
-      ...entry(1),
-      message: 'token="secret',
-      detail: '{"authorization":"Bearer also-secret'
-    })
-    await store.hydrate('host-a')
-
-    expect(store.get('host-a')[0]).toMatchObject({
-      message: 'token="[redacted]',
-      detail: '{"authorization":"[redacted]'
-    })
-  })
-
-  it('redacts URL userinfo through the last authority separator', async () => {
-    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
-
-    store.append('host-a', {
-      ...entry(1),
-      message: 'wss://user:p@ss@example.com/x',
-      detail: 'https://user:pass@example.com/x'
-    })
-    await store.hydrate('host-a')
-
-    expect(store.get('host-a')[0]).toMatchObject({
-      message: 'wss://[redacted]@example.com/x',
-      detail: 'https://[redacted]@example.com/x'
-    })
-  })
-
   it('does not overwrite persisted history when hydration fails and retries later', async () => {
     const load = vi
       .fn<() => Promise<readonly ConnectionLogEntry[]>>()

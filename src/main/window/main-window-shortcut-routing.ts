@@ -80,15 +80,19 @@ export function installMainWindowShortcutRouting(args: {
         ? getWindowShortcutActionId(action)
         : null
 
-    // Hold dictation needs renderer keyup; consume only single-keydown toggles in main.
+    // Hold and Auto need renderer keyup; consume only single-keydown toggles in main.
     if (action.type === 'dictationKeyDown') {
       const voiceSettings = store?.getSettings().voice
       // No model still forwards: the renderer's startDictation shows the setup toast.
-      if (!voiceSettings?.enabled) {
+      if (!voiceSettings?.enabled || textInputOwnsComposition(options.input)) {
         return false
       }
-      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
-      if (dictationMode === 'hold') {
+      const dictationMode = voiceSettings.dictationMode ?? 'auto'
+      // A double tap has no release to hold, so Auto toggles on it.
+      const toggles =
+        dictationMode === 'toggle' ||
+        (dictationMode === 'auto' && options.input.doubleTapModifier !== undefined)
+      if (!toggles) {
         return false
       }
       if (isAutoRepeat) {

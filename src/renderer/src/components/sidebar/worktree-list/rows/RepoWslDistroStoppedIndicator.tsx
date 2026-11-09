@@ -52,7 +52,7 @@ export function RepoWslDistroStoppedIndicator({
   )
   return (
     <TooltipProvider disableHoverableContent={false}>
-      <Tooltip delayDuration={400}>
+      <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"

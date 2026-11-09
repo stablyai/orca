@@ -17,7 +17,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { getDefaultSettings } from '../../../shared/constants'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import JiraIssueWorkspace from './JiraIssueWorkspace'
 

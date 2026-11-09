@@ -1015,7 +1015,7 @@
     "workspaceDeletion.alwaysDelete",
     "workspaceDeletion.alwaysDeleteTooltip",
     "workspaceDeletion.alwaysForceDelete",
-    "workspaceDeletion.alwaysForceDeleteTooltip",
+    "workspaceDeletion.alwaysForceDeleteDescription",
     "workspaceDeletion.moreActions",
     "workspaceDeletion.moreDeleteOptions",
     "workspaceDeletion.preferenceSaveFailed",

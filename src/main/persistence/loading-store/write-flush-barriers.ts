@@ -15,6 +15,7 @@ type WriteFlushBarrierOperationsRuntime = Pick<
   | 'githubCacheDirty'
   | 'githubCachePersistedAt'
   | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
   | 'githubCachePersistTimer'
   | 'githubCacheRetryDelayMs'
   | 'lastDurableWriteGeneration'

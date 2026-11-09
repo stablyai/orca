@@ -14,6 +14,7 @@ import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
 import { VoiceModelUnloadSetting } from './VoiceModelUnloadSetting'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
 import { useTranslate } from '@/i18n/use-translate'
@@ -226,6 +227,20 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         voiceSettings={voiceSettings}
         selectedModel={selectedModel}
         onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
+      <Separator />
+
+      <SettingsSwitchRow
+        label={t('components.settings.voice.fillerWords.title', 'Remove Filler Words')}
+        description={t(
+          'components.settings.voice.fillerWords.description',
+          'Drops sounds like “um” and “uh” from dictated text, in the dictation language.'
+        )}
+        checked={voiceSettings.removeFillerWords}
+        onChange={() =>
+          updateVoiceSettings({ removeFillerWords: !voiceSettings.removeFillerWords })
+        }
       />
 
       <Separator />

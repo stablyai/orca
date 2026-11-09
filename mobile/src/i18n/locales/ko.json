@@ -2189,8 +2189,7 @@
       "copyPathLabel": "Markdown 경로 복사",
       "copySource": "Markdown 소스 복사",
       "discard": "버리기",
-      "dismissKeyboard": "키보드 닫기",
-      "dismissKeyboardHint": "소프트웨어 키보드를 숨기고 Markdown 편집기를 열린 상태로 유지합니다.",
+      "previewTruncated": "미리보기가 일부만 표시됩니다.",
       "readOnly": "읽기 전용"
     },
     "nativeChatAttachActions": {

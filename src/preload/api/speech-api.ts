@@ -27,6 +27,8 @@ export type SpeechApi = {
   /** Resolves true when this chunk filled a cloud session's upload cap. */
   feedAudio: (samples: Float32Array, sampleRate: number, sessionId?: string) => Promise<boolean>
   stopDictation: (sessionId?: string) => Promise<void>
+  /** Drops the session's audio and any text it hasn't returned yet, without transcribing the rest. */
+  cancelDictation: (sessionId: string) => Promise<void>
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
   onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
   onDownloadProgress: (
