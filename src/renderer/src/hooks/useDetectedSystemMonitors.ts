@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localPreflightContextKey } from '@/lib/local-preflight-context-key'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import {
   resolveSystemMonitorDescriptors,

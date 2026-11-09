@@ -16,7 +16,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/lib/launch-agent-tab-order', () => ({
+vi.mock('@/lib/agent-session/launch/pane/launch-agent-tab-order', () => ({
   persistAgentLaunchTabOrder: persistOrderMock
 }))
 
