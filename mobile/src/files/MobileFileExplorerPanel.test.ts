@@ -193,7 +193,9 @@ function deferred() {
 
 let queryClient: QueryClient = createOrcaQueryClient()
 
-function explorer(): ReactElement {
+function explorer(
+  props?: Partial<Parameters<typeof MobileFileExplorerPanel>[0]>
+): ReactElement {
   return createElement(
     QueryClientProvider,
     { client: queryClient },
@@ -201,15 +203,18 @@ function explorer(): ReactElement {
       hostId: 'host-a',
       worktreeId: 'worktree-a',
       name: 'Example Worktree',
-      embedded: true
+      embedded: true,
+      ...props
     })
   )
 }
 
-async function renderExplorer(): Promise<ReactTestRenderer> {
+async function renderExplorer(
+  props?: Partial<Parameters<typeof MobileFileExplorerPanel>[0]>
+): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
-    renderer = create(explorer())
+    renderer = create(explorer(props))
   })
   if (!renderer) {
     throw new Error('MobileFileExplorerPanel did not render')
@@ -270,6 +275,69 @@ describe('MobileFileExplorerPanel', () => {
     mockTransport.client = null
     mockTransport.connectionState = 'connected'
     mockTransport.forceReconnect = vi.fn()
+  })
+
+  it('loads directories lazily and reuses cached children when reopened', async () => {
+    const reads: string[] = []
+    const entriesByPath: Record<string, MobileDirEntry[]> = {
+      '': [entry('src', true), entry('README.md')],
+      src: [entry('app.ts'), entry('components', true)]
+    }
+    createHost((method, relativePath, params) => {
+      if (method === 'files.readDir') {
+        const worktree =
+          typeof params === 'object' && params !== null && 'worktree' in params
+            ? String(params.worktree)
+            : ''
+        expect(worktree).toBe('id:worktree-a')
+        reads.push(relativePath)
+      }
+      return ok(entriesByPath[relativePath] ?? [])
+    })
+
+    const renderer = await renderExplorer()
+    expect(reads).toContain('')
+    expect(reads).not.toContain('src')
+
+    await pressByLabel(renderer, 'Open folder src')
+    expect(renderedText(renderer)).toContain('app.ts')
+    const srcReads = reads.filter((path) => path === 'src').length
+    expect(srcReads).toBeGreaterThan(0)
+
+    await pressByLabel(renderer, 'Open folder src')
+    await pressByLabel(renderer, 'Open folder src')
+
+    expect(reads.filter((path) => path === 'src').length).toBe(srcReads)
+  })
+
+  it('keeps the loaded tree visible during a transient disconnect', async () => {
+    const reads: string[] = []
+    const host = createHost((method, relativePath) => {
+      if (method === 'files.readDir') {
+        reads.push(relativePath)
+      }
+      return ok(relativePath === '' ? [entry('src', true), entry('README.md')] : [])
+    })
+    const renderer = await renderExplorer()
+    expect(renderedText(renderer)).toContain('src')
+    const readsBeforeDisconnect = reads.length
+
+    await host.setState(renderer, 'disconnected')
+
+    expect(reads.length).toBe(readsBeforeDisconnect)
+    expect(renderedText(renderer)).toContain('src')
+    expect(renderedText(renderer)).toContain('README.md')
+    expect(renderedText(renderer)).not.toContain('Waiting for desktop')
+  })
+
+  it('opens files in-session using onOpenFile when provided', async () => {
+    listingHost({ '': [entry('README.md')] })
+    const onOpenFile = vi.fn()
+    const renderer = await renderExplorer({ onOpenFile })
+
+    await pressByLabel(renderer, 'Preview file README.md')
+
+    expect(onOpenFile).toHaveBeenCalledWith('README.md')
   })
 
   it('refreshes the root in the background after reconnect without blanking the tree', async () => {

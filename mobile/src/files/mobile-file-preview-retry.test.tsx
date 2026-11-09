@@ -36,6 +36,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronLeft: 'Icon',
   CircleAlert: 'Icon',
   FileText: 'Icon',
+  ListOrdered: 'Icon',
   Save: 'Icon',
   WifiOff: 'Icon'
 }))
@@ -43,6 +44,9 @@ vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false, push })
 }))
 vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: vi.fn().mockResolvedValue(undefined) })
+}))
 vi.mock('./MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
