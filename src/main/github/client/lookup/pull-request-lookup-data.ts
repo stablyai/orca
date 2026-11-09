@@ -96,8 +96,6 @@ export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   checkPageLimit?: number
   /** A CI-line watch's own PR repository: lookups read only it, never another remote by number. */
   exactRepository?: GitHubOwnerRepo
-  /** Phone reads only: may answer from a recent lookup's open PR whose head is `currentHeadOid`. */
-  reuseRecentOpenPR?: boolean
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {

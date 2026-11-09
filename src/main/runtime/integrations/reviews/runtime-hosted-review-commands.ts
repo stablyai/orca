@@ -14,7 +14,10 @@ import type {
 } from '../../../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
-import { getPRForBranchOutcome } from '../../../github/client/lookup/pr-for-branch-outcome'
+import {
+  getPRForBranchOutcome,
+  readRecentPhonePROutcome
+} from '../../../github/client/lookup/pr-for-branch-outcome'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
 import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
 import { admissionTierForRefreshReason } from '../../../github/pr-refresh-candidate-policy'
@@ -86,10 +89,6 @@ export class RuntimeHostedReviewCommands {
     if (userRefresh === true) {
       lookupOptions.userRefresh = true
     }
-    // Desktop callers and reason-carrying refreshes keep their own GitHub read.
-    if (clientKind === 'mobile' && reason === undefined) {
-      lookupOptions.reuseRecentOpenPR = true
-    }
     if (acceptMergedFallbackPR === true) {
       lookupOptions.acceptMergedFallbackPR = true
     }
@@ -99,6 +98,19 @@ export class RuntimeHostedReviewCommands {
     const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
       Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
     const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
+    // Desktop callers and reason-carrying refreshes keep their own GitHub read.
+    if (clientKind === 'mobile' && reason === undefined) {
+      const recent = await readRecentPhonePROutcome(
+        repo.path,
+        branch,
+        linkedPRNumber ?? null,
+        connectionId,
+        lookupOptions
+      )
+      if (recent) {
+        return recent
+      }
+    }
     // Through the coordinator, so a client's read also serves this server's CI-line watches.
     return runHostedPRRead(
       {

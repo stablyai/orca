@@ -15,6 +15,65 @@ import { resolvePRForBranchOutcome } from './branch-lookup-resolution'
 import { readRecentOpenPROutcome, recordPRLastOutcome, startPRLookup } from './pr-last-outcome'
 const reads: CoalescedProbes<PRRefreshOutcome> = new Map()
 
+function prLookupScope(
+  repoPath: string,
+  connectionId: string | null | undefined,
+  options: GitHubPRBranchLookupOptions
+) {
+  const localGitOptions = hostedReviewLocalGitOptionArgs(options)[0] ?? {}
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  return {
+    localGitOptions,
+    ghOptions,
+    executionScope: githubPRStackExecutionScope(connectionId, localGitOptions),
+    generation: scopeGeneration(
+      hostedReviewRepoScope(repoPath, getRepoExecutionHostId({ connectionId }))
+    ),
+    readScope: githubReadExecutionScope(ghOptions)
+  }
+}
+
+function lastOutcomeKey(
+  repoPath: string,
+  branchName: string,
+  scope: ReturnType<typeof prLookupScope>
+): string {
+  return JSON.stringify([
+    scope.executionScope,
+    repoPath,
+    scope.generation,
+    branchName,
+    scope.readScope
+  ])
+}
+
+/** A phone read may take the last lookup's open PR; it was already observed when it was looked up. */
+export async function readRecentPhonePROutcome(
+  repoPath: string,
+  branch: string,
+  linkedPRNumber: number | null,
+  connectionId: string | null,
+  options: GitHubPRBranchLookupOptions
+): Promise<PRRefreshOutcome | null> {
+  if (options.userRefresh === true) {
+    return null
+  }
+  return withGitHubRepoExecution(
+    repoPath,
+    connectionId,
+    hostedReviewLocalGitOptionArgs(options)[0] ?? {},
+    async () =>
+      readRecentOpenPROutcome(
+        lastOutcomeKey(
+          repoPath,
+          branch.replace(/^refs\/heads\//, ''),
+          prLookupScope(repoPath, connectionId, options)
+        ),
+        { linkedPRNumber, currentHeadOid: options.currentHeadOid ?? null }
+      )
+  )
+}
+
 export async function getPRForBranchOutcome(
   repoPath: string,
   branch: string,
@@ -37,36 +96,12 @@ export async function getPRForBranchOutcome(
       ) {
         return { kind: 'no-pr', fetchedAt: Date.now() }
       }
-      const localGitArgs = hostedReviewLocalGitOptionArgs(options)
-      const localGitOptions = localGitArgs[0] ?? {}
-      const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-      const ghOptions = ghRepoExecOptions(context)
-      const executionScope = githubPRStackExecutionScope(connectionId, localGitOptions)
-
-      const generation = scopeGeneration(
-        hostedReviewRepoScope(repoPath, getRepoExecutionHostId({ connectionId }))
-      )
-      const readScope = githubReadExecutionScope(ghOptions)
-      const lastOutcomeKey = JSON.stringify([
-        executionScope,
-        repoPath,
-        generation,
-        branchName,
-        readScope
-      ])
-      if (options.reuseRecentOpenPR === true && options.userRefresh !== true) {
-        const recent = readRecentOpenPROutcome(lastOutcomeKey, {
-          linkedPRNumber: linkedPRNumber ?? null,
-          currentHeadOid: options.currentHeadOid ?? null
-        })
-        if (recent) {
-          return recent
-        }
-      }
+      const scope = prLookupScope(repoPath, connectionId, options)
+      const { localGitOptions, ghOptions, executionScope } = scope
       const key = JSON.stringify([
         executionScope,
         repoPath,
-        generation,
+        scope.generation,
         branchName,
         linkedPRNumber ?? null,
         fallbackPRNumber ?? null,
@@ -74,7 +109,7 @@ export async function getPRForBranchOutcome(
         options.currentHeadOid ?? null,
         options.checkPageLimit ?? null,
         options.exactRepository ?? null,
-        readScope
+        scope.readScope
       ])
       return runCoalescedProbe(
         reads,
@@ -101,7 +136,7 @@ export async function getPRForBranchOutcome(
             release()
           }
           const narrowed = options.checkPageLimit !== undefined || options.exactRepository
-          recordPRLastOutcome(lastOutcomeKey, {
+          recordPRLastOutcome(lastOutcomeKey(repoPath, branchName, scope), {
             start,
             linkedPRNumber: linkedPRNumber ?? null,
             outcome: narrowed ? null : outcome
