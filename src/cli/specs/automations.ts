@@ -42,7 +42,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'create'],
     summary: 'Create a scheduled Orca automation',
     usage:
-      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--precheck <command>] [--setup run|skip] [--repo <selector>|--workspace <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--json]',
+      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--precheck <command>] [--setup run|skip] [--repo <selector>|--workspace <selector>|--project <id-or-name>|--project-host-setup <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'name',
@@ -57,16 +57,15 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Trigger accepts hourly, daily, weekdays, weekly, a 5-field cron expression, or an RRULE string.',
       'When --repo is omitted, the CLI uses the enclosing Orca worktree when one can be resolved from cwd.',
-      'Use --project, or --project-host-setup, to run on a specific project host setup. --project takes the project id or the display name from `orca project list`, and --host is only needed when the project is set up on more than one host.',
-      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
-      'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
+      'Use --project, or --project-host-setup, to run on a specific project host setup. --project takes the project id or the display name from `orca project list`, and --server picks that server\u2019s own setup when the project is set up for more than one server here.',
+      'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific server/account; pass null on edit to clear it.',
       'Use --workspace to run in an existing worktree. With --repo or a project target, the automation creates a new worktree per run; with no target, a local create runs in the current Orca worktree unless you pass --workspace-mode new-per-run.',
-      'Use --setup run|skip for repository setup on new-per-run automations. Explicit choices override the repository setup policy and need a host running current Orca. When omitted on create, no choice is saved; current Orca skips setup.',
+      'Use --setup run|skip for repository setup on new-per-run automations. Explicit choices override the repository setup policy and need a server running current Orca. When omitted on create, no choice is saved; current Orca skips setup.',
       'Use --precheck to run a command only before scheduled runs; exit code 0 continues, any other exit, error, or timeout skips the run.',
       'Use --precheck-timeout <seconds> to set the time limit (default 60 seconds). Skips appear in Orca run history and orca automations runs --id <automation-id> as skipped_precheck.',
       'Run now in Orca and orca automations run intentionally bypass the precheck so you can test or override the scheduled condition.',
       'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
-      'Use --extra-agent-args="--model opus --effort high" to add arguments after the host\'s default agent Arguments on each fresh run. Only model, effort, and a few safe options are accepted (Antigravity, Claude, Codex, CodeBuddy, Cursor, Grok, OMP, Pi); extras cannot be combined with --reuse-session. On edit, --extra-agent-args= clears them.'
+      'Use --extra-agent-args="--model opus --effort high" to add arguments after the server\'s default agent Arguments on each fresh run. Only model, effort, and a few safe options are accepted (Antigravity, Claude, Codex, CodeBuddy, Cursor, Grok, OMP, Pi); extras cannot be combined with --reuse-session. On edit, --extra-agent-args= clears them.'
     ],
     examples: [
       'orca automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',
@@ -134,7 +133,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'orca automations runs [--id <automation-id>] [--limit <n>] [--cursor <cursor>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'limit', 'cursor'],
     notes: [
-      'Without --limit or --cursor, reads the whole history in pages, so a large history from a paired server still fits in its replies.',
+      'Without --limit or --cursor, reads the whole history in pages, so a large history from another server still fits in its replies.',
       'With --limit or --cursor, prints one page (newest first, at most 100 runs) and its nextCursor; pass that as --cursor for the next page.'
     ],
     examples: [

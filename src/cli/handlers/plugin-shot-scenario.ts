@@ -45,7 +45,7 @@ function requireLocal(ctx: HandlerContext): void {
   if (process.env.ORCA_CLI_CWD || ctx.client.isRemote) {
     throw refuse(
       'invalid_environment',
-      "shot --scenario runs the plugin's code on this machine and shows it in the Orca on this machine, so it does not reach another host. Run it where Orca and the plugin folder are, without --environment."
+      "shot --scenario runs the plugin's code on this machine and shows it in the Orca on this machine, so it does not reach another host. Run it where Orca and the plugin folder are, without --server."
     )
   }
 }

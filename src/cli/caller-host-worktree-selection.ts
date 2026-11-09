@@ -178,7 +178,7 @@ export function selectEnclosingWorktreeSelectionOnHost(
                 'Inspect a chosen workspace with `orca worktree show --worktree <selector> --json`.',
                 purpose === 'current'
                   ? 'Use the intended action’s target flag to select that workspace; current has no replacement target flag.'
-                  : `Pass ${flag} <selector> on your original invocation${purpose === 'ports' ? '; native folders require --all for a host-wide scan' : ''}.`,
+                  : `Pass ${flag} <selector> on your original invocation${purpose === 'ports' ? '; native folders require --all for a server-wide scan' : ''}.`,
                 'Pass the exact selector as one argument quoted for your shell.'
               ]
       }

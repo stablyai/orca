@@ -1,12 +1,14 @@
-/** Commands that act only on this machine: dispatch ignores --environment / --pairing-code for them, and help does not offer them. */
+import { isServerManagementCommand } from './local-environment-selector'
+
+/** Commands that act only on this computer: dispatch ignores --server / --pairing-code for them, and help does not offer them. */
 export function ignoresRemoteSelection(commandPath: readonly string[]): boolean {
   return (
     commandPath[0] === 'account' ||
     commandPath[0] === 'artifacts' ||
-    commandPath[0] === 'environment' ||
-    // Paired servers come from the local store; routing SSH lookup would mix two machines in one list.
+    isServerManagementCommand(commandPath) ||
+    // Saved servers come from the local store; routing SSH lookup would mix two computers in one list.
     commandPath.join(' ') === 'host list' ||
-    // Removes ids that `host list` printed from this runtime; an ambient selection must not retarget it.
+    // Removes ids that `host list` printed from this Orca; an ambient selection must not retarget it.
     commandPath.join(' ') === 'host rm' ||
     commandPath[0] === 'serve' ||
     (commandPath[0] === 'agent' && commandPath[1] !== 'launch') ||

@@ -30,6 +30,7 @@ export const VALUE_TAKING_FLAGS = new Set([
   '--disable-features',
   '--user-data-dir',
   '--proxy-server',
+  '--server',
   '--environment',
   '--pairing-code'
 ])

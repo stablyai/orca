@@ -13,10 +13,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   direction:
     '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
   'display-name': '--display-name <name>  Override the Orca display name',
-  environment:
-    "--environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them",
+  server:
+    "--server <server>      The Orca server to run on: `local` for the Orca on this computer, or a saved server's id or name (`orca server list`). Terminal handles belong to the server that issued them",
   'pairing-code':
-    '--pairing-code <code>  Run against a remote Orca server using an orca://pair?... code',
+    '--pairing-code <code>  Connect once to an Orca server with an orca://pair?... code',
   'element-index': '--element-index <n>   Element index from get-app-state',
   title: '--title <text>         Custom title for the terminal tab (omit to reset)',
   enter: '--enter                Append Enter after sending text',
@@ -61,8 +61,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   pages: '--pages <n>           Number of scroll pages',
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
-  'parent-environment':
-    "--parent-environment <environment> Environment holding --parent-worktree: local, or a saved environment id or name (default: the worktree's own)",
+  'parent-server':
+    "--parent-server <server> The server holding --parent-worktree: `local` or a saved server's id or name (default: the worktree's own server)",
   path: '--path <path>          Path argument for the command',
   pr: '--pr <number|null>     Linked GitHub pull request number; null clears on set',
   prompt: '--prompt <text>        Prompt text for agent-backed commands',

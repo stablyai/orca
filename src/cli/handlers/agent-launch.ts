@@ -32,12 +32,12 @@ export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
       if (launch.operationId) {
         throw new RuntimeClientError(
           'agent_session_operation_unknown',
-          'This host cannot replay the earlier launch. Return to the original execution host; do not retry without --retry-launch.'
+          'This server cannot replay the earlier launch. Return to the server that started it; do not retry without --retry-launch.'
         )
       }
       throw new RuntimeClientError(
         'incompatible_runtime',
-        'This Orca host cannot start agents from the CLI. Update Orca on the execution host.'
+        'This Orca server cannot start agents from the CLI. Update Orca on that server.'
       )
     }
     const result = await callAgentLaunch(

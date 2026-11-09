@@ -25,7 +25,7 @@ describe('orca connector', () => {
   it('names the update instead of surfacing method_not_found from an older host', async () => {
     await expect(
       callConnector(refusingClient('method_not_found'), 'connector.send', {})
-    ).rejects.toThrow('Update Orca on the host')
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
   })
 
   it('claims a start only for a definite answer', () => {

@@ -10,7 +10,11 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
 } from '../../shared/project-types'
-import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getSshTargetIdForExecutionHost,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch'
@@ -28,9 +32,11 @@ import {
   parseHostFlag,
   resolveHostFlagTarget
 } from '../execution-host-flag'
+import { readOwnerContext } from '../row-owner-server'
 import { getOptionalRepoKind, getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { findProjectSetups, resolveProjectIdSelector } from '../project-selector'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
+import { chooseSetupTwinHostId } from '../worktree-project-target'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 
 async function callProjectHostSetup<TResult>(
@@ -59,10 +65,7 @@ async function getResolvedHostId(
   client: HandlerContext['client']
 ): Promise<ExecutionHostId> {
   const host = await resolveHostFlagTarget(flags, client)
-  if (!host) {
-    throw new RuntimeClientError('invalid_argument', 'Missing required --host')
-  }
-  return host.id
+  return host?.id ?? LOCAL_EXECUTION_HOST_ID
 }
 
 // The runtime rejects SSH setup operations regardless of target existence; preserve that refusal.
@@ -71,8 +74,9 @@ async function getRequiredHostId(
   client: HandlerContext['client']
 ): Promise<ExecutionHostId> {
   const host = parseHostFlag(flags)
+  // Without --host the setup belongs to the server the command runs on.
   if (!host) {
-    throw new RuntimeClientError('invalid_argument', 'Missing required --host')
+    return LOCAL_EXECUTION_HOST_ID
   }
   if (host.kind !== 'alias') {
     return host.id
@@ -85,12 +89,25 @@ async function getRequiredHostId(
   return resolved.id
 }
 
-// Older hosts drop hostId and pick the first setup twin; refuse unsupported host targeting.
+// Older hosts drop hostId and pick the first setup twin, so a twin choice needs host targeting.
 async function getOptionalSetupHostId(
   flags: Map<string, string | boolean>,
   client: HandlerContext['client']
 ): Promise<ExecutionHostId | undefined> {
-  if (!flags.has('host')) {
+  const hostId = flags.has('host')
+    ? // Unresolved, like the setup paths: a removed SSH target's stale setup must stay deletable.
+      await getRequiredHostId(flags, client)
+    : chooseSetupTwinHostId(
+        (
+          await callProjectHostSetup<{ setups: ProjectHostSetup[] }>(
+            client,
+            'projectHostSetup.list'
+          )
+        ).result.setups,
+        getRequiredStringFlag(flags, 'setup'),
+        { owners: readOwnerContext(client), explicitServer: flags.has('server') }
+      )
+  if (hostId === undefined) {
     return undefined
   }
   const status = await client.call<RuntimeStatus>('status.get')
@@ -100,8 +117,7 @@ async function getOptionalSetupHostId(
       'This Orca server cannot pick a project setup by host yet. Update Orca on the server and try again.'
     )
   }
-  // Unresolved, like the setup paths: a removed SSH target's stale setup must stay deletable.
-  return await getRequiredHostId(flags, client)
+  return hostId
 }
 
 export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
@@ -123,7 +139,9 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const setups = projectSetups.filter(
       (setup) => hostFilter === undefined || hostFilterMatchesHostId(hostFilter, setup.hostId)
     )
-    printResult({ ...result, result: { setups } }, json, formatProjectHostSetupList)
+    printResult({ ...result, result: { setups } }, json, (value) =>
+      formatProjectHostSetupList(value, readOwnerContext(client))
+    )
   },
   'project setup-existing-folder': async ({ flags, client, cwd, json }) => {
     const rawPath = getRequiredStringFlag(flags, 'path')

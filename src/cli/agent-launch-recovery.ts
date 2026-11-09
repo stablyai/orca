@@ -59,12 +59,12 @@ export async function withCliAgentLaunchRecovery<T>(
         : undefined
     const nextSteps = recovery.operationId
       ? [
-          `Re-issue the exact same command from the same directory against the same execution host with --retry-launch ${recovery.operationId}. Keep that ID on every retry; never retry as a fresh launch.`,
+          `Re-issue the exact same command from the same directory against the same server with --retry-launch ${recovery.operationId}. Keep that ID on every retry; never retry as a fresh launch.`,
           'If replay reports an unknown or expired outcome, inspect the workspace and agent without sending input before deciding what to do.'
         ]
       : [
-          'Do not repeat the launch: this older host cannot prove whether it started the agent or sent the prompt.',
-          'Inspect worktree list and terminal list on the execution host, then read the agent without sending input. Confirm the outcome before deliberately starting another agent.'
+          'Do not repeat the launch: this older server cannot prove whether it started the agent or sent the prompt.',
+          'Inspect worktree list and terminal list on the server, then read the agent without sending input. Confirm the outcome before deliberately starting another agent.'
         ]
     // Replace transport restart-and-retry advice: the accepted launch may still be running.
     throw new RuntimeClientError(

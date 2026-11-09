@@ -491,7 +491,7 @@ or a development plugin's key when you run it inside that folder; installed plug
 The result adds `replay: true` and `scenario`, `errors` lists what the render reported, and an
 unknown name fails and lists the panel's scenarios. A replay is a still frame: controls whose
 value Orca owns start from the tree's props, images show their placeholder, it takes no `--act`,
-it works only on this machine (no `--environment`), and it needs Orca's window hidden or
+it works only on this machine (no `--server`), and it needs Orca's window hidden or
 minimized because the preview is drawn inside it. It writes
 `.orca/shots/<plugin-key>-<panel>.<scenario>.png` in the plugin folder unless you pass `--out`.
 
@@ -543,7 +543,7 @@ sidebar it skips the shot and says so once (`shot_skipped`), and resumes when th
 
 Both need the Orca desktop app with a workspace showing; `orca serve` has no window and refuses
 them. A shot never changes the view, so while Orca shows Settings or another full page it fails
-with `no_workspace`. With `--environment`, the PNG (at most 5 MiB) comes back to the machine
+with `no_workspace`. With `--server`, the PNG (at most 5 MiB) comes back to the machine
 that ran the command.
 
 To keep a folder loaded without a terminal, use Settings instead:

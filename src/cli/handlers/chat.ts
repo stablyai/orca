@@ -50,7 +50,7 @@ function explainRenameRefusal(error: unknown, sessionId: string): unknown {
   ) {
     return new RuntimeClientError(
       'incompatible_runtime',
-      'This Orca host cannot rename chats from the CLI. Update Orca on that host, or check that it has chats turned on.'
+      'This Orca server cannot rename chats from the CLI. Update Orca on that server, or check that it has chats turned on.'
     )
   }
   return error

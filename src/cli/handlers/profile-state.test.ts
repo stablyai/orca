@@ -477,7 +477,7 @@ describe('profile-state CLI recovery', () => {
 
     expect(existsSync(profile.databaseFile)).toBe(true)
     expect(vi.mocked(console.log).mock.calls.at(-1)?.[0]).toContain(
-      '`--environment` does not retarget profile-state recovery'
+      '`--server` does not retarget profile-state recovery'
     )
   })
 

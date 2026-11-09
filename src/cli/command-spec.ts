@@ -1,6 +1,8 @@
 export type CommandSpec = {
   path: string[]
   aliases?: string[][]
+  /** Old spellings: accepted as input, canonicalized to `path`, and never shown. */
+  legacyAliases?: string[][]
   argumentMode?: 'parsed' | 'passthrough'
   // Prevent typo recovery from suggesting destructive actions for unrelated commands.
   destructive?: boolean
@@ -22,6 +24,9 @@ export type CommandSpec = {
 
 export type IdentityFlag = 'from' | 'terminal'
 
+/** Still parsed for old scripts, but never offered in help or typo recovery. */
+export const INPUT_ONLY_FLAGS: ReadonlySet<string> = new Set(['host'])
+
 export function specPaths(spec: CommandSpec): string[][] {
-  return spec.aliases ? [spec.path, ...spec.aliases] : [spec.path]
+  return [spec.path, ...(spec.aliases ?? []), ...(spec.legacyAliases ?? [])]
 }

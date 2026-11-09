@@ -90,7 +90,23 @@ describe('--environment local and workspace addresses', () => {
     [['worktree', 'ps', '--pairing-code', 'orca://pair?code=x', '--environment', 'local']],
     [['worktree', 'ps', '--host', 'runtime:srv-b', '--environment', 'local']],
     [['environment', 'add', '--name', ' Local ', '--pairing-code', 'orca://pair?code=x']],
-    [['environment', 'stop', '--environment', 'local']]
+    [['environment', 'stop', '--environment', 'local']],
+    [['server', 'stop', '--server', 'local']],
+    [['worktree', 'ps', '--environment', 'srv-b', '--server', 'build-box']],
+    [
+      [
+        'worktree',
+        'create',
+        '--name',
+        'child',
+        '--parent-worktree',
+        'folder:hub-a',
+        '--parent-environment',
+        'local',
+        '--parent-server',
+        'srv-b'
+      ]
+    ]
   ])('refuses %j before any request', async (args) => {
     listEnvironmentsMock.mockReturnValue(SAVED)
     const { exitCode, output } = await run([...args, '--json'])
@@ -98,9 +114,25 @@ describe('--environment local and workspace addresses', () => {
     expect(JSON.parse(output).error.code).toBe('invalid_argument')
     expect(callMock).not.toHaveBeenCalled()
     expect(addEnvironmentFromPairingCodeMock).not.toHaveBeenCalled()
-    if (args[0] === 'environment' && args[1] === 'stop') {
-      expect(output).toContain('--environment srv-old')
+    if (args[1] === 'stop') {
+      expect(output).toContain('--server srv-old')
     }
+  })
+
+  it('accepts both spellings when they name the same server', async () => {
+    listEnvironmentsMock.mockReturnValue(SAVED)
+    callMock.mockResolvedValue(okFixture('ps', { worktrees: [], totalCount: 0, truncated: false }))
+    const { exitCode } = await run([
+      'worktree',
+      'ps',
+      '--environment',
+      'srv-b',
+      '--server',
+      'srv-b',
+      '--json'
+    ])
+    expect(exitCode).toBeUndefined()
+    expect(runtimeClientConstructorMock).toHaveBeenLastCalledWith(undefined, 'srv-b')
   })
 
   it('refuses current against another environment with an inspection command', async () => {
@@ -114,7 +146,7 @@ describe('--environment local and workspace addresses', () => {
     ])
     expect(exitCode).toBe(1)
     expect(JSON.parse(output).error.data.nextSteps[0]).toContain(
-      '`orca worktree ps --environment srv-b --json`'
+      '`orca worktree ps --server srv-b --json`'
     )
     expect(callMock).not.toHaveBeenCalled()
   })
@@ -146,7 +178,7 @@ describe('--environment local and workspace addresses', () => {
     expect(exitCode).toBeUndefined()
     expect(callMock).toHaveBeenCalledWith('worktree.show', { worktree: 'folder:hub-a' })
     expect(JSON.parse(output).result.worktree.address.line).toBe(
-      '--environment local --worktree folder:hub-a'
+      '--server local --worktree folder:hub-a'
     )
     vi.unstubAllEnvs()
   })
@@ -309,7 +341,7 @@ describe('worktree rm needs an explicit workspace', () => {
     ])
     expect(exitCode).toBe(1)
     expect(JSON.parse(output).error.data.nextSteps[0]).toContain(
-      '`orca worktree ps --environment srv-b --json`'
+      '`orca worktree ps --server srv-b --json`'
     )
     expect(callMock).not.toHaveBeenCalled()
   })

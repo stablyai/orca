@@ -1,6 +1,6 @@
 import type { HandlerGroup } from './handler-group-manifest'
 
-// Authoring runs offline; runtime commands reach the Orca host. Split so authoring never loads the RPC graph.
+// Authoring runs offline; runtime commands reach the Orca server. Split so authoring never loads the RPC graph.
 export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'plugin-authoring',

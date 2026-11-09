@@ -34,7 +34,12 @@ import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
 import { callNamingParentEnvironment } from './worktree-parent-environment'
-import { annotatePsRows, annotateShown } from './worktree-address-annotation'
+import {
+  annotateMutationResult,
+  annotatePsRows,
+  annotateShown
+} from './worktree-address-annotation'
+import { readOwnerContext } from '../row-owner-server'
 import { refuseCurrentForRemoval } from './worktree-removal-current-refusal'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
@@ -101,7 +106,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     await annotateOmittedHostScope(result.result)
-    printResult(result, json, formatWorktreeList)
+    printResult(result, json, (value) => formatWorktreeList(value, readOwnerContext(client)))
   },
   'worktree show': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
@@ -204,11 +209,12 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       await createWorktreeWithAgent({ client, flags, create, launch: agentLaunch, json, rawArgs })
       return
     }
-    const result = await withSetupDecisionRecovery(
+    const created = await withSetupDecisionRecovery(
       callNamingParentEnvironment<RuntimeWorktreeCreateResult>(client, 'worktree.create', create)
     )
+    const { response: result, parentText } = await annotateMutationResult(client, created)
     printHookWarning(result.result, json)
-    printLineageSummary(result.result, json)
+    printLineageSummary(result.result, json, parentText)
     printResult(result, json, formatWorktreeShow)
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
@@ -240,7 +246,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...parentFields,
       noParent: flags.get('no-parent') === true
     })
-    const result = await withWorktreeSelectorRecovery(
+    const updated = await withWorktreeSelectorRecovery(
       pending,
       parentSelector
         ? [
@@ -249,11 +255,12 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
           ]
         : []
     )
+    const { response: result, parentText } = await annotateMutationResult(client, updated)
     if (!json) {
       for (const warning of result.result.warnings ?? []) {
         console.error(`warning: ${warning.message}`)
       }
-      printSetParentLine(result.result.worktree, parentFields)
+      printSetParentLine(result.result.worktree, parentFields, parentText)
     }
     printResult(result, json, formatWorktreeShow)
   },
@@ -270,7 +277,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     if (!hostId) {
       throw new RuntimeClientError(
         'worktree_host_unresolved',
-        'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
+        'Orca cannot tell which server owns this workspace. Refresh projects and try again.'
       )
     }
     if (flags.get('allow-failed-archive-hook') === true && flags.get('run-hooks') !== true) {

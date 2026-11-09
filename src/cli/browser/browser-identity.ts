@@ -15,7 +15,7 @@ async function assertBrowserIdentitySupported({ client }: HandlerContext): Promi
   if (!status.result.capabilities?.includes(BROWSER_IDENTITY_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      'The running Orca runtime does not support browser identity management. Update or restart Orca and try again.'
+      'The running Orca server does not support browser identity management. Update or restart Orca and try again.'
     )
   }
 }

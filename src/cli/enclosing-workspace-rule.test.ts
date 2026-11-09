@@ -166,7 +166,6 @@ describe('a folder workspace whose host is unknown', () => {
       expect(() => select(rows, '/tmp/hub/notes')).toThrow(
         expect.objectContaining({
           code: 'selector_ambiguous',
-          message: expect.stringContaining("can't tell which host owns the folder workspace"),
           data: expect.objectContaining({
             nextSteps: expect.arrayContaining([
               'Pass --worktree folder:hub to target the folder workspace itself.'

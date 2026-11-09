@@ -22,7 +22,7 @@ const blocked = [
   ['orchestration worker-reuse', 'orchestration worker-release'],
   ['tab clues', 'tab close'],
   ['linear relation move', 'linear relation remove'],
-  ['environment rollbook', 'environment rollback']
+  ['environment rollbook', 'server rollback']
 ]
 
 const recovery = [
@@ -34,8 +34,8 @@ const recovery = [
   ['orchestration worker-releasee', 'orchestration worker-release'],
   ['tab clos', 'tab close'],
   ['tab clone', 'tab close'],
-  ['environment rollbac', 'environment rollback'],
-  ['environment remov', 'environment rm'],
+  ['environment rollbac', 'server rollback'],
+  ['environment remov', 'server rm'],
   ['artifacts delet', 'artifacts delete'],
   ['worktree remov', 'worktree remove'],
   ['worktree delet', 'worktree delete'],
@@ -62,16 +62,16 @@ describe('live destructive command recovery', () => {
     expect(data.nextSteps.join(' ')).toContain(`orca ${expected}`)
   })
 
-  it('retains the complete legitimate environment removal ranking', () => {
+  it('suggests only canonical server commands for a typo in the old spelling', () => {
     expect(suggestCommands(COMMAND_SPECS, ['environment', 'remov'])).toEqual([
-      'environment recover',
-      'environment rm'
+      'server recover',
+      'server rm'
     ])
   })
 
   it('keeps every declared alias accepted and normalized to its canonical command', () => {
     for (const spec of COMMAND_SPECS) {
-      for (const path of [spec.path, ...(spec.aliases ?? [])]) {
+      for (const path of [spec.path, ...(spec.aliases ?? []), ...(spec.legacyAliases ?? [])]) {
         expect(findCommandSpec(COMMAND_SPECS, path)).toBe(spec)
         const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(path))
         expect(parsed.commandPath).toEqual(spec.path)

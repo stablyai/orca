@@ -110,7 +110,8 @@ export type CliRuntimeState =
   | 'stale_bootstrap'
 
 export type CliStatusResult = {
-  target?: { kind: 'local' } | { kind: 'environment'; environment: string }
+  /** `server` is the saved selector, or `pairing-code` for a one-off connection. */
+  target?: { kind: 'local' } | { kind: 'server'; server: string }
   app: {
     running: boolean
     pid: number | null

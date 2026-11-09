@@ -31,7 +31,7 @@ function serverLabel(client: RuntimeClient): string {
   return client.environmentSelector ?? 'the connected server'
 }
 
-/** `worktree create`'s parent fields. A parent in another environment (--parent-environment, or
+/** `worktree create`'s parent fields. A parent in another environment (--parent-server, or
  * active/current against a server) is sent as a verified cross-store ref; with no parent flag, the
  * caller's own workspace is inferred on this machine's Orca. */
 export async function resolveCreateParentFields(

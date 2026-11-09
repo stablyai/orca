@@ -246,8 +246,8 @@ export class RuntimeClient {
         ok: true,
         result: {
           target: {
-            kind: 'environment',
-            environment: this.environmentSelector ?? 'pairing-code'
+            kind: 'server',
+            server: this.environmentSelector ?? 'pairing-code'
           },
           app: projectRemoteAppStatus(response.result),
           runtime: {
@@ -308,7 +308,7 @@ export class RuntimeClient {
     if (!response.result.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
       throw new RuntimeClientError(
         'orchestration_migration_required',
-        'The connected Orca runtime does not support the current orchestration contract. No effects were applied.',
+        'The connected Orca server does not support the current orchestration contract. No effects were applied.',
         orchestrationMigrationData('runtime_capability_missing')
       )
     }

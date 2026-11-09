@@ -16,9 +16,10 @@ import { printResult } from '../format'
 import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 import { formatManagedServerStatus } from './managed-server-format'
 import { reportAfterClosedConnection } from './managed-server-reconnect'
+import { quoteCliCommandArgument } from '../shell-command-quote'
 
 const UNSUPPORTED_MESSAGE =
-  'This Orca runtime cannot manage servers over SSH. Run this on the computer whose Orca desktop app deployed the server, after updating Orca there.'
+  'This Orca server cannot manage servers over SSH. Run this on the computer whose Orca desktop app deployed the server, after updating Orca there.'
 
 // Windows promotion and readiness waits can take ten minutes; allow headroom on slow hosts.
 export const MANAGED_SERVER_ACTION_TIMEOUT_MS = 20 * 60_000
@@ -48,11 +49,11 @@ async function callManagedServer<TResult>(
     if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
       throw unsupported()
     }
-    // The runtime continues the action after this client times out.
+    // The desktop continues the action after this client times out.
     if (!readOnly && error instanceof RuntimeClientError && error.code === 'runtime_timeout') {
       throw new RuntimeClientError(
         'managed_server_in_progress',
-        'Stopped waiting, but the desktop may still be running this action. Check `orca environment status` before retrying.'
+        `Stopped waiting, but the desktop may still be running this action. Check \`orca server status --server ${quoteCliCommandArgument(String(params.selector))}\` before retrying.`
       )
     }
     throw error
@@ -77,7 +78,7 @@ async function callExpectingRestart<TResult>(
 }
 
 function selectorOf(context: HandlerContext): { selector: string } {
-  return { selector: getRequiredStringFlag(context.flags, 'environment') }
+  return { selector: getRequiredStringFlag(context.flags, 'server') }
 }
 
 type Outcome = { outcome: string; code?: string; reason?: string }
@@ -111,7 +112,7 @@ function isSettled<TResult extends Outcome, TSettled extends TResult['outcome']>
 }
 
 export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
-  'environment status': async (context) => {
+  'server status': async (context) => {
     const response = await callManagedServer<OrcadManagedRuntimeStatus>(
       context,
       'managedServer.status',
@@ -119,7 +120,7 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
     )
     printResult(response, context.json, formatManagedServerStatus)
   },
-  'environment update': async (context) => {
+  'server update': async (context) => {
     const params = { ...selectorOf(context), force: context.flags.get('force') === true }
     const response = await callExpectingRestart<OrcadManagedDeployResult>(
       context,
@@ -135,7 +136,7 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
         : `Updated ${result.environment.name} to ${result.activeVersion}.`
     )
   },
-  'environment rollback': async (context) => {
+  'server rollback': async (context) => {
     const response = await callExpectingRestart<OrcadManagedRollbackResult>(
       context,
       'managedServer.rollback',
@@ -151,7 +152,7 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       (result) => `Rolled ${result.environment.name} back to ${result.activeVersion}.`
     )
   },
-  'environment recover': async (context) => {
+  'server recover': async (context) => {
     const params = selectorOf(context)
     const acceptChangedState = context.flags.get('accept-changed-state') === true
     if (acceptChangedState && context.flags.get('yes') !== true) {
@@ -179,12 +180,12 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
           : null
     )
   },
-  'environment stop': async (context) => {
+  'server stop': async (context) => {
     const params = selectorOf(context)
     if (context.flags.get('yes') !== true) {
       throw new RuntimeClientError(
         'confirmation_required',
-        `Stopping ${params.selector} ends its terminals and unlinks it from this machine. Re-run with --yes to confirm.`
+        `Stopping ${params.selector} ends its terminals and unlinks it from this computer. Re-run with --yes to confirm.`
       )
     }
     const response = await callManagedServer<OrcadManagedStopResult>(
@@ -197,15 +198,15 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       context.json,
       ['unlinked'],
       () =>
-        `Stopped ${params.selector}, unlinked it from this machine and disconnected its SSH host.`
+        `Stopped ${params.selector}, unlinked it from this computer and disconnected its SSH host.`
     )
   },
-  'environment forget': async (context) => {
+  'server forget': async (context) => {
     const params = selectorOf(context)
     if (context.flags.get('yes') !== true) {
       throw new RuntimeClientError(
         'confirmation_required',
-        `Forgetting ${params.selector} unlinks it from this machine without stopping it on its host. Re-run with --yes to confirm.`
+        `Forgetting ${params.selector} unlinks it from this computer without stopping it on its host. Re-run with --yes to confirm.`
       )
     }
     const response = await callManagedServer<OrcadManagedForgetResult>(
@@ -218,21 +219,22 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
       context.json,
       ['forgotten'],
       () =>
-        `Unlinked ${params.selector} from this machine and disconnected its SSH host. The host was not contacted, so orcad may still be running there; connect the host to set its server up again.`
+        `Unlinked ${params.selector} from this computer and disconnected its SSH host. The host was not contacted, so orcad may still be running there; connect the host to set its server up again.`
     )
   },
-  'environment cancel-stop': async (context) => {
+  'server cancel-stop': async (context) => {
+    const params = selectorOf(context)
     const response = await callManagedServer<OrcadManagedCancelStopResult>(
       context,
       'managedServer.cancelStop',
-      selectorOf(context)
+      params
     )
     report(response, context.json, ['canceled', 'already-stopped', 'none'], (result) => {
       switch (result.outcome) {
         case 'canceled':
           return `Stop withdrawn; the server keeps serving ${result.activeVersion}.`
         case 'already-stopped':
-          return 'orcad had already exited. Run `orca environment stop --yes` to unlink it.'
+          return `orcad had already exited. Run \`orca server stop --server ${quoteCliCommandArgument(params.selector)} --yes\` to unlink it.`
         case 'none':
           return 'No stop is pending.'
       }

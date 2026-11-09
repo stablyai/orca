@@ -1,7 +1,7 @@
 import { RuntimeClientError } from './runtime/types'
 
-// Local-only command families reject explicit runtime selectors rather than silently ignoring them.
-export const REMOTE_SELECTION_FLAGS = ['environment', 'pairing-code'] as const
+// Local-only command families reject explicit server selectors rather than silently ignoring them.
+export const REMOTE_SELECTION_FLAGS = ['server', 'pairing-code'] as const
 
 /** suffix completes "--<flag> does not retarget …" with the command's actual scope. */
 export function rejectRemoteSelectionFlags(

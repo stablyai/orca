@@ -18,12 +18,10 @@ function oneLine(value: string): string {
 }
 
 function formatHit(hit: AiVaultSearchHit): string {
-  const host = oneLine(hit.executionHostId ?? '')
   const header = [
     aiVaultAgentLabel(hit.agent),
     oneLine(hit.updatedAt ?? '') || 'unknown time',
-    oneLine(hit.title) || '(untitled)',
-    ...(host ? [`host=${host}`] : [])
+    oneLine(hit.title) || '(untitled)'
   ].join('  ')
   const evidence = hit.evidence
     ? `    ${hit.evidence.role}: ${oneLine(hit.evidence.snippet)}`
@@ -65,21 +63,21 @@ function formatUnavailable(
   reason: 'disabled' | 'not-ready' | 'no-service' | 'scope-unknown' | 'unsupported-agent'
 ): string {
   if (reason === 'disabled') {
-    return 'Session search is off on this host.'
+    return 'Session search is off on this server.'
   }
   if (reason === 'unsupported-agent') {
-    return 'This host does not support history search for the selected agent. Update Orca on that host or select another agent.'
+    return 'This server does not support history search for the selected agent. Update Orca on that server or select another agent.'
   }
   // Only hand-built requests can select an unknown identity; the CLI scopes by path.
   if (reason === 'scope-unknown') {
-    return 'This host does not know the workspace or project that search was scoped to.'
+    return 'This server does not know the workspace or project that search was scoped to.'
   }
   if (reason === 'not-ready') {
-    return 'Session search is not ready on this host yet. Try again once its index has started.'
+    return 'Session search is not ready on this server yet. Try again once its index has started.'
   }
   return [
-    'This host runs no session search service.',
-    'An Orca host older than session search answers the same way; update it and try again.'
+    'This server runs no session search service.',
+    'An Orca server older than session search answers the same way; update it and try again.'
   ].join('\n')
 }
 
@@ -92,7 +90,7 @@ function formatResults(response: SessionSearchResults): string {
     ...(response.page.hasMore && cursor
       ? [`more pages: re-run with --cursor ${cursor}`]
       : response.page.hasMore
-        ? ['more pages exist, but this host issued no cursor for them']
+        ? ['more pages exist, but this server issued no cursor for them']
         : []),
     ...formatTruncation(response.truncated)
   ]

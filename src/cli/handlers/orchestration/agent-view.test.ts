@@ -248,7 +248,7 @@ describe('orchestration agent views', () => {
 
     expect(stdout).toBe(
       'scope.run=run_1 scope.source=flag\n' +
-        'dispatchId=ctx_1 taskId=task_1 state=running liveness=live terminal=term_agent terminalState=active workspace=wt_1::/repo host=local attention=input next="orca-dev orchestration worker-stop --dispatch ctx_1"'
+        'dispatchId=ctx_1 taskId=task_1 state=running liveness=live terminal=term_agent terminalState=active workspace=wt_1::/repo server=local attention=input next="orca-dev orchestration worker-stop --dispatch ctx_1"'
     )
   })
 

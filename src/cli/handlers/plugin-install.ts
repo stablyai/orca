@@ -62,7 +62,7 @@ function looksLikePath(value: string): boolean {
   )
 }
 
-/** Sorts what the caller typed into a catalog id, a Git source or a folder on the Orca host. */
+/** Sorts what the caller typed into a catalog id, a Git source or a folder on the Orca server. */
 export function classifyPluginInstallSource(ctx: HandlerContext, value: string): InstallSpec {
   const ref = stringFlag(ctx, 'ref')
   const catalog = stringFlag(ctx, 'catalog')

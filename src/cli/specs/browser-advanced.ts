@@ -8,7 +8,7 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarg
     summary: 'List installed browser extensions and their enabled state',
     usage: 'orca extension list [--profile <id>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'profile'],
-    notes: ['Desktop only. Defaults to the default browser profile on this Orca host.']
+    notes: ['Desktop only. Defaults to the default browser profile on this Orca server.']
   },
   {
     path: ['extension', 'reload'],

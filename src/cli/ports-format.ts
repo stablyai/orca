@@ -47,14 +47,12 @@ export function formatPortsScan(
   scan: WorkspacePortHostScanResult,
   options: { showOwner: boolean }
 ): string {
-  const host = `host=${scan.executionHostId}`
   if (scan.unavailableReason) {
-    return `Port scan unavailable: ${scan.unavailableReason}\n${host}`
+    return `Port scan unavailable: ${scan.unavailableReason}`
   }
   if (scan.ports.length === 0) {
-    return `No listening ports found.\n${host}`
+    return 'No listening ports found.'
   }
   const ambiguousNames = options.showOwner ? findAmbiguousOwnerNames(scan.ports) : null
-  const rows = scan.ports.map((port) => formatPortRow(port, ambiguousNames))
-  return `${rows.join('\n')}\n\n${host}`
+  return scan.ports.map((port) => formatPortRow(port, ambiguousNames)).join('\n')
 }

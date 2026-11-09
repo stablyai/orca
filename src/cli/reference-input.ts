@@ -97,7 +97,7 @@ export async function assertReferenceWritesSupported(client: RuntimeClient): Pro
   if (!status.result.capabilities?.includes(WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      'This Orca host cannot merge reference changes safely. Update Orca on the execution host.'
+      'This Orca server cannot merge reference changes safely. Update Orca on that server.'
     )
   }
 }

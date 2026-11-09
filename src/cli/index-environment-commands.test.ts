@@ -56,7 +56,7 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
-  it('lists saved environments even when ORCA_ENVIRONMENT is set', async () => {
+  it('lists saved servers under the old spelling even when ORCA_ENVIRONMENT is set', async () => {
     process.env.ORCA_ENVIRONMENT = 'stale-env'
     listEnvironmentsMock.mockReturnValue([addEnvironmentFromPairingCodeMock()])
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -68,7 +68,7 @@ describe('orca cli worktree awareness', () => {
     expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
       ok: true,
       result: {
-        environments: [
+        servers: [
           {
             id: 'env-1',
             name: 'desk',

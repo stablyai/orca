@@ -309,8 +309,11 @@ export function resolveEnvironmentFromStore<T extends PersistedRuntimeEnvironmen
   if (matches.length > 1) {
     throw new RuntimeEnvironmentStoreError(
       'invalid_argument',
-      `Environment name "${selector}" is ambiguous; use the environment id.`
+      `Server name "${selector}" is ambiguous; use the server id.`
     )
   }
-  throw new RuntimeEnvironmentStoreError('invalid_argument', `Unknown environment: ${selector}`)
+  throw new RuntimeEnvironmentStoreError(
+    'invalid_argument',
+    `Unknown server: ${selector}. Run \`orca server list\`.`
+  )
 }

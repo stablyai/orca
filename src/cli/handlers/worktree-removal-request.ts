@@ -35,7 +35,7 @@ export async function requestWorktreeRemoval(
           if (!parsed.success) {
             throw new RuntimeClientError(
               'invalid_runtime_response',
-              'The Orca host returned an invalid status response.'
+              'The Orca server returned an invalid status response.'
             )
           }
           if (
@@ -44,7 +44,7 @@ export async function requestWorktreeRemoval(
             return deleteBranch === undefined ? legacy : { ...legacy, deleteBranch }
           }
           console.error(
-            'warning: This Orca host is older and uses its existing branch policy. Keep-by-default and --delete-branch do not apply.'
+            'warning: This Orca server is older and uses its existing branch policy. Keep-by-default and --delete-branch do not apply.'
           )
           return legacy
         },

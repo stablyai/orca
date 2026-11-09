@@ -14,7 +14,7 @@ import { listEnvironments } from '../shared/remote-runtime/host-store/runtime-en
 import { RuntimeClient } from './runtime-client'
 import { fetchSshTargetSummaries } from './host-selector-alternatives'
 
-/** Empty selectors mean the execution host cannot change. */
+/** Empty selectors mean the server cannot change. */
 export type AutomationDestinationTarget = { repo?: string; workspace?: string }
 
 async function resolveTargetRepo(

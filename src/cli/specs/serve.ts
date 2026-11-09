@@ -4,7 +4,7 @@ import { LOCAL_COMMAND_FLAGS } from '../args'
 export const SERVE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['serve'],
-    summary: 'Start an Orca runtime server without opening a desktop window',
+    summary: 'Start an Orca server without opening a desktop window',
     usage:
       'orca serve [--port <port>] [--bind <ip>] [--pairing-address <host>] [--allow-public | --refuse-public] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--reclaim-stale-lock [--data-root <dir>] [--yes]] [--json]',
     allowedFlags: [
@@ -32,7 +32,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       '--bind controls the interface the runtime listens on; it accepts a literal IP such as 127.0.0.1, a Tailscale address, or 0.0.0.0. --mobile-pairing needs no --bind or --bind 0.0.0.0.',
       'Serve accepts clients from localhost, LAN (10/8, 172.16/12, 192.168/16, link-local, fc00::/7) and Tailscale (100.64/10, fd7a:115c:a1e0::/48) addresses. Public addresses are also accepted with --allow-public, when --pairing-address is a hostname or public IP, once a paired device has connected from one, or while devices paired before this check existed remain paired. Addresses inside a network prefix of one of this host interfaces (for example same-network global IPv6) count as LAN. --refuse-public refuses public addresses in every case and cannot be combined with --allow-public. The startup log states which applies.',
       'Use --recipe-json with --project-root from VM recipes to print the recipe result JSON and leave the server running.',
-      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link. To pair later without restarting, run `orca pair`.',
+      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default server pairing link. To pair later without restarting, run `orca pair`.',
       'On a packaged macOS app serve runs Electron, which needs a desktop login; over SSH with nobody logged in, set ORCA_SERVE_RUNTIME=orcad to run the Node server instead (it has no in-app updater).',
       "A paired client cannot drive this machine's desktop (orca computer) unless the offer was created with --grant-desktop-control.",
       'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.',

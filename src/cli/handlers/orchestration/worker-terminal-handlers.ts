@@ -1,7 +1,8 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
-import { WORKER_LIST_VIEW, type WorkerListResult } from './worker-agent-views'
+import { workerListView, type WorkerListResult } from './worker-agent-views'
+import { formatOwnerToken, ownerOfWorkerHost, readOwnerContext } from '../../row-owner-server'
 import {
   formatHelperStops,
   WORKER_RELEASE_VIEW,
@@ -139,18 +140,19 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     if (requiresCurrentListSemantics && !result.result.page) {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        'The connected Orca runtime did not prove support for the requested worker-list flags, so no inventory was printed. Update the connected Orca runtime and retry.'
+        'The connected Orca server did not prove support for the requested worker-list flags, so no inventory was printed. Update the connected Orca server and retry.'
       )
     }
     if (!flags.has('full')) {
       printOrchestrationResult(
         { ...result, result: { ...result.result, scope } },
         json,
-        WORKER_LIST_VIEW
+        workerListView(readOwnerContext(client))
       )
       return
     }
     printResult({ ...result, result: { ...result.result, scope } }, json, (value) => {
+      const owners = readOwnerContext(client)
       const rows =
         value.workers.length === 0
           ? 'No workers found.'
@@ -165,7 +167,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                 const liveness = projection?.liveness.verdict
                 const attention = projection?.attention?.categories.join(',') || 'none'
                 const details = projection
-                  ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} host=${projection.host.id} workspace=${workspace}`
+                  ? `/${stage}] attention=${attention} liveness=${liveness} provider=${provider} ${formatOwnerToken(ownerOfWorkerHost(projection.host, owners))} workspace=${workspace}`
                   : `]`
                 const next = projection
                   ? ` next=${projection.nextAction.argv.join(' ') || 'none'}`

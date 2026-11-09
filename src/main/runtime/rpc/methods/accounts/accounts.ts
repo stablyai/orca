@@ -113,7 +113,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     params: AddDataAccountParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
-        throw new Error('Adding accounts is only available on the Orca host runtime.')
+        throw new Error('Adding accounts works only on the Orca server itself.')
       }
       return runtime.addDataAccountFromHome(params.provider, params.sourceDataHome, params.label)
     }
@@ -209,7 +209,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     params: AddCodexFromHomeParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {
-        throw new Error('Adding Codex accounts is only available on the Orca host runtime.')
+        throw new Error('Adding Codex accounts works only on the Orca server itself.')
       }
       return runtime.addCodexAccountFromHome(params.sourceHome, {
         runtime: params.runtime,

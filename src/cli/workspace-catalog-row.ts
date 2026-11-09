@@ -18,7 +18,7 @@ export function refuseUnresolvedOwner(innermost: readonly CatalogRow[]): void {
   }
   throw new RuntimeClientError(
     'selector_ambiguous',
-    `Orca can't tell which host owns the folder workspace containing the current directory (${unresolved.map((row) => `${row.id} at ${row.path}`).join(', ')}), so it won't guess the workspace.`,
+    `Orca can't tell which server owns the folder workspace containing the current directory (${unresolved.map((row) => `${row.id} at ${row.path}`).join(', ')}), so it won't guess the workspace.`,
     {
       workspaces: innermost.map((row) => ({
         kind: parseWorkspaceKey(row.id)?.type === 'folder' ? 'folder workspace' : 'worktree',

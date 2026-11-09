@@ -52,7 +52,7 @@ Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or 
    (see `docs/reference/plugin-declarative-ui.md`, "Testing"). Both run the plugin's code
    unsandboxed on this machine: use them only on code you trust.
 4. `plugin dev load <dir>` adds the folder to Settings → Plugins → Development folders on the
-   Orca host and loads it. Orca reloads it, and restarts its worker, when its files change; run
+   Orca server and loads it. Orca reloads it, and restarts its worker, when its files change; run
    `plugin dev reload <dir>` if a change was missed. `plugin restart <plugin-key>` stops a
    worker so its next command or event reruns its startup code. `plugin logs` shows what a worker printed and a panel's or editor's
    console errors, warnings and uncaught exceptions as `[frame] <file>:<line> <message>`.
@@ -92,13 +92,13 @@ Exit codes: `0` ok, `1` error, `2` `plugin_invalid`, `3` `approval_required` or 
    Both need the desktop app with a workspace showing and never raise the window.
 6. `plugin dev unload <dir>` when done.
 
-Paths are on the machine that runs Orca. With `--environment <server>`, pass an absolute path
+Paths are on the machine that runs Orca. With `--server <server>`, pass an absolute path
 on that server. From an SSH or WSL shell that forwards `orca` to another machine, the authoring
-and dev commands refuse; work on the Orca host instead.
+and dev commands refuse; work on the Orca server instead.
 
 `plugin_system_disabled` means plugins are off on that host. Ask the user to click "Turn on
 plugins" in Settings → Plugins, or on a host with no window (`orca serve`) to run
-`plugin system on` with the same `--environment`. It approves nothing; only plugins approved
+`plugin system on` with the same `--server`. It approves nothing; only plugins approved
 earlier start.
 
 ## Install, update and remove
@@ -110,7 +110,7 @@ earlier start.
 - `owner/repo` or `owner/repo@v1.2.0` on GitHub,
 - any `https://` or `ssh://` Git URL or `git@host:owner/repo.git`, with `#ref` for a version,
 - a GitHub or GitLab release, tag or tree page URL (`.../releases/tag/v1.2.0`, `.../-/tree/main`),
-- a plugin folder (a path on the Orca host).
+- a plugin folder (a path on the Orca server).
 
 With no version, Orca installs the newest version tag (`vX.Y.Z`), else the default branch, and
 always pins the exact commit. The result names the version, commit, publisher and repository.
@@ -137,7 +137,7 @@ returns `approval_required` with a `cat1-…` fingerprint for that exact URL and
 
 ## Private repositories
 
-Git runs on the Orca host (the `--environment` server when given) with that machine's own Git
+Git runs on the Orca server (the `--server` one when given) with that machine's own Git
 credentials and never prompts. Nothing to pass to `orca`; set up Git there once:
 
 - HTTPS on GitHub: `gh auth login` then `gh auth setup-git`. GitLab: `glab auth login`. Elsewhere:

@@ -8,7 +8,7 @@ export const CHAT_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca chat rename [--session <id>] --name <text> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'session', 'name'],
     notes: [
-      '--session takes the chat session id `orca agent launch` prints. Run inside a chat, it defaults to that chat; with --environment it is required.',
+      '--session takes the chat session id `orca agent launch` prints. Run inside a chat, it defaults to that chat; with --server it is required.',
       'The name shows in the tab, the sidebar, Session History and on paired phones, the same as renaming the tab by hand.'
     ],
     examples: [

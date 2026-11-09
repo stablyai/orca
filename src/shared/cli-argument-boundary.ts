@@ -1,5 +1,10 @@
-export const CLI_GLOBAL_VALUE_FLAGS: readonly string[] = ['pairing-code', 'environment']
+export const CLI_GLOBAL_VALUE_FLAGS: readonly string[] = ['pairing-code', 'server']
 export const CLI_GLOBAL_FLAGS: readonly string[] = ['help', 'json', ...CLI_GLOBAL_VALUE_FLAGS]
+/** Old flag spellings, accepted as input only and renamed to their canonical flag before validation. */
+export const CLI_FLAG_ALIASES: Readonly<Record<string, string>> = {
+  environment: 'server',
+  'parent-environment': 'parent-server'
+}
 
 export const CLI_BOOLEAN_FLAGS = new Set([
   'accept-changed-state',

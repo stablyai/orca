@@ -141,8 +141,8 @@ describe('--parent-environment', () => {
     expect(exitCode).toBe(1)
     const error = JSON.parse(output).error
     expect(error.code).toBe('LINEAGE_PARENT_NOT_FOUND')
-    expect(error.data.environment).toBe('srv-b')
-    expect(error.data.nextSteps.join('\n')).toContain('--parent-environment')
+    expect(error.data.server).toBe('srv-b')
+    expect(error.data.nextSteps.join('\n')).toContain('--parent-server')
     expect(new Set(calls.map((call) => call.environment))).toEqual(new Set(['srv-b']))
   })
 
@@ -198,10 +198,10 @@ describe('--parent-environment', () => {
       'folder:hub-a'
     ]
     const cases: [string, string, Answer][] = [
-      ['srv-z', 'environment_not_paired', FOLDER_PARENT],
+      ['srv-z', 'server_not_saved', FOLDER_PARENT],
       [
         'srv-c',
-        'environment_unavailable',
+        'server_unavailable',
         ({ environment }) =>
           environment === 'srv-c'
             ? new RuntimeClientError('remote_runtime_unavailable', 'Could not connect.')
@@ -229,7 +229,7 @@ describe('--parent-environment', () => {
       const { output } = await run(setOnB(parentEnvironment))
       expect(JSON.parse(output).error.code, parentEnvironment).toBe(code)
       expect(calls.filter((call) => MUTATIONS.has(call.method))).toEqual([])
-      if (code === 'environment_not_paired') {
+      if (code === 'server_not_saved') {
         expect(calls).toEqual([])
       }
     }
@@ -269,13 +269,13 @@ describe('--parent-environment', () => {
       const { output } = await run([...command, ...parent])
       const error = JSON.parse(output).error
       expect(error.code, command[1]).toBe('LINEAGE_PARENT_AMBIGUOUS')
-      expect(error.data.environment).toBe('srv-b')
+      expect(error.data.server).toBe('srv-b')
       expect(error.data.candidates).toEqual([
         { selector: 'folder:one' },
         { selector: 'folder:two' }
       ])
       expect(error.data.nextSteps).toEqual([
-        'Compare the choices with `orca worktree ps --environment srv-b --json`, then pass one as --parent-worktree.'
+        'Compare the choices with `orca worktree ps --server srv-b --json`, then pass one as --parent-worktree.'
       ])
     }
   })

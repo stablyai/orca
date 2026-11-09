@@ -1,4 +1,5 @@
 import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
+import { formatOwner, ownerOfWorkerHost, type OwnerContext } from '../../row-owner-server'
 import type { WorkerListRunScope } from './worker-list-run-scope'
 import { isActionableOrchestrationFleetAttention } from '../../../shared/orchestration/fleet/orchestration-fleet-attention'
 import { formatPrCommentRelativeTime } from '../../../shared/source-control/review-comments/pr-comment-time'
@@ -7,7 +8,7 @@ type WorkerProjection = {
   runId?: string
   outcome?: string | null
   provider?: { id: string; model: string | null } | null
-  host: { id: string }
+  host: { kind?: 'local' | 'remote'; id: string }
   workspace?: { id: string } | null
   stage: { activity: string }
   liveness: { verdict: string; detail?: string }
@@ -132,7 +133,7 @@ type WorkerListRow = {
   terminal?: string
   terminalState?: string
   workspace?: string
-  host?: string
+  server?: string
   attention?: string[]
   autoReleaseAt?: string
   next?: string
@@ -147,7 +148,10 @@ type WorkerListFields = {
 
 type ScopedWorkerList = WorkerListResult & { scope: WorkerListRunScope }
 
-export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerListFields> = {
+/** `owners` names each worker's server from the home coordinator's own store; nothing is dialed. */
+export const workerListView = (
+  owners: OwnerContext
+): OrchestrationAgentView<ScopedWorkerList, WorkerListFields> => ({
   fields: (value) => ({
     workers: value.workers.map((worker) => {
       const projection = worker.projection
@@ -167,7 +171,7 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         terminalState: worker.terminalState ?? undefined,
         // Older runtimes send no projection; the terminal resource row still names both.
         workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
-        host: projection?.host.id,
+        server: workerServer(projection?.host, owners),
         attention: actionableAttention(projection),
         autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
         next: projection
@@ -189,6 +193,13 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         }
       : undefined
   }
+})
+
+function workerServer(
+  host: WorkerProjection['host'] | undefined,
+  owners: OwnerContext
+): string | undefined {
+  return host ? formatOwner(ownerOfWorkerHost(host, owners)) : undefined
 }
 
 // Older runtimes send no projection and cannot close finished workers on their own.

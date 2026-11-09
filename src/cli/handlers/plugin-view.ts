@@ -79,12 +79,12 @@ export function defaultPluginShotPath(dir: string, pluginKey: string, panelId: s
   return join(dir, `${pluginKey}-${panelId}.png`)
 }
 
-/** The PNG lands on the machine that runs the CLI, also with --environment. */
+/** The PNG lands on the machine that runs the CLI, also with --server. */
 export function resolveLocalShotPath(ctx: HandlerContext, value: string): string {
   if (process.env.ORCA_CLI_CWD) {
     throw new RuntimeClientError(
       'invalid_environment',
-      'orca plugin shot writes the PNG on the machine that runs it, but this shell forwards orca to the Orca host. Run it on the machine that should keep the image.'
+      'orca plugin shot writes the PNG on the machine that runs it, but this shell forwards orca to the Orca server. Run it on the machine that should keep the image.'
     )
   }
   return isAbsolute(value) ? value : resolve(ctx.cwd, value)

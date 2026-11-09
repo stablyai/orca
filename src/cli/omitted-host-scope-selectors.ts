@@ -5,14 +5,15 @@ import {
 } from '../shared/execution-host'
 import type { RuntimeListingHostScope } from '../shared/runtime-listing-host-scope'
 import { findEnvironmentByName } from './host-selector-alternatives'
+import { quoteCliCommandArgument } from './shell-command-quote'
 
 export type OmittedHostScopeSelector = {
   hostId: ExecutionHostId
-  /** null means this machine has no selector for the omitted host. */
+  /** null means this computer has no selector for the omitted host. */
   selector: string | null
 }
 
-/** omittedHostSelectors is added locally, never sent by the runtime. */
+/** omittedHostSelectors is added locally, never sent by the server. */
 export type ListingHostScopeWithSelectors = RuntimeListingHostScope & {
   omittedHostSelectors?: OmittedHostScopeSelector[]
 }
@@ -56,16 +57,16 @@ function resolveSelector(
 ): string | null {
   if (host?.kind === 'runtime') {
     const environment = findEnvironmentByName(environments, host.environmentId)
-    return environment ? `--environment ${environment.name}` : null
+    return environment ? `--server ${quoteCliCommandArgument(environment.id)}` : null
   }
-  // Listings take no --host flag; local and SSH hosts are reached through the answering runtime.
+  // Listings take no --host flag; local and SSH hosts are reached through the answering server.
   return null
 }
 
 /** An absent scope means coverage is unknown. */
 export function formatListingHostScope(scope: ListingHostScopeWithSelectors | undefined): string {
   if (!scope) {
-    return 'scope: unverifiable — this host does not report which hosts it lists'
+    return 'scope: unverifiable — this server does not report what it lists'
   }
   const covered = scope.hostIds.length > 0 ? scope.hostIds.join(', ') : 'none'
   if (scope.omittedHostIds.length === 0) {
@@ -84,8 +85,8 @@ export function formatListingHostScope(scope: ListingHostScopeWithSelectors | un
     }
     const kind = parseExecutionHostId(hostId)?.kind
     return kind === 'local' || kind === 'ssh'
-      ? `${hostId} (reached through this runtime; no flag selects it)`
-      : `${hostId} (not selectable from this machine)`
+      ? `${hostId} (reached through this server; no flag selects it)`
+      : `${hostId} (not reachable from here)`
   })
   return `scope: ${covered} — not covered: ${omitted.join(', ')}`
 }

@@ -50,7 +50,7 @@ export async function prepareRecipeVmEnvironmentCall(
     }
     throw new RuntimeClientError(
       RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
-      `The VM behind environment "${environment.name}" is asleep. Run \`orca worktree activate --worktree <selector>\` for its workspace, or open it in Orca, to wake it.`
+      `The VM behind server "${environment.name}" is asleep. Run \`orca worktree activate --worktree <selector>\` for its workspace, or open it in Orca, to wake it.`
     )
   }
   const answer = await askDesktopToWake(environment.id)
@@ -61,13 +61,13 @@ export async function prepareRecipeVmEnvironmentCall(
   if (answer === 'unsupported') {
     throw new RuntimeClientError(
       RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
-      `The VM behind environment "${environment.name}" is asleep, and no running Orca here can wake it. Open Orca and open the workspace to wake it.`
+      `The VM behind server "${environment.name}" is asleep, and no running Orca here can wake it. Open Orca and open the workspace to wake it.`
     )
   }
   if (answer === 'still-waking') {
     throw new RuntimeClientError(
       RUNTIME_ENVIRONMENT_WAKING_ERROR_CODE,
-      `The VM behind environment "${environment.name}" is still waking up. Try again in a moment.`
+      `The VM behind server "${environment.name}" is still waking up. Try again in a moment.`
     )
   }
   // Up now, perhaps woken since this command read the server's pairing.
