@@ -101,7 +101,7 @@ export function registerJournalRowContextUsageTests(): void {
           ts: 1_000,
           fence: 1,
           reason: 'session_created',
-          providerHandle: agentSessionJournalProviderHandle(IDENTITY.providerHandle)
+          providerHandle: agentSessionJournalProviderHandle(IDENTITY)
         },
         {
           v: 3,
