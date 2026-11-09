@@ -1,3 +1,4 @@
+import { agentPickerCatalogView } from '../../../../shared/agent-launch/picker/agent-launch-picker-source'
 import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { launchDraftSources } from '../native-chat/drafts/native-chat-launch-draft-source'
@@ -16,30 +17,30 @@ export function retireAgentPickerSetups(
           entry.rows[0]?.executionHostId ?? 'local',
           entry.agent
         ])
-  const membership = new Map(
-    entries.map((entry) => [
-      entryKey(entry),
-      entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress
-        ? undefined
-        : new Map(
-            entry.catalog.models.map((model) => [
-              model.id,
-              model.effortsKnown === false
-                ? undefined
-                : new Set(model.efforts.map((effort) => effort.value))
-            ])
-          )
-    ])
-  )
+  const entriesByKey = new Map(entries.map((entry) => [entryKey(entry), entry]))
+  const memberships = new Map<AgentPickerEntry['catalog'], Map<string, Set<string> | undefined>>()
   const retire = (
     drafts: Map<string, AgentPickerRetainedSetup>,
     currentKey?: string,
     currentOwner?: { workspaceId: string; executionHostId: string }
   ) => {
     for (const [key, retained] of drafts) {
-      const models = membership.get(
+      const entry = entriesByKey.get(
         currentKey ?? JSON.stringify([retained.target?.key, retained.agent])
       )
+      const catalog = entry && agentPickerCatalogView(entry, retained.draft.surface).catalog
+      let models = catalog && memberships.get(catalog)
+      if (!models && catalog && catalog.origin !== 'unknown' && !catalog.listingInProgress) {
+        models = new Map(
+          catalog.models.map((model) => [
+            model.id,
+            model.effortsKnown === false
+              ? undefined
+              : new Set(model.efforts.map((effort) => effort.value))
+          ])
+        )
+        memberships.set(catalog, models)
+      }
       // Accepted relocation owns the slot now; an obsolete address cannot retire its options.
       const target =
         retained.target && currentOwner

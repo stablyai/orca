@@ -1,3 +1,4 @@
+import { agentPickerCatalogView } from '../../../../shared/agent-launch/picker/agent-launch-picker-source'
 import { agentPickerModelMenu } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import {
   TEXT_ACTION_DEFAULT_MODEL,
@@ -91,6 +92,7 @@ export function agentLaunchSetupOptionRows(
       argumentsOwnedRow('effort', options[0]?.label ?? 'Reasoning effort', 'thought_level', t)
     ]
   }
+  const view = agentPickerCatalogView(entry, draft.surface)
   const effort = agentPickerModelMenu(entry, draft.surface, {
     ...(currentModel ? { model: currentModel } : {}),
     ...argumentsView.choices.options
@@ -120,7 +122,7 @@ export function agentLaunchSetupOptionRows(
       const valueKnown =
         current !== undefined ||
         (option.id === 'serviceTier' &&
-          entry.catalog.origin !== 'unknown' &&
+          view.catalog.origin !== 'unknown' &&
           Boolean(liveModel?.serviceTiers?.length))
       return {
         id: option.id,
@@ -260,7 +262,14 @@ export function agentLaunchSetupCatalogState(
                         agent: entry.label
                       })
                     : null
-  return { hasModels, catalogPending, catalogMessage }
+  const canSearch =
+    hasModels &&
+    entry.catalog.origin !== 'unknown' &&
+    !entry.catalog.listingInProgress &&
+    entry.catalogRead !== 'pending' &&
+    entry.catalogRead !== 'failed' &&
+    entry.catalogRead !== 'unsupported'
+  return { hasModels, catalogPending, catalogMessage, canSearch }
 }
 
 /** Visible model rows, plus the model the list starts on. */

@@ -1,3 +1,4 @@
+import type { ModelCatalogSource } from '../../../../../shared/agent-session/options/model-catalog-source'
 import { useCallback, useEffect, useMemo } from 'react'
 import {
   useAppStateViewActive,
@@ -14,7 +15,11 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { AgentDedicatedChoices } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 
-export type AgentModelMenuSource = { scope: HostModelMenuScope; coherentCatalog: boolean }
+export type AgentModelMenuSource = {
+  scope: HostModelMenuScope
+  coherentCatalog: boolean
+  source?: ModelCatalogSource
+}
 const absent: HostModelMenuSnapshot = { pending: false, generation: 0 }
 const subscribeAbsent = () => () => {}
 
@@ -29,7 +34,7 @@ export function useAgentModelMenu(
   const scope = useMemo(
     () => source?.scope,
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Scope identity is host/agent/worktree, not the caller's object.
-    [key, agent, source?.scope.worktree]
+    [key, agent, source?.scope.worktree, source?.scope.sourceKey]
   )
   const subscribe = useCallback(
     (listener: () => void) =>
@@ -58,6 +63,7 @@ export function useAgentModelMenu(
   })
   return {
     ...menu,
+    source: source?.source ?? 'structured',
     fallbackAfterFailure:
       !!source && snapshot.attempted === true && !snapshot.pending && menu.status === 'builtin'
   }

@@ -9,7 +9,13 @@ import {
   subscribeHostModelCatalogSnapshot
 } from './host-model-catalog-snapshots'
 
-export type HostModelMenuScope = { target: RuntimeClientTarget; agent: string; worktree?: string }
+export type HostModelMenuScope = {
+  target: RuntimeClientTarget
+  agent: string
+  worktree?: string
+  sourceKey?: string
+  request?: Reader
+}
 export type HostModelMenuSnapshot = {
   answer?: AgentSessionModelCatalogResult
   pending: boolean
@@ -25,7 +31,12 @@ function retained(answer: AgentSessionModelCatalogResult | undefined) {
 }
 
 function keyOf(scope: HostModelMenuScope) {
-  return JSON.stringify([structuredAgentSessionHostKey(scope.target), scope.agent, scope.worktree])
+  return JSON.stringify([
+    structuredAgentSessionHostKey(scope.target),
+    scope.agent,
+    scope.worktree,
+    scope.sourceKey ?? 'structured'
+  ])
 }
 
 class HostModelMenuCatalog {
@@ -37,20 +48,29 @@ class HostModelMenuCatalog {
     this.snapshot = {
       answer: this.held(),
       pending: false,
-      generation: hostModelCatalogGeneration(scope.target, scope.agent)
+      generation: hostModelCatalogGeneration(scope.target, scope.agent, scope.sourceKey)
     }
   }
   private held() {
-    return readHostModelCatalogSnapshot(this.scope.target, this.scope.agent, {
-      newLaunch: true,
-      seedsModel: true,
-      worktree: this.scope.worktree ?? null
-    })
+    return readHostModelCatalogSnapshot(
+      this.scope.target,
+      this.scope.agent,
+      {
+        newLaunch: true,
+        seedsModel: true,
+        worktree: this.scope.worktree ?? null
+      },
+      this.scope.sourceKey
+    )
   }
   publish(value: Omit<HostModelMenuSnapshot, 'generation'>) {
     const next = {
       ...value,
-      generation: hostModelCatalogGeneration(this.scope.target, this.scope.agent)
+      generation: hostModelCatalogGeneration(
+        this.scope.target,
+        this.scope.agent,
+        this.scope.sourceKey
+      )
     }
     if (
       this.snapshot.generation === next.generation &&
@@ -77,7 +97,8 @@ class HostModelMenuCatalog {
         } else {
           this.publish({ ...this.snapshot, answer: this.held() })
         }
-      }
+      },
+      this.scope.sourceKey
     )
     return () => {
       this.listeners.delete(listener)
@@ -89,14 +110,17 @@ class HostModelMenuCatalog {
       return this.pending
     }
     const { target, agent, worktree } = this.scope
-    const generation = hostModelCatalogGeneration(target, agent)
-    const current = () => generation === hostModelCatalogGeneration(target, agent)
-    const request: Reader = (waitForListing) =>
-      callStructuredAgentSession(target, 'agentSession.modelCatalog', {
-        agent,
-        ...(worktree ? { worktree } : {}),
-        ...(waitForListing ? { waitForListing: true } : {})
-      })
+    const generation = hostModelCatalogGeneration(target, agent, this.scope.sourceKey)
+    const current = () =>
+      generation === hostModelCatalogGeneration(target, agent, this.scope.sourceKey)
+    const request: Reader =
+      this.scope.request ??
+      ((waitForListing) =>
+        callStructuredAgentSession(target, 'agentSession.modelCatalog', {
+          agent,
+          ...(worktree ? { worktree } : {}),
+          ...(waitForListing ? { waitForListing: true } : {})
+        }))
     this.publish({ ...this.snapshot, pending: true })
     const operation: Promise<AgentSessionModelCatalogResult | undefined> = Promise.resolve()
       .then(() => request(false))
@@ -120,7 +144,13 @@ class HostModelMenuCatalog {
           return this.pending !== operation ? this.pending : undefined
         }
         if (answer) {
-          recordHostModelCatalogSnapshot(target, agent, worktree ?? null, answer)
+          recordHostModelCatalogSnapshot(
+            target,
+            agent,
+            worktree ?? null,
+            answer,
+            this.scope.sourceKey
+          )
         }
         const shown = answer?.listingInProgress
           ? (this.held() ?? answer)

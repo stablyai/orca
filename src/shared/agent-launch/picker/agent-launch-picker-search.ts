@@ -1,10 +1,11 @@
 import { agentPickerModels } from './agent-launch-picker-catalog'
 import { resolveAgentChoiceLayers } from '../choices/agent-choice-layers'
-import type { AgentPickerEntry, AgentPickerModel } from './agent-launch-picker'
+import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './agent-launch-picker'
 import type { AgentDedicatedChoices } from '../choices/agent-launch-choices'
 
 export type AgentPickerSetup = {
   entry: AgentPickerEntry
+  surface: AgentPickerSurface
   model: AgentPickerModel
   choices: AgentDedicatedChoices
   label: string
@@ -26,7 +27,8 @@ const score = (word: string, values: readonly string[]): number =>
 export function searchAgentPickerSetups(
   entries: readonly AgentPickerEntry[],
   query: string,
-  limit = 8
+  limit = 8,
+  surfaceForEntry: (entry: AgentPickerEntry) => AgentPickerSurface = (entry) => entry.defaultSurface
 ): AgentPickerSetup[] {
   const words = tokens(query)
   if (!words.length) {
@@ -41,7 +43,8 @@ export function searchAgentPickerSetups(
     if (words.every((word) => score(word, agentWords))) {
       continue
     }
-    for (const model of agentPickerModels(entry)) {
+    const surface = surfaceForEntry(entry)
+    for (const model of agentPickerModels(entry, surface)) {
       if (model.isLegacy || model.hidden) {
         continue
       }
@@ -74,6 +77,7 @@ export function searchAgentPickerSetups(
         matches.push({
           setup: {
             entry,
+            surface,
             model,
             choices,
             label: [entry.label, model.label, effort?.label].filter(Boolean).join(' · ')

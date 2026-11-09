@@ -237,7 +237,8 @@ export class RuntimeGitGenerationCommands {
     agentId: string,
     settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>
   ): Promise<DiscoverCommitMessageModelsResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await (this.host.resolveRuntimeModelDiscoveryTarget?.(worktreeSelector) ??
+      this.host.resolveRuntimeGitTarget(worktreeSelector))
     const typedAgentId = agentId as TuiAgent
     const agentCommandOverride =
       settingsOverride?.agentCmdOverrides?.[typedAgentId] ??

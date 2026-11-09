@@ -26,9 +26,10 @@ const listeners = new Map<string, Set<CatalogListener>>()
 export function subscribeHostModelCatalogSnapshot(
   target: RuntimeClientTarget,
   agent: string,
-  listener: CatalogListener
+  listener: CatalogListener,
+  sourceKey = 'structured'
 ): () => void {
-  const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
+  const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
   const scoped = listeners.get(key) ?? new Set<CatalogListener>()
   listeners.set(key, scoped)
   scoped.add(listener)
@@ -40,26 +41,31 @@ export function subscribeHostModelCatalogSnapshot(
   }
 }
 
-export function hostModelCatalogGeneration(target: RuntimeClientTarget, agent: string): number {
-  const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
+export function hostModelCatalogGeneration(
+  target: RuntimeClientTarget,
+  agent: string,
+  sourceKey = 'structured'
+): number {
+  const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
   if (!catalogGenerations.has(key)) {
     catalogGenerations.set(key, 0)
   }
   return catalogGenerations.get(key)!
 }
 
-function snapshotKey(hostKey: string, agent: string): string {
-  return `${hostKey}\u0000${agent}`
+function snapshotKey(hostKey: string, agent: string, sourceKey = 'structured'): string {
+  return `${hostKey}\u0000${agent}\u0000${sourceKey}`
 }
 
 /** Undefined until host answers for this frame. */
 export function readHostModelCatalogSnapshot(
   target: RuntimeClientTarget,
   agent: string,
-  launch: HostModelCatalogLaunch
+  launch: HostModelCatalogLaunch,
+  sourceKey = 'structured'
 ): AgentSessionModelCatalogResult | undefined {
   return selectHostModelCatalogSnapshot(
-    snapshots.get(snapshotKey(structuredAgentSessionHostKey(target), agent)),
+    snapshots.get(snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)),
     launch
   )
 }
@@ -69,9 +75,10 @@ export function recordHostModelCatalogSnapshot(
   target: RuntimeClientTarget,
   agent: string,
   worktree: string | null,
-  catalog: AgentSessionModelCatalogResult
+  catalog: AgentSessionModelCatalogResult,
+  sourceKey = 'structured'
 ): void {
-  const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
+  const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
   const previous = snapshots.get(key)
   const next = withHostModelCatalogAnswer(previous, worktree, catalog)
   if (worktree !== null && next !== snapshots.get(key) && next?.byWorktree.has(worktree)) {
@@ -126,8 +133,8 @@ export function forgetHostModelCatalogSnapshots(
 export function hostModelCatalogSnapshotAgents(target: RuntimeClientTarget): string[] {
   const prefix = `${structuredAgentSessionHostKey(target)}\u0000`
   return [...snapshots.keys()]
-    .filter((key) => key.startsWith(prefix))
-    .map((key) => key.slice(prefix.length))
+    .filter((key) => key.startsWith(prefix) && key.split('\u0000')[2] === 'structured')
+    .map((key) => key.split('\u0000')[1]!)
 }
 
 /** Preload account-level lists per agent; failed reads prove no absence. Send savedOnly only when host advertises it, avoiding unsaved CLI listing. */

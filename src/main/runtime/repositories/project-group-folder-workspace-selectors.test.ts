@@ -12,6 +12,15 @@ const WORKSPACE_ID = folderWorkspaceKey(FOLDER_ID)
 // Browser workspaces require the folder on disk.
 const FOLDER_PATH = tmpdir()
 
+const discovery = vi.hoisted(() => ({ models: vi.fn(), env: vi.fn() }))
+vi.mock('../../text-generation/commit-message-text-generation', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  discoverCommitMessageModelsLocal: discovery.models
+}))
+vi.mock('../../text-generation/commit-message-agent-environment', () => ({
+  prepareLocalCommitMessageAgentEnv: discovery.env
+}))
+
 const connectedLinearWorkspaces = vi.hoisted(() => {
   const current: { id: string; organizationUrlKey: string }[] = []
   return { current }
@@ -43,6 +52,7 @@ function createRuntime(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the store reads these commands make.
   const store = withDurableRuntimeStore({
+    getSettings: () => ({}),
     getRepos: () => [],
     getRepo: () => undefined,
     getProjectGroups: () => [
@@ -77,4 +87,20 @@ describe('workspace commands on a project-group folder workspace', () => {
     expect(shown.id).toBe(WORKSPACE_ID)
     expect(shown.path).toBe(FOLDER_PATH)
   })
+})
+
+it('discovers CLI models in a registered folder when no repository exists', async () => {
+  discovery.env.mockResolvedValue({ ok: true, env: {} })
+  discovery.models.mockResolvedValue({
+    success: true,
+    catalogOrigin: 'probe',
+    models: [{ id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' }]
+  })
+  const result = await createRuntime().discoverRuntimeCommitMessageModels(
+    `id:${WORKSPACE_ID}`,
+    'antigravity'
+  )
+  expect(result).toMatchObject({ success: true, models: [{ id: 'gemini-3.8-flash-low' }] })
+  expect(discovery.env).toHaveBeenCalledWith('antigravity', undefined, { runtime: 'host' })
+  expect(discovery.models).toHaveBeenCalledWith('antigravity', {}, undefined, undefined)
 })

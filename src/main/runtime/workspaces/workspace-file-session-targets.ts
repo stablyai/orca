@@ -1,3 +1,4 @@
+import { parseWslUncPath } from '../../../shared/wsl-paths'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
@@ -58,6 +59,19 @@ export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOper
         ? getLocalProjectWorktreeGitOptions(store, repo)
         : {}
     return { worktree, repo, executionHostId, localGitOptions }
+  }
+
+  protected async resolveRuntimeModelDiscoveryTarget(worktreeSelector: string) {
+    const scope = await this.resolveFolderWorkspaceLaunchScope(worktreeSelector)
+    if (!scope?.folderWorkspace) {
+      return this.resolveRuntimeGitTarget(worktreeSelector)
+    }
+    const wsl = parseWslUncPath(scope.path)
+    return {
+      worktree: this.folderWorkspaceToResolvedWorktree(scope.folderWorkspace),
+      executionHostId: getConnectionExecutionHostId(scope.connectionId),
+      ...(wsl ? { localGitOptions: { wslDistro: wsl.distro } } : {})
+    }
   }
 
   // Resolve the worktree's filesystem host; getRepo(id) conflates host twins, runtime targets, unresolved owners and local paths (#11163).

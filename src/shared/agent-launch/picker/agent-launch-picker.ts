@@ -1,8 +1,6 @@
+import type { AgentPickerEntry } from './agent-launch-picker-entry'
 import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
-import {
-  textActionPickerEffectiveChoices,
-  type TextActionPickerCatalog
-} from './agent-launch-picker-text-action'
+import { textActionPickerEffectiveChoices } from './agent-launch-picker-text-action'
 import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
 import { agentPickerArgumentsKnown } from './agent-launch-picker-authority'
 
@@ -15,10 +13,7 @@ import {
   reconcileAgentChoiceArgsDetailed
 } from '../choices/agent-choice-reconciliation'
 import { resolveAgentChoiceLayers } from '../choices/agent-choice-layers'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionModelOption
-} from '../../agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../agent-session/agent-session-wire'
 import { orderAgentLaunchPickerAgents, type NewTabAgentMenuRow } from './agent-launch-picker-rows'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { CurrentActionSelection } from '../../source-control/ai/recipes/source-control-action-selection'
@@ -26,28 +21,7 @@ import type { CurrentActionSelection } from '../../source-control/ai/recipes/sou
 export type AgentPickerSurface = 'chat' | 'terminal'
 export type AgentPickerDraftOwner = object
 export type AgentPickerModel = AgentSessionModelOption & { isLegacy?: true; hidden?: true }
-export type AgentPickerEntry = {
-  textGeneration?: TextActionPickerCatalog
-  agent: TuiAgent
-  label: string
-  description?: string
-  aliases?: string[]
-  rows: NewTabAgentMenuRow[]
-  surfaces: AgentPickerSurface[]
-  defaultSurface: AgentPickerSurface
-  terminal: AgentDedicatedChoices
-  structured: AgentDedicatedChoices
-  arguments?: string | null
-  catalog: AgentSessionModelCatalogResult
-  coherentCatalog?: boolean
-  catalogRead?: 'pending' | 'settled' | 'failed' | 'unsupported'
-  ownerKey?: string
-  draftTarget?: { key: string; worktreeId?: string; repoId?: string; executionHostId: string }
-  /** The workspace the agent launches in, whose files and skills its first prompt can name. */
-  worktreeId?: string
-  defaultsPending?: boolean
-  structuredDefaultsPending?: boolean
-}
+export type { AgentPickerEntry, AgentPickerCatalogView } from './agent-launch-picker-entry'
 export type AgentPickerDraft = {
   agent: TuiAgent
   surface: AgentPickerSurface

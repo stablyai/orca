@@ -1,3 +1,4 @@
+import { agentPickerCatalogView } from './agent-launch-picker-source'
 import { modelMenuOptions } from '../../agent-session/options/model-menu-options'
 import { listedModelDescribing } from '../../agent-session/options/structured-agent-session-listed-model'
 import {
@@ -44,6 +45,7 @@ export function agentPickerEntryOptions(
         ]
       : []
   }
+  const view = agentPickerCatalogView(entry, surface)
   let options = agentPickerOptions(entry.agent, model, surface)
   const rows = agentPickerModelMenu(entry, surface).rows
   const live = model
@@ -52,7 +54,7 @@ export function agentPickerEntryOptions(
   if (!live && model) {
     return []
   }
-  if (entry.catalog.origin === 'unknown' || !live) {
+  if (view.catalog.origin === 'unknown' || !live) {
     return options.filter(
       (option) => option.kind.type !== 'select' || option.kind.choices.length > 0
     )
@@ -61,13 +63,13 @@ export function agentPickerEntryOptions(
     options = createClaudeCatalogOptions({
       effortLevelIds: live.efforts.map((choice) => choice.value),
       supportsFastMode:
-        live.supportsFastMode === true && entry.catalog.fastModeSupport?.supported !== false
+        live.supportsFastMode === true && view.catalog.fastModeSupport?.supported !== false
     })
   }
   if (surface === 'chat' || entry.agent === 'codex') {
     const dynamic = discoveredModel(
       live,
-      entry.catalog.fastModeSupport?.supported !== false,
+      view.catalog.fastModeSupport?.supported !== false,
       entry.agent
     ).options
     if (entry.agent === 'codex') {
@@ -113,21 +115,37 @@ export function agentPickerModelMenu(
   surface: AgentPickerSurface = entry.defaultSurface,
   saved?: Readonly<Record<string, string>>
 ) {
-  return modelMenuOptions(entry.catalog, {
+  const view = agentPickerCatalogView(entry, surface)
+  return modelMenuOptions(view.catalog, {
     agent: entry.agent,
     surface: entry.textGeneration ? 'textGeneration' : surface,
     seed: getAgentSessionOptionLaunchCatalog(entry.agent) ?? { models: [], modelApply: {} },
-    pending: entry.catalogRead === 'pending',
-    coherentCatalog: entry.coherentCatalog,
+    pending: view.catalogRead === 'pending',
+    coherentCatalog: view.coherentCatalog,
     newLaunch: true,
     seedsModel: true,
     saved
   })
 }
 
-export function agentPickerModels(entry: AgentPickerEntry): AgentPickerModel[] {
+export function agentPickerModels(
+  entry: AgentPickerEntry,
+  surface: AgentPickerSurface = entry.defaultSurface
+): AgentPickerModel[] {
   if (entry.textGeneration && entry.catalog.origin !== 'unknown') {
     return entry.catalog.models
   }
-  return agentPickerModelMenu(entry).rows
+  return agentPickerModelMenu(entry, surface).rows
+}
+
+export function agentPickerNamesConfiguredModel(
+  entry: AgentPickerEntry,
+  surface: AgentPickerSurface
+) {
+  const { catalog } = agentPickerCatalogView(entry, surface)
+  return (
+    catalog.origin !== 'unknown' &&
+    (catalog.listingNamesConfiguredModel ??
+      getAgentSessionOptionLaunchCatalog(entry.agent)?.hostListingNamesConfiguredModel === true)
+  )
 }

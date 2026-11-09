@@ -1,3 +1,4 @@
+import type { ModelCatalogSource } from '../../../../shared/agent-session/options/model-catalog-source'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
@@ -54,7 +55,8 @@ export type AgentPickerAcquisitionReads = {
   settings?: () => Promise<AgentPickerEntry[] | undefined>
   catalog: (
     entry: AgentPickerEntry,
-    waitForListing: boolean
+    waitForListing: boolean,
+    source?: ModelCatalogSource
   ) => Promise<AgentPickerEntry['catalog'] | undefined>
   observeCatalog?: (
     entry: AgentPickerEntry,
@@ -62,7 +64,8 @@ export type AgentPickerAcquisitionReads = {
       answer?: AgentPickerEntry['catalog']
       pending: boolean
       invalidated?: boolean
-    }) => void
+    }) => void,
+    source?: ModelCatalogSource
   ) => () => void
   support: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['structured'] | undefined>
 }

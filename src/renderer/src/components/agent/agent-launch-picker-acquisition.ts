@@ -1,3 +1,9 @@
+import {
+  agentPickerCatalogJobs,
+  updateAgentPickerCatalog,
+  agentPickerSourceView,
+  type AgentPickerCatalogJob
+} from './agent-picker-catalog-jobs'
 export {
   createAgentPickerInventorySource,
   useAgentPickerInventoryEntries,
@@ -25,6 +31,7 @@ class AgentPickerAcquisition {
   private queued: Record<'catalog' | 'support', Set<number>>
   private deferredCatalogs = new Set<number>()
   private supports = new Map<number, SupportRead>()
+  private jobs: AgentPickerCatalogJob[]
   private defaults: AgentPickerEntry[]
   private catalogSubscriptions: (() => void)[] = []
 
@@ -33,11 +40,11 @@ class AgentPickerAcquisition {
     private initial: AgentPickerEntry[],
     private reads: Reads
   ) {
-    this.entries = initial.map((entry) => ({
-      ...entry,
-      catalogRead:
-        entry.surfaces.length && entry.catalogRead !== 'unsupported' ? 'pending' : 'unsupported'
-    }))
+    this.entries = initial
+    this.jobs = agentPickerCatalogJobs(initial)
+    for (const job of this.jobs) {
+      this.entries = updateAgentPickerCatalog(this.entries, job, { catalogRead: 'pending' })
+    }
     this.defaults = initial
     for (const [i, entry] of initial.entries()) {
       if (entry.structuredDefaultsPending) {
@@ -45,9 +52,7 @@ class AgentPickerAcquisition {
       }
     }
     this.queued = {
-      catalog: new Set(
-        this.entries.flatMap((entry, i) => (entry.catalogRead === 'pending' ? [i] : []))
-      ),
+      catalog: new Set(this.jobs.map((_, index) => index)),
       support: new Set(this.supports.keys())
     }
   }
@@ -56,39 +61,36 @@ class AgentPickerAcquisition {
     const first = this.observers.size === 0
     this.observers.add(observer)
     if (first) {
-      this.catalogSubscriptions = this.entries.map(
-        (entry, index) =>
-          this.reads.observeCatalog?.(entry, ({ answer, pending, invalidated }) => {
-            this.entries = this.entries.map((row, i) =>
-              i === index
-                ? {
-                    ...row,
-                    catalog: answer ?? { origin: 'unknown' },
-                    catalogRead: pending || invalidated ? 'pending' : 'settled'
-                  }
-                : row
-            )
-            if (invalidated) {
-              this.queued.catalog.add(index)
-            }
-            this.publish()
-            this.admit('catalog')
-          }) ?? (() => {})
+      this.catalogSubscriptions = this.jobs.map(
+        (job, index) =>
+          this.reads.observeCatalog?.(
+            this.entries[job.index],
+            ({ answer, pending, invalidated }) => {
+              this.entries = updateAgentPickerCatalog(this.entries, job, {
+                catalog: answer ?? { origin: 'unknown' },
+                catalogRead: pending || invalidated ? 'pending' : 'settled'
+              })
+              if (invalidated) {
+                this.queued.catalog.add(index)
+              }
+              this.publish()
+              this.admit('catalog')
+            },
+            job.source
+          ) ?? (() => {})
       )
-      for (const [i, entry] of this.entries.entries()) {
+      for (const [index, job] of this.jobs.entries()) {
+        const view = agentPickerSourceView(this.entries[job.index], job.source)
         if (
-          this.initial[i].catalogRead !== 'unsupported' &&
-          entry.surfaces.length &&
-          entry.catalogRead !== 'pending' &&
-          (this.deferredCatalogs.has(i) ||
-            entry.catalog.origin === 'unknown' ||
-            entry.catalogRead === 'failed' ||
-            entry.catalogRead === 'unsupported' ||
-            entry.catalog.unavailable !== undefined ||
-            entry.catalog.listingInProgress)
+          view.catalogRead !== 'pending' &&
+          (this.deferredCatalogs.has(index) ||
+            view.catalog.origin === 'unknown' ||
+            view.catalogRead === 'failed' ||
+            view.catalog.unavailable !== undefined ||
+            view.catalog.listingInProgress)
         ) {
-          this.queued.catalog.add(i)
-          this.entries[i] = { ...entry, catalogRead: 'pending' }
+          this.queued.catalog.add(index)
+          this.entries = updateAgentPickerCatalog(this.entries, job, { catalogRead: 'pending' })
         }
       }
       for (const [i, read] of this.supports) {
@@ -132,6 +134,9 @@ class AgentPickerAcquisition {
         ...entry,
         catalog: this.entries[i].catalog,
         catalogRead: this.entries[i].catalogRead,
+        ...(this.entries[i].sourceCatalogs
+          ? { sourceCatalogs: this.entries[i].sourceCatalogs }
+          : {}),
         ...(read
           ? {
               structured: (current && read.value) || entry.structured,
@@ -168,25 +173,29 @@ class AgentPickerAcquisition {
 
   private async readCatalog(entry: AgentPickerEntry, index: number) {
     this.deferredCatalogs.delete(index)
-    const saved = await this.reads.catalog(entry, false)
+    const job = this.jobs[index]
+    const saved = await this.reads.catalog(entry, false, job.source)
     if (!saved?.listingInProgress) {
       return saved
     }
     if (saved.origin !== 'unknown') {
-      this.entries = this.entries.map((e, i) => (i === index ? { ...e, catalog: saved } : e))
+      this.entries = updateAgentPickerCatalog(this.entries, job, { catalog: saved })
       this.publish()
     }
     if (!this.observers.size) {
       this.deferredCatalogs.add(index)
       return saved
     }
-    return this.reads.catalog(entry, true)
+    return this.reads.catalog(entry, true, job.source)
   }
 
   private admit(kind: 'catalog' | 'support') {
     while (this.observers.size && this.outstanding[kind] < 2 && this.queued[kind].size) {
       const priorities = [...this.observers].map((o) => o.selected())
-      const preferred = this.entries.findIndex((e) => priorities.includes(e.agent))
+      const preferred =
+        kind === 'catalog'
+          ? this.jobs.findIndex((job) => priorities.includes(this.entries[job.index].agent))
+          : this.entries.findIndex((e) => priorities.includes(e.agent))
       const index = this.queued[kind].has(preferred)
         ? preferred
         : this.queued[kind].values().next().value
@@ -195,7 +204,7 @@ class AgentPickerAcquisition {
       }
       this.queued[kind].delete(index)
       this.outstanding[kind]++
-      const entry = this.entries[index]
+      const entry = this.entries[kind === 'catalog' ? this.jobs[index].index : index]
       if (kind === 'support') {
         this.supports.set(index, { state: 'pending' })
       }
@@ -207,15 +216,10 @@ class AgentPickerAcquisition {
                 if (resume) {
                   this.queued.catalog.add(index)
                 }
-                this.entries = this.entries.map((e, i) =>
-                  i === index
-                    ? {
-                        ...e,
-                        ...(catalog ? { catalog } : {}),
-                        catalogRead: resume ? 'pending' : 'settled'
-                      }
-                    : e
-                )
+                this.entries = updateAgentPickerCatalog(this.entries, this.jobs[index], {
+                  ...(catalog ? { catalog } : {}),
+                  catalogRead: resume ? 'pending' : 'settled'
+                })
               })
               .catch((error: unknown) => {
                 const unsupported =
@@ -225,14 +229,9 @@ class AgentPickerAcquisition {
                   (error.code === 'method_not_found' ||
                     error.code === 'structured_agent_session_unsupported' ||
                     error.code === 'forbidden')
-                this.entries = this.entries.map((e, i) =>
-                  i === index
-                    ? {
-                        ...e,
-                        catalogRead: unsupported ? 'unsupported' : 'failed'
-                      }
-                    : e
-                )
+                this.entries = updateAgentPickerCatalog(this.entries, this.jobs[index], {
+                  catalogRead: unsupported ? 'unsupported' : 'failed'
+                })
               })
           : this.reads
               .support(entry)

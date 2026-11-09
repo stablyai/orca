@@ -1,3 +1,4 @@
+import { agentPickerCatalogView } from '../../../../shared/agent-launch/picker/agent-launch-picker-source'
 import { AgentLaunchTextModelDefault } from './AgentLaunchTextModelDefault'
 import { textActionArgumentsOwnModel } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
 import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
@@ -42,9 +43,9 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import { agentPickerArgumentsKnown } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { agentPickerEffectiveChoices } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import type { AgentPickerSurface } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
   agentPickerModels,
+  agentPickerNamesConfiguredModel,
   agentPickerEntryOptions,
   agentPickerPermissions
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
@@ -74,21 +75,25 @@ export function AgentLaunchSetupPanel({
   const argumentsKnown = agentPickerArgumentsKnown(entry, draft)
   const effective = agentPickerEffectiveChoices(entry, draft)
   const argumentsView = agentPickerPanelArguments(entry, draft)
-  const models = agentPickerModels(entry)
+  const view = agentPickerCatalogView(entry, draft.surface)
+  const models = agentPickerModels(entry, draft.surface)
   const defaultsPending =
     draft.surface === 'chat' ? entry.structuredDefaultsPending : entry.defaultsPending
   const seed = getAgentSessionOptionLaunchCatalog(entry.agent)
-  const listedDefaultKnown =
-    entry.catalog.origin !== 'unknown' &&
-    (entry.catalog.listingNamesConfiguredModel ?? seed?.hostListingNamesConfiguredModel === true)
   const currentModel =
     argumentsView.choices.model ??
     effective.model ??
-    (!draft.delegated?.includes('model') && !defaultsPending && listedDefaultKnown
+    (!draft.delegated?.includes('model') &&
+    !defaultsPending &&
+    agentPickerNamesConfiguredModel(entry, draft.surface)
       ? models.find((model) => model.isDefault)?.id
       : undefined)
-  // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
-  const { hasModels, catalogPending, catalogMessage } = catalogOf(entry, models, currentModel, mode)
+  const { canSearch, catalogPending, catalogMessage } = catalogOf(
+    { ...entry, ...view },
+    models,
+    currentModel,
+    mode
+  )
   const modelInArguments = textActionArgumentsOwnModel(entry, draft)
   const modelDisabled = disabled || defaultsPending || catalogPending
   const modelRows = agentLaunchSetupModelRows(
@@ -133,11 +138,11 @@ export function AgentLaunchSetupPanel({
         onAction={() => {}}
       />
     ) : null
-  const handleUse = (surface: AgentPickerSurface) => {
+  const handleUse = (surface: AgentLaunchSetupPanelProps['draft']['surface']) => {
     const current = getDraft()
     return current ? onUse({ ...acceptAgentPickerArguments(entry, current), surface }) : false
   }
-  const use = (surface: AgentPickerSurface) =>
+  const use = (surface: AgentLaunchSetupPanelProps['draft']['surface']) =>
     mode === 'select' ? handleUse(surface) : footer.current?.launch(surface)
   const choiceChips = agentModelChoiceChips(
     entry.agent,
@@ -156,7 +161,6 @@ export function AgentLaunchSetupPanel({
     argumentsView.context
   )
   const rowGroups = agentLaunchSetupRowGroups(optionRows, mode === 'launch')
-  // Launch leaves Permissions and Arguments to Agent settings; select mode edits a saved setup.
   const editsDefaults = mode === 'select' && !entry.textGeneration
   const note = agentLaunchSetupArgumentsNote(entry.label, options, !seed?.modelApply.cli?.length)
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
@@ -231,13 +235,7 @@ export function AgentLaunchSetupPanel({
               {catalogMessage}
             </div>
           ) : null}
-          {hasModels &&
-          modelQuery &&
-          entry.catalog.origin !== 'unknown' &&
-          !entry.catalog.listingInProgress &&
-          entry.catalogRead !== 'pending' &&
-          entry.catalogRead !== 'failed' &&
-          entry.catalogRead !== 'unsupported' ? (
+          {canSearch && modelQuery ? (
             <CommandEmpty>{t('agentPicker.noModels', 'No models match your search.')}</CommandEmpty>
           ) : null}
           <CommandGroup>

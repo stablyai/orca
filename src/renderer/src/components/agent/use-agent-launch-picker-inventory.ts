@@ -1,6 +1,6 @@
+import { withAgentPickerCatalogAvailability } from './agent-picker-catalog-jobs'
 import { recomputeOn } from '@/lib/recompute-on'
 import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   createAgentPickerInventorySource,
   useAgentPickerInventoryEntries,
@@ -25,8 +25,12 @@ import {
   agentPickerModelCatalogReads,
   readAgentPickerLaunchSupport
 } from './agent-launch-picker-host-reads'
-import { agentPickerUsesNativeRuntime } from './agent-launch-picker-runtime'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import {
+  agentPickerUsesNativeRuntime,
+  agentPickerCatalogAvailability,
+  agentPickerHostPlatform,
+  agentPickerCliReadOptions
+} from './agent-launch-picker-runtime'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import {
@@ -113,11 +117,7 @@ export function useAgentLaunchPickerInventorySource(
       ...(worktreeId ? { worktreeId } : {})
     }
   })
-  const platform =
-    target?.kind === 'environment'
-      ? lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(target.environmentId))
-          ?.hostPlatform
-      : getRendererAppPlatform()
+  const platform = agentPickerHostPlatform(target, state.runtimeStatusByEnvironmentId)
   const nativeRuntime = agentPickerUsesNativeRuntime(
     route,
     platform,
@@ -198,16 +198,13 @@ export function useAgentLaunchPickerInventorySource(
           (agent) => agentPickerChoiceSeeds(agent, defaults),
           formatAgentTypeLabel,
           model.defaultTuiAgent
-        ).map((entry) => ({
-          ...entry,
-          coherentCatalog,
-          ...(!target ||
-          !entry.surfaces.length ||
-          !nativeRuntime ||
-          !(registeredAgents ? registeredAgents.some(({ agent }) => agent === entry.agent) : true)
-            ? { catalogRead: 'unsupported' as const }
-            : { catalogRead: 'pending' as const })
-        }))
+        ).map((entry) =>
+          withAgentPickerCatalogAvailability(
+            { ...entry, coherentCatalog },
+            agentPickerCatalogAvailability(target, route, workspaceId, nativeRuntime),
+            registeredAgents
+          )
+        )
       : []
   const fallback = useMemo(
     () =>
@@ -275,6 +272,13 @@ export function useAgentLaunchPickerInventorySource(
           target,
           selector,
           nativeRuntime,
+          ...agentPickerCliReadOptions(
+            target,
+            workspaceId,
+            context?.launchCwd ?? (selectedWorkspace ? selectedWorkspace.path : repo?.path) ?? '',
+            route,
+            [context?.runtimeId, context?.pairingRevision]
+          ),
           platform,
           settings,
           serverSettings:

@@ -2,6 +2,11 @@
 import userEvent from '@testing-library/user-event'
 import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { sourceEntry } from './agent-launch-picker-sources.test-fixture'
+import {
+  agentPickerDraft,
+  agentPickerFreshLaunchInputs
+} from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { AgentLaunchPicker } from './AgentLaunchPicker'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
@@ -83,3 +88,47 @@ it.each(['codex', 'pi'] as const)(
     ])
   }
 )
+
+it('searches a terminal dialog preset with a chat-default entry and launches its exact CLI selection', async () => {
+  const entry = { ...sourceEntry('chat'), terminal: { options: { effort: 'high' } } }
+  const picks = vi.fn()
+  render(
+    <TooltipProvider>
+      <AgentLaunchPicker
+        agent="antigravity"
+        entries={[entry]}
+        value={agentPickerDraft(entry, 'terminal')}
+        model={{
+          state: 'settled',
+          rows: [{ agent: 'antigravity', kind: 'chat' }],
+          detection: {
+            detectedIds: ['antigravity'],
+            isLoading: false,
+            isRefreshing: false,
+            detectionFailed: false,
+            needsServerUpdate: false,
+            refresh: async () => ['antigravity']
+          }
+        }}
+        onPick={(_agent, draft) =>
+          picks(
+            agentPickerFreshLaunchInputs(
+              draft!,
+              { surface: 'terminal', executionHostId: 'local' },
+              entry
+            )
+          )
+        }
+      />
+    </TooltipProvider>
+  )
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Select agent' }))
+  fireEvent.change(await screen.findByPlaceholderText('Search agents and setups…'), {
+    target: { value: 'Flash Low' }
+  })
+  fireEvent.click(await screen.findByRole('menuitem', { name: /Gemini 3.8 Flash \(Low\)/ }))
+  expect(picks).toHaveBeenCalledWith(
+    expect.objectContaining({ sessionOptions: { model: 'gemini-3.8-flash-low' } })
+  )
+  expect(mocks.call).not.toHaveBeenCalled()
+})

@@ -98,7 +98,16 @@ export function AgentLaunchPickerMenu({
   } | null>(null)
   const openSetup = activeSetup?.id ?? null
   const root = useRef<HTMLDivElement>(null)
-  const setups = setupDisabled ? [] : searchAgentPickerSetups(entries, query)
+  const setups = setupDisabled
+    ? []
+    : searchAgentPickerSetups(
+        entries,
+        query,
+        8,
+        (entry) =>
+          (value?.agent === entry.agent ? value.surface : draftForEntry?.(entry)?.surface) ??
+          entry.defaultSurface
+      )
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const visible = entries.filter((entry) =>
     words.every((word) => `${entry.agent} ${entry.label}`.toLowerCase().includes(word))
@@ -118,6 +127,9 @@ export function AgentLaunchPickerMenu({
     ) {
       setups.push({
         entry,
+        surface:
+          (value?.agent === entry.agent ? value.surface : draftForEntry?.(entry)?.surface) ??
+          entry.defaultSurface,
         model: {
           id: activeSetup.preset.model,
           label: activeSetup.label,
@@ -185,6 +197,7 @@ export function AgentLaunchPickerMenu({
               key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
               draftScope={draftScope}
               draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+              initialSurface={setup.surface}
               initialModel={setup.model.id}
               initialEffort={setup.choices.options?.effort}
               entry={setup.entry}
