@@ -31,4 +31,10 @@ describe('transitionDictationSession', () => {
     expect(restarted.phase).toBe('starting')
     expect(restarted.sessionId).not.toBe(listening.sessionId)
   })
+
+  it('ignores a cancel once an engine error dropped the session, so no start races its teardown', () => {
+    const abandoned = run('start', 'engine-ready', 'abandon')
+    expect(transitionDictationSession(abandoned, { type: 'cancel' })).toBe(abandoned)
+    expect(run('start', 'engine-ready', 'cancel')).toMatchObject({ phase: 'idle', sessionId: null })
+  })
 })

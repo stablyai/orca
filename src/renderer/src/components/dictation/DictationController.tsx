@@ -4,6 +4,10 @@ import { useAudioCapture } from '@/hooks/use-audio-capture'
 import { toast } from 'sonner'
 import { DictationIndicator } from './DictationIndicator'
 import { captureInsertionTarget } from './dictation-insertion-target'
+import { dictationPillAnchorFor, type DictationPillAnchor } from './dictation-pill-anchor'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isPlainEscapeKeyEvent } from '../terminal-pane/input/keyboard/agent-interrupt-key-event'
 import { createDictationTranscriptDelivery } from './dictation-transcript-delivery'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
@@ -24,6 +28,7 @@ import { useDictationSpeechEvents } from './use-dictation-speech-events'
 import {
   canStartDictation,
   initialDictationSession,
+  isDictationPillShown,
   isDictationUnderway,
   transitionDictationSession,
   type DictationSession,
@@ -56,6 +61,8 @@ export function DictationController() {
   // Push-to-talk restarts per utterance; report a missing preferred microphone once per preference.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const [captureLive, setCaptureLive] = useState(false)
+  // Holds the target pane only while the pill shows, so a closed pane isn't kept alive.
+  const [pillAnchor, setPillAnchor] = useState<DictationPillAnchor | null>(null)
 
   const dispatch = useCallback(
     (event: DictationSessionEvent): DictationSession => {
@@ -69,6 +76,7 @@ export function DictationController() {
         setDictationState(next.phase)
         if (next.phase === 'idle') {
           setPartialTranscript('')
+          setPillAnchor(null)
         }
       }
       return next
@@ -113,6 +121,17 @@ export function DictationController() {
     [dispatch, finishCapture, getCapturedChunkCount]
   )
 
+  // Words that already landed stay; the engine drops the rest instead of transcribing it.
+  const cancelDictation = useCallback(() => {
+    const previous = sessionRef.current
+    if (dispatch({ type: 'cancel' }) === previous || previous.sessionId === null) {
+      return
+    }
+    stopCapture()
+    void window.api.speech.cancelDictation(previous.sessionId).catch(() => undefined)
+    drainStoppedSession(previous.sessionId)
+  }, [dispatch, stopCapture, drainStoppedSession])
+
   const stopDictation = useCallback(async () => {
     const previous = sessionRef.current
     const next = dispatch({ type: 'stop' })
@@ -152,6 +171,7 @@ export function DictationController() {
     const deliver = createDictationTranscriptDelivery()
     deliverRef.current = (text) => deliver(text, insertionTarget)
     setCaptureLive(false)
+    setPillAnchor(dictationPillAnchorFor(insertionTarget))
 
     // A stop that arrived while starting is still this run's stop.
     const stopQueued = (): boolean => isCurrent() && sessionRef.current.phase === 'stopping'
@@ -161,7 +181,7 @@ export function DictationController() {
         stopCapture()
       }
       if (engineStarted) {
-        await window.api.speech.stopDictation(sessionId).catch(() => undefined)
+        await window.api.speech.cancelDictation(sessionId).catch(() => undefined)
         drainStoppedSession(sessionId)
       }
     }
@@ -281,13 +301,33 @@ export function DictationController() {
         void startDictation()
       } else if (action === 'stop') {
         void stopDictation()
+      } else if (action === 'cancel') {
+        cancelDictation()
       } else {
         toggleDictation()
       }
     }
     document.addEventListener(DICTATION_CONTROL_EVENT, handleControl)
     return () => document.removeEventListener(DICTATION_CONTROL_EVENT, handleControl)
-  }, [settings?.voice?.enabled, startDictation, stopDictation, toggleDictation])
+  }, [settings?.voice?.enabled, startDictation, stopDictation, cancelDictation, toggleDictation])
+
+  // Esc cancels while the pill shows and goes no further, so it can't also interrupt the agent.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (
+        !isPlainEscapeKeyEvent(event) ||
+        isImeOwnedKeyboardEvent(event) ||
+        !isDictationPillShown(sessionRef.current.phase)
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      cancelDictation()
+    }
+    addAppKeyListener('keydown', handleKeyDown, { first: true })
+    return () => removeAppKeyListener('keydown', handleKeyDown)
+  }, [cancelDictation])
 
   useDictationSilenceStop(
     dictationState === 'listening',
@@ -334,5 +374,5 @@ export function DictationController() {
     }
   })
 
-  return <DictationIndicator captureLive={captureLive} />
+  return <DictationIndicator captureLive={captureLive} anchor={pillAnchor} />
 }
