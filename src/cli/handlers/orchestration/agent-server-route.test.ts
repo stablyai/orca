@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeClientModule from '../../runtime-client'
-import { refuseAgentServerRoute } from './agent-server-route'
+import { refuseAgentServerRoute, requirePeerMailCarrier } from './agent-server-route'
 
 const { callerShow } = vi.hoisted(() => ({ callerShow: vi.fn() }))
 vi.mock('../../runtime-client', async (importOriginal) => {
@@ -52,7 +52,7 @@ describe('an agent pointing mail at another server', () => {
     ).rejects.toMatchObject({
       code: 'agent_server_route_refused',
       message:
-        'send --server devB runs on devB and nothing comes back to you. To message an agent on devB, use: orca orchestration send --on devB --to term_b --subject hi'
+        'send with --server devB runs on devB and nothing comes back to you. To message an agent on devB, use: orca orchestration send --on devB --to term_b --subject hi'
     })
   })
 
@@ -75,5 +75,25 @@ describe('an agent pointing mail at another server', () => {
     await expect(
       refuseAgentServerRoute('send', ctx(['orchestration', 'send'], [['environment', 'devB']]))
     ).resolves.toBeUndefined()
+  })
+})
+
+describe('send --on from an older Orca', () => {
+  it('is refused before anything is sent', async () => {
+    const call = vi
+      .fn()
+      .mockResolvedValue({ result: { capabilities: ['orchestration.contract.v1'] } })
+    const context = {
+      flags: new Map([['on', 'devB']]),
+      client: { call },
+      cwd: '/',
+      json: false
+    } as unknown as Parameters<typeof requirePeerMailCarrier>[0]
+
+    await expect(requirePeerMailCarrier(context)).rejects.toMatchObject({
+      code: 'peer_mail_unsupported'
+    })
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(call).toHaveBeenCalledWith('status.get')
   })
 })

@@ -12,7 +12,7 @@ import { requireWorkerDoneSettlement } from '../orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
-import { refuseAgentServerRoute } from './agent-server-route'
+import { refuseAgentServerRoute, requirePeerMailCarrier } from './agent-server-route'
 import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
@@ -74,6 +74,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
   'orchestration send': async (ctx) => {
     const { flags, client, cwd, json } = ctx
     await refuseAgentServerRoute('send', ctx)
+    await requirePeerMailCarrier(ctx)
     const to = getOptionalStringFlag(flags, 'to')
     const type = getOptionalStringFlag(flags, 'type')
     if (to) {

@@ -11,13 +11,16 @@ import {
   type OrchestrationMessageSummary as MessageSummary
 } from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
+import { requirePeerMailCarrier } from './agent-server-route'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 import { withReceiptNext } from './receipt-next-text'
 import { printOrchestrationResult } from './agent-view'
 import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
-  'orchestration reply': async ({ flags, client, cwd, json }) => {
+  'orchestration reply': async (ctx) => {
+    const { flags, client, cwd, json } = ctx
+    await requirePeerMailCarrier(ctx)
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const result = await callOrchestrationMutation<{
       message: { id: string }
