@@ -11,6 +11,7 @@ function model(id: string, label: string, sizeBytes: number, description: string
     type: 'transducer',
     provider: 'local',
     language: 'en',
+    languages: ['en'],
     sizeBytes,
     sampleRate: 16000,
     streaming: false

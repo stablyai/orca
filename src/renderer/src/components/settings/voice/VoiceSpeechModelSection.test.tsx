@@ -64,6 +64,7 @@ const localModel: SpeechModelManifest = {
   description: 'Runs offline',
   provider: 'local',
   language: 'en',
+  languages: ['en'],
   type: 'transducer',
   streaming: true,
   sampleRate: 16000,
