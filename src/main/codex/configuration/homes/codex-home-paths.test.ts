@@ -140,6 +140,23 @@ afterEach(() => {
 })
 
 describe('syncSystemCodexResourcesIntoManagedHome', () => {
+  it.each(['host', 'wsl'])('rejects a %s account home without an ownership marker', (runtime) => {
+    const accountsRoot =
+      runtime === 'host'
+        ? join(userDataDir, 'codex-accounts')
+        : join(fakeHomeDir, '.local', 'share', 'orca', 'codex-accounts')
+    const sourceAccount = join(accountsRoot, 'account-a', 'home')
+    const targetAccount = join(userDataDir, 'codex-accounts', 'account-b', 'home')
+    mkdirSync(sourceAccount, { recursive: true })
+    writeFileSync(join(sourceAccount, 'AGENTS.md'), 'private account A instructions\n')
+    writeFileSync(join(getSystemCodexHomePath(), 'AGENTS.md'), 'global instructions\n')
+    vi.stubEnv('CODEX_HOME', sourceAccount)
+
+    syncSystemCodexResourcesIntoManagedHome(targetAccount)
+
+    expect(readFileSync(join(targetAccount, 'AGENTS.md'), 'utf-8')).toBe('global instructions\n')
+  })
+
   it('rejects inherited managed homes without ORCA_CODEX_HOME', () => {
     const sourceAccount = join(
       fakeHomeDir,
@@ -163,7 +180,7 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
   })
 
   it('mirrors custom-home instructions into accounts without importing another account home', () => {
-    const customHome = join(fakeHomeDir, 'custom-codex')
+    const customHome = join(userDataDir, 'codex-accounts-backup')
     const firstAccount = join(userDataDir, 'first-account')
     const secondAccount = join(userDataDir, 'second-account')
     const localAccount = join(userDataDir, 'local-account')
