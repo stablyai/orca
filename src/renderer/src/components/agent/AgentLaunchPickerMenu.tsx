@@ -136,8 +136,9 @@ export function AgentLaunchPickerMenu({
   }
   // Why: Enter in the search picks the first enabled row, so show it highlighted like cmdk comboboxes.
   const enabled = (entry: AgentPickerEntry) => !disabled && entry.surfaces.length > 0
-  const firstSetup = setups.find((setup) => enabled(setup.entry))
-  const firstEntry = firstSetup ? undefined : visible.find(enabled)
+  // Why: a query naming an agent should surface that agent before other agents’ model setups.
+  const firstEntry = visible.find(enabled)
+  const firstSetup = firstEntry ? undefined : setups.find((setup) => enabled(setup.entry))
   const showSearchDefault = searchFocused && query.trim().length > 0
   return (
     <div ref={root} data-agent-launch-picker="true">
@@ -178,6 +179,30 @@ export function AgentLaunchPickerMenu({
         </div>
       ) : null}
       <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+        {visible.map((entry) => {
+          const source = draftForEntry?.(entry)
+          return (
+            <AgentPickerMenuRow
+              key={entry.agent}
+              draftScope={draftScope}
+              entry={entry}
+              mode={mode}
+              searchDefault={showSearchDefault && entry === firstEntry}
+              source={source}
+              selected={value?.agent === entry.agent ? value : undefined}
+              setupDisabled={setupDisabled}
+              openSetup={openSetup}
+              onSetupOpenChange={setActiveSetup}
+              disabled={disabled}
+              terminalBlocked={terminalBlocked}
+              runLaunch={runLaunch}
+              onSelectAgent={onSelectAgent}
+              isDefault={defaultAgent === entry.agent}
+              onSetDefault={onSetDefault}
+              shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
+            />
+          )
+        })}
         {setups.map((setup) => {
           const source = draftForEntry?.(setup.entry)
           return (
@@ -200,30 +225,6 @@ export function AgentLaunchPickerMenu({
               disabled={disabled}
               terminalBlocked={terminalBlocked}
               runLaunch={runLaunch}
-            />
-          )
-        })}
-        {visible.map((entry) => {
-          const source = draftForEntry?.(entry)
-          return (
-            <AgentPickerMenuRow
-              key={entry.agent}
-              draftScope={draftScope}
-              entry={entry}
-              mode={mode}
-              searchDefault={showSearchDefault && entry === firstEntry}
-              source={source}
-              selected={value?.agent === entry.agent ? value : undefined}
-              setupDisabled={setupDisabled}
-              openSetup={openSetup}
-              onSetupOpenChange={setActiveSetup}
-              disabled={disabled}
-              terminalBlocked={terminalBlocked}
-              runLaunch={runLaunch}
-              onSelectAgent={onSelectAgent}
-              isDefault={defaultAgent === entry.agent}
-              onSetDefault={onSetDefault}
-              shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
             />
           )
         })}
