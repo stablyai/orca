@@ -9,11 +9,13 @@ export function SkillSharedOlderLinks({
   share,
   olderShares,
   busy,
+  disabled,
   onRevokeLinks
 }: {
   share: SkillCloudOwnedShare
   olderShares: SkillCloudOwnedShare[]
   busy: boolean
+  disabled: boolean
   onRevokeLinks: (links: SkillCloudOwnedShare[]) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -45,7 +47,7 @@ export function SkillSharedOlderLinks({
               type="button"
               size="xs"
               variant={confirming === older.id ? 'destructive' : 'ghost'}
-              disabled={busy}
+              disabled={disabled}
               onClick={() => stop(older.id, [older])}
             >
               {stopLabel(older.id)}
@@ -57,7 +59,7 @@ export function SkillSharedOlderLinks({
         type="button"
         size="xs"
         variant={confirming === 'all' ? 'destructive' : 'outline'}
-        disabled={busy}
+        disabled={disabled}
         onClick={() => stop('all', [share, ...olderShares])}
       >
         {busy ? <Loader2 className="animate-spin" /> : null}

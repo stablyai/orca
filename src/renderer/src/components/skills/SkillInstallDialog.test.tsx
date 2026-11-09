@@ -145,4 +145,32 @@ describe('SkillInstallDialog', () => {
     )
     expect(skills.installShare).not.toHaveBeenCalled()
   })
+
+  it('keeps asking for review when the updated link can no longer be resolved', async () => {
+    const skills = installApi(
+      vi.fn().mockResolvedValue({
+        status: 'ok',
+        value: {
+          name: 'private-skill',
+          packageDigest: DIGEST,
+          destinationIdentity: 'local:global',
+          currentState: 'absent',
+          providers: []
+        }
+      })
+    )
+    skills.installShare.mockResolvedValue({ status: 'version-changed' })
+    Object.defineProperty(window, 'api', { configurable: true, value: { skills } })
+    render(<SkillInstallDialog open onOpenChange={() => undefined} />)
+    await inspectSkill()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Install skill' }))
+    await screen.findByText('private-skill was updated. Review it again.')
+    skills.resolveShare.mockResolvedValue({ status: 'reconnect-required' })
+    fireEvent.click(screen.getByRole('button', { name: 'Review again' }))
+
+    expect((await screen.findByRole('alert')).textContent).toContain('This share is unavailable')
+    expect(screen.getByText('private-skill was updated. Review it again.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Install skill' })).toBeNull()
+  })
 })

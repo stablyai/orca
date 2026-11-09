@@ -71,6 +71,7 @@ export function SkillSharedLinksView({
             share={share}
             olderShares={olderShares}
             busy={busyPackageId === share.packageId}
+            stopsDisabled={busyPackageId !== null}
             onRevoke={() => void revoke(share)}
             onRevokeLinks={(links) => void revokeMany(links)}
             onDeleted={refresh}

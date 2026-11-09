@@ -19,7 +19,7 @@ export type OwnedSkillShares = {
   shares: SkillCloudOwnedShare[]
   loading: boolean
   error: string | null
-  /** Package whose links are being stopped; its row stays busy until every stop settles. */
+  /** Package whose links are being stopped; one stop runs at a time, so every row waits for it. */
   busyPackageId: string | null
   refresh: () => void
   revoke: (share: SkillCloudOwnedShare) => Promise<void>
@@ -33,6 +33,7 @@ export function useOwnedSkillShares(): OwnedSkillShares {
   const [busyPackageId, setBusyPackageId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const generation = useRef(0)
+  const revoking = useRef(false)
 
   const load = useCallback(async (): Promise<void> => {
     const current = ++generation.current
@@ -67,6 +68,11 @@ export function useOwnedSkillShares(): OwnedSkillShares {
   }, [load])
 
   const revokeMany = useCallback(async (targets: SkillCloudOwnedShare[]): Promise<void> => {
+    // Why: one shared busy state and error; overlapping stops would clear or overwrite each other's.
+    if (revoking.current) {
+      return
+    }
+    revoking.current = true
     setBusyPackageId(targets[0]?.packageId ?? null)
     setError(null)
     const stopped = new Set<string>()
@@ -89,6 +95,7 @@ export function useOwnedSkillShares(): OwnedSkillShares {
     // Why: removing rows mid-sequence would change the row's identity and re-enable its stops.
     setShares((current) => current.filter((candidate) => !stopped.has(candidate.id)))
     setBusyPackageId(null)
+    revoking.current = false
     const live = targets.filter((share) => !stopped.has(share.id))
     if (live.length === 0) {
       toast.success(translate('auto.components.settings.shareSkills.linkRevoked', 'Link revoked'))

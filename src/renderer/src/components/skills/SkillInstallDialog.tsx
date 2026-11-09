@@ -106,8 +106,6 @@ export function SkillInstallDialog({
     setResult(null)
     try {
       const operation = await resolveSkillShareForInstall(shareId)
-      setVersionChanged(false)
-      setDestinationPreview(null)
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'unconfigured'
@@ -119,6 +117,9 @@ export function SkillInstallDialog({
         )
         return
       }
+      // Only a successful re-resolve leaves the updated state; a failure keeps it, so the stale review never returns.
+      setVersionChanged(false)
+      setDestinationPreview(null)
       setPreview({ shareId, version: operation.value.version })
     } catch (cause) {
       console.warn('[skills] share resolution failed:', cause)
@@ -363,7 +364,7 @@ export function SkillInstallDialog({
           </SkillInstallReview>
         )}
 
-        {!bundleVersion && error ? (
+        {(!bundleVersion || versionChanged) && error ? (
           <p className="text-xs text-destructive" role="alert">
             {error}
           </p>

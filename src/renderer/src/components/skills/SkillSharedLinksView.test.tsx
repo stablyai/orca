@@ -69,3 +69,50 @@ it('keeps the row disabled until Stop all has stopped every link', async () => {
   await act(async () => releaseOlder1())
   await waitFor(() => expect([...live]).toEqual([]))
 })
+
+it('holds every row while one stop runs so two stops cannot race', async () => {
+  const shares = ['alpha', 'beta'].map((id) => ({
+    id,
+    packageId: `pkg_${id}`,
+    name: id,
+    description: '',
+    url: `https://share.onorca.dev/skills/share/${id}`,
+    createdAt: '2026-11-08T00:00:00.000Z',
+    canonical: true,
+    pinnedVersionId: 'v1'
+  }))
+  let releaseAlpha!: () => void
+  const alphaHeld = new Promise<void>((resolve) => {
+    releaseAlpha = resolve
+  })
+  const revokeShare = vi.fn(async (id: string) => {
+    if (id === 'alpha') {
+      await alphaHeld
+    }
+    return { status: 'ok' }
+  })
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      skills: {
+        listOwnedShares: vi.fn().mockResolvedValue({ status: 'ok', value: shares }),
+        revokeShare
+      }
+    }
+  })
+  render(<SharedLinks />)
+
+  const [alphaStop] = await screen.findAllByRole('button', { name: 'Stop sharing' })
+  fireEvent.click(alphaStop!)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm stop' }))
+  await waitFor(() => expect(revokeShare).toHaveBeenCalledWith('alpha'))
+
+  for (const button of screen.getAllByRole('button', { name: 'Stop sharing' })) {
+    expect(button).toHaveProperty('disabled', true)
+  }
+  await act(async () => releaseAlpha())
+  await waitFor(() =>
+    expect(screen.getAllByRole('button', { name: 'Stop sharing' })).toHaveLength(1)
+  )
+  expect(screen.getByRole('button', { name: 'Stop sharing' })).toHaveProperty('disabled', false)
+})

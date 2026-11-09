@@ -72,6 +72,7 @@ export function SkillSharedLinkRow({
   share,
   olderShares = NO_SHARES,
   busy,
+  stopsDisabled = false,
   onRevoke,
   onRevokeLinks,
   onDeleted
@@ -79,6 +80,8 @@ export function SkillSharedLinkRow({
   share: SkillCloudOwnedShare
   olderShares?: SkillCloudOwnedShare[]
   busy: boolean
+  /** Another link's stop is running; stops wait for it. */
+  stopsDisabled?: boolean
   onRevoke: () => void
   onRevokeLinks?: (links: SkillCloudOwnedShare[]) => void
   onDeleted: () => void
@@ -166,7 +169,7 @@ export function SkillSharedLinkRow({
               className="shrink-0"
               // The icon unmounts on confirmation; explicitly transfer keyboard focus to its replacement.
               autoFocus
-              disabled={busy || deleting}
+              disabled={busy || stopsDisabled || deleting}
               onClick={() => (confirming === 'revoke' ? onRevoke() : void deletePackage())}
             >
               {busy || deleting ? <Loader2 className="animate-spin" /> : null}
@@ -183,7 +186,7 @@ export function SkillSharedLinkRow({
                     size="icon-sm"
                     variant="ghost"
                     className="shrink-0 text-muted-foreground hover:text-destructive"
-                    disabled={busy}
+                    disabled={busy || stopsDisabled}
                     onClick={() => setConfirming('revoke')}
                     aria-label={t(
                       'auto.components.settings.shareSkills.stopSharing',
@@ -204,7 +207,7 @@ export function SkillSharedLinkRow({
                     size="icon-sm"
                     variant="ghost"
                     className="shrink-0"
-                    disabled={busy}
+                    disabled={busy || stopsDisabled}
                     aria-label={t(
                       'auto.components.skills.SkillSharedLinkRow.moreActions',
                       'More actions for {{name}}',
@@ -260,6 +263,7 @@ export function SkillSharedLinkRow({
               share={share}
               olderShares={olderShares}
               busy={busy}
+              disabled={busy || stopsDisabled}
               onRevokeLinks={onRevokeLinks}
             />
           ) : null}
