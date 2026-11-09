@@ -1,7 +1,8 @@
 import type { AppState } from '../../store/types'
 import {
   annotateRecordReplacement,
-  annotateTabBucketReplacement
+  annotateTabBucketReplacement,
+  markFullResync
 } from '../../store/keyed-record-transitions'
 import {
   markPatchFullResync,
@@ -19,12 +20,13 @@ type TrackedRecord = (typeof TRACKED_RECORDS)[number]
 type ScopedPatch = Partial<Pick<AppState, TrackedRecord>>
 type ScopedState = Pick<AppState, TrackedRecord>
 
-/** Names the keys a workspace-scoped patch changed: those workspaces' buckets and their tabs. */
+/** Names the workspace-keyed records a workspace-scoped patch changed. Tab-keyed companions
+ *  aren't inferred from visible tabs: a host retraction can delete records of tabs neither
+ *  inventory lists, so callers without exact IDs mark them full resync. */
 export function annotateWorkspaceScopedPatch(
   state: ScopedState,
   patch: ScopedPatch,
   workspaceIds: ReadonlySet<string>,
-  extraTabIds: Iterable<string> = [],
   // Slices another unannotated writer built first stay unaddressed, so readers resync them.
   skip: ReadonlySet<string> = new Set()
 ): void {
@@ -43,27 +45,14 @@ export function annotateWorkspaceScopedPatch(
       annotateRecordReplacement(state[key], next, workspaceIds)
     }
   }
-  if (!TAB_KEYED_RECORDS.some((key) => patch[key] && patch[key] !== state[key] && !skip.has(key))) {
-    return
-  }
-  const tabIds = new Set(extraTabIds)
-  for (const workspaceId of workspaceIds) {
-    for (const tabs of [
-      state.tabsByWorktree[workspaceId],
-      patch.tabsByWorktree?.[workspaceId],
-      state.unifiedTabsByWorktree[workspaceId],
-      patch.unifiedTabsByWorktree?.[workspaceId]
-    ]) {
-      for (const tab of tabs ?? []) {
-        tabIds.add('entityId' in tab ? tab.entityId : tab.id)
-      }
-    }
-  }
+}
+
+/** Host-mirror funnel: its builders don't report which tab-keyed records they touched. */
+export function markTabRecordsFullResync(state: ScopedState, patch: ScopedPatch): void {
   for (const key of TAB_KEYED_RECORDS) {
     const next = patch[key]
-    const previous = state[key]
-    if (next && previous && !skip.has(key)) {
-      annotateRecordReplacement(previous, next, tabIds)
+    if (next && next !== state[key]) {
+      markFullResync(next, 'host-mirror-frame')
     }
   }
 }
@@ -89,7 +78,6 @@ export function annotateLayoutFlushPatch<P extends ScopedPatch>(
     state,
     shown,
     new Set([...builds.workspaceBuilt, ...builds.rebound.keys()]),
-    [...builds.rebound.values()].flatMap((tabIds) => [...tabIds]),
     new Set(Object.keys(rekeyed))
   )
   return shown

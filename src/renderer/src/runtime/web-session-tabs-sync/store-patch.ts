@@ -23,7 +23,7 @@ import {
   hostWorkingClientBoundaryByPaneKey,
   type WebSessionTabsSyncState
 } from './state'
-import { annotateWorkspaceScopedPatch } from './scoped-patch-annotation'
+import { annotateWorkspaceScopedPatch, markTabRecordsFullResync } from './scoped-patch-annotation'
 import { reportVisibleTabPickToHost } from './navigation/web-session-visible-tab-pick-report'
 import {
   createHostSessionMirrorSettle,
@@ -72,6 +72,7 @@ export function applyWebSessionTabsStorePatch(
     const patch = buildPatch(state, changedAgentPaneKeys)
     // Snapshot patches only rewrite the workspaces their frames name.
     annotateWorkspaceScopedPatch(state, patch, annotatedWorkspaceIds)
+    markTabRecordsFullResync(state, patch)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
     if (agentStatusSnapshots) {
       const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
