@@ -96,4 +96,21 @@ describe('createSparsePresetsSlice', () => {
       consoleError.mockRestore()
     }
   })
+
+  it('does not cache a structured validation failure as a saved preset', async () => {
+    const store = createTestStore()
+    mockApi.sparsePresets.save.mockResolvedValueOnce({
+      errorCode: 'name_required',
+      error: 'Preset name is required.'
+    })
+
+    const saved = await store.getState().saveSparsePreset({
+      repoId: 'repo-1',
+      name: '',
+      directories: ['src']
+    })
+
+    expect(saved).toBeNull()
+    expect(store.getState().sparsePresetsByRepo['repo-1']).toEqual([])
+  })
 })

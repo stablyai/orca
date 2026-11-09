@@ -1,4 +1,5 @@
 import { BranchSwitchCollisionError } from '../../git/branch-switch-target'
+import { SparsePresetValidationError } from '../../../shared/worktree/sparse-preset-failure'
 import {
   RECIPE_VM_REFUSAL_CODES,
   RecipeVmWakeUnavailableError
@@ -212,9 +213,10 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   if (
     error instanceof BranchSwitchCollisionError ||
     error instanceof TerminalSplitOutcomeError ||
+    error instanceof SparsePresetValidationError ||
     error instanceof WslHostWindowsDriveRefusalError
   ) {
-    // Keeps the code callers already match; the split's id or the refusal kind rides in `data`.
+    // Keep the existing RPC code while preserving structured details.
     return errorResponse(id, meta, 'runtime_error', message, error.data)
   }
   if (
