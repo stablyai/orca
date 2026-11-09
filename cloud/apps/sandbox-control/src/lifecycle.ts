@@ -55,9 +55,14 @@ function randomId(): string {
   return `sbx_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`
 }
 
-/** What the VM sends as its GitHub API credential; the egress proxy swaps it for the real token. */
-export function githubPlaceholderHeader(row: SandboxRow): string {
-  return `Bearer orca-ph-${row.id}`
+export function githubPlaceholderToken(row: SandboxRow): string {
+  return `orca-ph-${row.id}`
+}
+
+/** Authorization values the VM's GitHub clients send (Octokit/fetch use Bearer, gh uses token). */
+export function githubPlaceholderHeaders(row: SandboxRow): string[] {
+  const token = githubPlaceholderToken(row)
+  return [`Bearer ${token}`, `token ${token}`]
 }
 
 function egressPolicy(deps: LifecycleDeps, row: SandboxRow) {
@@ -66,7 +71,7 @@ function egressPolicy(deps: LifecycleDeps, row: SandboxRow) {
         {
           host: 'api.github.com',
           header: 'authorization',
-          placeholder: githubPlaceholderHeader(row),
+          placeholders: githubPlaceholderHeaders(row),
           via: 'forward',
           forwardURL: deps.config.egressProxyUrl
         }
@@ -109,7 +114,7 @@ async function boot(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandbox
   const connection = await startOrcad(deps.provider, state, {
     sandboxId: row.id,
     repo,
-    githubPlaceholder: deps.config.egressProxyUrl ? githubPlaceholderHeader(row) : undefined
+    githubPlaceholder: deps.config.egressProxyUrl ? githubPlaceholderToken(row) : undefined
   })
   const running = await claim(deps, row, { status: 'running', last_error: null, ...sessionFields(state, deps.now()) })
   return { row: running, connection }

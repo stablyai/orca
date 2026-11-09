@@ -54,7 +54,12 @@ describe('egress proxy (Vercel forwardURL target)', () => {
     const { sandboxId, oidc, proxied, upstream } = await setup()
     const res = await proxied({ token: await oidc({}), authorization: `Bearer orca-ph-${sandboxId}` })
     expect(res).toEqual({ status: 200, body: '{"login":"orca"}' })
-    expect(upstream).toEqual([{ url: 'https://api.github.com/user', authorization: 'Bearer ghs_for_ws-1' }])
+    // gh sends the `token` scheme; it reaches the same credential.
+    expect((await proxied({ token: await oidc({}), authorization: `token orca-ph-${sandboxId}` })).status).toBe(200)
+    expect(upstream).toEqual([
+      { url: 'https://api.github.com/user', authorization: 'Bearer ghs_for_ws-1' },
+      { url: 'https://api.github.com/user', authorization: 'Bearer ghs_for_ws-1' }
+    ])
   })
 
   it('refuses requests without the placeholder, from other teams, or for unproxied hosts', async () => {
@@ -73,6 +78,10 @@ describe('egress proxy (Vercel forwardURL target)', () => {
     expect(box!.policy.allow['api.github.com']).toEqual([
       {
         match: { headers: [{ key: { exact: 'authorization' }, value: { exact: `Bearer orca-ph-${sandboxId}` } }] },
+        forwardURL: PROXY_URL
+      },
+      {
+        match: { headers: [{ key: { exact: 'authorization' }, value: { exact: `token orca-ph-${sandboxId}` } }] },
         forwardURL: PROXY_URL
       },
       { response: { statusCode: 403, body: 'orca-egress-denied', contentType: 'text/plain' } }

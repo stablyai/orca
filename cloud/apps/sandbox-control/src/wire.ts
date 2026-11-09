@@ -65,6 +65,10 @@ export function sandboxView(row: SandboxRow) {
 export function readyView(row: SandboxRow, connection: OrcadReady) {
   return {
     sandbox: sandboxView(row),
-    connection: { type: 'orca-server' as const, ...connection }
+    connection: {
+      type: 'orca-server' as const,
+      pairingCode: connection.pairingCode,
+      projectRoot: connection.projectRoot
+    }
   }
 }

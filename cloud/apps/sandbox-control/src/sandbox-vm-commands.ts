@@ -12,6 +12,8 @@ export const DRAIN_TIMEOUT_MS = 5 * 60_000
 
 const ReadySchema = z
   .object({
+    // `orcad --recipe-json` prints the recipe line schemaVersion 1.
+    schemaVersion: z.literal(1).optional(),
     pairingCode: z.string().min(1).max(8192),
     projectRoot: z.string().startsWith('/').max(4096)
   })
@@ -29,7 +31,7 @@ export class VmCommandError extends Error {
 export type StartInputs = {
   sandboxId: string
   repo?: { url: string; ref?: string }
-  /** Value the VM sends for credential hosts; the egress layer swaps it for the real credential. */
+  /** Token the VM's GitHub clients send; the egress layer swaps it for a real short-lived one. */
   githubPlaceholder?: string
 }
 

@@ -12,14 +12,14 @@ describe('compileNetworkPolicy', () => {
         {
           host: 'github.com',
           header: 'Authorization',
-          placeholder: gitBasicAuthorization('orca-ph-1'),
+          placeholders: [gitBasicAuthorization('orca-ph-1')],
           via: 'transform',
           value: gitBasicAuthorization('ghs_real')
         },
         {
           host: 'api.github.com',
           header: 'authorization',
-          placeholder: 'Bearer orca-ph-1',
+          placeholders: ['Bearer orca-ph-1', 'token orca-ph-1'],
           via: 'forward',
           forwardURL: 'https://sandbox.onorca.dev/v1/egress/proxy'
         }
@@ -40,6 +40,10 @@ describe('compileNetworkPolicy', () => {
             match: { headers: [{ key: { exact: 'authorization' }, value: { exact: 'Bearer orca-ph-1' } }] },
             forwardURL: 'https://sandbox.onorca.dev/v1/egress/proxy'
           },
+          {
+            match: { headers: [{ key: { exact: 'authorization' }, value: { exact: 'token orca-ph-1' } }] },
+            forwardURL: 'https://sandbox.onorca.dev/v1/egress/proxy'
+          },
           deny
         ]
       }
@@ -56,7 +60,7 @@ describe('compileNetworkPolicy', () => {
       compileNetworkPolicy({
         mode: 'allowlist',
         allowlist: [],
-        credentials: [{ host: '*.github.com', header: 'authorization', placeholder: 'p', via: 'transform', value: 'v' }]
+        credentials: [{ host: '*.github.com', header: 'authorization', placeholders: ['p'], via: 'transform', value: 'v' }]
       })
     ).toThrow(/exact host/)
   })

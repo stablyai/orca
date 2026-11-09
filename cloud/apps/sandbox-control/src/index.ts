@@ -15,7 +15,7 @@ import {
   LifecycleError,
   createSandbox,
   destroySandbox,
-  githubPlaceholderHeader,
+  githubPlaceholderHeaders,
   renewLease,
   resumeSandbox,
   rolloverSandbox,
@@ -93,7 +93,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         teamId: env.VERCEL_TEAM_ID,
         projectId: env.VERCEL_PROJECT_ID,
         findSandbox: (name) => getSandboxByProviderName(env.SANDBOX_DB, name),
-        placeholderFor: githubPlaceholderHeader,
+        placeholdersFor: githubPlaceholderHeaders,
         credentials: deps.credentials ?? NO_CREDENTIALS,
         fetch: deps.egressFetch,
         keysForIssuer: deps.egressKeysForIssuer

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Asks orcad to quit before the VM stops: its shutdown turns working agent chats into durable
+# restart offers and flushes terminal restore hints, which the desktop continues after resume.
+set -euo pipefail
+STATE="$HOME/.orca-sandbox"
+WAIT_SECONDS="${1:-280}"
+pid="$(cat "$STATE/orcad.pid" 2>/dev/null || true)"
+if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+  exit 0
+fi
+kill -TERM "$pid"
+for _ in $(seq 1 $((WAIT_SECONDS * 10))); do
+  if ! kill -0 "$pid" 2>/dev/null; then
+    rm -f "$STATE/orcad.pid" "$STATE/ready.json"
+    exit 0
+  fi
+  sleep 0.1
+done
+# Leave it running: the provider stop ends it, and the drain already had its window.
+echo 'orcad still draining at deadline' >&2
+exit 0
