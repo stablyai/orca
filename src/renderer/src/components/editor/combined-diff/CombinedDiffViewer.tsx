@@ -57,6 +57,7 @@ export default function CombinedDiffViewer({
   const diffDefaultView = useAppStore((s) => s.settings?.diffDefaultView)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace)
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap)
+  const editorLineNumbers = useAppStore((s) => s.settings?.editorLineNumbers !== false)
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[file.worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
@@ -328,6 +329,7 @@ export default function CombinedDiffViewer({
           diffCommentCount={notes.diffCommentCount}
           commentOwner={notesView.owner}
           diffCommentsForWorktree={notesView.comments}
+          diffLineNumbers={editorLineNumbers}
           diffShowWhitespace={diffShowWhitespace}
           diffWordWrap={diffWordWrap}
           file={file}
@@ -344,6 +346,9 @@ export default function CombinedDiffViewer({
           sectionCount={sections.length}
           setAllSectionsCollapsed={preferences.setAllSectionsCollapsed}
           sideBySide={preferences.sideBySide}
+          toggleDiffLineNumbers={() =>
+            void updateSettings({ editorLineNumbers: !editorLineNumbers })
+          }
           toggleDiffShowWhitespace={preferences.toggleDiffShowWhitespace}
           toggleDiffWordWrap={preferences.toggleDiffWordWrap}
           toggleSideBySide={preferences.toggleSideBySide}

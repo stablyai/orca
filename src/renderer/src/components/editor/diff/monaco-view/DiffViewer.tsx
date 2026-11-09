@@ -85,6 +85,7 @@ export default function DiffViewer({
     () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
     [allDiffComments, relativePath]
   )
+  const editorLineNumbers = useAppStore((s) => s.settings?.editorLineNumbers !== false)
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
@@ -249,7 +250,11 @@ export default function DiffViewer({
         )
       })
       lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+      lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(
+        diffEditor,
+        sideBySide,
+        editorLineNumbers
+      )
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
@@ -305,7 +310,16 @@ export default function DiffViewer({
         diffEditor.focus()
       }
     },
-    [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
+    [
+      editable,
+      editorLineNumbers,
+      setupCopy,
+      modelKey,
+      filePath,
+      sideBySide,
+      registerDiffEditor,
+      unregisterDiffEditor
+    ]
   )
 
   // Snapshot on layout cleanup before unmount, avoiding scroll-time writes.
@@ -330,7 +344,11 @@ export default function DiffViewer({
       }
     }
     lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(
+      diffEditor,
+      sideBySide,
+      editorLineNumbers
+    )
     wordWrapOptionsSubRef.current?.dispose()
     wordWrapOptionsSubRef.current = syncDiffEditorOriginalWordWrap(diffEditor, diffWordWrap)
     return () => {
@@ -340,7 +358,7 @@ export default function DiffViewer({
       wordWrapOptionsSubRef.current?.dispose()
       wordWrapOptionsSubRef.current = null
     }
-  }, [diffWordWrap, sideBySide])
+  }, [diffWordWrap, editorLineNumbers, sideBySide])
 
   // Why: @monaco-editor/react calls updateOptions whenever this object's identity changes.
   const editorOptions = useMemo<editor.IDiffEditorConstructionOptions>(
@@ -353,7 +371,7 @@ export default function DiffViewer({
       scrollBeyondLastLine: false,
       ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
       ...monacoTypographyOptions(diffTypography),
-      lineNumbers: 'on',
+      lineNumbers: editorLineNumbers ? 'on' : 'off',
       ...buildDiffEditorWordWrapOptions(diffWordWrap),
       ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
       ...buildDiffEditorHideUnchangedOptions(diffCollapseUnchangedRegions),
@@ -369,6 +387,7 @@ export default function DiffViewer({
       editable,
       sideBySide,
       diffTypography,
+      editorLineNumbers,
       diffWordWrap,
       diffShowWhitespace,
       diffCollapseUnchangedRegions
