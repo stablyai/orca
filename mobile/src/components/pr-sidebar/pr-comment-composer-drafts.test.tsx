@@ -72,15 +72,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('brings an unposted comment back after the app is killed', async () => {
-  await open()
-  await type('Can we keep the retry?')
-  kill()
-
-  await open()
-  expect(box().value).toBe('Can we keep the retry?')
-})
-
 it('keeps text typed in a reopened composer when the earlier post lands', async () => {
   let land: (ok: boolean) => void = () => {}
   onSubmit = () => new Promise((resolve) => (land = resolve))

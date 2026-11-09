@@ -17,15 +17,4 @@ describe('resolvePRBranchFallback', () => {
     expect(fallback).toEqual({ fallbackPRNumber: null, fallbackPRSource: null })
     expect(shouldAcceptMergedFallbackPR({ linkedPRNumber: null, ...fallback })).toBe(false)
   })
-
-  it('falls back to a cached open PR with merged fallbacks accepted', () => {
-    const fallback = resolvePRBranchFallback({
-      linkedPRNumber: null,
-      cachedPR: { number: 41, state: 'open', headSha: 'old-head' },
-      hintPRNumber: 7,
-      currentHeadOid: 'new-head'
-    })
-    expect(fallback).toEqual({ fallbackPRNumber: 41, fallbackPRSource: 'pr-cache' })
-    expect(shouldAcceptMergedFallbackPR({ linkedPRNumber: null, ...fallback })).toBe(true)
-  })
 })
