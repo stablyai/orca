@@ -38,8 +38,8 @@ describe('account menu billing items', () => {
         state: 'connected',
         persistence: 'encrypted',
         capabilities: { flags: {}, refreshedAt: 0 }
-      })
-    ).toEqual([])
+      }).map((item) => item.id)
+    ).toEqual(['orca.team'])
     expect(visible()).toEqual(['orca.team', 'orca.plan-billing'])
     const plans = getRegisteredAccountMenuItems().find((item) => item.id === 'orca.plan-billing')
     plans?.onSelect()
