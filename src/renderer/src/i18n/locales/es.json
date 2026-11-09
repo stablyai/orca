@@ -16682,8 +16682,8 @@
         },
         "DictationPillFailure": {
           "discard": "Descartar grabación",
-          "modelFailed": "El modelo no cargó.",
-          "transcribeFailed": "No se transcribió. Grabación guardada.",
+          "modelFailed": "No se pudo cargar el modelo de voz.",
+          "transcribeFailed": "No se pudo transcribir. Grabación conservada.",
           "openSettings": "Configuración",
           "retry": "Reintentar"
         }

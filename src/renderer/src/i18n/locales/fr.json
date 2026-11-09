@@ -16926,7 +16926,7 @@
         "DictationPillFailure": {
           "discard": "Supprimer l'enregistrement",
           "modelFailed": "Modèle non chargé.",
-          "transcribeFailed": "Échec. Enregistrement conservé.",
+          "transcribeFailed": "Échec de la transcription. Enregistrement conservé.",
           "openSettings": "Paramètres",
           "retry": "Réessayer"
         }
@@ -21795,7 +21795,7 @@
       "dirty_many": "Validez ou abandonnez {{count}} fichiers modifiés avant de changer de branche.",
       "agentWorking": "Un agent travaille dans cet espace de travail. Changez de branche une fois qu’il a terminé, ou fermez son onglet s’il s’est arrêté.",
       "listFailed": "Orca n’a pas pu lister les branches locales. Rouvrez le sélecteur.",
-      "discoveryFailed": "Orca n’a trouvé aucune branche distante. Vous pouvez toujours passer à une branche locale ou créer une branche.",
+      "discoveryFailed": "Orca n’a pas pu rechercher les branches distantes. Vous pouvez toujours passer à une branche locale ou créer une branche.",
       "switchFailed": "Orca n’a pas pu changer de branche. Réessayez.",
       "switchFailedTitle": "Impossible de changer de branche",
       "switchFailedIn": "Impossible de changer de branche dans {{workspace}}",
@@ -24074,12 +24074,12 @@
     "reverting": "Réversion",
     "updateActionsHost": "Mettez à jour Orca sur {{host}} pour agir sur les commits",
     "thisHost": "cet hôte",
-    "cannotApplyMerge": "Impossible d’appliquer un cherry-pick ou de révoquer un commit de fusion ici",
+    "cannotApplyMerge": "Impossible d’appliquer un cherry-pick ou d’inverser un commit de fusion ici",
     "confirmCommitAction": "{{action}} {{commit}} ?",
     "cancelAction": "Annuler",
-    "checkoutCommit": "Extraire le commit",
+    "checkoutCommit": "Basculer sur le commit",
     "cherryPick": "Cherry-pick",
-    "revert": "Révoquer",
+    "revert": "Inverser",
     "actionLanded": "Maintenant sur {{commit}} dans {{branch}}",
     "detachedHead": "HEAD détachée",
     "actionWarning": "L’action est terminée, mais Git a signalé un problème.",
