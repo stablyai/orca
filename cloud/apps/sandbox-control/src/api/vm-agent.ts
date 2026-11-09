@@ -79,7 +79,7 @@ const LaunchResult = z.object({ outcome: z.object({ kind: z.string(), handle: z.
 /** Starts a new agent session with `prompt` in the workspace; returns its terminal handle. */
 export async function launchAgent(provider: SandboxProviderApi, sessionId: string, agent: AgentId, prompt: string): Promise<string> {
   const result = LaunchResult.safeParse(
-    await orca(provider, sessionId, ['agent', 'launch', '--agent', agent, '--worktree', `path:${PROJECT_ROOT}`, '--surface', 'terminal', '--prompt', prompt], {
+    await orca(provider, sessionId, ['agent', 'launch', '--agent', agent, '--worktree', `path:${PROJECT_ROOT}`, '--surface', 'terminal', `--prompt=${prompt}`], {
       prepare: true,
       timeoutMs: 90_000
     })
@@ -93,7 +93,7 @@ export async function launchAgent(provider: SandboxProviderApi, sessionId: strin
 
 /** Types `text` into a running agent session and submits it. */
 export async function sendToSession(provider: SandboxProviderApi, sessionId: string, handle: string, text: string): Promise<void> {
-  await orca(provider, sessionId, ['terminal', 'send', '--terminal', handle, '--text', text, '--enter'], { timeoutMs: 60_000 })
+  await orca(provider, sessionId, ['terminal', 'send', '--terminal', handle, `--text=${text}`, '--enter'], { timeoutMs: 60_000 })
 }
 
 const TerminalList = z.object({

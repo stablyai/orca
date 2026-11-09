@@ -127,7 +127,7 @@ describe('public API: workspaces', () => {
     // The text travelled as one argv entry after the fixed script, never through a shell string.
     const launch = h.vercel.commands.find((c) => c.args?.includes('agent'))!
     expect(launch.command).toBe('/bin/sh')
-    expect(launch.args!.at(-1)).toBe('fix the bug; rm -rf / "$(x)"')
+    expect(launch.args!.at(-1)).toBe('--prompt=fix the bug; rm -rf / "$(x)"')
   })
 })
 
@@ -156,10 +156,16 @@ describe('in-VM workspace tokens', () => {
     expect((await h.call('POST', '/v1/api-keys', { bearer: token, body: { name: 'x', scopes: ['workspaces:read'] } })).status).toBe(403)
     // Org switch off: the token stops at once; and a stop revokes it for good.
     await h.call('PUT', '/v1/settings', { bearer: owner, body: { vmCliEnabled: false } })
-    expect((await h.call('GET', '/v1/me', { bearer: token })).body.reason).toBe('vm_cli_disabled')
-    await h.call('PUT', '/v1/settings', { bearer: owner, body: { vmCliEnabled: true } })
-    await h.call('POST', `/v1/workspaces/${first.id}/sleep`, { bearer: owner })
     expect((await h.call('GET', '/v1/me', { bearer: token })).status).toBe(401)
+    // Re-enabling never revives a revoked token; the next boot mints a new one, which a stop revokes.
+    await h.call('PUT', '/v1/settings', { bearer: owner, body: { vmCliEnabled: true } })
+    expect((await h.call('GET', '/v1/me', { bearer: token })).status).toBe(401)
+    await h.call('POST', `/v1/workspaces/${first.id}/sleep`, { bearer: owner })
+    await h.call('POST', `/v1/workspaces/${first.id}/wake`, { bearer: owner })
+    const fresh = h.vercel.commands.filter((c) => c.env?.ORCA_CLOUD_TOKEN_VALUE).at(-1)!.env!.ORCA_CLOUD_TOKEN_VALUE!
+    expect((await h.call('GET', '/v1/me', { bearer: fresh })).status).toBe(200)
+    await h.call('POST', `/v1/workspaces/${first.id}/sleep`, { bearer: owner })
+    expect((await h.call('GET', '/v1/me', { bearer: fresh })).status).toBe(401)
   })
 })
 

@@ -125,6 +125,10 @@ function originFor(caller: ApiCaller): { origin: WorkspaceOrigin; originRef: str
   return { origin: 'api', originRef: caller.via === 'user' ? (caller.keyId ?? null) : null }
 }
 
+function messageBucket(caller: ApiCaller): string {
+  return caller.via === 'workspace' ? `msg:ws:${caller.sandboxId}` : `msg:${caller.accountId}:${caller.userId}`
+}
+
 export function isApiPath(pathname: string): boolean {
   return /^\/v1\/(me|api-keys|settings|audit|projects|workspaces|routines)(\/|$)/.test(pathname)
 }
@@ -343,6 +347,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       const body = parse(CreateWorkspaceBody, await ctx.readJson())
       if (body.message) {
         requireScope(caller, 'messages:write')
+        await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
       }
       const project = body.projectId ? await getProject(ctx.db, caller.accountId, body.projectId) : null
       await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, now)
@@ -361,6 +366,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       let message = null
       if (body.message) {
         const queued = await queueMessage(ctx.db, { workspace: row, sentBy: caller.userId, agent: body.message.agent ?? 'claude', text: body.message.text }, ctx.now())
+        await auditCaller(ctx.db, caller, { action: 'workspace.message', targetType: 'workspace', targetId: row.id, detail: { messageId: queued.id, chars: body.message.text.length, continues: false } }, ctx.now())
         ctx.waitUntil(deliverMessage(life, queued))
         message = messageView(queued)
       }
@@ -428,12 +434,13 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       }
       if (sub === 'messages' && !subId && method === 'POST') {
         requireScope(caller, 'messages:write')
-        await consumeRate(ctx.db, `msg:${caller.accountId}:${caller.userId}`, MESSAGES_PER_MINUTE, now)
+        const life = requireLife(ctx)
+        await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
         const body = parse(MessageBody, await ctx.readJson())
         const queued = await queueMessage(ctx.db, { workspace: row, sentBy: caller.userId, agent: body.agent ?? 'claude', text: body.text, session: body.session }, now)
         await auditCaller(ctx.db, caller, { action: 'workspace.message', targetType: 'workspace', targetId: row.id, detail: { messageId: queued.id, chars: body.text.length, continues: Boolean(body.session) } }, now)
         // Queued now, delivered in the background (waking the VM if it sleeps); poll the message.
-        ctx.waitUntil(deliverMessage(requireLife(ctx), queued))
+        ctx.waitUntil(deliverMessage(life, queued))
         return json({ message: messageView(queued) }, 202, { location: `/v1/workspaces/${row.id}/messages/${queued.id}` })
       }
     }

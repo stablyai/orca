@@ -513,6 +513,7 @@ async function stopForSuspend(deps: LifecycleDeps, row: SandboxRow): Promise<San
 /** The provider ended the session on its own (lease lapsed): bill up to when it stopped. */
 export async function markProviderStopped(deps: LifecycleDeps, row: SandboxRow): Promise<SandboxRow> {
   await queueUsage(deps.db, row, Math.min(deps.now(), row.lease_expires_at ?? deps.now()))
+  await deps.hooks?.afterStop?.(row).catch(() => undefined)
   return claim(deps, row, { status: 'suspended', ...NO_SESSION })
 }
 
@@ -570,6 +571,7 @@ async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
     const current = await getSandbox(deps.db, row.id)
     if (current?.status === 'resuming') {
       await transition(deps.db, current, { status: 'suspended', ...NO_SESSION, last_error: 'resume_failed' }, deps.now())
+      await deps.hooks?.afterStop?.(current).catch(() => undefined)
     }
     throw error
   }

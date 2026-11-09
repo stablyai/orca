@@ -73,26 +73,35 @@ export async function listMessages(db: D1Database, sandboxId: string, limit: num
   return results
 }
 
-/** Compare-and-set claim so two isolates never type the same message twice. */
-async function claim(db: D1Database, row: MessageRow, now: number): Promise<boolean> {
+/**
+ * Compare-and-set claim of a queued message so two isolates never type it twice. The claim token
+ * (attempt number) is what `settle` must match: a slow worker can never overwrite a newer result.
+ */
+async function claim(db: D1Database, row: MessageRow, now: number): Promise<number | null> {
   const result = await db
     .prepare(
       `UPDATE workspace_messages SET status = 'delivering', attempts = attempts + 1, updated_at = ?
-       WHERE id = ? AND updated_at = ? AND status IN ('queued', 'delivering')`
+       WHERE id = ? AND attempts = ? AND status = 'queued'`
     )
-    .bind(now, row.id, row.updated_at)
+    .bind(now, row.id, row.attempts)
     .run()
-  return result.meta.changes === 1
+  return result.meta.changes === 1 ? row.attempts + 1 : null
 }
 
-async function settle(db: D1Database, id: string, patch: { status: MessageStatus; result_handle?: string | null; error?: string | null }, now: number) {
+async function settle(
+  db: D1Database,
+  id: string,
+  attempt: number,
+  patch: { status: MessageStatus; result_handle?: string | null; error?: string | null },
+  now: number
+) {
   await db
     .prepare(
       `UPDATE workspace_messages SET status = ?, result_handle = COALESCE(?, result_handle), error = ?, updated_at = ?,
          delivered_at = CASE WHEN ? = 'delivered' THEN ? ELSE delivered_at END
-       WHERE id = ?`
+       WHERE id = ? AND attempts = ? AND status = 'delivering'`
     )
-    .bind(patch.status, patch.result_handle ?? null, patch.error ?? null, now, patch.status, now, id)
+    .bind(patch.status, patch.result_handle ?? null, patch.error ?? null, now, patch.status, now, id, attempt)
     .run()
 }
 
@@ -101,7 +110,8 @@ async function settle(db: D1Database, id: string, patch: { status: MessageStatus
  * starts a new agent session with the text as its first prompt.
  */
 export async function deliverMessage(life: LifecycleDeps, message: MessageRow): Promise<MessageRow> {
-  if (!(await claim(life.db, message, life.now()))) {
+  const attempt = await claim(life.db, message, life.now())
+  if (attempt === null) {
     return (await getMessage(life.db, message.id)) ?? message
   }
   try {
@@ -120,27 +130,34 @@ export async function deliverMessage(life: LifecycleDeps, message: MessageRow): 
     } else {
       handle = await launchAgent(life.provider, sessionId, message.agent, message.body)
     }
-    await settle(life.db, message.id, { status: 'delivered', result_handle: handle, error: null }, life.now())
+    await settle(life.db, message.id, attempt, { status: 'delivered', result_handle: handle, error: null }, life.now())
   } catch (error) {
     const code = error instanceof VmAgentError || error instanceof LifecycleError ? error.code : 'delivery_failed'
-    const permanent = code === 'workspace_gone' || code === 'terminal_not_found' || code === 'selector_not_found' || message.attempts + 1 >= MAX_ATTEMPTS
+    const permanent = code === 'workspace_gone' || code === 'terminal_not_found' || code === 'selector_not_found' || attempt >= MAX_ATTEMPTS
     // Codes only: never the provider body or the message text.
     console.log(JSON.stringify({ event: 'message_delivery_failed', messageId: message.id, code, permanent }))
-    await settle(life.db, message.id, { status: permanent ? 'failed' : 'queued', error: code }, life.now())
+    await settle(life.db, message.id, attempt, { status: permanent ? 'failed' : 'queued', error: code }, life.now())
   }
   return (await getMessage(life.db, message.id))!
 }
 
-/** Cron: retry queued messages and deliveries whose worker died mid-way. */
+/**
+ * Cron: retry queued messages. A delivery whose worker died mid-way may already have reached the
+ * agent, so it is not re-sent blindly: it fails with `delivery_outcome_unknown` and the caller
+ * decides (GET /sessions shows whether the agent got it).
+ */
 export async function retryPendingMessages(life: LifecycleDeps, limit = 20): Promise<number> {
   const now = life.now()
-  const { results } = await life.db
+  await life.db
     .prepare(
-      `SELECT * FROM workspace_messages
-       WHERE (status = 'queued' AND updated_at < ?) OR (status = 'delivering' AND updated_at < ?)
-       ORDER BY created_at LIMIT ?`
+      `UPDATE workspace_messages SET status = 'failed', error = 'delivery_outcome_unknown', updated_at = ?
+       WHERE status = 'delivering' AND updated_at < ?`
     )
-    .bind(now - 30_000, now - DELIVERY_STALE_MS, limit)
+    .bind(now, now - DELIVERY_STALE_MS)
+    .run()
+  const { results } = await life.db
+    .prepare(`SELECT * FROM workspace_messages WHERE status = 'queued' AND updated_at < ? ORDER BY created_at LIMIT ?`)
+    .bind(now - 30_000, limit)
     .all<MessageRow>()
   for (const row of results) {
     await deliverMessage(life, row)

@@ -59,7 +59,7 @@ const schemas: Record<string, object> = {
       id: { type: 'string' },
       name: { type: 'string' },
       projectId: { type: ['string', 'null'] },
-      status: { type: 'string', enum: ['starting', 'running', 'sleeping', 'waking', 'destroying', 'failed'] },
+      status: { type: 'string', enum: ['starting', 'running', 'sleeping', 'waking', 'destroying', 'destroyed', 'failed'] },
       archived: { type: 'boolean' },
       hidden: { type: 'boolean', description: 'Routine runs and other machine-made workspaces; excluded from lists unless include=hidden' },
       origin: { type: 'string', enum: ['desktop', 'api', 'mcp', 'routine', 'vm'] },

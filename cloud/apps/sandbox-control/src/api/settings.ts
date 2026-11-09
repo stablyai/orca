@@ -30,6 +30,12 @@ export async function putAccountSettings(
     )
     .bind(accountId, settings.vmCliEnabled ? 1 : 0, by, now)
     .run()
+  if (!settings.vmCliEnabled) {
+    await db
+      .prepare(`UPDATE api_keys SET revoked_at = ?, revoked_by = 'system:vm_cli_disabled' WHERE account_id = ? AND kind = 'workspace' AND revoked_at IS NULL`)
+      .bind(now, accountId)
+      .run()
+  }
   return settings
 }
 
