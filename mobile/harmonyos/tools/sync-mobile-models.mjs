@@ -82,7 +82,7 @@ const models = [
     contents: `
       export { diagnoseConnection, getReportableConnectionIncidentId } from './mobile/src/diagnostics/connection-diagnostics-analysis'
       export { buildConnectionDiagnosticsReport, formatConnectionLogHistory } from './mobile/src/diagnostics/connection-diagnostics-report'
-      export { boundConnectionDiagnosticsReport } from './mobile/src/diagnostics/connection-diagnostics-submission'
+      export { CONNECTION_DIAGNOSTICS_ENDPOINT, serializeConnectionDiagnosticsSubmission } from './mobile/src/diagnostics/connection-diagnostics-submission'
       export { redactConnectionLogText } from './mobile/src/diagnostics/connection-log-redaction'
       export { formatEndpoint } from './mobile/src/diagnostics/host-reachability'
       export { displayHostEndpoint } from './mobile/src/transport/hosts/host-endpoint'
