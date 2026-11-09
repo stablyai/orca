@@ -148,9 +148,10 @@ describe('createFolderRepoWorktree', () => {
     await create(repo, host(markRpcDeliveryUnknown(new Error('connection lost'))))
     vi.advanceTimersByTime(60_000)
 
-    const asked = host(refused('Setup decision required for this repository'))
-    await expect(create(repo, asked)).resolves.toEqual({ kind: 'needs-setup-choice' })
+    const asked = await create(repo, host(refused('Setup decision required for this repository')))
+    expect(asked.kind).toBe('needs-setup-choice')
     expect(isFolderRepoCreateBusy(repo)).toBe(false)
+    const hold = asked.kind === 'needs-setup-choice' ? asked.hold : -1
 
     const resent = host(refused(TAKEN))
     await expect(
@@ -158,7 +159,7 @@ describe('createFolderRepoWorktree', () => {
         target: repo,
         client: resent,
         name: 'billing',
-        setupDecision: 'skip'
+        skipSetupFor: hold
       })
     ).resolves.toEqual({ kind: 'maybe-created' })
     expect(resent.sendRequest.mock.calls[0]?.[1]).toMatchObject({
@@ -166,6 +167,39 @@ describe('createFolderRepoWorktree', () => {
       branchIntent: 'create-exact',
       setupDecision: 'skip'
     })
+  })
+
+  it('sends nothing for a setup choice once its create is listed or replaced', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const ask = async (repo: FolderRepoTarget) => {
+      await create(repo, host(markRpcDeliveryUnknown(new Error('connection lost'))))
+      vi.advanceTimersByTime(60_000)
+      const asked = await create(repo, host(refused('Setup decision required for this repository')))
+      return asked.kind === 'needs-setup-choice' ? asked.hold : -1
+    }
+    const listed = target()
+    const listedHold = await ask(listed)
+    const folder = { hostId: 'host-1', executionHost: undefined, folderWorktreeId: FOLDER }
+    reconcileFolderRepoCreates(folder, [{ repoId: listed.repoId }])
+    const replaced = target()
+    const replacedHold = await ask(replaced)
+    await ask(replaced)
+
+    const late = host(CREATED)
+    for (const [repo, hold] of [
+      [listed, listedHold],
+      [replaced, replacedHold]
+    ] as const) {
+      await expect(
+        createFolderRepoWorktree({
+          target: repo,
+          client: late,
+          name: 'billing',
+          skipSetupFor: hold
+        })
+      ).resolves.toEqual({ kind: 'checking' })
+    }
+    expect(late.sendRequest).not.toHaveBeenCalled()
   })
 })
 
@@ -289,7 +323,7 @@ describe('beginFolderComposerSubmission', () => {
         target: repo,
         client: tap,
         name: 'payments',
-        setupDecision: 'skip'
+        skipSetupFor: 0
       })
     ).resolves.toEqual({ kind: 'checking' })
     expect(tap.sendRequest).not.toHaveBeenCalled()

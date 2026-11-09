@@ -97,16 +97,16 @@ function release(operation: Operation): void {
   }
 }
 
-function hold(operation: Operation, busy = true): void {
+function hold(operation: Operation, busy = true): number | undefined {
   if (!isCurrent(operation)) {
-    return
+    return undefined
   }
   // A new identity, so an earlier hold's timer can't end this one.
   const held = { ...operation, id: nextId++, phase: 'held' as const, busy }
   operations.set(folderRepoCreateKey(held), held)
   notify()
   if (!busy) {
-    return
+    return held.id
   }
   setTimeout(() => {
     if (isCurrent(held)) {
@@ -114,6 +114,13 @@ function hold(operation: Operation, busy = true): void {
       notify()
     }
   }, HELD_BUSY_MS)
+  return held.id
+}
+
+/** Whether `hold` is still this repository's unconfirmed direct create, waiting for a setup choice. */
+export function isFolderRepoHoldPending(target: FolderRepoTarget, hold: number): boolean {
+  const operation = operations.get(folderRepoCreateKey(target))
+  return operation?.id === hold && operation.phase === 'held' && operation.origin === 'direct'
 }
 
 /** Forgets created or unconfirmed creates once the folder lists a worktree from that repository on that host. */
@@ -151,7 +158,7 @@ export type FolderRepoCreateOutcome =
   /** The host may have created it: the reply was lost, or a resend was refused as taken. */
   | { kind: 'maybe-created' }
   /** An unconfirmed create's resend needs a setup choice; it is resent as the same exact name with it. */
-  | { kind: 'needs-setup-choice' }
+  | { kind: 'needs-setup-choice'; hold: number }
   /** A composer's create is unconfirmed: nothing is sent, the folder is checked until it lists it. */
   | { kind: 'checking' }
   | { kind: 'failed'; message: string }
@@ -166,14 +173,16 @@ export async function createFolderRepoWorktree(args: {
   /** The client that creates: the desktop's own, or scoped to the folder's server. */
   client: RpcClient
   name: string
-  /** Chosen for an unconfirmed create's resend; otherwise the repo's own setup policy. */
-  setupDecision?: 'skip'
+  /** Resends this unconfirmed hold without setup; nothing is sent once the folder shows it or it is replaced. */
+  skipSetupFor?: number
 }): Promise<FolderRepoCreateOutcome> {
   const existing = operations.get(folderRepoCreateKey(args.target))
-  if (existing && (existing.phase !== 'held' || existing.busy)) {
+  const staleResend =
+    args.skipSetupFor !== undefined && !isFolderRepoHoldPending(args.target, args.skipSetupFor)
+  if (!staleResend && existing && (existing.phase !== 'held' || existing.busy)) {
     return { kind: 'already-running' }
   }
-  if (existing?.origin === 'composer') {
+  if (staleResend || existing?.origin === 'composer') {
     return { kind: 'checking' }
   }
   // An unconfirmed create is retried as the same exact name, even after a rename: a taken name may be its own.
@@ -200,7 +209,7 @@ export async function createFolderRepoWorktree(args: {
         displayName: name,
         displayNameKind: 'user',
         branchIntent: 'create-exact',
-        setupDecision: args.setupDecision ?? 'inherit',
+        setupDecision: args.skipSetupFor === undefined ? 'inherit' : 'skip',
         parentWorkspace: args.target.folderWorktreeId,
         parentWorkspaceOrigin: 'manual'
       })
@@ -220,8 +229,10 @@ export async function createFolderRepoWorktree(args: {
     const needsSetup = result.error.includes(SETUP_DECISION_REQUIRED)
     if (unresolved && needsSetup) {
       // That refusal did no git work, but says nothing about the earlier create; it stays unconfirmed.
-      hold(operation, false)
-      return { kind: 'needs-setup-choice' }
+      const held = hold(operation, false)
+      return held === undefined
+        ? { kind: 'maybe-created' }
+        : { kind: 'needs-setup-choice', hold: held }
     }
     if (unresolved) {
       return settleUnresolved({ kind: 'failed', message: result.error })

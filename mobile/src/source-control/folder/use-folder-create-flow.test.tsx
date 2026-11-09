@@ -299,4 +299,45 @@ describe('useFolderCreateFlow', () => {
     act(() => seen.confirm?.onCancel())
     expect(flow.current!.covered).toBe(false)
   })
+  it('closes a setup choice once the folder lists its create, and its stale confirm sends nothing', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const { flow, rerender } = mountFlow(() => {})
+    const { a, pending, retry } = await setupRefusedRetry(flow)
+    retry.answer()
+    await act(() => pending)
+    const staleConfirm = seen.confirm?.onConfirm
+    expect(seen.confirm?.visible).toBe(true)
+
+    rerender([
+      {
+        worktreeId: 'a-child',
+        repoId: a.target.repoId,
+        repo: 'a',
+        displayName: 'payments',
+        branch: 'payments'
+      }
+    ])
+    expect(seen.confirm?.visible).toBe(false)
+    await act(async () => staleConfirm?.())
+    expect(retry.client.sendRequest).toHaveBeenCalledTimes(1)
+    expect(seen.composer?.visible).toBe(false)
+  })
+
+  it("shows nothing for an older form's create once a setup choice opens, and still refreshes", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const refetch = vi.fn()
+    const { flow } = mountFlow(refetch)
+    const form = await openComposer(flow)
+    act(() => form.onClose())
+    const { pending, retry } = await setupRefusedRetry(flow)
+    retry.answer()
+    await act(() => pending)
+    expect(seen.confirm?.visible).toBe(true)
+    refetch.mockClear()
+
+    expect(form.folderLaunch?.submit.presenting()).toBe(false)
+    act(() => form.onCreated('repo::/w/payments', 'payments'))
+    expect(seen.toasts).toEqual([])
+    expect(refetch).toHaveBeenCalledTimes(1)
+  })
 })

@@ -15,6 +15,7 @@ import {
   beginFolderComposerSubmission,
   createFolderRepoWorktree,
   getFolderRepoCreatesVersion,
+  isFolderRepoHoldPending,
   reconcileFolderRepoCreates,
   releaseFolderComposerReservation,
   subscribeFolderRepoCreates,
@@ -27,6 +28,8 @@ const NO_LABELS = new Map()
 export type FolderCreateRepo = Pick<Repo, 'id' | 'displayName' | 'connectionId' | 'executionHostId'>
 
 type SetupChoice = {
+  /** The unconfirmed create it resends; once that is gone the dialog closes and sends nothing. */
+  hold: number
   repo: FolderCreateRepo
   target: FolderRepoTarget
   client: RpcClient
@@ -64,8 +67,8 @@ export function useFolderCreateFlow(args: {
   // The one form on screen, composer or setup choice. Set as forms open and close, not after render, so
   // two answers landing together can't both open one.
   const openRef = useRef<ComposerLaunch | SetupChoice | null>(null)
-  // The newest opening: an older form's late answer shows nothing over it.
-  const latestLaunchRef = useRef<ComposerLaunch | null>(null)
+  // The newest form opened, still set after it closes: an older form's late answer shows nothing over it.
+  const latestRef = useRef<ComposerLaunch | SetupChoice | null>(null)
   // Late answers show nothing once this screen is left or covered; the create itself still settles.
   const presentingRef = useRef(observing)
   useEffect(() => {
@@ -74,7 +77,7 @@ export function useFolderCreateFlow(args: {
   useEffect(
     () => () => {
       presentingRef.current = false
-      latestLaunchRef.current = null
+      latestRef.current = null
       const open = openRef.current
       openRef.current = null
       // Left without sending from the form: its repository takes taps again.
@@ -101,9 +104,9 @@ export function useFolderCreateFlow(args: {
       target: FolderRepoTarget,
       client: RpcClient,
       name: string,
-      setupDecision?: 'skip'
+      skipSetupFor?: number
     ) => {
-      const outcome = await createFolderRepoWorktree({ target, client, name, setupDecision })
+      const outcome = await createFolderRepoWorktree({ target, client, name, skipSetupFor })
       if (
         outcome.kind === 'created' ||
         outcome.kind === 'maybe-created' ||
@@ -140,8 +143,9 @@ export function useFolderCreateFlow(args: {
           )
         )
       } else if (outcome.kind === 'needs-setup-choice') {
-        const choice = { repo, target, client, name }
+        const choice = { hold: outcome.hold, repo, target, client, name }
         openRef.current = choice
+        latestRef.current = choice
         setSetupChoice(choice)
       } else if (outcome.kind === 'needs-composer') {
         const launch = {
@@ -151,7 +155,7 @@ export function useFolderCreateFlow(args: {
           name
         }
         openRef.current = launch
-        latestLaunchRef.current = launch
+        latestRef.current = launch
         setComposer(launch)
       } else if (outcome.kind === 'failed') {
         triggerError()
@@ -168,7 +172,7 @@ export function useFolderCreateFlow(args: {
 
   const launch = composer
   const presentingLaunch = (opened: ComposerLaunch | null) =>
-    presenting() && opened !== null && latestLaunchRef.current === opened
+    presenting() && opened !== null && latestRef.current === opened
   const composerElement = (
     <NewWorktreeModalController
       visible={launch !== null}
@@ -233,12 +237,18 @@ export function useFolderCreateFlow(args: {
   )
   const choice = setupChoice
   // Only this dialog's own answer: it closes itself and nothing newer.
-  const closeChoice = () => {
-    if (openRef.current === choice) {
+  const closeChoice = useCallback((closing: SetupChoice | null) => {
+    if (openRef.current === closing) {
       openRef.current = null
     }
-    setSetupChoice((current) => (current === choice ? null : current))
-  }
+    setSetupChoice((current) => (current === closing ? null : current))
+  }, [])
+  // The folder showed it, or another create replaced it: there is nothing left to retry.
+  useEffect(() => {
+    if (choice && !isFolderRepoHoldPending(choice.target, choice.hold)) {
+      closeChoice(choice)
+    }
+  }, [choice, closeChoice, createsVersion])
   const setupChoiceElement = (
     <ConfirmModal
       visible={setupChoice !== null}
@@ -250,12 +260,12 @@ export function useFolderCreateFlow(args: {
       )}
       confirmLabel={t('sourceControl.folder.setupChoiceSkip', 'Retry without setup')}
       onConfirm={() => {
-        if (choice) {
-          closeChoice()
-          void onCreate(choice.repo, choice.target, choice.client, choice.name, 'skip')
+        if (choice && openRef.current === choice) {
+          closeChoice(choice)
+          void onCreate(choice.repo, choice.target, choice.client, choice.name, choice.hold)
         }
       }}
-      onCancel={closeChoice}
+      onCancel={() => closeChoice(choice)}
     />
   )
   const toastElement = <TransientToast message={message} bottomInset={args.bottomInset} />
