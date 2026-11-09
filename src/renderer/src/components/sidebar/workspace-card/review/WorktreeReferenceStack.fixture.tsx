@@ -23,6 +23,10 @@ export const linkedCounts = defineFixture({
         <div key={label} className="flex h-12 items-center gap-2 px-2 text-[13px]">
           <span className="min-w-0 flex-1 truncate">{label}</span>
           <WorktreeCardMetaBadges
+            issue={null}
+            linearIssue={null}
+            review={null}
+            comment={null}
             linkedItemCount={count}
             referenceItems={Array.from({ length: count }, (_, index) => ({
               provider,
