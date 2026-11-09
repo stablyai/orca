@@ -148,6 +148,8 @@ export type RuntimeWorktreePsSummary = {
   detachedHead?: true
   /** Other-client classification for this host’s own phone, which shares its filter setting. */
   desktopOtherClient?: true
+  /** Set by a relaying desktop that created this workspace's environment from a recipe. */
+  recipeEnvironment?: { name: string; destroys?: boolean }
 }
 
 export type RuntimeGitLocalBranches = {
