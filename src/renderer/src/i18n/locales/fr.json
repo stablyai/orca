@@ -27,6 +27,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Proposition d’enregistrer le mot de passe",
+        "updateTitle": "Mettre à jour le mot de passe ?",
+        "saveTitle": "Enregistrer le mot de passe ?",
+        "username": "Nom d’utilisateur",
+        "password": "Mot de passe",
+        "never": "Jamais pour ce site",
+        "notNow": "Pas maintenant",
+        "update": "Mettre à jour",
+        "save": "Enregistrer"
+      },
+      "fill": {
+        "noUsername": "(sans nom d’utilisateur)",
+        "title": "Identifiants enregistrés",
+        "otherLogins": "Autres identifiants sur ce site"
+      }
+    },
     "newTab": {
       "emptyHint": "Recherchez ou saisissez une adresse ci-dessus. Les sites que vous visitez, les serveurs de développement exécutés dans cet espace de travail, ainsi que sa PR et son ticket s’afficheront ici.",
       "openServerFailed": "Impossible d’ouvrir {{address}}",

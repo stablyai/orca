@@ -20238,6 +20238,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "パスワード保存の確認",
+        "updateTitle": "パスワードを更新しますか？",
+        "saveTitle": "パスワードを保存しますか？",
+        "username": "ユーザー名",
+        "password": "パスワード",
+        "never": "このサイトでは保存しない",
+        "notNow": "今はしない",
+        "update": "更新",
+        "save": "保存"
+      },
+      "fill": {
+        "noUsername": "（ユーザー名なし）",
+        "title": "保存済みのログイン情報",
+        "otherLogins": "このサイトの他のログイン情報"
+      }
+    },
     "loadFailure": {
       "connectionNotSecure": "接続は安全ではありません",
       "cantReachHost": "{{value0}} に接続できません",
