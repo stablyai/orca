@@ -21,6 +21,41 @@ export function memberCountLabel(count: number, t: Translate): string {
   })
 }
 
+/** "Invited 2 days ago as an admin": one key per role, so no lowercased labels in sentences. */
+export function invitedAsCopy(role: OrcaOrgRole, when: string, t: Translate): string {
+  switch (role) {
+    case 'owner':
+      return t('auto.components.billing.team.invitedAsOwner', 'Invited {{value0}} as an owner', {
+        value0: when
+      })
+    case 'admin':
+      return t('auto.components.billing.team.invitedAsAdmin', 'Invited {{value0}} as an admin', {
+        value0: when
+      })
+    case 'member':
+      return t('auto.components.billing.team.invitedAsMember', 'Invited {{value0}} as a member', {
+        value0: when
+      })
+  }
+}
+
+export function roleChangedCopy(name: string, role: OrcaOrgRole, t: Translate): string {
+  switch (role) {
+    case 'owner':
+      return t('auto.components.billing.team.nowOwner', '{{value0}} is now an owner', {
+        value0: name
+      })
+    case 'admin':
+      return t('auto.components.billing.team.nowAdmin', '{{value0}} is now an admin', {
+        value0: name
+      })
+    case 'member':
+      return t('auto.components.billing.team.nowMember', '{{value0}} is now a member', {
+        value0: name
+      })
+  }
+}
+
 export function roleDescription(role: OrcaOrgRole, t: Translate): string {
   switch (role) {
     case 'owner':

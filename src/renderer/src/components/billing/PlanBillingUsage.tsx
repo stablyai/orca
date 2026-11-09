@@ -76,14 +76,20 @@ export function UsageSummary({
       </div>
       <Progress
         value={includedUsagePercent(entitlement)}
-        aria-label={t('auto.components.billing.usageLabel', 'Included hours used')}
+        tone={
+          includedUsagePercent(entitlement) >= 100 && !entitlement.overage.optedIn
+            ? 'warning'
+            : 'default'
+        }
+        aria-label={t('auto.components.billing.sandboxHoursUsedLabel', 'Sandbox hours used')}
       />
       {entitlement.overageSeconds === 0 &&
       entitlement.usedSeconds > entitlement.includedSeconds &&
       entitlement.includedSeconds > 0 ? (
         <p className="text-xs text-muted-foreground tabular-nums">
-          {t('auto.components.billing.overBy', 'Over by {{value0}} h this month', {
-            value0: formatHours(entitlement.usedSeconds - entitlement.includedSeconds)
+          {t('auto.components.billing.sandboxHoursOver', '{{count}} sandbox hours over', {
+            count: Math.round((entitlement.usedSeconds - entitlement.includedSeconds) / 360) / 10,
+            defaultValue_one: '{{count}} sandbox hour over'
           })}
         </p>
       ) : null}
@@ -115,10 +121,13 @@ export function UsageSummary({
 export function OverageControls({
   entitlement,
   busy,
+  failures = 0,
   onSetOverage
 }: {
   entitlement: OrcaBillingEntitlement
   busy: boolean
+  /** Bumped by the parent each time a change fails, to roll back the optimistic state. */
+  failures?: number
   onSetOverage: (args: OrcaBillingOverageArgs) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -141,6 +150,12 @@ export function OverageControls({
     setCapDollars(savedDollars)
     setOptimisticOn(null)
   }
+  const [seenFailures, setSeenFailures] = useState(failures)
+  if (seenFailures !== failures) {
+    setSeenFailures(failures)
+    setOptimisticOn(null)
+    setSavedFlash(false)
+  }
   const optedIn = optimisticOn ?? overage.optedIn
   const parsedCap = Number(capDollars)
   const capValid = capDollars.trim() !== '' && Number.isInteger(parsedCap) && parsedCap >= 0
@@ -156,6 +171,14 @@ export function OverageControls({
       value2: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
     }
   )
+  const descriptionOn = t(
+    'auto.components.billing.overageDescriptionOn',
+    'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set.',
+    {
+      value0: formatCents(overage.centsPerHour, locale),
+      value1: formatCents(Math.round(overage.centsPerHour * largeWeight), locale)
+    }
+  )
   const capPercent =
     overage.spendCapCents > 0
       ? Math.min(100, Math.round((overage.spentCents / overage.spendCapCents) * 100))
@@ -164,6 +187,7 @@ export function OverageControls({
     <div className="space-y-1.5">
       <Progress
         value={capPercent}
+        tone={capPercent >= 100 ? 'warning' : 'default'}
         aria-label={t('auto.components.billing.capUsedLabel', 'Overage spend cap used')}
       />
       <p className="text-xs text-muted-foreground tabular-nums">
@@ -211,7 +235,7 @@ export function OverageControls({
             {t('auto.components.billing.overageTitle', 'Overage')}
           </p>
           <p id={descriptionId} className="text-xs text-muted-foreground">
-            {description}
+            {optedIn ? descriptionOn : description}
           </p>
         </div>
         <SettingsDisabledControlTooltip
@@ -251,7 +275,7 @@ export function OverageControls({
                 if (changed && !busy) {
                   onSetOverage({ enabled: true, spendCapCents: parsedCap * 100 })
                   setSavedFlash(true)
-                  // Save unmounts; land focus on the confirmation instead of the page body.
+                  // Save turns into "Saving…" in place; move focus onto it.
                   window.requestAnimationFrame(() => savedRef.current?.focus())
                 }
               }}
@@ -276,25 +300,13 @@ export function OverageControls({
                     }}
                   />
                 </div>
-                {capValid && entitlement.reason === 'overage_cap_reached' ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t(
-                      'auto.components.billing.capReachedHint',
-                      'Raise the cap to keep starting sandboxes. Your files are safe.'
-                    )}
-                  </p>
-                ) : null}
                 {capValid ? null : (
                   <p id={capErrorId} className="text-xs text-destructive">
                     {t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
                   </p>
                 )}
               </div>
-              {changed ? (
-                <Button type="submit" variant="outline" aria-disabled={busy || undefined}>
-                  {t('auto.components.billing.saveCap', 'Save')}
-                </Button>
-              ) : savedFlash ? (
+              {savedFlash ? (
                 <span
                   ref={savedRef}
                   tabIndex={-1}
@@ -302,10 +314,22 @@ export function OverageControls({
                   className="flex h-9 items-center gap-1 text-xs text-muted-foreground outline-none"
                 >
                   <Check className="size-3.5" />
-                  {busy
+                  {busy || changed
                     ? t('auto.components.billing.capSaving', 'Saving…')
                     : t('auto.components.billing.capSaved', 'Saved')}
                 </span>
+              ) : changed ? (
+                <Button type="submit" variant="outline" aria-disabled={busy || undefined}>
+                  {t('auto.components.billing.saveCap', 'Save')}
+                </Button>
+              ) : null}
+              {capValid && entitlement.reason === 'overage_cap_reached' ? (
+                <p className="basis-full text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.billing.capReachedHint',
+                    'Raise the cap to keep starting sandboxes. Your files are safe.'
+                  )}
+                </p>
               ) : null}
             </form>
           )}

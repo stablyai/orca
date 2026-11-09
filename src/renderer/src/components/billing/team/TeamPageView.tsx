@@ -334,8 +334,8 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                 <p className="text-xs text-muted-foreground text-pretty">
                   {canLeave
                     ? t(
-                        'auto.components.billing.team.leaveBody',
-                        'You lose access to the team’s cloud workspaces and secrets. An admin can invite you back.'
+                        'auto.components.billing.team.leaveBody2',
+                        'You lose access to the team’s cloud workspaces and secrets. An owner or admin can invite you back.'
                       )
                     : t(
                         'auto.components.billing.team.leaveLastOwner',
@@ -355,7 +355,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
               >
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="destructive-chip"
                   size="sm"
                   disabled={!canLeave}
                   onClick={props.onLeave}

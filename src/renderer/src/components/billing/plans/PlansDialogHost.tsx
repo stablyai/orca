@@ -6,6 +6,7 @@ import type { OrcaBillingOpenResult } from '../../../../../shared/orca-billing'
 import { CheckoutPanel } from '../checkout/CheckoutPanel'
 import { useCheckoutFlow } from '../checkout/use-checkout-flow'
 import { openFailureCopy } from '../plan-billing-copy'
+import type { PlanBillingNotice } from '../PlanBillingSection'
 import { openTeamPage } from '../team/team-page-store'
 import { useOrcaBillingStatus } from '../use-orca-billing-status'
 import { PlansDialogContent } from './PlansDialogContent'
@@ -25,7 +26,7 @@ export function PlansDialogHost(): React.JSX.Element {
   const orgId = useAppStore((state) => state.orcaProfileAuthStatus?.cloud?.activeOrgId ?? null)
   const seats = useOrgSeatCount(open ? orgId : null)
   const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<PlanBillingNotice | null>(null)
   const [orderedAt, setOrderedAt] = useState(0)
 
   const onPaid = useCallback((paidSeats: number) => {
@@ -44,13 +45,17 @@ export function PlansDialogHost(): React.JSX.Element {
         error: String(error)
       }))
     setBusy(false)
+    const failure = openFailureCopy(outcome, t)
     setNotice(
-      outcome.status === 'opened'
-        ? t(
-            'auto.components.billing.continueInBrowser',
-            'Continue in your browser. This updates when you come back.'
-          )
-        : openFailureCopy(outcome, t)
+      failure
+        ? { kind: 'error', text: failure }
+        : {
+            kind: 'info',
+            text: t(
+              'auto.components.billing.continueInBrowser',
+              'Continue in your browser. This updates when you come back.'
+            )
+          }
     )
   }
 

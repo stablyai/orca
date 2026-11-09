@@ -13,7 +13,7 @@ export function denyReasonCopy(
 ): string {
   switch (reason) {
     case 'no_subscription':
-      return t('auto.components.billing.reasonNoPlan', 'Hosted sandboxes need a paid plan.')
+      return t('auto.components.billing.reasonNoPlan2', 'Orca Cloud needs a Team plan.')
     case 'subscription_inactive':
       return canManage
         ? t(
@@ -27,12 +27,12 @@ export function denyReasonCopy(
     case 'payment_grace_expired':
       return canManage
         ? t(
-            'auto.components.billing.reasonGraceExpired2',
-            'Payment failed, so sandboxes are suspended. Update your payment method to resume.'
+            'auto.components.billing.reasonGraceExpired3',
+            'Payment failed. New sandboxes can’t start and running sandboxes are asleep. Update your payment method. Your files are safe.'
           )
         : t(
-            'auto.components.billing.reasonGraceExpiredMember',
-            'Payment failed, so sandboxes are suspended. Ask an owner or admin to update the payment method.'
+            'auto.components.billing.reasonGraceExpiredMember2',
+            'Payment failed. New sandboxes can’t start and running sandboxes are asleep. Ask an owner or admin to update the payment method. Your files are safe.'
           )
     case 'payment_past_due':
       return canManage
@@ -61,8 +61,8 @@ export function denyReasonCopy(
             'Spend cap reached. Raise the monthly spend cap to keep starting sandboxes. Your files are safe.'
           )
         : t(
-            'auto.components.billing.reasonCapMember2',
-            'Spend cap reached. Ask an owner or admin to add hours. Your files are safe.'
+            'auto.components.billing.reasonCapMember3',
+            'Spend cap reached. Ask an owner or admin to raise the spend cap. Your files are safe.'
           )
   }
 }
