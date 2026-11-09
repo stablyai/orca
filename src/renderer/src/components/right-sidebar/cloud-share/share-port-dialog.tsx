@@ -10,6 +10,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { InlineError } from '@/components/ui/inline-error'
+import { OrcaSignInButton } from '@/components/OrcaSignInProgress'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsSegmentedControl'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
@@ -76,7 +77,7 @@ export function SharePortDialog({
   const [expiresIn, setExpiresIn] = useState<ShareExpiry>('24h')
   const [allowWake, setAllowWake] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ text: string; signedOut: boolean } | null>(null)
   const [created, setCreated] = useState(initialCreated)
   const submitRef = useRef<HTMLButtonElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
@@ -86,11 +87,14 @@ export function SharePortDialog({
   }, [open])
 
   useEffect(() => {
-    // Show the end of the link (its unique part) rather than the shared host.
-    const input = urlRef.current
-    if (input) {
-      input.scrollLeft = input.scrollWidth
-    }
+    // Show the end of the link (its unique part), once the dialog has laid the field out.
+    const frame = requestAnimationFrame(() => {
+      const input = urlRef.current
+      if (input) {
+        input.scrollLeft = input.scrollWidth
+      }
+    })
+    return () => cancelAnimationFrame(frame)
   }, [created])
 
   const chosenPort = port ?? parsePort(portText)
@@ -111,7 +115,7 @@ export function SharePortDialog({
       return
     }
     if (!result.ok) {
-      setError(shareErrorMessage(result.code))
+      setError({ text: shareErrorMessage(result.code), signedOut: result.code === 'unauthorized' })
       return
     }
     setCreated({ share: result.share, copied: await onCopy(result.share.url) })
@@ -172,7 +176,13 @@ export function SharePortDialog({
         </DialogHeader>
 
         {created ? (
-          <CreatedLink created={created.share} now={now} urlRef={urlRef} onCopy={onCopy} />
+          <CreatedLink
+            created={created.share}
+            copied={created.copied}
+            now={now}
+            urlRef={urlRef}
+            onCopy={onCopy}
+          />
         ) : (
           <form
             id={formId}
@@ -210,8 +220,8 @@ export function SharePortDialog({
                   {
                     value: 'public',
                     label: t(
-                      'auto.components.right.sidebar.CloudShare.audiencePublic',
-                      'Anyone with the link'
+                      'auto.components.right.sidebar.CloudShare.audiencePublicShort',
+                      'Public'
                     )
                   }
                 ]}
@@ -282,8 +292,13 @@ export function SharePortDialog({
                   'auto.components.right.sidebar.CloudShare.createFailed',
                   'Couldn’t create the link.'
                 )}
-                detail={error}
+                detail={error.text}
               />
+            )}
+            {error?.signedOut && (
+              <OrcaSignInButton variant="outline" size="xs">
+                {t('auto.components.right.sidebar.CloudShare.signIn', 'Sign in to Orca')}
+              </OrcaSignInButton>
             )}
             {alreadyShared.length > 0 && (
               <div className="space-y-1">

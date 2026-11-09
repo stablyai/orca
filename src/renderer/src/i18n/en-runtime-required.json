@@ -396,6 +396,10 @@
             "selectedCount_one": "{{count}} selected",
             "selectedCount_other": "{{count}} selected"
           },
+          "RuntimeForwardedPorts": {
+            "connectionCount_one": "{{count}} connection",
+            "connectionCount_other": "{{count}} connections"
+          },
           "Search": {
             "fileCount_one": "{{count}} file",
             "fileCount_other": "{{count}} files",

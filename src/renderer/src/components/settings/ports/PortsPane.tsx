@@ -89,6 +89,11 @@ export function PortsPane({ settings }: { settings: GlobalSettings }): React.JSX
     [forwarding, updateSettings]
   )
   const off = !forwarding.autoForward
+  const needsAutoForward = t(
+    'auto.components.settings.ports.needsAutoForward',
+    'Turn on Auto-forward ports to change this.'
+  )
+  const rangeErrorId = useId()
   const [rangeError, setRangeError] = useState<string | null>(null)
   const reportInvalid = useCallback(
     (rejected: string | null) =>
@@ -109,8 +114,8 @@ export function PortsPane({ settings }: { settings: GlobalSettings }): React.JSX
       <SettingsSwitchRow
         label={t('auto.components.settings.ports.autoForward', 'Auto-forward ports')}
         description={t(
-          'auto.components.settings.ports.autoForwardDescription',
-          'Forward dev servers on remote hosts to localhost here.'
+          'auto.components.settings.ports.autoForwardDescriptionSandboxes',
+          'Forward dev servers in sandboxes and on remote hosts to this computer.'
         )}
         checked={forwarding.autoForward}
         onChange={() => update({ autoForward: !forwarding.autoForward })}
@@ -121,7 +126,8 @@ export function PortsPane({ settings }: { settings: GlobalSettings }): React.JSX
           'auto.components.settings.ports.exclusiveDescription',
           'If the port is taken here, skip it instead of remapping.'
         )}
-        checked={forwarding.exclusive}
+        // Off reads as off: a dependent switch that cannot act should not look on.
+        checked={forwarding.exclusive && !off}
         onChange={() => update({ exclusive: !forwarding.exclusive })}
         disabled={off}
       />
@@ -143,7 +149,7 @@ export function PortsPane({ settings }: { settings: GlobalSettings }): React.JSX
               max={forwarding.rangeEnd}
               disabled={off}
               ariaLabel={t('auto.components.settings.ports.rangeStart', 'Lowest port')}
-              describedBy={rangeHelpId}
+              describedBy={rangeError && !off ? `${rangeHelpId} ${rangeErrorId}` : rangeHelpId}
               onCommit={(rangeStart) => update({ rangeStart })}
               onInvalid={reportInvalid}
             />
@@ -154,17 +160,22 @@ export function PortsPane({ settings }: { settings: GlobalSettings }): React.JSX
               max={65_535}
               disabled={off}
               ariaLabel={t('auto.components.settings.ports.rangeEnd', 'Highest port')}
-              describedBy={rangeHelpId}
+              describedBy={rangeError && !off ? `${rangeHelpId} ${rangeErrorId}` : rangeHelpId}
               onCommit={(rangeEnd) => update({ rangeEnd })}
               onInvalid={reportInvalid}
             />
           </div>
         }
       />
-      {rangeError ? <InlineError title={rangeError} className="my-2" /> : null}
+      {rangeError && !off ? (
+        <div id={rangeErrorId}>
+          <InlineError title={rangeError} className="my-2" />
+        </div>
+      ) : null}
       <SettingsSwitchRow
         label={t('auto.components.settings.ports.notify', 'Notify when a port is forwarded')}
-        checked={forwarding.notify}
+        description={off ? needsAutoForward : undefined}
+        checked={forwarding.notify && !off}
         onChange={() => update({ notify: !forwarding.notify })}
         disabled={off}
       />

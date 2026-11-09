@@ -31,7 +31,10 @@ export function RuntimePortsEmptyText(): React.JSX.Element {
         className="rounded-sm text-foreground underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         onClick={() => openSettingsTarget({ pane: 'ports', repoId: null })}
       >
-        {t('auto.components.right.sidebar.PortsPanel.portsSettingsLink', 'Ports settings')}
+        {t(
+          'auto.components.right.sidebar.PortsPanel.turnOnInSettings',
+          'Turn on in Ports settings'
+        )}
       </button>
     </>
   )

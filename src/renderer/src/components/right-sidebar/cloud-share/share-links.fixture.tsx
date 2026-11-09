@@ -91,7 +91,36 @@ export const revoked = defineFixture({
 
 export const loadError = defineFixture({
   width: 300,
-  render: () => <List status="error" shares={[teamLink]} errorText="Couldn’t load links." />
+  render: () => (
+    <List
+      status="error"
+      shares={[teamLink]}
+      errorText="Couldn’t load links."
+      errorDetail="Couldn’t reach Orca Cloud. Try again."
+    />
+  )
+})
+
+export const loadSignedOut = defineFixture({
+  width: 300,
+  render: () => <List status="error" errorText="Sign in to see shared links." needsSignIn />
+})
+
+export const loading = defineFixture({ width: 300, render: () => <List status="loading" /> })
+
+/** A revoke the server refused keeps the confirm open and says so. */
+export const revokeFailed = defineFixture({
+  width: 300,
+  render: () => <List shares={[publicLink]} onRevoke={async () => false} />,
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('button[aria-label="Turn off link"]')?.click()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    const turnOff = [...frame.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Turn off'
+    )
+    turnOff?.click()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
 })
 
 /** Clicking Turn off asks to confirm in place, with Cancel focused. */
@@ -187,6 +216,20 @@ export const dialogCreated = defineFixture({
     <Dialog
       port={5173}
       created={link({ id: '0123456789abcdef0123456789abcdef', port: 5173, allowWake: true })}
+    />
+  )
+})
+
+export const dialogCreatedPublic = defineFixture({
+  width: 560,
+  render: () => (
+    <Dialog
+      port={3000}
+      created={link({
+        id: 'fedcba9876543210fedcba9876543210',
+        audience: 'public',
+        allowWake: false
+      })}
     />
   )
 })

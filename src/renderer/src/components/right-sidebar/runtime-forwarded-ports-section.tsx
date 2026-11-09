@@ -35,10 +35,10 @@ export function RuntimeForwardedPortsSection({
           size={12}
           className={cn('shrink-0 motion-safe:transition-transform', !collapsed && 'rotate-90')}
         />
-        <span className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('auto.components.right.sidebar.RuntimeForwardedPorts.title', 'Other forwards')}
         </span>
-        <span className="ml-1 text-3xs text-muted-foreground/60">{forwards.length}</span>
+        <span className="ml-1 text-2xs text-muted-foreground">{forwards.length}</span>
       </button>
       {collapsed ? null : (
         <div id="runtime-other-forwards">
@@ -58,13 +58,14 @@ function OtherForwardRow({ forward }: { forward: RuntimePortForward }): React.JS
   const connections =
     forward.openConnections === 0
       ? null
-      : forward.openConnections === 1
-        ? t('auto.components.right.sidebar.RuntimeForwardedPorts.oneConnection', '1 connection')
-        : t(
-            'auto.components.right.sidebar.RuntimeForwardedPorts.manyConnections',
-            '{{value0}} connections',
-            { value0: forward.openConnections }
-          )
+      : t(
+          'auto.components.right.sidebar.RuntimeForwardedPorts.connectionCount',
+          '{{count}} connections',
+          {
+            count: forward.openConnections,
+            defaultValue_one: '{{count}} connection'
+          }
+        )
   const detail = [address, connections].filter(Boolean).join(' · ')
   return (
     <div className="group -mx-1 flex items-center gap-2 rounded px-1 py-1 hover:bg-accent/50 motion-safe:transition-colors">

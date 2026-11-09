@@ -45,11 +45,9 @@ export function RuntimePortForwardStatus({
           )
         : remapped
           ? t(
-              'auto.components.right.sidebar.RuntimePortForward.remappedInUse',
-              '{{value0}} in use',
-              {
-                value0: remotePort
-              }
+              'auto.components.right.sidebar.RuntimePortForward.remappedInUseHere',
+              '({{value0}} in use here)',
+              { value0: remotePort }
             )
           : null
     const localAddress = t(
@@ -94,15 +92,15 @@ export function RuntimePortForwardStatus({
         {note ? (
           <span
             className={cn(
-              'shrink-0 text-2xs',
+              'shrink-0 whitespace-nowrap text-2xs',
               unreachable ? 'text-status-warning-text' : 'text-muted-foreground'
             )}
           >
-            · {note}
+            {note}
           </span>
         ) : null}
         {offline && onReconnect ? (
-          <Button type="button" variant="ghost" size="statusAction" onClick={onReconnect}>
+          <Button type="button" variant="quiet" size="statusAction" onClick={onReconnect}>
             {t('auto.components.right.sidebar.RuntimePortForward.reconnect', 'Reconnect')}
           </Button>
         ) : null}
@@ -148,7 +146,7 @@ export function RuntimePortForwardStatus({
       ) : null}
       <Button
         type="button"
-        variant="ghost"
+        variant="quiet"
         size="statusAction"
         className="-mx-1"
         onClick={onForward}

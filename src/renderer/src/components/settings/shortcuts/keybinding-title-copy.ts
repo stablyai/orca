@@ -164,7 +164,9 @@ const STATIC_TITLE_COPY = {
     translate(
       'keybindings.title.terminalSwitchInputSource',
       'Switch input source / language (native)'
-    )
+    ),
+  'cloudWorkspace.copyLink': () =>
+    translate('keybindings.title.cloudWorkspaceCopyLink', 'Copy Cloud Workspace Link')
 } satisfies Record<StaticKeybindingActionId, () => string>
 
 const GROUP_COPY = {

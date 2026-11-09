@@ -14,6 +14,8 @@ type InlineErrorProps = {
   retryLabel?: React.ReactNode
   onRetry?: () => void
   retrying?: boolean
+  /** 'compact' for narrow panels (sidebar sections): tighter padding, xs text. */
+  density?: 'default' | 'compact'
   className?: string
 }
 
@@ -29,6 +31,7 @@ function InlineError({
   retryLabel,
   onRetry,
   retrying = false,
+  density = 'default',
   className
 }: InlineErrorProps): React.JSX.Element {
   const Icon = tone === 'error' ? CircleAlert : Info
@@ -37,7 +40,8 @@ function InlineError({
       role={tone === 'error' ? 'alert' : 'status'}
       data-slot="inline-error"
       className={cn(
-        'flex gap-3 rounded-lg border px-3 py-2.5 text-sm',
+        'flex rounded-lg border',
+        density === 'compact' ? 'gap-2 px-2.5 py-2 text-xs' : 'gap-3 px-3 py-2.5 text-sm',
         detail ? 'items-start' : 'items-center',
         tone === 'error'
           ? 'border-destructive/15 bg-destructive/5 dark:border-destructive/25'

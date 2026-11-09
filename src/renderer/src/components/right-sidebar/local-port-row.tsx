@@ -114,7 +114,7 @@ export function LocalPortRow({
       <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
         <ContextMenuTrigger asChild>
           <div
-            className="flex min-w-0 flex-1 items-center gap-2 rounded focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+            className="flex min-w-0 flex-1 items-start gap-2 rounded focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
             tabIndex={0}
             role="group"
             aria-label={t(

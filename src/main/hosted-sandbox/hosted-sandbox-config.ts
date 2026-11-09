@@ -56,7 +56,8 @@ export function getHostedSandboxConfig(
       cached = devKeyFile
         ? await mintDevSandboxToken(
             devKeyFile,
-            ensureActiveOrcaProfile(userDataPath).profile.cloud?.userId
+            ensureActiveOrcaProfile(userDataPath).profile.cloud,
+            env
           )
         : await mintSandboxToken(userDataPath, env, packaged, fetchImpl)
       return cached.token
@@ -121,8 +122,18 @@ async function mintSandboxToken(
 /** Dev builds only: sign with the dev operator key the dev control plane trusts (issuer orca-sandbox-dev-test). */
 async function mintDevSandboxToken(
   keyFile: string,
-  userId: string | undefined
+  cloud: { userId: string; activeOrgId?: string } | undefined,
+  env: NodeJS.ProcessEnv
 ): Promise<{ token: string; expiresAt: number }> {
+  const userId = cloud?.userId
+  // Team dogfood: two dev profiles in one dev org share workspaces; the role comes from env.
+  const orgRole = env.ORCA_CLOUD_SANDBOX_DEV_ORG_ROLE?.trim()
+  const org = cloud?.activeOrgId
+    ? {
+        org: cloud.activeOrgId,
+        org_role: orgRole === 'owner' || orgRole === 'admin' ? orgRole : 'member'
+      }
+    : {}
   const parsed = DevKeyFile.parse(JSON.parse(await readFile(keyFile, 'utf8')))
   const key = createPrivateKey({ key: parsed.private, format: 'jwk' })
   const now = Math.floor(Date.now() / 1000)
@@ -133,6 +144,7 @@ async function mintDevSandboxToken(
   })
   const payload = encode({
     sub: userId ?? 'desktop-dogfood',
+    ...org,
     purpose: 'sandbox',
     iss: 'orca-sandbox-dev-test',
     aud: 'orca-sandbox',

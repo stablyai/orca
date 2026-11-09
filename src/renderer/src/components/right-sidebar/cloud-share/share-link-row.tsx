@@ -1,14 +1,15 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { Check, Copy, ExternalLink, Globe, Link2Off, Loader2, Users } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatUiNarrowDuration, formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
 import { cn } from '@/lib/utils'
 import type {
   ShareLink,
   ShareState
 } from '../../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
+import { formatShareExpiryDate, formatShareTimeLeft } from './share-link-status'
 
 const COPIED_MS = 1600
 /** Lets the Share dialog keep Escape for the inline confirm instead of closing. */
@@ -20,30 +21,6 @@ export function shareLinkState(share: ShareLink, now: number): ShareState {
     return 'expired'
   }
   return share.state
-}
-
-/** "50m" / "23h" / "6d": time left, for the dense sidebar row. */
-export function formatShareTimeLeft(expiresAt: number, now: number): string {
-  const minutes = Math.max(1, Math.round((expiresAt - now) / 60_000))
-  if (minutes < 60) {
-    return formatUiNarrowDuration(minutes, 'minute')
-  }
-  const hours = Math.round(minutes / 60)
-  return hours < 48
-    ? formatUiNarrowDuration(hours, 'hour')
-    : formatUiNarrowDuration(Math.round(hours / 24), 'day')
-}
-
-/** "in 50m" / "in 23h" / "in 6d". */
-export function formatShareExpiry(expiresAt: number, now: number): string {
-  const minutes = Math.max(1, Math.round((expiresAt - now) / 60_000))
-  if (minutes < 60) {
-    return formatUiNarrowRelativeTime(minutes, 'minute')
-  }
-  const hours = Math.round(minutes / 60)
-  return hours < 48
-    ? formatUiNarrowRelativeTime(hours, 'hour')
-    : formatUiNarrowRelativeTime(Math.round(hours / 24), 'day')
 }
 
 export function ShareAudienceIcon({
@@ -69,17 +46,27 @@ export function CopyShareLinkButton({
   url,
   onCopy,
   className,
-  withLabel = false
+  withLabel = false,
+  initialCopied = false
 }: {
   url: string
   onCopy: (url: string) => Promise<boolean>
   className?: string
   withLabel?: boolean
+  /** Already copied (the dialog copies on create), so the button starts on "Copied". */
+  initialCopied?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState(initialCopied)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => clearTimeout(timer.current ?? undefined), [])
+  useEffect(() => {
+    if (!initialCopied) {
+      return
+    }
+    const reset = setTimeout(() => setCopied(false), COPIED_MS)
+    return () => clearTimeout(reset)
+  }, [initialCopied])
   const label = copied
     ? t('auto.components.right.sidebar.CloudShare.copied', 'Copied')
     : t('auto.components.right.sidebar.CloudShare.copyLink', 'Copy link')
@@ -166,6 +153,7 @@ export function ShareLinkRow({
   const confirmId = useId()
   const [confirming, setConfirming] = useState(false)
   const [revoking, setRevoking] = useState(false)
+  const [revokeFailed, setRevokeFailed] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
   const turnOffRef = useRef<HTMLButtonElement>(null)
@@ -185,16 +173,23 @@ export function ShareLinkRow({
 
   const revoke = async (): Promise<void> => {
     setRevoking(true)
+    setRevokeFailed(false)
     const revoked = await revokeSafely(onRevoke, share)
     setRevoking(false)
-    setConfirming(false)
+    // A failed revoke keeps the confirm open with the reason, so "Turn off" can simply be tried again.
+    setRevokeFailed(!revoked)
     if (revoked) {
+      setConfirming(false)
       if (onRevoked) {
         onRevoked()
       } else {
         rowRef.current?.focus()
       }
     }
+  }
+  const closeConfirm = (): void => {
+    setConfirming(false)
+    setRevokeFailed(false)
   }
 
   const status =
@@ -223,10 +218,7 @@ export function ShareLinkRow({
       data-state={state}
     >
       <div className="flex items-center gap-2">
-        <div
-          className={cn('flex min-w-0 flex-1 items-center gap-2', !active && 'opacity-60')}
-          title={share.url}
-        >
+        <div className={cn('flex min-w-0 flex-1 items-center gap-2', !active && 'opacity-60')}>
           <div className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
             <ShareAudienceIcon audience={share.audience} />
           </div>
@@ -235,16 +227,44 @@ export function ShareLinkRow({
               {showPort && (
                 <span className="text-xs font-medium text-foreground">:{share.port}</span>
               )}
-              <span
-                className={cn(
-                  'truncate text-xs',
-                  share.audience === 'public' ? 'text-foreground' : 'text-muted-foreground'
-                )}
-              >
-                {audienceLabel}
-              </span>
+              {share.audience === 'public' ? (
+                <span className="text-foreground">
+                  <Badge variant="paneLabel">{audienceLabel}</Badge>
+                </span>
+              ) : (
+                <span className="truncate text-xs text-muted-foreground">{audienceLabel}</span>
+              )}
             </div>
-            <div className="truncate text-2xs text-muted-foreground">{meta}</div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="truncate text-2xs text-muted-foreground">{meta}</div>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {state === 'revoked'
+                  ? t(
+                      'auto.components.right.sidebar.CloudShare.revokedAt',
+                      'Turned off {{value0}}',
+                      {
+                        value0: formatShareExpiryDate(share.revokedAt ?? now)
+                      }
+                    )
+                  : state === 'expired'
+                    ? t(
+                        'auto.components.right.sidebar.CloudShare.expiredAt',
+                        'Expired {{value0}}',
+                        {
+                          value0: formatShareExpiryDate(share.expiresAt)
+                        }
+                      )
+                    : t(
+                        'auto.components.right.sidebar.CloudShare.expiresAt',
+                        'Expires {{value0}}',
+                        {
+                          value0: formatShareExpiryDate(share.expiresAt)
+                        }
+                      )}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
         {active && !confirming && (
@@ -298,50 +318,83 @@ export function ShareLinkRow({
       {active && confirming && (
         <div
           {...{ [SHARE_CONFIRM_ATTRIBUTE]: '' }}
-          className="mt-1 flex items-center gap-1.5 rounded-md border border-border bg-muted/40 py-1 pr-1 pl-2"
+          className="mt-1 space-y-1.5 rounded-md border border-border bg-muted/40 p-2"
           role="group"
           aria-labelledby={confirmId}
+          aria-describedby={`${confirmId}-detail`}
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
               event.stopPropagation()
-              setConfirming(false)
+              closeConfirm()
             }
           }}
         >
-          <span id={confirmId} className="min-w-0 flex-1 truncate text-2xs text-foreground">
-            {t('auto.components.right.sidebar.CloudShare.confirmText', 'Turn off this link?')}
-          </span>
-          <Button
-            ref={cancelRef}
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-disabled={revoking}
-            onClick={() => {
-              if (!revoking) {
-                setConfirming(false)
-              }
-            }}
-          >
-            {t('auto.components.right.sidebar.CloudShare.cancel', 'Cancel')}
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="xs"
-            disabled={revoking}
-            onClick={() => void revoke()}
-          >
-            {/* Spinner and label share one grid cell, so the button keeps its width. */}
-            <span className="grid place-items-center">
-              <span className={cn('col-start-1 row-start-1', revoking && 'invisible')}>
-                {t('auto.components.right.sidebar.CloudShare.turnOff', 'Turn off')}
-              </span>
-              {revoking && (
-                <Loader2 className="col-start-1 row-start-1 size-3 animate-spin motion-reduce:animate-none" />
+          <div className="space-y-0.5">
+            <p id={confirmId} className="text-xs font-medium text-foreground">
+              {share.audience === 'public'
+                ? t(
+                    'auto.components.right.sidebar.CloudShare.confirmPublic',
+                    'Turn off the public link to :{{value0}}?',
+                    {
+                      value0: share.port
+                    }
+                  )
+                : t(
+                    'auto.components.right.sidebar.CloudShare.confirmTeam',
+                    'Turn off the team link to :{{value0}}?',
+                    {
+                      value0: share.port
+                    }
+                  )}
+            </p>
+            <p id={`${confirmId}-detail`} className="text-2xs text-muted-foreground">
+              {t(
+                'auto.components.right.sidebar.CloudShare.confirmDetail',
+                'People with it can’t open it anymore.'
               )}
-            </span>
-          </Button>
+            </p>
+            {revokeFailed && (
+              <p className="text-2xs text-destructive" role="alert">
+                {t(
+                  'auto.components.right.sidebar.CloudShare.revokeFailed',
+                  'Couldn’t turn it off. Try again.'
+                )}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              ref={cancelRef}
+              type="button"
+              variant="ghost"
+              size="xs"
+              aria-disabled={revoking}
+              onClick={() => {
+                if (!revoking) {
+                  closeConfirm()
+                }
+              }}
+            >
+              {t('auto.components.right.sidebar.CloudShare.cancel', 'Cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="xs"
+              disabled={revoking}
+              onClick={() => void revoke()}
+            >
+              {/* Spinner and label share one grid cell, so the button keeps its width. */}
+              <span className="grid place-items-center">
+                <span className={cn('col-start-1 row-start-1', revoking && 'invisible')}>
+                  {t('auto.components.right.sidebar.CloudShare.turnOff', 'Turn off')}
+                </span>
+                {revoking && (
+                  <Loader2 className="col-start-1 row-start-1 size-3 animate-spin motion-reduce:animate-none" />
+                )}
+              </span>
+            </Button>
+          </div>
         </div>
       )}
     </div>

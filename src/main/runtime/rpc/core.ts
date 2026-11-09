@@ -1,4 +1,8 @@
 import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
+import type {
+  PairingRevokeDeviceParams,
+  PairingRevokeDeviceResult
+} from '../../../shared/remote-runtime/pairing/pairing-revoke-device-contract'
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -53,6 +57,8 @@ export type PairingRpcContext = {
 // Mints new pairing credentials, so only the host owner's local transport provides it.
 export type PairingOffersRpcContext = {
   create(params: PairingCreateOfferParams): Promise<PairingCreateOfferResult>
+  /** Revokes a paired device and closes its open sockets now (not at its next sign-in). */
+  revoke(params: PairingRevokeDeviceParams): Promise<PairingRevokeDeviceResult>
 }
 
 export type RpcEnvelopeMeta = {

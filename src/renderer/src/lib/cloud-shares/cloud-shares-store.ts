@@ -11,12 +11,51 @@ import type {
 export type CloudSharesState =
   /** Not asked yet: share UI stays hidden until the environment is known to be Orca Cloud. */
   | { status: 'unknown'; shares: [] }
+  /** First fetch for an environment seen as Orca Cloud before: the section shows a placeholder. */
+  | { status: 'loading'; shares: [] }
   | { status: 'ready'; shares: ShareLink[] }
   | { status: 'error'; shares: ShareLink[]; code: CloudShareFailureCode }
   /** Not an Orca Cloud workspace (or no control plane in this build). */
   | { status: 'unsupported'; shares: [] }
 
 const UNKNOWN: CloudSharesState = { status: 'unknown', shares: [] }
+const LOADING: CloudSharesState = { status: 'loading', shares: [] }
+/** Environments that answered as Orca Cloud before, so a later launch can show a placeholder at once. */
+const KNOWN_KEY = 'orca.cloudShares.knownEnvironments'
+
+function readKnown(): Set<string> {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(KNOWN_KEY) ?? '[]')
+    return new Set(
+      Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+    )
+  } catch {
+    return new Set()
+  }
+}
+let known: Set<string> | null = null
+
+function knownCloud(): Set<string> {
+  known ??= readKnown()
+  return known
+}
+
+function rememberCloud(environmentId: string, isCloud: boolean): void {
+  const set = knownCloud()
+  if (set.has(environmentId) === isCloud) {
+    return
+  }
+  if (isCloud) {
+    set.add(environmentId)
+  } else {
+    set.delete(environmentId)
+  }
+  try {
+    window.localStorage.setItem(KNOWN_KEY, JSON.stringify([...set].slice(-50)))
+  } catch {
+    // Storage full or blocked: the placeholder just won't show next time.
+  }
+}
 const states = new Map<string, CloudSharesState>()
 /** Bumped by every local change, so a list answer that started earlier can't overwrite it. */
 const versions = new Map<string, number>()
@@ -40,7 +79,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function isCloudSharesAvailable(state: CloudSharesState): boolean {
-  return state.status === 'ready' || state.status === 'error'
+  return state.status === 'ready' || state.status === 'error' || state.status === 'loading'
 }
 
 export function refreshCloudShares(environmentId: string): Promise<void> {
@@ -59,8 +98,10 @@ export function refreshCloudShares(environmentId: string): Promise<void> {
       }
       const previous = states.get(environmentId)
       if (result.ok) {
+        rememberCloud(environmentId, true)
         set(environmentId, { status: 'ready', shares: result.shares })
       } else if (result.code === 'not_cloud') {
+        rememberCloud(environmentId, false)
         set(environmentId, { status: 'unsupported', shares: [] })
       } else {
         set(environmentId, { status: 'error', shares: previous?.shares ?? [], code: result.code })
@@ -72,7 +113,8 @@ export function refreshCloudShares(environmentId: string): Promise<void> {
         return
       }
       // Only a known cloud workspace shows the error; an unknown one stays hidden and retries later.
-      const previous = states.get(environmentId)
+      const previous =
+        states.get(environmentId) ?? (knownCloud().has(environmentId) ? LOADING : undefined)
       if (previous && isCloudSharesAvailable(previous)) {
         set(environmentId, { status: 'error', shares: previous.shares, code: 'unavailable' })
       }
@@ -109,7 +151,9 @@ export type CloudSharesController = {
 /** Loads once per environment (skipped once it is known not to be Orca Cloud). */
 export function useCloudShares(environmentId: string | null): CloudSharesController {
   const state = useSyncExternalStore(subscribe, () =>
-    environmentId ? (states.get(environmentId) ?? UNKNOWN) : UNKNOWN
+    environmentId
+      ? (states.get(environmentId) ?? (knownCloud().has(environmentId) ? LOADING : UNKNOWN))
+      : UNKNOWN
   )
   useEffect(() => {
     if (environmentId && states.get(environmentId)?.status !== 'unsupported') {

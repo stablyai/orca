@@ -16,6 +16,10 @@ export type Env = {
   VERCEL_API_BASE?: string
   /** Golden image (orcad + agent CLIs) every new sandbox boots from; see image/. */
   GOLDEN_SNAPSHOT_ID?: string
+  /** Non-prod only: pin this image over the rotated active one (preview versions testing new VM entry points). */
+  GOLDEN_SNAPSHOT_OVERRIDE?: string
+  /** Git as the sender: `on`, `accounts:<id>,<id>` or off (default). See memberGitEnabled in index.ts. */
+  MEMBER_GIT_IDENTITY?: string
   /** `release:latest` | `release:v1.2.3`: build golden images from Orca's released orca-server tarball. */
   GOLDEN_IMAGE_SOURCE?: string
   /** TTL for Worker-built golden images; unset/0 keeps them until rotated out. */

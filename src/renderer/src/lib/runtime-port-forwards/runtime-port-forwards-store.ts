@@ -67,7 +67,14 @@ export function runtimePortForwardingAvailable(): boolean {
   return typeof bridge()?.openPortForward === 'function'
 }
 
+let announcementRepeat = 0
+
 function emit(next: ForwardState): void {
+  if (next.announcement && next.announcement === state.announcement.replace(/\u00a0+$/, '')) {
+    // Live regions only speak changed text; a trailing no-break space marks a repeat.
+    announcementRepeat = (announcementRepeat + 1) % 2
+    next = { ...next, announcement: next.announcement + '\u00a0'.repeat(announcementRepeat + 1) }
+  }
   state = next
   for (const listener of listeners) {
     listener()
@@ -189,10 +196,17 @@ export async function openRuntimePortForward(
           'Forwarded :{{value0}} to localhost:{{value1}}',
           { value0: request.remotePort, value1: result.forward.localPort }
         )
-      : `:${request.remotePort} ${runtimePortForwardFailureText({
-          code: result.code,
-          localPort: request.localPort ?? request.remotePort
-        })}`
+      : translate(
+          'auto.lib.runtimePortForwards.failedAnnouncement',
+          "Couldn't forward :{{value0}}. {{value1}}",
+          {
+            value0: request.remotePort,
+            value1: runtimePortForwardFailureText({
+              code: result.code,
+              localPort: request.localPort ?? request.remotePort
+            })
+          }
+        )
   })
   return result
 }
@@ -219,16 +233,20 @@ export async function closeRuntimePortForward(
 export function runtimePortForwardFailureText(failure: RuntimePortForwardFailure): string {
   switch (failure.code) {
     case 'port_busy':
-      return translate('auto.lib.runtimePortForwards.busyInUse', 'localhost:{{value0}} in use', {
-        value0: failure.localPort
-      })
+      return translate(
+        'auto.lib.runtimePortForwards.busyInUseHere',
+        'localhost:{{value0}} in use on this computer',
+        {
+          value0: failure.localPort
+        }
+      )
     case 'host_unsupported':
       return translate('auto.lib.runtimePortForwards.updateHost', 'Update Orca on this host')
     case 'invalid_request':
     case 'listen_failed':
       return translate(
-        'auto.lib.runtimePortForwards.listenFailedHere',
-        'Could not listen on this computer'
+        'auto.lib.runtimePortForwards.listenFailedRetry',
+        "Couldn't listen on this computer. Retry or pick another port"
       )
     case 'tunnel_failed':
       return translate('auto.lib.runtimePortForwards.hostNotReachable', 'Host not reachable')

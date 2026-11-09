@@ -13,6 +13,7 @@
 1 src/main/browser/extensions/web-store/browser-extension-webstore-updater.ts
 1 src/main/claude/agent-view/agent-view-bridge.ts
 1 src/main/cli/appimage-serve-preparation.ts
+1 src/main/cloud-workspaces/cloud-workspaces-service.ts
 1 src/main/codex-accounts/codex-login-session.ts
 1 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/crash-reporting/pre-gone-host-memory.ts

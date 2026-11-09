@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Writes one git config per workspace member for `orca-git-as`. No token ever lands here: each file
+# carries the member's egress placeholder (swapped for their GitHub token by the control plane's
+# egress proxy, for this workspace's repository only) and their GitHub author identity.
+# Env: ORCA_MEMBERS_B64 = base64 JSON [{userId, name, email, authorization}]. Prints {"members":<n>}.
+set -euo pipefail
+umask 077
+DIR="$HOME/.orca-sandbox/members"
+mkdir -p "$DIR"
+json="$(printf '%s' "${ORCA_MEMBERS_B64:-W10=}" | base64 -d)"
+tmp="$(mktemp -d "$DIR.XXXXXX")"
+count=0
+while IFS= read -r row; do
+  user="$(jq -r '.userId' <<<"$row")"
+  case "$user" in '' | *[!A-Za-z0-9_.:-]*) continue ;; esac
+  file="$tmp/$(printf '%s' "$user" | tr ':' '_').gitconfig"
+  # An empty extraheader first resets the image-wide (app identity) header for this member's git.
+  git config -f "$file" --add http.https://github.com/.extraheader ''
+  git config -f "$file" --add http.https://github.com/.extraheader "Authorization: $(jq -r '.authorization' <<<"$row")"
+  git config -f "$file" user.name "$(jq -r '.name' <<<"$row")"
+  git config -f "$file" user.email "$(jq -r '.email' <<<"$row")"
+  count=$((count + 1))
+done < <(jq -c '.[]' <<<"$json")
+rm -rf "$DIR.old"
+[ -d "$DIR" ] && mv "$DIR" "$DIR.old"
+mv "$tmp" "$DIR"
+rm -rf "$DIR.old"
+echo "{\"members\":$count}"

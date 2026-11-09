@@ -43,10 +43,10 @@ export function SshForwardedPortsSection({
             size={12}
             className={cn('text-muted-foreground transition-transform', !collapsed && 'rotate-90')}
           />
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('auto.components.right.sidebar.PortsPanel.ddbe58d74e', 'Forwarded')}
           </span>
-          {count > 0 && <span className="ml-1 text-[10px] text-muted-foreground/60">{count}</span>}
+          {count > 0 && <span className="ml-1 text-2xs text-muted-foreground">{count}</span>}
         </button>
         <Button
           type="button"

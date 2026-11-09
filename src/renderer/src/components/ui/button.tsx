@@ -24,6 +24,9 @@ const buttonVariants = cva(
         'orchestration-tab': `${outlineButtonClasses} border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating dark:border-(--crew-border) dark:bg-(--crew-surface) dark:hover:bg-accent dark:hover:text-accent-foreground`,
         secondary: `bg-secondary text-secondary-foreground hover:bg-secondary/80 ${pressClasses}`,
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        // Secondary text action that only takes the foreground colour on hover.
+        quiet:
+          'text-muted-foreground hover:bg-accent hover:text-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
@@ -39,7 +42,7 @@ const buttonVariants = cva(
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
         inline: 'h-6 gap-1 px-0 has-[>svg]:px-0',
         // A text action inside a dense status line: shorter than xs, body-weight text.
-        statusAction: 'h-5 gap-1 rounded-md px-1 text-xs font-normal',
+        statusAction: 'h-5 gap-1 rounded-md px-1 text-2xs font-normal [&_svg]:size-3',
         // A ghost name inside a row label: `inline`'s height, padded so its hover fill clears the text.
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',

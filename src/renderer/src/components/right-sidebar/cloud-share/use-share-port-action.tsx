@@ -9,8 +9,10 @@ import {
   useCloudShares,
   type CloudSharesController
 } from '@/lib/cloud-shares/cloud-shares-store'
+import { useAppStore } from '@/store'
 import {
   SHARE_RESERVED_PORTS,
+  type CloudShareFailureCode,
   type ShareLink
 } from '../../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
 import { shareErrorMessage } from './share-link-status'
@@ -18,6 +20,21 @@ import { SharePortDialog } from './share-port-dialog'
 
 const MENU_ITEM_CLASS =
   'rounded-md focus:bg-accent focus:text-accent-foreground dark:focus:bg-accent'
+
+/** "Sign in" on a toast when the failure is a signed-out Orca account. */
+function signInAction(code: CloudShareFailureCode): {
+  action?: { label: string; onClick: () => void }
+} {
+  if (code !== 'unauthorized') {
+    return {}
+  }
+  return {
+    action: {
+      label: translate('auto.components.right.sidebar.CloudShare.signIn', 'Sign in to Orca'),
+      onClick: () => void useAppStore.getState().connectCurrentOrcaProfile()
+    }
+  }
+}
 
 export type SharePortAction = {
   /** False until the environment is known to be Orca Cloud: callers hide every share affordance. */
@@ -58,7 +75,7 @@ export function useSharePortAction(environmentId: string | null): SharePortActio
     (share: ShareLink) => {
       void openLink(share.id).then((result) => {
         if (!result.ok) {
-          toast.error(shareErrorMessage(result.code))
+          toast.error(shareErrorMessage(result.code), signInAction(result.code))
         }
       })
     },
@@ -66,9 +83,10 @@ export function useSharePortAction(environmentId: string | null): SharePortActio
   )
   const revoke = useCallback(
     async (share: ShareLink) => {
+      // The row keeps its confirm open and says it failed; only a sign-out needs more than that.
       const result = await revokeLink(share.id)
-      if (!result.ok) {
-        toast.error(shareErrorMessage(result.code))
+      if (!result.ok && result.code === 'unauthorized') {
+        toast.error(shareErrorMessage(result.code), signInAction(result.code))
       }
       return result.ok
     },

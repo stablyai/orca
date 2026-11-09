@@ -122,7 +122,10 @@ function announceMany(environmentId: string, count: number): void {
       id: `runtime-port-forward:${environmentId}:many`,
       duration: FORWARDED_TOAST_MS,
       action: {
-        label: translate('auto.components.ports.RuntimePortAutoForwarder.openPorts', 'Open Ports'),
+        label: translate(
+          'auto.components.ports.RuntimePortAutoForwarder.openPortsPanel',
+          'Open ports'
+        ),
         onClick: () => {
           const state = useAppStore.getState()
           state.setRightSidebarOpen(true)

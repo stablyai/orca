@@ -2,6 +2,8 @@ import React, { useId, useRef, useState } from 'react'
 import { ChevronRight, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
+import { Skeleton } from '@/components/ui/skeleton'
+import { OrcaSignInButton } from '@/components/OrcaSignInProgress'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { ShareLink } from '../../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
@@ -11,10 +13,15 @@ import { ShareLinkRow, shareLinkState } from './share-link-row'
 const ENDED_VISIBLE_MS = 10 * 60_000
 
 export type SharedLinksListProps = {
-  status: 'ready' | 'error'
+  status: 'loading' | 'ready' | 'error'
   shares: ShareLink[]
   now: number
   errorText?: string
+  /** Shown under the error title (what to do next). */
+  errorDetail?: string
+  /** The error is "signed out": offer Sign in instead of Retry. */
+  needsSignIn?: boolean
+  retrying?: boolean
   onShare: () => void
   onRetry: () => void
   onCopy: (url: string) => Promise<boolean>
@@ -45,6 +52,9 @@ export function SharedLinksList({
   shares,
   now,
   errorText,
+  errorDetail,
+  needsSignIn = false,
+  retrying = false,
   onShare,
   onRetry,
   onCopy,
@@ -91,7 +101,7 @@ export function SharedLinksList({
               {t('auto.components.right.sidebar.CloudShare.section', 'Shared links')}
             </span>
             {activeCount > 0 && (
-              <span className="ml-1 text-3xs text-muted-foreground/60">{activeCount}</span>
+              <span className="ml-1 text-3xs text-muted-foreground">{activeCount}</span>
             )}
           </button>
         </h3>
@@ -100,7 +110,7 @@ export function SharedLinksList({
           type="button"
           variant="ghost"
           size="xs"
-          className="-mr-1 h-5 shrink-0"
+          className="-mr-1 shrink-0"
           onClick={onShare}
         >
           <Share2 className="size-3" />
@@ -109,17 +119,43 @@ export function SharedLinksList({
       </div>
       {!collapsed && (
         <div id={listId}>
+          {status === 'loading' && (
+            <div aria-busy className="flex items-center gap-2 py-1">
+              <span className="sr-only">
+                {t('auto.components.right.sidebar.CloudShare.loading', 'Loading shared links…')}
+              </span>
+              <Skeleton className="size-5 shrink-0" />
+              <div className="min-w-0 flex-1 space-y-1">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-2.5 w-16" />
+              </div>
+            </div>
+          )}
           {status === 'error' && (
             // Neutral (status, not alert): background refreshes would otherwise interrupt.
             <InlineError
               tone="neutral"
+              density="compact"
               className="my-1"
               title={errorText}
-              retryLabel={t('auto.components.right.sidebar.CloudShare.retry', 'Retry')}
-              onRetry={onRetry}
+              detail={errorDetail}
+              retryLabel={
+                needsSignIn
+                  ? undefined
+                  : t('auto.components.right.sidebar.CloudShare.retry', 'Retry')
+              }
+              onRetry={needsSignIn ? undefined : onRetry}
+              retrying={retrying}
             />
           )}
-          {visible.length === 0 && status !== 'error' ? (
+          {status === 'error' && needsSignIn && (
+            <div className="mb-1">
+              <OrcaSignInButton variant="outline" size="xs">
+                {t('auto.components.right.sidebar.CloudShare.signIn', 'Sign in to Orca')}
+              </OrcaSignInButton>
+            </div>
+          )}
+          {status === 'loading' ? null : visible.length === 0 && status !== 'error' ? (
             <p className="py-1 text-xs text-muted-foreground">
               {t(
                 'auto.components.right.sidebar.CloudShare.empty',
