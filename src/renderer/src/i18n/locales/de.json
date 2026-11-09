@@ -19218,7 +19218,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…"
+        "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…",
+        "cliInstall": "Installieren",
+        "cliRecheck": "Erneut prüfen"
       },
       "reasoning": "Denkprozess",
       "failureWords": {
@@ -20716,7 +20718,10 @@
           "onCloud": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft in der Cloud.",
           "offTitle": "Diktieren ist aus",
           "offDescription": "Schalte es ein, um mit {{shortcut}} in jedem Bereich zu diktieren.",
-          "savedMicrophone": "Dein Mikrofon"
+          "savedMicrophone": "Dein Mikrofon",
+          "description": "Sprechen statt tippen, in jedem Bereich. Die Sprache wird auf diesem Computer erkannt, deine Audiodaten bleiben also hier.",
+          "setUp": "Einrichten",
+          "asksForMicrophone": "Orca fragt nach Zugriff auf das Mikrofon."
         },
         "quality": {
           "unsupported": "Unterstützt deine Sprache nicht",

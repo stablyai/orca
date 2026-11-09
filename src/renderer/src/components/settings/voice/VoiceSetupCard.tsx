@@ -12,6 +12,8 @@ import { Button } from '../../ui/button'
 import { Progress } from '../../ui/progress'
 import { Switch } from '../../ui/switch'
 import { useVoiceMicrophoneDevices } from './use-voice-microphone-devices'
+import { VoiceSpeechModelQuality } from './VoiceSpeechModelQuality'
+import type { SpeechModelQuality } from '../../../../../shared/speech-model-quality'
 
 type VoiceSetupCardProps = {
   voiceSettings: VoiceSettings
@@ -22,6 +24,9 @@ type VoiceSetupCardProps = {
   onDownloadModel: (modelId: string) => void
   onCancelDownload: (modelId: string) => void
   onShowMicrophone: () => void
+  /** The model one-click setup offers, with its quality for the rating language. */
+  suggestion: { model: SpeechModelManifest; quality: SpeechModelQuality } | undefined
+  onSetUp: () => void
 }
 
 /** The pane's first card: dictation's on/off switch and the one problem to fix, if any. */
@@ -33,7 +38,9 @@ export function VoiceSetupCard({
   onToggleVoiceDictation,
   onDownloadModel,
   onCancelDownload,
-  onShowMicrophone
+  onShowMicrophone,
+  suggestion,
+  onSetUp
 }: VoiceSetupCardProps): React.JSX.Element {
   const t = useTranslate()
   const shortcut = useShortcutLabel('voice.dictation')
@@ -54,6 +61,7 @@ export function VoiceSetupCard({
   let title: string
   let description: string
   let body: React.ReactNode = null
+  let showSwitch = true
 
   if (selectedModel && downloading) {
     icon = <Download />
@@ -94,10 +102,47 @@ export function VoiceSetupCard({
     )
   } else if (!selectedModel || !ready) {
     title = t('components.settings.voice.setup.title', 'Set up dictation')
-    description = t(
-      'components.settings.voice.setup.pickModel',
-      'Talk instead of typing in any pane. Download a speech model below to start; models on this computer keep your audio here.'
-    )
+    if (suggestion) {
+      showSwitch = voiceSettings.enabled
+      description = t(
+        'components.settings.voice.setup.description',
+        'Talk instead of typing in any pane. Speech is recognized on this computer, so your audio stays here.'
+      )
+      body = (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 rounded-md border border-border px-3 py-2">
+            <span className="text-sm font-medium">{suggestion.model.label}</span>
+            <span className="flex items-center gap-4">
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {t('auto.components.settings.VoicePane.91980ce124', '{{value0}} MB', {
+                  value0: Math.round((suggestion.model.sizeBytes ?? 0) / 1_000_000)
+                })}
+              </span>
+              <VoiceSpeechModelQuality quality={suggestion.quality} />
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="sm" disabled={permissionPending} onClick={onSetUp}>
+              <Download />
+              {t('components.settings.voice.setup.setUp', 'Set up')}
+            </Button>
+            {voiceSettings.enabled ? null : (
+              <span className="text-xs text-muted-foreground">
+                {t(
+                  'components.settings.voice.setup.asksForMicrophone',
+                  'Orca will ask for microphone access.'
+                )}
+              </span>
+            )}
+          </div>
+        </div>
+      )
+    } else {
+      description = t(
+        'components.settings.voice.setup.pickModel',
+        'Talk instead of typing in any pane. Download a speech model below to start; models on this computer keep your audio here.'
+      )
+    }
   } else if (voiceSettings.enabled && microphone.kind === 'missing') {
     tone = 'warn'
     icon = <CircleAlert />
@@ -164,14 +209,16 @@ export function VoiceSetupCard({
         </div>
         {body}
       </div>
-      <Switch
-        checked={voiceSettings.enabled}
-        aria-label={t('auto.components.settings.VoicePane.0121960365', 'Enable Voice Dictation')}
-        aria-busy={permissionPending}
-        disabled={permissionPending}
-        onCheckedChange={onToggleVoiceDictation}
-        className="disabled:cursor-wait disabled:opacity-70"
-      />
+      {showSwitch ? (
+        <Switch
+          checked={voiceSettings.enabled}
+          aria-label={t('auto.components.settings.VoicePane.0121960365', 'Enable Voice Dictation')}
+          aria-busy={permissionPending}
+          disabled={permissionPending}
+          onCheckedChange={onToggleVoiceDictation}
+          className="disabled:cursor-wait disabled:opacity-70"
+        />
+      ) : null}
     </div>
   )
 }

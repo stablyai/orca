@@ -18528,7 +18528,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "このホストで {{agent}} の準備ができているか確認しています…"
+        "checking": "このホストで {{agent}} の準備ができているか確認しています…",
+        "cliInstall": "インストール",
+        "cliRecheck": "再確認"
       },
       "reasoning": "推論",
       "contextMenu": {
@@ -19997,7 +19999,10 @@
           "onCloud": "どのペインでも {{shortcut}} を押します。{{model}} はクラウドで動作します。",
           "offTitle": "音声入力はオフです",
           "offDescription": "オンにすると、どのペインでも {{shortcut}} で音声入力できます。",
-          "savedMicrophone": "選択したマイク"
+          "savedMicrophone": "選択したマイク",
+          "description": "どのペインでも、入力の代わりに話せます。音声はこのコンピューター上で認識されるため、外に出ません。",
+          "setUp": "設定する",
+          "asksForMicrophone": "Orca がマイクへのアクセスを求めます。"
         },
         "quality": {
           "unsupported": "お使いの言語に非対応",
