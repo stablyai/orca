@@ -28,11 +28,26 @@ rule:
     # Party shape
     - pattern: $P.orcaSessionId !== null
     - pattern: $P.orcaSessionId === null
+    - pattern: $P.orcaSessionId != null
+    - pattern: $P.orcaSessionId == null
     - pattern: $P.terminalHandle === null
     - pattern: $P.terminalHandle !== null
+    - pattern: $P.terminalHandle != null
+    - pattern: $P.terminalHandle == null
+    # Party shape tested for truthiness: `if (p.orcaSessionId)`, `!p.x`, `p.x && …`, `p.x ? …`
+    - all:
+        - kind: member_expression
+        - has: { field: property, regex: '^(orcaSessionId|terminalHandle)$' }
+        - any:
+            - inside: { kind: parenthesized_expression, inside: { kind: if_statement } }
+            - inside: { kind: unary_expression, has: { field: operator, regex: '^!$' } }
+            - inside: { kind: binary_expression, has: { field: operator, regex: '^(&&|\|\|)$' } }
+            - inside: { kind: ternary_expression, field: condition }
     # Kind and mode literals
     - pattern: $K.kind === 'structured'
+    - pattern: $K.kind !== 'structured'
     - pattern: $K.mode === 'structured'
+    - pattern: $K.mode !== 'structured'
     - pattern: isTuiAgent($$$)
     # Caller kind read from the environment
     - pattern: readInjectedAgentSessionId($$$)

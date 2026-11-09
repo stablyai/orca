@@ -30,7 +30,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported: refused `session_caller_not_live` while the chat is released
-- Terminal · Paired: refused `stable_pane_required`: the mailbox lives on the caller's own Orca
+- Terminal · Paired: supported: only `--peek`, which reads the paired Orca's mailbox; a consuming check is refused `stable_pane_required`, since that mailbox can never receive this caller's mail
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -43,7 +43,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: runs on the paired Orca, which records a caller it cannot reach
+- Terminal · Paired: refused `stable_pane_required`: the paired Orca has no pane for this caller, so it cannot find its Run
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -105,7 +105,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: runs on the paired Orca, which records a caller it cannot reach
+- Terminal · Paired: refused `stable_pane_required`: the paired Orca has no pane for this caller, so it cannot find its Run
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -114,7 +114,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: reads the paired Orca's own records
+- Terminal · Paired: supported: only with `--run`; without it the paired Orca refuses `stable_pane_required`, having no pane for this caller
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -123,7 +123,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: runs on the paired Orca, which records a caller it cannot reach
+- Terminal · Paired: refused `stable_pane_required`: the paired Orca has no pane for this caller, so it cannot find its Run
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -180,7 +180,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: runs on the paired Orca, which records a caller it cannot reach
+- Terminal · Paired: refused `stable_pane_required`: the paired Orca has no pane for this caller, so it cannot bind a Run to it
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -189,7 +189,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: reads the paired Orca's own records
+- Terminal · Paired: refused `stable_pane_required`: the paired Orca has no pane for this caller, so it cannot find its Run
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -220,7 +220,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: runs on the paired Orca, which records a caller it cannot reach
+- Terminal · Paired: refused `stable_pane_required`: the paired Orca has no pane for this caller, so it cannot bind a Run to it
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -242,7 +242,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: runs on the paired Orca, which records a caller it cannot reach
+- Terminal · Paired: refused `stable_pane_required`: the paired Orca has no pane for this caller, so it cannot find its Run
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -251,7 +251,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: reads the paired Orca's own records
+- Terminal · Paired: supported: only with `--run`; without it the paired Orca refuses `stable_pane_required`, having no pane for this caller
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -260,7 +260,7 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: runs on the paired Orca, which records a caller it cannot reach
+- Terminal · Paired: refused `stable_pane_required`: the paired Orca has no pane for this caller, so it cannot find its Run
 - Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
@@ -335,8 +335,8 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - Terminal · Local: supported
 - Chat · Local: supported
-- Terminal · Paired: supported: `--on` starts it from the caller's own Orca and reports come home
-- Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca; `--on` starts it from the caller's own Orca
+- Terminal · Paired: supported: runs on the paired Orca, which records a coordinator it cannot reach (`worker-start --on` is the route that brings reports home)
+- Chat · Paired: refused `session_caller_host_boundary`: a session id names a caller only on its own Orca (`worker-start --on` is the route that brings reports home)
 - Terminal · SSH/WSL: supported
 - Chat · SSH/WSL: refused `session_caller_host_boundary`: chat agents do not run in SSH or WSL
 
