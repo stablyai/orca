@@ -10,7 +10,10 @@ import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-st
 import { insertMobileDictationAway } from './mobile-dictation-away-insert'
 import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
 import { dictationAwayCopy } from './mobile-dictation-away-copy'
-import { useMobileDictationAnnouncements } from './use-mobile-dictation-announcements'
+import {
+  useMobileDictationAnnouncements,
+  useMobileDictationSpeech
+} from './use-mobile-dictation-announcements'
 import {
   MobileDictationClearanceContext,
   MobileDictationHostContext,
@@ -59,6 +62,8 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   const clearToast = useCallback(() => setToast(null), [])
   const [clearances, setClearances] = useState<ReadonlyMap<symbol, number>>(new Map())
   const clipboard = useClipboardWriter()
+  const speech = useMobileDictationSpeech()
+  const { say: speak } = speech
 
   // Bring a dictation's target back: its screen if one is still mounted, otherwise open the session again.
   const openOwner = useCallback(
@@ -79,10 +84,12 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   }, [openOwner])
 
   // Say it on the screen that shows the dictation, else in the host's toast (with Open for the dictation it is about).
+  // A screen's toast is not read by VoiceOver on the page, so it is spoken too; the host's toast is spoken when it shows.
   const say = (message: string, about?: MobileDictationOwner) => {
     const screen = screenFor(screensRef.current, ownerRef.current, false)
     if (screen?.shown()) {
       screen.toast(message)
+      speak(message)
     } else {
       setToast(about ? { message, open: () => openOwner(about) } : { message })
     }
@@ -91,6 +98,7 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     const screen = screenFor(screensRef.current, ownerRef.current, false)
     if (screen?.shown()) {
       screen.reportFailure(err)
+      speak(dictationFailureMessage(err.message))
       return
     }
     triggerError()
@@ -146,16 +154,15 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     cancel: cancelDictation,
     retry
   } = dictation
-  // Its screen in front: the in-place controls speak for it; otherwise the pill and its toasts do.
-  const inPlace = owner !== null && screenFor(screensRef.current, owner, false)?.shown() === true
-  const away = owner !== null && isUnderway(dictation) && !inPlace
-  const announcements = useMobileDictationAnnouncements(dictation, {
-    computerName: owner?.computerName ?? null,
-    inPlace,
-    away,
-    toast: toast?.message ?? null
-  })
-  const { noteCancel } = announcements
+  const away =
+    owner !== null &&
+    isUnderway(dictation) &&
+    screenFor(screensRef.current, owner, false)?.shown() !== true
+  const { noteCancel } = useMobileDictationAnnouncements(
+    dictation,
+    { computerName: owner?.computerName ?? null, away, toast: toast?.message ?? null },
+    speak
+  )
   // Every ✕ (in place, the pill, the terminal's long press) ends here, so a cancel is never read as "Inserted."
   const cancel = useCallback(() => {
     noteCancel()
@@ -241,14 +248,15 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   const title = owner?.title ?? ''
   const clearance = Math.max(0, ...clearances.values())
   const pill = useMemo(
-    () => ({ away, title, open, toast, clearToast, clearance, liveText: announcements.liveText }),
-    [announcements.liveText, away, clearToast, clearance, open, title, toast]
+    () => ({ away, title, open, toast, clearToast, clearance, liveText: speech.liveText }),
+    [speech.liveText, away, clearToast, clearance, open, title, toast]
   )
   const value = useMemo<MobileDictationHost>(
     () => ({
       owner,
       start,
       stop,
+      announce: speak,
       attach,
       refresh,
       subscribe,
@@ -256,7 +264,18 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
       getIdleDictation,
       getUnderway
     }),
-    [attach, getDictation, getIdleDictation, getUnderway, owner, refresh, start, stop, subscribe]
+    [
+      attach,
+      getDictation,
+      getIdleDictation,
+      getUnderway,
+      owner,
+      refresh,
+      speak,
+      start,
+      stop,
+      subscribe
+    ]
   )
   return (
     <MobileDictationClearanceContext.Provider value={setClearance}>

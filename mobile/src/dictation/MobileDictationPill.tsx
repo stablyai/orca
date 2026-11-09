@@ -209,7 +209,7 @@ export function MobileDictationPillLayer(): React.JSX.Element | null {
           <MobileDictationPill title={pill.title} onOpen={pill.open} onStop={stop} />
         </View>
       ) : null}
-      <MobileDictationStatusAnnouncement text={pill.liveText} />
+      <MobileDictationStatusAnnouncement liveText={pill.liveText} />
       <MobileDictationToast
         toast={pill.toast}
         onDone={pill.clearToast}
