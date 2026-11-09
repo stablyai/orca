@@ -3773,7 +3773,6 @@
             "4f327c8b3d": "Markdown を開く…",
             "3d5d6c960d": "新規 Markdown",
             "fd2b42aaa3": "新規モバイルエミュレータ",
-            "aea43b5748": "既存のエミュレータタブを開きます。",
             "b426bb2615": "モバイルエミュレータに移動",
             "4833fb2cbe": "新規ブラウザタブ",
             "d364f3c8d4": "新規ターミナル",
@@ -7925,7 +7924,6 @@
           "f828e1de19": "- チームと共有",
           "673a7fd10e": "確認中…",
           "5426ecbdcb": "ローカルスクリプトは実行されません",
-          "b2b06c7ce8": "利用可能な環境変数 (カーソルを合わせると詳細が表示されます):",
           "95a0411b3e": "テンプレート",
           "175daba180": "例",
           "b20c5df6ca": "「orca.yaml」ファイルを追加して、このリポジトリの共有セットアップ、アーカイブ、または Issue 自動化のデフォルトを有効にします。テンプレートの例:",
@@ -19495,6 +19493,7 @@
       "composerWorkspace": {
         "copyFailed": "コピーできませんでした",
         "copyIdentity": "{{value0}} をコピー",
+        "detachedCommit": "コミット {{head}}（ブランチではありません）",
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
         "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
@@ -19971,6 +19970,9 @@
           "title": "フィラーを削除",
           "description": "音声入力の言語に合わせて、「えーと」「うーん」などのつなぎ言葉を入力テキストから取り除きます。"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "利用可能な環境変数"
       }
     },
     "agentChildRow": {
@@ -21704,11 +21706,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "削除の設定を保存できませんでした",
     "alwaysForceDelete": "常に強制削除",
+    "alwaysForceDeleteDescription": "今後のすべてのワークスペース削除に適用されます。",
     "moreActions": "その他の強制削除オプション",
-    "alwaysForceDeleteTooltip": "今後のすべてのワークスペース削除に適用されます。",
     "alwaysForceDeleteBranches": "保持したブランチを常に削除する",
     "moreBranchActions": "その他のブランチ削除オプション",
-    "alwaysForceDeleteBranchesTooltip": "将来のワークスペースの削除後に保持されるブランチに適用されます。",
+    "alwaysForceDeleteBranchesDescription": "将来のワークスペースの削除後に保持されるブランチに適用されます。",
     "moreDeleteOptions": "その他の削除オプション",
     "alwaysDelete": "常に削除",
     "alwaysDeleteTooltip": "今後の削除ではこの確認をスキップします。"
@@ -22069,7 +22071,8 @@
     "refresh": "更新",
     "restartLocal": "ローカルデーモンを再起動",
     "killAllLocal": "すべてのローカルセッションを終了",
-    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。"
+    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。",
+    "metricDetails": "メトリクスの詳細"
   },
   "workspaceSpace": {
     "table": {

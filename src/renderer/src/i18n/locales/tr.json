@@ -4284,7 +4284,6 @@
             "4f327c8b3d": "Markdown Aç...",
             "3d5d6c960d": "Yeni Markdown",
             "fd2b42aaa3": "Yeni Mobil Emülatör",
-            "aea43b5748": "Mevcut emülatör sekmesini açın.",
             "b426bb2615": "Mobil Emülatöre Git",
             "4833fb2cbe": "Yeni Tarayıcı Sekmesi",
             "d364f3c8d4": "Yeni Terminal",
@@ -8564,7 +8563,6 @@
           "f828e1de19": "- ekibinizle paylaşılır",
           "673a7fd10e": "Kontrol ediliyor...",
           "5426ecbdcb": "Yerel betikler çalıştırılmayacak",
-          "b2b06c7ce8": "Kullanılabilir ortam değişkenleri (ayrıntılar için üzerine gelin):",
           "95a0411b3e": "şablon",
           "175daba180": "Örnek",
           "b20c5df6ca": "Bu repo için paylaşılan kurulum, arşiv veya sorun otomasyonu varsayılanlarını etkinleştirmek üzere bir `orca.yaml` dosyası ekleyin. Örnek şablon:",
@@ -20183,6 +20181,7 @@
       "composerWorkspace": {
         "copyFailed": "Kopyalanamadı",
         "copyIdentity": "{{value0}} kopyala",
+        "detachedCommit": "Commit {{head}} (dal değil)",
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
@@ -20654,6 +20653,9 @@
           "title": "Dolgu seslerini kaldır",
           "description": "Dikte edilen metinden “hmm” gibi duraksama seslerini dikte diline göre çıkarır."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Kullanılabilir ortam değişkenleri"
       }
     },
     "agentChildRow": {
@@ -21848,11 +21850,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Silme tercihi kaydedilemedi",
     "alwaysForceDelete": "Her zaman zorla sil",
+    "alwaysForceDeleteDescription": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreActions": "Diğer zorla silme seçenekleri",
-    "alwaysForceDeleteTooltip": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreBranchActions": "Diğer branch silme seçenekleri",
     "alwaysForceDeleteBranches": "Korunan branch'leri her zaman sil",
-    "alwaysForceDeleteBranchesTooltip": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır.",
+    "alwaysForceDeleteBranchesDescription": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır.",
     "moreDeleteOptions": "Diğer silme seçenekleri",
     "alwaysDelete": "Her zaman sil",
     "alwaysDeleteTooltip": "Bundan sonraki silme işlemlerinde bu onayı atla."
@@ -22391,7 +22393,8 @@
     "refresh": "Yenile",
     "restartLocal": "Yerel arka plan hizmetini yeniden başlat",
     "killAllLocal": "Tüm yerel oturumları sonlandır",
-    "killFailed": "Terminal sonlandırılamadı. Son gözlemlenen oturumlar korunur."
+    "killFailed": "Terminal sonlandırılamadı. Son gözlemlenen oturumlar korunur.",
+    "metricDetails": "Metrik ayrıntıları"
   },
   "browserExtensions": {
     "permission": {

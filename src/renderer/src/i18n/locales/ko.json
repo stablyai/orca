@@ -3773,7 +3773,6 @@
             "4f327c8b3d": "Markdown 열기...",
             "3d5d6c960d": "새로운 Markdown",
             "fd2b42aaa3": "새로운 모바일 에뮬레이터",
-            "aea43b5748": "기존 에뮬레이터 탭을 엽니다.",
             "b426bb2615": "모바일 에뮬레이터로 이동",
             "4833fb2cbe": "새 브라우저 탭",
             "d364f3c8d4": "새로운 Terminal",
@@ -7888,7 +7887,6 @@
           "f828e1de19": "- 팀과 공유",
           "673a7fd10e": "확인 중...",
           "5426ecbdcb": "로컬 스크립트가 실행되지 않습니다.",
-          "b2b06c7ce8": "사용 가능한 환경 변수(자세한 내용을 보려면 마우스를 올리세요):",
           "95a0411b3e": "템플릿",
           "175daba180": "예",
           "b20c5df6ca": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:",
@@ -19495,6 +19493,7 @@
       "composerWorkspace": {
         "copyFailed": "복사하지 못했습니다",
         "copyIdentity": "{{value0}} 복사",
+        "detachedCommit": "커밋 {{head}} (브랜치 아님)",
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
         "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
@@ -19971,6 +19970,9 @@
           "title": "군말 제거",
           "description": "받아쓰기 언어에 맞춰 받아쓴 텍스트에서 “음”, “흠” 같은 소리를 지웁니다."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "사용 가능한 환경 변수"
       }
     },
     "agentChildRow": {
@@ -21704,9 +21706,9 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "삭제 환경설정을 저장하지 못했습니다",
     "alwaysForceDelete": "항상 강제 삭제",
+    "alwaysForceDeleteDescription": "이후 모든 워크스페이스 삭제에 적용됩니다.",
     "moreActions": "추가 강제 삭제 옵션",
-    "alwaysForceDeleteTooltip": "이후 모든 워크스페이스 삭제에 적용됩니다.",
-    "alwaysForceDeleteBranchesTooltip": "향후 워크스페이스 삭제 후 보존되는 브랜치에 적용됩니다.",
+    "alwaysForceDeleteBranchesDescription": "향후 워크스페이스 삭제 후 보존되는 브랜치에 적용됩니다.",
     "moreBranchActions": "브랜치 삭제 옵션 더 보기",
     "alwaysForceDeleteBranches": "보존된 브랜치 항상 삭제",
     "moreDeleteOptions": "추가 삭제 옵션",
@@ -22069,7 +22071,8 @@
     "refresh": "새로 고침",
     "restartLocal": "로컬 데몬 다시 시작",
     "killAllLocal": "모든 로컬 세션 종료",
-    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다."
+    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다.",
+    "metricDetails": "지표 세부 정보"
   },
   "workspaceSpace": {
     "table": {

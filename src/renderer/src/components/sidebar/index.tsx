@@ -169,7 +169,7 @@ function Sidebar({
   )
 
   return (
-    <TooltipProvider delayDuration={400}>
+    <TooltipProvider>
       {/* Why: the handle lives outside the clipped sidebar so its outer half isn't cut off. */}
       <div className="relative flex min-h-0 flex-shrink-0 scrollbar-sleek-parent">
         <div

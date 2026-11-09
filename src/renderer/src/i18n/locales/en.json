@@ -4561,7 +4561,6 @@
             "4f327c8b3d": "Open Markdown...",
             "3d5d6c960d": "New Markdown",
             "fd2b42aaa3": "New Mobile Emulator",
-            "aea43b5748": "Open the existing emulator tab.",
             "b426bb2615": "Go to Mobile Emulator",
             "4833fb2cbe": "New Browser Tab",
             "d364f3c8d4": "New Terminal",
@@ -8877,7 +8876,6 @@
           "f828e1de19": "- shared with your team",
           "673a7fd10e": "Checking...",
           "5426ecbdcb": "Local scripts will not run",
-          "b2b06c7ce8": "Available environment variables (hover for details):",
           "95a0411b3e": "template",
           "175daba180": "Example",
           "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
@@ -20777,6 +20775,7 @@
       "composerWorkspace": {
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
+        "detachedCommit": "Commit {{head}} (not a branch)",
         "folder": "Folder",
         "mainCheckout": "Main checkout",
         "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
@@ -21328,6 +21327,9 @@
           "title": "Remove Filler Words",
           "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Available environment variables"
       }
     },
     "agentChildRow": {
@@ -22628,11 +22630,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",
     "alwaysForceDelete": "Always force delete",
+    "alwaysForceDeleteDescription": "Applies to all future workspace deletions.",
     "moreActions": "More force delete options",
-    "alwaysForceDeleteTooltip": "Applies to all future workspace deletions.",
     "moreBranchActions": "More branch delete options",
     "alwaysForceDeleteBranches": "Always delete preserved branches",
-    "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions.",
+    "alwaysForceDeleteBranchesDescription": "Applies to branches kept after future workspace deletions.",
     "moreDeleteOptions": "More delete options",
     "alwaysDelete": "Always delete",
     "alwaysDeleteTooltip": "Skip this confirmation for future deletions."
@@ -23353,7 +23355,8 @@
     "refresh": "Refresh",
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
-    "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+    "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
+    "metricDetails": "Metric details"
   },
   "browserExtensions": {
     "permission": {
