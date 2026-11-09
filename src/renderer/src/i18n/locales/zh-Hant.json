@@ -2726,7 +2726,7 @@
         "untitled": "無標題聊天",
         "listLabel": "將恢復的聊天",
         "dontAskAgain": "不再詢問（自動恢復）",
-        "dontAskAgainHint": "您可以在「設定」→「實驗」→「聊天 UI」中關閉此功能。",
+        "dontAskAgainHint": "您可以在「設定」→「聊天」→「行為」中關閉此功能。",
         "selectAgent": "在 {{value2}} 中恢復 {{value0}} 聊天「{{value1}}」",
         "dismissAll": "全部關閉",
         "viewChats": "檢視聊天",
