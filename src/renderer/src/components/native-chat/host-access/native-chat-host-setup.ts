@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -195,6 +196,13 @@ function useNativeChatInstall(
   const [rechecking, setRechecking] = useState(false)
   const recheck = useCallback(() => {
     const state = useAppStore.getState()
+    const reportFailure = () =>
+      toast.error(
+        translate(
+          'components.native-chat.install.cliRecheckFailed',
+          'Could not check installed agents on this host. Try again.'
+        )
+      )
     setRechecking(true)
     void (
       environmentId
@@ -212,9 +220,11 @@ function useNativeChatInstall(
         if (inventory.state === 'successful') {
           setOpened(false)
           onRechecked()
+        } else {
+          reportFailure()
         }
       })
-      .catch(() => undefined)
+      .catch(reportFailure)
       .finally(() => setRechecking(false))
   }, [environmentId, worktreeId, onRechecked])
   return useMemo(
