@@ -144,9 +144,29 @@ async function personTurn(journal: AgentSessionJournal, name: string) {
   )
 }
 
-/** A person's limited turn of `rows` rows and one automatic continue that hit the limit again after `rows` more. */
-async function chainOfOne(journal: AgentSessionJournal, rows: number) {
-  const first = await limitedTurn(journal, 'first', rows)
+/** A person's limited turn of `rows` rows and one automatic continue that hit the limit again after `rows` more.
+ *  `olderRows` puts a long earlier turn first, and the person's turn is then opened by the agent's echo. */
+async function chainOfOne(journal: AgentSessionJournal, rows: number, olderRows?: number) {
+  let opened: { userItemId?: string } = {}
+  if (olderRows !== undefined) {
+    await limitedTurn(journal, 'older', olderRows)
+    const echo = { provider: 'orca' as const, clientMessageId: 'provider-echo-root' }
+    await journal.appendSubmission({
+      clientMessageId: 'person-root',
+      payloadFingerprint: 'person-root',
+      body: { kind: 'message', role: 'user', blocks: [] },
+      origin: 'client',
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'person-root',
+      state: 'accepted',
+      providerIdentity: echo,
+      fence: 1
+    })
+    opened = { userItemId: agentJournalItemKey(echo) }
+  }
+  const first = await limitedTurn(journal, 'first', rows, opened)
   const sent = await hostContinue(
     journal,
     { turnItemId: first.turnScope.turnItemId, resetsAt: 60_000 },
@@ -182,14 +202,14 @@ it('derives the chain only when the status projection rebuilds', async () => {
 
 // Bounds come from what the walk must read: the chain's own turns once each way, never the history before it.
 it('reads the chain tail linearly, whatever history precedes it', async () => {
-  const measure = async (history: number, rows: number) => {
+  const measure = async (history: number, rows: number, olderRows?: number) => {
     const journal = await fixture.open({
       identity: { ...fixture.IDENTITY, sessionId: `measure-${(measured += 1)}` }
     })
     for (let index = 0; index < history; index += 1) {
       await personTurn(journal, `old-${index}`)
     }
-    await chainOfOne(journal, rows)
+    await chainOfOne(journal, rows, olderRows)
     reads = chainReads()
     const chain = new StructuredAgentSessionJournalProjections().read(journal, null).usageLimitCut
       ?.chain
@@ -199,6 +219,11 @@ it('reads the chain tail linearly, whatever history precedes it', async () => {
   const long = await measure(500, 0)
   expect([short.chain, long.chain]).toEqual([1, 1])
   expect(long.total).toBe(short.total)
+  // An echo-opened root names a key no row carries; its opener is still found without reading the turn before.
+  const echoed = await measure(0, 0, 50)
+  const echoedLong = await measure(0, 0, 500)
+  expect([echoed.chain, echoedLong.chain]).toEqual([1, 1])
+  expect(echoedLong.total).toBe(echoed.total)
   const rows = await measure(0, 200)
   const tenfold = await measure(0, 2_000)
   expect([rows.chain, tenfold.chain]).toEqual([1, 1])

@@ -59,12 +59,17 @@ function openerOf(
   return -1
 }
 
-/** Whether the turn at `index` was opened by a slash command, read from its opener just before it. */
+/** Whether the turn at `index` was opened by a slash command, read from its opener just before it.
+ *  An echo-opened turn names the provider's key while its row keeps the submission's, so the nearest
+ *  root user row is the opener too; the walk never reaches the turn before. */
 function isCommandTurnAt(items: readonly AgentJournalRenderItem[], index: number): boolean {
   const userItemId = readAgentJournalTurn(items[index]!.body)?.userItemId
   for (let before = index - 1; userItemId && before >= 0; before -= 1) {
     const item = items[before]!
-    if (item.itemId === userItemId) {
+    if (
+      item.itemId === userItemId ||
+      (isRootAgentJournalItem(item) && item.body.kind === 'message' && item.body.role === 'user')
+    ) {
       return isStructuredAgentSessionCommandEntry(item.body)
     }
     if (isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)) {
@@ -125,8 +130,8 @@ function usageLimitBetween(
 
 /** How many automatic continues in a row ended in another usage limit, read from the journal so a
  *  restart or reopen agrees. Each step needs the exact join: the turn opened by a host submission
- *  whose message id names the cut before it. Walks back from the end, so the work is the chain's
- *  own tail, never the conversation's length. */
+ *  whose message id names the cut before it. Walks back from the end, so the rows read are the
+ *  chain's own; the sends searched for openers can be all of them when an opener matches none. */
 export function usageLimitContinueChain(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly ChainSubmission[],
