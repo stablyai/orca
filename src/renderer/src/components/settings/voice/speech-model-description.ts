@@ -1,7 +1,7 @@
 import type { SpeechModelManifest } from '../../../../../shared/speech-types'
 import { translate } from '@/i18n/i18n'
 
-// Models transcribe-cpp can't run; their users moved to SenseVoice or Nemotron.
+// Models transcribe-cpp can't run; their users moved to SenseVoice or Parakeet.
 const retiredForEngine = (): string =>
   translate(
     'settings.voice.modelDescriptions.retiredForEngine',
@@ -34,6 +34,11 @@ const DESCRIPTIONS: Record<string, () => string> = {
       'settings.voice.modelDescriptions.whisperTiny',
       '90+ languages. Lower accuracy than Parakeet but broadest language coverage.'
     ),
+  'whisper-large-v3-turbo': () =>
+    translate(
+      'settings.voice.modelDescriptions.whisperLargeV3Turbo',
+      'Best accuracy for Japanese, Korean, and Chinese, and 90+ languages. Slower than Parakeet.'
+    ),
   'sense-voice-zh-en-ja-ko-yue': () =>
     translate(
       'settings.voice.modelDescriptions.senseVoice',
@@ -47,7 +52,7 @@ const DESCRIPTIONS: Record<string, () => string> = {
   'nemotron-3.5-asr-streaming-0.6b': () =>
     translate(
       'settings.voice.modelDescriptions.nemotron',
-      'Korean, Chinese, Japanese and many more languages, with automatic language detection.'
+      'English, Spanish, German and many more languages, with automatic language detection.'
     ),
   'openai-gpt-transcribe': () =>
     translate(

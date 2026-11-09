@@ -1153,8 +1153,9 @@
         "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
         "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key.",
         "openAiCompatible": "Any service with an OpenAI-style transcription API, such as Groq, Mistral or a local server.",
+        "whisperLargeV3Turbo": "Best accuracy for Japanese, Korean, and Chinese, and 90+ languages. Slower than Parakeet.",
         "retiredForEngine": "No longer offered: the speech engine can no longer run it. Delete it to free up space.",
-        "nemotron": "Korean, Chinese, Japanese and many more languages, with automatic language detection."
+        "nemotron": "English, Spanish, German and many more languages, with automatic language detection."
       }
     },
     "diagnostics": {

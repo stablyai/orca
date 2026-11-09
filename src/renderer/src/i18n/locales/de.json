@@ -962,8 +962,9 @@
         "whisperTiny": "Über 90 Sprachen. Geringere Genauigkeit als Parakeet, aber die größte Sprachabdeckung.",
         "senseVoice": "Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch mit automatischer Erkennung der gesprochenen Sprache.",
         "gptTranscribe": "Cloud-Transkription mit hoher Genauigkeit. Benötigt einen OpenAI-API-Schlüssel.",
+        "whisperLargeV3Turbo": "Beste Genauigkeit für Japanisch, Koreanisch und Chinesisch sowie über 90 Sprachen. Langsamer als Parakeet.",
         "retiredForEngine": "Nicht mehr verfügbar: Die Spracherkennung kann dieses Modell nicht mehr ausführen. Löschen Sie es, um Speicherplatz freizugeben.",
-        "nemotron": "Koreanisch, Chinesisch, Japanisch und viele weitere Sprachen, mit automatischer Spracherkennung."
+        "nemotron": "Englisch, Spanisch, Deutsch und viele weitere Sprachen, mit automatischer Spracherkennung."
       }
     },
     "diagnostics": {

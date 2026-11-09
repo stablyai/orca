@@ -938,8 +938,9 @@
         "whisperTiny": "90'dan fazla dil. Parakeet'ten daha düşük doğruluk, ancak en geniş dil kapsamı.",
         "senseVoice": "Otomatik dil algılamayla Çince, İngilizce, Japonca, Korece ve Kantonca.",
         "gptTranscribe": "Yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir.",
+        "whisperLargeV3Turbo": "Japonca, Korece ve Çince için en iyi doğruluk, ayrıca 90'dan fazla dil. Parakeet'ten daha yavaş.",
         "retiredForEngine": "Artık sunulmuyor: konuşma motoru bu modeli artık çalıştıramıyor. Yer açmak için silin.",
-        "nemotron": "Korece, Çince, Japonca ve daha birçok dil; dil otomatik algılanır."
+        "nemotron": "İngilizce, İspanyolca, Almanca ve daha birçok dil; dil otomatik algılanır."
       }
     },
     "diagnostics": {

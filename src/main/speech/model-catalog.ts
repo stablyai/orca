@@ -92,8 +92,8 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sampleRate: 16000,
     streaming: true,
     modelingUnit: 'cjkchar',
-    // transcribe-cpp has no zipformer.
-    replacedBy: 'nemotron-3.5-asr-streaming-0.6b'
+    // transcribe-cpp has no zipformer; SenseVoice beat Nemotron 3.5 on Korean and Chinese.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
   {
     id: 'zipformer-streaming-korean',
@@ -106,8 +106,8 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sampleRate: 16000,
     streaming: true,
     modelingUnit: 'bpe',
-    // transcribe-cpp has no zipformer.
-    replacedBy: 'nemotron-3.5-asr-streaming-0.6b'
+    // transcribe-cpp has no zipformer; SenseVoice beat Nemotron 3.5 on Korean and Chinese.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
   {
     id: 'parakeet-tdt-ctc-0.6b-ja-int8',
@@ -136,6 +136,19 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'whisper-large-v3-turbo',
+    label: 'Whisper Large v3 Turbo',
+    description:
+      'Best accuracy for Japanese, Korean, and Chinese, and 90+ languages. Slower than Parakeet.',
+    type: 'whisper',
+    provider: 'local',
+    language: 'multilingual',
+    ...getGgufSpeechModelDownload('whisper-large-v3-turbo'),
+    dictationLanguages: DICTATION_LANGUAGES,
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'sense-voice-zh-en-ja-ko-yue',
     label: 'SenseVoice',
     description:
@@ -153,7 +166,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     id: 'nemotron-3.5-asr-streaming-0.6b',
     label: 'Nemotron 3.5',
     description:
-      'Korean, Chinese, Japanese and many more languages, with automatic language detection.',
+      'English, Spanish, German and many more languages, with automatic language detection.',
     type: 'transducer',
     provider: 'local',
     language: 'multilingual',

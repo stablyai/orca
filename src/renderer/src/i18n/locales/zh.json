@@ -505,8 +505,9 @@
         "whisperTiny": "支持 90 多种语言。准确度低于 Parakeet，但语言覆盖最广。",
         "senseVoice": "支持中文、英语、日语、韩语和粤语，并自动检测语言。",
         "gptTranscribe": "准确度高的云端转录。需要 OpenAI API 密钥。",
+        "whisperLargeV3Turbo": "日语、韩语和中文准确度最高，支持 90 多种语言。速度比 Parakeet 慢。",
         "retiredForEngine": "已不再提供：语音引擎已无法运行此模型。删除它以释放空间。",
-        "nemotron": "支持韩语、中文、日语等多种语言，可自动识别语言。"
+        "nemotron": "支持英语、西班牙语、德语等多种语言，可自动识别语言。"
       }
     },
     "diagnostics": {
