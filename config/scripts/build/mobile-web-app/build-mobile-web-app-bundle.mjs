@@ -24,6 +24,13 @@ import {
   routePathnameFromKey
 } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
+import {
+  ROUTE_ENTRY_NAMESPACE,
+  entryStaticClosure,
+  isScriptOutput,
+  lazyModulesToAnchor,
+  sharedModulesToMerge
+} from './mobile-web-app-chunk-grouping.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const mobileDir = join(projectDir, 'mobile')
@@ -134,7 +141,7 @@ const HAIRLINE_PLUGIN_NAME = 'orca-hairline-device-pixel'
 const ENTRY_CHUNK_NAME = 'entry'
 
 const ROUTE_MANIFEST_MODULE = /web-entry[\\/]route-manifest(\.ts)?$/
-const ROUTE_ENTRY_NAMESPACE = 'orca-route-entry'
+const LAZY_ENTRY_NAMESPACE = 'orca-lazy-entry'
 
 // The entry's static imports as written, minus the manifest: a route importing it would be an output cycle.
 async function entryImportAnchors() {
@@ -160,8 +167,14 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 // Keep typed route-manifest file for TS/Metro resolution; replace only its body for web.
 // Routes import the entry's imports first, so esbuild keeps those modules in one chunk instead of one per route subset.
 // Routes also import every module in sharedModules, which esbuild then puts in one chunk all routes load.
-function routeManifestPlugin(manifestSource, routes, sharedModules) {
+// Lazy modules in anchoredLazyModules (path to export names) get the same imports, so they don't split those chunks either.
+function routeManifestPlugin(manifestSource, routes, sharedModules, anchoredLazyModules) {
   let anchors
+  const anchoredImports = async () => {
+    anchors ??= entryImportAnchors()
+    const shared = sharedModules.map((module) => `import ${JSON.stringify(module)}\n`).join('')
+    return `${await anchors}${shared}`
+  }
   return {
     name: ROUTE_MANIFEST_PLUGIN_NAME,
     setup(build) {
@@ -170,26 +183,43 @@ function routeManifestPlugin(manifestSource, routes, sharedModules) {
         loader: 'js',
         resolveDir: mobileDir
       }))
-      if (routes.length === 0) {
-        return
-      }
-      const routeImport = new RegExp(
-        `^(?:${routes.map(({ module }) => escapeRegExp(module)).join('|')})$`
-      )
-      build.onResolve({ filter: routeImport }, (args) =>
-        args.kind === 'dynamic-import'
-          ? { path: args.path, namespace: ROUTE_ENTRY_NAMESPACE }
-          : undefined
-      )
-      build.onLoad({ filter: /.*/, namespace: ROUTE_ENTRY_NAMESPACE }, async (args) => {
-        anchors ??= entryImportAnchors()
-        const shared = sharedModules.map((module) => `import ${JSON.stringify(module)}\n`).join('')
-        return {
-          contents: `${await anchors}${shared}export { default } from ${JSON.stringify(args.path)}\n`,
+      if (routes.length > 0) {
+        const routeImport = new RegExp(
+          `^(?:${routes.map(({ module }) => escapeRegExp(module)).join('|')})$`
+        )
+        build.onResolve({ filter: routeImport }, (args) =>
+          args.kind === 'dynamic-import'
+            ? { path: args.path, namespace: ROUTE_ENTRY_NAMESPACE }
+            : undefined
+        )
+        build.onLoad({ filter: /.*/, namespace: ROUTE_ENTRY_NAMESPACE }, async (args) => ({
+          contents: `${await anchoredImports()}export { default } from ${JSON.stringify(args.path)}\n`,
           loader: 'js',
           resolveDir: dirname(entryPoint)
+        }))
+      }
+      if (anchoredLazyModules.size === 0) {
+        return
+      }
+      build.onResolve({ filter: /.*/ }, async (args) => {
+        if (args.kind !== 'dynamic-import' || args.pluginData === LAZY_ENTRY_NAMESPACE) {
+          return undefined
         }
+        const { path, errors } = await build.resolve(args.path, {
+          kind: args.kind,
+          importer: args.importer,
+          resolveDir: args.resolveDir,
+          pluginData: LAZY_ENTRY_NAMESPACE
+        })
+        return errors.length === 0 && anchoredLazyModules.has(path)
+          ? { path, namespace: LAZY_ENTRY_NAMESPACE }
+          : undefined
       })
+      build.onLoad({ filter: /.*/, namespace: LAZY_ENTRY_NAMESPACE }, async (args) => ({
+        contents: `${await anchoredImports()}export { ${anchoredLazyModules.get(args.path).join(', ')} } from ${JSON.stringify(args.path)}\n`,
+        loader: 'js',
+        resolveDir: dirname(entryPoint)
+      }))
     }
   }
 }
@@ -234,7 +264,11 @@ const hairlineDevicePixelPlugin = {
 }
 
 /** Split out so a test can read the options MOBILE_WEB_APP_SHIMS claims, without a build. */
-export function mobileWebAppBuildOptions(routes, sharedModules = []) {
+export function mobileWebAppBuildOptions(
+  routes,
+  sharedModules = [],
+  anchoredLazyModules = new Map()
+) {
   return {
     // Fixed so no absolute path of this checkout can reach the output.
     absWorkingDir: mobileDir,
@@ -267,7 +301,12 @@ export function mobileWebAppBuildOptions(routes, sharedModules = []) {
       zod: MOBILE_ZOD_PACKAGE
     },
     plugins: [
-      routeManifestPlugin(renderMobileWebAppRouteManifest(routes), routes, sharedModules),
+      routeManifestPlugin(
+        renderMobileWebAppRouteManifest(routes),
+        routes,
+        sharedModules,
+        anchoredLazyModules
+      ),
       lucideBarrelPlugin,
       hairlineDevicePixelPlugin
     ],
@@ -309,66 +348,6 @@ export function mobileWebAppBuildOptions(routes, sharedModules = []) {
       ...turnedOnDarkBuildDefines()
     }
   }
-}
-
-// Budget entry plus transitive static imports, stopping at dynamic imports; entry-only limits let shared initial chunks grow unseen.
-export function entryStaticClosure(metafile, entryOutputPath) {
-  const reached = new Set([entryOutputPath])
-  for (const current of reached) {
-    for (const imported of metafile.outputs[current]?.imports ?? []) {
-      if (imported.kind !== 'import-statement' || reached.has(imported.path)) {
-        continue
-      }
-      reached.add(imported.path)
-    }
-  }
-  return reached
-}
-
-// esbuild cuts a chunk per set of routes sharing a module; one this small costs more as a request than as code every route loads.
-const MERGED_SHARED_CHUNK_MAX_BYTES = 16 * 1024
-
-// Small route-shared chunks whose static imports already load at boot or merge too, so merging adds only their own bytes.
-// ESM only: a bare import runs a CommonJS module's body at route load, not where its importer first needs it.
-function sharedModulesToMerge(metafile, entryOutputPath) {
-  const { inputs, outputs } = metafile
-  const boot = entryStaticClosure(metafile, entryOutputPath)
-  const routeReached = new Set(
-    Object.entries(outputs)
-      .filter(([, output]) => output.entryPoint?.startsWith(`${ROUTE_ENTRY_NAMESPACE}:`))
-      .flatMap(([path]) => [...entryStaticClosure(metafile, path)])
-  )
-  const merged = new Set(
-    Object.entries(outputs)
-      .filter(
-        ([path, output]) =>
-          isScriptOutput(path) &&
-          !output.entryPoint &&
-          !boot.has(path) &&
-          routeReached.has(path) &&
-          output.bytes <= MERGED_SHARED_CHUNK_MAX_BYTES &&
-          Object.keys(output.inputs).every((input) => inputs[input]?.format === 'esm')
-      )
-      .map(([path]) => path)
-  )
-  const importsUnmerged = (path) =>
-    outputs[path].imports.some(
-      ({ kind, path: imported }) =>
-        kind === 'import-statement' && !boot.has(imported) && !merged.has(imported)
-    )
-  for (let dropped = true; dropped;) {
-    dropped = false
-    for (const path of merged) {
-      if (importsUnmerged(path)) {
-        merged.delete(path)
-        dropped = true
-      }
-    }
-  }
-  return [...merged]
-    .flatMap((path) => Object.keys(outputs[path].inputs))
-    .sort()
-    .map((input) => resolve(mobileDir, input))
 }
 
 // Hash final output bytes leaf-first, rewriting dependency names before hashing importers.
@@ -437,8 +416,6 @@ export function routeChunkNames(metafile, routes, renamed) {
     })
   )
 }
-
-const isScriptOutput = (path) => path.endsWith('.js')
 
 // appDir is a seam for the tests, which bundle a scratch route tree; production always uses mobile/app.
 // Page closure includes ancestor layouts as entry modules, not just route imports.
@@ -532,10 +509,12 @@ function entryOutput(metafile) {
 // The page's scripts as shipped: a first build finds the small shared chunks, a second merges them.
 export async function buildMobileWebAppScripts(routes) {
   const split = await esbuild.build(mobileWebAppBuildOptions(routes))
-  const sharedModules = sharedModulesToMerge(split.metafile, entryOutput(split.metafile))
-  return sharedModules.length === 0
+  const entryOutputPath = entryOutput(split.metafile)
+  const sharedModules = sharedModulesToMerge(split.metafile, entryOutputPath)
+  const anchoredLazyModules = lazyModulesToAnchor(split.metafile, entryOutputPath)
+  return sharedModules.length === 0 && anchoredLazyModules.size === 0
     ? split
-    : esbuild.build(mobileWebAppBuildOptions(routes, sharedModules))
+    : esbuild.build(mobileWebAppBuildOptions(routes, sharedModules, anchoredLazyModules))
 }
 
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
