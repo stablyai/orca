@@ -10,19 +10,22 @@ import {
   EnvironmentProviderError,
   isEnvironmentProviderError,
   type EnvironmentHandle,
-  type EnvironmentProviderCapabilities,
-  type EnvironmentProviderDriver,
-  type EnvironmentReady,
-  type EnvironmentSessionInfo,
-  type EnvironmentStatus,
-  type EnvironmentStatusSnapshot
+  type EnvironmentStatus
 } from '../environment-providers/environment-provider-driver'
+import { environmentRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
+import type {
+  HostedEnvironmentCapabilities,
+  HostedEnvironmentProviderDriver,
+  HostedEnvironmentReady,
+  HostedSessionInfo,
+  HostedStatusSnapshot
+} from './hosted-environment-provider'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 
 export const HOSTED_SANDBOX_DRIVER_ID = 'orca-cloud'
 
 /** Measured on Vercel: stop is a reboot (PTYs lost), disk persists, Pro caps a session at 24h. */
-export const HOSTED_SANDBOX_CAPABILITIES: EnvironmentProviderCapabilities = Object.freeze({
+export const HOSTED_SANDBOX_CAPABILITIES: HostedEnvironmentCapabilities = Object.freeze({
   memoryPause: false,
   maxSessionMs: 24 * 60 * 60_000,
   fsPersistOnStop: true,
@@ -43,13 +46,12 @@ const STATUS: Record<HostedSandboxView['status'], EnvironmentStatus> = {
 
 export function createHostedSandboxDriver(
   client: HostedSandboxControlPlaneClient
-): EnvironmentProviderDriver {
+): HostedEnvironmentProviderDriver {
   return {
     id: HOSTED_SANDBOX_DRIVER_ID,
     capabilities: HOSTED_SANDBOX_CAPABILITIES,
 
     async create(spec, ctx) {
-      ctx?.onProgress?.({ phase: 'checking-entitlement' })
       const machineSize = toMachineSize(spec.machineSize)
       ctx?.onProgress?.({ phase: 'provisioning' })
       const ready = await client.create(
@@ -94,12 +96,11 @@ export function createHostedSandboxDriver(
     },
 
     async renewLease(handle, extendMs, ctx) {
-      ctx?.onProgress?.({ phase: 'renewing' })
       return toSnapshot(await client.renewLease(sandboxIdOf(handle), extendMs, ctx?.signal))
     },
 
     async rollover(handle, ctx) {
-      ctx?.onProgress?.({ phase: 'rolling-over' })
+      ctx?.onProgress?.({ phase: 'resuming' })
       const ready = await client.rollover(sandboxIdOf(handle), ctx?.signal)
       ctx?.onProgress?.({ phase: 'connecting' })
       return toReady(ready)
@@ -126,7 +127,7 @@ function sandboxIdOf(handle: EnvironmentHandle): string {
   return id
 }
 
-function toSession(view: HostedSandboxView): EnvironmentSessionInfo | null {
+function toSession(view: HostedSandboxView): HostedSessionInfo | null {
   return view.session
     ? {
         startedAt: view.session.startedAt,
@@ -136,11 +137,11 @@ function toSession(view: HostedSandboxView): EnvironmentSessionInfo | null {
     : null
 }
 
-function toSnapshot(view: HostedSandboxView): EnvironmentStatusSnapshot {
+function toSnapshot(view: HostedSandboxView): HostedStatusSnapshot {
   return { status: STATUS[view.status], session: toSession(view) }
 }
 
-function toReady(ready: HostedSandboxReadyResponse): EnvironmentReady {
+function toReady(ready: HostedSandboxReadyResponse): HostedEnvironmentReady {
   const session = toSession(ready.sandbox)
   if (ready.sandbox.status !== 'running' || !session) {
     throw new EnvironmentProviderError(
@@ -148,13 +149,14 @@ function toReady(ready: HostedSandboxReadyResponse): EnvironmentReady {
       'Orca Cloud reported a connection for an environment that is not running.'
     )
   }
+  const handle: EnvironmentHandle = {
+    driverId: HOSTED_SANDBOX_DRIVER_ID,
+    environmentId: ready.sandbox.id,
+    driverState: { sandboxId: ready.sandbox.id }
+  }
   return {
-    handle: {
-      driverId: HOSTED_SANDBOX_DRIVER_ID,
-      environmentId: ready.sandbox.id,
-      driverState: { sandboxId: ready.sandbox.id }
-    },
-    connection: ready.connection,
+    handle,
+    result: environmentRecipeResult(handle, ready.connection, 'orca-worktree'),
     session
   }
 }

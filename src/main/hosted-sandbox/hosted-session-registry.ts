@@ -15,11 +15,9 @@ import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-envi
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import { applyResumedRuntimePairing } from '../ephemeral-vm/runtime-resume-pairing'
 import { noteRecipeVmWakePairing } from '../ephemeral-vm/recipe-vm-wake-pairings'
-import type { EnvironmentProviderDriver } from '../environment-providers/environment-provider-driver'
-import {
-  environmentHandleFromRecipeResult,
-  environmentReadyToRecipeResult
-} from '../environment-providers/environment-provider-recipe-adapter'
+import { getEphemeralVmRecipeResultPairingCode } from '../../shared/ephemeral-vm-recipes'
+import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
+import type { HostedEnvironmentProviderDriver } from './hosted-environment-provider'
 import { autoResumeAgentsAfterRollover } from './hosted-agent-auto-resume'
 import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
@@ -43,7 +41,7 @@ export type HostedSessionRegistry = {
 
 export function createHostedSessionRegistry(deps: {
   userDataPath: string
-  driver: EnvironmentProviderDriver
+  driver: HostedEnvironmentProviderDriver
   windows: () => readonly BrowserWindow[]
   log?: (line: string) => void
 }): HostedSessionRegistry {
@@ -100,12 +98,12 @@ export function createHostedSessionRegistry(deps: {
       },
       reconnect: async (ready) => {
         updateEphemeralVmRuntimeStatus(deps.userDataPath, runtime.id, {
-          recipeResult: environmentReadyToRecipeResult(ready, 'orca-worktree')
+          recipeResult: ready.result
         })
         const { environment } = await applyResumedRuntimePairing({
           userDataPath: deps.userDataPath,
           environmentId: runtimeEnvironmentId,
-          pairingCode: ready.connection.pairingCode,
+          pairingCode: getEphemeralVmRecipeResultPairingCode(ready.result) ?? '',
           invalidateTransport: invalidateRuntimeEnvironmentTransport
         })
         noteRecipeVmWakePairing(

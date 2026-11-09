@@ -1,9 +1,7 @@
 // What to do next with a session-capped, no-memory-pause environment (Vercel: stop = reboot, 24h cap).
 // Idle stop, the opportunistic refresh and the forced cap rollover are one decision so they never race.
-import type {
-  EnvironmentProviderCapabilities,
-  EnvironmentSessionInfo
-} from '../environment-providers/environment-provider-driver'
+import type { EnvironmentProviderCapabilities } from '../environment-providers/environment-provider-driver'
+import type { HostedSessionInfo } from './hosted-environment-provider'
 
 export type HostedActivitySample = {
   /** orcad's idle probes: clients, terminals, agents, automations. Unverifiable counts as busy. */
@@ -36,7 +34,7 @@ export const HOSTED_LEASE_POLICY = {
 export function decideHostedLeaseAction(input: {
   now: number
   capabilities: EnvironmentProviderCapabilities
-  session: EnvironmentSessionInfo
+  session: HostedSessionInfo
   activity: HostedActivitySample
   warned: ReadonlySet<HostedLeaseWarning>
 }): HostedLeaseAction {
