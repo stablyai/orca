@@ -11,7 +11,6 @@ import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/account
 import { persistedHostQueryKey } from '../query/host-query-persistence'
 import { keepNativeHostQueries, nativeQueryStoreReady } from '../query/native-query-persistence'
 import { homeStatsKey, homeStatsQuery } from '../stats/home-stats-summary-read'
-import { loadStoredHostProfiles } from '../transport/hosts/host-metadata-store'
 import {
   homeWorktreeCountsQuery,
   type HomeWorktreeCounts
@@ -53,8 +52,8 @@ async function readLegacySnapshot(): Promise<LegacySnapshot | null> {
   return { savedAt: 0, worktreeInfo: {} }
 }
 
-// Counts nothing stored yet answers; the old key goes once the store holds them. Without a readable host
-// list or a store that can write (web, a key that won't load), the key waits for a later launch.
+// Counts nothing stored yet answers; the old key goes once the store holds them. Without a store that can
+// write (web, a key that won't load), the key waits for a later launch.
 function seedFromLegacySnapshot(
   queryClient: QueryClient,
   snapshot: LegacySnapshot,
@@ -95,19 +94,13 @@ function seedFromLegacySnapshot(
   ).then(() => AsyncStorage.removeItem(LEGACY_SNAPSHOT_KEY).catch(() => undefined))
 }
 
-/** Restores each paired desktop's stored Home rows; resolves once each is applied or missed. */
-export async function restoreHomeQueries(queryClient: QueryClient): Promise<void> {
-  // Independent first reads: the paired hosts, the store's key (keychain) and the old snapshot key.
-  const [hosts, storeReady, legacy] = await Promise.all([
-    loadStoredHostProfiles().catch(() => null),
-    nativeQueryStoreReady(),
-    readLegacySnapshot()
-  ])
-  const hostIds = hosts?.map((host) => host.id) ?? null
-  if (!hostIds || !storeReady) {
-    return
-  }
-  await Promise.all(
+/** Restores the paired desktops' stored Home rows; resolves once each is applied or missed. */
+export async function restoreHomeQueries(
+  queryClient: QueryClient,
+  hostIds: readonly string[]
+): Promise<void> {
+  // Claimed synchronously, so observers mounting in the same commit join this one batched read.
+  const restored = Promise.all(
     hostIds.map(
       (hostId) =>
         keepNativeHostQueries(queryClient, hostId)?.restore(
@@ -120,7 +113,12 @@ export async function restoreHomeQueries(queryClient: QueryClient): Promise<void
         ) ?? Promise.resolve()
     )
   )
-  if (legacy) {
+  const [storeReady, legacy] = await Promise.all([
+    nativeQueryStoreReady(),
+    readLegacySnapshot(),
+    restored
+  ])
+  if (storeReady && legacy) {
     seedFromLegacySnapshot(queryClient, legacy, hostIds)
   }
 }

@@ -19,9 +19,6 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     }
   }
 }))
-vi.mock('../transport/hosts/host-metadata-store', () => ({
-  loadStoredHostProfiles: async () => [{ id: 'host-a' }]
-}))
 vi.mock('../device-store/device-store', () => ({
   processDeviceStore: () => ({
     open: async () => 'ready',
@@ -67,11 +64,11 @@ describe('restoreHomeQueries', () => {
         }
       })
     )
-    await restoreHomeQueries(new QueryClient())
+    await restoreHomeQueries(new QueryClient(), ['host-a'])
     await vi.waitFor(() => expect(asyncStorage.has(LEGACY_KEY)).toBe(false))
 
     const relaunched = new QueryClient()
-    await restoreHomeQueries(relaunched)
+    await restoreHomeQueries(relaunched, ['host-a'])
     expect(relaunched.getQueryData(homeWorktreeCountsKey('host-a'))).toEqual({
       totalWorktrees: 7,
       activeCount: 2,

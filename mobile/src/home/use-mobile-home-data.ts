@@ -105,6 +105,21 @@ export function useMobileHomeData() {
     [hostLastConnected]
   )
 
+  // Once the first desktop list is up: counts show only after a desktop connects, so the rows never wait
+  // for the store, and its keychain read doesn't compete with the list's. Before the queries below, whose
+  // observers then join this batched read instead of each reading its own row.
+  const storeRestoredRef = useRef(false)
+  useEffect(() => {
+    if (storeRestoredRef.current || hostCatalog.length === 0) {
+      return
+    }
+    storeRestoredRef.current = true
+    void restoreHomeQueries(
+      queryClient,
+      hostCatalog.map((host) => host.id)
+    )
+  }, [hostCatalog, queryClient])
+
   // A desktop's reads wait for its connection; one still connecting would report the list unavailable.
   const countsQueries = useMemo(
     () =>
@@ -188,11 +203,6 @@ export function useMobileHomeData() {
   useEffect(() => {
     allClientsRef.current = allClients
   }, [allClients])
-
-  // Counts show only once a desktop connects, so the rows never wait for this read.
-  useEffect(() => {
-    void restoreHomeQueries(queryClient)
-  }, [queryClient])
 
   useFocusEffect(
     useCallback(() => {
