@@ -212,7 +212,8 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         if (!isCurrent() || !client) {
           return
         }
-        const finished = await finishDesktopDictation(client, dictationId)
+        const sentSeconds = pendingAudioBudgetRef.current.sentAudioSeconds
+        const finished = await finishDesktopDictation(client, dictationId, sentSeconds)
         if (!isCurrent()) {
           return
         }
