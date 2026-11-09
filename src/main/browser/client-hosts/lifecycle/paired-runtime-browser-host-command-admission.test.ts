@@ -194,7 +194,9 @@ function createLease(
   })
 }
 
-async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn> }): Promise<{
+async function subscribeLease(options?: {
+  sendRequest?: RemoteRuntimeTransportSubscription['sendRequest']
+}): Promise<{
   callbacks: { current?: RemoteRuntimeTransportSubscriptionCallbacks }
   close: ReturnType<typeof vi.fn>
 }> {
