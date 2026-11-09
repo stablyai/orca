@@ -4217,6 +4217,32 @@
     "es": "Mantener",
     "zh-Hant": "按住"
   },
+  "settings.voiceSettingsScreen.autoMode": {
+    "de": "Automatisch",
+    "en": "Auto",
+    "es": "Automático",
+    "fr": "Auto",
+    "ja": "自動",
+    "ko": "자동",
+    "pt": "Automático",
+    "ru": "Авто",
+    "tr": "Otomatik",
+    "zh-Hant": "自動",
+    "zh": "自动"
+  },
+  "settings.voiceSettingsScreen.dictationModeWithAutoDescription": {
+    "de": "Automatisch: Tippen zum Starten und Stoppen; am Computer nimmt das Gedrückthalten des Kürzels auf, bis Sie loslassen. Gedrückt halten: währenddessen diktieren. Umschalten: einmal zum Starten und erneut zum Stoppen drücken.",
+    "en": "Auto: tap to start and stop; on your computer, holding the shortcut records until you let go. Hold: dictate while held. Toggle: press once to start, again to stop.",
+    "es": "Automático: toca para iniciar y detener; en tu ordenador, mantener el atajo graba hasta que lo sueltes. Mantener pulsado: dicta sin soltar. Alternar: pulsa una vez para iniciar y otra para detener.",
+    "fr": "Auto : appuyez pour démarrer et arrêter ; sur votre ordinateur, maintenir le raccourci enregistre jusqu’à ce que vous relâchiez. Maintien : dictez tant que vous maintenez l’appui. Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter.",
+    "ja": "自動：タップで開始と停止。コンピュータではショートカットを押し続けると離すまで録音します。ホールド：押している間だけ音声入力します。トグル：1 回押すと開始し、もう一度押すと停止します。",
+    "ko": "자동: 탭하여 시작하고 중지합니다. 컴퓨터에서는 단축키를 길게 누르면 손을 뗄 때까지 녹음합니다. 길게 누르기: 누르고 있는 동안 받아쓰기합니다. 토글: 한 번 누르면 시작하고, 다시 누르면 중지합니다.",
+    "pt": "Automático: toque para iniciar e parar; no computador, manter o atalho pressionado grava até você soltar. Manter pressionado: pressione e segure para ditar. Alternar: pressione uma vez para iniciar e novamente para parar.",
+    "ru": "Авто: нажмите, чтобы начать и остановить; на компьютере удержание сочетания клавиш записывает до отпускания. Удержание: диктуйте, пока удерживаете кнопку. Переключение: нажмите один раз, чтобы начать, ещё раз — чтобы остановить.",
+    "tr": "Otomatik: başlatmak ve durdurmak için dokunun; bilgisayarınızda kısayolu basılı tutmak bırakana kadar kaydeder. Basılı tut: basılı tuttuğunuz sürece dikte edin. Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın.",
+    "zh-Hant": "自動：輕按開始和停止；在電腦上按住快捷鍵會一直錄音，直到放開。按住：按住期間進行聽寫。切換：按一次開始，再按一次停止。",
+    "zh": "自动：轻按开始和停止；在电脑上按住快捷键会一直录音，直到松开。按住：按住期间进行听写。切换：按一次开始，再按一次停止。"
+  },
   "切换：按一次开始，再按一次停止。按住：按住期间进行听写。": {
     "zh": "切换：按一次开始，再按一次停止。按住：按住期间进行听写。",
     "tr": "Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın. Basılı tut: basılı tuttuğunuz sürece dikte edin.",

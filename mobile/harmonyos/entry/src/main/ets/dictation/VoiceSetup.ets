@@ -1,4 +1,5 @@
 import { RpcSuccess, SpikeRpcClient } from '../transport/SpikeRpcClient';
+import upstream from '../vendor/dictation-shortcut-mode.js';
 
 export interface SpeechModel {
   id: string;
@@ -13,6 +14,7 @@ export interface SpeechModel {
 export interface VoiceSetup {
   enabled: boolean;
   dictationMode: string;
+  dictationHoldToRecord?: boolean;
   selectedModelId: string;
   models: SpeechModel[];
 }
@@ -20,11 +22,23 @@ export interface VoiceSetup {
 export interface VoiceConfig {
   enabled?: boolean;
   dictationMode?: string;
+  dictationHoldToRecord?: boolean;
   modelId?: string;
 }
 
 export function modelInFlight(model: SpeechModel): boolean {
   return model.status === 'downloading' || model.status === 'extracting';
+}
+
+const shortcut: ESObject = upstream;
+
+export function voiceShortcutMode(setup: VoiceSetup | null): string {
+  if (!setup) { return ''; }
+  return setup.dictationHoldToRecord === undefined ? setup.dictationMode : shortcut.dictationShortcutMode(setup) as string;
+}
+
+export function voiceShortcutModeConfig(mode: string): VoiceConfig {
+  return shortcut.dictationShortcutModeSettings(mode) as VoiceConfig;
 }
 
 function readSetup(payload: string): VoiceSetup {
@@ -52,6 +66,7 @@ function readSetup(payload: string): VoiceSetup {
   return {
     enabled: record['enabled'] === true,
     dictationMode: typeof record['dictationMode'] === 'string' ? record['dictationMode'] as string : '',
+    dictationHoldToRecord: typeof record['dictationHoldToRecord'] === 'boolean' ? record['dictationHoldToRecord'] as boolean : undefined,
     selectedModelId: typeof record['selectedModelId'] === 'string' ? record['selectedModelId'] as string : '',
     models: models
   };

@@ -33,6 +33,13 @@ const models = [
     `
   },
   {
+    file: 'dictation-shortcut-mode',
+    provenance: 'orcaDictationShortcutMode',
+    contents: `
+      export { dictationShortcutMode, dictationShortcutModeSettings } from './src/shared/dictation-shortcut-mode'
+    `
+  },
+  {
     file: 'agent-list',
     provenance: 'orcaAgentList',
     contents: `

@@ -1,7 +1,8 @@
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { i18n } from '@kit.LocalizationKit';
-import { modelInFlight, SpeechModel, VoiceConfig, VoiceSettingsRpc, VoiceSetup } from '../dictation/VoiceSetup';
+import { modelInFlight, SpeechModel, VoiceConfig, VoiceSettingsRpc, VoiceSetup, voiceShortcutMode,
+  voiceShortcutModeConfig } from '../dictation/VoiceSetup';
 import { lucideColorFilter } from '../settings/LucideColor';
 import { uiText } from '../settings/NativeUi';
 import {
@@ -195,6 +196,7 @@ struct VoiceSettings {
   private engineAvailable(value: string): boolean { return value !== DICTATION_ENGINE_ONDEVICE || this.phoneStatus !== 'unsupported'; }
   private canConfigure(): boolean { return this.connected && this.busyAction === ''; }
   private canChooseModel(): boolean { return this.canConfigure() && this.setup?.enabled === true; }
+  private offersAuto(): boolean { return this.setup?.dictationHoldToRecord !== undefined; }
   private model(id: string): SpeechModel | undefined {
     return this.setup?.models.find((model: SpeechModel): boolean => model.id === id);
   }
@@ -275,12 +277,12 @@ struct VoiceSettings {
   @Builder
   private mode(value: string, label: string) {
     Button(this.t(label), { type: ButtonType.Normal }).fontFamily('Geist').fontSize(12)
-      .fontWeight(FontWeight.Medium).fontColor(this.setup?.dictationMode === value ? this.themeText : this.themeSecondary)
+      .fontWeight(FontWeight.Medium).fontColor(voiceShortcutMode(this.setup) === value ? this.themeText : this.themeSecondary)
       .height(30).padding({ left: 11, right: 11 }).borderRadius(8)
-      .backgroundColor(this.setup?.dictationMode === value ? this.themeBg : Color.Transparent)
-      .accessibilitySelected(this.setup?.dictationMode === value)
+      .backgroundColor(voiceShortcutMode(this.setup) === value ? this.themeBg : Color.Transparent)
+      .accessibilitySelected(voiceShortcutMode(this.setup) === value).id(`voice-mode-${value}`)
       .enabled(this.canChooseModel()).onClick((): void => {
-        if (this.setup?.dictationMode !== value) { this.change('configure', '', { dictationMode: value }).catch(() => {}); }
+        if (voiceShortcutMode(this.setup) !== value) { this.change('configure', '', voiceShortcutModeConfig(value)).catch(() => {}); }
       })
   }
 
@@ -304,13 +306,20 @@ struct VoiceSettings {
         Row({ space: 10 }) {
           Text(this.t('听写模式')).fontFamily('Geist').fontSize(16).fontColor(this.themeText).layoutWeight(1)
           Row({ space: 2 }) {
-            this.mode('toggle', '切换')
-            this.mode('hold', '按住')
+            if (this.offersAuto()) {
+              this.mode('auto', 'settings.voiceSettingsScreen.autoMode')
+              this.mode('hold', '按住')
+              this.mode('toggle', '切换')
+            } else {
+              this.mode('toggle', '切换')
+              this.mode('hold', '按住')
+            }
           }.padding(3).borderRadius(10).backgroundColor(this.themeSheet)
         }.width('100%').constraintSize({ minHeight: 50 }).padding({ left: 16, right: 16 })
           .opacity(this.setup?.enabled === true ? 1 : 0.45)
       }.width('100%').backgroundColor(this.themeSurface).borderRadius(16).clip(true)
-      this.note('切换：按一次开始，再按一次停止。按住：按住期间进行听写。')
+      this.note(this.offersAuto() ? 'settings.voiceSettingsScreen.dictationModeWithAutoDescription'
+        : '切换：按一次开始，再按一次停止。按住：按住期间进行听写。')
     }.width('100%')
     Column() {
       this.title('语音模型')

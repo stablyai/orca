@@ -23,7 +23,8 @@
     "entry/src/main/ets/vendor/connection-diagnostics.js": "0df8770a4e17eaa9685eea94d8b8233c10d321a24fac7055c0d8b7bf67355ee9",
     "entry/src/main/ets/vendor/terminal-rail.js": "172f7f933854c677cdcdc2fd00c373a79b07973ba51777c10d205d5c4160e5b7",
     "entry/src/main/ets/vendor/bundle-compat.js": "7ad72dd427a2f052a164eccc08e587b02a27413be1a404084a9357a3987d4162",
-    "entry/src/main/ets/vendor/host-machine.js": "f79bd3087ce9537ac4ffa7d3dab1d46ea0fe9d0bffe139cf89d7ae6b19b7b4eb"
+    "entry/src/main/ets/vendor/host-machine.js": "f79bd3087ce9537ac4ffa7d3dab1d46ea0fe9d0bffe139cf89d7ae6b19b7b4eb",
+    "entry/src/main/ets/vendor/dictation-shortcut-mode.js": "17daa29155497ff7120bda3436fe3f2b3d27fd720ba6fd168cc8205b72b04d48"
   },
   "orcaAgentList": {
     "revision": "cba8f0efcc3588a4f6606d9834555a8b3860a39c",
@@ -96,6 +97,13 @@
       "src/shared/host-machine-line.ts",
       "src/shared/host-platform-label.ts",
       "src/shared/zod-salvage.ts"
+    ]
+  },
+  "orcaDictationShortcutMode": {
+    "revision": "9e128042fa4f6488426eb53a3f221524d067671f",
+    "esbuild": "0.28.2",
+    "sources": [
+      "src/shared/dictation-shortcut-mode.ts"
     ]
   }
 }
