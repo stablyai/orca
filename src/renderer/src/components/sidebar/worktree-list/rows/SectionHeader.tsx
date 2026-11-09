@@ -302,6 +302,7 @@ export function renderWorktreeSectionHeaderRow(
             }
           }}
         >
+          {/* Stretch the title’s grab area to row height; action attributes exclude buttons while padding still arms drag. */}
           <div
             data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
             data-project-group-header-drag-handle={isDraggableProjectGroupHeader ? '' : undefined}
@@ -317,7 +318,6 @@ export function renderWorktreeSectionHeaderRow(
                 'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
                 repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone
               )}
-              style={row.repo ? undefined : { color: sectionHeaderColor }}
             >
               {row.repo ? (
                 <RepoIconGlyph
