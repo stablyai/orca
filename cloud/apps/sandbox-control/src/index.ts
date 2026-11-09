@@ -386,6 +386,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         })) ?? fail('not_found', 404)
       )
     }
+    if (url.pathname === '/v1/github/dev-connect' && env.SANDBOX_ENV !== 'prod') {
+      // Dev-only, link-shareable start of the user flow: mints a fresh 10-min state per click for a dev:<sub>
+      // account (desktop builds call POST /v1/github/connect instead).
+      const connect = githubConnect(env, deps)
+      const sub = url.searchParams.get('sub') ?? ''
+      if (!connect || !/^[A-Za-z0-9_.-]{1,64}$/.test(sub)) {
+        return fail('not_found', 404)
+      }
+      const state = await createConnectState(env.SANDBOX_DB, connect.stateSecret, { accountId: `dev:${sub}`, userId: sub }, (deps.now ?? Date.now)())
+      return Response.redirect(authorizeUrl(connect, url.origin, state), 302)
+    }
     if (url.pathname === '/v1/github/connect' || url.pathname === '/v1/github/installations') {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
