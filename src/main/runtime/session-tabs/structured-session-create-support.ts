@@ -232,6 +232,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
             workspaceCwd: workspaceCwd
           })
         : null
+    // A fresh fallback is a new chat, so it takes the configured new-chat defaults the resume seed withheld.
+    const seedOptions =
+      resumeFrom && !adoption ? structuredLaunchSeedOptions(settings, input.agent) : options
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -243,7 +246,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       provider: input.agent,
       agent: input.agent,
       accountHome: adoption ? adoption.accountHome : selectedAccountHome,
-      ...(options ? { options } : {}),
+      ...(seedOptions ? { options: seedOptions } : {}),
       ...(input.resumeFrom && adoption
         ? {
             adopt: structuredAgentSessionAdoptAttach({

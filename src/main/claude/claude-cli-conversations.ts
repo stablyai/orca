@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
+import { findClaudeTranscriptBySessionIdContent } from './claude-transcript-content-lookup'
 import {
   directoryTranscriptImport,
   resumeInvocationFromOptions,
@@ -17,12 +18,22 @@ const CLAUDE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
     join(homedir(), '.claude'),
     ...(getClaudeProfileRouter()?.accountHomes() ?? [])
   ],
-  findTranscript: ({ providerSessionId, store, workspaceCwd, strictErrors }) =>
-    resolveSessionFilePath('claude', providerSessionId, {
+  findTranscript: async ({ providerSessionId, store, workspaceCwd, strictErrors }) => {
+    const byName = await resolveSessionFilePath('claude', providerSessionId, {
       claudeProjectsDir: store,
       cwd: workspaceCwd,
       strictErrors
     })
+    if (byName) {
+      return byName
+    }
+    // A different filename is not absence; the rows name the session (#37707 review).
+    return findClaudeTranscriptBySessionIdContent({
+      projectsDir: store,
+      workspaceCwd,
+      providerSessionId
+    })
+  }
 })
 
 const CLAUDE_SESSION_HISTORY: StructuredAgentSessionHistory = {

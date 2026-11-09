@@ -9,6 +9,7 @@ import {
   structuredAgentSessionOwnerForTab
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 import type { Tab } from '../../../../shared/tab-types'
 
 export function findStructuredAgentSessionTab(
@@ -70,8 +71,11 @@ export function activateStructuredAgentSessionTabOnOwner(
       // Why both: navigation scopes new hosts to this client; notifyClients:false protects old hosts.
       ...(options?.callerOnly ? { notifyClients: false, navigation: 'caller' as const } : {})
     }
-  ).catch(() => {
+  ).catch((error: unknown) => {
     // A chat still opening (or one whose start failed) has no host tab yet; the next activation retries.
+    if (!hasRuntimeRpcErrorCode(error, 'tab_not_found')) {
+      console.warn('[structured-agent-session-tab-activation] activate failed:', error)
+    }
   })
 }
 

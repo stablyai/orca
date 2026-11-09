@@ -172,23 +172,26 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
       ...(source?.kind === 'absent' ? { exhaustionReason: 'transcriptUnreadable' as const } : {}),
       candidateAccountHomes: admitted ? [admitted.accountHome] : candidates,
       resolveTranscript: async (args) => {
-        const exact = admitted?.path
-        if (exact) {
+        // An empty file has no history to adopt: committing to it would fail later in
+        // prepareCreateTranscript (outside the fresh-chat wrapper) instead of starting fresh.
+        const adoptableFile = async (path: string): Promise<string | null> => {
           try {
-            if ((await stat(exact)).isFile()) {
-              return exact
-            }
+            const info = await stat(path)
+            return info.isFile() && info.size > 0 ? path : null
           } catch (error) {
             if (
-              !(
-                error instanceof Error &&
-                'code' in error &&
-                (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-              )
+              error instanceof Error &&
+              'code' in error &&
+              (error.code === 'ENOENT' || error.code === 'ENOTDIR')
             ) {
-              throw error
+              return null
             }
+            throw error
           }
+        }
+        const exact = admitted?.path
+        if (exact && (await adoptableFile(exact))) {
+          return exact
         }
         const store = storeOf(args.accountHome)
         if (!store) {
@@ -201,7 +204,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
           workspaceCwd: args.workspaceCwd,
           strictErrors: true
         })
-        if (!found) {
+        if (!found || !(await adoptableFile(found))) {
           return null
         }
         const path = await input.transcriptImport.admitTranscriptPath({
