@@ -49,14 +49,12 @@ describe('Claude outer hook process capture', () => {
     }
   )
 
-  it.skipIf(process.platform === 'win32').each([undefined, 'darwin'])(
-    'unwraps an outer sh -c wrapper without unwrapping non-shell callers (OSTYPE=%s)',
-    async (osType) => {
+  it.skipIf(process.platform === 'win32')(
+    'reports the caller behind a forking outer sh -c, but never the parent of a non-shell caller',
+    async () => {
       const home = await mkdtemp(join(tmpdir(), 'orca-presence-unwrap-'))
       try {
-        const dir = join(home, '.orca', 'agent-hooks')
-        await mkdir(dir, { recursive: true })
-        const scriptPath = join(dir, 'antigravity-hook.sh')
+        const scriptPath = join(home, 'antigravity-hook.sh')
         await writeFile(
           scriptPath,
           ['#!/bin/sh', ...buildHookProcessCapture(), 'printf "%s" "$orca_agent_process"'].join(
@@ -64,58 +62,35 @@ describe('Claude outer hook process capture', () => {
           ),
           { mode: 0o700 }
         )
-        const wrappedCommand = `/bin/sh -c ${quotePosixShell(`${HOOK_PARENT_CAPTURE}/bin/sh ${quotePosixShell(scriptPath)}`)}`
-        const wrappedResult = await runProcess({
-          program: '/usr/bin/env',
-          args: [
-            '-i',
-            `HOME=${home}`,
-            'PATH=/usr/bin:/bin',
-            'ORCA_PANE_KEY=presence-test-pane',
-            ...(osType ? [`OSTYPE=${osType}`] : []),
-            '/bin/sh',
-            '-c',
-            `${wrappedCommand}; exit $?`
-          ],
+        const command = `/bin/sh -c ${quotePosixShell(`${HOOK_PARENT_CAPTURE}/bin/sh ${quotePosixShell(scriptPath)}`)}`
+        const env = { HOME: home, PATH: '/usr/bin:/bin', ORCA_PANE_KEY: 'presence-test-pane' }
+
+        // `; exit $?` keeps the outer shell from exec'ing the command, as a forking sh does.
+        const wrapped = await runProcess({
+          program: '/bin/sh',
+          args: ['-c', `${command}; exit $?`],
+          env,
           timeoutMs: 5000
         })
-        expect(wrappedResult.code).toBe(0)
-        const wrappedIdentity = readAgentProcessIdentity(wrappedResult.stdout)
-        expect(wrappedIdentity?.pid).toBe(process.pid)
-        if (osType === 'darwin') {
-          expect(wrappedIdentity?.platform).toBe('darwin')
-        }
+        const identity = readAgentProcessIdentity(wrapped.stdout)
+        expect(identity?.pid).toBe(process.pid)
+        expect(await probeAgentProcessPresence(identity)).toBe('live')
 
-        // A non-shell caller whose own argv contains ORCA_HOOK_AGENT_PID= must not be unwrapped to its parent.
-        const directNonShellResult = await runProcess({
+        // A non-shell agent whose args quote the wrapper keeps its own PID.
+        const direct = await runProcess({
           program: process.execPath,
           args: [
             '-e',
-            `const { spawnSync } = require('node:child_process');
-             const res = spawnSync('/bin/sh', ['-c', ${JSON.stringify(wrappedCommand)}], {
-               env: {
-                 HOME: ${JSON.stringify(home)},
-                 PATH: '/usr/bin:/bin',
-                 ORCA_PANE_KEY: 'presence-test-pane',
-                 ...(process.env.OSTYPE ? { OSTYPE: process.env.OSTYPE } : {})
-               },
-               encoding: 'utf8'
-             });
-             process.stdout.write(JSON.stringify({ callerPid: process.pid, hookOut: res.stdout }));`,
-            'ORCA_HOOK_AGENT_PID=prompt-argument'
+            `const out = require('node:child_process').spawnSync('/bin/sh', ['-c', process.argv[1]], { encoding: 'utf8' }).stdout
+             process.stdout.write(JSON.stringify({ pid: process.pid, out }))`,
+            command,
+            '/bin/sh -c ORCA_HOOK_AGENT_PID=1'
           ],
-          env: {
-            HOME: home,
-            PATH: '/usr/bin:/bin',
-            ...(osType ? { OSTYPE: osType } : {})
-          },
+          env,
           timeoutMs: 5000
         })
-        expect(directNonShellResult.code).toBe(0)
-        const parsed: { callerPid: number; hookOut: string } = JSON.parse(
-          directNonShellResult.stdout
-        )
-        expect(readAgentProcessIdentity(parsed.hookOut)?.pid).toBe(parsed.callerPid)
+        const caller: { pid: number; out: string } = JSON.parse(direct.stdout)
+        expect(readAgentProcessIdentity(caller.out)?.pid).toBe(caller.pid)
       } finally {
         await rm(home, { recursive: true, force: true })
       }

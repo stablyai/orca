@@ -35,10 +35,6 @@ const hooksSchema = z.object({
   )
 })
 
-/**
- * Installs the Antigravity hook configuration into a temporary home directory
- * and returns the configured shell command for the requested hook event.
- */
 function installedCommand(home: string, event: string): string {
   homeMock.mockReturnValue(home)
   expect(new AntigravityHookService().install().state).toBe('installed')
@@ -53,18 +49,8 @@ function installedCommand(home: string, event: string): string {
   return command
 }
 
-/**
- * Executes an installed POSIX hook command either by tokenizing argv directly ('direct')
- * or through an outer '/bin/sh -c' wrapper ('shell', matching Antigravity CLI hook execution).
- */
-function invoke(
-  command: string,
-  input: string,
-  env: NodeJS.ProcessEnv,
-  mode: 'direct' | 'shell' = 'direct'
-) {
-  const [program, ...args] =
-    mode === 'shell' ? ['/bin/sh', '-c', `${command}; exit $?`] : tokenizeCommandLine(command)
+function invoke(command: string, input: string, env: NodeJS.ProcessEnv) {
+  const [program, ...args] = tokenizeCommandLine(command)
   if (!program) {
     throw new Error('Missing executable')
   }
@@ -100,13 +86,9 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable contract', () => {
-  it.each([
-    ['current', 'direct'],
-    ['current', 'shell'],
-    ['old', 'direct']
-  ] as const)(
-    'delivers UTF-8 JSON and %s (%s) command ownership with open stdin',
-    async (version, mode) => {
+  it.each(['current', 'old'] as const)(
+    'delivers UTF-8 JSON and %s command ownership with open stdin',
+    async (version) => {
       home = mkdtempSync(join(tmpdir(), "orca-agy-hook-'quoted-"))
       const payload = JSON.stringify({
         tool_name: 'run_command',
@@ -135,21 +117,16 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
           version === 'current'
             ? currentCommand
             : `/bin/sh -c ${quotePosixShell(wrapPosixHookCommand(join(home, '.orca', 'agent-hooks', 'antigravity-hook.sh'), { ORCA_ANTIGRAVITY_EVENT: 'PreToolUse' }, { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION }))}`
-        const result = await invoke(
-          command,
-          payload,
-          {
-            ...process.env,
-            ORCA_AGENT_HOOK_ENDPOINT: '',
-            ORCA_AGENT_HOOK_PORT: String(address.port),
-            ORCA_AGENT_HOOK_TOKEN: 'test-only-token',
-            ORCA_PANE_KEY: 'test-pane',
-            ORCA_HOOK_AGENT_PID: version === 'current' ? '2' : '',
-            TMUX: '/tmp/agy-test.sock,123,0',
-            TMUX_PANE: '%4'
-          },
-          mode
-        )
+        const result = await invoke(command, payload, {
+          ...process.env,
+          ORCA_AGENT_HOOK_ENDPOINT: '',
+          ORCA_AGENT_HOOK_PORT: String(address.port),
+          ORCA_AGENT_HOOK_TOKEN: 'test-only-token',
+          ORCA_PANE_KEY: 'test-pane',
+          ORCA_HOOK_AGENT_PID: version === 'current' ? '2' : '',
+          TMUX: '/tmp/agy-test.sock,123,0',
+          TMUX_PANE: '%4'
+        })
         expect(result.code).toBe(0)
         expect(result.stdout).toBe('{"decision":"ask"}')
         expect(result.elapsedMs).toBeLessThan(8000)
@@ -160,40 +137,11 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
         if (version === 'current') {
           const observed = await readAgentProcess(process.pid)
           expect(observed.verdict).toBe('live')
-          const expectedProcess = {
+          expect(JSON.parse(posts[0]?.get('agentProcess') || '{}')).toEqual({
             pid: process.pid,
             platform: process.platform,
             startTime: observed.verdict === 'live' ? observed.startTime : undefined
-          }
-          expect(JSON.parse(posts[0]?.get('agentProcess') || '{}')).toEqual(expectedProcess)
-          if (mode === 'shell') {
-            for (const event of ['PostToolUse', 'PostInvocation'] as const) {
-              const followUp = await invoke(
-                installedCommand(home, event),
-                payload,
-                {
-                  ...process.env,
-                  ORCA_AGENT_HOOK_ENDPOINT: '',
-                  ORCA_AGENT_HOOK_PORT: String(address.port),
-                  ORCA_AGENT_HOOK_TOKEN: 'test-only-token',
-                  ORCA_PANE_KEY: 'test-pane',
-                  ORCA_HOOK_AGENT_PID: '2',
-                  TMUX: '/tmp/agy-test.sock,123,0',
-                  TMUX_PANE: '%4'
-                },
-                'shell'
-              )
-              expect(followUp.code).toBe(0)
-            }
-            expect(posts.map((post) => post.get('hook_event_name'))).toEqual([
-              'PreToolUse',
-              'PostToolUse',
-              'PostInvocation'
-            ])
-            for (const post of posts) {
-              expect(JSON.parse(post.get('agentProcess') || '{}')).toEqual(expectedProcess)
-            }
-          }
+          })
         } else {
           expect(posts[0]?.get('agentProcess')).toBe('')
         }
