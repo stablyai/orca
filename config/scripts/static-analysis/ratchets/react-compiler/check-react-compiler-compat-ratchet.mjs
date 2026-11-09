@@ -16,12 +16,15 @@ import {
 } from '../../ratchet-baseline/ratchet-baseline.mjs'
 import {
   HAZARD_FIXES,
+  LIVE_MODULE_READERS,
   VIRTUALIZER_HOOKS,
+  findLiveReadWrappers,
   findMemoizedCalls,
   findSourceHazards,
   findVirtualizerMemoFlows,
   findVirtualizerWrappers,
   hookCallLines,
+  renderLiveReadLines,
   renderStoreReadLines
 } from './react-compiler-hazards.mjs'
 
@@ -129,6 +132,23 @@ function collectVirtualizerHooks(sources) {
   return hooks
 }
 
+/** Live module-state readers plus every plain function that calls one, followed through wrappers. */
+function collectLiveReaders(sources) {
+  const readers = new Set(LIVE_MODULE_READERS)
+  for (let grew = true; grew;) {
+    grew = false
+    for (const [rel, text] of sources) {
+      for (const name of findLiveReadWrappers(rel, text, readers)) {
+        if (!readers.has(name)) {
+          readers.add(name)
+          grew = true
+        }
+      }
+    }
+  }
+  return readers
+}
+
 function sourceLineOf(text, snippet) {
   const index = text.split('\n').findIndex((line) => line.includes(snippet.split('(')[0]))
   return index === -1 ? '?' : index + 1
@@ -165,9 +185,16 @@ async function scanFile(rel, text, result) {
     addTo(result.hazards, `${rel}#${hazard.fn}:${hazard.kind}`, `${hazard.line}: ${hazard.text}`)
   }
   const storeReadFns = new Set()
-  for (const { fn, kind, name } of findMemoizedCalls(rel, output.code)) {
+  for (const { fn, kind, name } of findMemoizedCalls(rel, output.code, result.liveReaders)) {
     if (kind === 'store-read') {
       storeReadFns.add(fn)
+      continue
+    }
+    if (kind === 'live-read') {
+      // A call inside the source's own useMemo or a closure keeps its written behavior.
+      for (const line of renderLiveReadLines(rel, text, fn, name)) {
+        addTo(result.hazards, `${rel}#${fn}:live-read-in-memo-block`, `${line}: ${name}()`)
+      }
       continue
     }
     const lines = hookCallLines(rel, text, fn, name)
@@ -189,7 +216,8 @@ export async function scanRenderer(root = process.cwd()) {
     diagnostics: new Map(),
     hazards: new Map(),
     uncompiled: readUncompiledFiles(root),
-    virtualizerHooks: collectVirtualizerHooks(sources)
+    virtualizerHooks: collectVirtualizerHooks(sources),
+    liveReaders: collectLiveReaders(sources)
   }
   const pending = [...sources]
   result.files = pending.length

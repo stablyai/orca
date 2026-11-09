@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  findLiveReadWrappers,
+  findMemoizedCalls,
   findMemoizedHookCalls,
   findMemoizedStoreReads,
   findSourceHazards,
   findVirtualizerMemoFlows,
   findVirtualizerWrappers,
+  renderLiveReadLines,
   renderStoreReadLines
 } from './react-compiler-hazards.mjs'
 
@@ -146,5 +149,47 @@ describe('virtualizer flows into memo blocks', () => {
     expect(
       findVirtualizerMemoFlows('a.jsx', '', compiled, hooks).map(({ fn, text }) => `${fn}:${text}`)
     ).toEqual(['Pane:list={list}', 'Pane:list.getTotalSize'])
+  })
+})
+
+describe('live module-state reads in memo blocks', () => {
+  it('follows plain wrappers and flags a render read the compiler caches, not a useMemo one', () => {
+    const lib = [
+      'export function scopeKey(s) {',
+      '  return s ? runtimeKey(s.env) : null',
+      '}',
+      'export const later = (s) => () => runtimeKey(s)',
+      'export function useScope(s) {',
+      '  return runtimeKey(s)',
+      '}'
+    ].join('\n')
+    expect(findLiveReadWrappers('lib.ts', lib, new Set(['runtimeKey']))).toEqual(['scopeKey'])
+    const compiled = [
+      'import { c as _c } from "react/compiler-runtime";',
+      'export function Card(t0) {',
+      '  const $ = _c(2);',
+      '  const { settings } = t0;',
+      '  let t1;',
+      '  if ($[0] !== settings) {',
+      '    t1 = scopeKey(settings);',
+      '    $[0] = settings;',
+      '    $[1] = t1;',
+      '  } else {',
+      '    t1 = $[1];',
+      '  }',
+      '  return t1;',
+      '}'
+    ].join('\n')
+    const readers = new Set(['runtimeKey', 'scopeKey'])
+    expect(findMemoizedCalls('a.js', compiled, readers)).toEqual([
+      { fn: 'Card', kind: 'live-read', name: 'scopeKey' }
+    ])
+    const src = [
+      'export function Card({ settings }) {',
+      '  const kept = useMemo(() => scopeKey(settings), [settings])',
+      '  return [kept, scopeKey(settings)]',
+      '}'
+    ].join('\n')
+    expect(renderLiveReadLines('a.tsx', src, 'Card', 'scopeKey')).toEqual([3])
   })
 })

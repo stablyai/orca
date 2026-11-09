@@ -36,6 +36,11 @@ export const HAZARD_FIXES = {
     'child elements cached on it after every scroll. Add the file to',
     'config/react-compiler-uncompiled-files.txt, owners that pass the virtualizer down included.'
   ],
+  'live-read-in-memo-block': [
+    'React Compiler caches this render-time read of module state (a provider runtime context key or a',
+    'structured selection) on its arguments, so it misses the module-level change. Add the file to',
+    'config/react-compiler-uncompiled-files.txt, or subscribe to the state so a change re-renders.'
+  ],
   'hook-in-memo-block': [
     'React Compiler memoizes this hook call inside a cached block, so it runs only when the block',
     'recomputes (a conditional hook). Call the hook in its own top-level `const` and use the variable.'
@@ -252,16 +257,19 @@ function isStoreRead(node) {
   )
 }
 
-function memoizedCallKind(node) {
+function memoizedCallKind(node, liveReaders) {
   if (isStoreRead(node)) {
     return { kind: 'store-read', name: 'getState' }
   }
-  const hook = calleeName(node.expression)
-  return hook && HOOK_NAME.test(hook) ? { kind: 'hook', name: hook } : null
+  const callee = calleeName(node.expression)
+  if (callee && liveReaders.has(callee)) {
+    return { kind: 'live-read', name: callee }
+  }
+  return callee && HOOK_NAME.test(callee) ? { kind: 'hook', name: callee } : null
 }
 
-/** Hook calls and `getState()` reads the compiler placed inside a memo-cache guarded block. */
-export function findMemoizedCalls(fileName, compiledCode) {
+/** Hook calls, `getState()` reads and live module-state reads the compiler placed inside a memo-cache guarded block. */
+export function findMemoizedCalls(fileName, compiledCode, liveReaders = new Set()) {
   if (!compiledCode.includes('compiler-runtime')) {
     return []
   }
@@ -276,7 +284,7 @@ export function findMemoizedCalls(fileName, compiledCode) {
     if (isFunctionNode(node)) {
       return
     }
-    const call = ts.isCallExpression(node) ? memoizedCallKind(node) : null
+    const call = ts.isCallExpression(node) ? memoizedCallKind(node, liveReaders) : null
     // Nested guarded blocks are walked once per enclosing block; keying by node dedupes them.
     if (call) {
       found.set(node, { fn, ...call })
@@ -320,6 +328,20 @@ export function findMemoizedStoreReads(fileName, compiledCode) {
 
 /** Source lines of render-time `getState()` calls in `fnName`; a useMemo/callback read is excluded. */
 export function renderStoreReadLines(fileName, text, fnName) {
+  return renderCallLines(fileName, text, fnName, isStoreRead)
+}
+
+/** Source lines of render-time calls to `callee` in `fnName`; a useMemo/callback call is excluded. */
+export function renderLiveReadLines(fileName, text, fnName, callee) {
+  return renderCallLines(
+    fileName,
+    text,
+    fnName,
+    (node) => ts.isCallExpression(node) && calleeName(node.expression) === callee
+  )
+}
+
+function renderCallLines(fileName, text, fnName, matches) {
   const sourceFile = parseModule(fileName, text)
   const lines = new Set()
   for (const { name, node: root } of listReactFunctions(sourceFile)) {
@@ -330,7 +352,7 @@ export function renderStoreReadLines(fileName, text, fnName) {
       if (node !== root && isFunctionNode(node)) {
         return
       }
-      if (isStoreRead(node)) {
+      if (matches(node)) {
         lines.add(lineOf(sourceFile, node))
       }
       ts.forEachChild(node, visit)
@@ -338,6 +360,69 @@ export function renderStoreReadLines(fileName, text, fnName) {
     visit(root)
   }
   return [...lines].sort((a, b) => a - b)
+}
+
+// Reads of module-level state that changes without a React update; a cache keyed on props keeps the old value.
+export const LIVE_MODULE_READERS = [
+  // Both fold in providerRuntimeSessionGeneration (lib/provider-runtime-context.ts).
+  'getProviderRuntimeContextKey',
+  'getEnvironmentRuntimeContextKey',
+  // Both read the selection lifetime registry in structured-agent-session-selection-controller.ts.
+  'structuredSessionSelectionAuthority',
+  'structuredSessionSelectionController'
+]
+
+function moduleFunctionName(node) {
+  if (ts.isFunctionDeclaration(node) && node.name) {
+    return node.name.text
+  }
+  const parent = node.parent
+  return (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+    ts.isVariableDeclaration(parent) &&
+    ts.isIdentifier(parent.name) &&
+    ts.isVariableStatement(parent.parent?.parent)
+    ? parent.name.text
+    : null
+}
+
+/** Module-scope plain functions whose own body calls a live reader, so their result is live too. */
+export function findLiveReadWrappers(fileName, text, readers) {
+  if (![...readers].some((reader) => text.includes(reader))) {
+    return []
+  }
+  const sourceFile = parseModule(fileName, text)
+  const wrappers = []
+  for (const statement of sourceFile.statements) {
+    const candidates = ts.isFunctionDeclaration(statement)
+      ? [statement]
+      : ts.isVariableStatement(statement)
+        ? statement.declarationList.declarations
+            .map((declaration) => declaration.initializer && unwrap(declaration.initializer))
+            .filter((init) => init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init)))
+        : []
+    for (const fn of candidates) {
+      const name = moduleFunctionName(fn)
+      if (!name || isReactName(name) || readers.has(name)) {
+        continue
+      }
+      let calls = false
+      const visit = (node) => {
+        if (calls || (node !== fn && isFunctionNode(node))) {
+          return
+        }
+        if (ts.isCallExpression(node) && readers.has(calleeName(node.expression) ?? '')) {
+          calls = true
+          return
+        }
+        ts.forEachChild(node, visit)
+      }
+      visit(fn)
+      if (calls) {
+        wrappers.push(name)
+      }
+    }
+  }
+  return wrappers
 }
 
 /** Source lines of `hook` calls in `fnName` that sit inside a larger expression. */

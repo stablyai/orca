@@ -2,7 +2,7 @@
 # Files in config/render-path-translate-baseline.txt and config/react-compiler-hazard-baseline.txt
 # are skipped too. Remove a line once its file is safe to compile.
 
-# Render-time reads of providerRuntimeSessionGeneration (lib/provider-runtime-context.ts).
+# Render-time reads of providerRuntimeSessionGeneration (lib/provider-runtime-context.ts; hazard live-read-in-memo-block).
 src/renderer/src/components/feature-wall/FeatureWallSetupChecklist.tsx
 src/renderer/src/components/feature-wall/use-integration-connection-status.ts
 src/renderer/src/components/integrations/task-trackers/jira-integration-card.tsx
@@ -17,7 +17,7 @@ src/renderer/src/components/task-page/jira/use-task-page-jira-list-projection.ts
 src/renderer/src/components/task-page/jira/use-task-page-jira-list-state.ts
 src/renderer/src/hooks/use-integration-provider-status-refresh.ts
 
-# structuredSessionSelectionAuthority/Controller read module state the selection lifetime replaces.
+# structuredSessionSelectionAuthority/Controller read module state the selection lifetime replaces (live-read-in-memo-block).
 src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-option-state.ts
 
 # applyTerminalColdActivation mutates controller refs during render on the terminal hot path.
