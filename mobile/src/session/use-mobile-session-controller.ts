@@ -32,6 +32,7 @@ import { useMobileSessionContentCreateActions } from './use-mobile-session-conte
 import { useMobileSessionCloseActions } from './tabs/use-mobile-session-close-actions'
 import { useMobileSessionBulkClose } from './tabs/use-mobile-session-bulk-close'
 import { useMobileSessionPresentation } from './use-mobile-session-presentation'
+import { useMobileSessionStoredChatTab } from './use-mobile-session-stored-chat-tab'
 import { useMobileSessionPanelRouteActions } from './use-mobile-session-panel-route-actions'
 
 export function useMobileSessionController() {
@@ -94,6 +95,7 @@ export function useMobileSessionController() {
   const lifecycle = Object.assign(tabReconciliation, useMobileSessionLifecycle(tabReconciliation))
   const keyboardState = Object.assign(lifecycle, useMobileSessionKeyboardState(lifecycle))
   useMobileSessionStartup(keyboardState)
+  useMobileSessionStoredChatTab(keyboardState)
   const preferences = useMobileSessionPreferenceFocus(keyboardState)
   const tabSwitching = Object.assign(keyboardState, useMobileSessionTabSwitching(keyboardState))
   const openNativeSession = useMobileStructuredSessionOpening(tabSwitching)

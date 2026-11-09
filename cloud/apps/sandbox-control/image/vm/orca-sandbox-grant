@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Mints a fresh, single-device orcad pairing offer for one org member's device and seals it to that
+# device's X25519 key, so the control plane relays only ciphertext (the VM owner's E2EE model holds:
+# every member device gets its own revocable orcad credential, nobody else can read it).
+# Env from the control plane: ORCA_GRANT_ID, ORCA_GRANT_RECIPIENT_KEY (base64 raw X25519 public
+# key), ORCA_GRANT_KIND (desktop|mobile), ORCA_PUBLIC_WSS. Prints one JSON line:
+# {"deviceId":"…","sealed":{"v":1,"ephemeralPublicKeyB64":"…","nonceB64":"…","ciphertextB64":"…"}}
+# Sealing: ECDH(ephemeral, recipient) -> HKDF-SHA256(salt = eph||recipient, info
+# "orca-cloud-grant-v1") -> AES-256-GCM, AAD "orca-cloud-grant-v1:<grant id>".
+set -euo pipefail
+umask 077
+ORCA_HOME=/opt/orca
+STATE="$HOME/.orca-sandbox"
+DATA="$HOME/.orcad-data"
+mkdir -p "$STATE"
+exec 9>"$STATE/grant.lock"
+# One mint at a time: --rotate retires unredeemed offers, so two members never share a credential.
+flock -w 30 9
+
+case "${ORCA_GRANT_ID:-}" in '' | *[!A-Za-z0-9_-]*) echo 'bad grant id' >&2; exit 2 ;; esac
+case "${ORCA_GRANT_KIND:-}" in desktop) scope=() ;; mobile) scope=(--mobile) ;; *) echo 'bad kind' >&2; exit 2 ;; esac
+case "${ORCA_GRANT_RECIPIENT_KEY:-}" in '' | *[!A-Za-z0-9+/=]*) echo 'bad key' >&2; exit 2 ;; esac
+case "${ORCA_PUBLIC_WSS:-}" in wss://*) ;; *) echo 'bad endpoint' >&2; exit 2 ;; esac
+
+node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
+cli="$ORCA_HOME/runtime/orcad/out/cli/index.js"
+offer="$(ORCA_USER_DATA_PATH="$DATA" timeout 30 "$node" "$cli" pair --json --rotate "${scope[@]}" \
+  --address "$ORCA_PUBLIC_WSS" 2>/dev/null)" || { echo 'pair failed' >&2; exit 1; }
+# The offer goes to the sealer on stdin (never argv or disk); only the sealed form is printed.
+printf '%s' "$offer" | ORCA_GRANT_ID="$ORCA_GRANT_ID" ORCA_GRANT_RECIPIENT_KEY="$ORCA_GRANT_RECIPIENT_KEY" \
+  "$node" -e '
+const crypto = require("node:crypto")
+let input = ""
+process.stdin.on("data", (c) => (input += c)).on("end", () => {
+  const res = JSON.parse(input).result
+  if (!res || res.available !== true || !res.pairingUrl || !res.deviceId) {
+    console.error("offer unavailable")
+    process.exit(1)
+  }
+  const recipient = Buffer.from(process.env.ORCA_GRANT_RECIPIENT_KEY, "base64")
+  if (recipient.length !== 32) { console.error("bad key length"); process.exit(2) }
+  const recipientKey = crypto.createPublicKey({ key: { kty: "OKP", crv: "X25519", x: recipient.toString("base64url") }, format: "jwk" })
+  const eph = crypto.generateKeyPairSync("x25519")
+  const ephRaw = Buffer.from(eph.publicKey.export({ format: "jwk" }).x, "base64url")
+  const shared = crypto.diffieHellman({ privateKey: eph.privateKey, publicKey: recipientKey })
+  const key = Buffer.from(crypto.hkdfSync("sha256", shared, Buffer.concat([ephRaw, recipient]), "orca-cloud-grant-v1", 32))
+  const nonce = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, nonce)
+  cipher.setAAD(Buffer.from("orca-cloud-grant-v1:" + process.env.ORCA_GRANT_ID))
+  const body = Buffer.from(JSON.stringify({ pairingUrl: res.pairingUrl, deviceId: res.deviceId, scope: res.scope }))
+  const ct = Buffer.concat([cipher.update(body), cipher.final(), cipher.getAuthTag()])
+  process.stdout.write(JSON.stringify({ deviceId: res.deviceId, sealed: { v: 1, ephemeralPublicKeyB64: ephRaw.toString("base64"), nonceB64: nonce.toString("base64"), ciphertextB64: ct.toString("base64") } }) + "\n")
+})'

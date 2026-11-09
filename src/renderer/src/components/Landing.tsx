@@ -1,3 +1,8 @@
+import {
+  CloudWorkspacesHome,
+  useCloudWorkspacesPresent
+} from './cloud-workspaces/CloudWorkspacesHome'
+import { useCloudWorkspaceHighlight } from './cloud-workspaces/cloud-workspace-links'
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -215,6 +220,8 @@ function PreflightBanner({
 
 export default function Landing(): React.JSX.Element {
   const t = useTranslate()
+  const cloudHighlightId = useCloudWorkspaceHighlight()
+  const cloudListPresent = useCloudWorkspacesPresent()
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
@@ -251,38 +258,52 @@ export default function Landing(): React.JSX.Element {
   ])
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-background">
-      <div className="w-full max-w-lg px-6">
-        <div className="flex flex-col items-center gap-4 py-8">
-          <LandingBrand />
+    <div className="scrollbar-sleek absolute inset-0 flex flex-col items-center overflow-y-auto bg-background">
+      {/* Centered when alone; with cloud workspaces below, a smaller brand block sits near the
+          top and the shortcut list steps aside so the list is the focus. */}
+      <div
+        className={cn(
+          'flex w-full flex-col items-center',
+          cloudListPresent ? 'pt-[12vh]' : 'my-auto'
+        )}
+      >
+        <div className="w-full max-w-lg px-6">
+          <div className={cn('flex flex-col items-center', cloudListPresent ? 'gap-3 py-4' : 'gap-4 py-8')}>
+            <LandingBrand compact={cloudListPresent} />
 
-          {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} repos={repos} />}
+            {preflightIssues.length > 0 && (
+              <PreflightBanner issues={preflightIssues} repos={repos} />
+            )}
 
-          <p className="text-sm text-muted-foreground text-center">
-            {hasProjects
-              ? t(
-                  'auto.components.Landing.9c00bd4adf',
-                  'Select a workspace from the sidebar to begin.'
-                )
-              : t('auto.components.Landing.cd21242762', 'Add a project to get started.')}
-          </p>
+            <p className="text-sm text-muted-foreground text-center">
+              {hasProjects
+                ? t(
+                    'auto.components.Landing.9c00bd4adf',
+                    'Select a workspace from the sidebar to begin.'
+                  )
+                : t('auto.components.Landing.cd21242762', 'Add a project to get started.')}
+            </p>
 
-          <div className="flex items-center justify-center gap-2.5 flex-wrap">
-            <button className={LANDING_ACTION_BUTTON_CLASS} onClick={() => openModal('add-repo')}>
-              <FolderPlus className="size-3.5" />
-              {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
-            </button>
+            <div className="flex items-center justify-center gap-2.5 flex-wrap">
+              <button className={LANDING_ACTION_BUTTON_CLASS} onClick={() => openModal('add-repo')}>
+                <FolderPlus className="size-3.5" />
+                {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
+              </button>
 
-            <button
-              className={LANDING_ACTION_BUTTON_CLASS}
-              onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
-            >
-              <GitBranchPlus className="size-3.5" />
-              {createActionLabel}
-            </button>
+              <button
+                className={LANDING_ACTION_BUTTON_CLASS}
+                onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
+              >
+                <GitBranchPlus className="size-3.5" />
+                {createActionLabel}
+              </button>
+            </div>
+
+            {!cloudListPresent && <LandingShortcutList shortcuts={shortcuts} />}
           </div>
-
-          <LandingShortcutList shortcuts={shortcuts} />
+        </div>
+        <div className="w-full max-w-3xl px-6 pb-20 empty:hidden">
+          <CloudWorkspacesHome highlightId={cloudHighlightId} />
         </div>
       </div>
 

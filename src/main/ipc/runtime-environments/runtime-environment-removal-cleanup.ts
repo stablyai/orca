@@ -4,6 +4,7 @@ import { clearBrowserRoutePartitionStorageForEnvironment } from '../../browser/r
 import { retireBrowserRoutePartitionStorageForEnvironment } from '../../browser/routing/partitions/browser-route-partition-storage-retirement'
 import { clearRuntimeEnvironmentCapabilityEvidence } from './runtime-environment-capability-evidence'
 import { clearRuntimeEnvironmentManualDisconnect } from './runtime-environment-manual-disconnect'
+import { getRuntimePortForwardManager } from '../../runtime-port-forward/runtime-port-forward-manager'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import {
   forgetRemoteLayoutSnapshot,
@@ -33,6 +34,8 @@ export function retireRemovedRuntimeEnvironment(
   forgetRemoteLayoutSnapshot(store, environmentId)
   store.setHostRepoCatalogSnapshot(environmentId, null)
   clearRuntimeEnvironmentManualDisconnect(environmentId)
+  // Its forwards would otherwise keep this computer's ports bound for a host that no longer exists.
+  getRuntimePortForwardManager()?.closeEnvironment(environmentId)
   const retiring = Promise.resolve(invalidateTransport(environmentId))
   // Explicit removal retires browser storage after client hosts release their live partitions.
   void retireBrowserRoutePartitionStorageForEnvironment({

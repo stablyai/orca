@@ -24,6 +24,7 @@
 1 src/renderer/src/components/onboarding/ThemeLookCarousel.tsx
 1 src/renderer/src/components/right-sidebar/ssh-forwarded-ports-section.tsx
 1 src/renderer/src/components/right-sidebar/ssh-ports-panel.tsx
+1 src/renderer/src/components/right-sidebar/use-runtime-port-row-forwarding.tsx
 1 src/renderer/src/components/settings/accounts/codex/CodexLoginLinkNotice.tsx
 1 src/renderer/src/components/settings/accounts/sign-in/HostAccountSignInPrompt.tsx
 1 src/renderer/src/components/settings/general/GeneralSupportSection.tsx

@@ -68,6 +68,8 @@ export type CreateSandboxParams = {
   tags: Record<string, string>
   /** Provider-side snapshot expiry after last use (backstop behind Orca's own retention); 0 = never. */
   snapshotExpirationMs: number
+  /** Default true (workspaces). Environment build boxes are throwaway: their output is a manual snapshot. */
+  persistent?: boolean
 }
 
 export type RunCommandParams = {
@@ -88,6 +90,8 @@ export type SandboxProviderApi = {
   stopSession(sessionId: string): Promise<{ snapshotId: string | null }>
   extendTimeout(sessionId: string, durationMs: number): Promise<ProviderSession>
   updateNetworkPolicy(sessionId: string, policy: NetworkPolicy): Promise<void>
+  /** Sets the full exposed-port list on the sandbox (live on a running session); returns its routes. */
+  updatePorts(name: string, ports: number[]): Promise<ProviderRoute[]>
   runCommand(sessionId: string, params: RunCommandParams): Promise<CommandResult>
   /** Provider-side snapshot expiry after last use (archive TTL backstop). */
   updateSnapshotExpiration(name: string, expirationMs: number): Promise<void>

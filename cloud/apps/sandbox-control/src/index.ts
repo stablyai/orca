@@ -13,20 +13,38 @@
 //   GET    /v1/sandboxes/:id/archive                              -> {archive}
 //   POST   /v1/sandboxes/:id/unarchive                            -> {sandbox, connection}
 //   DELETE /v1/sandboxes/:id                                      -> {sandbox}
+//   POST, GET /v1/sandboxes/:id/shares | DELETE /v1/sandboxes/:id/shares/:shareId | POST /v1/shares/:token/visit
+//   POST | DELETE /v1/sandboxes/:id/ssh-keys {publicKey}          -> {ssh: {port, user, hostKey}}
 //   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 //   POST   /v1/github/connect -> {installUrl, authorizeUrl}  (bind a GitHub App installation to the account)
 //   GET    /v1/github/installations                          -> {installations}
+//   /v1/environments[/...]  org environments + versioned builds (see src/environment-routes.ts)
+//   POST   /v1/device-sessions | GET | DELETE /:id  per-phone access (see device-sessions.ts)
+// Phones sign their own EdDSA tokens (device-sessions.ts) and act as their user, except that they
+// cannot enroll devices, manage secrets or connect GitHub.
+//   /v1/team/workspaces[/:id[/presence|wake|lease|grants[/:grantId]]], /v1/team/links/resolve, /v1/team/prompts
+//          team workspace registry, presence, per-device grants (src/workspaces.ts, src/grants.ts)
+// /v1/sandboxes/* is the owner's lifecycle API: only the workspace's owner (and, for suspend and
+// destroy, an org admin) can reach a row there, because resume hands back an orcad pairing offer.
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
+// Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
 import { z } from 'zod'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { authenticateDesktop } from './auth'
-import { handleApi, isApiPath, type ApiExtension } from './api/router'
+import { authenticateApi } from './api/caller'
+import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
+import { handleMcpRoutes, isMcpPath, oauthApprovalsApi, oauthGrantsApi } from './mcp'
+import { purgeOAuth } from './mcp/oauth'
 import { retryPendingMessages } from './api/messages'
 import { revokeWorkspaceTokens } from './api/keys'
 import { provisionWorkspaceToken } from './api/settings'
 import { docsPage, openApiDocument } from './api/openapi'
+import { handleDeviceSessionsRoute } from './device-sessions'
+import { createRoutinesApi } from './routines/api'
+import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
+import { tickRoutines } from './routines/runs'
 import { advanceGoldenImages, currentGoldenSnapshotId } from './golden-images'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
@@ -70,9 +88,17 @@ import { cachedProviderEnv } from './session-env'
 import { credentialTargets } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
-import { VmCommandError } from './sandbox-vm-commands'
+import { DesktopCommandError, VmCommandError, startDesktop } from './sandbox-vm-commands'
+import { forgetShareLink, handleShareGateway } from './share-gateway'
+import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
+import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
+import { audit } from './api/audit'
 import { getSandbox, getSandboxByProviderName, listAccountSandboxes, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
+import { advanceAllBuilds, type BuildDeps } from './environment-builds'
+import { environmentErrorResponse, handleEnvironmentRoute, isEnvironmentRoute } from './environment-routes'
+import { EnvironmentError } from './environments'
+import type { GoldenImageProviderApi } from './golden-image-provider'
 import { CreateRequestSchema, LeaseRequestSchema, parseWakeWait, readyView, sandboxView } from './wire'
 import { ArchiveRequestSchema } from './sandbox-vm-inspect'
 import {
@@ -84,19 +110,42 @@ import {
   workspaceStatus,
   type WorkspaceConfig
 } from './workspace-lifecycle'
-import { wakeForPreview } from './preview-wake'
 import {
-  SshPublicKeySchema,
-  SshForbiddenError,
-  SshUnavailableError,
-  removeSsh,
-  setupSsh,
-  sshLoginUser,
-  sshRowForSecret,
-  wakeForSsh
-} from './sandbox-ssh'
-
-const SshSetupRequestSchema = z.object({ publicKey: SshPublicKeySchema }).strict()
+  GrantRequestSchema,
+  issueGrant,
+  listGrants,
+  recordOwnerDevice,
+  revokeForAccessChange,
+  revokeGrantsForDeviceSession,
+  revokeGrantsForMember,
+  revokeOne
+} from './grants'
+import { getOrgPrompts, putOrgPrompts } from './org-prompts'
+import {
+  completeUserConnect,
+  createUserConnectState,
+  disconnectUser,
+  getUserTokenRow,
+  memberGitIdentity,
+  storeUserToken,
+  userAuthorizeUrl
+} from './github-user-tokens'
+import { memberGitRoutes } from './member-git'
+import {
+  PatchSchema,
+  PresenceSchema,
+  WORKSPACE_ERROR_STATUS,
+  WorkspaceError,
+  canOpen,
+  isOrgAdmin,
+  listWorkspaces,
+  patchWorkspace,
+  reportPresence,
+  requireVisible,
+  resolveLink,
+  workspaceViews
+} from './workspaces'
+import type { SandboxCaller } from './auth'
 
 const MAX_JSON_BYTES = 16 * 1024
 /** Archive bodies carry the desktop's cached repo state (file trees) when the VM is already asleep. */
@@ -109,9 +158,11 @@ const CentsPerHourSchema = z
 const FEATURES_HEADER = 'x-orca-sandbox-features'
 /** A pasted .env file: up to 100 values. */
 const MAX_BATCH_JSON_BYTES = 160 * 1024
+// Public API bodies: routine prompts are up to 20k characters (POST/PATCH /v1/routines).
+const MAX_API_JSON_BYTES = 96 * 1024
 
 export type Deps = {
-  provider?: SandboxProviderApi
+  provider?: SandboxProviderApi & Partial<GoldenImageProviderApi>
   entitlements?: EntitlementClient
   credentials?: CredentialBroker
   github?: GitHubAppMinter
@@ -129,6 +180,10 @@ export type Deps = {
   apiExtensions?: ApiExtension[]
   /** Long-poll sleep (tests advance a fake clock). */
   sleep?: (ms: number) => Promise<void>
+  /** Workspace-grant cleanup for a revoked device session (wired by the workspace registry). */
+  onDeviceSessionRevoked?: (deviceSessionId: string) => Promise<void>
+  /** Share-gateway fetch to the VM's share proxy (tests). */
+  shareFetch?: typeof fetch
 }
 
 function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
@@ -154,11 +209,28 @@ export function publicOrigin(env: Env, url?: URL): string | undefined {
   return configured?.replace(/\/+$/, '') ?? url?.origin
 }
 
-function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => ProxiedRoute[] {
+function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => Promise<ProxiedRoute[]> {
   const broker = deps.credentials ?? egressCredentials(env)
-  return (row, host) => {
+  const memberGit = memberGitEnabled(env)
+  const members = memberGitRoutes({
+    db: env.SANDBOX_DB,
+    identity: async (row, userId) => {
+      const keyring = keyringFor(env)
+      return keyring && memberGit(row.account_id)
+        ? memberGitIdentity(env.SANDBOX_DB, await keyring, githubConnect(env, deps), row.account_id, userId, (deps.now ?? Date.now)())
+        : null
+    }
+  })
+  return async (row, host) => {
+    if (host === 'github.com') {
+      return members.routes(row, host)
+    }
     if (host === 'api.github.com') {
-      return [{ header: 'authorization', placeholders: githubPlaceholderHeaders(row), credential: () => broker.authorizationFor(row, host) }]
+      return [
+        // Members first: a member placeholder must never fall through to the app's token.
+        ...(await members.routes(row, host)),
+        { header: 'authorization', placeholders: githubPlaceholderHeaders(row), credential: () => broker.authorizationFor(row, host) }
+      ]
     }
     const entries = egressSecretHosts(row).filter((candidate) => candidate.host === host)
     const keyring = keyringFor(env)
@@ -305,6 +377,26 @@ function githubManifestCallback(env: Env, url: URL): Response {
   )
 }
 
+/**
+ * Operator: point the GitHub App's webhook at this Worker with GITHUB_WEBHOOK_SECRET. GitHub's API
+ * can set the URL and secret; activating the hook and choosing events stays in the app settings UI.
+ */
+async function configureAppWebhook(env: Env, deps: Deps, body: unknown): Promise<Response> {
+  const minter = deps.github ?? githubMinter(env)
+  const target = (body as { url?: unknown } | null)?.url
+  if (!minter?.appRequest || !env.GITHUB_WEBHOOK_SECRET) {
+    return fail('not_configured', 503)
+  }
+  if (typeof target !== 'string' || !/^https:\/\/[^\s]+\/v1\/github\/webhook$/.test(target)) {
+    return fail('invalid_request', 400)
+  }
+  const patched = await minter.appRequest('PATCH', '/app/hook/config', { url: target, content_type: 'json', insecure_ssl: '0', secret: env.GITHUB_WEBHOOK_SECRET })
+  const config = (await patched.json().catch(() => null)) as { url?: string; content_type?: string } | null
+  const app = (await (await minter.appRequest('GET', '/app')).json().catch(() => null)) as { events?: string[]; permissions?: Record<string, string> } | null
+  console.log(JSON.stringify({ event: 'github_app_webhook_configured', status: patched.status }))
+  return json({ status: patched.status, url: config?.url ?? null, contentType: config?.content_type ?? null, events: app?.events ?? null, permissions: app?.permissions ?? null })
+}
+
 function devCredentials(env: Env): CredentialBroker {
   const value = env.EGRESS_DEV_STATIC_AUTHORIZATION
   if (!value || env.SANDBOX_ENV === 'prod') {
@@ -341,13 +433,31 @@ async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<un
   return text ? JSON.parse(text) : {}
 }
 
+async function apiContext(env: Env, deps: Deps, request: Request, life?: Promise<ApiContext['life']>): Promise<ApiContext> {
+  const resolved = await (life ?? lifecycleDeps(env, deps))
+  const routines = createRoutinesApi({
+    publicUrl: publicOrigin(env, new URL(request.url))!,
+    deps: () => (resolved ? { life: resolved, githubFetch: deps.githubFetch } : null)
+  })
+  return {
+    db: env.SANDBOX_DB,
+    now: deps.now ?? Date.now,
+    life: resolved,
+    waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
+    readJson: () => readJson(request, MAX_API_JSON_BYTES),
+    extensions: [oauthApprovalsApi, oauthGrantsApi, routines, ...(deps.apiExtensions ?? [])]
+  }
+}
+
 /** Lifecycle routes refuse to run half-configured rather than guess at Orca's provider account. */
 async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null> {
   if (!deps.provider && (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID)) {
     return null
   }
   // The Worker rotates golden images itself (golden-images.ts); the var only seeds the first one.
-  const goldenSnapshotId = await currentGoldenSnapshotId(env.SANDBOX_DB, env.GOLDEN_SNAPSHOT_ID)
+  // Preview versions in dev may pin an image under test (shared D1's active image is the live one).
+  const override = env.SANDBOX_ENV !== 'prod' ? env.GOLDEN_SNAPSHOT_OVERRIDE : undefined
+  const goldenSnapshotId = override || (await currentGoldenSnapshotId(env.SANDBOX_DB, env.GOLDEN_SNAPSHOT_ID))
   if (!goldenSnapshotId) {
     return null
   }
@@ -365,6 +475,7 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
     entitlements: deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env)),
     github: deps.github ?? githubMinter(env),
     secrets: await secretsDeps(env),
+    memberIdentity: await memberIdentityFor(env, deps),
     now: deps.now ?? Date.now,
     retention: deps.retention ?? retentionFromEnv(env),
     background: deps.waitUntil,
@@ -376,6 +487,7 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
     },
     config: {
       pool: poolConfigFromEnv(env),
+      shareLinkSecret: shareSecret(env),
       extraEgressHosts: (env.EGRESS_EXTRA_HOSTS ?? '').split(',').map((host) => host.trim()).filter(Boolean),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
@@ -388,6 +500,26 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
       egressProxyUrl: env.EGRESS_PROXY_URL,
       sessionDeadlineMs:
         env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
+    }
+  }
+}
+
+function buildDeps(life: LifecycleDeps, deps: Deps): BuildDeps {
+  return {
+    db: life.db,
+    // SAFETY: the Vercel client implements both; test fakes for builds do too.
+    provider: life.provider as BuildDeps['provider'],
+    github: life.github,
+    keyring: life.secrets?.keyring,
+    entitlements: life.entitlements,
+    now: life.now,
+    waitUntil: deps.waitUntil,
+    githubFetch: deps.githubFetch,
+    config: {
+      environment: life.config.environment,
+      goldenSnapshotId: life.config.goldenSnapshotId,
+      region: life.config.defaultRegion,
+      guardrails: life.config.guardrails
     }
   }
 }
@@ -433,6 +565,7 @@ async function advanceGoldenImagesFromEnv(env: Env): Promise<void> {
       region: env.VERCEL_REGION ?? 'iad1',
       expirationMs: Number.isFinite(days) && days >= 1 ? Math.floor(days) * 86_400_000 : 0,
       source: env.GOLDEN_IMAGE_SOURCE,
+      github: githubMinter(env)?.sourceRequest,
       seedSnapshotId: env.GOLDEN_SNAPSHOT_ID,
       refreshBeforeMs: env.GOLDEN_REFRESH_BEFORE_HOURS ? Number(env.GOLDEN_REFRESH_BEFORE_HOURS) * 3_600_000 : undefined
     }
@@ -453,6 +586,33 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
   return false
 }
 
+/**
+ * Git as the sender is opt-in (MEMBER_GIT_IDENTITY = on | accounts:<id>,<id>; default off): members
+ * of a shared workspace share one VM user and the sender id is not yet stamped by orcad, so a member
+ * could push as another member of the same workspace (to that repository only). Off = app identity.
+ */
+export function memberGitEnabled(env: Env): (accountId: string) => boolean {
+  const mode = egressPlaceholderMode(env.MEMBER_GIT_IDENTITY)
+  return (accountId) => mode === true || (mode instanceof Set && mode.has(accountId))
+}
+
+async function memberIdentityFor(env: Env, deps: Deps): Promise<LifecycleDeps['memberIdentity']> {
+  const keyring = keyringFor(env)
+  if (!keyring || env.MEMBER_GIT_IDENTITY === undefined || env.MEMBER_GIT_IDENTITY === 'off') {
+    return undefined
+  }
+  const enabled = memberGitEnabled(env)
+  try {
+    const ring = await keyring
+    return async (row, userId) =>
+      enabled(row.account_id)
+        ? memberGitIdentity(env.SANDBOX_DB, ring, githubConnect(env, deps), row.account_id, userId, (deps.now ?? Date.now)())
+        : null
+  } catch {
+    return undefined
+  }
+}
+
 async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
   const keyring = keyringFor(env)
   if (!keyring) {
@@ -467,9 +627,51 @@ async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
   }
 }
 
+/** Public share-link traffic; null when the request is not for a link. */
+async function shareGateway(request: Request, url: URL, env: Env, deps: Deps): Promise<Response | null> {
+  const secrets = shareSecrets(env)
+  const onShareHost = env.SHARE_HOST_SUFFIX && url.hostname.endsWith(env.SHARE_HOST_SUFFIX)
+  if (!secrets || !(onShareHost || (sharePathMode(env) && url.pathname.startsWith('/s/')))) {
+    return null
+  }
+  const provider =
+    deps.provider ??
+    (env.VERCEL_TOKEN && env.VERCEL_TEAM_ID && env.VERCEL_PROJECT_ID
+      ? createVercelSandboxApi({ token: env.VERCEL_TOKEN, teamId: env.VERCEL_TEAM_ID, projectId: env.VERCEL_PROJECT_ID, baseUrl: env.VERCEL_API_BASE })
+      : null)
+  if (!provider) {
+    return null
+  }
+  return handleShareGateway(request, url, {
+    db: env.SANDBOX_DB,
+    secrets,
+    provider,
+    now: deps.now ?? Date.now,
+    hostSuffix: env.SHARE_HOST_SUFFIX,
+    pathMode: sharePathMode(env),
+    fetch: deps.shareFetch,
+    // Visitor wake (link opt-in) is the same single-flight wake as every other wake source, billed
+    // and entitlement-checked as the owner's. The page polls status, so no long-poll here.
+    wake: async (sandbox) => {
+      const life = await lifecycleDeps(env, deps)
+      if (!life) {
+        throw new Error('not_configured')
+      }
+      const answer = await wakeSandbox(life, sandbox, { waitMs: 0, ...workspaceConfig(env, deps) })
+      if (answer.state === 'failed' || answer.state === 'not_found') {
+        throw new Error(`wake_${answer.state}`)
+      }
+    }
+  })
+}
+
 export async function handleRequest(request: Request, env: Env, deps: Deps = {}): Promise<Response> {
   const url = new URL(request.url)
   try {
+    const shared = await shareGateway(request, url, env, deps)
+    if (shared) {
+      return shared
+    }
     if (url.pathname === '/v1/egress/proxy' || url.pathname.startsWith('/v1/egress/proxy/')) {
       if (!env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID) {
         return fail('not_configured', 503)
@@ -482,6 +684,9 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         fetch: deps.egressFetch,
         keysForIssuer: deps.egressKeysForIssuer
       })
+    }
+    if (isRoutineHookPath(url.pathname)) {
+      return await handleRoutineHook(request, url, { db: env.SANDBOX_DB, now: deps.now ?? Date.now, githubWebhookSecret: env.GITHUB_WEBHOOK_SECRET })
     }
     if (url.pathname === '/v1/github/manifest-callback') {
       return githubManifestCallback(env, url)
@@ -499,6 +704,44 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       const life = await lifecycleDeps(env, deps)
       if (!life) {
         return fail('not_configured', 503)
+      }
+      if (url.pathname === '/v1/internal/routines/tick' && request.method === 'POST') {
+        // Preview versions get no cron: drive the routine scheduler from here.
+        return json({ tick: await tickRoutines({ life, githubFetch: deps.githubFetch }) })
+      }
+      if (url.pathname === '/v1/internal/github/app-webhook' && request.method === 'POST') {
+        return await configureAppWebhook(env, deps, await readJson(request))
+      }
+      if (url.pathname === '/v1/internal/dev/member-github' && request.method === 'POST' && env.SANDBOX_ENV !== 'prod') {
+        // Dev rehearsal only: stand in a member's GitHub user token with a fresh app installation
+        // token for one repo, so git-as-sender can be exercised without a second GitHub human.
+        const body = DevMemberGitHubSchema.safeParse(await readJson(request))
+        const keyring = keyringFor(env)
+        const minter = deps.github ?? githubMinter(env)
+        if (!body.success || !keyring || !minter) {
+          return fail(body.success ? 'not_configured' : 'invalid_request', body.success ? 503 : 400)
+        }
+        const minted = await minter.tokenForRepo(body.data.repoUrl, body.data.accountId)
+        if (!minted) {
+          return fail('not_found', 404)
+        }
+        await storeUserToken(
+          env.SANDBOX_DB,
+          await keyring,
+          { account_id: body.data.accountId, user_id: body.data.userId },
+          { id: body.data.githubUserId, login: body.data.login, name: body.data.name },
+          { access: minted.token, refresh: null, accessExpiresAt: minted.expiresAt, refreshExpiresAt: null },
+          life.now()
+        )
+        return json({ stored: true, expiresAt: minted.expiresAt })
+      }
+      if (url.pathname === '/v1/internal/org-members/removed' && request.method === 'POST') {
+        // Auth pushes this when a member leaves or is removed: every device they paired is revoked.
+        const body = MemberRemovedSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        return json(await revokeGrantsForMember(life, body.data.accountId, body.data.userId))
       }
       return (
         (await handleOperator(request, url.pathname, {
@@ -519,10 +762,75 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       const state = await createConnectState(env.SANDBOX_DB, connect.stateSecret, { accountId: `dev:${sub}`, userId: sub }, (deps.now ?? Date.now)())
       return Response.redirect(authorizeUrl(connect, url.origin, state), 302)
     }
+    if (url.pathname === '/v1/device-sessions' || url.pathname.startsWith('/v1/device-sessions/')) {
+      const now = (deps.now ?? Date.now)()
+      const caller = await authenticateDesktop(env, request, now)
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      return await handleDeviceSessionsRoute(request, url, {
+        db: env.SANDBOX_DB,
+        caller,
+        now,
+        readJson: () => readJson(request),
+        // A revoked phone loses every workspace grant it was issued (its orcad devices too).
+        onRevoked:
+          deps.onDeviceSessionRevoked ??
+          (async (deviceSessionId) => {
+            const life = await lifecycleDeps(env, deps)
+            if (life) {
+              await revokeGrantsForDeviceSession(life, deviceSessionId)
+            }
+          })
+      })
+    }
+    if (url.pathname === '/v1/github/dev-user-connect' && env.SANDBOX_ENV !== 'prod') {
+      // Dev-only, link-shareable start of a member's own GitHub identity (git as the sender) for
+      // dev:org:<org> member <sub>; desktop builds call POST /v1/github/user/connect instead.
+      const connect = githubConnect(env, deps)
+      const sub = url.searchParams.get('sub') ?? ''
+      const org = url.searchParams.get('org') ?? ''
+      if (!connect || !keyringFor(env) || !/^[A-Za-z0-9_.-]{1,64}$/.test(sub) || !/^[A-Za-z0-9_.-]{1,64}$/.test(org)) {
+        return fail('not_found', 404)
+      }
+      const state = await createUserConnectState(
+        env.SANDBOX_DB,
+        connect.stateSecret,
+        { userId: sub, accountId: `dev:org:${org}`, orgId: org },
+        (deps.now ?? Date.now)()
+      )
+      return Response.redirect(userAuthorizeUrl(connect, url.origin, state), 302)
+    }
+    if (url.pathname === '/v1/github/user' || url.pathname === '/v1/github/user/connect') {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      if (url.pathname === '/v1/github/user/connect' && request.method === 'POST') {
+        const connect = githubConnect(env, deps)
+        if (!connect || !keyringFor(env)) {
+          return fail('not_configured', 503)
+        }
+        const state = await createUserConnectState(env.SANDBOX_DB, connect.stateSecret, caller, (deps.now ?? Date.now)())
+        return json({ authorizeUrl: userAuthorizeUrl(connect, url.origin, state) })
+      }
+      if (url.pathname === '/v1/github/user' && request.method === 'GET') {
+        const row = await getUserTokenRow(env.SANDBOX_DB, caller.accountId, caller.userId)
+        return json(row ? { connected: true, login: row.github_login, githubUserId: row.github_user_id } : { connected: false })
+      }
+      if (url.pathname === '/v1/github/user' && request.method === 'DELETE') {
+        await disconnectUser(env.SANDBOX_DB, caller)
+        return json({ connected: false })
+      }
+      return fail('not_found', 404)
+    }
     if (url.pathname === '/v1/github/connect' || url.pathname === '/v1/github/installations') {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
         return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
       }
       if (url.pathname === '/v1/github/installations' && request.method === 'GET') {
         const rows = await listAccountInstallations(env.SANDBOX_DB, caller.accountId)
@@ -547,24 +855,44 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return docsPage(publicOrigin(env, url)!)
     }
     if (isApiPath(url.pathname)) {
-      const life = await lifecycleDeps(env, deps)
       try {
-        return await handleApi(request, url, env, {
-          db: env.SANDBOX_DB,
-          now: deps.now ?? Date.now,
-          life,
-          waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
-          readJson: () => readJson(request),
-          extensions: deps.apiExtensions
-        })
+        return await handleApi(request, url, env, await apiContext(env, deps, request))
       } catch (error) {
         return errorResponse(error)
       }
+    }
+    if (isMcpPath(url.pathname)) {
+      // Hosted MCP server (src/mcp): every tool call runs through the public API as the MCP caller.
+      const now = deps.now ?? Date.now
+      let life: Promise<ApiContext['life']> | undefined
+      return await handleMcpRoutes(request, url, {
+        origin: publicOrigin(env, url)!,
+        db: env.SANDBOX_DB,
+        now,
+        allowedOrigins: (env.MCP_ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean),
+        authenticate: (req) => authenticateApi(env, req, now()),
+        api: async (caller, method, path, body) => {
+          const inner = new Request(new URL(path, url.origin), {
+            method,
+            headers: { 'content-type': 'application/json' },
+            body: body === undefined ? undefined : JSON.stringify(body)
+          })
+          life ??= lifecycleDeps(env, deps)
+          try {
+            return await handleApiAs(caller, inner, new URL(inner.url), await apiContext(env, deps, inner, life))
+          } catch (error) {
+            return errorResponse(error)
+          }
+        }
+      })
     }
     if (url.pathname === '/v1/secrets' || url.pathname.startsWith('/v1/secrets/')) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
         return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
       }
       const secrets = await secretsDeps(env)
       if (!secrets) {
@@ -592,20 +920,54 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       return response
     }
-    // Wake on SSH: the desktop's ProxyCommand presents a per-sandbox wake secret, not an Orca token.
-    const sshWake = /^\/v1\/ssh-wake\/(sbx_[a-f0-9]{24})$/.exec(url.pathname)
-    if (sshWake && request.method === 'POST') {
-      const secret = /^Bearer (osw_[A-Za-z0-9_-]{20,100})$/.exec(request.headers.get('authorization') ?? '')?.[1] ?? ''
-      const row = await getSandbox(env.SANDBOX_DB, sshWake[1]!)
-      const ssh = row ? await sshRowForSecret(env.SANDBOX_DB, row.id, secret) : null
-      const life = ssh ? await lifecycleDeps(env, deps) : null
-      if (!row || !ssh || !life || row.status === 'destroyed') {
+    if (isEnvironmentRoute(url.pathname)) {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
         return fail('unauthorized', 401)
       }
-      return json(await wakeForSsh(life, row, ssh, { ...workspaceConfig(env, deps), waitMs: parseWakeWait(url, await readJson(request)) }))
+      const life = await lifecycleDeps(env, deps)
+      if (!life) {
+        return fail('not_configured', 503)
+      }
+      return await handleEnvironmentRoute(request, url, caller, buildDeps(life, deps), () => readJson(request))
+    }
+    if (/^\/v1\/sandboxes\/[A-Za-z0-9_]+\/shares(?:\/|$)|^\/v1\/shares\//.test(url.pathname)) {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      const secrets = shareSecrets(env)
+      // No link URL can be served without either a share domain or (dev) path mode.
+      if (!secrets || (!env.SHARE_HOST_SUFFIX && !sharePathMode(env))) {
+        return fail('not_configured', 503)
+      }
+      const answer = await handleShareRoute(request.method, url.pathname, {
+        db: env.SANDBOX_DB,
+        secret: secrets[0]!,
+        secrets,
+        caller,
+        now: (deps.now ?? Date.now)(),
+        origin: url.origin,
+        hostSuffix: env.SHARE_HOST_SUFFIX,
+        readJson: () => readJson(request),
+        forget: forgetShareLink
+      })
+      return answer ? json(answer.body, answer.status) : fail('not_found', 404)
+    }
+    if (
+      url.pathname === '/v1/team/workspaces' ||
+      url.pathname.startsWith('/v1/team/workspaces/') ||
+      url.pathname === '/v1/team/links/resolve' ||
+      url.pathname === '/v1/team/prompts'
+    ) {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      return await workspaceRoute(request, url, env, deps, caller)
     }
     const match =
-      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|ssh))?)?$/.exec(
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|ssh-keys|desktop))?)?$/.exec(
         url.pathname
       )
     if (!match) {
@@ -625,7 +987,9 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     if (!id) {
       if (request.method === 'GET') {
         // Routine runs and other machine-made workspaces stay out of the desktop's list.
-        const rows = (await listAccountSandboxes(env.SANDBOX_DB, caller.accountId)).filter((row) => (row as { hidden?: number }).hidden !== 1)
+        const rows = (await listAccountSandboxes(env.SANDBOX_DB, caller.accountId)).filter(
+          (row) => (row as { hidden?: number }).hidden !== 1 && !row.workspace_id.startsWith('routine-') && row.user_id === caller.userId
+        )
         return json({ sandboxes: rows.map(view) })
       }
       if (request.method !== 'POST') {
@@ -637,27 +1001,45 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return fail('invalid_request', 400)
       }
       const ready = await createSandbox(life, caller, body.data)
+      await recordOwnerDevice(life.db, ready.row, ready.connection.pairingCode, life.now())
       return readyResponse(ready)
     }
     const row = await getSandbox(env.SANDBOX_DB, id)
-    // Another account's sandbox is indistinguishable from a missing one.
-    if (!row || row.account_id !== caller.accountId) {
+    const route = `${request.method} ${action ?? ''}`
+    const owner = row !== null && row.account_id === caller.accountId && row.user_id === caller.userId
+    const adminAction =
+      (route === 'DELETE ' || route === 'POST suspend') && row?.account_id === caller.accountId && isOrgAdmin(caller)
+    // Another account's (or a teammate's) sandbox is indistinguishable from a missing one.
+    if (!row || !(owner || adminAction)) {
       return fail('not_found', 404)
     }
-    const route = `${request.method} ${action ?? ''}`
     switch (route) {
       case 'GET ':
         return json({ sandbox: view(row) })
-      case 'DELETE ':
-        return json({ sandbox: view(await destroySandbox(life, row)) })
+      case 'DELETE ': {
+        const destroyed = await destroySandbox(life, row)
+        await revokeSandboxShares(env.SANDBOX_DB, row.id, life.now())
+        // The VM and its device registry are gone; so is every grant into it.
+        await life.db.batch([
+          life.db
+            .prepare(
+              `UPDATE workspace_grants SET status = 'revoked', revoked_at = ?, revoke_reason = 'destroyed' WHERE sandbox_id = ? AND status <> 'revoked'`
+            )
+            .bind(life.now(), row.id),
+          life.db.prepare('DELETE FROM workspace_presence WHERE sandbox_id = ?').bind(row.id)
+        ])
+        return json({ sandbox: view(destroyed) })
+      }
       case 'POST suspend':
         return json({ sandbox: view(await suspendSandbox(life, row)) })
       case 'POST resume': {
         const ready = await resumeSandbox(life, row)
+        await recordOwnerDevice(life.db, ready.row, ready.connection.pairingCode, life.now())
         return readyResponse(ready)
       }
       case 'POST rollover': {
         const ready = await rolloverSandbox(life, row)
+        await recordOwnerDevice(life.db, ready.row, ready.connection.pairingCode, life.now())
         return readyResponse(ready)
       }
       case 'POST wake':
@@ -666,6 +1048,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         // User-triggered and unbounded otherwise: shares the per-account start rate limit.
         await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
         const ready = await restartSandbox(life, row)
+        await recordOwnerDevice(life.db, ready.row, ready.connection.pairingCode, life.now())
         return json(readyView(ready.row, ready.connection))
       }
       case 'GET status':
@@ -685,27 +1068,16 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       case 'POST env/refresh':
         return json({ applied: await refreshSandboxEnv(life, row) })
-      case 'DELETE ssh':
-        if (row.user_id !== caller.userId) {
-          return fail('not_found', 404)
+      case 'POST desktop': {
+        // Runs only the image's fixed entry point; the desktop listens on the VM's loopback and is
+        // reached through the paired runtime's port forward, never a public route.
+        if (row.status !== 'running' || !row.session_id) {
+          return fail('conflict', 409, `sandbox_${row.status}`)
         }
-        await removeSsh(life, row)
-        return json({ removed: true })
-      case 'POST ssh': {
-        // Only the sandbox's owner may put a key into it (a teammate in the same account may not).
-        if (row.user_id !== caller.userId) {
-          return fail('not_found', 404)
-        }
-        const body = SshSetupRequestSchema.safeParse(await readJson(request))
-        if (!body.success) {
-          return fail('invalid_request', 400)
-        }
-        const { wakeSecret } = await setupSsh(env.SANDBOX_DB, row, body.data.publicKey, life.now())
-        return json({
-          wakeUrl: `${url.origin}/v1/ssh-wake/${row.id}`,
-          wakeSecret,
-          user: await sshLoginUser(life.provider, row)
-        })
+        const started = Date.now()
+        const desktop = await startDesktop(life.provider, row.session_id)
+        console.log(JSON.stringify({ event: 'desktop_start', ms: Date.now() - started }))
+        return json({ desktop: { port: desktop.port, path: desktop.path, password: desktop.password } })
       }
       case 'POST lease': {
         const body = LeaseRequestSchema.safeParse(await readJson(request))
@@ -714,11 +1086,137 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         }
         return json({ sandbox: view(await renewLease(life, row, body.data.extendMs)) })
       }
+      case 'POST ssh-keys':
+      case 'DELETE ssh-keys': {
+        const body = SshKeyRequestSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return fail('invalid_request', 400)
+        }
+        const action = request.method === 'POST' ? 'add' : 'remove'
+        const ssh = await updateSshKey(life, row, action, body.data.publicKey)
+        // Who granted or revoked shell access to which VM; the key comment names device + workspace.
+        await audit(
+          env.SANDBOX_DB,
+          { accountId: caller.accountId, type: 'user', id: caller.userId, userId: caller.userId },
+          {
+            action: action === 'add' ? 'sandbox.ssh_key_added' : 'sandbox.ssh_key_removed',
+            targetType: 'sandbox',
+            targetId: row.id,
+            detail: { key: body.data.publicKey.split(' ')[2] }
+          },
+          life.now()
+        ).catch(() => undefined)
+        return json({ ssh })
+      }
       default:
         return fail('not_found', 404)
     }
   } catch (error) {
     return errorResponse(error)
+  }
+}
+
+const DevMemberGitHubSchema = z
+  .object({
+    accountId: z.string().min(1).max(160),
+    userId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/),
+    repoUrl: z.url({ protocol: /^https$/ }).max(2048),
+    login: z.string().min(1).max(64),
+    githubUserId: z.number().int().positive(),
+    name: z.string().min(1).max(120)
+  })
+  .strict()
+
+const MemberRemovedSchema = z
+  .object({
+    accountId: z.string().min(1).max(160).regex(/^(org|dev:org):[A-Za-z0-9_.:-]+$/),
+    userId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/)
+  })
+  .strict()
+
+async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, caller: SandboxCaller): Promise<Response> {
+  const db = env.SANDBOX_DB
+  const clock = deps.now ?? Date.now
+  const now = clock()
+  if (url.pathname === '/v1/team/links/resolve' && request.method === 'GET') {
+    return json(await resolveLink(db, caller, url, now))
+  }
+  if (url.pathname === '/v1/team/prompts') {
+    if (request.method === 'GET') {
+      return json(await getOrgPrompts(db, caller))
+    }
+    if (request.method === 'PUT') {
+      return json(await putOrgPrompts(db, caller, await readJson(request), now))
+    }
+    return fail('not_found', 404)
+  }
+  if (url.pathname === '/v1/team/workspaces') {
+    return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now)) : fail('not_found', 404)
+  }
+  const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
+  if (!match) {
+    return fail('not_found', 404)
+  }
+  const [, id, action, grantId] = match
+  const row = await requireVisible(db, caller, id!)
+  const route = `${request.method} ${action ?? ''}${grantId ? ' :grant' : ''}`
+  const view = async (r = row) => (await workspaceViews(db, caller, [r], clock()))[0]
+  if (route === 'GET ') {
+    return json({ workspace: await view() })
+  }
+  if (route === 'POST presence') {
+    const body = PresenceSchema.safeParse(await readJson(request))
+    if (!body.success) {
+      return fail('invalid_request', 400)
+    }
+    return json(await reportPresence(db, caller, row, body.data, now))
+  }
+  const life = await lifecycleDeps(env, deps)
+  if (!life) {
+    return fail('not_configured', 503)
+  }
+  switch (route) {
+    case 'PATCH ': {
+      const body = PatchSchema.safeParse(await readJson(request))
+      if (!body.success) {
+        return fail('invalid_request', 400)
+      }
+      const patched = await patchWorkspace(db, caller, row, body.data, now)
+      const revoked =
+        patched.revoke === 'none' ? null : await revokeForAccessChange(life, patched.row, patched.revoke, caller.userId)
+      return json({ workspace: await view(patched.row), ...(revoked ? { revoked } : {}) })
+    }
+    case 'POST wake': {
+      if (!canOpen(caller, row)) {
+        throw new WorkspaceError('not_found')
+      }
+      // Never returns the owner's pairing offer; teammates get in through their own grant.
+      const ready = await resumeSandbox(life, row)
+      return json({ workspace: await view(ready.row) })
+    }
+    case 'POST lease': {
+      if (!canOpen(caller, row)) {
+        throw new WorkspaceError('not_found')
+      }
+      const body = LeaseRequestSchema.safeParse(await readJson(request))
+      if (!body.success) {
+        return fail('invalid_request', 400)
+      }
+      return json({ workspace: await view(await renewLease(life, row, body.data.extendMs)) })
+    }
+    case 'GET grants':
+      return json(await listGrants(db, caller, row))
+    case 'POST grants': {
+      const body = GrantRequestSchema.safeParse(await readJson(request))
+      if (!body.success) {
+        return fail('invalid_request', 400)
+      }
+      return json(await issueGrant(life, caller, row, body.data))
+    }
+    case 'DELETE grants :grant':
+      return json(await revokeOne(life, caller, row, grantId!))
+    default:
+      return fail('not_found', 404)
   }
 }
 
@@ -732,6 +1230,15 @@ async function githubReturn(env: Env, deps: Deps, url: URL): Promise<Response> {
     const result = await handleGitHubReturn(env.SANDBOX_DB, connect, url, (deps.now ?? Date.now)())
     if ('redirect' in result) {
       return new Response(null, { status: 302, headers: { location: result.redirect, 'cache-control': 'no-store' } })
+    }
+    if ('userConnect' in result) {
+      const keyring = keyringFor(env)
+      if (!keyring) {
+        return html('GitHub sign-in is not available right now. Try again from Orca.')
+      }
+      const user = await completeUserConnect(env.SANDBOX_DB, await keyring, connect, result.userConnect, result.code, (deps.now ?? Date.now)())
+      const esc = (value: string) => value.replace(/[^A-Za-z0-9_.-]/g, '')
+      return html(`Connected GitHub <b>${esc(user.login)}</b>. Pushes from shared Orca Cloud workspaces will be yours. You can close this tab.`)
     }
     if ('error' in result) {
       return html(
@@ -758,6 +1265,12 @@ function errorResponse(error: unknown): Response {
   if (error instanceof SyntaxError) {
     return fail('invalid_json', 400)
   }
+  if (error instanceof EnvironmentError) {
+    return environmentErrorResponse(error)
+  }
+  if (error instanceof WorkspaceError) {
+    return fail(error.code, WORKSPACE_ERROR_STATUS[error.code], error.reason)
+  }
   if (error instanceof SecretError) {
     return fail(error.code, error.status, error.reason)
   }
@@ -776,14 +1289,13 @@ function errorResponse(error: unknown): Response {
     const status = { not_found: 404, conflict: 409, entitlement_denied: 403, provider_unavailable: 502 }[error.code]
     return fail(error.code, status, error.reason)
   }
+  if (error instanceof DesktopCommandError) {
+    return error.code === 'desktop_not_installed'
+      ? fail('conflict', 409, error.code)
+      : fail('provider_unavailable', 502, error.code)
+  }
   if (error instanceof BillingUnavailableError) {
     return fail('billing_unavailable', 503)
-  }
-  if (error instanceof SshForbiddenError) {
-    return fail('entitlement_denied', 403, error.reason.slice(0, 64))
-  }
-  if (error instanceof SshUnavailableError) {
-    return fail('conflict', 409, `ssh_${error.reason}`)
   }
   // Provider and VM failures are summarized; their bodies never reach the desktop.
   if (error instanceof ProviderError || error instanceof VmCommandError) {
@@ -796,24 +1308,51 @@ export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return handleRequest(request, env, { waitUntil: (work) => ctx.waitUntil(work.catch(() => undefined)) })
   },
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Every minute: routines (schedule slots, run polling). Every fifth minute: everything else.
+    ctx.waitUntil(
+      lifecycleDeps(env, {}).then(async (life) => {
+        if (life) {
+          const tick = await tickRoutines({ life }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+          if (Object.values(tick).some((value) => value !== 0)) {
+            console.log(JSON.stringify({ event: 'routines_tick', ...tick }))
+          }
+        }
+      })
+    )
+    if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) {
+      return
+    }
     ctx.waitUntil(
       lifecycleDeps(env, {}).then(async (life) => {
         if (life) {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
-          // Runs with the pool off too: that is how a size change to 0 or the kill switch drains it.
-          const pool = await maintainPool(life).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
-          console.log(JSON.stringify({ event: 'pool', ...pool }))
+          const builds = await advanceAllBuilds(buildDeps(life, {})).catch(() => 0)
+          if (builds > 0) {
+            console.log(JSON.stringify({ event: 'environment_builds_advanced', builds }))
+          }
           const retried = await retryPendingMessages(life).catch(() => -1)
           if (retried !== 0) {
             console.log(JSON.stringify({ event: 'message_retry', retried }))
           }
         }
+        // Abandoned MCP client registrations and dead OAuth codes/approvals.
+        const purged = await purgeOAuth(env.SANDBOX_DB, Date.now()).catch(() => -1)
+        if (purged !== 0) {
+          console.log(JSON.stringify({ event: 'oauth_purge', purged }))
+        }
         await advanceGoldenImagesFromEnv(env).catch((error: unknown) =>
           console.log(JSON.stringify({ event: 'golden_image_tick_failed', error: String(error).slice(0, 200) }))
         )
+        // After the golden tick, with fresh deps: a just-activated image replaces pooled VMs this tick.
+        // Runs with the pool off too: that is how a size change to 0 or the kill switch drains it.
+        const fresh = await lifecycleDeps(env, {})
+        if (fresh) {
+          const pool = await maintainPool(fresh).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+          console.log(JSON.stringify({ event: 'pool', ...pool }))
+        }
       })
     )
   }

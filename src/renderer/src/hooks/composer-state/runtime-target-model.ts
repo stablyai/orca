@@ -1,3 +1,4 @@
+import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RefObject } from 'react'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../../shared/execution-host'
@@ -52,6 +53,8 @@ export type ComposerRuntimeTargetModel = {
   selectedRecipeRepoId: string | null
   selectedRecipeRepoConnectionId: string | null
   ephemeralVmsEnabled: boolean
+  /** Orca Cloud for this project, from main; drives the picker's sign-in/upsell row. */
+  orcaCloudAvailability: OrcaCloudAvailability
   ephemeralVmRecipes: OrcaVmRecipe[]
   selectedEphemeralVmRecipeId: string | null
   setSelectedEphemeralVmRecipeId: (recipeId: string | null) => void

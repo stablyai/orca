@@ -34,6 +34,9 @@ const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
 const SleepTwinWorkspaceDialog = lazyWithRetry(
   () => import('./workspace-actions/sleep/SleepTwinWorkspaceDialog')
 )
+const CloudSshIncludeDialog = lazyWithRetry(
+  () => import('./workspace-actions/cloud-ssh/CloudSshIncludeDialog')
+)
 const WorktreeVisibilityDialog = lazyWithRetry(
   () => import('./workspace-visibility/dialog/WorktreeVisibilityDialog')
 )
@@ -283,6 +286,7 @@ function Sidebar({
         {activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null}
         {activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null}
         {activeModal === 'confirm-sleep-twin' ? <SleepTwinWorkspaceDialog /> : null}
+        {activeModal === 'confirm-cloud-ssh-include' ? <CloudSshIncludeDialog /> : null}
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}

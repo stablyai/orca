@@ -6,8 +6,6 @@ import {
   type OrcaCloudWorkspaceApi
 } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import {
-  ORCA_CLOUD_SSH_CHANNELS as SSH,
-  type OrcaCloudSshApi,
   ORCA_CLOUD_TRANSFER_CHANNELS as TRANSFER,
   type CloudTransferProgressEvent,
   type OrcaCloudTransferApi
@@ -32,7 +30,6 @@ export const orcaCloudWorkspaceApi = {
     ipcRenderer.on(CH.oom, listener)
     return () => ipcRenderer.removeListener(CH.oom, listener)
   },
-  prepareSsh: (args) => ipcRenderer.invoke(SSH.prepare, args),
   prepareTransferToLocal: (args) => ipcRenderer.invoke(TRANSFER.prepare, args),
   finishTransferToLocal: (args) => ipcRenderer.invoke(TRANSFER.finish, args),
   onTransferProgress: (callback) => {
@@ -41,4 +38,4 @@ export const orcaCloudWorkspaceApi = {
     ipcRenderer.on(TRANSFER.progress, listener)
     return () => ipcRenderer.removeListener(TRANSFER.progress, listener)
   }
-} satisfies OrcaCloudWorkspaceApi & OrcaCloudTransferApi & OrcaCloudSshApi
+} satisfies OrcaCloudWorkspaceApi & OrcaCloudTransferApi

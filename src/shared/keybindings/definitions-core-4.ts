@@ -127,5 +127,14 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     },
     // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
+  },
+  {
+    id: 'cloudWorkspace.copyLink',
+    title: 'Copy Cloud Workspace Link',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'cloud', 'workspace', 'link', 'share', 'copy', 'team'],
+    // Why: Mod+Shift+C is browser.annotateElement and Mod+Alt+Shift+C copies a relative path.
+    defaultBindings: platformBindings(['Mod+Alt+Shift+L'])
   }
 ]

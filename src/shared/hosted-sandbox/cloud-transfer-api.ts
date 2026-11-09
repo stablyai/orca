@@ -69,19 +69,3 @@ export const ORCA_CLOUD_TRANSFER_CHANNELS = {
   finish: 'orcaCloudWorkspace:finishTransferToLocal',
   progress: 'orcaCloudWorkspace:transferProgress'
 } as const
-
-/** Wake on SSH: a host entry whose ProxyCommand wakes the VM first, then tunnels to its sshd. */
-export type CloudSshPrepared = {
-  host: string
-  configPath: string
-  /** Runnable as-is from any terminal: `ssh -F "<config>" <host>`. */
-  command: string
-  /** For ~/.ssh/config (editors' Remote-SSH): `Include "<config>"`. */
-  includeLine: string
-}
-
-export type OrcaCloudSshApi = {
-  prepareSsh: (args: { workspaceId: string }) => Promise<CloudTransferResult<CloudSshPrepared>>
-}
-
-export const ORCA_CLOUD_SSH_CHANNELS = { prepare: 'orcaCloudWorkspace:prepareSsh' } as const

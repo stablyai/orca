@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Starts the on-demand remote desktop (idempotent) and prints one JSON line:
+# {"schemaVersion":1,"port":6080,"display":":1","path":"vnc.html","password":"<8 chars>"}
+# Xvnc (X server + VNC in one) listens on a unix socket only; websockify serves noVNC and bridges
+# WebSockets to that socket on 127.0.0.1 only. Nothing is reachable from outside the VM: the
+# desktop reaches it through Orca's port forward. The forward is a localhost port on the user's
+# computer, which any local process or web page can reach, so VNC auth with a per-boot random
+# password guards it (Xvnc blacklists repeated failures). Never started at boot.
+set -euo pipefail
+umask 077
+DESKTOP=/opt/orca/desktop
+STATE="$HOME/.orca-desktop"
+PORT="${ORCA_DESKTOP_PORT:-6080}"
+DISPLAY_NUM="${ORCA_DESKTOP_DISPLAY:-1}"
+GEOMETRY="${ORCA_DESKTOP_GEOMETRY:-1280x800}"
+SOCKET="$STATE/vnc.sock"
+# The parent's DISPLAY must not leak into the WM/xterm below; they use ours.
+export DISPLAY=":$DISPLAY_NUM"
+
+# Exit 3 = this image has no desktop (built before it, or its optional install failed).
+fail() { printf 'orca-desktop: %s\n' "$1" >&2; exit "${2:-1}"; }
+case "$PORT" in '' | *[!0-9]*) fail 'ORCA_DESKTOP_PORT must be a number' ;; esac
+case "$DISPLAY_NUM" in '' | *[!0-9]*) fail 'ORCA_DESKTOP_DISPLAY must be a number' ;; esac
+case "$GEOMETRY" in [0-9]*x[0-9]*) ;; *) fail 'ORCA_DESKTOP_GEOMETRY must look like 1280x800' ;; esac
+command -v Xvnc >/dev/null || fail 'not installed in this image (Xvnc missing)' 3
+command -v vncpasswd >/dev/null || fail 'not installed in this image (vncpasswd missing)' 3
+[ -s "$DESKTOP/novnc/vnc.html" ] || fail 'not installed in this image (noVNC missing)' 3
+
+mkdir -p "$STATE"
+exec 9>"$STATE/start.lock"
+flock -w 30 9 || fail 'another start is in progress'
+
+pid_of() { # never "0": kill 0 targets our own process group
+  local pid
+  pid="$(cat "$STATE/$1.pid" 2>/dev/null || true)"
+  case "$pid" in '' | 0 | *[!0-9]*) return 1 ;; esac
+  printf '%s' "$pid"
+}
+alive() { local pid; pid="$(pid_of "$1")" && kill -0 "$pid" 2>/dev/null; }
+ready_line() {
+  printf '{"schemaVersion":1,"port":%s,"display":":%s","path":"vnc.html","password":"%s"}\n' \
+    "$PORT" "$DISPLAY_NUM" "$(cat "$STATE/password")"
+}
+listening() { # websockify answers HTTP on loopback
+  curl -fsS -o /dev/null --max-time 1 "http://127.0.0.1:$PORT/vnc.html" 2>/dev/null
+}
+
+# Pids from a previous boot (resume = reboot from disk) name dead or unrelated processes.
+boot_id="$(cat /proc/sys/kernel/random/boot_id)"
+if [ "$(cat "$STATE/boot-id" 2>/dev/null || true)" != "$boot_id" ]; then
+  rm -f "$STATE"/*.pid "$SOCKET" "$STATE/password" "$STATE/passwd"
+  printf '%s' "$boot_id" >"$STATE/boot-id"
+fi
+
+if alive xvnc && alive websockify && listening && [ -s "$STATE/password" ]; then
+  ready_line
+  exit 0
+fi
+
+start() { # name cmd... — detached, logs in $STATE/<name>.log
+  local name=$1; shift
+  # 9>&-: children must not inherit the start lock, or the next call waits for them to exit.
+  setsid nohup "$@" >"$STATE/$name.log" 2>&1 </dev/null 9>&- &
+  echo $! >"$STATE/$name.pid"
+}
+
+if ! alive xvnc || [ ! -s "$STATE/password" ]; then
+  if alive xvnc; then kill "$(pid_of xvnc)" 2>/dev/null || true; sleep 0.2; fi
+  rm -f "$SOCKET"
+  # VNC auth uses 8 password bytes; 8 random alphanumerics (~48 bits) plus Xvnc's blacklist.
+  password="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 8 || true)"
+  [ "${#password}" = 8 ] || fail 'could not generate a password'
+  printf '%s' "$password" | vncpasswd -f >"$STATE/passwd"
+  printf '%s' "$password" >"$STATE/password"
+  # -rfbport -1: no TCP VNC port at all, only a 0600 unix socket for websockify.
+  start xvnc Xvnc ":$DISPLAY_NUM" -geometry "$GEOMETRY" -depth 24 -nolisten tcp \
+    -rfbport -1 -rfbunixpath "$SOCKET" -rfbunixmode 0600 \
+    -SecurityTypes VncAuth -PasswordFile "$STATE/passwd" \
+    -AlwaysShared -AcceptSetDesktopSize -desktop 'Remote Desktop'
+  for _ in $(seq 1 100); do
+    [ -S "$SOCKET" ] && break
+    alive xvnc || { tail -n 20 "$STATE/xvnc.log" >&2; fail 'Xvnc exited'; }
+    sleep 0.05
+  done
+  [ -S "$SOCKET" ] || fail 'Xvnc did not create its socket'
+  if command -v xsetroot >/dev/null; then xsetroot -solid '#1e1f22' 9>&- || true; fi
+  if command -v openbox >/dev/null; then
+    # Dark, flat theme to match Orca; the first terminal stays maximized as the tab resizes the screen.
+    printf '%s\n' '<?xml version="1.0"?>' \
+      '<openbox_config xmlns="http://openbox.org/3.4/rc"><theme><name>Onyx</name></theme>' \
+      '<applications><application class="XTerm"><maximized>yes</maximized></application></applications>' \
+      '</openbox_config>' >"$STATE/openbox.xml"
+    start wm openbox --config-file "$STATE/openbox.xml"
+  elif command -v twm >/dev/null; then
+    start wm twm
+  fi
+  if command -v xterm >/dev/null; then
+    start xterm xterm -bg '#1e1f22' -fg '#d4d4d4' -fa 'Liberation Mono,Monospace' -fs 11
+  fi
+fi
+
+if ! alive websockify || ! listening; then
+  if alive websockify; then kill "$(pid_of websockify)" 2>/dev/null || true; fi
+  PYTHONPATH="$DESKTOP/websockify" start websockify python3 -P -W ignore::UserWarning -m websockify \
+    --web "$DESKTOP/novnc" --unix-target "$SOCKET" "127.0.0.1:$PORT"
+  for _ in $(seq 1 100); do
+    listening && break
+    alive websockify || { tail -n 20 "$STATE/websockify.log" >&2; fail 'websockify exited'; }
+    sleep 0.05
+  done
+  listening || fail "websockify is not answering on 127.0.0.1:$PORT"
+fi
+ready_line

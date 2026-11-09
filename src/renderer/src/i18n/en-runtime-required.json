@@ -92,6 +92,11 @@
         "resumingCount_one": "Resuming {{count}} chat",
         "resumingCount_other": "Resuming {{count}} chats"
       },
+      "NewWorkspaceComposerCard": {
+        "addRemoteOrcaServer": "Add Remote Orca Server",
+        "ephemeralVm": "Per-Workspace Environment",
+        "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe"
+      },
       "PullRequestPage": {
         "filesViewed_one": "{{viewed}} / {{count}} file viewed",
         "filesViewed_other": "{{viewed}} / {{count}} files viewed"
@@ -344,6 +349,13 @@
           }
         }
       },
+      "new": {
+        "workspace": {
+          "RunTargetCombobox": {
+            "orcaCloudPaymentIssue": "Payment issue"
+          }
+        }
+      },
       "onboarding": {
         "AgentStep": {
           "showMoreAgents_one": "Show {{count}} more agent →",
@@ -395,6 +407,10 @@
           "BulkActionBar": {
             "selectedCount_one": "{{count}} selected",
             "selectedCount_other": "{{count}} selected"
+          },
+          "RuntimeForwardedPorts": {
+            "connectionCount_one": "{{count}} connection",
+            "connectionCount_other": "{{count}} connections"
           },
           "Search": {
             "fileCount_one": "{{count}} file",
@@ -861,6 +877,9 @@
           "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
           "moreChildren_one": "+{{count}} more",
           "moreChildren_other": "+{{count}} more"
+        },
+        "FolderWorkspaceComposerDialog": {
+          "title": "Create Folder Workspace"
         },
         "HostRemoveDialog": {
           "alsoRemoveWorkspaces_one": "Also remove this workspace from Orca",

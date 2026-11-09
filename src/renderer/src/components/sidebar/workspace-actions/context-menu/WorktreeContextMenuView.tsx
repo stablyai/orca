@@ -8,15 +8,18 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { WorktreeRowOpenInSubMenu } from '../open/WorktreeRowOpenInSubMenu'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
+import { WorktreeOpenInAndSshSubMenus } from '../cloud-ssh/WorktreeOpenInAndSshSubMenus'
+import { WorkspaceVmLifecycleMenuItems } from '../sleep/WorkspaceVmLifecycleMenuItems'
 import { WorktreeCloudTransferMenuItem } from './WorktreeCloudTransferMenuItem'
 import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controller/worktree-card-dom-events'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
+import { WorktreeRemoteDesktopMenuItem } from '../../workspace-card/host/WorktreeRemoteDesktopMenuItem'
+import { usePrimeCloudEnvironmentIds } from '@/lib/cloud-remote-desktop/cloud-environment-ids'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
 import {
@@ -48,6 +51,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleRemoveParentLink,
     handleRename,
     handleSleepSubtree,
+    handleSleepSubtreeWithVm,
     handleTogglePin,
     handleToggleRead,
     hasAnyContextLineage,
@@ -71,6 +75,18 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const t = useTranslate()
+  usePrimeCloudEnvironmentIds()
+  const sleepItems = (
+    <WorkspaceSleepMenuItems
+      isMultiContext={isMultiContext}
+      sleepLabel={sleepLabel}
+      sleepDisabled={deletingContext || sleepableWorktrees.length === 0}
+      descendantCount={lineageDescendantCount}
+      subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
+      onSleep={handleCloseTerminals}
+      onSleepSubtree={handleSleepSubtree}
+    />
+  )
   return (
     <div
       ref={scopeRef}
@@ -131,15 +147,27 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             </span>
           </DropdownMenuLabel>
           {!isMultiContext && <WorktreeWslHostStartMenuItem worktreeId={worktree.id} />}
-          <WorkspaceSleepMenuItems
-            isMultiContext={isMultiContext}
-            sleepLabel={sleepLabel}
-            sleepDisabled={deletingContext || sleepableWorktrees.length === 0}
-            descendantCount={lineageDescendantCount}
-            subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
-            onSleep={handleCloseTerminals}
-            onSleepSubtree={handleSleepSubtree}
-          />
+          {!isMultiContext && <WorktreeRemoteDesktopMenuItem worktreeId={worktree.id} />}
+          {isMultiContext ? (
+            sleepItems
+          ) : (
+            <WorkspaceVmLifecycleMenuItems
+              worktreeId={worktree.id}
+              hasSleepableActivity={sleepableWorktrees.length > 0}
+              disabled={
+                deletingContext ||
+                (deletingSubtree &&
+                  subtreeSleepableWorktrees.some((target) => target.id !== worktree.id))
+              }
+              onSleep={handleCloseTerminals}
+              hasActiveDescendants={subtreeSleepableWorktrees.some(
+                (target) => target.id !== worktree.id
+              )}
+              onSleepSubtree={handleSleepSubtreeWithVm}
+              sleepItems={sleepItems}
+              replacesSleep={lineageDescendantCount === 0}
+            />
+          )}
           {!isMultiContext && <WorktreeCloudTransferMenuItem worktreeId={worktree.id} />}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
@@ -175,7 +203,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           {!isMultiContext && (
             <>
               <DropdownMenuSeparator />
-              <WorktreeRowOpenInSubMenu
+              <WorktreeOpenInAndSshSubMenus
                 worktree={worktree}
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}

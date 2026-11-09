@@ -23,18 +23,23 @@ export default function WorktreeCreationPanel({
   const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const progressLabelId = React.useId()
-  // Depend on primitive status so stderr’s fresh entry objects cannot continuously reset the interval.
-  const now = useWorktreeCreationClock(entry?.status === 'creating')
+  const checksFinishedAt =
+    entry?.environmentCheck?.status === 'failed' ? entry.environmentCheck.finishedAt : undefined
+  // Depend on primitives so stderr’s fresh entry objects cannot continuously reset the interval;
+  // a build paused on failed checks waits on the user, so its clock stops.
+  const now = useWorktreeCreationClock(
+    entry?.status === 'creating' && entry.environmentCheck?.status !== 'failed'
+  )
   if (!entry) {
     return null
   }
 
   const dismiss = (): void => useAppStore.getState().removePendingWorktreeCreation(creationId)
   const isError = entry.status === 'error'
-  // Failed VM creations retain provisioning-vm phase so error and progress share the centered layout.
-  const isVmCreation = entry.phase === 'provisioning-vm'
+  // A VM build keeps its sheet through fetch and checkout, so it never drops to the one-line status.
+  const isVmCreation = Boolean(entry.request.ephemeralVmRecipe) || entry.phase === 'provisioning-vm'
   const title = entry.request.displayName || entry.request.name
-  const elapsedLabel = formatElapsedTime(now - entry.startedAt)
+  const elapsedLabel = formatElapsedTime((checksFinishedAt ?? now) - entry.startedAt)
   const checkoutProgress = getVisibleCheckoutProgress(entry)
 
   return (
@@ -52,13 +57,14 @@ export default function WorktreeCreationPanel({
           <VmBuildSheet
             creationId={creationId}
             entry={entry}
+            now={now}
             elapsedLabel={elapsedLabel}
             error={
               isError
                 ? (entry.error ??
                   t(
-                    'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
-                    'Something went wrong while creating the worktree.'
+                    'auto.components.worktree.creation.WorktreeCreationPanel.somethingWentWrong',
+                    'Something went wrong while creating the workspace.'
                   ))
                 : null
             }
@@ -79,15 +85,15 @@ export default function WorktreeCreationPanel({
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <span className="font-medium text-destructive">
               {t(
-                'auto.components.worktree.creation.WorktreeCreationPanel.ed2a664f8b',
-                'Couldn’t create worktree'
+                'auto.components.worktree.creation.VmBuildFailureCard.createFailedTitle',
+                'Couldn’t create workspace'
               )}
             </span>
             <span className="text-muted-foreground">
               {entry.error ??
                 t(
-                  'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
-                  'Something went wrong while creating the worktree.'
+                  'auto.components.worktree.creation.WorktreeCreationPanel.somethingWentWrong',
+                  'Something went wrong while creating the workspace.'
                 )}
             </span>
             <button

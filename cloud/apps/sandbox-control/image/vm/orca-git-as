@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Runs git as a workspace member: their GitHub identity for pushes/PRs and their commit author.
+#   orca-git-as <member user id> <git args...>      e.g. orca-git-as "$ORCA_SENDER_ID" push origin HEAD
+# Falls back to plain git (the workspace's app identity) when the member never connected GitHub.
+set -euo pipefail
+user="${1:-}"
+shift || true
+case "$user" in '' | *[!A-Za-z0-9_.:-]*) echo 'usage: orca-git-as <member id> <git args...>' >&2; exit 2 ;; esac
+file="$HOME/.orca-sandbox/members/$(printf '%s' "$user" | tr ':' '_').gitconfig"
+if [ ! -f "$file" ]; then
+  echo "orca-git-as: $user has not connected GitHub; using the workspace identity" >&2
+  exec git "$@"
+fi
+exec git -c "include.path=$file" "$@"

@@ -50,7 +50,7 @@ export function PlansIntervalToggle({
             aria-pressed={value === option.interval}
             onClick={() => onChange(option.interval)}
             className={cn(
-              'relative z-10 flex items-center justify-center gap-1.5 rounded-full px-4 py-1 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60',
+              'relative z-10 flex items-center justify-center gap-1.5 rounded-full px-4 py-1 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-60',
               value === option.interval
                 ? 'text-foreground'
                 : 'text-muted-foreground hover:text-foreground'

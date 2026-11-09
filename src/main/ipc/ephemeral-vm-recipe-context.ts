@@ -4,7 +4,12 @@ import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-re
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import { isFolderRepo, isGitRepoKind } from '../../shared/repo-kind'
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { PluginService } from '../plugins/plugin-service'
+import {
+  getOrcaCloudAvailability,
+  withProviderRecipes
+} from '../hosted-sandbox/hosted-sandbox-install'
 import {
   EphemeralVmFailureError,
   ephemeralVmFailure,
@@ -56,6 +61,19 @@ export function listRecipes(
     repoPath: repo.path,
     recipes: combineEphemeralVmRecipes(hooks?.environmentRecipes ?? [], pluginRecipes),
     diagnostics: hooks?.environmentRecipeDiagnostics ?? []
+  }
+}
+
+/** The Run-on picker's list, plus Orca Cloud availability so it can offer sign-in or an upsell. */
+export async function listPickerRecipes(
+  store: Store,
+  repoId: string,
+  pluginService?: PluginService
+): Promise<EphemeralVmRecipeListResult & { orcaCloud: OrcaCloudAvailability }> {
+  const orcaCloud = await getOrcaCloudAvailability()
+  return {
+    ...listRecipes(store, repoId, await withProviderRecipes(pluginService, orcaCloud)),
+    orcaCloud
   }
 }
 

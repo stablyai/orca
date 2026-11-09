@@ -41,13 +41,31 @@ export type SandboxRow = {
   /** Comma list of custom model-provider hosts added to this session's egress allowlist. */
   egress_allow_hosts: string | null
   retention_warned_at: number | null
+  /** Environment build this sandbox first booted from (null: the golden image). Never changes. */
+  environment_id: string | null
+  environment_build_id: string | null
+  source_snapshot_id: string | null
   /** orcad's public wss endpoint for the current session. */
   orcad_endpoint: string | null
   /** When orcad last became ready (wake callers report it as `readyAt`). */
   ready_at: number | null
   archived_at: number | null
   archive_expires_at: number | null
+  /** Registry (0006). `user_id` is the current owner (reassignable); `created_by` never changes. */
+  created_by: string | null
+  /** Display name (0020's `name`; the API calls it `title`). */
+  name: string | null
+  repo_branch: string | null
+  visibility: WorkspaceVisibility
+  section: string | null
+  /** 0020: machine-made rows (routine runs) stay out of default lists. */
+  hidden?: number
+  last_activity_at: number | null
+  last_activity_by: string | null
+  token_usd_micros: number | null
 }
+
+export type WorkspaceVisibility = 'private' | 'team'
 
 export type SessionFields = Pick<
   SandboxRow,
@@ -71,17 +89,21 @@ export async function insertSandbox(
   row: Pick<
     SandboxRow,
     'id' | 'account_id' | 'user_id' | 'workspace_id' | 'provider' | 'provider_name' | 'machine_size' | 'region' | 'repo_url'
-  >,
+  > &
+    Partial<Pick<SandboxRow, 'environment_id' | 'environment_build_id' | 'source_snapshot_id' | 'name' | 'repo_branch' | 'visibility' | 'section'>>,
   now: number
 ): Promise<SandboxRow> {
   await db
     .prepare(
       `INSERT INTO sandboxes (id, account_id, user_id, workspace_id, provider, provider_name, status,
-         machine_size, region, generation, created_at, updated_at, repo_url)
-       VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?)`
+         machine_size, region, generation, created_at, updated_at, repo_url, environment_id, environment_build_id,
+         source_snapshot_id, created_by, name, repo_branch, visibility, section, last_activity_at, last_activity_by)
+       VALUES (?, ?, ?, ?, ?, ?, 'creating', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(row.id, row.account_id, row.user_id, row.workspace_id, row.provider, row.provider_name,
-      row.machine_size, row.region, now, now, row.repo_url)
+      row.machine_size, row.region, now, now, row.repo_url, row.environment_id ?? null,
+      row.environment_build_id ?? null, row.source_snapshot_id ?? null, row.user_id, row.name ?? null,
+      row.repo_branch ?? null, row.visibility ?? 'private', row.section ?? null, now, row.user_id)
     .run()
   const inserted = await getSandbox(db, row.id)
   if (!inserted) {
@@ -96,6 +118,14 @@ export function getSandbox(db: D1Database, id: string): Promise<SandboxRow | nul
 
 export function getSandboxByProviderName(db: D1Database, name: string): Promise<SandboxRow | null> {
   return db.prepare('SELECT * FROM sandboxes WHERE provider_name = ?').bind(name).first<SandboxRow>()
+}
+
+/** A failed attempt that is still being cleaned up stops blocking its workspace (unique live index). */
+export async function detachFromWorkspace(db: D1Database, id: string): Promise<void> {
+  await db
+    .prepare(`UPDATE sandboxes SET workspace_id = workspace_id || '#abandoned:' || id WHERE id = ? AND status <> 'destroyed'`)
+    .bind(id)
+    .run()
 }
 
 export function liveSandboxForWorkspace(
@@ -151,6 +181,35 @@ const PATCHABLE = new Set<string>([
   'egress_secret_hosts', 'egress_allow_hosts', 'repo_url', 'retention_warned_at', 'orcad_endpoint', 'ready_at',
   'archived_at', 'archive_expires_at'
 ])
+
+export type RegistryPatch = Partial<
+  Pick<SandboxRow, 'name' | 'repo_branch' | 'visibility' | 'section' | 'archived_at' | 'user_id' | 'token_usd_micros'>
+>
+const REGISTRY_PATCHABLE = new Set<string>(['name', 'repo_branch', 'visibility', 'section', 'archived_at', 'user_id', 'token_usd_micros'])
+
+/**
+ * Registry metadata (title, visibility, owner, ...). Deliberately not a `transition`: it never
+ * bumps `generation`, so renaming or a presence heartbeat cannot fail a concurrent resume's CAS.
+ */
+// `updated_at` is the lifecycle clock (cron sweeps read it), so metadata edits leave it alone.
+export async function updateRegistry(db: D1Database, id: string, patch: RegistryPatch): Promise<SandboxRow | null> {
+  const entries = Object.entries(patch).filter(([key]) => REGISTRY_PATCHABLE.has(key))
+  if (entries.length > 0) {
+    await db
+      .prepare(`UPDATE sandboxes SET ${entries.map(([key]) => `${key} = ?`).join(', ')} WHERE id = ? AND status <> 'destroyed'`)
+      .bind(...entries.map(([, value]) => value ?? null), id)
+      .run()
+  }
+  return getSandbox(db, id)
+}
+
+/** Last activity (open, message, presence) — coarse, at most one write a minute per workspace. */
+export async function touchActivity(db: D1Database, id: string, userId: string, now: number): Promise<void> {
+  await db
+    .prepare('UPDATE sandboxes SET last_activity_at = ?, last_activity_by = ? WHERE id = ? AND (last_activity_at IS NULL OR last_activity_at < ?)')
+    .bind(now, userId, id, now - 60_000)
+    .run()
+}
 
 /** Applies `patch` only if nobody moved the row since `expected` was read; null on a lost race. */
 export async function transition(

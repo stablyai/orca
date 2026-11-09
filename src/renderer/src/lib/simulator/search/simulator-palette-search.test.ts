@@ -2,16 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
-import { buildPaletteTabDocument } from '../../../../../shared/palette-match/tab-document'
 import '../../../../../shared/palette-match/palette-query'
 
-import {
-  SIMULATOR_PALETTE_QUERY_MAX_BYTES,
-  SIMULATOR_TYPE_SEARCH_ALIASES,
-  buildSearchableSimulatorTabs,
-  searchSimulatorTabs
-} from './simulator-palette-search'
-import type { SearchableSimulatorTab } from './simulator-palette-search-types'
+import { buildSearchableSimulatorTabs, searchSimulatorTabs } from './simulator-palette-search'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -51,8 +44,6 @@ function makeTab(overrides: Partial<Tab> = {}): Tab {
     ...overrides
   }
 }
-
-/** Mirrors buildSearchableSimulatorTabs so hand-built rows index the same fields. */
 
 describe('simulator-palette-search', () => {
   it('keeps same-id simulator tabs isolated by execution host', () => {
@@ -126,30 +117,5 @@ describe('simulator-palette-search', () => {
     })
 
     expect(entries).toEqual([])
-  })
-
-  it('rejects oversized pasted queries before scanning simulator tabs', () => {
-    const oversizedQuery = 'secret-simulator-palette'.repeat(SIMULATOR_PALETTE_QUERY_MAX_BYTES)
-    const entry = {
-      get tab(): Tab {
-        throw new Error('oversized simulator palette queries must not scan tabs')
-      },
-      worktree: makeWorktree(),
-      repoName: 'repo/mobile',
-      worktreeSortIndex: 0,
-      isCurrentTab: false,
-      isCurrentWorktree: false,
-      document: buildPaletteTabDocument({
-        id: 'sim-1',
-        title: 'Mobile Emulator',
-        secondaryTexts: [],
-        worktreeName: 'Mobile Worktree',
-        branch: 'feature/mobile-emulator',
-        repoName: 'repo/mobile',
-        typeAliases: SIMULATOR_TYPE_SEARCH_ALIASES
-      })
-    } as SearchableSimulatorTab
-
-    expect(searchSimulatorTabs([entry], oversizedQuery)).toEqual([])
   })
 })

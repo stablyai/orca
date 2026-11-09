@@ -11,14 +11,21 @@ import {
   type GuardrailConfig
 } from './guardrails'
 import { DEFAULT_EGRESS_ALLOWLIST, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
+import { applyQueuedRevokes } from './grant-revokes'
+import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
+import { connectedMembers, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
 import { egressSecretHosts, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
-import { ORCAD_PORT, SSH_BRIDGE_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
+import { ORCAD_PORT, SHARE_PROXY_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady, type StartInputs } from './sandbox-vm-commands'
+import { WORKSPACE_PRELUDE_SCRIPT } from '../image/vm-scripts.generated'
+import { resolveEnvironmentBoot, type BootSource } from './environments'
+import { shareProxyKey } from './share-crypto'
 import { claimPooledVm, deletePooledVm, maintainPool, type PoolConfig, type PooledVm } from './pool'
 import {
+  detachFromWorkspace,
   NO_SESSION,
   countActiveSandboxes,
   countActiveSandboxesForUser,
@@ -54,6 +61,8 @@ export type LifecycleDeps = {
   /** egressPlaceholders: every account (`true`) or only the listed account ids (staged rollout). */
   secrets?: { keyring: Keyring; egressPlaceholders: boolean | ReadonlySet<string> }
   now: () => number
+  /** A member's GitHub identity (user token) for git-as-sender; absent = app identity only. */
+  memberIdentity?: (row: SandboxRow, userId: string) => Promise<MemberGitIdentity | null>
   /** Orphan/retention policy for the cron; defaults in retention.ts. */
   retention?: RetentionConfig
   /**
@@ -82,6 +91,8 @@ export type LifecycleDeps = {
     pool?: PoolConfig
     /** Hosts allowed on top of the default egress allowlist (e.g. this control plane for the in-VM CLI). */
     extraEgressHosts?: readonly string[]
+    /** SHARE_LINK_SECRET: each session's share-proxy key derives from it; unset = no share links. */
+    shareLinkSecret?: string
   }
 }
 
@@ -116,15 +127,18 @@ export function phaseTimer(now: () => number = Date.now) {
 type BootPrep = {
   secrets: SessionSecrets
   minted: { token: string; expiresAt: number } | null
+  /** Members whose own GitHub identity this session may use (git as the sender). */
+  memberPlaceholders: string[]
 }
 
 /** Everything a boot needs that does not depend on the VM: resolved concurrently with the VM work. */
 async function prepareBoot(deps: LifecycleDeps, row: SandboxRow): Promise<BootPrep> {
-  const [secrets, minted] = await Promise.all([
+  const [secrets, minted, memberPlaceholders] = await Promise.all([
     sessionSecretEnv(deps, row),
-    deps.github && row.repo_url ? deps.github.tokenForRepo(row.repo_url, row.account_id) : Promise.resolve(null)
+    deps.github && row.repo_url ? deps.github.tokenForRepo(row.repo_url, row.account_id) : Promise.resolve(null),
+    memberPlaceholdersFor(deps, row)
   ])
-  return { secrets, minted }
+  return { secrets, minted, memberPlaceholders }
 }
 
 function routedRow(row: SandboxRow, prep: BootPrep): SandboxRow {
@@ -146,7 +160,7 @@ export function githubPlaceholderHeaders(row: SandboxRow): string[] {
   return [`Bearer ${token}`, `token ${token}`]
 }
 
-export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: string) {
+export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: string, memberPlaceholders: readonly string[] = []) {
   const git: CredentialRoute[] = gitToken
     ? [
         {
@@ -162,6 +176,25 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
   const proxyUrl = deps.config.egressProxyUrl
   const credentials: CredentialRoute[] = proxyUrl
     ? [
+        // Members' own GitHub identities: forwarded so the proxy can pin them to the workspace repo.
+        ...(memberPlaceholders.length > 0
+          ? [
+              {
+                host: 'github.com',
+                header: 'authorization',
+                placeholders: memberPlaceholders.map((p) => gitBasicAuthorization(p)),
+                via: 'forward' as const,
+                forwardURL: proxyUrl
+              },
+              {
+                host: 'api.github.com',
+                header: 'authorization',
+                placeholders: memberPlaceholders.flatMap((p) => [`Bearer ${p}`, `token ${p}`]),
+                via: 'forward' as const,
+                forwardURL: proxyUrl
+              }
+            ]
+          : []),
         {
           host: 'api.github.com',
           header: 'authorization',
@@ -254,6 +287,8 @@ async function boot(
     timer: ReturnType<typeof phaseTimer>
     /** A pooled VM started before the caller claimed it: usage starts at the claim, not the boot. */
     billFrom?: number
+    /** First boot only: prepares the checkout (environment build link, empty repos) before orcad. */
+    prelude?: StartInputs['prelude']
   }
 ): Promise<Ready> {
   if (state.sandbox.tags.orcaSandbox !== row.id) {
@@ -266,20 +301,26 @@ async function boot(
   const needsPolicy =
     !options.policyApplied &&
     (git || routed.egress_secret_hosts || row.egress_secret_hosts || routed.egress_allow_hosts || row.egress_allow_hosts)
+  // Members revoked while the VM slept must be gone before orcad accepts its first sign-in.
+  await applyQueuedRevokes(deps.db, deps.provider, row.id, state.session.id, deps.now())
   const [, connection] = await Promise.all([
     needsPolicy
       ? options.timer.time('policy', () =>
-          deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed, prep.minted?.token))
+          deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed, prep.minted?.token, prep.memberPlaceholders))
         )
       : Promise.resolve(),
-    options.timer.time('orcad', () =>
+    options.timer.time('orcad', async () =>
       startOrcad(deps.provider, state, {
         sandboxId: row.id,
         repo: options.repo,
         // Repos hosted outside github.com get no GitHub credential, not even the placeholder.
         githubPlaceholder: deps.config.egressProxyUrl && parseGitHubRepo(row.repo_url ?? '') ? githubPlaceholderToken(row) : undefined,
         gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined,
-        secretEnv: prep.secrets.env
+        secretEnv: prep.secrets.env,
+        shareProxyKey: deps.config.shareLinkSecret
+          ? await shareProxyKey(deps.config.shareLinkSecret, row.id, state.session.id)
+          : undefined,
+        prelude: options.prelude
       })
     )
   ])
@@ -297,6 +338,10 @@ async function boot(
     ...sessionFields(deps, state),
     ...(options.billFrom !== undefined ? { usage_settled_at: options.billFrom } : {})
   })
+  // Per-member git identities for `orca-git-as` (policy routes were refreshed above).
+  if (deps.memberIdentity && (await connectedMembers(deps.db, running)).length > 0) {
+    await syncMemberGit(deps, running, state.session.id)
+  }
   await deps.hooks?.afterBoot?.(running, state.session.id).catch(() => undefined)
   return { row: running, connection, timings: options.timer.timings }
 }
@@ -307,21 +352,62 @@ export async function refreshGitCredentials(
   row: SandboxRow,
   sessionId: string
 ): Promise<{ expiresAt: number } | null> {
-  if (!deps.github || !row.repo_url) {
-    return null
-  }
-  const minted = await deps.github.tokenForRepo(row.repo_url, row.account_id)
+  const members = await memberPlaceholdersFor(deps, row)
+  const minted = deps.github && row.repo_url ? await deps.github.tokenForRepo(row.repo_url, row.account_id) : null
   if (!minted) {
+    if (members.length > 0) {
+      await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, undefined, members))
+    }
     return null
   }
-  await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, minted.token))
+  await deps.provider.updateNetworkPolicy(sessionId, egressPolicy(deps, row, minted.token, members))
   return { expiresAt: minted.expiresAt }
+}
+
+async function memberPlaceholdersFor(deps: LifecycleDeps, row: SandboxRow): Promise<string[]> {
+  if (!deps.memberIdentity || !deps.config.egressProxyUrl || !row.repo_url) {
+    return []
+  }
+  return Promise.all((await connectedMembers(deps.db, row)).map((userId) => memberPlaceholder(row.id, userId)))
+}
+
+export const MEMBERS_COMMAND = '/opt/orca/bin/orca-sandbox-members'
+
+/**
+ * Who may push from this workspace changed (boot, grant, revoke): refresh the egress routes and the
+ * VM's per-member git configs (`orca-git-as`). Best effort: a failure leaves pushes on the app identity.
+ */
+export async function syncMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<number> {
+  if (!deps.memberIdentity || !deps.config.egressProxyUrl || !row.repo_url) {
+    return 0
+  }
+  try {
+    await refreshGitCredentials(deps, row, sessionId)
+    const configs = await memberGitConfigs({ db: deps.db, identity: deps.memberIdentity }, row)
+    const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(configs))))
+    await deps.provider.runCommand(sessionId, { command: MEMBERS_COMMAND, env: { ORCA_MEMBERS_B64: encoded }, timeoutMs: 30_000 })
+    return configs.length
+  } catch {
+    return 0
+  }
 }
 
 export async function createSandbox(
   deps: LifecycleDeps,
   caller: { accountId: string; userId: string },
-  request: { workspaceId: string; machineSize: MachineSize; region?: string; repo?: { url: string; ref?: string } },
+  request: {
+    workspaceId: string
+    machineSize: MachineSize
+    region?: string
+    repo?: { url: string; ref?: string }
+    /** Boot from exactly this environment build (bld_...). */
+    environmentBuildId?: string
+    /** Default true: boot from the active build of the org environment that lists the repo. */
+    useEnvironment?: boolean
+    title?: string
+    visibility?: 'private' | 'team'
+    section?: string
+  },
   options: { pool?: boolean } = {}
 ): Promise<Ready> {
   const existing = await liveSandboxForWorkspace(deps.db, caller.accountId, request.workspaceId)
@@ -340,20 +426,38 @@ export async function createSandbox(
     return { row: existing, connection }
   }
   const timer = phaseTimer(deps.now)
-  await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, request.machineSize))
+  // An environment build carries the repo prebuilt and its own machine size (Large bills 2x).
+  const source: BootSource | null =
+    request.environmentBuildId || request.useEnvironment !== false
+      ? await timer.time('environment', () =>
+          resolveEnvironmentBoot(deps.db, caller.accountId, {
+            repoUrl: request.repo?.url,
+            buildId: request.environmentBuildId
+          })
+        )
+      : null
+  const machineSize = source?.machineSize ?? request.machineSize
+  await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, machineSize))
   const region = request.region ?? deps.config.defaultRegion
+  // The pool keeps warm VMs per image: the golden one, and the active build of recently used environments.
   const pooled =
     options.pool === false
       ? null
-      : await timer.time('pool', () => claimPooledVm(deps, request.machineSize, region).catch(() => null))
-  if (pooled) {
-    // Refill behind the response so the next create finds one too.
+      : await timer.time('pool', () =>
+          claimPooledVm(deps, machineSize, region, source?.snapshotId ?? deps.config.goldenSnapshotId).catch(() => null)
+        )
+  if (deps.config.pool) {
+    // Refill behind the response, on a miss too (empty, or stale after a golden rotation), so the next
+    // create finds one without waiting for the cron.
     const refill = maintainPool(deps).catch((error: unknown) =>
       console.log(JSON.stringify({ event: 'pool_refill_failed', error: String(error).slice(0, 200) }))
     )
     deps.background?.(refill)
   }
   const claimedAt = deps.now()
+  const prelude: StartInputs['prelude'] = request.repo
+    ? { script: WORKSPACE_PRELUDE_SCRIPT, env: source?.repoDir ? { ORCA_ENV_REPO_DIR: source.repoDir } : {} }
+    : undefined
   const id = pooled?.id ?? randomId()
   // Write-ahead row and the VM-independent prep (secrets, repo token) run together.
   const [row, prep] = await timer.time('prepare', async () => {
@@ -366,14 +470,22 @@ export async function createSandbox(
         workspace_id: request.workspaceId,
         provider: 'vercel',
         provider_name: `orca-${deps.config.environment}-${id}`,
-        machine_size: request.machineSize,
+        machine_size: machineSize,
         region,
-        repo_url: request.repo?.url ?? null
+        repo_url: request.repo?.url ?? null,
+        environment_id: source?.environmentId ?? null,
+        environment_build_id: source?.buildId ?? null,
+        source_snapshot_id: source?.snapshotId ?? deps.config.goldenSnapshotId,
+        repo_branch: request.repo?.ref ?? null,
+        name: request.title ?? null,
+        // A personal account has no team: its workspaces are always private.
+        visibility: request.visibility === 'team' && caller.accountId.includes('org:') ? 'team' : 'private',
+        section: request.section ?? null
       },
       deps.now()
     ).catch(async (error: unknown) => {
       if (pooled) {
-        await deletePooledVm(deps, pooled.provider_name).catch(() => undefined)
+        await deletePooledVm(deps, pooled.provider_name, pooled.snapshot_id).catch(() => undefined)
       }
       throw error
     })
@@ -390,15 +502,18 @@ export async function createSandbox(
   if (pooled) {
     try {
       const state = await timer.time('vm', () =>
-        adoptPooledVm(deps, pooled, egressPolicy(deps, routedRow(row, prep), prep.minted?.token))
+        adoptPooledVm(deps, pooled, egressPolicy(deps, routedRow(row, prep), prep.minted?.token, prep.memberPlaceholders))
       )
-      const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, billFrom: claimedAt })
+      const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, billFrom: claimedAt, prelude })
       console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', pooled: true, ms: timer.timings }))
       return ready
     } catch (error) {
       // A pooled VM that will not take the session is discarded; the caller still gets a workspace.
       console.log(JSON.stringify({ event: 'pool_adopt_failed', error: String(error).slice(0, 200) }))
       await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
+      // Destroy can stop short (e.g. the provider's delete snapshot is still being written); the cron
+      // finishes it. That row never held user data, so it lets go of the workspace now.
+      await detachFromWorkspace(deps.db, row.id)
       return createSandbox(deps, caller, request, { pool: false })
     }
   }
@@ -408,13 +523,12 @@ export async function createSandbox(
     state = await timer.time('vm', () =>
       deps.provider.createSandbox({
         name: row.provider_name,
-        snapshotId: deps.config.goldenSnapshotId,
+        snapshotId: source?.snapshotId ?? deps.config.goldenSnapshotId,
         vcpus: VCPUS[row.machine_size],
         region: row.region,
         timeoutMs: LEASE_MS,
-        // orcad, and the SSH bridge (wake on SSH; idle unless SSH was set up).
-        ports: [ORCAD_PORT, SSH_BRIDGE_PORT],
-        networkPolicy: egressPolicy(deps, routedRow(row, prep), prep.minted?.token),
+        ports: [ORCAD_PORT, SHARE_PROXY_PORT],
+        networkPolicy: egressPolicy(deps, routedRow(row, prep), prep.minted?.token, prep.memberPlaceholders),
         snapshotExpirationMs: deps.config.snapshotExpirationMs ?? DEFAULT_SNAPSHOT_EXPIRATION_MS,
         tags: { orcaSandbox: row.id, orcaEnv: deps.config.environment }
       })
@@ -424,8 +538,8 @@ export async function createSandbox(
     throw error
   }
   try {
-    const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer })
-    console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', ms: timer.timings }))
+    const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer, prelude })
+    console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', fromBuild: source?.buildId ?? null, ms: timer.timings }))
     return ready
   } catch (error) {
     await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
@@ -646,13 +760,15 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   // Persistent sandboxes leave automatic snapshots behind delete; prove none survive.
   const listed = await deps.provider.listSnapshots(destroying.provider_name)
   await recordSnapshots(deps.db, row.id, listed.map((s) => s.id), deps.now())
+  // The image it booted from (golden or an environment build) is shared: never this sandbox's to delete.
+  const shared = new Set([deps.config.goldenSnapshotId, row.source_snapshot_id].filter((id): id is string => !!id))
   for (const id of await recordedSnapshotIds(deps.db, row.id)) {
-    if (id !== deps.config.goldenSnapshotId) {
+    if (!shared.has(id)) {
       await deps.provider.deleteSnapshot(id)
     }
   }
   const remaining = (await deps.provider.listSnapshots(destroying.provider_name)).filter(
-    (s) => s.status !== 'deleted' && s.id !== deps.config.goldenSnapshotId
+    (s) => s.status !== 'deleted' && !shared.has(s.id)
   )
   if (remaining.length > 0) {
     throw new LifecycleError('provider_unavailable', 'snapshot_cleanup_incomplete')
@@ -660,7 +776,6 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await markSnapshotsDeleted(deps.db, row.id, deps.now())
   // Archive metadata (repo state, file tree) goes with the workspace.
   await deps.db.prepare('DELETE FROM sandbox_archives WHERE sandbox_id = ?').bind(row.id).run()
-  await deps.db.prepare('DELETE FROM sandbox_ssh WHERE sandbox_id = ?').bind(row.id).run()
   const destroyed = await claim(deps, destroying, {
     status: 'destroyed',
     ...NO_SESSION,

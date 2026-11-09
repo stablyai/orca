@@ -21,7 +21,12 @@ export type GoldenImageProviderApi = {
     sessionId: string,
     params: { command: string; args?: string[]; env?: Record<string, string>; timeoutMs: number }
   ): Promise<string>
-  /** Null exit code while it runs. */
-  getCommand(sessionId: string, commandId: string): Promise<{ exitCode: number | null }>
+  /** Null exit code while it runs; `wait` blocks (provider-side) until it ends. */
+  getCommand(sessionId: string, commandId: string, options?: { wait?: boolean }): Promise<{ exitCode: number | null }>
+  /**
+   * The command's output as provider ndjson (`{"stream":"stdout"|"stderr","data":"..."}` lines), from
+   * the first byte; follows live output until the command ends.
+   */
+  streamCommandLogs(sessionId: string, commandId: string, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>>
   getSnapshot(snapshotId: string): Promise<{ id: string; status: 'created' | 'deleted' | 'failed'; expiresAt: number | null } | null>
 }

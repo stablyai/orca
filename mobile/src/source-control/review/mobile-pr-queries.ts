@@ -146,7 +146,8 @@ export const prBranchReviewQuery = defineHostQuery({
           branch: input.branch,
           headSha: input.head,
           // Only an action's read re-learns host status; revalidations reuse what this connection knows.
-          refresh: read.live
+          refresh: read.live,
+          previous
         }
       ),
       previous
@@ -157,12 +158,19 @@ export const prChecksQuery = defineHostQuery({
   family: 'pr.checks',
   staleTime: 15_000,
   refetchOnWindowFocus: true,
-  fetch: async (client, target, input: PrChecksInput): Promise<PRCheckDetail[]> => {
+  fetch: async (
+    client,
+    target,
+    input: PrChecksInput,
+    _previous,
+    read
+  ): Promise<PRCheckDetail[]> => {
     const outcome = await fetchPRChecks(client, target.worktree ?? '', {
       prNumber: input.number,
       headSha: input.head,
       // Fork checks must use the PR's own repo identity.
-      prRepo: prRepoSlug(input)
+      prRepo: prRepoSlug(input),
+      refresh: read.live
     })
     if (!outcome.ok) {
       throw new Error(outcome.error)

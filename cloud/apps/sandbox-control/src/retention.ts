@@ -263,7 +263,7 @@ async function sweepOrphans(deps: LifecycleDeps, summary: HousekeepingSummary): 
     if (now - orphan.first_seen_at >= grace) {
       await deps.provider.deleteSandbox(box.name)
       for (const snapshot of await deps.provider.listSnapshots(box.name)) {
-        if (snapshot.status === 'created' && snapshot.id !== deps.config.goldenSnapshotId) {
+        if (snapshot.status === 'created' && snapshot.id !== deps.config.goldenSnapshotId && !(await isEnvironmentBuildSnapshot(deps.db, snapshot.id))) {
           await deps.provider.deleteSnapshot(snapshot.id)
         }
       }
@@ -396,4 +396,10 @@ export async function housekeeping(
     }
   }
   return summary
+}
+
+/** Environment build snapshots are shared images, kept by environment-builds.ts retention only. */
+async function isEnvironmentBuildSnapshot(db: D1Database, snapshotId: string): Promise<boolean> {
+  const row = await db.prepare('SELECT 1 AS hit FROM environment_builds WHERE snapshot_id = ?').bind(snapshotId).first<{ hit: number }>()
+  return row !== null
 }

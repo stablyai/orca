@@ -1,3 +1,4 @@
+import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -69,6 +70,8 @@ export type NewWorkspaceComposerCardProps = {
   selectedEphemeralVmRecipeId?: string | null
   onEphemeralVmRecipeChange?: (recipeId: string | null) => void
   ephemeralVmRecipeError?: string | null
+  /** Orca Cloud for the selected project, from main; drives the picker's sign-in/upsell row. */
+  orcaCloudAvailability?: OrcaCloudAvailability
   repoBackedSearchRepos?: readonly RepoOption[]
   repoBackedSourcesDisabled?: boolean
   allowSmartNameAddProject?: boolean

@@ -88,7 +88,9 @@ const StatePayload = z.object({
   a: z.string().min(1).max(160),
   u: z.string().min(1).max(160),
   e: z.number().int(),
-  i: z.number().int().positive().optional()
+  i: z.number().int().positive().optional(),
+  // `user`: a member connecting their own GitHub identity (github-user-tokens.ts), not an install.
+  k: z.literal('user').optional()
 })
 export type ConnectState = z.infer<typeof StatePayload>
 
@@ -266,7 +268,12 @@ export async function handleGitHubReturn(
   config: GitHubConnectConfig,
   url: URL,
   now: number
-): Promise<{ redirect: string } | { bound: string[]; denied: number } | { error: string }> {
+): Promise<
+  | { redirect: string }
+  | { bound: string[]; denied: number }
+  | { error: string }
+  | { userConnect: { a: string; u: string }; code: string }
+> {
   const rawState = url.searchParams.get('state') ?? ''
   const state = rawState ? await verifyState(config.stateSecret, rawState, now) : null
   if (!state) {
@@ -282,6 +289,10 @@ export async function handleGitHubReturn(
   }
   if (!(await consumeState(db, state, now))) {
     return { error: 'state_used' }
+  }
+  if (state.k === 'user') {
+    // A member connecting their own GitHub identity: the caller stores the user token.
+    return { userConnect: { a: state.a, u: state.u }, code }
   }
   const result = await verifiedInstallations(config, code, installationId)
   for (const installation of result.allowed) {

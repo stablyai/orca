@@ -2155,6 +2155,15 @@
         "restartSoonDetail": "{{name}} reaches its 24-hour session limit. Files stay; running agents pick up where they left off.",
         "thisWorkspace": "This workspace",
         "seePlans": "See plans"
+      },
+      "runtimePortForwards": {
+        "desktopOnly": "Port forwarding needs the desktop app.",
+        "forwardedAnnouncement": "Forwarded :{{value0}} to localhost:{{value1}}",
+        "updateHost": "Update Orca on this host",
+        "hostNotReachable": "Host not reachable",
+        "failedAnnouncement": "Couldn't forward :{{value0}}. {{value1}}",
+        "busyInUseHere": "localhost:{{value0}} in use on this computer",
+        "listenFailedRetry": "Couldn't listen on this computer. Retry or pick another port"
       }
     },
     "hooks": {
@@ -2278,7 +2287,9 @@
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "portsTitle": "Ports",
+        "portsDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -2834,7 +2845,10 @@
         "runCommandsNow": "Run commands now",
         "skipForNow": "Skip for now",
         "skipCommands": "Skip commands",
-        "connectProject": "Connect {{name}}"
+        "connectProject": "Connect {{name}}",
+        "customEnvironmentsHint": "Create a workspace from an orca.yaml recipe",
+        "addRemoteOrcaServerSentence": "Add remote Orca server",
+        "customEnvironments": "Custom environments"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -3970,12 +3984,10 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Dismiss",
             "34dd5ee38b": "Retry",
-            "ed2a664f8b": "Couldn’t create worktree",
             "a3346fc6ed": "Cancel worktree creation",
             "532aea14ce": "Cancel",
-            "767951265d": "Something went wrong while creating the worktree.",
             "cancelProvisioning": "Cancel",
-            "vmProvisioningLogEmpty": "Waiting for recipe output…"
+            "somethingWentWrong": "Something went wrong while creating the workspace."
           },
           "PendingNativeChatCreation": {
             "sendBlockedFailed": "Retry creating the worktree to send",
@@ -3996,10 +4008,93 @@
             "editRecipe": "Edit recipe",
             "fixWithAgent": "Fix with agent",
             "openAnyway": "Open anyway",
-            "openAnywayHint": "Open anyway keeps this VM and creates the workspace on it as is. Dismiss destroys the VM.",
             "provision": "Provision VM",
             "retryChecks": "Retry checks",
-            "title": "Building your VM"
+            "provisionCloud": "Start sandbox",
+            "checksCloud": "Prepare environment",
+            "createCloud": "Open workspace",
+            "titleCloud": "Starting your cloud workspace",
+            "readyCloud": "Your cloud workspace is ready",
+            "failedCloud": "Couldn’t start your cloud workspace",
+            "titleVm": "Building your VM workspace",
+            "readyVm": "Your VM workspace is ready",
+            "attentionVm": "Your VM workspace needs attention",
+            "failedVm": "Couldn’t build your VM workspace",
+            "hideLogs": "Hide logs",
+            "viewLogs": "View logs",
+            "logEmpty": "Waiting for output…",
+            "usually": "usually ~{{seconds}}s",
+            "slow": "Taking longer than usual",
+            "attentionCloud": "Your cloud workspace needs attention",
+            "statePending": "Not started",
+            "stateRunning": "In progress",
+            "stateDone": "Done",
+            "stateFailed": "Failed",
+            "openFailedCloud": "Couldn’t open your cloud workspace"
+          },
+          "VmBuildFailureCard": {
+            "createFailedTitle": "Couldn’t create workspace",
+            "checksTitleCloud": "The sandbox is up, but its environment checks failed",
+            "planTitle": "Orca Cloud needs a Team plan",
+            "planBody": "Cloud workspaces are part of the Team plan. Nothing was created, and you weren’t charged.",
+            "hoursUsedTitle": "You’ve used this period’s sandbox hours",
+            "hoursUsedBody": "Raise your overage limit or wait for your hours to reset. Nothing was created.",
+            "paymentTitle": "Your Orca payment needs attention",
+            "paymentBody": "Update your payment method to start cloud workspaces again. Nothing was created.",
+            "concurrencyTitle": "All your cloud workspaces are in use",
+            "concurrencyBody": "You’ve reached your plan’s limit on running cloud workspaces. Put one to sleep or delete it from the sidebar, then try again.",
+            "signInTitle": "Sign in to use Orca Cloud",
+            "signInBody": "Cloud workspaces run on your Orca account. Sign in and Orca starts this one for you.",
+            "unavailableTitle": "Orca Cloud is unavailable right now",
+            "unavailableBody": "The problem is on our side, not in your project. Nothing was created. Try again in a moment.",
+            "networkTitle": "Couldn’t reach Orca Cloud",
+            "networkBody": "Check your internet connection, then try again.",
+            "snapshotTitle": "This project’s saved environment is missing",
+            "snapshotBody": "The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Try again; if it keeps happening, contact support.",
+            "provisionBodyCloud": "Something went wrong while starting the sandbox. Try again, or open the logs for details.",
+            "stillRunningCloud": "The sandbox is running and using sandbox hours until you choose.",
+            "stillRunningLocal": "The VM is running and using hours until you choose.",
+            "tryAgain": "Try again",
+            "signIn": "Sign in",
+            "more": "More",
+            "deleteSandbox": "Delete sandbox",
+            "deleteVm": "Delete VM",
+            "updatePayment": "Update payment method",
+            "manageBilling": "Manage billing",
+            "checksBodyCloud": "Open anyway to fix these inside the workspace, or retry the checks after changing your project.",
+            "createBodyCloud": "Your sandbox started, but Orca couldn’t open the workspace on it. Try again, or open the logs for details."
+          },
+          "VmBuildLog": {
+            "jumpToError": "Jump to first error",
+            "copied": "Copied",
+            "copy": "Copy log",
+            "label": "Build log",
+            "copyFailed": "Couldn’t copy the log.",
+            "copiedStatus": "Log copied"
+          },
+          "orcaCloudBuildLog": {
+            "checkingPlan": "Checking your plan…",
+            "provisioning": "Starting the sandbox…",
+            "booting": "Booting the sandbox…",
+            "connecting": "Connecting to the sandbox…"
+          },
+          "environmentCheckCopy": {
+            "gitMissing": "git isn’t installed.",
+            "gitMissingFix": "Add git to the environment image.",
+            "toolMissing": "{{command}} isn’t installed, but {{reason}} needs it.",
+            "toolMissingFix": "Add {{command}} to the environment image or setup script.",
+            "agentMissing": "No coding agent is installed.",
+            "agentMissingFix": "Install the agent you want to run here, such as Claude or Codex.",
+            "agentSignedOut": "{{agent}} is installed but not signed in.",
+            "agentSignInTimedOut": "Couldn’t confirm that {{agent}} is signed in.",
+            "agentSignInFix": "Orca asks you to sign in to {{agent}} the first time it starts in this workspace.",
+            "diskLow": "Only {{free}} GB of disk space is free.",
+            "diskVeryLowFix": "Installs and builds will fail. Use a larger disk or clear caches.",
+            "diskLowFix": "Dependency installs can need several GB. Consider a larger disk.",
+            "failed": "Failed",
+            "warning": "Warning",
+            "passed": "Passed",
+            "toolMissingFixCloud": "Install {{command}} in the workspace, or add it to your project’s setup script."
           }
         }
       },
@@ -6593,13 +6688,13 @@
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",
-          "29c56f30ee": "Check for Updates",
+          "29c56f30ee": "Check for updates",
           "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "Changelog",
           "cdc87f897e": "Docs",
-          "e565171a7c": "Keyboard Shortcuts",
-          "4cf5b868d7": "Send Feedback",
+          "e565171a7c": "Keyboard shortcuts",
+          "4cf5b868d7": "Send feedback",
           "a428c25998": "Settings",
           "2991a0106c": "Help",
           "4e8f5710d3": "Couldn't restart Orca.",
@@ -6900,7 +6995,12 @@
           "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
           "projectGroupRefreshing": "Refreshing {{group}}…",
           "refreshProjectGroup": "Refresh projects",
-          "hostServerReplaced": "Different server: forget it, then connect"
+          "hostServerReplaced": "Different server: forget it, then connect",
+          "hostVmResumeFailed": "Resume failed",
+          "hostVmSetupFailed": "Setup failed",
+          "hostVmSuspended": "Suspended",
+          "hostVmWaking": "Waking…",
+          "hostVmProvisioning": "Provisioning…"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -7631,7 +7731,48 @@
           "running": "Running",
           "idle": "Idle"
         },
-        "projectOrderSaveFailed": "Could not save the complete project order"
+        "projectOrderSaveFailed": "Could not save the complete project order",
+        "CloudSshIncludeDialog": {
+          "title": "Let {{editor}} find your cloud workspaces?",
+          "body": "{{editor}} connects through ~/.ssh/config. Orca will add this line at the top. Nothing else in the file changes.",
+          "cancel": "Cancel",
+          "confirm": "Add Line and Open"
+        },
+        "CloudSsh": {
+          "noEditors": "Install VS Code or Cursor to open over SSH.",
+          "menu": "SSH",
+          "copyCommand": "Copy SSH Command",
+          "revoke": "Revoke SSH Access",
+          "firstUseHint": "Your first connection adds this computer’s key.",
+          "unsupportedImage": "SSH isn’t available here",
+          "unsupportedImageDetail": "This workspace was created before Orca Cloud supported SSH. New workspaces have it.",
+          "asleep": "The workspace went to sleep",
+          "asleepDetail": "Try again to wake it.",
+          "wakeFailed": "Couldn’t wake the workspace",
+          "wakeFailedDetail": "Try again in a moment.",
+          "editorMissing": "Editor not found",
+          "editorMissingDetail": "Reinstall it, or open the workspace in the other editor.",
+          "failed": "Couldn’t set up SSH",
+          "forwardFailedDetail": "Orca couldn’t reach the workspace. Check your connection and try again.",
+          "failedDetail": "Orca Cloud didn’t answer. Try again in a moment.",
+          "retry": "Retry",
+          "settingUp": "Setting up SSH…",
+          "waking": "Waking the workspace…",
+          "addingKey": "Adding this computer’s key…",
+          "wakingTitle": "Waking the workspace…",
+          "preparing": "Preparing SSH…",
+          "copied": "SSH command copied",
+          "opening": "Opening in {{editor}}",
+          "openingDetail": "The first connection can take a minute.",
+          "revoking": "Revoking SSH access…",
+          "revoked": "SSH access revoked",
+          "revokedDetail": "This computer can no longer connect.",
+          "removeInclude": "Remove from ~/.ssh/config",
+          "includeRemoveFailed": "Couldn’t edit ~/.ssh/config",
+          "includeRemoved": "Removed from ~/.ssh/config",
+          "includeRemovedDetail": "Editors no longer see Orca Cloud hosts. Opening one in an editor asks again.",
+          "revokedUnreachableDetail": "Deleted here. Orca couldn’t reach the workspace, so its copy is removed the next time this computer connects."
+        }
       },
       "shared": {
         "useDaemonActions": {
@@ -9297,7 +9438,9 @@
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
           "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
           "remoteServersDescription": "Run Orca on another machine and work on it from here.",
-          "noSettingsFoundForQuery": "No settings found for \"{{value0}}\""
+          "noSettingsFoundForQuery": "No settings found for \"{{value0}}\"",
+          "portsTitle": "Ports",
+          "portsDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -13919,6 +14062,28 @@
           },
           "title": "Agent API Keys",
           "description": "Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine."
+        },
+        "ports": {
+          "autoForward": "Auto-forward ports",
+          "exclusive": "Same port number only",
+          "exclusiveDescription": "If the port is taken here, skip it instead of remapping.",
+          "range": "Auto-forward port range",
+          "rangeDescription": "Ports outside this range aren't auto-forwarded.",
+          "rangeStart": "Lowest port",
+          "rangeEnd": "Highest port",
+          "notify": "Notify when a port is forwarded",
+          "search": {
+            "title": "Port Forwarding",
+            "ports": "ports",
+            "forward": "forward",
+            "localhost": "localhost",
+            "tunnel": "tunnel",
+            "devServer": "dev server",
+            "descriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
+          },
+          "rangeInvalid": "\"{{value0}}\" isn't a usable port. Use a port from 1 to 65535, lowest first.",
+          "needsAutoForward": "Turn on Auto-forward ports to change this.",
+          "autoForwardDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
         }
       },
       "right": {
@@ -14148,7 +14313,10 @@
             "remotePortOutOfRange": "Remote port must be 1–65535",
             "localPortOutOfRange": "Local port must be 1–65535",
             "localPortInUse": "Port {{port}} is already in use. Choose a different local port.",
-            "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024."
+            "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024.",
+            "remoteEmpty": "No ports yet. Dev servers started here are forwarded to localhost.",
+            "remoteEmptyOff": "No ports yet. Auto-forward is off.",
+            "turnOnInSettings": "Turn on in Ports settings"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",
@@ -15470,6 +15638,99 @@
             "createInProgress": "Create PR in progress...",
             "workspaceHostUnresolved": "The workspace host is unresolved. Refresh the workspace and retry.",
             "branchDiscoveryFailed": "Branch discovery failed."
+          },
+          "RuntimeForwardedPorts": {
+            "title": "Other forwards",
+            "ssh": "SSH access",
+            "stopped": "stopped",
+            "stopLabel": "Stop forwarding port {{value0}}",
+            "connectionCount_one": "{{count}} connection",
+            "connectionCount_other": "{{count}} connections"
+          },
+          "RuntimePortForward": {
+            "pending": "Forwarding…",
+            "useAnother": "Use another port",
+            "retry": "Retry",
+            "forward": "Forward to localhost",
+            "copied": "Copied {{value0}}",
+            "localAddress": "localhost:{{value0}}",
+            "stopForwarding": "Stop forwarding",
+            "hostOfflineNote": "Host offline",
+            "notAnswering": "Nothing answering on :{{value0}} yet",
+            "forwardedToLabel": "Port {{value0}} is forwarded to {{value1}}. Open in browser",
+            "reconnect": "Reconnect",
+            "actionLabel": "{{value0}} for port {{value1}}",
+            "copyLocalUrl": "Copy local URL",
+            "stopAndSkip": "Stop and don't auto-forward :{{value0}}",
+            "remappedInUseHere": "({{value0}} in use here)"
+          },
+          "CloudShare": {
+            "alreadyShared": "Already shared",
+            "audienceLabel": "Who can open it",
+            "audiencePublicHint": "Anyone who has the link can open it without signing in.",
+            "audiencePublicShort": "Public",
+            "audienceTeam": "Team only",
+            "audienceTeamHint": "Teammates open it from Orca, signed in to your team.",
+            "canWake": "Can wake",
+            "cancel": "Cancel",
+            "confirmDetail": "People with it can’t open it anymore.",
+            "confirmPublic": "Turn off the public link to :{{value0}}?",
+            "confirmTeam": "Turn off the team link to :{{value0}}?",
+            "copied": "Copied",
+            "copiedAnnouncement": "Link copied",
+            "copy": "Copy",
+            "copyFailed": "Couldn’t copy the link.",
+            "copyLink": "Copy link",
+            "create": "Create link",
+            "createFailed": "Couldn’t create the link.",
+            "createPublic": "Create public link",
+            "createdCopied": "Your link is ready and copied.",
+            "createdNotCopied": "Your link is ready. Copy it below.",
+            "description": "Get a link that opens port {{value0}} in a browser.",
+            "descriptionAnyPort": "Get a link that opens a port in a browser.",
+            "done": "Done",
+            "empty": "No active links. Share a port to open it in someone’s browser.",
+            "errorInvalid": "That port can’t be shared: 2222, 6768 and 6769 are used by Orca in the workspace.",
+            "errorLimit": "This workspace has as many links as it can. Turn one off first.",
+            "errorNotFound": "That link is no longer active.",
+            "errorUnauthorized": "Sign in to Orca again, then try again.",
+            "errorUnavailable": "Couldn’t reach Orca Cloud. Try again.",
+            "expired": "Expired",
+            "expiredAt": "Expired {{value0}}",
+            "expiresAt": "Expires {{value0}}",
+            "expiry1h": "In 1 hour",
+            "expiry24h": "In 24 hours",
+            "expiry7d": "In 7 days",
+            "expiryLabel": "Expires",
+            "linkLabel": "Share link",
+            "listeningPorts": "Listening ports",
+            "loadFailed": "Couldn’t load links.",
+            "loadSignedOut": "Sign in to see shared links.",
+            "loading": "Loading shared links…",
+            "menuShare": "Share…",
+            "open": "Open link",
+            "portHint": "The port your dev server listens on.",
+            "portHintDetected": "Or pick a port that’s listening.",
+            "portInvalid": "Enter a port from 1 to 65535. Ports 2222, 6768 and 6769 are used by Orca.",
+            "portLabel": "Port",
+            "publicNote": "Anyone with this link can open port {{value0}} without signing in. Turn it off anytime in Ports → Shared links.",
+            "retry": "Retry",
+            "revokeFailed": "Couldn’t turn it off. Try again.",
+            "revoked": "Turned off",
+            "revokedAnnouncement": "Link turned off",
+            "revokedAt": "Turned off {{value0}}",
+            "section": "Shared links",
+            "shareButton": "Share…",
+            "signIn": "Sign in to Orca",
+            "statusWithWake": "{{value0}} · Can wake",
+            "teamNote": "Teammates open it from Orca, signed in to your team.",
+            "timeLeft": "{{value0}} left",
+            "title": "Share port {{value0}}",
+            "titleAnyPort": "Share a port",
+            "turnOff": "Turn off",
+            "turnOffLink": "Turn off link",
+            "wakeHint": "Otherwise the link works only while the workspace is awake. Wake time counts toward your usage.",
+            "wakeLabel": "Let visitors wake the workspace"
           }
         }
       },
@@ -15768,7 +16029,20 @@
           "RunTargetCombobox": {
             "listLabel": "Run targets",
             "label": "Run on",
-            "browse": "Browse run targets"
+            "browse": "Browse run targets",
+            "orcaCloudHoursLeft": "{{hours}} h left",
+            "orcaCloudNoHours": "No hours left",
+            "orcaCloudPaymentIssue": "Payment issue",
+            "orcaCloudTeamBadge": "Team",
+            "orcaCloudUpgrade": "Upgrade",
+            "orcaCloudDetail": "Hosted sandbox · 4 vCPU / 8 GB",
+            "orcaCloudRenew": "Renew",
+            "orcaCloudAddHours": "Add hours",
+            "orcaCloudUpdatePayment": "Update payment",
+            "orcaCloudPaymentFailed": "Payment failed",
+            "orcaCloudSignIn": "Sign in to use Orca Cloud",
+            "orcaCloudNeedsTeam": "Needs a Team plan",
+            "orcaCloudSignInButton": "Sign in"
           },
           "projectCombobox": {
             "recentHeading": "Recent",
@@ -18955,7 +19229,10 @@
         "projectCount_one": "{{count}} project",
         "selectedProjectCount_one": "{{count}} selected project",
         "sourceHostCount_one": "{{count}} source host",
-        "unavailableCount_one": "{{count}} unavailable"
+        "unavailableCount_one": "{{count}} unavailable",
+        "statusProvisioning": "provisioning",
+        "statusSuspended": "suspended",
+        "statusWaking": "waking"
       },
       "ShortcutKeyCombo": {
         "07eb4985a1": "Double-tap {{value0}}"
@@ -19715,6 +19992,112 @@
           "seatsFollow2": "Seats follow your team: new members add a seat now; removed seats drop off at renewal."
         },
         "teamFrom": "Team starts at {{value0}} per seat per month, billed annually."
+      },
+      "ports": {
+        "RuntimePortAutoForwarder": {
+          "open": "Open",
+          "busyDescription": "\"Same port number only\" is on, so :{{value0}} was not forwarded.",
+          "useAnother": "Use another port",
+          "forwarded": "Forwarded :{{value0}} to localhost:{{value1}}",
+          "remappedInUse": "{{value0}} · {{value1}} in use on this computer",
+          "many": "{{value0}} ports forwarded",
+          "busyInUse": "localhost:{{value0}} in use on this computer",
+          "openPortsPanel": "Open ports"
+        }
+      },
+      "cloudWorkspaces": {
+        "archive": "Archive",
+        "archived": "Archived",
+        "byAnyone": "By anyone",
+        "byMe": "By me",
+        "byMember": "By {{value0}}",
+        "cancel": "Cancel",
+        "chatLinkCopied": "Chat link copied",
+        "computeCost": "Compute {{value0}} × {{value1}}/h = {{value2}}",
+        "computeHours": "{{value0}} h",
+        "computeMinutes": "{{value0}} min",
+        "connected": "{{value0}} is connected. Its projects are in the sidebar.",
+        "copyFailed": "Could not copy the link.",
+        "copyLink": "Copy link",
+        "cost": "Cost",
+        "costValue": "Cost {{value0}}",
+        "daysAgo": "{{value0}}d ago",
+        "emptyArchivedBody": "Archived cloud workspaces show up here.",
+        "emptyArchivedTitle": "No archived workspaces",
+        "emptyFilteredBody": "Try another owner or repository.",
+        "emptyFilteredTitle": "Nothing matches these filters",
+        "emptyMineBody": "Create one with Orca Cloud from New workspace. It keeps running while your laptop sleeps.",
+        "emptyMineTitle": "No cloud workspaces yet",
+        "emptyTeamBody": "Share a cloud workspace from its menu and everyone in your org can open it here.",
+        "emptyTeamTitle": "No team workspaces yet",
+        "environmentName": "{{value0}} (cloud)",
+        "errorConcurrencyLimit": "Your team is running as many cloud workspaces as its plan allows.",
+        "errorConflict": "The workspace is busy changing state. Try again in a moment.",
+        "errorEntitlementDenied": "Your plan does not allow starting this workspace right now.",
+        "errorForbidden": "Only the owner or an org admin can do that.",
+        "errorNotFound": "This workspace is private, archived or no longer exists.",
+        "errorTooManyDevices": "Too many of your devices are paired with this workspace. Remove one first.",
+        "errorUnauthorized": "Your Orca Cloud session expired. Sign in again.",
+        "errorUnknown": "Something went wrong. Try again.",
+        "errorUnreachable": "Orca Cloud is not reachable right now. Try again.",
+        "filterByOwner": "Filter by owner",
+        "filterByRepository": "Filter by repository",
+        "heading": "Cloud workspaces",
+        "hoursAgo": "{{value0}}h ago",
+        "inAnyRepo": "In any repo",
+        "inRepo": "In {{value0}}",
+        "justNow": "just now",
+        "lastActiveValue": "Last active {{value0}}",
+        "linkNotFound": "This link points to a private workspace, another org, or one that was deleted.",
+        "listMeta": "{{value0}} workspaces · {{value1}}",
+        "loading": "Loading cloud workspaces",
+        "makePrivate": "Make private",
+        "memberTyping": "{{value0}} is typing",
+        "memberViewing": "{{value0}} is viewing",
+        "memberYou": "{{value0}} (you)",
+        "minutesAgo": "{{value0}}m ago",
+        "modelTokensCost": "Model tokens {{value0}}",
+        "move": "Move",
+        "moveToSection": "Move to section",
+        "newSection": "New section",
+        "newSectionEllipsis": "New section…",
+        "noAccess": "You do not have access to this workspace.",
+        "noSection": "No section",
+        "nowPrivate": "Now private. Teammates’ devices were disconnected.",
+        "open": "Open",
+        "openFailed": "Could not open the workspace.",
+        "opening": "Opening",
+        "ownerChanged": "Owner changed",
+        "private": "Private",
+        "reassignOwner": "Reassign owner",
+        "refresh": "Refresh cloud workspaces",
+        "restored": "Restored",
+        "retry": "Retry",
+        "rowActions": "Actions for {{value0}}",
+        "rowLabel": "{{value0}}, {{value1}}, owned by {{value2}}",
+        "scopeMine": "Mine",
+        "scopeTeam": "Team",
+        "sectionName": "Section name",
+        "sectionNamePlaceholder": "e.g. Payments",
+        "serverNotSaved": "The workspace server was not saved.",
+        "shareWithTeam": "Share with team",
+        "sharedWithTeam": "Shared with team",
+        "sharedWithYourTeam": "Shared with your team",
+        "showArchived": "Show archived",
+        "statusAsleep": "Asleep",
+        "statusDeleted": "Deleted",
+        "statusDeleting": "Deleting",
+        "statusGoingToSleep": "Going to sleep",
+        "statusNeedsAttention": "Needs attention",
+        "statusRunning": "Running",
+        "statusStarting": "Starting",
+        "statusWaking": "Waking",
+        "unarchive": "Unarchive",
+        "verifyFailed": "Could not verify the workspace server. Try again.",
+        "whoseWorkspaces": "Whose workspaces",
+        "workspaceFallback": "workspace",
+        "workspaceLinkCopied": "Workspace link copied",
+        "you": "You"
       }
     },
     "i18n": {
@@ -20254,6 +20637,7 @@
         "orcaStopCanContinue": "You can continue in this conversation.",
         "orcaStopUnnamedServer": "the remote server",
         "permissionDenied": "{{agent}} denied permission. View details.",
+        "safetyReviewApproved": "{{agent}} approved this action. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
@@ -21085,7 +21469,8 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
-      }
+      },
+      "fromSender": "From {{value0}}"
     },
     "tab": {
       "bar": {
@@ -21794,6 +22179,21 @@
         "reopenClosedTab": "Reopen closed tab",
         "terminal": "Terminal"
       }
+    },
+    "cloudRemoteDesktop": {
+      "menuItem": "Open Remote Desktop",
+      "failedTitle": "Couldn’t open Remote Desktop",
+      "notCloud": "Remote Desktop is only available for Orca Cloud workspaces.",
+      "notRunning": "This workspace isn’t running. Open it to start it, then try again.",
+      "notInstalled": "This workspace was created before Remote Desktop existed. Create a new Orca Cloud workspace to use it.",
+      "signedOut": "Your Orca Cloud session expired. Sign in again to continue.",
+      "forwardFailed": "The desktop started, but Orca couldn’t connect this computer to it.",
+      "unavailable": "Orca Cloud didn’t start the desktop.",
+      "starting": "Starting Remote Desktop…",
+      "tabTitle": "Remote Desktop",
+      "stillStarting": "Still starting…",
+      "retry": "Try Again",
+      "openWorkspace": "Open Workspace"
     }
   },
   "dashboardPopout": {
@@ -23114,6 +23514,30 @@
       "checksPending": "{{review}} checks: Pending",
       "checksPassing": "{{review}} checks: Passing",
       "open": "{{review}}: Open"
+    },
+    "vm": {
+      "menu": {
+        "waking": "Waking VM…",
+        "retryResume": "Retry Resume VM",
+        "resume": "Resume VM",
+        "suspend": "Suspend VM",
+        "suspendDescription": "Close this workspace's panels and suspend its VM. Opening the workspace wakes it."
+      },
+      "state": {
+        "provisioning": "VM provisioning",
+        "suspended": "VM suspended",
+        "waking": "VM waking",
+        "resumeFailed": "VM resume failed",
+        "provisionFailed": "VM setup failed"
+      },
+      "hint": {
+        "provisioning": "The VM is being created.",
+        "suspended": "Asleep to save cost. Opening the workspace wakes it.",
+        "waking": "Resuming the VM and reconnecting.",
+        "resumeFailed": "The VM could not be resumed. Right-click and choose Resume VM to retry.",
+        "provisionFailed": "The VM was not created, or creation was interrupted. Open Settings to destroy or remove it."
+      },
+      "suspendFailed": "Failed to suspend VM workspace"
     }
   },
   "tabHoverCard": {
@@ -23762,7 +24186,8 @@
       "newAgentTab": "New {{agent}} tab",
       "tabNewBrowserSplitRight": "New browser tab in right split",
       "viewPlugins": "Open Plugins",
-      "sidebarProjectsToggleCollapse": "Collapse / Expand All Projects"
+      "sidebarProjectsToggleCollapse": "Collapse / Expand All Projects",
+      "cloudWorkspaceCopyLink": "Copy Cloud Workspace Link"
     },
     "group": {
       "global": "Global",
@@ -23954,7 +24379,12 @@
       "error": "Needs attention",
       "repair": "Re-pair needed",
       "update": "Update needed",
-      "serverReplaced": "Different server"
+      "serverReplaced": "Different server",
+      "resumeFailed": "Resume failed",
+      "setupFailed": "Setup failed",
+      "provisioning": "Provisioning",
+      "suspended": "Suspended",
+      "waking": "Waking"
     },
     "compat": {
       "compatible": "Runtime client and server are compatible.",
@@ -24751,5 +25181,15 @@
     "starting": "{{agent}}: starting sign-in…",
     "title": "Agent sign-in",
     "otherAccount": "{{agent}} signed in as {{email}}."
+  },
+  "cloudShare": {
+    "openFailed": {
+      "title": "Couldn’t open the shared preview",
+      "notInTeam": "You’re not on the team this preview is shared with. Ask the owner for access or a public link.",
+      "signIn": "Sign in to Orca, then open the shared preview again.",
+      "ended": "That shared preview is no longer active.",
+      "unreachable": "Couldn’t reach Orca Cloud. Try again in a moment.",
+      "ok": "OK"
+    }
   }
 }

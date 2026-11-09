@@ -1,4 +1,9 @@
 import type {
+  RuntimePortForward,
+  RuntimePortForwardOpenRequest,
+  RuntimePortForwardOpenResult
+} from '../../shared/runtime-port-forwards'
+import type {
   AuthCallbackForwardRequest,
   AuthCallbackForwardResult
 } from '../../shared/auth-callback-forward'
@@ -103,6 +108,14 @@ export type RuntimeApi = {
     closeAuthCallbackForward?: (
       request: Pick<AuthCallbackForwardRequest, 'environmentId' | 'flowId'>
     ) => Promise<void>
+    // Absent in the web client, which cannot listen on this computer's loopback.
+    listPortForwards?: () => Promise<RuntimePortForward[]>
+    openPortForward?: (
+      request: RuntimePortForwardOpenRequest
+    ) => Promise<RuntimePortForwardOpenResult>
+    closePortForward?: (request: { id: string }) => Promise<RuntimePortForward | null>
+    wakePortForwardHost?: (request: { environmentId: string }) => Promise<boolean>
+    onPortForwardsChanged?: (callback: (forwards: RuntimePortForward[]) => void) => () => void
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     // Absent in the web client, whose catalog lives in the browser rather than a CLI-editable file.

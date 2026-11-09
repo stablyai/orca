@@ -41,6 +41,7 @@ export type UISliceContextual = {
     | 'confirm-non-git-folder'
     | 'confirm-remove-folder'
     | 'confirm-sleep-twin'
+    | 'confirm-cloud-ssh-include'
     | 'add-repo'
     | 'quick-open'
     | 'worktree-palette'

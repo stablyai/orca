@@ -72,6 +72,8 @@ export const CLI_COMMAND_NAMES = [
   'skills',
   'snapshot',
   'speech',
+  'ssh',
+  'ssh-proxy',
   'status',
   'storage',
   'tab',

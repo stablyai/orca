@@ -33,6 +33,10 @@ import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environm
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
 import { registerAuthCallbackForwardHandlers } from './auth-callback-forward'
+import {
+  RUNTIME_PORT_FORWARD_HANDLER_CHANNELS,
+  registerRuntimePortForwardHandlers
+} from './runtime-port-forward-handlers'
 import { registerOrcadRuntimeLifecycleHandlers } from './orcad-runtime-lifecycle-handlers'
 import { registerOrcadRuntimeConversionHandlers } from './orcad-runtime-conversion-handlers'
 import { registerOrcadDeltaMoveHandlers } from './orcad-delta-move-handlers'
@@ -152,6 +156,10 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   })
   registerRuntimeEnvironmentRecoveryHandler()
   registerAuthCallbackForwardHandlers(getUserDataPath)
+  for (const channel of RUNTIME_PORT_FORWARD_HANDLER_CHANNELS) {
+    ipcMain.removeHandler(channel)
+  }
+  registerRuntimePortForwardHandlers(getUserDataPath)
   registerRuntimeEnvironmentRepairHandler({
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport

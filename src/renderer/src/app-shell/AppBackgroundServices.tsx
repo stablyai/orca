@@ -4,6 +4,7 @@ import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
 import RetainedAgentsSyncGate from '../components/dashboard/RetainedAgentsSyncGate'
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
+import { RuntimePortAutoForwarder } from '../components/ports/RuntimePortAutoForwarder'
 import { SavedHostScopeWidenGate } from '../components/sidebar/worktree-list/listing/SavedHostScopeWidenGate'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
 import { RemoteHostBrowserControlNoticeHost } from '../components/browser-pane/remote-host-control/RemoteHostBrowserControlNoticeHost'
@@ -33,6 +34,7 @@ export function AppBackgroundServices(): React.JSX.Element {
     <>
       <NativeChatVisualGuestThemePublisher />
       <WorkspacePortScanner enabled={workspaceSessionReady} />
+      <RuntimePortAutoForwarder enabled={workspaceSessionReady} />
       <ActiveWorkspaceSyncGate />
       {/* Keep permission notices available across app surfaces. */}
       <MacosTccPromptNoticeHost />

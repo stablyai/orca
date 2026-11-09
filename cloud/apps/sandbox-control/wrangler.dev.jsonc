@@ -21,10 +21,13 @@
   ],
   // Same-account Workers cannot call each other over workers.dev (error 1042); BILLING_URL names the origin.
   "services": [{ "binding": "BILLING", "service": "orca-billing-dev" }],
-  "triggers": { "crons": ["*/5 * * * *"] },
+  // Every minute for routines (src/routines); the rest of the cron work runs on minute % 5 == 0.
+  "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "SANDBOX_ENV": "dev",
     "SANDBOX_POOL_SIZE": "2",
+    // The golden orcad tracks this branch (host RPCs ship there first); rebuilt when HEAD touches VM code.
+    "GOLDEN_IMAGE_SOURCE": "git:https://github.com/nwparker/orca-private#cloud/integration",
     "SANDBOX_JWT_AUDIENCE": "orca-sandbox",
     "SANDBOX_JWKS_URL": "https://login.onorca.dev/.well-known/jwks.json",
     "SANDBOX_AUTH_ISSUER": "https://login.onorca.dev",
@@ -35,6 +38,8 @@
     // Golden image from image/build-golden-image.ts; lifecycle routes answer 503 without one.
     "GOLDEN_SNAPSHOT_ID": "snap_vpcmcCAgTtISiTZgsCosOlThQbFd",
     "GITHUB_APP_SLUG": "orca-cloud-dev",
-    "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy"
+    "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy",
+    // Git as the sender is opt-in per org (see memberGitEnabled); dev: only the W4 rehearsal org.
+    "MEMBER_GIT_IDENTITY": "accounts:dev:org:w4org"
   }
 }
