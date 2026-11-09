@@ -14,7 +14,7 @@ import {
 
 const discoverRuntimeCommitMessageModels = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/runtime-git-generation-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
   discoverRuntimeCommitMessageModels
 }))
 
