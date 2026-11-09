@@ -57,6 +57,7 @@ export function useEmulatorControlStream(
   scrcpyDeviceId: string | null = null
 ): EmulatorControlStream {
   const wsRef = useRef<WebSocket | null>(null)
+  const lastTouchRef = useRef<ServeSimTouchFrame | null>(null)
   const keyboardTimerIdsRef = useRef<Set<number>>(new Set())
   const pressedKeyboardUsagesRef = useRef<Set<number>>(new Set())
   const [connected, setConnected] = useState(false)
@@ -162,6 +163,7 @@ export function useEmulatorControlStream(
       ws.onclose = () => {
         if (wsRef.current === ws) {
           wsRef.current = null
+          lastTouchRef.current = null
         }
         clearKeyboardTimers()
         setConnected(false)
@@ -176,11 +178,16 @@ export function useEmulatorControlStream(
     return () => {
       disposed = true
       clearReconnectTimer()
-      // Why: delayed HID frames may leave a modifier/key down if the tab closes
-      // before the matching up frame runs. Release held usages while the socket
-      // is still open, then cancel the remaining delayed queue.
+      // Interrupted HID input can stay pressed after disconnect, so release keys and touches first.
       cancelKeyboardFrames()
       const ws = wsRef.current
+      const touch = lastTouchRef.current
+      if (ws?.readyState === WebSocket.OPEN && touch) {
+        try {
+          ws.send(encodeServeSimTouchFrame({ ...touch, type: 'end' }))
+        } catch {}
+      }
+      lastTouchRef.current = null
       if (ws) {
         wsRef.current = null
         ws.close()
@@ -207,6 +214,7 @@ export function useEmulatorControlStream(
       }
       try {
         ws.send(encodeServeSimTouchFrame(touch))
+        lastTouchRef.current = touch.type === 'end' ? null : touch
         return true
       } catch {
         return false

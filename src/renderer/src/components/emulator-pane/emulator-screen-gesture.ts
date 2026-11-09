@@ -231,6 +231,37 @@ export function resolveEmulatorWheelDelta(
   }
 }
 
+export function resolveWheelGestureStep(
+  point: EmulatorScreenPoint,
+  delta: EmulatorScreenPoint
+): { start: EmulatorScreenPoint; end: EmulatorScreenPoint } | null {
+  if (Math.hypot(delta.x, delta.y) < 1e-9) {
+    return null
+  }
+  // iOS reserves screen edges for system gestures in every orientation.
+  const start = {
+    x: Math.max(0.12, Math.min(0.88, point.x)),
+    y: Math.max(0.12, Math.min(0.88, point.y))
+  }
+  for (const axis of ['x', 'y'] as const) {
+    if (start[axis] <= 0.12 && delta[axis] < 0) {
+      start[axis] = 0.88
+    } else if (start[axis] >= 0.88 && delta[axis] > 0) {
+      start[axis] = 0.12
+    }
+  }
+  const xFraction = delta.x === 0 ? Infinity : ((delta.x < 0 ? 0.12 : 0.88) - start.x) / delta.x
+  const yFraction = delta.y === 0 ? Infinity : ((delta.y < 0 ? 0.12 : 0.88) - start.y) / delta.y
+  const fraction = Math.min(1, xFraction, yFraction)
+  return {
+    start,
+    end: {
+      x: fraction === xFraction ? (delta.x < 0 ? 0.12 : 0.88) : start.x + delta.x * fraction,
+      y: fraction === yFraction ? (delta.y < 0 ? 0.12 : 0.88) : start.y + delta.y * fraction
+    }
+  }
+}
+
 export function buildWheelGesturePoints(
   start: EmulatorScreenPoint,
   end: EmulatorScreenPoint,
