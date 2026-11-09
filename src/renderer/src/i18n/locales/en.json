@@ -20194,6 +20194,8 @@
         "pasteFailed": "Paste failed.",
         "tooManySkills": "Your message was not sent to {{agent}}. Keep at most {{limit}} selected skill files and try again.",
         "commandAttachmentsUnsupported": "Remove attachments before using a chat-session command.",
+        "shellCommandAttachmentsUnsupported": "Remove attachments before running a ! command.",
+        "shellCommandFailed": "Could not start the ! command in a terminal.",
         "optionValueShort": {
           "minimal": "Min",
           "medium": "Med",
