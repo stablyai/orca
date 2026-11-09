@@ -88,6 +88,13 @@ export const panelRunning = defineFixture({
   render: () => <Panel state="running" value={entry(running)} />
 })
 
+/** After "Move to this computer": the cloud workspace stays usable, with a quiet "Moved" line. */
+export const panelMovedToComputer = defineFixture({
+  width: 300,
+  setup: () => window.localStorage.setItem('orca-cloud-moved-at:ws', String(Date.UTC(2026, 11, 8))),
+  render: () => <Panel state="running" value={entry(running)} />
+})
+
 export const panelUnresponsive = defineFixture({
   width: 300,
   render: () => (

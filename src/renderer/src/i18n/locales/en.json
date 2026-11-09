@@ -2181,21 +2181,6 @@
         "failedAnnouncement": "Couldn't forward :{{value0}}. {{value1}}",
         "busyInUseHere": "localhost:{{value0}} in use on this computer",
         "listenFailedRetry": "Couldn't listen on this computer. Retry or pick another port"
-      },
-      "orcaCloudTransfer": {
-        "failedDetail": "Your files are safe in the cloud workspace. Nothing was changed on this computer.",
-        "retry": "Try again",
-        "packing": "Packing the cloud workspace…",
-        "downloading": "Downloading…",
-        "importing": "Bringing the branch over…",
-        "creating": "Creating the local workspace…",
-        "applying": "Applying uncommitted changes and chats…",
-        "done": "Moved to this computer",
-        "failed": "Couldn’t move the workspace",
-        "leftovers": "Some changes did not apply cleanly; they were saved to {{dir}}.",
-        "summary_one": "Branch {{branch}} with your uncommitted changes and agent chats ({{count}}). The cloud workspace is unchanged.",
-        "summary_other": "Branch {{branch}} with your uncommitted changes and agent chats ({{count}}). The cloud workspace is unchanged.",
-        "waking": "Waking the workspace…"
       }
     },
     "hooks": {
@@ -25548,6 +25533,57 @@
     "idleSleptNoTime": "{{name}} went to sleep while idle",
     "idleSleptDetail": "Files and chats are saved. It uses no sandbox hours until you open it.",
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
-    "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle"
+    "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
+    "movedToComputer": "Moved to this computer",
+    "moveToComputer": "Move to this computer"
+  },
+  "orcaCloudMove": {
+    "step": {
+      "waking": "Waking",
+      "packing": "Packing",
+      "downloading": "Downloading",
+      "creating": "Creating workspace",
+      "applying": "Applying changes"
+    },
+    "confirm": {
+      "intro": "This creates a local workspace from {{name}}:",
+      "branch": "The branch and its commits",
+      "changes": "Uncommitted changes and untracked files",
+      "chats": "Claude and Codex chats, so agents can resume here",
+      "counts": "Sizes and counts are worked out during the move. The cloud workspace stays as it is.",
+      "branchTaken": "{{branch}} is already checked out on this computer",
+      "branchTakenDetail": "The moved branch gets a new name. Chats already on this computer are kept.",
+      "action": "Move to this computer"
+    },
+    "cancel": "Cancel",
+    "steps": "Steps",
+    "bytesOf": "{{done}} of {{total}}",
+    "elapsed": "{{elapsed}} elapsed",
+    "failed": "Couldn’t move the workspace",
+    "failedDetail": "Your files are safe in the cloud workspace. Nothing was changed on this computer.",
+    "retry": "Try again",
+    "close": "Close",
+    "done": {
+      "branch": "Branch {{branch}}",
+      "branchRenamed": "Branch {{branch}} (renamed from {{cloud}})",
+      "changes": "Uncommitted changes",
+      "untracked_one": "{{count}} untracked file",
+      "untracked_other": "{{count}} untracked files",
+      "chats_one": "{{count}} agent chat",
+      "chats_other": "{{count}} agent chats",
+      "cloudKept": "The cloud workspace is unchanged. Archive it if you no longer need it.",
+      "archive": "Archive cloud workspace",
+      "close": "Done"
+    },
+    "partial": "Some changes didn’t apply cleanly",
+    "partialDetail": "They were saved to a folder so nothing is lost. Your files are safe.",
+    "openFolder": "Open folder",
+    "title": {
+      "running": "Moving {{name}} to this computer",
+      "done": "Moved to this computer",
+      "failed": "Move didn’t finish",
+      "confirm": "Move to this computer"
+    },
+    "description": "Copy this cloud workspace to a local workspace."
   }
 }

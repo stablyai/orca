@@ -90,11 +90,20 @@ export function installHostedSandbox(): void {
   })
   const workspaces = installHostedWorkspaceService({
     userDataPath,
-    client,
+    // Every status read also carries the control plane's idle-sleep minutes.
+    client: {
+      ...client,
+      workspaceStatus: async (sandboxId, signal) => {
+        const answer = await client.workspaceStatus(sandboxId, signal)
+        if (answer.status.idleSleepMinutes) {
+          noteIdleSleepMinutes(answer.status.idleSleepMinutes)
+        }
+        return answer
+      }
+    },
     windows: () => BrowserWindow.getAllWindows(),
     syncSessions: () => void registry.sync(),
-    stopSession: (environmentId) => registry.stopEnvironment(environmentId),
-    onIdleSleepMinutes: noteIdleSleepMinutes
+    stopSession: (environmentId) => registry.stopEnvironment(environmentId)
   })
   setHostedWorkspaceService(workspaces)
   const disposeTransfer = installCloudTransferHandlers({

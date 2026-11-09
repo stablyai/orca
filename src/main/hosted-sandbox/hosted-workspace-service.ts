@@ -58,8 +58,6 @@ export function installHostedWorkspaceService(deps: {
   syncSessions: () => void
   /** Stop the lease scheduler of one environment (its session is about to be replaced). */
   stopSession: (environmentId: string) => void
-  /** The control plane's idle-sleep minutes, from any status read. */
-  onIdleSleepMinutes?: (minutes: number) => void
   log?: (line: string) => void
 }): HostedWorkspaceService {
   const log = deps.log ?? ((line: string) => console.error(line))
@@ -158,9 +156,6 @@ export function installHostedWorkspaceService(deps: {
         try {
           const { status } = await deps.client.workspaceStatus(found.sandboxId)
           oom.observe(runtime.workspaceId, found.sandboxId, status)
-          if (status.idleSleepMinutes) {
-            deps.onIdleSleepMinutes?.(status.idleSleepMinutes)
-          }
         } catch {
           // Status is advisory; the next beat retries.
         }
@@ -195,9 +190,6 @@ export function installHostedWorkspaceService(deps: {
     try {
       const { status } = await deps.client.workspaceStatus(found.sandboxId)
       oom.observe(args.workspaceId, found.sandboxId, status)
-      if (status.idleSleepMinutes) {
-        deps.onIdleSleepMinutes?.(status.idleSleepMinutes)
-      }
       return { ok: true, value: status }
     } catch (error) {
       return failure(error)

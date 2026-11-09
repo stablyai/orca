@@ -8,7 +8,8 @@ import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
-import { installOrcaCloudWorkspaceStore,
+import {
+  installOrcaCloudWorkspaceStore,
   noteCloudRolloverState
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import type { HostedSessionRestartResult } from '../../../shared/hosted-sandbox/hosted-session-events'

@@ -335,7 +335,13 @@ export function noteCloudRolloverState(
   if (state === 'restarting') {
     const startedAt = Date.now()
     rolloverStarts.set(workspaceId, startedAt)
-    noteCloudWakeProgress({ workspaceId, phase: 'waking', source: 'restart', startedAt, at: startedAt })
+    noteCloudWakeProgress({
+      workspaceId,
+      phase: 'waking',
+      source: 'restart',
+      startedAt,
+      at: startedAt
+    })
     return
   }
   const startedAt = rolloverStarts.get(workspaceId)
