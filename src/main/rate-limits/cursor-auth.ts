@@ -186,8 +186,9 @@ export async function readCursorAuthSession(
   const desktopRead = await readCursorDesktopProfile(desktopDbPath)
   if (desktopRead.status === 'ok' && desktopRead.profile.accessToken) {
     const desktopToken = await readCursorDesktopToken(desktopRead.profile.accessToken)
+    // The IDE is signed in but its token is unreadable; that beats expired-login guidance for a stale CLI token.
     if (desktopToken.status === 'error') {
-      errors.push(desktopToken.error)
+      return { status: 'error', error: desktopToken.error }
     }
     const session =
       desktopToken.status === 'ok'

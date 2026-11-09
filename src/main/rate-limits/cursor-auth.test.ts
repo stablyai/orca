@@ -262,6 +262,16 @@ describe('readCursorAuthSession with an encrypted Cursor IDE token', () => {
     })
   })
 
+  it('reports a denied Cursor Safe Storage read even when an expired CLI session exists', async () => {
+    keychainState.token = expiredJwt('auth0|user_stale')
+    keychainState.safeStorageError = new Error('User canceled the operation')
+    desktopState.result = desktopProfile(safeStorageEncrypt(jwt('github|user_ide'), 'cursor-key'))
+    expect(await readCursorAuthSession(options)).toEqual({
+      status: 'error',
+      error: 'Unable to read the Cursor IDE encryption key from the macOS Keychain'
+    })
+  })
+
   it('reports an undecryptable IDE token as an error', async () => {
     keychainState.safeStoragePassword = 'other-key'
     desktopState.result = desktopProfile(safeStorageEncrypt(jwt('github|user_ide'), 'cursor-key'))
