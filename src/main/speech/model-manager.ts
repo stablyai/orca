@@ -200,7 +200,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
       await rm(modelDir, { recursive: true, force: true })
       await rename(stagingDir, modelDir)
       this.updateState(modelId, 'ready')
-      if (getCatalogModel(modelId)) {
+      if (getCatalogModel(modelId)?.files?.some((file) => file.endsWith('.gguf'))) {
         downloadSileroVadInBackground(this)
       }
     } catch (err) {

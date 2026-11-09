@@ -219,7 +219,7 @@ export type DownloadableSpeechModelId = keyof typeof MODEL_DOWNLOAD_FILES
 /** What the model manager needs to download, verify and place one model's files. */
 export type SpeechModelDownload = Pick<
   SpeechModelManifest,
-  'id' | 'provider' | 'downloadFiles' | 'sizeBytes'
+  'id' | 'provider' | 'downloadFiles' | 'legacyDownloadFiles' | 'sizeBytes'
 >
 
 const SILERO_VAD_FILES = huggingFaceFiles(
