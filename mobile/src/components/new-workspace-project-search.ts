@@ -1,7 +1,10 @@
 import type { Repo } from '../../../src/shared/repo-types'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { getProjectIdentityKey } from '../../../src/shared/project-host-setup-projection'
-import { matchProjectHostQuery } from '../../../src/shared/project-host-query'
+import {
+  matchProjectHostQuery,
+  scoreProjectHostQuery
+} from '../../../src/shared/project-host-query'
 import type {
   NewWorkspaceProjectOption,
   NewWorkspaceRunTargetOption
@@ -25,7 +28,7 @@ export function searchNewWorkspaceProjectOptions<TRepo extends SearchRepo>(
   if (query.trim() === '') {
     return [...options]
   }
-  return options.flatMap((option) => {
+  const scored = options.flatMap((option) => {
     const hostRepos = uniqueHostRepos(repos, option.id)
     const hostLabels = hostRepos.map(hostLabelFor)
     const match = matchProjectHostQuery(query, {
@@ -37,16 +40,29 @@ export function searchNewWorkspaceProjectOptions<TRepo extends SearchRepo>(
       return []
     }
     if (!match.hostIndexes) {
-      return [option]
+      return [{ row: option, score: scoreProjectHostQuery(query, projectText(option)) }]
     }
     // Picking a host-narrowed row also picks that host, so the run target follows the query.
     return match.hostIndexes.map((index) => ({
-      ...option,
-      id: newWorkspaceProjectHostRowId(option.id, getRepoExecutionHostId(hostRepos[index])),
-      detail: hostLabels[index],
-      repo: hostRepos[index]
+      row: {
+        ...option,
+        id: newWorkspaceProjectHostRowId(option.id, getRepoExecutionHostId(hostRepos[index])),
+        detail: hostLabels[index],
+        repo: hostRepos[index]
+      },
+      score: scoreProjectHostQuery(query, projectText(option), hostLabels[index])
     }))
   })
+  return byScore(scored)
+}
+
+function projectText(option: { label: string; detail?: string }) {
+  return { name: option.label, detail: option.detail }
+}
+
+// Array sort is stable, so equal scores keep the list's own order.
+function byScore<T>(scored: readonly { row: T; score: number }[]): T[] {
+  return [...scored].sort((a, b) => b.score - a.score).map(({ row }) => row)
 }
 
 export function searchNewWorkspaceRunTargetOptions<TRepo extends SearchRepo>(
@@ -90,7 +106,7 @@ export function quickPickNewWorkspaceTargets<TRepo extends SearchRepo>(
   hostId: string | null,
   limit: number
 ): NewWorkspaceQuickPick<TRepo>[] {
-  const picks: NewWorkspaceQuickPick<TRepo>[] = []
+  const picks: { row: NewWorkspaceQuickPick<TRepo>; score: number }[] = []
   for (const option of options) {
     const hostRepos = uniqueHostRepos(repos, option.id)
     const hostLabels = hostRepos.map(hostLabelFor)
@@ -108,15 +124,18 @@ export function quickPickNewWorkspaceTargets<TRepo extends SearchRepo>(
       const repoHostId = getRepoExecutionHostId(repo)
       if (hostId === null || repoHostId === hostId) {
         picks.push({
-          id: newWorkspaceProjectHostRowId(option.id, repoHostId),
-          label: option.label,
-          hostLabel: hostLabels[index],
-          repo
+          row: {
+            id: newWorkspaceProjectHostRowId(option.id, repoHostId),
+            label: option.label,
+            hostLabel: hostLabels[index],
+            repo
+          },
+          score: scoreProjectHostQuery(query, projectText(option), hostLabels[index])
         })
       }
     }
   }
-  return picks.slice(0, limit)
+  return byScore(picks).slice(0, limit)
 }
 
 /** The hosts any project is set up on, in first-seen order, for quick host filters. */

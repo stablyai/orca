@@ -12,6 +12,33 @@ function includes(text: string | undefined, needle: string): boolean {
   return text !== undefined && text.toLowerCase().includes(needle)
 }
 
+/**
+ * How well a matched row fits the query, higher first: each word scores where it lands, so the
+ * project "linux" outranks a project that only matched through the host "Local Linux".
+ */
+export function scoreProjectHostQuery(
+  rawQuery: string,
+  target: Pick<ProjectHostQueryTarget, 'name' | 'detail'>,
+  hostLabel?: string
+): number {
+  const query = rawQuery.trim().toLowerCase()
+  const name = target.name.toLowerCase()
+  const wordScore = (word: string): number =>
+    name === word
+      ? 100
+      : name.startsWith(word)
+        ? 80
+        : name.includes(word)
+          ? 60
+          : includes(target.detail, word)
+            ? 30
+            : includes(hostLabel, word)
+              ? 10
+              : 0
+  const words = query.split(/\s+/).filter(Boolean)
+  return words.reduce((sum, word) => sum + wordScore(word), name === query ? 50 : 0)
+}
+
 // "build orca" for detail "build/orca": "build" also names a host, and "orca" alone still finds the project.
 function projectWordsNamingHosts(
   words: readonly string[],

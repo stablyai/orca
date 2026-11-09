@@ -34,6 +34,20 @@ describe('searchNewWorkspaceProjectOptions', () => {
     expect(only).toMatchObject({ label: 'orca', detail: 'build-box' })
     expect(getRepoExecutionHostId(only.repo)).toBe(getRepoExecutionHostId(repos[1]))
   })
+
+  it('ranks a project named like the query above projects that match only through the host', () => {
+    const linuxRepos = [
+      { id: 'api', displayName: 'api', path: '/src/api' },
+      { id: 'kernel', displayName: 'linux', path: '/src/linux' }
+    ]
+    const result = searchNewWorkspaceProjectOptions(
+      buildNewWorkspaceProjectOptions(linuxRepos),
+      linuxRepos,
+      'linux',
+      () => 'Local Linux'
+    )
+    expect(result.map((option) => option.label)).toEqual(['linux', 'api'])
+  })
 })
 
 describe('quickPickNewWorkspaceTargets', () => {
