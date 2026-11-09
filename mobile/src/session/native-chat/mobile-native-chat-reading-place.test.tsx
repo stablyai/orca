@@ -24,6 +24,7 @@ import {
   type MobileNativeChatRowKeys
 } from './transcript/mobile-native-chat-row-keys'
 import { mobileNativeChatRowId } from '../mobile-native-chat-reading-place'
+import type { MobileNativeChatListHandle } from './transcript/use-mobile-native-chat-tail-follow'
 import { MobileNativeChatPageList } from './transcript/MobileNativeChatPageList'
 import { ToolRun } from './transcript/MobileNativeChatToolRun'
 import { useMobileNativeChatTurnDisclosure } from './transcript/use-mobile-native-chat-turn-disclosure'
@@ -263,6 +264,7 @@ function Row({
 }
 
 let shownKeys!: MobileNativeChatRowKeys
+let listHandle: MobileNativeChatListHandle | null = null
 
 function Chat(props: {
   messages: NativeChatMessage[]
@@ -285,7 +287,9 @@ function Chat(props: {
   const keys = useMobileNativeChatRowKeys(folded, props.messages, 'chat', turns.presentation)
   shownKeys = keys
   return h(MobileNativeChatPageList, {
-    ref: null,
+    ref: (handle) => {
+      listHandle = handle
+    },
     rows: turns.listMessages,
     rowKeys: keys,
     runs: turns.presentation.workRuns.heads,
@@ -649,4 +653,36 @@ it('a roster keeps its key when the fold moves it, and the rows the reader saw a
   expect(chat0.show(all.slice(13))).toBeLessThanOrEqual(1)
   expect(tops(['mid0', 'mid5'])).toEqual(after)
   expect(chat0.drawn(mobileNativeChatRowId('s2'))).toBe(1)
+})
+
+it('draws an older prompt and keeps it at the top while the answer grows', () => {
+  const prompt = say('prompt', 'user', 'go')
+  const answers = Array.from({ length: 40 }, (_, i) => ({
+    ...say(`answer${i}`, 'assistant', 'reply'),
+    blocks: Array.from({ length: 4 }, () => ({ type: 'text' as const, text: 'reply' }))
+  }))
+  const chat0 = mount([prompt, ...answers], { following: false, live: true })
+  const row = mobileNativeChatRowId('prompt')
+  expect(chat0.drawn(row)).toBe(0)
+  let moved: boolean | undefined
+  act(() => {
+    moved = listHandle?.scrollToRow?.('prompt')
+  })
+  expect(moved).toBe(false)
+  expect(chat0.drawn(row)).toBe(1)
+  act(() => {
+    moved = listHandle?.scrollToRow?.('prompt')
+  })
+  expect(moved).toBe(true)
+  expect(chat0.scroller.top(row)).toBe(0)
+  chat0.show([
+    prompt,
+    ...answers.slice(0, -1),
+    {
+      ...say('answer39', 'assistant', 'reply'),
+      blocks: Array.from({ length: 24 }, () => ({ type: 'text' as const, text: 'reply' }))
+    }
+  ])
+  chat0.rest()
+  expect(chat0.scroller.top(row)).toBe(0)
 })

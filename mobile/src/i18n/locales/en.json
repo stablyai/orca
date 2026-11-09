@@ -2026,6 +2026,7 @@
       "collapse": "Collapse"
     },
     "nativeChatFloatingControls": {
+      "scrollToPrompt": "Scroll to prompt",
       "scrollToLatest": "Scroll to latest"
     },
     "nativeChatFullContent": {

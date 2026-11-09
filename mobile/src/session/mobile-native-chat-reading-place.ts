@@ -107,6 +107,14 @@ function drawnRows(scroller: MobileNativeChatScrollNode): Sibling[] {
   return rows
 }
 
+export function mobileNativeChatDrawnRow(scroller: MobileNativeChatScrollNode, key: string) {
+  return drawnRows(scroller).find((row) => rowIdOf(row) === key)
+}
+
+export function mobileNativeChatRowBox(scroller: MobileNativeChatScrollNode) {
+  return scroller.querySelector(`[${ROWS}]`)
+}
+
 // Binary-search ordered row bottoms to avoid measuring thousands of offscreen rows.
 function firstRowEndingBelow(rows: readonly Tagged[], y: number): number {
   let low = 0

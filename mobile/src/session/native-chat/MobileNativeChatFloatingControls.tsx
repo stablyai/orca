@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Animated, Easing, Platform, Pressable, View } from 'react-native'
-import { ArrowDown } from 'lucide-react-native'
+import { ArrowDown, CornerLeftUp } from 'lucide-react-native'
 import { SHEET_CURVE } from '../../components/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
 import { colors, feedback } from '../../theme/mobile-theme'
@@ -11,14 +11,24 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 const JUMP_EASING = Easing.bezier(...SHEET_CURVE)
 
 export function MobileNativeChatFloatingControls({
-  showJumpToTail,
-  onJumpToTail
+  mode,
+  onPress
 }: {
-  showJumpToTail: boolean
-  onJumpToTail: () => void
+  mode: 'latest' | 'prompt' | null
+  onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const showJumpToTail = mode !== null
+  const [lastMode, setLastMode] = useState(mode)
+  if (mode !== null && mode !== lastMode) {
+    setLastMode(mode)
+  }
+  const label =
+    lastMode === 'prompt'
+      ? t('session.nativeChatFloatingControls.scrollToPrompt', 'Scroll to prompt')
+      : t('session.nativeChatFloatingControls.scrollToLatest', 'Scroll to latest')
+  const Icon = lastMode === 'prompt' ? CornerLeftUp : ArrowDown
   const reducedMotion = useReducedMotionEnabled() === true
   const shown = useRef(new Animated.Value(showJumpToTail ? 1 : 0)).current
   // Stays mounted so a scroll that flips it mid-fade turns the fade around instead of popping.
@@ -42,17 +52,13 @@ export function MobileNativeChatFloatingControls({
         style={{ opacity: shown, transform: [{ scale }] }}
       >
         <Pressable
-          accessibilityLabel={
-            showJumpToTail
-              ? t('session.nativeChatFloatingControls.scrollToLatest', 'Scroll to latest')
-              : undefined
-          }
+          accessibilityLabel={showJumpToTail ? label : undefined}
           disabled={!showJumpToTail}
           focusable={showJumpToTail}
           style={({ pressed }) => [styles.fab, pressed && { opacity: feedback.pressedOpacity }]}
-          onPress={onJumpToTail}
+          onPress={onPress}
         >
-          <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
+          <Icon size={18} color={colors.textPrimary} strokeWidth={2.2} />
         </Pressable>
       </Animated.View>
     </View>
