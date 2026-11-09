@@ -1,5 +1,8 @@
 import { SparsePresetValidationError } from '../../../shared/worktree/sparse-preset-failure'
-import { normalizeSparseDirectories } from '../sparse-checkout-directories'
+import {
+  InvalidSparseDirectoryError,
+  normalizeSparseDirectories
+} from '../sparse-checkout-directories'
 
 export function normalizeSparsePresetName(name: string): string {
   const trimmed = name.trim()
@@ -17,10 +20,7 @@ export function normalizeSparsePresetDirectories(directories: string[]): string[
   try {
     normalized = normalizeSparseDirectories(directories)
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === 'Sparse checkout directories must be repo-relative paths.'
-    ) {
+    if (error instanceof InvalidSparseDirectoryError) {
       throw new SparsePresetValidationError('directories_invalid')
     }
     throw error
