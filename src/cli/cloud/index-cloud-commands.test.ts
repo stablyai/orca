@@ -26,7 +26,7 @@ import { main } from '../index'
 let home: string
 let out: string[]
 let err: string[]
-const fetchMock = vi.fn()
+const fetchMock = vi.fn<typeof fetch>()
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-cloud-main-'))
@@ -34,10 +34,10 @@ beforeEach(() => {
   err = []
   vi.spyOn(console, 'log').mockImplementation((line: unknown) => void out.push(String(line)))
   vi.spyOn(console, 'error').mockImplementation((line: unknown) => void err.push(String(line)))
-  vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: unknown) => {
+  vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
     out.push(String(chunk))
     return true
-  }) as typeof process.stdout.write)
+  })
   vi.stubEnv('ORCA_CLOUD_CREDENTIALS_FILE', join(home, 'credentials.json'))
   vi.stubEnv('ORCA_CLOUD_TOKEN', 'orca_ws_test')
   vi.stubEnv('ORCA_CLOUD_API_URL', 'https://cloud.test')
@@ -65,9 +65,9 @@ describe('orca cloud via main()', () => {
     )
     await main(['cloud', 'workspace', 'create', '--name', 'child', '--json'], home)
     expect(process.exitCode).toBeUndefined()
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [url, init] = fetchMock.mock.calls[0] ?? []
     expect(url).toBe('https://cloud.test/v1/workspaces')
-    expect(JSON.parse(String(init.body))).toEqual({ name: 'child' })
+    expect(JSON.parse(String(init?.body))).toEqual({ name: 'child' })
     expect(JSON.parse(out.join(''))).toMatchObject({
       ok: true,
       schemaVersion: 1,
@@ -87,9 +87,9 @@ describe('orca cloud via main()', () => {
       ['cloud', 'message', 'sbx_c1', '--text', 'hello', '--agent', 'codex', '--json'],
       home
     )
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [url, init] = fetchMock.mock.calls[0] ?? []
     expect(url).toBe('https://cloud.test/v1/workspaces/sbx_c1/messages')
-    expect(JSON.parse(String(init.body))).toEqual({ text: 'hello', agent: 'codex' })
+    expect(JSON.parse(String(init?.body))).toEqual({ text: 'hello', agent: 'codex' })
 
     fetchMock.mockResolvedValue(Response.json({ workspaceStatus: 'running', sessions: [] }))
     await main(['cloud', 'sessions', 'sbx_c1', '--json'], home)

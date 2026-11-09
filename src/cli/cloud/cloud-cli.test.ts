@@ -120,7 +120,7 @@ function ctx(flags: Record<string, string | boolean>, json = true): HandlerConte
     },
     cwd: home,
     json
-  } as HandlerContext
+  }
 }
 
 function lastJson(): { ok: boolean; schemaVersion: number; result: Record<string, unknown> } {
