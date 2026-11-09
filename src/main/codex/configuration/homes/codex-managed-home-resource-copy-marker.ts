@@ -33,7 +33,10 @@ function parseCopiedResourceSourcePath(text: string): string | null {
   }
 }
 
-function readCopiedResourceSourcePath(managedHomePath: string, entryName: string): string | null {
+export function readCopiedResourceSourcePath(
+  managedHomePath: string,
+  entryName: string
+): string | null {
   try {
     return parseCopiedResourceSourcePath(
       readFileSync(getResourceCopyMarkerPath(managedHomePath, entryName), 'utf-8')
