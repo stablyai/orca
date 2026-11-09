@@ -540,6 +540,13 @@
       "description": "수동 저장 및 자동 저장 전에 텍스트를 포맷합니다. 설정 > 프로젝트에서 포맷터 명령을 설정하세요. 기본적으로 꺼져 있습니다.",
       "keywords": "포맷터 저장 시 포맷 prettier biome gofmt"
     },
+    "editorKeybindings": {
+      "title": "에디터 키 바인딩",
+      "description": "코드 에디터에서 표준 편집 대신 Emacs 키 바인딩을 사용합니다.",
+      "keywords": "에디터 키 바인딩 키맵 emacs",
+      "default": "기본값",
+      "emacs": "Emacs"
+    },
     "editorInsertFinalNewline": {
       "title": "마지막 줄바꿈 삽입",
       "description": "비어 있지 않은 코드 파일을 저장할 때 끝에 줄바꿈이 없으면 추가합니다. 기본적으로 꺼져 있습니다.",

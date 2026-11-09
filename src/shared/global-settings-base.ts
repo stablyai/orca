@@ -8,6 +8,7 @@ import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settin
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
 import type { NativeChatIdleStopSettings } from './native-chat/native-chat-idle-stop'
+import type { EditorKeybindingsSettings } from './editor-keybindings-preset'
 import type { EditorTypographySettings } from './editor-typography-settings-types'
 import type { PluginAppearanceSettings } from './plugin-appearance-settings-types'
 import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/plugin-file-type'
@@ -39,6 +40,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &
   EditorTypographySettings &
+  EditorKeybindingsSettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &

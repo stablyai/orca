@@ -17,6 +17,7 @@ import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
 import { MarkdownDefaultViewSetting } from './MarkdownDefaultViewSetting'
 import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
+import { EditorKeybindingsSetting } from './EditorKeybindingsSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorFormatOnSaveSetting } from './EditorFormatOnSaveSetting'
 import { EditorInsertFinalNewlineSetting } from './EditorInsertFinalNewlineSetting'
@@ -236,6 +237,7 @@ export function GeneralEditorSettingsSection({
       <EditorTypographySettings settings={settings} updateSettings={updateSettings} />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
+      <EditorKeybindingsSetting settings={settings} updateSettings={updateSettings} />
 
       <DiffShowWhitespaceSetting settings={settings} updateSettings={updateSettings} />
 
