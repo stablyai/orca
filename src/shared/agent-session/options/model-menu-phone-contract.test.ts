@@ -11,6 +11,12 @@ import {
 import { structuredAgentSessionShownSnapshot } from './structured-agent-session-option-view'
 import { modelMenuOptions } from './model-menu-options'
 
+import {
+  selectHostModelCatalogSnapshot,
+  withHostModelCatalogAnswer,
+  type HostModelCatalogSnapshot
+} from './host-model-catalog-snapshot-rules'
+
 const seed = structuredAgentSessionSeedCatalog('codex')!
 const listed: AgentSessionModelCatalogResult = {
   origin: 'probe',
@@ -138,5 +144,34 @@ it('keeps the phone reader session-options source when the old host catalog meth
     )
   } finally {
     detach()
+  }
+})
+
+it('retains complete account answers through the phone cache writer and seed selector', () => {
+  let snapshot: HostModelCatalogSnapshot | undefined
+  for (const answer of [
+    { origin: 'probe', fetchedAt: 2, models: [] },
+    { origin: 'unknown' },
+    { ...listed, listingNamesConfiguredModel: false }
+  ] satisfies AgentSessionModelCatalogResult[]) {
+    snapshot = withHostModelCatalogAnswer(snapshot, null, answer)
+    expect(snapshot?.account).toEqual(answer)
+    expect(snapshot?.byWorktree.size).toBe(0)
+    for (const progress of [
+      { origin: 'unknown', listingInProgress: true },
+      { origin: 'probe', fetchedAt: 3, models: [], listingInProgress: true }
+    ] satisfies AgentSessionModelCatalogResult[]) {
+      expect(withHostModelCatalogAnswer(snapshot, null, progress)).toBe(snapshot)
+    }
+    const retained = selectHostModelCatalogSnapshot(snapshot, {
+      newLaunch: true,
+      seedsModel: false
+    })
+    expect(retained).toEqual(answer)
+    const menu = modelMenuOptions(retained, { ...input, seedsModel: false })
+    expect(menu.status).toBe(answer.origin === 'unknown' ? 'builtin' : 'listed')
+    if (answer.origin !== 'unknown') {
+      expect(menu.rows.map(({ id }) => id)).toEqual(answer.models.length ? ['gpt-5.6-sol'] : [])
+    }
   }
 })

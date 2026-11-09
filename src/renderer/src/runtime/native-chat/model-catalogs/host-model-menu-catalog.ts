@@ -44,7 +44,7 @@ class HostModelMenuCatalog {
     return readHostModelCatalogSnapshot(this.scope.target, this.scope.agent, {
       newLaunch: true,
       seedsModel: true,
-      worktree: this.scope.worktree
+      worktree: this.scope.worktree ?? null
     })
   }
   publish(value: Omit<HostModelMenuSnapshot, 'generation'>) {
@@ -119,11 +119,15 @@ class HostModelMenuCatalog {
         if (!current()) {
           return this.pending !== operation ? this.pending : undefined
         }
-        const shown = answer ?? retained(this.snapshot.answer)
-        this.publish({ answer: shown, pending: false, attempted: true })
         if (answer) {
           recordHostModelCatalogSnapshot(target, agent, worktree ?? null, answer)
         }
+        const shown = answer?.listingInProgress
+          ? (this.held() ?? answer)
+          : answer
+            ? this.held()
+            : retained(this.snapshot.answer)
+        this.publish({ answer: shown, pending: false, attempted: true })
         return shown
       })
       .finally(() => {

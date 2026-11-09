@@ -10,13 +10,17 @@ type ListedHostModelCatalog = Exclude<AgentSessionModelCatalogResult, { origin: 
 /** One host's answers for one agent. */
 export type HostModelCatalogSnapshot = {
   /** A session-less read's answer: the account a new chat would pin, with no workspace named. */
-  readonly account: ListedHostModelCatalog | null
+  readonly account: AgentSessionModelCatalogResult | null
   /** A new chat's answer per worktree (`''` when it named none): only it says whether that
    *  workspace's own config replaces the listed default. */
   readonly byWorktree: ReadonlyMap<string, AgentSessionModelCatalogResult>
 }
 
-export type HostModelCatalogLaunch = { newLaunch: boolean; worktree?: string; seedsModel: boolean }
+export type HostModelCatalogLaunch = {
+  newLaunch: boolean
+  worktree?: string | null
+  seedsModel: boolean
+}
 
 function withoutNamedDefault(catalog: ListedHostModelCatalog): ListedHostModelCatalog {
   return {
@@ -31,6 +35,7 @@ export function withoutUnprovenNewLaunchDefault(
   catalog: AgentSessionModelCatalogResult
 ): AgentSessionModelCatalogResult {
   return catalog.origin === 'unknown' ||
+    catalog.models.length === 0 ||
     catalog.listingNamesConfiguredModel === false ||
     catalog.defaultHoldsInEveryWorkspace === true
     ? catalog
@@ -45,7 +50,11 @@ export function selectHostModelCatalogSnapshot(
   if (!snapshot) {
     return undefined
   }
-  const exact = snapshot.byWorktree.get(launch.worktree ?? '')
+  if (launch.worktree === null && snapshot.account) {
+    return launch.newLaunch ? withoutUnprovenNewLaunchDefault(snapshot.account) : snapshot.account
+  }
+  const exact =
+    launch.worktree === null ? undefined : snapshot.byWorktree.get(launch.worktree ?? '')
   if (exact) {
     return exact
   }
@@ -58,10 +67,12 @@ export function selectHostModelCatalogSnapshot(
       }
     }
   }
-  if (!listed || listed.modelsDifferByWorkspace) {
+  if (!listed || (listed.origin !== 'unknown' && listed.modelsDifferByWorkspace)) {
     return undefined
   }
   if (
+    listed.origin === 'unknown' ||
+    listed.models.length === 0 ||
     !launch.newLaunch ||
     listed.listingNamesConfiguredModel === false ||
     listed.defaultHoldsInEveryWorkspace === true
@@ -89,19 +100,16 @@ export function withHostModelCatalogAnswer(
       return snapshot
     }
   }
+  if (worktree === null) {
+    // A completed account observation supersedes every answer from the previous snapshot.
+    return { account: catalog, byWorktree: new Map() }
+  }
   if (!listed) {
-    if (worktree === null) {
-      return undefined
-    }
     const retired = snapshot?.byWorktree.get(worktree)
     return {
       account: retired && snapshot?.account === retired ? null : (snapshot?.account ?? null),
       byWorktree: new Map(snapshot?.byWorktree).set(worktree, catalog)
     }
-  }
-  if (worktree === null) {
-    // A newer account-level list supersedes per-workspace answers made from an older one.
-    return { account: catalog, byWorktree: new Map() }
   }
   const byWorktree = new Map(snapshot?.byWorktree).set(worktree, catalog)
   // A default no workspace can replace is every new chat's, wherever it runs.

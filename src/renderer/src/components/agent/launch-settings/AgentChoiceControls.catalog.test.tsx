@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, renderHook, render, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { useState } from 'react'
@@ -36,7 +36,10 @@ vi.mock('./AgentChoiceMenu', () => ({
 }))
 import { AgentChoiceControls } from './AgentChoiceControls'
 import { useAgentModelMenu } from './use-agent-model-menu'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import {
+  recordHostModelCatalogSnapshot,
+  resetHostModelCatalogSnapshotsForTests
+} from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { modelMenuOptions } from '../../../../../shared/agent-session/options/model-menu-options'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../../shared/agent-session/options/agent-session-option-catalog'
 const source = {
@@ -212,3 +215,81 @@ it('shows fallback only after an eligible settled read fails, never before deman
   view.rerender(<Editor applicable={false} />)
   expect(screen.queryByRole('note')).toBeNull()
 })
+
+it.each(['live', 'empty', 'saved-empty'] as const)(
+  'keeps successful account %s visible in Settings after self and sibling notifications',
+  async (kind) => {
+    const saved =
+      kind === 'saved-empty' ? { model: 'old-only', options: { effort: 'ultra' } } : undefined
+    const change = vi.fn()
+    mocks.call.mockResolvedValueOnce({
+      origin: 'probe',
+      fetchedAt: 3,
+      modelsDifferByWorkspace: true,
+      listingNamesConfiguredModel: true,
+      models:
+        kind === 'live'
+          ? [
+              {
+                id: 'gpt-6.1-sol',
+                label: 'GPT-6.1 Sol',
+                isDefault: true,
+                efforts: [
+                  { value: 'high', label: 'High' },
+                  { value: 'ultra', label: 'Ultra' }
+                ],
+                defaultEffort: 'high'
+              }
+            ]
+          : []
+    })
+    const hook = renderHook(() => useAgentModelMenu('codex', saved, source, true))
+    await waitFor(() => expect(hook.result.current.status).toBe('listed'))
+    expect(hook.result.current.fallbackAfterFailure).toBe(false)
+    expect(hook.result.current.rows.map(({ id }) => id)).toEqual(
+      kind === 'live' ? ['gpt-6.1-sol'] : []
+    )
+    for (const worktree of ['id:other', '']) {
+      act(() =>
+        recordHostModelCatalogSnapshot(source.scope.target, 'codex', worktree, {
+          origin: 'probe',
+          fetchedAt: 4,
+          modelsDifferByWorkspace: true,
+          models: [{ id: 'other', label: 'Other', isDefault: false, efforts: [] }]
+        })
+      )
+    }
+    expect(hook.result.current.status).toBe('listed')
+    expect(hook.result.current.fallbackAfterFailure).toBe(false)
+    expect(hook.result.current.rows.map(({ id }) => id)).toEqual(
+      kind === 'live' ? ['gpt-6.1-sol'] : []
+    )
+    render(
+      <AgentChoiceControls
+        agent="codex"
+        value={saved}
+        modelMenu={hook.result.current}
+        onChange={change}
+      />
+    )
+    const model = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement
+    expect([...model.options].map(({ value }) => value)).toEqual([
+      '__agent_default__',
+      ...(kind === 'live' ? ['gpt-6.1-sol'] : saved ? ['old-only'] : [])
+    ])
+    expect(model.value).toBe(saved ? 'old-only' : '__agent_default__')
+    expect(screen.queryByRole('note')).toBeNull()
+    if (saved) {
+      const effort = screen.getByRole('combobox', { name: 'Reasoning effort' }) as HTMLSelectElement
+      expect(effort.value).toBe('ultra')
+      expect(effort.disabled).toBe(true)
+      expect(hook.result.current.descriptors.find(({ id }) => id === 'effort')).toMatchObject({
+        settable: false,
+        kind: { currentValue: 'ultra' }
+      })
+      expect(saved).toEqual({ model: 'old-only', options: { effort: 'ultra' } })
+    }
+    expect(change).not.toHaveBeenCalled()
+    hook.unmount()
+  }
+)

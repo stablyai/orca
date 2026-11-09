@@ -84,7 +84,7 @@ export function recordHostModelCatalogSnapshot(
       previous?.byWorktree.size === next?.byWorktree.size &&
       (worktree === null ||
         same(previous?.byWorktree.get(worktree), next?.byWorktree.get(worktree))))
-  if (unchanged && catalog.origin !== 'unknown' && catalog.models.length > 0) {
+  if (unchanged) {
     return
   }
   if (next) {
