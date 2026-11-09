@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { SIDEBAR_RAIL_WIDTH } from '../components/sidebar/rail/sidebar-rail-geometry'
 import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
@@ -19,6 +20,8 @@ export type AppChromeLayout = ReturnType<typeof useAppChromeLayout>
 export function useAppChromeLayout() {
   const activeView = useAppStore((s) => s.activeView)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarRail = useAppStore((s) => s.sidebarRail)
+  const sidebarExpanded = sidebarOpen && !sidebarRail
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -68,19 +71,19 @@ export function useAppChromeLayout() {
     activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
   // Tasks/Landing keep sidebar-width chrome when open; creation suppresses stacked chrome.
   const stackedSidebarOpen =
-    !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
+    !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarExpanded
   // Creation retains sidebar chrome; workspaceChromeActive gates the workspace tabs.
   const leftTitlebarChromeLayout = resolveLeftTitlebarChromeLayout({
     workspaceChromeActive,
     stackedSidebarOpen,
     creationLayoutActive,
-    sidebarOpen
+    sidebarOpen: sidebarExpanded
   })
 
   // Fit terminals before paint in the width-change frame to avoid transient wrong sizes.
   useLayoutEffect(() => {
     window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
-  }, [sidebarOpen, rightSidebarOpen])
+  }, [sidebarOpen, sidebarRail, rightSidebarOpen])
 
   const titlebarLeftControlsRef = useRef<HTMLDivElement | null>(null)
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
@@ -105,14 +108,18 @@ export function useAppChromeLayout() {
     settings?.showTitlebarAppName,
     showSidebar,
     leftTitlebarChromeLayout.isFloating,
-    sidebarOpen
+    sidebarOpen,
+    sidebarRail
   ])
 
   return {
     activeView,
     activePendingCreationId,
     activeTabCanExpand,
-    collapsedSidebarHeaderWidth,
+    collapsedSidebarHeaderWidth:
+      sidebarOpen && sidebarRail
+        ? Math.max(0, collapsedSidebarHeaderWidth - SIDEBAR_RAIL_WIDTH)
+        : collapsedSidebarHeaderWidth,
     creationLayoutActive,
     hasActiveWorktree,
     isFullScreen,
@@ -127,7 +134,9 @@ export function useAppChromeLayout() {
     showRightSidebarControls: canShowRightSidebarForView(activeView),
     showTitlebarAppName: settings?.showTitlebarAppName !== false,
     showTitlebarExpandButton: workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded,
+    sidebarExpanded,
     sidebarOpen,
+    sidebarRail: sidebarOpen && sidebarRail,
     stackedSidebarOpen,
     // Retained workbench panes need a separate visibility condition.
     terminalWorkbenchVisible: workspaceChromeActive,

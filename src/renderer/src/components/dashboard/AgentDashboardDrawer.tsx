@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { selectRenderedSidebarWidth } from '../sidebar/rail/sidebar-rail-geometry'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
@@ -98,7 +99,7 @@ export function AgentDashboardDrawer({
   const open = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
-  const sidebarWidth = useAppStore((s) => s.sidebarWidth)
+  const sidebarWidth = useAppStore(selectRenderedSidebarWidth)
   const [menuOpen, setMenuOpen] = useState(false)
   const boardRef = useRef<HTMLDivElement | null>(null)
   const focusReturnRef = useRef<{ opener: HTMLElement | null; handoff: boolean }>({

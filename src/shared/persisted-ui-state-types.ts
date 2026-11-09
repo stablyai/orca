@@ -43,6 +43,7 @@ export type PersistedUIState = {
   activeView: TopLevelView
   sidebarWidth: number
   sidebarOpen?: boolean
+  sidebarRail?: boolean
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView

@@ -24,9 +24,11 @@ export function createUiAgentActions(
   UISlice,
   | 'sidebarOpen'
   | 'sidebarWidth'
+  | 'sidebarRail'
   | 'toggleSidebar'
   | 'setSidebarOpen'
   | 'setSidebarWidth'
+  | 'setSidebarRail'
   | 'agentSendPopoverTargetMode'
   | 'openAgentSendPopoverTargetMode'
   | 'closeAgentSendPopoverTargetMode'
@@ -46,9 +48,11 @@ export function createUiAgentActions(
     ...createUiActivityActions(set, get),
     sidebarOpen: true,
     sidebarWidth: 280,
+    sidebarRail: false,
     toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
     setSidebarOpen: (open) => set({ sidebarOpen: open }),
     setSidebarWidth: (width) => set({ sidebarWidth: width }),
+    setSidebarRail: (rail) => set({ sidebarRail: rail }),
     agentSendPopoverTargetMode: null,
     openAgentSendPopoverTargetMode: (args) => {
       const targets = deriveRunningAgentSendTargets(get(), args.worktreeId)

@@ -6,6 +6,7 @@ import { GeneralEditorSettingsSection } from '../editor/GeneralEditorSettingsSec
 import { GeneralSupportSection } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from '../updates/GeneralUpdateSettingsSection'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
+import { getGeneralSidebarSearchEntries } from './general-sidebar-search'
 import {
   getGeneralCliSearchEntries,
   getGeneralNavigationSearchEntries,
@@ -205,7 +206,10 @@ export function GeneralPane({
         </SearchableSetting>
       </SettingsGroup>
     ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
+    matchesSettingsSearch(searchQuery, [
+      ...getGeneralWorkspaceSearchEntries(),
+      ...getGeneralSidebarSearchEntries()
+    ]) ? (
       <GeneralWorkspaceSettingsSection
         key="workspace"
         settings={settings}

@@ -5,6 +5,7 @@ export type PersistedUIWriteBaseline = {
   gitGraphFiltersByWorktree?: PersistedUIState['gitGraphFiltersByWorktree']
   sidebarWidth: number
   sidebarOpen: boolean
+  sidebarRail: boolean
   rightSidebarOpen: boolean
   rightSidebarTab: PersistedUIState['rightSidebarTab']
   rightSidebarExplorerView: PersistedUIState['rightSidebarExplorerView']
@@ -36,6 +37,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   gitGraphFiltersByWorktree: true,
   sidebarWidth: true,
   sidebarOpen: true,
+  sidebarRail: true,
   rightSidebarOpen: true,
   rightSidebarTab: true,
   rightSidebarExplorerView: true,

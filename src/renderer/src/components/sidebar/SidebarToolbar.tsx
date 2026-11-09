@@ -8,6 +8,7 @@ import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
+import { SidebarRailSettingsMenu } from './rail/SidebarRailSettingsMenu'
 
 const WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY = 'orca.workspaceBoardMovedHintSeen.v1'
 const WORKSPACE_BOARD_MOVED_HINT_DURATION_MS = 12000
@@ -16,12 +17,14 @@ type SidebarToolbarProps = {
   workspaceBoardOpen: boolean
   workspaceBoardDragPreviewOpen?: boolean
   onWorkspaceBoardToggle: () => void
+  compact?: boolean
 }
 
 const SidebarToolbar = React.memo(function SidebarToolbar({
   workspaceBoardOpen,
   workspaceBoardDragPreviewOpen = false,
-  onWorkspaceBoardToggle
+  onWorkspaceBoardToggle,
+  compact = false
 }: SidebarToolbarProps) {
   const t = useTranslate()
   // Subscribe across this memo boundary so asynchronously applied locale changes relabel the toolbar and its children.
@@ -65,6 +68,51 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
     onWorkspaceBoardToggle()
   }
 
+  const workspaceBoardLabel = workspaceBoardMovedHintOpen
+    ? t(
+        'auto.components.sidebar.SidebarToolbar.87d0064026',
+        'Workspace board moved to the bottom bar'
+      )
+    : workspaceBoardOpen
+      ? t('auto.components.sidebar.SidebarToolbar.a30e34eb5c', 'Close workspace board')
+      : t('auto.components.sidebar.SidebarToolbar.49f62c5665', 'Workspace board')
+  const workspaceBoardButton = (
+    <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
+      <TooltipTrigger asChild>
+        <Button
+          variant={workspaceBoardOpen || workspaceBoardDragPreviewOpen ? 'secondary' : 'ghost'}
+          size="icon-xs"
+          type="button"
+          aria-label={t('auto.components.sidebar.SidebarToolbar.49f62c5665', 'Workspace board')}
+          aria-pressed={workspaceBoardOpen}
+          data-workspace-board-trigger=""
+          data-workspace-board-preview={workspaceBoardDragPreviewOpen ? 'true' : undefined}
+          onClick={handleWorkspaceBoardClick}
+          className="text-muted-foreground"
+        >
+          <Kanban className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {workspaceBoardLabel}
+      </TooltipContent>
+    </Tooltip>
+  )
+
+  if (compact) {
+    return (
+      <div className="mt-auto shrink-0">
+        <div className="flex justify-center border-t border-worktree-sidebar-border px-1.5 py-1.5 text-muted-foreground">
+          <SidebarRailSettingsMenu
+            workspaceBoardOpen={workspaceBoardOpen}
+            hint={workspaceBoardMovedHintOpen ? workspaceBoardLabel : undefined}
+            onWorkspaceBoardClick={handleWorkspaceBoardClick}
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="mt-auto shrink-0">
       <div className="flex items-center justify-between border-t border-worktree-sidebar-border px-2 py-1.5">
@@ -73,38 +121,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
         </div>
         <div className="flex items-center gap-1">
           <ScrollToCurrentWorkspaceToolbarButton />
-          <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
-            <TooltipTrigger asChild>
-              <Button
-                variant={
-                  workspaceBoardOpen || workspaceBoardDragPreviewOpen ? 'secondary' : 'ghost'
-                }
-                size="icon-xs"
-                type="button"
-                aria-label={t(
-                  'auto.components.sidebar.SidebarToolbar.49f62c5665',
-                  'Workspace board'
-                )}
-                aria-pressed={workspaceBoardOpen}
-                data-workspace-board-trigger=""
-                data-workspace-board-preview={workspaceBoardDragPreviewOpen ? 'true' : undefined}
-                onClick={handleWorkspaceBoardClick}
-                className="text-muted-foreground"
-              >
-                <Kanban className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {workspaceBoardMovedHintOpen
-                ? t(
-                    'auto.components.sidebar.SidebarToolbar.87d0064026',
-                    'Workspace board moved to the bottom bar'
-                  )
-                : workspaceBoardOpen
-                  ? t('auto.components.sidebar.SidebarToolbar.a30e34eb5c', 'Close workspace board')
-                  : t('auto.components.sidebar.SidebarToolbar.49f62c5665', 'Workspace board')}
-            </TooltipContent>
-          </Tooltip>
+          {workspaceBoardButton}
         </div>
       </div>
     </div>
