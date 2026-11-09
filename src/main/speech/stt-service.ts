@@ -47,7 +47,7 @@ export class SttService {
     this.state = createSttSessionState(modelManager, spawnWorker)
   }
 
-  /** `terms`: the dictionary for where this dictation goes, repo terms first (mergeDictationTerms). */
+  /** `terms`: the dictionary for where this dictation goes, repo terms first (dictationTermsFor). */
   startDictation(
     modelId: string,
     sink: SttEventSink,

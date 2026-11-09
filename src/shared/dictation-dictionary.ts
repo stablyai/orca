@@ -1,5 +1,8 @@
-/** A word or phrase dictation should spell `term`'s way, optionally also replacing what the model hears instead. */
-export type DictationTerm = { term: string; heardAs?: string }
+/**
+ * A word or phrase dictation should spell `term`'s way, optionally also replacing what the model hears instead.
+ * `hint` marks the repo name: it biases recognition and joins its words, but never recases a single word.
+ */
+export type DictationTerm = { term: string; heardAs?: string; hint?: true }
 
 export const MAX_DICTATION_TERMS = 500
 export const MAX_DICTATION_TERM_LENGTH = 100
@@ -29,23 +32,36 @@ export function normalizeDictationTerms(value: unknown): DictationTerm[] | undef
   for (const entry of value) {
     const term: unknown = entry?.term
     const heardAs: unknown = entry?.heardAs
+    const hint: unknown = entry?.hint
     if (typeof term !== 'string' || !term.trim()) {
       continue
     }
     const alias = typeof heardAs === 'string' ? heardAs.trim() : ''
     terms.push({
       term: term.trim().slice(0, MAX_DICTATION_TERM_LENGTH),
-      ...(alias ? { heardAs: alias.slice(0, MAX_DICTATION_TERM_LENGTH) } : {})
+      ...(alias ? { heardAs: alias.slice(0, MAX_DICTATION_TERM_LENGTH) } : {}),
+      ...(hint === true ? { hint } : {})
     })
   }
   return terms.slice(0, MAX_DICTATION_TERMS)
 }
 
-/** Repo terms first, so a repo's spelling wins over a personal one for the same words. */
-export function mergeDictationTerms(repoTerms: unknown, personalTerms: unknown): DictationTerm[] {
+/**
+ * The dictionary for a dictation into `repo` (none for a folder workspace): its terms first, so a repo's
+ * spelling wins over a personal one, then the personal terms, then its name as a hint unless that's off.
+ */
+export function dictationTermsFor(
+  voice: { dictationTerms?: unknown; dictationRepoNameHint?: boolean } | undefined,
+  repo: { dictationTerms?: unknown; displayName?: string } | undefined
+): DictationTerm[] {
+  const nameHint =
+    repo?.displayName && voice?.dictationRepoNameHint !== false
+      ? [{ term: repo.displayName, hint: true }]
+      : []
   return [
-    ...(normalizeDictationTerms(repoTerms) ?? []),
-    ...(normalizeDictationTerms(personalTerms) ?? [])
+    ...(normalizeDictationTerms(repo?.dictationTerms) ?? []),
+    ...(normalizeDictationTerms(voice?.dictationTerms) ?? []),
+    ...(normalizeDictationTerms(nameHint) ?? [])
   ]
 }
 
@@ -75,8 +91,11 @@ export function createDictationDictionary(
       add(wordKey(heardAs), term)
     }
   }
-  for (const { term } of terms ?? []) {
-    add(wordKey(term), term)
+  for (const { term, hint } of terms ?? []) {
+    // A one-word repo name like "orca" would recase every "Orca"; only a name of several words joins.
+    if (!hint || (term.match(WORD_RE)?.length ?? 0) > 1) {
+      add(wordKey(term), term)
+    }
   }
   if (byKey.size === 0 && unspacedAliases.length === 0) {
     return null

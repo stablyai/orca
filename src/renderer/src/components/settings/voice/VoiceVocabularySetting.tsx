@@ -14,7 +14,8 @@ import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import {
   SettingsSegmentedControl,
-  SettingsSubsectionHeader
+  SettingsSubsectionHeader,
+  SettingsSwitchRow
 } from '../form-controls/SettingsFormControls'
 
 type VocabularyScope = 'personal' | 'repo'
@@ -112,6 +113,22 @@ export function VoiceVocabularySetting({
             saveTerms([...terms, entry])
           }
         }}
+      />
+      <SettingsSwitchRow
+        label={t(
+          'components.settings.voice.vocabulary.repoNameHint',
+          'Use the repo name as a hint'
+        )}
+        description={t(
+          'components.settings.voice.vocabulary.repoNameHintDescription',
+          "Helps recognize the repo's name."
+        )}
+        checked={voiceSettings.dictationRepoNameHint !== false}
+        onChange={() =>
+          onUpdateVoiceSettings({
+            dictationRepoNameHint: voiceSettings.dictationRepoNameHint === false
+          })
+        }
       />
     </div>
   )
