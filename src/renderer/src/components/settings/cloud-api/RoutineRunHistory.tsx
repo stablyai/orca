@@ -265,21 +265,25 @@ function RunRow({
         </time>
         <span className="text-right text-muted-foreground tabular-nums">{duration}</span>
         {/* Icon-only actions with names in tooltips so three always fit the fixed column. */}
-        <span className="flex items-center justify-end gap-0.5 overflow-hidden">
+        <span className="grid grid-cols-[1.5rem_1.5rem_1.5rem] items-center justify-end gap-0.5">
           {run.result?.prUrl ? (
             <RunAction
               icon={GitPullRequest}
               label={t('auto.components.settings.cloudRoutines.runs.pr', 'Pull request')}
               onClick={() => void window.api.shell.openUrl(run.result!.prUrl!)}
             />
-          ) : null}
+          ) : (
+            <span aria-hidden />
+          )}
           {run.result?.commentUrl ? (
             <RunAction
               icon={MessageSquare}
               label={t('auto.components.settings.cloudRoutines.runs.comment', 'Comment')}
               onClick={() => void window.api.shell.openUrl(run.result!.commentUrl!)}
             />
-          ) : null}
+          ) : (
+            <span aria-hidden />
+          )}
           {run.workspaceId && onOpenWorkspace ? (
             <RunAction
               icon={ExternalLink}
@@ -289,7 +293,9 @@ function RunRow({
               )}
               onClick={() => onOpenWorkspace(run.workspaceId!)}
             />
-          ) : null}
+          ) : (
+            <span aria-hidden />
+          )}
         </span>
       </div>
       {run.result?.summary ? (
