@@ -15,6 +15,7 @@ import type { FileWithMtime } from './session-scanner-types'
 import { extractString, parseJsonObject } from './session-scanner-values'
 import { scanIssueTextFromError } from './session-scan-issues'
 import { isMissingTranscriptPathError } from './session-scanner-discovery'
+import { noteAiVaultScanFileFound } from './ai-vault-scan-progress'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
@@ -74,7 +75,11 @@ export function cwdBucketScopePrefixes(
 ): Set<string> {
   const prefixes = new Set<string>()
   for (const scopePath of scopePaths) {
-    for (const candidate of scopePathCandidates(scopePath)) {
+    // Encoders add the NFC spelling; a cwd recorded in NFD names its bucket differently.
+    for (const candidate of scopePathCandidates(scopePath).flatMap((path) => [
+      path,
+      path.normalize('NFD')
+    ])) {
       for (const prefix of layout.encodeScopePrefixes(candidate)) {
         prefixes.add(prefix.toLowerCase())
       }
@@ -212,6 +217,8 @@ export async function collectBucketFiles(args: {
   inScope?: ReturnType<typeof createAiVaultScopeCwdMatcher>
   issues: IssueSink
   collected: Map<string, FileWithMtime>
+  // Files whose first lines name no cwd go here, bounded on their own, instead of being dropped.
+  unknown?: Map<string, FileWithMtime>
   limit: number
   excludedFilePaths: ReadonlySet<string>
   signal?: AbortSignal
@@ -221,19 +228,28 @@ export async function collectBucketFiles(args: {
       await yieldToEventLoop()
     }
     throwIfAiVaultScanCancelled(args.signal)
-    if (args.collected.has(path) || args.excludedFilePaths.has(path)) {
+    if (args.collected.has(path) || args.unknown?.has(path) || args.excludedFilePaths.has(path)) {
       continue
     }
     try {
+      let collected = args.collected
       if (args.inScope) {
         const cwd = await readFirstCwd(path, args.issues, args.agent, args.signal)
-        if (!args.inScope(cwd, path)) {
+        if (cwd === null && args.unknown) {
+          collected = args.unknown
+        } else if (!args.inScope(cwd, path)) {
           continue
         }
       }
       const fileStat = await wslGatedStat(path, 'scan', args.signal)
       throwIfAiVaultScanCancelled(args.signal)
-      addBoundedFile(args.collected, args.limit, {
+      // Scope-only scans don't list cwd-bucket agents recursively, so their file count comes from here.
+      noteAiVaultScanFileFound(args.signal, args.agent, {
+        path,
+        dev: fileStat.dev,
+        ino: fileStat.ino
+      })
+      addBoundedFile(collected, args.limit, {
         path,
         mtimeMs: fileStat.mtimeMs,
         modifiedAt: fileStat.mtime.toISOString(),

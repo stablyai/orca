@@ -2,14 +2,16 @@
 # Startup-only or one-shot uses are fine to keep; per-RPC, per-spawn, per-focus or per-poll uses are the target.
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing calls: pnpm check:main-sync-fs-ratchet --prune
-1 src/main/agent-hooks/first-work-rename-runtime.ts
-2 src/main/agent-hooks/hook-config-write-path.ts
-1 src/main/agent-hooks/hooks-json-read.ts
-20 src/main/agent-hooks/installer-utils.ts
-6 src/main/agent-hooks/locked-executable-rename.ts
-1 src/main/agent-hooks/server/server-hydration.ts
-1 src/main/agent-hooks/wsl-hook-relay-deps.ts
-3 src/main/agent-hooks/wsl-hook-relay-launch.ts
+1 src/main/agent-hooks/first-work/first-work-rename-runtime.ts
+2 src/main/agent-hooks/installation/configuration/hook-config-write-path.ts
+1 src/main/agent-hooks/installation/configuration/hooks-json-read.ts
+11 src/main/agent-hooks/installation/configuration/hooks-json-write.ts
+6 src/main/agent-hooks/installation/scripts/locked-executable-rename.ts
+9 src/main/agent-hooks/installation/scripts/managed-hook-script-write.ts
+2 src/main/agent-hooks/server/last-status-legacy-file.ts
+1 src/main/agent-hooks/server/last-status-saved-rows.ts
+1 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
+3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 1 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
 14 src/main/agent-launch/trust/agent-trust-presets.ts
 2 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
@@ -57,11 +59,11 @@
 1 src/main/browser/extensions/installation/browser-extension-load-directory.ts
 1 src/main/browser/extensions/profile-sessions/browser-extension-session-loader.ts
 2 src/main/browser/extensions/profile-storage/browser-extension-data-removal.ts
+8 src/main/browser/extensions/profile-storage/browser-extension-profile-document-store.ts
 4 src/main/browser/extensions/profile-storage/browser-extension-profile-state-store.ts
 3 src/main/browser/extensions/profile-storage/browser-extension-retired-profile-storage.ts
-8 src/main/browser/extensions/profile-storage/browser-extension-sync-storage-store.ts
-1 src/main/browser/guest-lifecycle/popups/browser-popup-background-cdp-probe.ts
-2 src/main/browser/guest-lifecycle/popups/popup-identity-electron-probe.ts
+1 src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-background-cdp-probe.ts
+2 src/main/browser/electron-fixtures/popup-identity-electron-probe.ts
 1 src/main/browser/identity/browser-identity-mode-record.ts
 2 src/main/browser/identity/browser-identity-mode-store.ts
 2 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
@@ -371,8 +373,9 @@
 2 src/main/orcad/orcad-wsl-host-claude-profile-refresh.ts
 1 src/main/orcad/serve-profile-ssh-targets.ts
 6 src/main/persistence/atomic-snapshot-writer.ts
-6 src/main/persistence/loading-store/user-data-path.ts
-3 src/main/persistence/loading-store/write-flush-barriers.ts
+1 src/main/persistence/loading-store/github-cache-sidecar.ts
+1 src/main/persistence/loading-store/github-cache-startup-read.ts
+5 src/main/persistence/loading-store/user-data-path.ts
 9 src/main/persistence/migrating-orcad-catalog/migration-journal-directory.ts
 4 src/main/persistence/migrating-orcad-catalog/orcad-migration-blob-installers.ts
 3 src/main/persistence/migrating-orcad-catalog/orcad-migration-blob-staging.ts
@@ -475,7 +478,6 @@
 5 src/main/runtime/mobile-cloud-relay/relay-region-preference.ts
 2 src/main/runtime/mobile-cloud-relay/relay-revoke-outbox.ts
 1 src/main/runtime/orchestration/db/runtime-orchestration-database-access.ts
-1 src/main/runtime/push/notifications/mobile-notification-dismissal-store.ts
 2 src/main/runtime/push/push-unregister-outbox.ts
 2 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 1 src/main/runtime/rpc/server/network-source-policy-store.ts
@@ -499,8 +501,10 @@
 1 src/main/speech/stt-worker-model-config.ts
 2 src/main/speech/stt-worker-paths.ts
 2 src/main/sqlite/harden-database-files.ts
+1 src/main/sqlite/keyed-json-row-cache.ts
+5 src/main/sqlite/legacy-json-source.ts
 1 src/main/sqlite/sync-database.ts
-1 src/main/sqlite/versioned-cache-database.ts
+2 src/main/sqlite/versioned-cache-database.ts
 1 src/main/ssh/authentication/ssh-auth-resolution.ts
 2 src/main/ssh/config/ssh-config-alias-claim.ts
 5 src/main/ssh/config/ssh-config-include-expander.ts

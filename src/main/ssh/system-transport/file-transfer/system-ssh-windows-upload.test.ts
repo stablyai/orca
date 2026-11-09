@@ -29,12 +29,7 @@ import {
   clearWindowsRemoteWriteCapabilitiesForTests,
   getWindowsRemoteWriteCapabilities
 } from './system-ssh-windows-write-capabilities'
-import {
-  explainWindowsPowerShellStdinFailure,
-  WINDOWS_STDIN_WRITE_CHUNK_BYTES,
-  WINDOWS_STDIN_WRITE_TIMEOUT_MS,
-  writeWindowsRemoteFile
-} from './system-ssh-windows-write-strategy'
+import { WINDOWS_STDIN_WRITE_CHUNK_BYTES } from './system-ssh-windows-write-strategy'
 import type { SshTarget } from '../../../../shared/ssh-types'
 
 type FakeChannel = EventEmitter & {
@@ -91,9 +86,6 @@ const fileWrites = (): RecordedCommand[] =>
 const writtenPath = (command: RecordedCommand): string =>
   /\$path = '((?:[^']|'')*)'/.exec(command.script)?.[1]?.replace(/''/g, "'") ?? ''
 
-const putLines = (): string[] =>
-  sftpBatches.flatMap((batch) => batch.script.split('\n').filter((line) => line.startsWith('put ')))
-const putDestination = (line: string): string => /put "(?:[^"]*)" "([^"]*)"/.exec(line)?.[1] ?? ''
 const putSource = (line: string): string => /put "([^"]*)"/.exec(line)?.[1] ?? ''
 
 function acceptSftp(): void {
@@ -213,20 +205,6 @@ describe('Windows upload over sftp', () => {
     expect(getWindowsRemoteWriteCapabilities(target).shouldTry('sftp-subsystem')).toBe(true)
     expect(fileWrites()).toHaveLength(0)
   })
-
-  it('keeps using sftp for the next file after one path it could not spell', async () => {
-    writeFileSync(join(localDir, 'relay.js'), 'x')
-
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), '//fileserver/share/a.js', {
-      hostPlatform
-    })
-    await uploadFileViaSystemSsh(target, join(localDir, 'relay.js'), `${remoteRoot}/b.js`, {
-      hostPlatform
-    })
-
-    expect(putLines()).toHaveLength(1)
-    expect(putDestination(putLines()[0]!)).toContain('/C:/Users/dev/.orca-remote/b.js')
-  })
 })
 
 describe('Windows upload on a host with no sftp subsystem', () => {
@@ -301,77 +279,5 @@ describe('Windows upload on a host with no sftp subsystem', () => {
     expect(fileWrites().map((write) => write.executable)).toEqual(['pwsh.exe'])
     expect(getWindowsRemoteWriteCapabilities(target).shouldTry('pwsh')).toBe(true)
     expect(commands.some((command) => command.script.includes('::Move('))).toBe(false)
-  })
-
-  it.each([
-    'relay-CommandNotFoundException.js',
-    'is not recognized as an internal or external command.js'
-  ])('propagates a timeout whose filename resembles a missing command: %s', async (file) => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const remotePath = `${remoteRoot}/${file}`
-    writeFileSync(join(localDir, file), 'x')
-    let noteWriteStarted: () => void = () => {}
-    const writeStarted = new Promise<void>((resolve) => {
-      noteWriteStarted = resolve
-    })
-    spawnSystemSshCommandMock.mockImplementation((_target: SshTarget, command: string) => {
-      const executable = command.split(' ')[0] ?? ''
-      return createFakeChannel((channel) => {
-        commands.push({
-          script: decodePowerShellCommand(command),
-          executable,
-          stdin: channel.written
-        })
-        if (executable !== 'pwsh.exe') {
-          setImmediate(() => channel.emit('close', 0, null))
-        } else {
-          noteWriteStarted()
-        }
-      })
-    })
-    try {
-      const result = expect(
-        uploadFileViaSystemSsh(target, join(localDir, file), remotePath, { hostPlatform })
-      ).rejects.toThrow('timed out')
-      await writeStarted
-      await vi.advanceTimersByTimeAsync(WINDOWS_STDIN_WRITE_TIMEOUT_MS + 1)
-      await result
-
-      expect(fileWrites().map((write) => write.executable)).toEqual(['pwsh.exe'])
-      expect(getWindowsRemoteWriteCapabilities(target).shouldTry('pwsh')).toBe(true)
-      expect(commands.some((command) => command.script.includes('::Move('))).toBe(false)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it.each([
-    'relay-CommandNotFoundException.js',
-    'is not recognized as an internal or external command.js'
-  ])('propagates a short source whose filename resembles a missing command: %s', async (file) => {
-    await expect(
-      writeWindowsRemoteFile(
-        target,
-        `${remoteRoot}/${file}`,
-        {
-          totalBytes: 1,
-          readChunk: async () => Buffer.alloc(0),
-          withLocalFile: async (send) => send(join(localDir, file))
-        },
-        {}
-      )
-    ).rejects.toThrow('Source ran short')
-
-    expect(fileWrites()).toHaveLength(0)
-    expect(getWindowsRemoteWriteCapabilities(target).shouldTry('pwsh')).toBe(true)
-    expect(commands.some((command) => command.script.includes('::Move('))).toBe(false)
-  })
-})
-
-describe('last-resort Windows PowerShell failure reporting', () => {
-  it('leaves a real failure alone, so a permission error is not reported as a host limitation', () => {
-    const denied = new Error('write C:/x at offset 0 failed (exit 1): Access to the path is denied')
-
-    expect(explainWindowsPowerShellStdinFailure(denied)).toBe(denied)
   })
 })

@@ -54,7 +54,7 @@ vi.mock('../providers/local-pty/local-pty-provider', () => ({ LocalPtyProvider: 
 vi.mock('../browser/backends/offscreen-browser-backend', () => ({
   OffscreenBrowserBackend: class {}
 }))
-vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
 vi.mock('./main-process-relay-status', () => ({
   getDesktopRelayStatus: vi.fn(),
   publishDesktopRelayStatus: vi.fn()

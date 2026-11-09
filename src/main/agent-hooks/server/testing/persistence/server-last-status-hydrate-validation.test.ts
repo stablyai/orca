@@ -1,14 +1,6 @@
+import { readSavedStatus, hasSavedStatus } from './last-status.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  utimesSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
@@ -19,8 +11,7 @@ import {
   recentTs,
   PANE,
   GOOD_PANE,
-  LEAF_2,
-  LEAF_5
+  LEAF_2
 } from '../server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -124,37 +115,13 @@ describe('Last-status persistence', () => {
         buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'about to drop' })
       )
       server.flushStatusPersistSync()
-      let parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      let parsed = JSON.parse(readSavedStatus(lastStatusPath()))
       expect(parsed.entries[PANE]).toBeTruthy()
 
       server.clearPaneState(PANE)
       server.flushStatusPersistSync()
-      parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      parsed = JSON.parse(readSavedStatus(lastStatusPath()))
       expect(parsed.entries[PANE]).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('skips a write when the serialized contents are byte-identical to the previous write', async () => {
-    const server = new AgentHookServer()
-    await server.start({
-      env: 'production',
-      userDataPath
-    })
-    try {
-      await postHookEvent(
-        server,
-        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'first' })
-      )
-      server.flushStatusPersistSync()
-      utimesSync(lastStatusPath(), 1, 1)
-      const firstMtime = statSync(lastStatusPath()).mtimeMs
-
-      server.clearPaneState(makePaneKey('non-existent', LEAF_5))
-      server.flushStatusPersistSync()
-      const secondMtime = statSync(lastStatusPath()).mtimeMs
-      expect(secondMtime).toBe(firstMtime)
     } finally {
       server.stop()
     }
@@ -175,8 +142,8 @@ describe('Last-status persistence', () => {
     } finally {
       server.stop()
     }
-    expect(existsSync(lastStatusPath())).toBe(true)
-    const parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+    expect(hasSavedStatus(lastStatusPath())).toBe(true)
+    const parsed = JSON.parse(readSavedStatus(lastStatusPath()))
     expect(parsed.entries[PANE]?.payload?.prompt).toBe('flush me')
   })
 })

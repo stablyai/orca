@@ -217,6 +217,48 @@ describe('orchestration federation control mail', () => {
     expect(workerDb.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
   })
 
+  it('refuses a reply to a finished paired-host report by naming a new worker there', async () => {
+    const taskId = homeDb.getDispatchContextById(dispatchId)!.task_id
+    workerDb.enqueueFederationRelay({
+      dispatchId,
+      direction: 'to_home',
+      kind: 'worker_done',
+      payload: JSON.stringify({
+        from: `dispatch:${dispatchId}`,
+        subject: 'Done',
+        body: 'Finished remotely.',
+        type: 'worker_done',
+        priority: 'normal',
+        threadId: null,
+        payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded', filesModified: [] })
+      }),
+      settleRemoteOutcome: 'succeeded'
+    })
+    await syncFederationBarrier(homeRuntime, homeDb)
+    const report = homeDb
+      .getUnreadMessages(`run:${runId}`)
+      .find((message) => message.type === 'worker_done')!
+
+    await expect(
+      homeDispatcher.dispatch({
+        id: 'reply-finished-remote',
+        authToken: 'coordinator-token',
+        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+        orchestrationRequestId: 'reply-finished-remote-request',
+        method: 'orchestration.reply',
+        params: { from: 'term_coord', id: report.id, body: 'One more thing' }
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: 'dispatch_inactive',
+        data: { followUp: { kind: 'worker_start_on', server: 'worker' } }
+      }
+    })
+    expect(homeDb.getAllMessagesForHandle(`dispatch:${dispatchId}`)).toHaveLength(0)
+    expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(0)
+  })
+
   function checkRequest(id: string, wait = false, timeoutMs = 5_000, types?: string): RpcRequest {
     return {
       id,

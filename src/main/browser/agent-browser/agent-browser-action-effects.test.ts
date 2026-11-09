@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { WebContents } from 'electron'
 import { runWithActionEffects, type ActionEffectsHost } from './agent-browser-action-effects'
-import type { BrowserPageEvent } from '../guest-lifecycle/browser-page-events'
+import type { BrowserPageEvent } from '../guest-lifecycle/page-activity/browser-page-events'
 import { readBrowserActionEffects } from '../../../shared/browser-action-effects'
 
 vi.mock('../routing/input-ownership/remote-cli-page-admission', () => ({
