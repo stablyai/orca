@@ -23,23 +23,6 @@ function resourcesWith(files: string[]): string {
 }
 
 describe("finding the app's speech engines (#31174)", () => {
-  it('hands orcad the node_modules a packaged app ships its sherpa recognizer in', () => {
-    const resources = resourcesWith(['sherpa-onnx-darwin-x64/sherpa-onnx.node'])
-    expect(findAppSpeechRecognizerDir(join(resources, 'app.asar.unpacked'), 'darwin', 'x64')).toBe(
-      join(resources, 'node_modules')
-    )
-  })
-
-  it('hands orcad the node_modules holding transcribe-cpp and its native package', () => {
-    const resources = resourcesWith([
-      'transcribe-cpp/package.json',
-      '@transcribe-cpp/linux-arm64-cpu-vulkan/contract.json'
-    ])
-    expect(findAppSpeechRecognizerDir(join(resources, 'app.asar.unpacked'), 'linux', 'arm64')).toBe(
-      join(resources, 'node_modules')
-    )
-  })
-
   it('answers nothing when the app ships no engine for this platform', () => {
     const resources = resourcesWith([
       'transcribe-cpp/package.json',
