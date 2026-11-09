@@ -97,10 +97,19 @@ export function useNativeChatPtyComposerSend(args: {
         return false
       }
       let pendingId: string | undefined
+      // Why: only a terminal-backed chat can read the agent's composer line back to prove Enter was consumed.
+      const submitConfirmation =
+        args.readTerminalDraft !== undefined
+          ? {
+              readInputLine: () => args.readTerminalDraft?.() ?? null,
+              submittedText: text
+            }
+          : {}
       const sendOptions =
         args.agent === 'claude' && classification === 'chat'
           ? {
               ...launchSendOptions,
+              ...submitConfirmation,
               onWriteRejected: () => {
                 if (pendingId) {
                   args.optimisticSendOutcome?.reject(pendingId)
@@ -145,11 +154,15 @@ export function useNativeChatPtyComposerSend(args: {
         pendingId = args.onOptimisticSend?.(text, imagePaths, retry !== undefined)
         if (pendingHandle) {
           args.trackPendingSend(pendingHandle, pendingId)
-          if (retry && pendingId) {
+          if (pendingId) {
             const id = pendingId
             void pendingHandle.outcome?.then((outcome) => {
               if (outcome === 'not-submitted') {
+                // Why: the agent never took the message, so the optimistic row must not claim it was delivered.
                 args.optimisticSendOutcome?.reject(id)
+                args.setNotice(
+                  translate('components.native-chat.messageNotSent', 'Message not sent')
+                )
               } else if (outcome === 'uncertain') {
                 args.optimisticSendOutcome?.holdUnconfirmed(id)
               }
