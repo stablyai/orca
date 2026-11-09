@@ -1,3 +1,4 @@
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS } from './durable-rows/journal-row-schema'
@@ -5,9 +6,11 @@ import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS } from './durable-rows/journal-ro
 export type JournalDomainHistoryHeader = {
   itemId: string
   sequence: number
+  sequenceIndex: number
+  ordinal: number
   own: boolean
   subagentGroupKey: string | null
-  /** Sent item plus current submission bytes, read without loading either body. */
+  /** Stored size without body reads; retained sources still need exact reader-form admission. */
   bytes: number
 }
 
@@ -23,9 +26,20 @@ export function selectJournalDomainHistoryWindow(
   where: string,
   prefix: readonly [string, string],
   end: number,
-  limit: number
+  limit: number,
+  sources: readonly JournalDomainHistoryHeader[] = []
 ): JournalDomainHistoryHeader[] {
-  return historyWindow(selectJournalDomainHistoryHeaders(db, where, prefix, end, limit), limit)
+  const headers = [
+    ...selectJournalDomainHistoryHeaders(db, where, prefix, end, limit),
+    ...sources.filter((source) => source.sequence < end)
+  ].sort(
+    (a, b) => b.sequence - a.sequence || b.sequenceIndex - a.sequenceIndex || b.ordinal - a.ordinal
+  )
+  const boundary = headers[2 * limit - 1]?.sequence
+  return historyWindow(
+    boundary === undefined ? headers : headers.filter((header) => header.sequence >= boundary),
+    limit
+  )
 }
 
 /** Newest-first keyset over every scoped row: the existing 2×limit reach also caps sparse-root chats.
@@ -37,7 +51,7 @@ function selectJournalDomainHistoryHeaders(
   end: number,
   limit: number
 ): JournalDomainHistoryHeader[] {
-  const columns = `item_id, sequence, root, subagent_row, subagent_group_key,
+  const columns = `item_id, sequence, sequence_index, ordinal, root, subagent_row, subagent_group_key,
     ${JOURNAL_DOMAIN_HISTORY_ITEM_BYTES} AS bytes`
   const order = 'ORDER BY sequence DESC, sequence_index DESC, ordinal DESC'
   const cap = 2 * limit
@@ -63,6 +77,8 @@ function selectJournalDomainHistoryHeaders(
   return rows.map((row: SqliteRow) => ({
     itemId: String(row.item_id),
     sequence: Number(row.sequence),
+    sequenceIndex: Number(row.sequence_index),
+    ordinal: Number(row.ordinal),
     own: row.root === 1 && row.subagent_row === 0,
     subagentGroupKey: row.subagent_group_key === null ? null : String(row.subagent_group_key),
     bytes: Number(row.bytes)
@@ -140,5 +156,24 @@ export function* journalDomainSequenceGroups<T extends { sequence: number }>(
   }
   if (group.length > 0) {
     yield group.toReversed()
+  }
+}
+
+/** An oversized group's placeholders keep each row's identity and placement, never its body. */
+export function readJournalDomainHistoryEnvelope(
+  db: Database.Database,
+  prefix: readonly [string, string],
+  itemId: string
+): AgentJournalRenderItem {
+  const row = db
+    .prepare(`SELECT placement_json AS envelope,revision,sequence,sequence_index FROM journal_items
+      WHERE session_id=? AND epoch=? AND item_id=?`)
+    .get(...prefix, itemId)!
+  // The placeholder replaces the omitted body.
+  return {
+    ...JSON.parse(String(row.envelope)),
+    revision: Number(row.revision),
+    sequence: Number(row.sequence),
+    sequenceIndex: Number(row.sequence_index)
   }
 }

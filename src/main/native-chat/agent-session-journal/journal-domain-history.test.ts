@@ -5,12 +5,17 @@ import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { measureHistoryItem } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
+import {
+  measureHistoryItem,
+  HISTORY_PAGE_CONTENT_BUDGET_BYTES,
+  BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+} from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { message, messageFixture, target } from './journal-sql-message.test-fixture'
 import {
   readJournalDomainHistoryPage,
   type JournalDomainHistoryRequest
 } from './journal-domain-history-page'
+import { insertJournalDomainQueueRow } from './journal-domain-queue-rows'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -212,6 +217,177 @@ it('excludes a retained body and submission by stored size before reading either
   })
   expect(sequences(forward)).toEqual([1])
   expect(forward.page).toMatchObject({ hasNewer: true, window: { nextCursor: { sequence: 1 } } })
+})
+
+it('windows retained image sources before reading their bodies and admits their exact reader form', () => {
+  const { db, seedItem, seedSend, head, event, read } = history()
+  seedSend()
+  db.prepare(`UPDATE journal_submission_attempts SET facts_json=json_set(facts_json,
+    '$.admission.sourcePlacement',json(?)), admission_body_json=? WHERE message_id='send'`).run(
+    JSON.stringify({
+      itemId: 'orca:send',
+      revision: 0,
+      sequence: 1,
+      observedAt: 1,
+      turnScope: { kind: 'thread' }
+    }),
+    JSON.stringify({
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'text', text: 'x'.repeat(2 * HISTORY_PAGE_CONTENT_BUDGET_BYTES) },
+        { type: 'image-ref', path: '/image.png' }
+      ]
+    })
+  )
+  db.prepare(`UPDATE journal_submission_attempts SET payload_json=json_set(payload_json,
+    '$.keptAsQueuedMessageId',?) WHERE message_id='send'`).run('card'.repeat(4096))
+  db.exec("UPDATE journal_items SET hidden=1 WHERE item_id='orca:send'")
+  for (let sequence = 2; sequence <= 5; sequence++) {
+    seedItem(text(sequence, 'visible'))
+    event(sequence, sequence === 3 ? ['orca:send'] : [`orca:${sequence}:0`])
+  }
+  head(5, 1)
+  const reader = {
+    form: 'client' as const,
+    budgetBytes: HISTORY_PAGE_CONTENT_BUDGET_BYTES + 4096,
+    queuedImages: { ids: [['send', true] as const], imageIds: ['send'] }
+  }
+  const original = db
+    .prepare("SELECT admission_body_json FROM journal_submission_attempts WHERE message_id='send'")
+    .get()!.admission_body_json
+  db.exec(
+    "UPDATE journal_submission_attempts SET admission_body_json='invalid' WHERE message_id='send'"
+  )
+  const tail = read({ direction: 'tail', limit: 2, reader })
+  expect(sequences(tail)).toEqual([4, 5])
+  const middle = read({
+    direction: 'before',
+    cursor: tail.page.window.nextCursor,
+    limit: 2,
+    reader
+  })
+  expect(sequences(middle)).toEqual([2, 3])
+  expect(middle.page.hasOlder).toBe(true)
+  db.prepare(
+    "UPDATE journal_submission_attempts SET admission_body_json=? WHERE message_id='send'"
+  ).run(original)
+  const oldest = read({
+    direction: 'before',
+    cursor: middle.page.window.nextCursor,
+    limit: 2,
+    reader
+  })
+  expect(oldest.page.items).toMatchObject([
+    { itemId: 'orca:send', sequence: 1, shortened: true, body: { kind: 'message' } }
+  ])
+  expect(oldest.page.hasOlder).toBe(false)
+  expect(oldest.page.submissions[0]).not.toHaveProperty('keptAsQueuedMessageId')
+  const forward = read({ direction: 'after', cursor: { epoch: 'epoch', sequence: 1 }, reader })
+  expect(sequences(forward)).toEqual([1, 2, 4, 5])
+  expect(forward.page).toMatchObject({ hasNewer: false, window: { nextCursor: { sequence: 5 } } })
+  const excluded = read({
+    direction: 'after',
+    cursor: { epoch: 'epoch', sequence: 1 },
+    limit: 2,
+    reader: { ...reader, budgetBytes: 4096 }
+  })
+  expect(sequences(excluded)).toEqual([2])
+  expect(excluded.page).toMatchObject({ hasNewer: true, window: { nextCursor: { sequence: 2 } } })
+  const bounded = {
+    ...reader,
+    form: 'bounded' as const,
+    budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+  }
+  expect(
+    read({ direction: 'before', cursor: middle.page.window.nextCursor, reader: bounded }).page.items
+  ).toMatchObject([{ itemId: 'orca:send', shortened: true, body: { kind: 'message' } }])
+  expect(
+    read({ direction: 'after', cursor: { epoch: 'epoch', sequence: 1 }, reader: bounded }).page
+  ).toMatchObject({
+    items: [{ itemId: 'orca:send' }, { sequence: 2 }, { sequence: 4 }, { sequence: 5 }],
+    window: { nextCursor: { sequence: 5 } }
+  })
+})
+
+it('keeps visible rows first and retained sources in relation order across a whole boundary sequence', () => {
+  const { db, seedItem, seedSend, head, read } = history()
+  seedSend()
+  db.prepare(`UPDATE journal_submission_attempts SET facts_json=json_set(facts_json,
+    '$.admission.sourcePlacement',json(?)) WHERE message_id='send'`).run(
+    JSON.stringify({
+      itemId: 'orca:send',
+      revision: 0,
+      sequence: 7,
+      sequenceIndex: 0,
+      observedAt: 7,
+      turnScope: { kind: 'thread' }
+    })
+  )
+  db.exec("DELETE FROM journal_items WHERE item_id='orca:send'")
+  for (const id of ['z-card', 'a-card']) {
+    insertJournalDomainQueueRow(db, target, {
+      messageId: id,
+      position: 0,
+      state: 'waiting',
+      fingerprint: '',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'image-ref', path: '/image.png' }] },
+      queuedAt: { epoch: 'epoch', sequence: 7 },
+      holdReason: null,
+      returnedReason: null,
+      returnedRejection: null,
+      consumedAs: null
+    })
+  }
+  seedItem(text(7, 'visible'))
+  seedItem(text(8, 'tail'))
+  head(8)
+  const reader = {
+    form: 'client' as const,
+    queuedImages: {
+      ids: [
+        ['z-card', true],
+        ['send', true],
+        ['a-card', true]
+      ] as const,
+      imageIds: ['z-card', 'a-card']
+    }
+  }
+  const tail = read({ direction: 'tail', limit: 1, reader })
+  expect(tail.page).toMatchObject({
+    items: [{ itemId: 'orca:8:0' }],
+    submissions: [],
+    hasOlder: true,
+    hasNewer: false,
+    window: { nextCursor: { sequence: 8 } }
+  })
+  const before = read({
+    direction: 'before',
+    cursor: tail.page.window.nextCursor,
+    limit: 1,
+    reader
+  })
+  expect(before.page.items.map((item) => item.itemId)).toEqual([
+    'orca:7:0',
+    'orca:z-card',
+    'orca:send',
+    'orca:a-card'
+  ])
+  expect(before.page).toMatchObject({
+    submissions: [{ clientMessageId: 'send' }],
+    hasOlder: false,
+    hasNewer: true,
+    window: { oldest: { sequence: 7 }, newest: { sequence: 7 }, nextCursor: { sequence: 7 } }
+  })
+  db.exec("UPDATE journal_submission_attempts SET dispatch_state='accepted'")
+  expect(
+    read({
+      direction: 'before',
+      cursor: tail.page.window.nextCursor,
+      limit: 1,
+      reader
+    }).page.items.map((item) => item.itemId)
+  ).toEqual(['orca:7:0', 'orca:z-card', 'orca:a-card'])
 })
 
 it('catches up with the current revision, placement and submission, not the replayed metadata', async () => {

@@ -1,3 +1,8 @@
+import * as historyPages from '../../../../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import {
+  queuedImageTestBody,
+  streamState
+} from '../protocol/structured-agent-session-wire-record.test-fixture'
 import { seedTestJournalQueueCard } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -87,7 +92,7 @@ it('publishes the complete original and exact compact retry tuple through instal
     itemId: agentJournalSubmissionKey(id),
     revision: 0,
     body,
-    sequence: 4,
+    sequence: 3,
     observedAt: original.resolvedAt,
     turnScope: { kind: 'thread' }
   }
@@ -95,7 +100,7 @@ it('publishes the complete original and exact compact retry tuple through instal
     itemId: agentJournalSubmissionKey(`start-failure:${id}`),
     revision: 1,
     body: { kind: 'status', text: reason, tone: 'error', failure: rejection },
-    sequence: 5,
+    sequence: 4,
     observedAt: original.resolvedAt,
     recoveredAt: original.resolvedAt,
     recovered: true,
@@ -110,9 +115,9 @@ it('publishes the complete original and exact compact retry tuple through instal
     reason,
     submittedAt: original.submittedAt,
     resolvedAt: null,
-    submittedSequence: 2,
+    submittedSequence: 1,
     handoverRecorded: true,
-    acceptedSequence: 2,
+    acceptedSequence: 1,
     origin: 'client',
     source: { kind: 'user' },
     options: { model: 'default' },
@@ -148,11 +153,11 @@ it('publishes the complete original and exact compact retry tuple through instal
       removedItemIds: [],
       submissions: [expectedSubmission],
       window: {
-        oldest: { epoch, sequence: 4 },
-        newest: { epoch, sequence: 5 },
-        nextCursor: { epoch, sequence: 4 }
+        oldest: { epoch, sequence: 3 },
+        newest: { epoch, sequence: 4 },
+        nextCursor: { epoch, sequence: 3 }
       },
-      liveCursor: { epoch, sequence: 5 },
+      liveCursor: { epoch, sequence: 4 },
       hasOlder: false,
       hasNewer: false,
       latestTurn: null,
@@ -197,7 +202,7 @@ it('publishes the complete original and exact compact retry tuple through instal
     ...snapshotPage
   } = expected.page
   const emptyBatch = {
-    cursor: { epoch, sequence: 5 },
+    cursor: { epoch, sequence: 4 },
     items: [],
     removedItemIds: [],
     submissions: []
@@ -210,26 +215,28 @@ it('publishes the complete original and exact compact retry tuple through instal
     streaming: true
   })
   const common = { sessionId: SESSION, fence: 4, hostNow }
-  expect(frames).toStrictEqual([
-    response({ type: 'snapshot', ...common, page: snapshotPage, activity: null }),
-    response({
-      type: 'batch',
-      ...common,
-      batch: emptyBatch,
-      queuedMessages,
-      queuePause,
-      nextQueuedMessageId
-    }),
-    response({ type: 'batch', ...common, batch: emptyBatch, backgroundTasks }),
-    response({
-      type: 'batch',
-      ...common,
-      batch: emptyBatch,
-      latestTurn: null,
-      actionablePromptIds: [],
-      working: false
-    })
-  ])
+  await eventually(() =>
+    expect(frames).toStrictEqual([
+      response({ type: 'snapshot', ...common, page: snapshotPage, activity: null }),
+      response({
+        type: 'batch',
+        ...common,
+        batch: emptyBatch,
+        queuedMessages,
+        queuePause,
+        nextQueuedMessageId
+      }),
+      response({ type: 'batch', ...common, batch: emptyBatch, backgroundTasks }),
+      response({
+        type: 'batch',
+        ...common,
+        batch: emptyBatch,
+        latestTurn: null,
+        actionablePromptIds: [],
+        working: false
+      })
+    ])
+  )
 })
 
 it('keeps a saved physical hold independent while its own rejected retry blocks the ordered suffix', async () => {
@@ -341,4 +348,140 @@ it('keeps a saved physical hold independent while its own rejected retry blocks 
   expect((await state.reads.submission(id))?.payloadFingerprint).toBe(immutable?.payloadFingerprint)
   expect(await state.reads.receiptFor(id)).not.toEqual(receipt)
   await published()
+})
+
+it('keeps a queue edit after the old-reader page whose eligibility read it overlapped', async () => {
+  rig = await createQueuedMessageTestRig({ restartable: true })
+  setStructuredAgentSessionHost(rig.host)
+  await rig.host.close(SESSION, 'evict')
+  rig.failNextStart(new Error('fixture start failed'))
+  const body = await queuedImageTestBody(rig.root)
+  const id = hostTestOperationId()
+  const fields = { body }
+  expect(
+    await call(
+      'agentSession.send',
+      {
+        envelope: rig.envelope(fields, 'agentSession.send', id),
+        ...fields
+      },
+      OLD
+    )
+  ).toMatchObject({ result: { ok: true } })
+  await eventually(async () => expect(await rig!.drafts()).toHaveLength(1))
+  const j = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const card = (await j.queuedMessages.list()).find((row) => row.state === 'returned')!
+  const cursor = j.cursor()
+  const entered = Promise.withResolvers<void>()
+  const resume = Promise.withResolvers<void>()
+  const list = j.queuedMessages.list.bind(j.queuedMessages)
+  let editing: ReturnType<typeof j.queuedMessages.update> | undefined
+  const readingQueue = vi
+    .spyOn(j.queuedMessages, 'list')
+    .mockImplementationOnce(async () => {
+      const rows = await list()
+      entered.resolve()
+      await resume.promise
+      return rows
+    })
+    .mockImplementation(async () => {
+      await editing
+      return list()
+    })
+  try {
+    const reading = historyPages.readAgentSessionHistory(
+      j,
+      { sessionId: SESSION, direction: 'tail' },
+      {
+        reader: queuedImageHistoryReader(OLD)
+      }
+    )
+    await entered.promise
+    editing = j.queuedMessages.update({
+      messageId: card.messageId,
+      expectedBodyFingerprint: card.fingerprint,
+      text: 'overlapping edit'
+    })
+    resume.resolve()
+    const result = await reading
+    await editing
+    expect(result.page.liveCursor).toEqual(cursor)
+    expect(result.page.items).toContainEqual(
+      expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
+    )
+    expect(result.page.submissions.find((send) => send.clientMessageId === id)).not.toHaveProperty(
+      'keptAsQueuedMessageId'
+    )
+    const after = await historyPages.readAgentSessionHistory(
+      j,
+      { sessionId: SESSION, direction: 'tail' },
+      { reader: queuedImageHistoryReader(OLD) }
+    )
+    expect(after.page.liveCursor!.sequence).toBeGreaterThan(cursor.sequence)
+    expect(after.page.submissions.find((send) => send.clientMessageId === id)).toMatchObject({
+      keptAsQueuedMessageId: card.messageId
+    })
+  } finally {
+    resume.resolve()
+    readingQueue.mockRestore()
+  }
+})
+
+it('catches up a queue insertion between the old-reader initial page and its side controls', async () => {
+  rig = await createQueuedMessageTestRig({ restartable: true })
+  setStructuredAgentSessionHost(rig.host)
+  await rig.workingSend()
+  const j = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+  const pageReady = Promise.withResolvers<void>()
+  const resume = Promise.withResolvers<void>()
+  const hydrate = historyPages.readAgentSessionHydrationPage
+  const reading = vi
+    .spyOn(historyPages, 'readAgentSessionHydrationPage')
+    .mockImplementationOnce(async (...args) => {
+      const page = await hydrate(...args)
+      pageReady.resolve()
+      await resume.promise
+      return page
+    })
+  try {
+    const frames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
+    await pageReady.promise
+    const body = await queuedImageTestBody(rig.root, 'queued after initial page')
+    const id = hostTestOperationId()
+    const fields = { body, delivery: 'queue-if-active' as const }
+    expect(
+      await call(
+        'agentSession.send',
+        {
+          envelope: rig.envelope(fields, 'agentSession.send', id),
+          ...fields
+        },
+        OLD
+      )
+    ).toMatchObject({ result: { ok: true, value: { queued: { messageId: id } } } })
+    expect(await j.reads.submission(id)).toBeUndefined()
+    resume.resolve()
+    await eventually(() =>
+      expect(streamState(frames).items).toContainEqual(
+        expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
+      )
+    )
+    expect(frames).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          result: expect.objectContaining({
+            type: 'batch',
+            batch: expect.objectContaining({
+              items: expect.arrayContaining([
+                expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
+              ])
+            })
+          })
+        })
+      ])
+    )
+  } finally {
+    resume.resolve()
+    reading.mockRestore()
+  }
 })

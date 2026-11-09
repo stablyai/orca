@@ -8,6 +8,7 @@ import { messageFixture, target } from './journal-sql-message.test-fixture'
 import { domainLifecycleFixture, lifecycleIdentity } from './journal-domain-lifecycle.test-fixture'
 import { journalSqlReads } from './journal-sql-reads'
 import { readJournalSqlPoint } from './journal-sql-point-read'
+import { readJournalDomainHistoryPage } from './journal-domain-history-page'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   codexProviderHandle,
@@ -15,7 +16,10 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalRenderItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const cleanup: (() => void)[] = []
 afterEach(() => cleanup.splice(0).forEach((close) => close()))
@@ -84,7 +88,7 @@ it('imports independent raw and outcome sources without creating public attempts
   )
   expect(await reads.submission('raw')).toBeUndefined()
   expect(await reads.submission('outcome')).toBeUndefined()
-  expect(await reads.historySourceItems(['raw', 'outcome'])).toEqual([
+  const originals: AgentJournalRenderItem[] = [
     {
       itemId: 'orca:raw',
       revision: 0,
@@ -108,7 +112,25 @@ it('imports independent raw and outcome sources without creating public attempts
       recovered: true,
       recoveredAt: 25
     }
-  ])
+  ]
+  expect(await reads.historySourceItems(['raw', 'outcome'])).toEqual(originals)
+  const page = readJournalDomainHistoryPage(f.db, {
+    sessionId: 'chat',
+    direction: 'tail',
+    reader: {
+      form: 'client',
+      queuedImages: {
+        ids: [
+          ['raw', true],
+          ['outcome', true]
+        ],
+        imageIds: []
+      }
+    }
+  }).page
+  expect(page.items).toEqual(originals)
+  expect(page.submissions).toEqual([])
+  expect(page.hasOlder).toBe(false)
   state.inputs.handovers.set('outcome', {
     kind: 'dispatch',
     v: 4,
