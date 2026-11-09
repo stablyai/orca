@@ -4,7 +4,14 @@ import { z } from 'zod'
 import type { GoldenImageProviderApi } from '../src/golden-image-provider'
 import type { SandboxProviderApi } from '../src/sandbox-provider'
 
-export const VM_SCRIPTS = ['orca-sandbox-start', 'orca-sandbox-drain', 'orca-egress-probe', 'orca-image-wipe'] as const
+export const VM_SCRIPTS = [
+  'orca-sandbox-start',
+  'orca-sandbox-drain',
+  'orca-sandbox-env',
+  'orca-session-env.sh',
+  'orca-egress-probe',
+  'orca-image-wipe'
+] as const
 
 const Sha256 = z.string().regex(/^[a-f0-9]{64}$/)
 const Package = z.string().regex(/^(@[a-z0-9-]+\/)?[a-z0-9.-]+@\d+\.\d+\.\d+[A-Za-z0-9.-]*$/)
@@ -82,7 +89,7 @@ export function provisionEnv(inputs: BuildInputs): Record<string, string> {
     env.GH_SHA256 = manifest.gh.sha256
   }
   for (const name of VM_SCRIPTS) {
-    env[`ORCA_VM_SCRIPT_${name.replaceAll('-', '_')}`] = utf8Base64(inputs.vmScripts[name])
+    env[`ORCA_VM_SCRIPT_${name.replaceAll(/[-.]/g, '_')}`] = utf8Base64(inputs.vmScripts[name])
   }
   return env
 }

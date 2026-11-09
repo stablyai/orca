@@ -197,6 +197,24 @@ export function createVercelSandboxApi(
       return readCommandStream(response)
     },
 
+    async readFile(sessionId, path) {
+      try {
+        const response = await request('POST', `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/fs/read`, {
+          body: { path }
+        })
+        const bytes = await response.arrayBuffer()
+        if (bytes.byteLength > MAX_COMMAND_OUTPUT) {
+          throw new ProviderError(response.status, 'file_too_large')
+        }
+        return new TextDecoder().decode(bytes)
+      } catch (error) {
+        if (error instanceof ProviderError && error.status === 404) {
+          return null
+        }
+        throw error
+      }
+    },
+
     deleteSandbox: (name) =>
       missingOk(() =>
         request('DELETE', `/v2/sandboxes/${encodeURIComponent(name)}`, {

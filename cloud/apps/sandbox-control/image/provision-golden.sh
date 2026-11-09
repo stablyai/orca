@@ -60,12 +60,14 @@ log 'agent CLIs'
 npm install --global --no-fund --no-audit --prefix "$ORCA_HOME/tools" $AGENT_NPM_PACKAGES
 
 log 'Orca entry points'
-for name in orca-sandbox-start orca-sandbox-drain orca-egress-probe orca-image-wipe; do
-  var="ORCA_VM_SCRIPT_${name//-/_}"
+for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe; do
+  var="ORCA_VM_SCRIPT_${name//[-.]/_}"
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"
 done
 printf 'export PATH=%s/tools/bin:%s/bin:$PATH\n' "$ORCA_HOME" "$ORCA_HOME" | sudo tee /etc/profile.d/orca.sh >/dev/null
+# Every new shell (login or not: /etc/bashrc sources profile.d) re-reads the session env file.
+sudo install -m 0644 "$ORCA_HOME/bin/orca-session-env.sh" /etc/profile.d/zz-orca-session-env.sh
 sudo chown -R root:root "$ORCA_HOME"
 
 log 'smoke: orcad reaches ready on loopback (and warms the V8 compile cache: ~1.5 s off every boot)'
