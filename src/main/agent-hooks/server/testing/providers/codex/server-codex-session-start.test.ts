@@ -486,12 +486,12 @@ it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
         await post({
           hook_event_name: 'UserPromptSubmit',
           session_id: 'replacement-session',
-          prompt: 'replacement task',
-          turnStartedAt: 11_000
+          prompt: 'replacement task'
         })
         expect(desktop.getStatusSnapshot()[0]).toMatchObject({
           state: 'working',
-          prompt: 'replacement task'
+          prompt: 'replacement task',
+          turnStartedAt: 11_000
         })
       }
     } finally {

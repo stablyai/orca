@@ -29,7 +29,6 @@ export type SpeechModelErrorRate = {
 export type SpeechModelManifest = {
   id: string
   label: string
-  description: string
   type: SpeechModelType
   provider: SpeechModelProvider
   /** The text pipeline's hint: one language, a bilingual pair such as 'zh-en', or 'multilingual'. */
@@ -84,6 +83,12 @@ export type SpeechTranscriptEvent = {
   sessionId: string
 }
 
+/** Speech the engine has heard but not committed yet; only pause-cut on-device models send it. */
+export type SpeechPendingEvent = {
+  pending: boolean
+  sessionId: string
+}
+
 /** Desktop audio posted from the preload straight to the speech process; 'end' follows the last frame. */
 export type SpeechAudioPortMessage =
   | { type: 'feed'; samples: Float32Array; sampleRate: number }
@@ -127,10 +132,13 @@ export type VoiceSettings = {
   speechGpu?: SpeechGpuMode
   /** Personal dictionary, used in every repo; each repo adds its own Repo.dictationTerms. */
   dictationTerms?: DictationTerm[]
+  /** Adds the current repo's name as a hint (DictationTerm.hint). Absent = on. */
+  dictationRepoNameHint?: boolean
 }
 
 /** Where a dictation goes: an engine in the desktop's own process takes repoTerms, a host resolves worktreeId itself. */
 export type DictationContext = {
   worktreeId?: string
   repoTerms?: DictationTerm[]
+  repoName?: string
 }

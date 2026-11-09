@@ -15,8 +15,9 @@ type Feed = Extract<SttWorkerRequest, { type: 'feed' }>
 type Open = Extract<SttWorkerRequest, { type: 'open' }>
 type ChildMessage =
   | { type: 'chunk'; streamId: string; text: string; samples: number }
+  | { type: 'speech-pending'; streamId: string; pending: boolean }
   | {
-      type: 'ready' | 'stopped' | 'error' | 'partial' | 'final'
+      type: 'ready' | 'loading' | 'stopped' | 'discarded' | 'error' | 'partial' | 'final'
       streamId?: string
       text?: string
       error?: string
@@ -32,7 +33,8 @@ type StreamBacklog = {
   pending: 'stop' | 'discard' | null
 }
 
-// Well under the session's 60 s start and stop timeouts, so a CPU replay still fits; covers first-run shader compiles.
+// Per load step or decode. Well under the session's 60 s start and stop timeouts, so a CPU replay still fits;
+// covers first-run shader compiles.
 const GPU_STALL_TIMEOUT_MS = 25_000
 
 /**
@@ -129,6 +131,10 @@ class SttCpuFallbackWorker extends EventEmitter implements SttWorkerProcess {
       this.detachChild()
       void this.child.terminate().catch(() => undefined)
       this.emit('exit', 1)
+      return
+    }
+    if (message.type === 'loading') {
+      this.watchForStall(true)
       return
     }
     if (message.type === 'chunk') {

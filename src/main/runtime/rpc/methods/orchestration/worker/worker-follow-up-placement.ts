@@ -10,6 +10,7 @@ import {
   structuredWorkerSession
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import type { WorkerFollowUpPlacement } from './worker-follow-up-choice'
+import { publishChatTabInBackground } from '../../../../session-tabs/background-chat-tab-publication'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */
 export type WorkerFollowUp = {
@@ -128,13 +129,7 @@ export async function reopenWorkerChat(
   const running = structuredWorkerSession(identity)
   const sessionId = running.kind === 'here' ? running.sessionId : identity.sessionId
   const userOpened = host.isSessionTabVisible(sessionId)
-  const revealed = await host.revealSession(sessionId)
-  await runtime.publishStructuredAgentSessionTab({
-    workspaceId: revealed.workspaceId,
-    sessionId: revealed.sessionId,
-    agent: revealed.agent,
-    activate: false
-  })
+  await publishChatTabInBackground(runtime, host, sessionId)
   return {
     handle,
     chat: true,

@@ -12,15 +12,19 @@ import { OpenAiCompatibleProviderDialog } from './OpenAiCompatibleProviderDialog
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
-import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
+import { VoiceVocabularySetting } from './VoiceVocabularySetting'
+import { VOICE_MICROPHONE_ROW_ID, VoiceInputSettings } from './VoiceInputSettings'
+import { VoiceSetupCard } from './VoiceSetupCard'
+import { cancelSpeechModelDownload, startSpeechModelDownload } from './speech-model-download'
 import { VoiceModelUnloadSetting } from './VoiceModelUnloadSetting'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
-import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { VoiceSpeechGpuSetting } from './VoiceSpeechGpuSetting'
-import { matchesSettingsSearch } from '../search/settings-search'
-import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
 import { useTranslate } from '@/i18n/use-translate'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { useLanguageReadiness } from '@/i18n/language-readiness'
+import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { speechModelRatingLanguage } from '../../../../../shared/speech-model-quality'
 
 type VoicePaneProps = {
   settings: GlobalSettings
@@ -35,8 +39,10 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const modelStates = useAppStore((s) => s.modelStates)
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
-  const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery ?? '')
-  const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
+  const systemLanguageTag = useLanguageReadiness((s) => s.detection?.detectedTag)
+  // null until main answers, so the card and list never show a state the catalog would contradict.
+  const [loadedCatalog, setCatalog] = useState<SpeechModelManifest[] | null>(null)
+  const catalog = loadedCatalog ?? []
   const [permissionPending, setPermissionPending] = useState(false)
   const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false)
   const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
@@ -143,18 +149,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   }
 
   const selectedModel = catalog.find((m) => m.id === voiceSettings.sttModel)
-  const showOpenAiSettingsRow =
-    voiceSettings.openAiApiKeyConfigured ||
-    selectedModel?.provider === 'openai' ||
-    (settingsSearchQuery.trim() !== '' &&
-      matchesSettingsSearch(settingsSearchQuery, getOpenaiTranscriptionSearchEntry()))
 
   const compatibleModel = catalog.find((m) => m.provider === 'openai-compatible')
   const compatibleConfigured =
     compatibleModel !== undefined &&
     modelStates.some((s) => s.id === compatibleModel.id && s.status === 'ready')
-  const showCompatibleSettingsRow =
-    compatibleConfigured || selectedModel?.provider === 'openai-compatible'
 
   const openOpenAiDialog = (modelId: string | null = null): void => {
     setPendingCloudModelId(modelId)
@@ -167,11 +166,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     setCompatibleDialogOpen(true)
   }
 
-  const openCloudSetup = (manifest: SpeechModelManifest): void => {
-    if (manifest.provider === 'openai-compatible') {
-      openCompatibleDialog(manifest.id)
+  const openCloudSetup = (modelId: string): void => {
+    if (catalog.find((m) => m.id === modelId)?.provider === 'openai-compatible') {
+      openCompatibleDialog(modelId)
     } else {
-      openOpenAiDialog(manifest.id)
+      openOpenAiDialog(modelId)
     }
   }
 
@@ -252,95 +251,134 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     }
   }
 
+  const selectedState = modelStates.find((s) => s.id === voiceSettings.sttModel)
+  const ratingLanguage =
+    speechModelRatingLanguage(voiceSettings.dictationLanguage, systemLanguageTag ?? undefined) ??
+    'en'
+
   return (
-    <div ref={handlePaneRef} className="space-y-1">
-      <VoiceDictationSettingsSection
-        voiceSettings={voiceSettings}
-        permissionPending={permissionPending}
-        onToggleVoiceDictation={() => void toggleVoiceDictation()}
-        onUpdateVoiceSettings={updateVoiceSettings}
-      />
-
-      <VoiceSpeechModelSection
-        voiceSettings={voiceSettings}
-        catalog={catalog}
-        modelStates={modelStates}
-        onUpdateVoiceSettings={updateVoiceSettings}
-        onOpenCloudSetup={openCloudSetup}
-        onRefreshModelStates={refreshModelStates}
-      />
-
-      <Separator />
-
-      <VoiceDictationLanguageSetting
-        voiceSettings={voiceSettings}
-        selectedModel={selectedModel}
-        onUpdateVoiceSettings={updateVoiceSettings}
-      />
-
-      <Separator />
-
-      <SettingsSwitchRow
-        label={t('components.settings.voice.fillerWords.title', 'Remove Filler Words')}
-        description={t(
-          'components.settings.voice.fillerWords.description',
-          'Drops sounds like “um” and “uh” from dictated text, in the dictation language.'
-        )}
-        checked={voiceSettings.removeFillerWords}
-        onChange={() =>
-          updateVoiceSettings({ removeFillerWords: !voiceSettings.removeFillerWords })
-        }
-      />
-
-      <Separator />
-
-      <VoiceModelUnloadSetting
-        voiceSettings={voiceSettings}
-        selectedModel={selectedModel}
-        onUpdateVoiceSettings={updateVoiceSettings}
-      />
-
-      {selectedModel?.provider === 'local' && (
+    <div ref={handlePaneRef} className="space-y-6">
+      {loadedCatalog ? (
         <>
-          <Separator />
+          <VoiceSetupCard
+            voiceSettings={voiceSettings}
+            selectedModel={selectedModel}
+            selectedState={selectedState}
+            permissionPending={permissionPending}
+            onToggleVoiceDictation={() => void toggleVoiceDictation()}
+            onDownloadModel={(modelId) => startSpeechModelDownload(modelId, refreshModelStates)}
+            onCancelDownload={(modelId) => cancelSpeechModelDownload(modelId, refreshModelStates)}
+            onShowMicrophone={() =>
+              document
+                .getElementById(VOICE_MICROPHONE_ROW_ID)
+                ?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'center' })
+            }
+          />
+
+          <VoiceSpeechModelSection
+            voiceSettings={voiceSettings}
+            catalog={catalog}
+            modelStates={modelStates}
+            ratingLanguage={ratingLanguage}
+            onUpdateVoiceSettings={updateVoiceSettings}
+            onOpenCloudSetup={openCloudSetup}
+            onRefreshModelStates={refreshModelStates}
+            cloudSettings={
+              <>
+                {voiceSettings.openAiApiKeyConfigured ? (
+                  <>
+                    <UnsealedCredentialNotice
+                      protection={openAiKeyProtection}
+                      credentialName={t(
+                        'auto.components.settings.VoicePane.openAiKeyName',
+                        'Your OpenAI transcription key'
+                      )}
+                    />
+                    <OpenAiTranscriptionSettingsRow
+                      configured
+                      disabled={openAiKeyPending}
+                      onConfigure={() => openOpenAiDialog(null)}
+                      onClear={() => void clearOpenAiApiKey()}
+                    />
+                  </>
+                ) : null}
+                {compatibleConfigured ? (
+                  <OpenAiTranscriptionSettingsRow
+                    variant="compatible"
+                    configured
+                    disabled={false}
+                    onConfigure={() => openCompatibleDialog(null)}
+                    onClear={() => void removeCompatibleProvider()}
+                  />
+                ) : null}
+              </>
+            }
+          />
+        </>
+      ) : null}
+
+      <Separator />
+
+      <div className="space-y-1">
+        <SettingsSubsectionHeader
+          title={t('components.settings.voice.language.title', 'Language')}
+        />
+        <VoiceDictationLanguageSetting
+          voiceSettings={voiceSettings}
+          selectedModel={selectedModel}
+          onUpdateVoiceSettings={updateVoiceSettings}
+        />
+      </div>
+
+      <Separator />
+
+      <VoiceVocabularySetting
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
+      <Separator />
+
+      <div className="space-y-1">
+        <SettingsSubsectionHeader title={t('components.settings.voice.cleanup.title', 'Cleanup')} />
+        <SettingsSwitchRow
+          label={t('components.settings.voice.fillerWords.title', 'Remove Filler Words')}
+          description={t(
+            'components.settings.voice.fillerWords.description',
+            'Drops sounds like “um” and “uh” from dictated text, in the dictation language.'
+          )}
+          checked={voiceSettings.removeFillerWords}
+          onChange={() =>
+            updateVoiceSettings({ removeFillerWords: !voiceSettings.removeFillerWords })
+          }
+        />
+      </div>
+
+      <Separator />
+
+      <VoiceInputSettings
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
+      <Separator />
+
+      <div className="space-y-1">
+        <SettingsSubsectionHeader
+          title={t('components.settings.voice.advanced.title', 'Advanced')}
+        />
+        <div className="divide-y divide-border">
           <VoiceSpeechGpuSetting
             voiceSettings={voiceSettings}
             onUpdateVoiceSettings={updateVoiceSettings}
           />
-        </>
-      )}
-
-      {showOpenAiSettingsRow && (
-        <>
-          <Separator />
-          <UnsealedCredentialNotice
-            protection={openAiKeyProtection}
-            credentialName={t(
-              'auto.components.settings.VoicePane.openAiKeyName',
-              'Your OpenAI transcription key'
-            )}
+          <VoiceModelUnloadSetting
+            voiceSettings={voiceSettings}
+            selectedModel={selectedModel}
+            onUpdateVoiceSettings={updateVoiceSettings}
           />
-          <OpenAiTranscriptionSettingsRow
-            configured={voiceSettings.openAiApiKeyConfigured}
-            disabled={openAiKeyPending}
-            onConfigure={() => openOpenAiDialog(null)}
-            onClear={() => void clearOpenAiApiKey()}
-          />
-        </>
-      )}
-
-      {showCompatibleSettingsRow && (
-        <>
-          <Separator />
-          <OpenAiTranscriptionSettingsRow
-            variant="compatible"
-            configured={compatibleConfigured}
-            disabled={false}
-            onConfigure={() => openCompatibleDialog(null)}
-            onClear={() => void removeCompatibleProvider()}
-          />
-        </>
-      )}
+        </div>
+      </div>
 
       <OpenAiCompatibleProviderDialog
         open={compatibleDialogOpen}

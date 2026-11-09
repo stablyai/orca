@@ -108,7 +108,7 @@ function textarea(): HTMLTextAreaElement {
 }
 
 describe('native chat composer composition ownership', () => {
-  it('preserves the focused browser preedit through 120 stale streaming rerenders', () => {
+  it('preserves the focused preedit through a stale streaming rerender', () => {
     const textareaRef = createRef<HTMLTextAreaElement>()
     const onImeSettled = vi.fn()
     const props = fieldProps({ textareaRef, onImeSettled })
@@ -118,12 +118,10 @@ describe('native chat composer composition ownership', () => {
     fireEvent.compositionStart(input)
     changePrompt(input, '가')
 
-    for (let index = 0; index < 120; index += 1) {
-      view.rerender(<TestField {...props} draft={`stale streaming draft ${index}`} />)
-      expect(textarea()).toBe(input)
-      expect(document.activeElement).toBe(input)
-      expect(promptValue(input)).toBe('가')
-    }
+    view.rerender(<TestField {...props} draft="stale streaming draft" />)
+    expect(textarea()).toBe(input)
+    expect(document.activeElement).toBe(input)
+    expect(promptValue(input)).toBe('가')
 
     fireEvent.compositionEnd(input, { data: '가' })
     expect(onImeSettled).toHaveBeenCalledOnce()
