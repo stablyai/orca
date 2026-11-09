@@ -22,6 +22,23 @@ export const WORKTREE_SECTION_HEADER_PADDING_LEFT = PROJECT_GROUP_HEADER_BASE_PA
 export const PROJECT_GROUP_HEADER_INDENT = 10
 export const MAX_PROJECT_GROUP_HEADER_DEPTH = 6
 
+/** Left inset that nests a row under its host header: headers one step, their contents two. */
+export function getHostSectionRowInset(args: {
+  rowType: string
+  index: number
+  firstHostHeaderIndex: number
+}): number {
+  // Why: rows before the first host header belong to no host, and host headers stay top level.
+  if (
+    args.firstHostHeaderIndex < 0 ||
+    args.index <= args.firstHostHeaderIndex ||
+    args.rowType === 'host-header'
+  ) {
+    return 0
+  }
+  return args.rowType === 'header' ? SIDEBAR_TREE_INDENT : SIDEBAR_TREE_INDENT * 2
+}
+
 function clampDepth(depth: number): number {
   return Math.max(0, Math.floor(Number.isFinite(depth) ? depth : 0))
 }

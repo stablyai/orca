@@ -37,12 +37,14 @@ import {
 } from './item-row'
 import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
+import { getHostSectionRowInset } from './indentation'
 import type { WorktreeRowDragState } from '../drag/row-state'
 import type { Translate } from '@/i18n/use-translate'
 
 export type WorktreeVirtualRowContext = {
   renderRows: RenderRow[]
   firstHeaderIndex: number
+  firstHostHeaderIndex: number
   activeStickyHeaderIndexRef: React.MutableRefObject<number | null>
   activeStickyHostIndexRef: React.MutableRefObject<number | null>
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
@@ -122,7 +124,8 @@ function folderLineageToggle(
 function renderLineageGroupVirtualRow(
   ctx: WorktreeVirtualRowContext,
   row: Extract<RenderRow, { type: 'lineage-group' }>,
-  vItem: VirtualItem
+  vItem: VirtualItem,
+  hostInset: number
 ): React.JSX.Element {
   const parent = row.folder ? undefined : row.rows[0]
   const children = row.folder ? row.rows : row.rows.slice(1)
@@ -148,7 +151,10 @@ function renderLineageGroupVirtualRow(
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset) }}
+      style={{
+        transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset),
+        paddingLeft: hostInset || undefined
+      }}
     >
       <div className="overflow-visible">
         {row.folder
@@ -175,11 +181,12 @@ function renderLineageGroupVirtualRow(
   )
 }
 
-// Each row renderer owns its frame because sticky headers, lineage groups and plain cards position differently.
-export function renderWorktreeVirtualRow(
+/** Each row renderer owns its frame because sticky headers, lineage groups and plain cards position differently. */
+function renderWorktreeVirtualRowFrame(
   ctx: WorktreeVirtualRowContext,
   row: RenderRow,
   vItem: VirtualItem,
+  hostInset: number,
   t?: Translate
 ): React.JSX.Element | null {
   if (row.type === 'host-header') {
@@ -199,14 +206,15 @@ export function renderWorktreeVirtualRow(
           index: vItem.index,
           firstHeaderIndex: ctx.firstHeaderIndex
         }),
-        measureVirtualRowElement: ctx.measureVirtualRowElement
+        measureVirtualRowElement: ctx.measureVirtualRowElement,
+        hostInset
       },
       t
     )
   }
 
   if (row.type === 'lineage-group') {
-    return renderLineageGroupVirtualRow(ctx, row, vItem)
+    return renderLineageGroupVirtualRow(ctx, row, vItem, hostInset)
   }
 
   if (row.type === 'imported-worktrees-card') {
@@ -214,6 +222,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      hostInset,
       actionStateByProjectId: ctx.importedWorktreeCardActionState,
       onShow: ctx.onShowImportedWorktrees,
       onKeepHidden: ctx.onKeepImportedWorktreesHidden
@@ -225,6 +234,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      hostInset,
       actionState: ctx.newExternalWorktreeInboxActionState.get(row.repo.id),
       onReview: ctx.onOpenWorktreeVisibility,
       onSuppress: ctx.onOpenSuppressExternalWorktreeInbox
@@ -235,7 +245,8 @@ export function renderWorktreeVirtualRow(
     return renderPendingCreationVirtualRow({
       row,
       vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      hostInset
     })
   }
 
@@ -245,6 +256,7 @@ export function renderWorktreeVirtualRow(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      hostInset,
       lineage: { onToggle: folderLineageToggle(ctx, row) }
     })
   }
@@ -273,7 +285,10 @@ export function renderWorktreeVirtualRow(
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset) }}
+      style={{
+        transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset),
+        paddingLeft: hostInset || undefined
+      }}
       onDragOver={
         itemWorkspaceStatus
           ? (event) => ctx.onWorkspaceStatusDragOver(event, itemWorkspaceStatus)
@@ -289,4 +304,19 @@ export function renderWorktreeVirtualRow(
       {renderWorktreeItemRow(ctx.item, row, false)}
     </div>
   )
+}
+
+/** Renders a row's frame, inset under its host header so the sidebar reads as a tree. */
+export function renderWorktreeVirtualRow(
+  ctx: WorktreeVirtualRowContext,
+  row: RenderRow,
+  vItem: VirtualItem,
+  t?: Translate
+): React.JSX.Element | null {
+  const hostInset = getHostSectionRowInset({
+    rowType: row.type,
+    index: vItem.index,
+    firstHostHeaderIndex: ctx.firstHostHeaderIndex
+  })
+  return renderWorktreeVirtualRowFrame(ctx, row, vItem, hostInset, t)
 }

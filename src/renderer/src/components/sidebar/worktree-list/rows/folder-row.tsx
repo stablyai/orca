@@ -17,7 +17,7 @@ import {
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
-import { getVirtualRowTransform } from '../viewport/virtual-rows'
+import { getVirtualRowFrameStyle } from '../viewport/virtual-rows'
 import {
   getFolderWorkspaceRowGeometry,
   getLineageChildrenInlineStyle,
@@ -75,6 +75,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
   row: FolderWorkspaceItemRow
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
+  hostInset: number
   lineage?: FolderRowLineage
 }): React.JSX.Element {
   return renderFolderWorkspaceOption(args)
@@ -86,6 +87,8 @@ export function renderFolderWorkspaceOption(args: {
   row: FolderWorkspaceItemRow
   vItem?: VirtualItem
   measureVirtualRowElement?: (element: HTMLDivElement | null) => void
+  /** Left inset under a host header; only a row that owns its frame applies it. */
+  hostInset?: number
   lineage?: FolderRowLineage
 }): React.JSX.Element {
   const { ctx, row, vItem, lineage } = args
@@ -140,7 +143,7 @@ export function renderFolderWorkspaceOption(args: {
             'data-index': vItem.index,
             ref: args.measureVirtualRowElement,
             className: 'absolute left-0 right-0 top-0',
-            style: { transform: getVirtualRowTransform(vItem.start) }
+            style: getVirtualRowFrameStyle(vItem.start, args.hostInset ?? 0)
           }
         : { className: 'relative' })}
       onClick={forwardOptionPressToCardSurface}

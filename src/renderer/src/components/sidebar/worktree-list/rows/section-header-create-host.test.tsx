@@ -137,7 +137,8 @@ function clickCreate(row: GroupHeaderRow): void {
         isActiveStickyHeader: false,
         hasStickyHost: false,
         hasHeaderTopSpacing: false,
-        measureVirtualRowElement: vi.fn()
+        measureVirtualRowElement: vi.fn(),
+        hostInset: 0
       })}
     </TooltipProvider>
   )
