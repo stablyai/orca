@@ -18,6 +18,7 @@ const pr: PRInfo = {
   state: 'open',
   url: 'https://github.com/acme/app/pull/42',
   checksStatus: 'pending',
+  checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1, neutral: 0 },
   updatedAt: '2026-11-09T10:00:00Z',
   mergeable: 'MERGEABLE',
   headSha: 'abc123'
@@ -41,7 +42,33 @@ describe('pullRequestChangeObserver', () => {
       },
       []
     )
-    observe(candidate, { kind: 'found', pr: { ...pr, checksStatus: 'success' }, fetchedAt: 4 }, [])
+    // A read that couldn't load the checks reports neutral with no summary.
+    const { checksSummary: _unloaded, ...withoutChecks } = pr
+    observe(
+      candidate,
+      { kind: 'found', pr: { ...withoutChecks, checksStatus: 'neutral' }, fetchedAt: 4 },
+      []
+    )
+    observe(
+      candidate,
+      {
+        kind: 'found',
+        pr: {
+          ...pr,
+          checksStatus: 'success',
+          checksSummary: {
+            state: 'success',
+            total: 1,
+            passed: 1,
+            failed: 0,
+            pending: 0,
+            neutral: 0
+          }
+        },
+        fetchedAt: 5
+      },
+      []
+    )
 
     expect(published).toEqual([
       { worktreeId: 'repo-1::/repo', repoId: 'repo-1', branch: 'feature' },

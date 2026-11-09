@@ -1,4 +1,5 @@
 import type { PRRefreshOutcome } from '../../shared/github/pull-request-refresh-types'
+import type { CheckStatus } from '../../shared/github/pull-request-types'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import type { PRRefreshOutcomeObserver } from './pr-refresh-event-publisher'
 
@@ -7,19 +8,25 @@ export type PullRequestChange = Omit<
   'type'
 >
 
+type PublishedPR = { summary: string; checks: CheckStatus | null }
+
 // An evicted checkout costs one repeat event, so the bound only caps memory.
 const MAX_TRACKED_CHECKOUTS = 256
 
 // Errors say nothing about the PR, so they never publish.
-function outcomeSignature(outcome: PRRefreshOutcome): string | null {
+function observedPR(outcome: PRRefreshOutcome, last: PublishedPR | undefined): PublishedPR | null {
   if (outcome.kind === 'no-pr') {
-    return 'no-pr'
+    return { summary: 'no-pr', checks: null }
   }
   if (outcome.kind !== 'found') {
     return null
   }
-  const { number, state, headSha, updatedAt, checksStatus } = outcome.pr
-  return JSON.stringify([number, state, headSha ?? null, updatedAt ?? null, checksStatus])
+  const { number, state, headSha, updatedAt, checksStatus, checksSummary } = outcome.pr
+  return {
+    summary: JSON.stringify([number, state, headSha ?? null, updatedAt ?? null]),
+    // A read that couldn't load the checks (an error, or a watch read's page cap) reports 'neutral' without a summary.
+    checks: checksSummary ? checksStatus : (last?.checks ?? null)
+  }
 }
 
 /**
@@ -29,14 +36,16 @@ function outcomeSignature(outcome: PRRefreshOutcome): string | null {
 export function pullRequestChangeObserver(
   publish: (change: PullRequestChange) => void
 ): PRRefreshOutcomeObserver {
-  const published = new Map<string, string>()
-  const publishIfChanged = (change: PullRequestChange, signature: string): void => {
+  const published = new Map<string, PublishedPR>()
+  const publishIfChanged = (change: PullRequestChange, outcome: PRRefreshOutcome): void => {
     const key = `${change.worktreeId}\0${change.branch}`
-    if (published.get(key) === signature) {
+    const last = published.get(key)
+    const next = observedPR(outcome, last)
+    if (!next || (next.summary === last?.summary && next.checks === last.checks)) {
       return
     }
     published.delete(key)
-    published.set(key, signature)
+    published.set(key, next)
     const oldest = published.keys().next().value
     if (published.size > MAX_TRACKED_CHECKOUTS && oldest !== undefined) {
       published.delete(oldest)
@@ -44,15 +53,11 @@ export function pullRequestChangeObserver(
     publish(change)
   }
   return (candidate, outcome, aliases) => {
-    const signature = outcomeSignature(outcome)
-    if (signature === null) {
-      return
-    }
     // One read can stand for several checkouts linked to the same PR. A client's own read names
     // no checkout, and that client already holds the answer.
     for (const { worktreeId, repoId, branch } of [candidate, ...aliases]) {
       if (worktreeId) {
-        publishIfChanged({ worktreeId, repoId: repoId ?? candidate.repoId, branch }, signature)
+        publishIfChanged({ worktreeId, repoId: repoId ?? candidate.repoId, branch }, outcome)
       }
     }
   }
