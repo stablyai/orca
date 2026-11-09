@@ -47,7 +47,7 @@ const schemas: Record<string, object> = {
         properties: {
           machineSize: { type: 'string', enum: ['standard', 'large'] },
           region: { type: ['string', 'null'] },
-          buildId: { type: ['string', 'null'], description: 'Pinned org environment build; null uses the active build for the repo' }
+          buildId: { type: ['string', 'null'], description: 'Pinned team environment build; null uses the active build for the repo' }
         }
       },
       createdAt: { type: 'integer' }
@@ -61,7 +61,7 @@ const schemas: Record<string, object> = {
       projectId: { type: ['string', 'null'] },
       status: { type: 'string', enum: ['starting', 'running', 'sleeping', 'waking', 'destroying', 'destroyed', 'failed'] },
       archived: { type: 'boolean' },
-      hidden: { type: 'boolean', description: 'Routine runs and other machine-made workspaces; excluded from lists unless include=hidden' },
+      hidden: { type: 'boolean', description: 'Routine runs and other automatically created workspaces; excluded from lists unless include=hidden' },
       origin: { type: 'string', enum: ['desktop', 'api', 'mcp', 'routine', 'vm'] },
       machineSize: { type: 'string' },
       region: { type: 'string' },
@@ -134,7 +134,7 @@ const schemas: Record<string, object> = {
         type: ['object', 'null'],
         properties: { id: { type: 'string' }, status: { type: 'string' }, finishedAt: { type: ['integer', 'null'] } }
       },
-      createdBy: { type: 'string', description: 'Runs execute as this user (their personal and the org secrets).' },
+      createdBy: { type: 'string', description: 'Runs execute as this user (their personal and the team Cloud secrets).' },
       createdAt: { type: 'integer' },
       updatedAt: { type: 'integer' }
     }
@@ -209,7 +209,7 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
     get: { tags: ['Account'], summary: 'Who the token acts as', responses: { 200: { description: 'Caller', schema: obj({ accountId: { type: 'string' }, userId: { type: 'string' }, role: { type: 'string' }, scopes: { type: 'array', items: { type: 'string' } } }) } } }
   },
   '/v1/api-keys': {
-    get: { tags: ['API keys'], sessionOnly: true, summary: 'List API keys', description: 'Admins see every key in the org; members see their own.', responses: { 200: { description: 'Keys', schema: list('keys', 'ApiKey') } } },
+    get: { tags: ['API keys'], sessionOnly: true, summary: 'List Orca API keys', description: 'Owners and admins see every key on the team; members see their own.', responses: { 200: { description: 'Keys', schema: list('keys', 'ApiKey') } } },
     post: {
       tags: ['API keys'],
       sessionOnly: true,
@@ -220,7 +220,7 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
     }
   },
   '/v1/api-keys/{id}': {
-    delete: { tags: ['API keys'], sessionOnly: true, summary: 'Revoke an API key', params: [idParam('id', 'Key id')], responses: { 200: 'Revoked' } }
+    delete: { tags: ['API keys'], sessionOnly: true, summary: 'Revoke an Orca API key', params: [idParam('id', 'Key id')], responses: { 200: 'Revoked' } }
   },
   '/v1/oauth-approvals': {
     post: {
@@ -309,8 +309,8 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
     post: {
       tags: ['Workspaces'],
       scope: 'workspaces:write',
-      summary: 'Create a workspace (boots a VM)',
-      description: 'Returns once the VM is running (typically a few seconds). Pass `message` to queue a first prompt for an agent.',
+      summary: 'Create a workspace (starts a sandbox)',
+      description: 'Returns once the sandbox is running (typically a few seconds). Pass `message` to queue a first prompt for an agent.',
       body: obj({
         name: { type: 'string' },
         projectId: { type: 'string' },
@@ -324,10 +324,10 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
   },
   '/v1/workspaces/{id}': {
     get: { tags: ['Workspaces'], scope: 'workspaces:read', summary: 'Workspace status', params: [WS], responses: { 200: { description: 'Workspace', schema: one('workspace', 'Workspace') } } },
-    delete: { tags: ['Workspaces'], scope: 'workspaces:write', summary: 'Destroy a workspace (deletes its disk)', params: [WS], responses: { 200: { description: 'Destroyed', schema: one('workspace', 'Workspace') } } }
+    delete: { tags: ['Workspaces'], scope: 'workspaces:write', summary: 'Delete a workspace (its files are gone for good)', params: [WS], responses: { 200: { description: 'Deleted', schema: one('workspace', 'Workspace') } } }
   },
   '/v1/workspaces/{id}/sleep': {
-    post: { tags: ['Workspaces'], scope: 'workspaces:write', summary: 'Sleep: stop the VM, keep the disk', params: [WS], responses: { 200: { description: 'Sleeping', schema: one('workspace', 'Workspace') } } }
+    post: { tags: ['Workspaces'], scope: 'workspaces:write', summary: 'Sleep: the sandbox sleeps and its files are kept', params: [WS], responses: { 200: { description: 'Sleeping', schema: one('workspace', 'Workspace') } } }
   },
   '/v1/workspaces/{id}/wake': {
     post: { tags: ['Workspaces'], scope: 'workspaces:write', summary: 'Wake a sleeping or archived workspace', params: [WS], responses: { 200: { description: 'Running', schema: one('workspace', 'Workspace') } } }
@@ -422,7 +422,7 @@ export function openApiDocument(origin: string) {
         tags: op.tags,
         summary: op.summary,
         ...(op.description || op.scope || op.sessionOnly
-          ? { description: [op.description, op.scope ? `Scope: \`${op.scope}\`.` : null, op.sessionOnly ? 'Signed-in session only (API keys cannot manage keys).' : null].filter(Boolean).join('\n\n') }
+          ? { description: [op.description, op.scope ? `Scope: \`${op.scope}\`.` : null, op.sessionOnly ? 'Signed-in session only (Orca API keys cannot manage keys).' : null].filter(Boolean).join('\n\n') }
           : {}),
         operationId: `${method}${path.replace(/\{(\w+)\}/g, 'By_$1').replace(/[^A-Za-z0-9]+(.)?/g, (_m, c: string | undefined) => (c ? c.toUpperCase() : ''))}`,
         ...(op.params ? { parameters: op.params } : {}),
@@ -438,7 +438,7 @@ export function openApiDocument(origin: string) {
       title: 'Orca Cloud API',
       version: '1.0.0',
       description:
-        'Create and drive Orca Cloud workspaces, message their agents and run routines. Authenticate with `Authorization: Bearer orca_sk_…` (Settings → API keys). Each key is limited to 120 requests a minute; responses carry `x-ratelimit-*` headers.'
+        'Create and drive Orca Cloud workspaces, message their agents and run routines. Authenticate with `Authorization: Bearer orca_sk_…` (Settings → Orca API keys). Each key is limited to 120 requests a minute; responses carry `x-ratelimit-*` headers.'
     },
     servers: [{ url: origin }],
     security: [{ bearer: [] }],
@@ -447,11 +447,11 @@ export function openApiDocument(origin: string) {
       schemas
     },
     tags: [
-      { name: 'Workspaces', description: 'Cloud VMs: create, sleep, wake, archive, destroy' },
+      { name: 'Workspaces', description: 'Cloud workspaces: create, sleep, wake, archive, delete' },
       { name: 'Agents', description: 'Message agents and list their sessions' },
-      { name: 'Routines', description: 'Scheduled, GitHub-triggered and webhook-triggered agent runs in fresh VMs' },
+      { name: 'Routines', description: 'Scheduled, GitHub-triggered and webhook-triggered agent runs, each in a fresh sandbox' },
       { name: 'Projects', description: 'A repo plus the environment workspaces start from' },
-      { name: 'API keys', description: 'Org-scoped keys, hashed at rest' },
+      { name: 'API keys', description: 'Orca API keys: team-scoped, hashed at rest. For the Orca Cloud API, the orca CLI and MCP clients. Claude or Codex keys go in Cloud secrets.' },
       { name: 'Account', description: 'Settings and audit log' }
     ],
     paths
@@ -480,28 +480,28 @@ a{color:var(--accent)}
 <h1>Orca Cloud API</h1>
 <p>Create cloud workspaces, message their agents, and run routines from scripts, CI and MCP clients. Base URL <code>${o}</code>. Machine-readable spec: <a href="/v1/openapi.json">/v1/openapi.json</a>.</p>
 <h2>Authenticate</h2>
-<p>Create a key in Orca → Settings → API keys. Keys belong to your org, carry scopes, and are shown once.</p>
+<p>Create a key in Orca → Settings → Orca API keys. Keys belong to your team, have Read only, Full access or Custom permissions, and are shown once. Claude or Codex keys go in Cloud secrets instead.</p>
 <pre>export ORCA_API_KEY=orca_sk_…
 curl -s ${o}/v1/me -H "Authorization: Bearer $ORCA_API_KEY"</pre>
 <h2>Start a workspace and give an agent a task</h2>
 <pre>curl -s ${o}/v1/workspaces -H "Authorization: Bearer $ORCA_API_KEY" -H 'content-type: application/json' \\
   -d '{"name":"fix-flaky-test","repo":{"url":"https://github.com/acme/app"},
        "message":{"agent":"claude","text":"Find and fix the flaky checkout test, then open a PR."}}'</pre>
-<p>The call returns when the VM is running. The message is queued and delivered in the background; poll <code>GET /v1/workspaces/{id}/messages/{messageId}</code>.</p>
-<h2>Sleep, wake, archive, destroy</h2>
+<p>The call returns when the sandbox is running. The message is queued and delivered in the background; poll <code>GET /v1/workspaces/{id}/messages/{messageId}</code>.</p>
+<h2>Sleep, wake, archive, delete</h2>
 <pre>curl -X POST ${o}/v1/workspaces/$ID/sleep   -H "Authorization: Bearer $ORCA_API_KEY"
 curl -X POST ${o}/v1/workspaces/$ID/wake    -H "Authorization: Bearer $ORCA_API_KEY"
 curl -X POST ${o}/v1/workspaces/$ID/archive -H "Authorization: Bearer $ORCA_API_KEY"
 curl -X DELETE ${o}/v1/workspaces/$ID       -H "Authorization: Bearer $ORCA_API_KEY"</pre>
 <h2>MCP</h2>
-<p>Point any MCP client at <code>${o}/mcp</code> (Streamable HTTP). Clients that support OAuth register themselves and open an approval page in the browser: approve with a one-time code from Orca → Settings → API keys → <i>Approve an app</i>, or with one of your API keys. The app never gets more than that key may do. Clients without OAuth can send an API key as a bearer token.</p>
+<p>Point any MCP client at <code>${o}/mcp</code> (Streamable HTTP). Clients that support OAuth register themselves and open an approval page in the browser: approve with a one-time code from Orca → Settings → Orca API keys → <i>Approve an app</i>, or with one of your API keys. The app never gets more than that key may do. Clients without OAuth can send an API key as a bearer token.</p>
 <pre>claude mcp add --transport http orca-cloud ${o}/mcp
 claude mcp add --transport http orca-cloud ${o}/mcp --header "Authorization: Bearer $ORCA_API_KEY"</pre>
 <p>Tools: whoami, list_projects, list_workspaces, get_workspace, create_workspace, sleep_workspace, wake_workspace, archive_workspace, destroy_workspace, send_message, get_message, list_sessions, read_session, list_routines, run_routine. They use the same scopes, rate limits and audit log as the REST API.</p>
 <h2>Limits and errors</h2>
 <div class="grid">
-<div class="card"><b>Rate limits</b>120 requests/min per key, 30 messages/min per user, 10 workspace creates/min per org. 429 responses carry <code>Retry-After</code>.</div>
-<div class="card"><b>Errors</b>JSON <code>{"error":"code","reason":"…"}</code>. Another org's resources answer 404, never 403.</div>
+<div class="card"><b>Rate limits</b>120 requests/min per key, 30 messages/min per user, 10 workspace creates/min per team. 429 responses carry <code>Retry-After</code>.</div>
+<div class="card"><b>Errors</b>JSON <code>{"error":"code","reason":"…"}</code>. Another team's resources answer 404, never 403.</div>
 <div class="card"><b>Audit</b>Every mutation is recorded. Owners and admins can read <code>GET /v1/audit</code>.</div>
 </div>
 <h2>Reference</h2>

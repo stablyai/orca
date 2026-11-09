@@ -52,7 +52,7 @@ const HINTS: Record<string, string> = {
   rate_limited: 'Too many requests; wait a minute and retry.',
   conflict: 'The workspace is busy with another lifecycle change or in the wrong state; check get_workspace and retry.',
   entitlement_denied: 'The account plan does not allow this (concurrency or usage limit).',
-  workspace_unavailable: 'The workspace VM did not answer; check get_workspace (it may be sleeping or starting).',
+  workspace_unavailable: 'The workspace sandbox did not answer; check get_workspace (it may be asleep or starting).',
   not_configured: 'Orca Cloud workspaces are not available on this server.'
 }
 
@@ -94,7 +94,7 @@ export const TOOLS = [
   }),
   tool({
     name: 'list_projects',
-    description: 'Lists the Orca Cloud projects in this account. A project is a repository plus default machine settings; pass its id to create_workspace to start a workspace from it.',
+    description: 'Lists the Orca Cloud projects in this account. A project is a repository plus default sandbox settings; pass its id to create_workspace to start a workspace from it.',
     input: z.object({}).strict(),
     annotations: read('List projects'),
     run: async (_args, api) => fromApi(await api('GET', '/v1/projects'))
@@ -102,7 +102,7 @@ export const TOOLS = [
   tool({
     name: 'list_workspaces',
     description:
-      'Lists Orca Cloud workspaces (cloud VMs with a checked-out repo and coding agents). Each has an id, name, status (starting, running, sleeping, stopped, failed, destroyed), project and repo. Archived and hidden (routine run) workspaces are left out unless requested.',
+      'Lists cloud workspaces (each a sandbox with a checked-out repo and coding agents). Each has an id, name, status (starting, running, sleeping (asleep), waking, failed), project and repo. Archived and hidden (routine run) workspaces are left out unless requested.',
     input: z
       .object({
         projectId: Id('project').optional().describe('Only workspaces started from this project.'),
@@ -121,7 +121,7 @@ export const TOOLS = [
   }),
   tool({
     name: 'get_workspace',
-    description: 'Gets one workspace: status, repo, machine size, current session lease and the last error, if any.',
+    description: 'Gets one workspace: status, repo, sandbox size, current session lease and the last error, if any.',
     input: WorkspaceId,
     annotations: read('Get workspace'),
     run: async (args, api) => fromApi(await api('GET', `/v1/workspaces/${args.workspaceId}`))
@@ -129,14 +129,14 @@ export const TOOLS = [
   tool({
     name: 'create_workspace',
     description:
-      'Starts a new Orca Cloud workspace: a fresh cloud VM with the repo checked out, ready for coding agents. Start it from a project (projectId) or a repo URL. Optionally pass `message` to hand the agent its first task; it is queued and delivered as soon as the VM is up (follow it with get_message). Usually takes 10-60 seconds and uses the account\'s cloud minutes.',
+      'Starts a new Orca Cloud workspace: a fresh sandbox with the repo checked out, ready for coding agents. Start it from a project (projectId) or a repo URL. Optionally pass `message` to hand the agent its first task; it is queued and delivered as soon as the sandbox is up (follow it with get_message). Usually takes 10-60 seconds and uses your team\'s sandbox hours.',
     input: z
       .object({
         name: z.string().trim().min(1).max(100).optional().describe('Display name for the workspace.'),
-        projectId: Id('project').optional().describe('Project to start from (see list_projects). Supplies the repo and machine defaults.'),
+        projectId: Id('project').optional().describe('Project to start from (see list_projects). Supplies the repo and sandbox defaults.'),
         repoUrl: z.url({ protocol: /^https$/ }).max(2048).optional().describe('https Git URL to clone when not using a project, e.g. https://github.com/acme/app.'),
         ref: z.string().min(1).max(255).optional().describe('Branch, tag or commit to check out (default: the repo default branch).'),
-        machineSize: z.enum(['standard', 'large']).optional().describe('VM size; large has more CPU and memory and costs more.'),
+        machineSize: z.enum(['standard', 'large']).optional().describe('Sandbox size: standard (4 vCPU · 8 GB) or large (8 vCPU · 16 GB, uses sandbox hours at 2× the rate).'),
         message: z.string().min(1).max(32_000).optional().describe('First task for the agent in the new workspace.'),
         agent: Agent.optional()
       })
@@ -155,14 +155,14 @@ export const TOOLS = [
   }),
   tool({
     name: 'sleep_workspace',
-    description: 'Puts a running workspace to sleep: the VM stops and its disk is kept, so nothing is billed until wake_workspace. Running agents stop.',
+    description: 'Puts a running workspace to sleep: its files are kept and no sandbox hours are used until wake_workspace. Running agents are interrupted.',
     input: WorkspaceId,
     annotations: { title: 'Sleep workspace', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     run: async (args, api) => fromApi(await api('POST', `/v1/workspaces/${args.workspaceId}/sleep`))
   }),
   tool({
     name: 'wake_workspace',
-    description: 'Wakes a sleeping workspace (restores the VM with its disk). Returns once it is running again.',
+    description: 'Wakes a sleeping workspace with its files intact. Returns once it is running again.',
     input: WorkspaceId,
     annotations: { title: 'Wake workspace', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     run: async (args, api) => fromApi(await api('POST', `/v1/workspaces/${args.workspaceId}/wake`))
@@ -176,9 +176,9 @@ export const TOOLS = [
   }),
   tool({
     name: 'destroy_workspace',
-    description: 'Permanently destroys a workspace and its VM disk. Uncommitted and unpushed work in it is lost. This cannot be undone.',
+    description: 'Deletes a workspace and its sandbox for good. Uncommitted and unpushed work in it is lost. This cannot be undone.',
     input: WorkspaceId,
-    annotations: { title: 'Destroy workspace', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: { title: 'Delete workspace', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     run: async (args, api) => fromApi(await api('DELETE', `/v1/workspaces/${args.workspaceId}`))
   }),
   tool({
