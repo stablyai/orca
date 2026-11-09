@@ -49,8 +49,14 @@ function installedCommand(home: string, event: string): string {
   return command
 }
 
-function invoke(command: string, input: string, env: NodeJS.ProcessEnv) {
-  const [program, ...args] = tokenizeCommandLine(command)
+function invoke(
+  command: string,
+  input: string,
+  env: NodeJS.ProcessEnv,
+  mode: 'direct' | 'shell' = 'direct'
+) {
+  const [program, ...args] =
+    mode === 'shell' ? ['/bin/sh', '-c', command] : tokenizeCommandLine(command)
   if (!program) {
     throw new Error('Missing executable')
   }
@@ -86,9 +92,13 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable contract', () => {
-  it.each(['current', 'old'] as const)(
-    'delivers UTF-8 JSON and %s command ownership with open stdin',
-    async (version) => {
+  it.each([
+    ['current', 'direct'],
+    ['current', 'shell'],
+    ['old', 'direct']
+  ] as const)(
+    'delivers UTF-8 JSON and %s (%s) command ownership with open stdin',
+    async (version, mode) => {
       home = mkdtempSync(join(tmpdir(), "orca-agy-hook-'quoted-"))
       const payload = JSON.stringify({
         tool_name: 'run_command',
@@ -117,16 +127,21 @@ describe.skipIf(process.platform === 'win32')('Antigravity POSIX hook executable
           version === 'current'
             ? currentCommand
             : `/bin/sh -c ${quotePosixShell(wrapPosixHookCommand(join(home, '.orca', 'agent-hooks', 'antigravity-hook.sh'), { ORCA_ANTIGRAVITY_EVENT: 'PreToolUse' }, { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION }))}`
-        const result = await invoke(command, payload, {
-          ...process.env,
-          ORCA_AGENT_HOOK_ENDPOINT: '',
-          ORCA_AGENT_HOOK_PORT: String(address.port),
-          ORCA_AGENT_HOOK_TOKEN: 'test-only-token',
-          ORCA_PANE_KEY: 'test-pane',
-          ORCA_HOOK_AGENT_PID: version === 'current' ? '2' : '',
-          TMUX: '/tmp/agy-test.sock,123,0',
-          TMUX_PANE: '%4'
-        })
+        const result = await invoke(
+          command,
+          payload,
+          {
+            ...process.env,
+            ORCA_AGENT_HOOK_ENDPOINT: '',
+            ORCA_AGENT_HOOK_PORT: String(address.port),
+            ORCA_AGENT_HOOK_TOKEN: 'test-only-token',
+            ORCA_PANE_KEY: 'test-pane',
+            ORCA_HOOK_AGENT_PID: version === 'current' ? '2' : '',
+            TMUX: '/tmp/agy-test.sock,123,0',
+            TMUX_PANE: '%4'
+          },
+          mode
+        )
         expect(result.code).toBe(0)
         expect(result.stdout).toBe('{"decision":"ask"}')
         expect(result.elapsedMs).toBeLessThan(8000)
