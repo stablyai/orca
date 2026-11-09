@@ -33,7 +33,7 @@ export function DocPreviewDocumentChip({
           type="button"
           onClick={onBeginEdit ?? (() => void copyText())}
           aria-label={label}
-          className="@container flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-xl border border-border bg-background px-3 py-1 text-left shadow-sm hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="@container flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-lg bg-muted px-2.5 text-left hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           {copied ? (
             <Check className="size-4 shrink-0 text-muted-foreground" />

@@ -6,7 +6,6 @@ import {
 import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-preview-api'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
-import type { BrowserChromeShareControl } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
 import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
 import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
 import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
@@ -118,17 +117,16 @@ export async function readDocPreviewArtifactRequest(
 export function buildDocPreviewShareControl(
   filePath: string,
   location: DocPreviewGrantLocation | null
-): ((control: BrowserChromeShareControl) => React.ReactNode) | undefined {
+): React.ReactNode {
   if (!location || !isShareableHtmlPath(filePath)) {
     return undefined
   }
   const sourceKey = fileArtifactSourceKey(docPreviewGrantFileOwner(location.owner), filePath)
-  return (control) => (
+  return (
     <ArtifactPublishButton
       sourceKey={sourceKey}
       className="h-7 w-7"
       createRequest={() => readDocPreviewArtifactRequest(location, filePath, sourceKey)}
-      {...control}
     />
   )
 }

@@ -17143,10 +17143,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Ajanlar için sayfa bağlamını alın",
-                      "body": "Bir sayfa öğesinin bağlamını ajanlar için kopyalamak üzere yakalama aracını kullanın."
-                    },
                     "annotate": {
                       "title": "Tasarım geri bildirimlerini yerinde işaretleyin",
                       "body": "Öğelere açıklamalar ekleyin ve bu notları bir ajana gönderin."
@@ -17279,7 +17275,6 @@
             "244266c122": "İçe Aktar…",
             "e52a955e6f": "Bunu her zaman Ayarlar > Tarayıcı bölümünde bulabilirsiniz.",
             "4f5ffaa6a1": "Tarayıcı verilerini içe aktar",
-            "b24fef25be": "İçe Aktar",
             "02e89014c5": "{{value1}}{{value2}} konumundan {{value0}} çerez içe aktarıldı.",
             "d40d584769": "Dosyadan {{value0}} çerez içe aktarıldı."
           },
@@ -17341,7 +17336,6 @@
             "4328a0a062": "Sayfa öğesi yakalanamadı: {{value0}}",
             "759f32af29": "İndiriliyor",
             "4300f38145": "{{value0}}{{value1}} adresinden indiriliyor",
-            "acbe79fd01": "Sayfa öğesini yakala ({{value0}})",
             "cc4a071d3a": "Sayfa öğesine açıklama ekle ({{value0}})",
             "572046436a": "Uzak tarayıcı",
             "b313a7275b": "Uzak tarayıcı açılıyor",

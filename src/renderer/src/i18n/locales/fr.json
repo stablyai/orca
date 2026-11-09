@@ -17113,10 +17113,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Récupérez le contexte de la page pour les agents",
-                      "body": "Utilisez l’outil de capture pour copier le contexte d’un élément de la page pour les agents."
-                    },
                     "annotate": {
                       "title": "Annotez vos retours de design sur place",
                       "body": "Annotez des éléments et envoyez ces notes à un agent."
@@ -17249,7 +17245,6 @@
             "244266c122": "Importer…",
             "e52a955e6f": "Vous retrouverez toujours cette option dans Paramètres > Navigateur.",
             "4f5ffaa6a1": "Importer les données du navigateur",
-            "b24fef25be": "Importer",
             "02e89014c5": "{{value0}} cookies importés depuis {{value1}}{{value2}}.",
             "d40d584769": "{{value0}} cookies importés depuis un fichier."
           },
@@ -17330,7 +17325,6 @@
             "4328a0a062": "Échec de la capture : {{value0}}",
             "759f32af29": "Téléchargement",
             "4300f38145": "Téléchargement depuis {{value0}}{{value1}}",
-            "acbe79fd01": "Capturer un élément de la page ({{value0}})",
             "cc4a071d3a": "Annoter un élément de la page ({{value0}})",
             "572046436a": "Navigateur distant",
             "b313a7275b": "Ouverture du navigateur distant",

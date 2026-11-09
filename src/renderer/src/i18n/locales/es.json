@@ -16870,10 +16870,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Captura el contexto de la página para los agentes",
-                      "body": "Usa la herramienta de captura para copiar el contexto de un elemento de la página para los agentes."
-                    },
                     "annotate": {
                       "title": "Marca el feedback de diseño sobre la página",
                       "body": "Anota elementos y envía esas notas a un agente."
@@ -17006,7 +17002,6 @@
             "244266c122": "Importar…",
             "e52a955e6f": "Siempre puedes encontrar esto en Configuración > Navegador.",
             "4f5ffaa6a1": "Importar datos del navegador",
-            "b24fef25be": "Importar",
             "02e89014c5": "Se importaron {{value0}} cookies de {{value1}}{{value2}}.",
             "d40d584769": "Se importaron {{value0}} cookies del archivo."
           },
@@ -17086,7 +17081,6 @@
             "4328a0a062": "Captura fallida: {{value0}}",
             "759f32af29": "Descargando",
             "4300f38145": "Descargando desde {{value0}}{{value1}}",
-            "acbe79fd01": "Tomar elemento de página ({{value0}})",
             "cc4a071d3a": "Anotar elemento de la página ({{value0}})",
             "572046436a": "Navegador remoto",
             "b313a7275b": "Abrir navegador remoto",
