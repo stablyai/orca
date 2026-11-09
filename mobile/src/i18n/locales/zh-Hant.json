@@ -2843,6 +2843,8 @@
       "dictationHeading": "聽寫",
       "dictationMode": "聽寫模式",
       "dictationModeDescription": "切換：按一次開始，再按一次停止。按住：按住期間進行聽寫。",
+      "dictationModeWithAutoDescription": "自動：輕按開始和停止；在電腦上按住快捷鍵會一直錄音，直到放開。按住：按住期間進行聽寫。切換：按一次開始，再按一次停止。",
+      "autoMode": "自動",
       "downloadFailed": "下載失敗",
       "enableDictation": "啟用語音聽寫",
       "holdMode": "按住",

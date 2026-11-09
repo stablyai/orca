@@ -17,16 +17,21 @@ import {
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
 import { MobileSwitch } from '../components/MobileSwitch'
+import {
+  dictationShortcutMode,
+  dictationShortcutModeSettings
+} from '../../../src/shared/dictation-shortcut-mode'
 import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
 import { VoiceTranscribeOnSection, voiceTranscribeOnShown } from './voice-transcribe-on-section'
 
 const POLL_INTERVAL_MS = 1500
 
-function dictationModes(t: Translate) {
-  return [
-    { value: 'toggle', label: t('settings.voiceSettingsScreen.toggleMode', 'Toggle') },
-    { value: 'hold', label: t('settings.voiceSettingsScreen.holdMode', 'Hold') }
-  ] as const
+// Hosts that report hold-to-record have Auto; older ones only Toggle and Hold.
+function dictationModes(t: Translate, offersAuto: boolean) {
+  const toggle = { value: 'toggle', label: t('settings.voiceSettingsScreen.toggleMode', 'Toggle') }
+  const hold = { value: 'hold', label: t('settings.voiceSettingsScreen.holdMode', 'Hold') }
+  const auto = { value: 'auto', label: t('settings.voiceSettingsScreen.autoMode', 'Auto') }
+  return offersAuto ? ([auto, hold, toggle] as const) : ([toggle, hold] as const)
 }
 
 type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
@@ -154,13 +159,16 @@ export default function VoiceSettingsScreen({
         return
       }
       setError(null)
-      const { enabled, dictationMode } = params
+      const { enabled, dictationMode, dictationHoldToRecord } = params
       setSetup((prev) =>
         prev
           ? {
               ...prev,
               ...(enabled === undefined ? {} : { enabled }),
-              ...(dictationMode === undefined ? {} : { dictationMode })
+              ...(dictationMode === undefined ? {} : { dictationMode }),
+              ...(dictationHoldToRecord === undefined || prev.dictationHoldToRecord === undefined
+                ? {}
+                : { dictationHoldToRecord })
             }
           : prev
       )
@@ -243,6 +251,7 @@ export default function VoiceSettingsScreen({
   )
 
   const enabled = setup?.enabled ?? false
+  const offersAuto = setup?.dictationHoldToRecord !== undefined
   const selectedModel = setup?.models.find((m) => m.id === setup.selectedModelId)
   const selectedModelLabel =
     selectedModel?.label ?? t('settings.voiceSettingsScreen.noneSelected', 'None selected')
@@ -299,10 +308,17 @@ export default function VoiceSettingsScreen({
             first={!voiceTranscribeOnShown()}
             title={t('settings.voiceSettingsScreen.dictationHeading', 'DICTATION')}
             // The segmented control leaves the mode row no room for two lines of explanation.
-            footer={t(
-              'settings.voiceSettingsScreen.dictationModeDescription',
-              'Toggle: press once to start, again to stop. Hold: dictate while held.'
-            )}
+            footer={
+              offersAuto
+                ? t(
+                    'settings.voiceSettingsScreen.dictationModeWithAutoDescription',
+                    'Auto: tap to start and stop; on your computer, holding the shortcut records until you let go. Hold: dictate while held. Toggle: press once to start, again to stop.'
+                  )
+                : t(
+                    'settings.voiceSettingsScreen.dictationModeDescription',
+                    'Toggle: press once to start, again to stop. Hold: dictate while held.'
+                  )
+            }
           >
             <ListRow
               key="enabled"
@@ -329,9 +345,9 @@ export default function VoiceSettingsScreen({
               disabled={!enabled}
               accessory={
                 <MobileSegmentedControl
-                  segments={dictationModes(t)}
-                  selected={setup.dictationMode}
-                  onSelect={(dictationMode) => void configure({ dictationMode })}
+                  segments={dictationModes(t, offersAuto)}
+                  selected={offersAuto ? dictationShortcutMode(setup) : setup.dictationMode}
+                  onSelect={(mode) => void configure(dictationShortcutModeSettings(mode))}
                   testIDPrefix="voice-mode-"
                   disabled={!enabled}
                 />

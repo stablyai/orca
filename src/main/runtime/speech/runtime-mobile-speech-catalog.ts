@@ -60,6 +60,7 @@ export class RuntimeMobileSpeechCatalog {
       enabled: voice.enabled === true,
       selectedModelId: voice.sttModel ?? '',
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
+      dictationHoldToRecord: voice.dictationHoldToRecord !== false,
       removeFillerWords: voice.removeFillerWords !== false,
       models
     }
@@ -101,6 +102,7 @@ export class RuntimeMobileSpeechCatalog {
     enabled?: boolean
     modelId?: string
     dictationMode?: 'toggle' | 'hold'
+    dictationHoldToRecord?: boolean
   }): Promise<RuntimeSpeechSetupState> {
     const store = this.requireWritableStore()
     const current = store.getSettings().voice ?? getDefaultVoiceSettings()
@@ -114,7 +116,10 @@ export class RuntimeMobileSpeechCatalog {
       ...current,
       ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
       ...(params.modelId !== undefined ? { sttModel: params.modelId } : {}),
-      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
+      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
+      ...(params.dictationHoldToRecord !== undefined
+        ? { dictationHoldToRecord: params.dictationHoldToRecord }
+        : {})
     }
     store.updateSettings?.({ voice: nextVoice }, { notifyListeners: true })
     return this.list()

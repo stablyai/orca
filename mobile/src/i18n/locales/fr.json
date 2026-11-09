@@ -2921,6 +2921,8 @@
       "dictationHeading": "DICTÉE",
       "dictationMode": "Mode de dictée",
       "dictationModeDescription": "Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que vous maintenez l'appui.",
+      "dictationModeWithAutoDescription": "Auto : appuyez pour démarrer et arrêter ; sur votre ordinateur, maintenir le raccourci enregistre jusqu’à ce que vous relâchiez. Maintien : dictez tant que vous maintenez l’appui. Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter.",
+      "autoMode": "Auto",
       "downloadFailed": "Échec du téléchargement",
       "enableDictation": "Activer la dictée vocale",
       "holdMode": "Maintien",

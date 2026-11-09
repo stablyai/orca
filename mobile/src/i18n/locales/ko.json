@@ -2843,6 +2843,8 @@
       "dictationHeading": "받아쓰기",
       "dictationMode": "받아쓰기 모드",
       "dictationModeDescription": "토글: 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다. 길게 누르기: 누르고 있는 동안 받아쓰기합니다.",
+      "dictationModeWithAutoDescription": "자동: 탭하여 시작하고 중지합니다. 컴퓨터에서는 단축키를 길게 누르면 손을 뗄 때까지 녹음합니다. 길게 누르기: 누르고 있는 동안 받아쓰기합니다. 토글: 한 번 누르면 시작하고, 다시 누르면 중지합니다.",
+      "autoMode": "자동",
       "downloadFailed": "다운로드 실패",
       "enableDictation": "음성 받아쓰기 활성화",
       "holdMode": "길게 누르기",

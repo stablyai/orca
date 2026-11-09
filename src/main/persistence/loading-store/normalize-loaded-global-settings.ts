@@ -24,6 +24,7 @@ import { readLegacySidekickFlag } from '../applying-settings/onboarding-normaliz
 import { normalizeMachineName } from '../../../shared/machine-name'
 import { replaceRetiredSpeechModelId } from '../../speech/model-catalog'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { VoiceSettings } from '../../../shared/speech-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 
@@ -72,15 +73,10 @@ export function normalizeLoadedGlobalSettings(
     normalizedSourceControlGroupOrder
   } = profile
   const pluginOwnedSettings = normalizePluginOwnedSettings(parsed.settings ?? {})
-  const voice = { ...getDefaultVoiceSettings(), ...parsed.settings?.voice }
-  // Stored 'toggle' was everyone's old default, and Auto still toggles on a tap; Hold was always a choice.
-  const keepsDictationMode =
-    voice.dictationMode === 'hold' ||
-    voice.dictationMode === 'auto' ||
-    (parsed.settings?.voiceDictationModeDefaultedToAuto === true &&
-      voice.dictationMode === 'toggle')
-  if (!keepsDictationMode) {
-    voice.dictationMode = 'auto'
+  const voice = {
+    ...getDefaultVoiceSettings(),
+    ...parsed.settings?.voice,
+    ...migrateDictationShortcutMode(parsed.settings)
   }
   const matchTerminalSidebarInputs = {
     pluginAppThemeLight: pluginOwnedSettings.pluginAppThemeLight,
@@ -195,5 +191,22 @@ export function normalizeLoadedGlobalSettings(
     ),
     voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) },
     voiceDictationModeDefaultedToAuto: true
+  }
+}
+
+/** Auto is stored as Toggle plus hold-to-record so builds that only know Toggle and Hold keep working. */
+function migrateDictationShortcutMode(
+  settings: PersistedState['settings'] | undefined
+): Pick<VoiceSettings, 'dictationMode' | 'dictationHoldToRecord'> {
+  const stored: { dictationMode?: unknown; dictationHoldToRecord?: unknown } = settings?.voice ?? {}
+  // Builds from 3d2b0b12812 stored Auto as 'auto'. A 'toggle' saved before the marker was everyone's old default.
+  const dictationHoldToRecord =
+    stored.dictationMode === 'auto' ||
+    (typeof stored.dictationHoldToRecord === 'boolean'
+      ? stored.dictationHoldToRecord
+      : settings?.voiceDictationModeDefaultedToAuto !== true)
+  return {
+    dictationMode: stored.dictationMode === 'hold' ? 'hold' : 'toggle',
+    dictationHoldToRecord
   }
 }

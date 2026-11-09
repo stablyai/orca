@@ -21,6 +21,7 @@ import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from './mac-app-paste-input'
+import { dictationShortcutMode } from '../../shared/dictation-shortcut-mode'
 import {
   nativeChatPromptClaimsShortcut,
   textInputOwnsComposition,
@@ -87,7 +88,7 @@ export function installMainWindowShortcutRouting(args: {
       if (!voiceSettings?.enabled || textInputOwnsComposition(options.input)) {
         return false
       }
-      const dictationMode = voiceSettings.dictationMode ?? 'auto'
+      const dictationMode = dictationShortcutMode(voiceSettings)
       // A double tap has no release to hold, so Auto toggles on it.
       const toggles =
         dictationMode === 'toggle' ||

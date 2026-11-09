@@ -20,7 +20,7 @@ export function useDictationControls(
   const escCancels = useEffectEvent(() => handlers.escCancels())
   // A failed recording stays retryable even after voice is turned off in Settings.
   const enabled = voice?.enabled === true || phase !== 'idle'
-  const mainShortcut = voice?.enabled === true && (voice.dictationMode ?? 'auto') !== 'hold'
+  const mainShortcut = voice?.enabled === true && voice.dictationMode !== 'hold'
 
   // Main intercepts Toggle presses and Auto double taps so the chord never reaches xterm.
   useEffect(() => {

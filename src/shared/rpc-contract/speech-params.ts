@@ -60,7 +60,8 @@ export const SpeechModelAction = z.object({
 export const DictationSetup = z.object({
   enabled: z.boolean().optional(),
   modelId: OptionalString,
-  dictationMode: z.enum(['toggle', 'hold']).optional()
+  dictationMode: z.enum(['toggle', 'hold']).optional(),
+  dictationHoldToRecord: z.boolean().optional()
 })
 
 /** Why the cap: an OpenAI key is ~200 characters; anything far longer is a paste mistake. */
