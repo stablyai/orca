@@ -17,15 +17,21 @@ function marker(): ForkMarker {
 
 it('does not move a pre-clear inherited boundary when only later context is rewound', async () => {
   await appendItems(4)
-  const old = fixture.journal.currentRead().items
+  const old = await Promise.all(
+    [1, 2, 3, 4].map((ordinal) => fixture.journal.reads.item(agentJournalItemKey(item(ordinal))))
+  )
+  if (old.some((entry) => entry === null)) {
+    throw new Error('expected the inherited items')
+  }
+  const inherited = old.filter((entry) => entry !== null)
   const boundary = marker().forkedFrom.childBoundary
   const kept = [{ identity: item(3), body: body('item-3'), ownerFence: 0 }]
-  expect(remapForkChildBoundary(boundary, old, kept, old[1].sequence)).toEqual({
+  expect(remapForkChildBoundary(boundary, inherited, kept, inherited[1].sequence)).toEqual({
     kind: 'item',
     itemId: 'codex:thread-1:turn-1:2'
   })
   expect(
-    remapForkChildBoundary(boundary, old, [
+    remapForkChildBoundary(boundary, inherited, [
       { identity: item(1), body: body('item-1'), ownerFence: 0 }
     ])
   ).toEqual({ kind: 'item', itemId: 'codex:thread-1:turn-1:1' })

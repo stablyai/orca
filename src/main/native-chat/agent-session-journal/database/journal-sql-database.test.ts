@@ -7,14 +7,14 @@ import { openJournalDatabase } from './journal-database'
 import { journalDatabasePath } from './journal-host-database'
 import { JournalSqlDatabase } from './journal-sql-database'
 import { publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
-import { publishJournalOutcomeEpoch } from '../outcomes/journal-outcome-write'
+import { publishJournalOutcomeEpoch } from '../outcomes/journal-outcome-epoch.test-fixture'
 import { journalSqlLifecycleRows } from '../journal-sql-reducer-rows.test-fixture'
 import {
   journalSqlReaderPath,
   journalSqlWorkerPath
 } from '../journal-sql-worker-bundle.test-fixture'
-import { JournalProjectionStaleError } from '../journal-sql-meta'
 import type { JournalWriterEffect } from '../journal-writer-effects'
+import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { CommandReceiptExistsError } from '../writing/command-receipt-transaction'
 
 const roots: string[] = []
@@ -66,21 +66,17 @@ it('opens an unconverted chat while background work waits for live activity, the
   const { database, errors } = await fixture(['a', 'b'])
   database.setSessionActive('live-chat', true)
   const background = database.startMaintenance()
-  await expect(database.readers.read(history('b'))).rejects.toBeInstanceOf(
-    JournalProjectionStaleError
-  )
+  await expect(database.readers.domainHistory(history('b'))).rejects.toThrow('without domain state')
   const opened = await database.openSession(identity('a'))
   expect(opened.target).toMatchObject({ sessionId: 'a', epoch: 'epoch' })
-  expect(await database.readers.read(history('a'))).toMatchObject({
+  expect(await database.readers.domainHistory(history('a'))).toMatchObject({
     ok: true,
     page: { sessionId: 'a', liveCursor: { sequence: 16 } }
   })
-  await expect(database.readers.read(history('b'))).rejects.toBeInstanceOf(
-    JournalProjectionStaleError
-  )
+  await expect(database.readers.domainHistory(history('b'))).rejects.toThrow('without domain state')
   database.setSessionActive('live-chat', false)
   await background
-  expect(await database.readers.read(history('b'))).toMatchObject({
+  expect(await database.readers.domainHistory(history('b'))).toMatchObject({
     ok: true,
     page: { sessionId: 'b', liveCursor: { sequence: 16 } }
   })
@@ -102,12 +98,12 @@ it('serializes a new chat through its writer-assigned epoch and reads committed 
     })
   const first = append('first')
   const second = append('second')
-  const read = database.serialize('new', () => database.readers.read(history('new')))
+  const read = database.serialize('new', () => database.readers.domainHistory(history('new')))
   expect((await first).items).toEqual([
-    { itemId: 'orca:item', deleted: false, revision: 1, sequence: 2, sequenceIndex: 0 }
+    { itemId: 'orca:item', deleted: false, revision: 1, sequence: 1, sequenceIndex: 0 }
   ])
   expect((await second).items).toEqual([
-    { itemId: 'orca:item', deleted: false, revision: 2, sequence: 2, sequenceIndex: 0 }
+    { itemId: 'orca:item', deleted: false, revision: 2, sequence: 1, sequenceIndex: 0 }
   ])
   expect(await read).toMatchObject({
     ok: true,
@@ -118,7 +114,7 @@ it('serializes a new chat through its writer-assigned epoch and reads committed 
   await database.close()
   const reopened = await open(root, errors)
   await reopened.openSession(identity('new'))
-  expect(await reopened.readers.read(history('new'))).toMatchObject({
+  expect(await reopened.readers.domainHistory(history('new'))).toMatchObject({
     ok: true,
     page: {
       items: [{ itemId: 'orca:item', revision: 2, body: { kind: 'status', text: 'second' } }]
@@ -127,8 +123,8 @@ it('serializes a new chat through its writer-assigned epoch and reads committed 
   expect(errors).toEqual([])
 })
 
-it('co-writes record metadata and command receipts, preserving unreadable rows and tab methods across the worker', async () => {
-  const { database } = await fixture()
+it('rolls back tab changes with a conflicting receipt while preserving unreadable records', async () => {
+  const { database, root } = await fixture()
   const receipt: JournalWriterEffect = {
     kind: 'receipt',
     scope: { kind: 'global' },
@@ -143,20 +139,39 @@ it('co-writes record metadata and command receipts, preserving unreadable rows a
       result: { kind: 'journal-row', epoch: 'epoch', sequence: 1 }
     }
   }
-  const store = (tabId: string): JournalWriterEffect => ({
-    kind: 'store',
-    insertOperationsIfAbsent: false,
-    writes: {
-      records: { upsert: [['held-session', '{"schemaVersion":999}']], remove: [] },
-      operations: { upsert: [], remove: [] },
-      retiredClaimKeys: null,
-      sessionTabs: { recorded: true, tabs: [{ tabId, sessionId: 'held-session' }] }
-    }
+  await withTestAgentSessionDatabase(root, (db) => {
+    db.prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)').run(
+      'held-session',
+      '{"schemaVersion":999}'
+    )
+    db.prepare('INSERT INTO agent_session_tabs(tab_id,session_id,position) VALUES(?,?,0)').run(
+      'original',
+      'held-session'
+    )
+    db.prepare(
+      "INSERT INTO agent_session_store_meta(key,value) VALUES('session_tabs_recorded','1')"
+    ).run()
   })
-  await database.effects([store('original'), receipt])
-  await expect(database.effects([store('must-rollback'), receipt])).rejects.toBeInstanceOf(
-    CommandReceiptExistsError
-  )
+  await database.effects([receipt])
+  await expect(
+    database.effects([
+      {
+        kind: 'store',
+        mutation: {
+          input: {
+            kind: 'command',
+            command: {
+              kind: 'tab-visibility',
+              sessionId: 'held-session',
+              visible: false,
+              legacyTabIds: []
+            }
+          }
+        }
+      },
+      receipt
+    ])
+  ).rejects.toBeInstanceOf(CommandReceiptExistsError)
   const records = await database.loadRecords()
   expect(records.unreadableRecords.get('held-session')).toEqual({
     reason: 'unsupported_schema',
@@ -202,7 +217,7 @@ it('reads full item detail and provenance independently of bounded history, reta
     kind: 'item',
     item: { itemId: 'orca:tool', revision: 1, body: { output } }
   })
-  expect(await database.readers.read(history('detail'))).toMatchObject({
+  expect(await database.readers.domainHistory(history('detail'))).toMatchObject({
     ok: true,
     page: { items: [{ shortened: true, body: { output: { truncated: true } } }] }
   })
@@ -263,17 +278,26 @@ it('replays late revisions and removals in write order while preserving their or
   })
   await append('newest', 'third')
   const read = (sequence: number) =>
-    database.readers.read({
+    database.readers.domainHistory({
       sessionId: 'replay',
       direction: 'after',
       cursor: { epoch: held.epoch, sequence },
       limit: 1
     })
+  expect(await read(2)).toMatchObject({
+    ok: true,
+    page: {
+      items: [{ itemId: 'orca:older', sequence: 1, revision: 2, body: { text: 'revised' } }],
+      removedItemIds: [],
+      window: { nextCursor: { sequence: 3 } },
+      hasNewer: true
+    }
+  })
   expect(await read(3)).toMatchObject({
     ok: true,
     page: {
-      items: [{ itemId: 'orca:older', sequence: 2, revision: 2, body: { text: 'revised' } }],
-      removedItemIds: [],
+      items: [],
+      removedItemIds: ['orca:removed'],
       window: { nextCursor: { sequence: 4 } },
       hasNewer: true
     }
@@ -281,18 +305,9 @@ it('replays late revisions and removals in write order while preserving their or
   expect(await read(4)).toMatchObject({
     ok: true,
     page: {
-      items: [],
-      removedItemIds: ['orca:removed'],
-      window: { nextCursor: { sequence: 5 } },
-      hasNewer: true
-    }
-  })
-  expect(await read(5)).toMatchObject({
-    ok: true,
-    page: {
-      items: [{ itemId: 'orca:newest', sequence: 6, revision: 1, body: { text: 'third' } }],
+      items: [{ itemId: 'orca:newest', sequence: 5, revision: 1, body: { text: 'third' } }],
       removedItemIds: [],
-      window: { nextCursor: { sequence: 6 } },
+      window: { nextCursor: { sequence: 5 } },
       hasNewer: false
     }
   })

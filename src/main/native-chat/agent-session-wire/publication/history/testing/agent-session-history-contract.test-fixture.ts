@@ -8,18 +8,19 @@ import type {
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   type AgentJournalItemBody,
-  AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+  type AgentJournalRenderItem,
+  AGENT_JOURNAL_THREAD_SCOPE
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { serializeRemoteRuntimePayload } from '../../../../../../shared/remote-runtime/remote-runtime-memory-limits'
+import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { withTestAgentSessionDatabase } from '../../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase,
-  insertTestJournalRow
-} from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  JOURNAL_DOMAIN_ITEM_COLUMNS,
+  journalDomainItemColumns
+} from '../../../../agent-session-journal/journal-domain-item-read-columns'
+import { journalDomainItemPlacement } from '../../../../agent-session-journal/journal-domain-item-placement'
 import type {
   JournalItemRow,
-  JournalRow,
   JournalTombstoneRow
 } from '../../../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
@@ -33,7 +34,7 @@ export const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: codexProviderHandle('thread-1')
 }
 
-export const journals = createTrackedJournalOpener({ legacyInputs: true })
+export const journals = createTrackedJournalOpener()
 
 let root: string
 
@@ -93,30 +94,66 @@ export type RawSeedRow =
   | Omit<JournalItemRow, 'v' | 'epoch' | 'fence' | 'ts'>
   | Omit<JournalTombstoneRow, 'v' | 'epoch' | 'fence' | 'ts'>
 
-/** Seed raw legacy rows, then reopen to exercise current read bounds. */
-
+/** Seed pre-existing identities and their retained events for wire-bound tests. */
 export async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSessionJournal> {
-  const full = rows.map(
-    (row) =>
-      ({
-        ...row,
-        v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-        epoch: journal.epoch,
-        fence: 1,
-        ts: tick()
-      }) as JournalRow
-  )
+  const target = { sessionId: IDENTITY.sessionId, epoch: journal.physicalCursor().epoch }
   await journal.close()
-  const opened = openTestJournalHostDatabase(root)
-  try {
-    opened.db.exec('BEGIN IMMEDIATE')
-    for (const row of full) {
-      insertTestJournalRow(opened.db, IDENTITY.sessionId, row)
+  await withTestAgentSessionDatabase(root, (db) => {
+    db.exec('BEGIN IMMEDIATE')
+    for (const row of rows) {
+      if (row.kind === 'item') {
+        const item: AgentJournalRenderItem = {
+          itemId: row.itemId,
+          revision: row.revision,
+          sequence: row.seq,
+          observedAt: tick(),
+          body: row.body,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+        const payload = JSON.stringify(item)
+        const { values } = journalDomainItemColumns(item, payload)
+        db.prepare(`INSERT INTO journal_items
+          (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json,
+           placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')})
+          VALUES(${Array.from({ length: 10 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')})`).run(
+          target.sessionId,
+          target.epoch,
+          item.itemId,
+          row.seq,
+          item.revision,
+          row.seq,
+          0,
+          1,
+          payload,
+          journalDomainItemPlacement(item),
+          ...values
+        )
+      } else {
+        db.prepare('DELETE FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?').run(
+          target.sessionId,
+          target.epoch,
+          row.itemId
+        )
+        db.prepare(
+          'INSERT INTO journal_item_tombstones(session_id,epoch,item_id,revision) VALUES(?,?,?,?)'
+        ).run(target.sessionId, target.epoch, row.itemId, row.revision)
+      }
+      db.prepare('INSERT INTO journal_events VALUES(?,?,?,0,?)').run(
+        target.sessionId,
+        target.epoch,
+        row.seq,
+        JSON.stringify({
+          items: [{ itemId: row.itemId }],
+          submissions: [],
+          cards: []
+        })
+      )
     }
-    opened.db.exec('COMMIT')
-  } finally {
-    await opened.close()
-  }
+    db.prepare(
+      'UPDATE journal_chat_state SET last_sequence=?,retained_sequence=1 WHERE session_id=?'
+    ).run(Math.max(...rows.map((row) => row.seq)), target.sessionId)
+    db.exec('COMMIT')
+  })
   return journals.open({ identity: IDENTITY, stateDirectory: root, now: tick })
 }
 

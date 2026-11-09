@@ -13,10 +13,11 @@ import { fields } from '../outcomes/journal-state-schema'
 import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
 import { decodeJournalOutcome, type JournalOutcome } from '../outcomes/journal-outcome-codec'
 import { applyJournalRow } from '../projection/journal-reducer'
+import { assertTestJournalHistoricalInputs } from '../replay/journal-historical-inputs.test-support'
 import {
-  assertTestJournalHistoricalInputs,
-  pinTestJournalInputMode
-} from '../replay/journal-historical-inputs.test-support'
+  openTestAgentSessionDatabase,
+  closeTestAgentSessionRecordStores
+} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 
 import '../durable-rows/journal-row-schema'
 import { serializeJournalRow } from '../durable-rows/journal-row-encoding'
@@ -81,11 +82,8 @@ export function createTrackedJournalOpener(
       const { openAgentSessionJournal } = await import('../journal-store-factory')
       const journal = await openAgentSessionJournal({
         ...options,
-        database: openTestJournalHostDatabase(stateDirectory)
+        database: await openTestAgentSessionDatabase(stateDirectory)
       })
-      if (fixture.legacyInputs) {
-        pinTestJournalInputMode(journal)
-      }
       journals.push(journal)
       return journal
     },
@@ -95,6 +93,7 @@ export function createTrackedJournalOpener(
     },
     closeAll: async () => {
       await Promise.allSettled(journals.splice(0).map((journal) => journal.close()))
+      await closeTestAgentSessionRecordStores()
       await closeTestJournalHostDatabases()
     }
   }
