@@ -132,11 +132,6 @@ export function createSshIpcMocks(): SshIpcMocks {
       }))
     },
     sshConnectionStore: {
-      isRuntimeOwnedSshTarget: (target: { owner?: unknown }) => target.owner !== undefined,
-      isManagedOrcadSshTarget: (target: { orcadFence?: unknown; orcadProvisioning?: unknown }) =>
-        target.orcadFence !== undefined || target.orcadProvisioning !== undefined,
-      allowsDirectSshRelay: (target: { orcadFence?: unknown; orcadProvisioning?: unknown }) =>
-        target.orcadFence === undefined && target.orcadProvisioning === undefined,
       SshConnectionStore: class MockSshConnectionStore {
         constructor() {
           return mockSshStore

@@ -36,6 +36,8 @@ export type TerminalFileLinkActionDeps = {
   onOpenFailure?: (failure: FileOpenFailure) => void
   /** The tab that owns the link; editor opens place themselves relative to its group. */
   sourceTabId?: string | null
+  /** Chat menus leave out "Open in new tab"; Open file already places the file beside the chat. */
+  omitOpenInNewTab?: boolean
 }
 
 export type FileLinkActions = Pick<
@@ -157,6 +159,7 @@ export function buildFileLinkActions(
     : null
   // Why: eligibility is unknown until the path resolves, so the row may still be refused then.
   const openInGroupRow =
+    !deps.omitOpenInNewTab &&
     !worktreeRoot &&
     fileContext.sourceHostResolved &&
     canOpenLinkInSourceGroup(useAppStore.getState(), deps.worktreeId, deps.sourceTabId)

@@ -51,11 +51,11 @@ async function observeSessionSidecar(
       sizeBytes: fileStat.size
     }
   } catch (error) {
-    return isMissingSidecarError(error) ? 'none' : 'unknown'
+    return isMissingTranscriptPathError(error) ? 'none' : 'unknown'
   }
 }
 
-export function isMissingSidecarError(error: unknown): boolean {
+export function isMissingTranscriptPathError(error: unknown): boolean {
   if (error instanceof WslTranscriptFsError) {
     return false
   }

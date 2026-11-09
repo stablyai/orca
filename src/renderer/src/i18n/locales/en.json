@@ -4455,6 +4455,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Turn on"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Sized for another window",
+            "fitHere": "Fit here"
           }
         }
       },
@@ -12000,7 +12004,11 @@
           "stopCleanup": "Stop cleanup",
           "cleanupStopped": "Cleanup stopped",
           "stopCleanupFailed": "Couldn’t stop Cloud VM cleanup.",
-          "cloudVmRefreshLabel": "Refresh Cloud VMs"
+          "cloudVmRefreshLabel": "Refresh Cloud VMs",
+          "provisioning": "Provisioning",
+          "untrackedRuntimeHint": "Orca never received this VM’s details. Cleanup runs destroy with only instance ID {{instanceId}}; if it fails, delete the VM in your provider, then remove it from this list.",
+          "removeFromList": "Remove from list",
+          "removeFromListFailed": "Couldn’t remove Cloud VM runtime from the list."
         },
         "ephemeralVms": {
           "search": {
@@ -15280,7 +15288,9 @@
             "needsIsolatedFrames": "This panel is not available: it needs isolated plugin frames, which are turned off."
           },
           "activityBar": {
-            "error": "Error"
+            "error": "Error",
+            "disablePlugin": "Disable Plugin",
+            "disableFailed": "Could not disable plugin."
           },
           "AiVaultSessionLimitMenu": {
             "historyDepth": "History depth: {{value0}}",
@@ -16705,6 +16715,7 @@
           "kernelStartFailed": "The kernel failed to start.",
           "noPython": "Python was not found on this computer. Install it from [python.org](https://www.python.org/downloads/), then run the cell again.",
           "kernelDied": "The kernel died.",
+          "outputTruncated": "Output truncated: Orca kept the start of this cell's output and discarded the rest. To keep all of it, write it to a file instead.",
           "localOnly": "Notebook cells can only run for files on this computer.",
           "pythonOnly": "Only Python notebooks can run in Orca.",
           "ownerUnresolved": "Orca can't tell which computer this notebook is on yet, so its cells can't run.",
@@ -19746,6 +19757,12 @@
       },
       "reasoning": "Reasoning",
       "failureWords": {
+        "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
+        "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat. Open it and fork from there.",
+        "forkOriginalMissingNamed": "{{agent}} could not find this response in \"{{detail}}\". Open that chat and fork from there.",
+        "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
+        "forkOriginalLatestOnly": "{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.",
+        "forkOriginalLatestOnlyNamed": "{{agent}} can only fork the latest response in \"{{detail}}\". Open that chat and fork its latest response once it has finished.",
         "theAgent": "The agent",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
         "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",
@@ -20756,6 +20773,7 @@
         "copyIdentity": "Copy {{value0}}",
         "folder": "Folder",
         "mainCheckout": "Main checkout",
+        "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
         "worktree": "Worktree"
       },
       "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
@@ -22008,6 +22026,7 @@
       "switch": "Switch branch: {{branch}}",
       "search": "Search branches",
       "recover": "Switch to {{branch}}",
+      "copy": "Copy branch name",
       "create": "Create branch {{name}} from {{branch}}",
       "open": "Open workspace",
       "occupied": "Checked out in {{path}}",
@@ -22340,10 +22359,10 @@
     "claudeThemeSyncOffer": {
       "title": "Match Claude Code to your Orca theme?",
       "description": "Claude Code on this computer would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.",
-      "accept": "Match Theme",
+      "accept": "Match theme",
       "accepted": "Claude Code theme sync is on",
       "acceptedDescription": "New Claude Code sessions on this computer use your Orca theme.",
-      "decline": "No Thanks",
+      "decline": "No thanks",
       "failed": "Could not turn on Claude Code theme sync",
       "failedDescription": "Turn it on in Settings."
     }
@@ -22624,7 +22643,18 @@
       "confirm": "Delete all listed worktrees",
       "preservedBranches": "Some nested worktree branches were kept"
     },
-    "setupTerminalTitle": "Setup"
+    "setupTerminalTitle": "Setup",
+    "delete": {
+      "detachingChildren": "Detaching children...",
+      "childrenPreservedTitle": "Child workspaces will be kept",
+      "childrenCannotBeKeptTitle": "Child workspaces cannot be kept",
+      "childrenPreservedDescription": "Direct children will become top-level workspaces. Their files, terminals, and nested children will be kept.",
+      "detachChildren": "Detach and keep child workspaces",
+      "nestedChildrenCannotBeKept": "Child workspace folders inside this workspace must be moved outside it before they can be kept.",
+      "childrenChanged": "Child workspaces changed. Review the workspace list and try again.",
+      "childrenChangedClearPreserve": "Child workspaces changed. Clear this option to review deletion.",
+      "detachFailed": "Could not detach all child workspaces. The parent was not deleted. {{error}}"
+    }
   },
   "projectBoard": {
     "noColumnField": "This board view has no single-select or iteration field to group by, so Orca is listing items instead.",
@@ -24219,7 +24249,13 @@
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "sshTargetRemoveFailed": "Failed to remove the hidden SSH target.",
       "recipeExitedWithoutCode": "Recipe exited with code unknown.",
-      "destroyExitedWithoutCode": "Destroy exited with code unknown."
+      "destroyExitedWithoutCode": "Destroy exited with code unknown.",
+      "suspendExited": "Suspend exited with code {{exitCode}}.",
+      "suspendExitedWithoutCode": "Suspend exited with code unknown.",
+      "resumeExited": "Resume exited with code {{exitCode}}.",
+      "resumeExitedWithoutCode": "Resume exited with code unknown.",
+      "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.",
+      "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources."
     }
   },
   "installDirAcl": {

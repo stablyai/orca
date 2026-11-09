@@ -6,7 +6,7 @@ import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   observeSessionFile,
-  isMissingSidecarError,
+  isMissingTranscriptPathError,
   type SessionFileObservation
 } from './session-file-observation'
 import { SessionNewestFiles } from './session-newest-files'
@@ -259,7 +259,7 @@ export async function forEachSessionFile(
     // Propagate gate refusal so stalled distros are not reported as empty trees.
     if (
       error instanceof WslTranscriptFsError ||
-      (options.strictErrors && !isMissingSidecarError(error))
+      (options.strictErrors && !isMissingTranscriptPathError(error))
     ) {
       throw error
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { notificationPaneTab } from './tabs/notification-pane-tab'
-import type { MobileSessionTab } from './mobile-session-route-types'
+import type { MobileSessionTab } from './tabs/mobile-session-tabs'
 
 const leaf = '10000000-0000-4000-8000-000000000001'
 const tabs: MobileSessionTab[] = [

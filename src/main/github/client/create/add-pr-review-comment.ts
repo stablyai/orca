@@ -1,3 +1,4 @@
+import { githubBodyMediaHeaders } from '../../body-image-urls'
 import type {
   GitHubCommentResult,
   GitHubPRReviewCommentInput
@@ -31,6 +32,7 @@ export async function addPRReviewComment(
   try {
     const fields = [
       'api',
+      ...githubBodyMediaHeaders(args.body),
       '-X',
       'POST',
       `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${args.prNumber}/comments`,
@@ -97,6 +99,7 @@ export async function addPRReviewCommentReply(
     const { stdout } = await ghExecFileAsync(
       [
         'api',
+        ...githubBodyMediaHeaders(body),
         '-X',
         'POST',
         `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}/comments/${commentId}/replies`,

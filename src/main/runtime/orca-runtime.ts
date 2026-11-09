@@ -2,7 +2,8 @@ import type { SessionOptionValue } from '../../shared/native-chat/input/native-c
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
-import { publishNativeChatFollowUpChanges } from './agent-session/launch/runtime-native-chat-follow-up-events'
+import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
+import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
 import { publishWorkspaceViewChanges } from './sidebar-inputs/runtime-workspace-view-change-events'
 import {
   OrcaRuntimeWithSidebarTemporal,
@@ -174,7 +175,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
-    publishNativeChatFollowUpChanges(this.store, (event) => this.emitClientEvent(event))
+    publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
+    publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
   }
 
   private structuredAgentAvailability?: ReturnType<typeof installAvailability>

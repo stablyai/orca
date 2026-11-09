@@ -10,7 +10,7 @@ import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mob
 import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import { createStableLogicalRpcClient } from '../transport/connection/stable-logical-rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { buildProjectConversations } from './project-conversations'
 import { conversationHistory, conversationWorkspace } from './project-conversations.test-fixture'
 import { useConversationActions } from './use-conversation-actions'

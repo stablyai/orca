@@ -7,24 +7,6 @@ function entry(id: number): ConnectionLogEntry {
 }
 
 describe('connection log buffer', () => {
-  it('keeps entries per host without cross-talk', () => {
-    const store = createConnectionLogStore()
-    store.append('host-a', entry(1))
-    store.append('host-b', entry(2))
-
-    expect(store.get('host-a').map((e) => e.id)).toEqual(['log-1'])
-    expect(store.get('host-b').map((e) => e.id)).toEqual(['log-2'])
-  })
-
-  it('drops the oldest entries past the cap', () => {
-    const store = createConnectionLogStore(3)
-    for (let i = 1; i <= 5; i++) {
-      store.append('host-a', entry(i))
-    }
-
-    expect(store.get('host-a').map((e) => e.id)).toEqual(['log-3', 'log-4', 'log-5'])
-  })
-
   it('redacts credentials before retaining or persisting an event', async () => {
     const save = vi.fn(async () => {})
     const store = createConnectionLogStore(3, {

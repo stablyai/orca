@@ -34,6 +34,10 @@ import type {
   RuntimeTerminalDriverState
 } from '../../../../shared/runtime-session-contracts'
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+import type {
+  AgentListPublication,
+  AgentPaneActivityChange
+} from '../../../../shared/agent-status/presentation/agent-list-status'
 
 type DriverState = RuntimeTerminalDriverState
 
@@ -174,6 +178,8 @@ export type RuntimeNotifier = {
   workspaceSleepChanged?(notice: WorkspaceSleepNotice): void
   // Only the host renderer owns slept-agent wake records; phones request navigation-free wake through this optional bridge.
   resumeSleepingAgents?(worktreeId: string): void
+  /** The window applies a client's Agents-list change with its own actions and answers with the verdicts it leaves. */
+  applyAgentPaneActivity?(change: AgentPaneActivityChange): Promise<AgentListPublication>
   terminalFitOverrideChanged(
     ptyId: string,
     mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit',

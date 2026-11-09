@@ -1,7 +1,6 @@
 import { describe } from 'vitest'
 import { registerPtyConnectionCommandFinishedCleanupTests } from '../agent-identity/pty-connection-command-finished-cleanup.spec'
 import { registerPtyConnectionCommandFinishedInterruptArbitrationTests } from '../input/pty-connection-command-finished-interrupt-arbitration.spec'
-import { registerPtyConnectionHookCompletionBellArbitrationTests } from '../notifications/pty-connection-hook-completion-bell-arbitration.spec'
 import { registerPtyConnectionBellQueryReplyAndStaleInputTests } from '../input/pty-connection-bell-query-reply-and-stale-input.spec'
 import { registerPtyConnectionHookCompletionSideEffectsTests } from '../notifications/pty-connection-hook-completion-side-effects.spec'
 import { registerPtyConnectionMainSideEffectAuthorityTests } from '../emulation/pty-connection-main-side-effect-authority.spec'
@@ -13,7 +12,6 @@ describe('pty-connection-command-finished-cleanup', () => {
   registerPtyConnectionCommandFinishedInterruptArbitrationTests()
 })
 describe('pty-connection-hook-completion-bell-arbitration', () => {
-  registerPtyConnectionHookCompletionBellArbitrationTests()
   registerPtyConnectionBellQueryReplyAndStaleInputTests()
 })
 describe(

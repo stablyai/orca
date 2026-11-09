@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { _internals } from '../../../agent-hooks/server'
+import { _internals } from '../../../agent-hooks/server/agent-hook-server'
 import {
   closeProviderTimelineRigs,
   SESSION as ADAPTER_SESSION
