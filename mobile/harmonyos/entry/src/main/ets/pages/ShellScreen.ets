@@ -154,7 +154,7 @@ struct ShellScreen {
   };
   private hostEndpointListener: (hostId: string, endpoint: string) => void = (hostId: string, endpoint: string): void => {
     if (this.disposed || hostId !== this.hostId || this.hostMeta?.endpoint === endpoint) { return; }
-    this.startup.cancel(); this.releaseBridge();
+    this.suspendTransport(0);
     let previous = this.supervisor;
     this.supervisor = null;
     if (previous) { previous.stop(); }
@@ -255,9 +255,20 @@ struct ShellScreen {
       this.bridge.publishState('disconnected', 0); this.bridge.dispose(); this.bridge = null;
     }
     this.nativeProxy.setBridge(null);
-    if (this.agentWatch) { this.agentWatch.stop(); this.agentWatch = null; }
+    this.stopAgentWatch();
     if (this.nativeDevice) { this.nativeDevice.dispose().catch(() => {}); this.nativeDevice = null; }
     this.client = null;
+  }
+  private stopAgentWatch(): void {
+    if (this.agentWatch) { this.agentWatch.stop(); this.agentWatch = null; }
+  }
+  private suspendTransport(attempt: number): void {
+    this.startup.cancel(); this.generation++;
+    if (!this.painted || !this.bridge) { this.releaseBridge(); return; }
+    this.client = null;
+    this.stopAgentWatch();
+    this.nativeDevice?.setDesktopClient(null);
+    this.bridge.suspendTransport(attempt);
   }
   private failStartup(message: string): void {
     if (this.disposed) { return; }
@@ -352,10 +363,11 @@ struct ShellScreen {
           let client = supervisor.getClient();
           if (client) { this.loadConnected(client, host).catch(() => {}); }
         } else if (phase === 'reconnecting') {
-          this.startup.cancel(); this.generation++; this.releaseBridge(); this.publishPhase(`连接中断 · ${detail}`);
+          this.suspendTransport(supervisor.getReconnectAttempt()); this.publishPhase(`连接中断 · ${detail}`);
         } else if (phase === 'connecting') { this.publishPhase('连接桌面…'); }
         else if (phase === 'auth-failed') {
           this.startup.cancel(); this.generation++; this.releaseBridge(); this.publishPhase('凭证已失效，请重新配对');
+          this.webSrc = ''; this.painted = false;
         }
       });
       supervisor.start();
@@ -365,6 +377,16 @@ struct ShellScreen {
   }
 
   private async loadConnected(client: SpikeRpcClient, meta: HostMeta): Promise<void> {
+    let path = this.supervisor?.getActivePath() ?? 'lan';
+    if (this.painted && this.bridge && this.nativeDevice) {
+      this.stopAgentWatch();
+      this.client = client; this.hostMeta = meta;
+      this.nativeDevice.setDesktopClient(client);
+      this.bridge.attachTransport(client, path);
+      this.publishPhase('已连接');
+      this.startAgentWatch(client, meta);
+      return;
+    }
     let generation = ++this.generation; this.releaseBridge(); this.client = client;
     this.hostMeta = meta;
     this.painted = false; this.startupGeneration = this.startup.begin();
@@ -385,12 +407,11 @@ struct ShellScreen {
       this.manifest = manifest; this.baseDir = baseDir;
       let storage = new PageStorageStore(getContext(this), meta.id);
       let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext, client); this.nativeDevice = nativeDevice;
-      let bridge = new BridgeHost(client, this.controller, manifest, meta, this.routePathname);
+      let bridge = new BridgeHost(client, this.controller, manifest, meta, this.routePathname, path);
       bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale); bridge.setRouteParams(this.routeParams);
-      if (this.supervisor) { bridge.setConnectionPath(this.supervisor.getActivePath()); }
       bridge.setLocationSink((pathname: string, params: Record<string, string>): void => this.recordResume(pathname, params));
       bridge.setNativeNavigation((page: BridgeNativePage, replace: boolean): void => {
-        if (this.disposed || !this.pageVisible || generation !== this.generation || this.bridge !== bridge) { return; }
+        if (this.disposed || !this.pageVisible || this.bridge !== bridge) { return; }
         let url = page === 'edit-host' ? 'pages/HostDetail' : 'pages/ConnectionLog';
         let params: Record<string, string> = { 'hostId': meta.id };
         let navigation = replace ? router.replaceUrl({ url: url, params: params }) : router.pushUrl({ url: url, params: params });

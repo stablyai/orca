@@ -47,6 +47,7 @@ export class NativeDevice {
     this.context = context; this.speech = new NativeSpeech(context);
     this.images = new NativeImageActions(context); this.pdf = new NativePdfViewer(context, client);
   }
+  setDesktopClient(client: SpikeRpcClient | null): void { this.pdf.setClient(client); }
   async dispose(): Promise<void> {
     this.disposed = true; this.generation++; this.selectionGeneration++; this.media.clear();
     this.speech.dispose(); this.images.dispose();

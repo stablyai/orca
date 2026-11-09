@@ -66,3 +66,52 @@ test('a refused duplicate request sends the page a readable definite failure', a
   bridge.dispose()
   client.close()
 })
+
+test('reconnect preserves the page and restores live streams without repeating writes', async () => {
+  const first = createRpcPeer()
+  const next = createRpcPeer()
+  const oldClient = new first.SpikeRpcClient()
+  const newClient = new next.SpikeRpcClient()
+  await oldClient.connect('ws://test', 'first-token', 'key', 'v2')
+  await newClient.connect('ws://test', 'second-token', 'key', 'v2')
+  const { bridge, frames } = createBridge(first, oldClient)
+  post(bridge, { type: 'ready' })
+  const document = frames.find((frame) => frame.type === 'init').sessionId
+  post(bridge, { type: 'subscribe', id: 'live', method: 'session.tabs.subscribeAll' })
+  post(bridge, { type: 'subscribe', id: 'retired', method: 'notifications.subscribe' })
+  post(bridge, { id: 'write', method: 'worktree.create', params: { name: 'draft' } })
+  post(bridge, {
+    type: 'subscribe',
+    id: 'unsafe',
+    method: 'worktree.create',
+    params: { name: 'draft' }
+  })
+  first.receiveText('{"id":"live","ok":true,"streaming":true,"result":{"title":"before outage"}}')
+
+  bridge.suspendTransport(1)
+  post(bridge, { type: 'cancel', id: 'retired', target: 'subscription' })
+  post(bridge, { id: 'offline-write', method: 'worktree.create', params: { name: 'draft' } })
+  first.receiveText('{"id":"live","ok":true,"streaming":true,"result":{"title":"stale socket"}}')
+  bridge.attachTransport(newClient, 'relay')
+  post(bridge, { type: 'ready' })
+  next.receiveText('{"id":"live","ok":true,"streaming":true,"result":{"title":"after reconnect"}}')
+  await new Promise(setImmediate)
+
+  assert.equal(frames.findLast((frame) => frame.type === 'init').sessionId, document)
+  assert.deepEqual(
+    frames.filter((frame) => frame.id === 'live').map((frame) => frame.payload?.title),
+    ['before outage', 'after reconnect']
+  )
+  assert.equal(frames.find((frame) => frame.id === 'write').error.isRpcDeliveryUnknown, true)
+  assert.equal(
+    frames.find((frame) => frame.id === 'offline-write').error.isRpcDeliveryUnknown,
+    false
+  )
+  assert.deepEqual(
+    next.sent.map((wire) => JSON.parse(wire).method),
+    ['session.tabs.subscribeAll']
+  )
+  bridge.dispose()
+  oldClient.close()
+  newClient.close()
+})

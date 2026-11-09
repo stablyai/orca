@@ -110,8 +110,12 @@ export class SpikeRpcClient {
   private closeListeners: (() => void)[] = [];
   private binaryListeners: ((bytes: Uint8Array) => void)[] = [];
 
-  onBinaryFrames(listener: (bytes: Uint8Array) => void): void {
+  onBinaryFrames(listener: (bytes: Uint8Array) => void): () => void {
     this.binaryListeners.push(listener);
+    return (): void => {
+      let index = this.binaryListeners.indexOf(listener);
+      if (index >= 0) { this.binaryListeners.splice(index, 1); }
+    };
   }
   private logSink: ((line: string) => void) | null = null;
   private currentDeviceToken: string = '';

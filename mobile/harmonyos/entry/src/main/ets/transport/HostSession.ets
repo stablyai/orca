@@ -41,6 +41,7 @@ export class HostSession {
   addListener(listener: Listener): void { this.listeners.push(listener); }
   getClient(): SpikeRpcClient | null { return this.client; }
   getActivePath(): string { return this.activePath; }
+  getReconnectAttempt(): number { return this.attempt; }
   private publish(phase: SessionPhase, detail: string): void {
     for (let i = 0; i < this.listeners.length; i++) { this.listeners[i](phase, detail); }
   }

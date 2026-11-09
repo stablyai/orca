@@ -22,6 +22,12 @@ export class NativePdfViewer {
 
   constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null) { this.context = context; this.client = client; }
 
+  setClient(client: SpikeRpcClient | null): void {
+    if (this.client === client) { return; }
+    if (!this.shown) { this.cancel().catch(() => {}); }
+    this.client = client;
+  }
+
   private active(generation: number): void {
     if (this.disposed || generation !== this.generation) { throw new Error('PDF open cancelled'); }
   }
