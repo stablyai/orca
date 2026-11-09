@@ -3,6 +3,7 @@ import { readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import type { Performance as NodePerformance } from 'node:perf_hooks'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { retryTransientMainEvaluate } from '../../../../tests/e2e/helpers/electron-main-evaluate-retry'
 import { summarizeEventLoopDelay } from '../../../../tests/e2e/helpers/event-loop-delay-report'
 
 export type RpcAnswer<T = unknown> = { ok: true; result: T } | { ok: false; error: unknown }
@@ -122,18 +123,22 @@ export type HostWork = { cpuMs: number; mainThreadActiveMs: number; offMainThrea
 /** Process CPU covers the main thread and its storage workers; main-thread ELU separates the two. */
 export async function hostWorkMark(app: ElectronApplication): Promise<() => Promise<HostWork>> {
   // Main-process callbacks see Node's performance, not the DOM one this file is typed against.
-  const start = await app.evaluate(() => ({
-    cpu: process.cpuUsage(),
-    elu: (performance as unknown as NodePerformance).eventLoopUtilization()
-  }))
+  const start = await retryTransientMainEvaluate(() =>
+    app.evaluate(() => ({
+      cpu: process.cpuUsage(),
+      elu: (performance as unknown as NodePerformance).eventLoopUtilization()
+    }))
+  )
   return async () => {
-    const delta = await app.evaluate((_electron, start) => {
-      const node = performance as unknown as NodePerformance
-      return {
-        cpu: process.cpuUsage(start.cpu),
-        elu: node.eventLoopUtilization(node.eventLoopUtilization(), start.elu)
-      }
-    }, start)
+    const delta = await retryTransientMainEvaluate(() =>
+      app.evaluate((_electron, start) => {
+        const node = performance as unknown as NodePerformance
+        return {
+          cpu: process.cpuUsage(start.cpu),
+          elu: node.eventLoopUtilization(node.eventLoopUtilization(), start.elu)
+        }
+      }, start)
+    )
     const cpuMs = (delta.cpu.user + delta.cpu.system) / 1000
     return {
       cpuMs,
