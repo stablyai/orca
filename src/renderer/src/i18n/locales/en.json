@@ -6553,10 +6553,7 @@
         },
         "SidebarAccountMenu": {
           "account": "Account",
-          "orcaAccount": "Orca account",
-          "signIn": "Sign in",
-          "signInAgain": "Sign in again",
-          "signingIn": "Signing in…"
+          "signIn": "Sign in"
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",

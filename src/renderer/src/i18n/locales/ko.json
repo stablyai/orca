@@ -5629,6 +5629,10 @@
           "allProjects": "모든 프로젝트",
           "selectedProjects_other": "프로젝트 {{count}}개"
         },
+        "SidebarAccountMenu": {
+          "account": "계정",
+          "signIn": "로그인"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca 재시작",
           "29c56f30ee": "업데이트 확인",

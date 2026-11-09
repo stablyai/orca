@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { formatOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
@@ -56,8 +56,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const setupProgress = useSetupGuideProgress(true, false, false)
-  const keybindings = useAppStore((s) => s.keybindings)
-  const settingsShortcut = formatOptionalShortcutLabel('app.settings', keybindings)
+  const settingsShortcut = useOptionalShortcutLabel('app.settings')
   const registeredItems = useRegisteredAccountMenuItems()
   const [menuOpen, setMenuOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
@@ -87,9 +86,12 @@ export function SidebarAccountMenu(): React.JSX.Element {
     openSettingsPage()
   }
 
+  // Builds without Orca sign-in (and the unloaded state) have no account to show or connect.
+  const showAccountHeader = identity.signedIn || authStatus?.configured === true
+
   const handleAccountHeaderSelect = (): void => {
-    // The account pane hosts sign-out, the pending sign-in link, and unconfigured-build copy.
-    if (identity.signedIn || signingIn || authStatus?.configured !== true) {
+    // The account pane hosts sign-out and the pending sign-in link.
+    if (identity.signedIn || signingIn) {
       openAccountSettings()
       return
     }
@@ -143,33 +145,39 @@ export function SidebarAccountMenu(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-60">
-          <DropdownMenuItem onSelect={handleAccountHeaderSelect} data-account-menu-header="">
-            <AccountAvatar identity={identity} className="size-7 text-xs" />
-            <span className="flex min-w-0 flex-col">
-              {identity.signedIn ? (
-                <>
-                  <span className="truncate font-medium">{identity.name}</span>
-                  {identity.name !== identity.email ? (
-                    <span className="truncate text-xs text-muted-foreground">{identity.email}</span>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  <span className="truncate font-medium">
-                    {identity.needsReconnect
-                      ? t('auto.components.sidebar.SidebarAccountMenu.signInAgain', 'Sign in again')
-                      : t('auto.components.sidebar.SidebarAccountMenu.signIn', 'Sign in')}
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {signingIn
-                      ? t('auto.components.sidebar.SidebarAccountMenu.signingIn', 'Signing in…')
-                      : t('auto.components.sidebar.SidebarAccountMenu.orcaAccount', 'Orca account')}
-                  </span>
-                </>
-              )}
-            </span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {showAccountHeader ? (
+            <>
+              <DropdownMenuItem onSelect={handleAccountHeaderSelect} data-account-menu-header="">
+                <AccountAvatar identity={identity} className="size-7 text-xs" />
+                <span className="flex min-w-0 flex-col">
+                  {identity.signedIn ? (
+                    <>
+                      <span className="truncate font-medium">{identity.name}</span>
+                      {identity.name !== identity.email ? (
+                        <span className="truncate text-xs text-muted-foreground">
+                          {identity.email}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <span className="truncate font-medium">
+                        {identity.needsReconnect
+                          ? t('auto.components.settings.orcaAccount.signInAgain', 'Sign in again')
+                          : t('auto.components.sidebar.SidebarAccountMenu.signIn', 'Sign in')}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {signingIn
+                          ? t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')
+                          : t('auto.components.settings.orcaAccount.account', 'Orca account')}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           {extensionItems.length > 0 ? (
             <>
               {extensionItems.map((item) => {

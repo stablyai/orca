@@ -121,3 +121,18 @@ it('hides capability-gated items while signed out', () => {
   expect(screen.getByRole('menuitem', { name: /Sign in again/ })).toBeInTheDocument()
   expect(screen.queryByRole('menuitem', { name: 'Gated item' })).not.toBeInTheDocument()
 })
+
+it('omits the account header in builds without Orca sign-in', () => {
+  useAppStore.setState({
+    orcaProfileAuthStatus: {
+      activeProfileId: 'local-default',
+      configured: false,
+      state: 'unconfigured',
+      persistence: 'none'
+    }
+  })
+  renderOpenMenu()
+
+  expect(screen.queryByRole('menuitem', { name: /Sign in/ })).not.toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeInTheDocument()
+})

@@ -351,7 +351,8 @@ test.describe('Onboarding flow', () => {
       .poll(async () => (await getSettings(orcaPage)).defaultTuiAgent, { timeout: 5_000 })
       .toBe('codex')
 
-    await orcaPage.getByRole('button', { name: 'Help', exact: true }).click()
+    await orcaPage.getByRole('button', { name: 'Account', exact: true }).click()
+    await orcaPage.getByRole('menuitem', { name: 'Help', exact: true }).click()
     await orcaPage.getByRole('menuitem', { name: 'Onboarding', exact: true }).click()
     await onboardingFooterButton(orcaPage, SET_UP_LATER_BUTTON).click()
     await expectMainPage(orcaPage)
