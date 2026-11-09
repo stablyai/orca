@@ -1,102 +1,56 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode
-} from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { triggerError } from '../platform/haptics'
 import { useClipboardWriter } from '../platform/clipboard'
 import { dictationFailureMessage } from './mobile-dictation-setup'
 import { useMobileDictationHaptics } from './use-mobile-dictation-haptics'
 import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-stop'
-import {
-  insertMobileDictationAway,
-  type MobileDictationAwayTarget
-} from './mobile-dictation-away-insert'
+import { insertMobileDictationAway } from './mobile-dictation-away-insert'
 import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
 import { dictationAwayCopy } from './mobile-dictation-away-copy'
+import {
+  MobileDictationClearanceContext,
+  MobileDictationHostContext,
+  type MobileDictationHost,
+  type MobileDictationHostToast,
+  type MobileDictationOwner,
+  type MobileDictationScreen
+} from './mobile-dictation-host-context'
 
-export type MobileDictationHostToast = { message: string; open?: () => void }
+export {
+  useMobileDictationHost,
+  type MobileDictationOwner,
+  type MobileDictationScreen
+} from './mobile-dictation-host-context'
 
-// Who started the dictation and where its words go, fixed at the tap: leaving the screen never moves them.
-export type MobileDictationOwner = {
-  // The starting screen instance, and the session it shows (a reopened screen of that session takes over its controls).
-  readonly instance: object
-  readonly sessionKey: string
-  readonly client: RpcClient | null
-  readonly target: MobileDictationAwayTarget
-  // The target tab's title, for the pill and its toasts.
-  readonly title: string
-  // The session route that opens the target tab again.
-  readonly href: string
-  readonly dictationMode: string | undefined
-  readonly removeFillerWords: boolean
-}
-
-// A mounted session screen, as the dictation host sees it.
-export type MobileDictationScreen = {
-  readonly instance: object
-  readonly sessionKey: string
-  // The one "shown" rule (mobile-dictation-shown.ts): true while the in-place controls stand for the dictation.
-  readonly shown: () => boolean
-  // The starting screen inserts where it started (cursor, live input); false when it cannot, so the host inserts instead.
-  readonly insert: (text: string) => boolean
-  // Setup refusals open its setup sheet; other failures toast on it.
-  readonly reportFailure: (err: Error) => void
-  readonly toast: (message: string) => void
-}
-
-type MobileDictationHost = {
-  readonly dictation: UseMobileDictationResult
-  readonly owner: MobileDictationOwner | null
-  readonly start: (owner: MobileDictationOwner) => Promise<void>
-  // Stop with the selection tick, as every stop button does.
-  readonly stop: () => void
-  readonly attach: (screen: MobileDictationScreen) => () => void
-  // A screen's shown() answer changed; the pill reads it on render.
-  readonly refresh: () => void
-  // The floating pill's state: the dictation when its screen is not shown, and the host's toast.
-  readonly pill: {
-    readonly away: boolean
-    readonly title: string
-    readonly open: () => void
-    readonly toast: MobileDictationHostToast | null
-    readonly clearToast: () => void
-  }
-}
-
-const MobileDictationHostContext = createContext<MobileDictationHost | null>(null)
-
-export function useMobileDictationHost(): MobileDictationHost {
-  const host = useContext(MobileDictationHostContext)
-  if (!host) {
-    throw new Error('useMobileDictationHost needs a MobileDictationHostProvider')
-  }
-  return host
-}
-
+// The owner's screen: the one in front when two show its session, else the first; startingOnly asks for the screen that started it.
 function screenFor(
   screens: ReadonlySet<MobileDictationScreen>,
   owner: MobileDictationOwner | null,
   startingOnly: boolean
 ): MobileDictationScreen | null {
+  let found: MobileDictationScreen | null = null
   for (const screen of screens) {
-    if (
-      owner &&
-      screen.sessionKey === owner.sessionKey &&
-      (!startingOnly || screen.instance === owner.instance)
-    ) {
+    if (!owner || screen.sessionKey !== owner.sessionKey) {
+      continue
+    }
+    if (startingOnly ? screen.instance === owner.instance : screen.shown()) {
       return screen
     }
+    found ??= startingOnly ? null : screen
   }
-  return null
+  return found
+}
+
+function isUnderway(dictation: UseMobileDictationResult): boolean {
+  return (
+    dictation.isStarting ||
+    dictation.isRecording ||
+    dictation.isProcessing ||
+    dictation.failure !== null
+  )
 }
 
 // One dictation per host document, above its screens, so it keeps going when its session leaves the screen.
@@ -109,30 +63,45 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   const refresh = useCallback(() => setRevision((revision) => revision + 1), [])
   const [toast, setToast] = useState<MobileDictationHostToast | null>(null)
   const clearToast = useCallback(() => setToast(null), [])
+  const [clearances, setClearances] = useState<ReadonlyMap<object, number>>(new Map())
   const clipboard = useClipboardWriter()
 
-  // Bring the target back: pop to its session when that screen is still in the stack, otherwise open it again.
+  // Bring a dictation's target back: its screen if one is still mounted, otherwise open the session again.
+  const openOwner = useCallback(
+    (target: MobileDictationOwner) => {
+      const screen = screenFor(screensRef.current, target, false)
+      if (screen) {
+        screen.bringToFront(target.paneKey)
+      } else {
+        router.push(target.href)
+      }
+    },
+    [router]
+  )
   const open = useCallback(() => {
-    const current = ownerRef.current
-    if (!current) {
-      return
+    if (ownerRef.current) {
+      openOwner(ownerRef.current)
     }
-    if (screenFor(screensRef.current, current, false)) {
-      router.dismissTo(current.href)
-    } else {
-      router.push(current.href)
-    }
-  }, [router])
+  }, [openOwner])
 
-  // Tell the user where words went: on the screen when it shows the dictation, else the host's toast with Open.
-  const say = (message: string, withOpen: boolean) => {
+  // Say it on the screen that shows the dictation, else in the host's toast (with Open for the dictation it is about).
+  const say = (message: string, about?: MobileDictationOwner) => {
     const screen = screenFor(screensRef.current, ownerRef.current, false)
     if (screen?.shown()) {
       screen.toast(message)
     } else {
-      setToast(withOpen ? { message, open } : { message })
+      setToast(about ? { message, open: () => openOwner(about) } : { message })
     }
   }
+  const reportFailureRef = useRef((err: Error) => {
+    const screen = screenFor(screensRef.current, ownerRef.current, false)
+    if (screen?.shown()) {
+      screen.reportFailure(err)
+      return
+    }
+    triggerError()
+    setToast({ message: dictationFailureMessage(err.message) })
+  })
 
   const dictation = useMobileDictation({
     client: owner?.client ?? null,
@@ -149,42 +118,78 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
       }
       void insertMobileDictationAway(current, text).then((inserted) => {
         if (inserted) {
-          say(dictationAwayCopy.insertedIn(current), true)
+          say(dictationAwayCopy.insertedIn(current), current)
           return
         }
         triggerError()
         void clipboard.writeText(text).then(
-          () => say(nativeChatDictationCopy.insertFailedCopied(), false),
-          () => say(nativeChatDictationCopy.insertFailed(), false)
+          () => say(nativeChatDictationCopy.insertFailedCopied()),
+          () => say(nativeChatDictationCopy.insertFailed())
         )
       })
     },
     onError: (err, { kept }) => {
       if (kept) {
         triggerError()
-        return
+      } else {
+        reportFailureRef.current(err)
       }
-      const screen = screenFor(screensRef.current, ownerRef.current, false)
-      if (screen?.shown()) {
-        screen.reportFailure(err)
-        return
-      }
-      triggerError()
-      setToast({ message: dictationFailureMessage(err.message) })
     },
-    onAudioLimitReached: () => say(nativeChatDictationCopy.stoppedAtCloudLimit(), false)
+    onAudioLimitReached: () => say(nativeChatDictationCopy.stoppedAtCloudLimit())
   })
   const stop = useMobileDictationHaptics(dictation)
-  useMobileDictationSilenceStop(dictation, owner?.dictationMode, stop, (message) =>
-    say(message, false)
-  )
+  useMobileDictationSilenceStop(dictation, owner?.dictationMode, stop, (message) => say(message))
 
-  const { start: startDictation } = dictation
+  // Screens subscribe to the live dictation; the host's context only changes when its owner or pill does.
+  const liveRef = useRef(dictation)
+  const listenersRef = useRef(new Set<() => void>())
+  const { meter, start: startDictation, stop: stopDictation, cancel, retry } = dictation
+  const idle = useMemo<UseMobileDictationResult>(
+    () => ({
+      status: 'idle',
+      isStarting: false,
+      isRecording: false,
+      isProcessing: false,
+      transcriptSoFar: '',
+      error: null,
+      failure: null,
+      engine: null,
+      meter,
+      start: startDictation,
+      stop: stopDictation,
+      cancel,
+      retry
+    }),
+    [cancel, meter, retry, startDictation, stopDictation]
+  )
+  const idleRef = useRef(idle)
+  useLayoutEffect(() => {
+    liveRef.current = dictation
+    idleRef.current = idle
+    for (const listener of listenersRef.current) {
+      listener()
+    }
+  })
+  const subscribe = useCallback((listener: () => void) => {
+    listenersRef.current.add(listener)
+    return () => {
+      listenersRef.current.delete(listener)
+    }
+  }, [])
+  const getDictation = useCallback(() => liveRef.current, [])
+  const getIdleDictation = useCallback(() => idleRef.current, [])
+  const getUnderway = useCallback(() => isUnderway(liveRef.current), [])
+
   const start = useCallback(
     async (next: MobileDictationOwner) => {
       ownerRef.current = next
       setOwner(next)
-      await startDictation(next.client)
+      try {
+        await startDictation(next.client)
+      } catch (err) {
+        // The starting screen may already be gone, so a refused start is told wherever the user is now.
+        reportFailureRef.current(err instanceof Error ? err : new Error(String(err)))
+      }
     },
     [startDictation]
   )
@@ -200,25 +205,60 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     },
     [refresh]
   )
+  const setClearance = useCallback((id: object, height: number) => {
+    setClearances((current) => {
+      if ((current.get(id) ?? 0) === height) {
+        return current
+      }
+      const next = new Map(current)
+      if (height > 0) {
+        next.set(id, height)
+      } else {
+        next.delete(id)
+      }
+      return next
+    })
+  }, [])
 
-  const underway =
-    dictation.isStarting ||
-    dictation.isRecording ||
-    dictation.isProcessing ||
-    dictation.failure !== null
-  const away = owner !== null && underway && !screenFor(screensRef.current, owner, false)?.shown()
+  const away =
+    owner !== null && isUnderway(dictation) && !screenFor(screensRef.current, owner, false)?.shown()
   const title = owner?.title ?? ''
+  const clearance = Math.max(0, ...clearances.values())
   const pill = useMemo(
-    () => ({ away, title, open, toast, clearToast }),
-    [away, clearToast, open, title, toast]
+    () => ({ away, title, open, toast, clearToast, clearance }),
+    [away, clearToast, clearance, open, title, toast]
   )
   const value = useMemo<MobileDictationHost>(
-    () => ({ dictation, owner, start, stop, attach, refresh, pill }),
-    [attach, dictation, owner, pill, refresh, start, stop]
+    () => ({
+      owner,
+      start,
+      stop,
+      attach,
+      refresh,
+      subscribe,
+      getDictation,
+      getIdleDictation,
+      getUnderway,
+      pill
+    }),
+    [
+      attach,
+      getDictation,
+      getIdleDictation,
+      getUnderway,
+      owner,
+      pill,
+      refresh,
+      start,
+      stop,
+      subscribe
+    ]
   )
   return (
-    <MobileDictationHostContext.Provider value={value}>
-      {children}
-    </MobileDictationHostContext.Provider>
+    <MobileDictationClearanceContext.Provider value={setClearance}>
+      <MobileDictationHostContext.Provider value={value}>
+        {children}
+      </MobileDictationHostContext.Provider>
+    </MobileDictationClearanceContext.Provider>
   )
 }

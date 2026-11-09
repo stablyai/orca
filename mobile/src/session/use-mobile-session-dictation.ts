@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useFocusEffect } from 'expo-router'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
+import { useFocusEffect, useNavigation } from 'expo-router'
+import { HOST_SESSION_ROUTE } from '../navigation/host-stack-navigation'
 import { useMobileSessionDictationSetup } from './use-mobile-session-dictation-setup'
-import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { triggerError } from '../platform/haptics'
 import { useClipboardWriter } from '../platform/clipboard'
 import {
@@ -23,30 +30,6 @@ import {
 import { mobileSessionTabPaneKey } from './tabs/notification-pane-tab'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 import type { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
-
-// What a session screen's controls see when the dictation belongs to another screen, or this one is behind another.
-function idleView(dictation: UseMobileDictationResult): UseMobileDictationResult {
-  return {
-    ...dictation,
-    status: 'idle',
-    isStarting: false,
-    isRecording: false,
-    isProcessing: false,
-    transcriptSoFar: '',
-    error: null,
-    failure: null,
-    engine: null
-  }
-}
-
-function isUnderway(dictation: UseMobileDictationResult): boolean {
-  return (
-    dictation.isStarting ||
-    dictation.isRecording ||
-    dictation.isProcessing ||
-    dictation.failure !== null
-  )
-}
 
 // The session screen's side of the page's one dictation: start it here, show it in place while this screen is in front, and insert where it started.
 export function useMobileSessionDictation(
@@ -85,9 +68,14 @@ export function useMobileSessionDictation(
     ownedHere: host.owner?.sessionKey === sessionKey,
     inFront
   })
-  const raw = host.dictation
-  const dictation = useMemo(() => (shown ? raw : idleView(raw)), [raw, shown])
-  const busyElsewhere = !shown && isUnderway(raw)
+  // Only the screen showing the dictation re-renders on its every word; the rest see one idle object and whether it is busy.
+  const dictation = useSyncExternalStore(
+    host.subscribe,
+    shown ? host.getDictation : host.getIdleDictation
+  )
+  const busyElsewhere = useSyncExternalStore(host.subscribe, host.getUnderway) && !shown
+  // The screen's own navigation: bringing it back pops what was pushed over it, never another session's screen.
+  const navigation = useNavigation()
 
   // Share dictation error handling for start rejection and live errors so disabled host setup always opens the setup sheet.
   const reportDictationFailure = useCallback(
@@ -143,6 +131,10 @@ export function useMobileSessionDictation(
     return true
   }
 
+  const navigationRef = useRef(navigation)
+  useLayoutEffect(() => {
+    navigationRef.current = navigation
+  })
   const screenRef = useRef({
     shown,
     insert: insertHere,
@@ -169,7 +161,20 @@ export function useMobileSessionDictation(
           dictationRouteContextRef.current = null
           screenRef.current.reportFailure(err)
         },
-        toast: (message) => screenRef.current.showToast(message)
+        toast: (message) => screenRef.current.showToast(message),
+        bringToFront: (paneKey) => {
+          const current = navigationRef.current
+          // From this screen POP_TO starts at this route (the dispatch's source), so it stops here; merge keeps its params and swaps the pane.
+          current?.dispatch({
+            type: 'POP_TO',
+            payload: {
+              name: HOST_SESSION_ROUTE,
+              params: paneKey ? { paneKey } : undefined,
+              merge: true
+            },
+            target: current.getState()?.key
+          })
+        }
       }),
     [attach, dictationRouteContextRef, instance, sessionKey]
   )
@@ -209,31 +214,26 @@ export function useMobileSessionDictation(
     dictationRouteContextRef.current = routeContext
     const target = destination.captureDestination(showNativeChat, activeHandle)
     const paneKey = mobileSessionTabPaneKey(activeSessionTab)
-    void host
-      .start({
-        instance,
-        sessionKey,
-        client,
-        target:
-          target?.field === 'chat'
-            ? target.scope === null
-              ? null
-              : { field: 'chat', scope: target.scope }
-            : target,
-        title: activeSessionTab?.title ?? '',
-        href: workspaceRouteHref(
-          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${paneKey ? `?paneKey=${encodeURIComponent(paneKey)}` : ''}`,
-          executionHost
-        ),
-        dictationMode: scope.dictationMode,
-        removeFillerWords
-      })
-      .catch((err) => {
-        if (dictationRouteContextRef.current === routeContext) {
-          dictationRouteContextRef.current = null
-        }
-        reportDictationFailure(err)
-      })
+    // A refused start comes back through this screen's reportFailure while it is shown, or the host's toast.
+    void host.start({
+      instance,
+      sessionKey,
+      client,
+      target:
+        target?.field === 'chat'
+          ? target.scope === null
+            ? null
+            : { field: 'chat', scope: target.scope }
+          : target,
+      title: activeSessionTab?.title ?? '',
+      paneKey,
+      href: workspaceRouteHref(
+        `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${paneKey ? `?paneKey=${encodeURIComponent(paneKey)}` : ''}`,
+        executionHost
+      ),
+      dictationMode: scope.dictationMode,
+      removeFillerWords
+    })
   }, [
     activeHandle,
     activeSessionTab,
@@ -259,8 +259,8 @@ export function useMobileSessionDictation(
   const stopDictation = host.stop
   const cancelDictation = useCallback(() => {
     dictationRouteContextRef.current = null
-    void raw.cancel()
-  }, [dictationRouteContextRef, raw])
+    void dictation.cancel()
+  }, [dictationRouteContextRef, dictation])
 
   const handleDictationToggle = useCallback(() => {
     if (dictation.isProcessing) {

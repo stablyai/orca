@@ -24,7 +24,11 @@ import {
 } from './mobile-dictation-controls-copy'
 import { dictationAwayCopy } from './mobile-dictation-away-copy'
 import { composerInputStyles } from '../components/composer-input/composer-input-styles'
-import { useMobileDictationHost, type MobileDictationHostToast } from './mobile-dictation-host'
+import {
+  useMobileDictationHost,
+  useMobileDictationHostLive,
+  type MobileDictationHostToast
+} from './mobile-dictation-host-context'
 
 const TOAST_MS = 4000
 // Long enough to read the target's name and reach Open.
@@ -188,8 +192,11 @@ export function MobileDictationPillLayer(): React.JSX.Element {
   useMobileColorScheme()
   useMobileTranslation()
   const insets = useSafeAreaInsets()
-  const { dictation, stop, pill } = useMobileDictationHost()
-  const pillBottom = insets.bottom + spacing.md
+  const host = useMobileDictationHost()
+  const dictation = useMobileDictationHostLive(host)
+  const { stop, pill } = host
+  // Above the home indicator, or above a screen's bottom bar when it reported one.
+  const pillBottom = Math.max(insets.bottom + spacing.md, pill.clearance + spacing.sm)
   return (
     <>
       {pill.away ? (

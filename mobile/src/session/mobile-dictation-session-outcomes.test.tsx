@@ -47,7 +47,7 @@ vi.mock('expo-keep-awake', () => ({
 }))
 vi.mock('expo-router', () => {
   const router = { canGoBack: () => false, push: () => {}, dismissTo: () => {} }
-  return { useFocusEffect: () => {}, useRouter: () => router }
+  return { useFocusEffect: () => {}, useRouter: () => router, useNavigation: () => undefined }
 })
 vi.mock('../platform/haptics', () => ({
   triggerError: () => {
@@ -367,7 +367,7 @@ describe('a dictation whose session screen was left', () => {
     const rpc = createFakeRpcClient()
     const mounted = await startRecording(rpc)
     mounted.leave()
-    expect(mounted.host().dictation.isRecording).toBe(true)
+    expect(mounted.host().getDictation().isRecording).toBe(true)
     expect(mounted.host().pill.away).toBe(true)
     act(() => mounted.host().stop())
     await settle(rpc, 'ship it')
