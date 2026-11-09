@@ -121,3 +121,35 @@ it('saves text typed while the store could not be read once the store answers ag
   expect(field![0]).toBe('typed while the store was down')
   vi.useRealTimers()
 })
+
+it('does not bring back a saved draft the user cleared while the store could not be read', async () => {
+  vi.useFakeTimers()
+  const table = new Map([[KEY, encodeDeviceStoreValue({ body: 'already sent text' })]])
+  publishInMemoryDeviceStore(table)
+  const store = readPageDeviceStore()!
+  let readFails = true
+  publishPageDeviceStore({
+    ...store,
+    read: async (name, keys) => (readFails ? { status: 'unavailable' } : store.read(name, keys))
+  })
+  await act(async () => {
+    renderer = create(createElement(Field))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  // The send landed: its success handler clears a field that is already empty on this page.
+  act(() => field![1](''))
+  readFails = false
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15_000)
+  })
+  act(() => renderer?.unmount())
+  renderer = null
+  resetDurableDraftFieldsForTests()
+
+  await act(async () => {
+    renderer = create(createElement(Field))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(field![0]).toBe('')
+  vi.useRealTimers()
+})

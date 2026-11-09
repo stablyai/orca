@@ -92,6 +92,10 @@ export function updateDurableDraftField(
   // Even an unchanged value is the user's choice: a read still pending must not overwrite it.
   slot.touched.add(field)
   if (next === current) {
+    // A clear on a row the page couldn't read yet still removes what the store holds, so sent text can't come back.
+    if (!next && Object.keys(slot.fields).length === 0) {
+      slot.row.save('immediate')
+    }
     return
   }
   const rest = Object.fromEntries(Object.entries(slot.fields).filter(([name]) => name !== field))
