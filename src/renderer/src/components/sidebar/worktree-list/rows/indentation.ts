@@ -19,8 +19,11 @@ const GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET = 3
 export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
 // Why: shared with project headers so titles don't shift when grouping mode changes.
 export const WORKTREE_SECTION_HEADER_PADDING_LEFT = PROJECT_GROUP_HEADER_BASE_PADDING
-export const PROJECT_GROUP_HEADER_INDENT = 10
+// Why: a full tree step leaves room for the parent level's indent guide left of each card edge.
+export const PROJECT_GROUP_HEADER_INDENT = SIDEBAR_TREE_INDENT
 export const MAX_PROJECT_GROUP_HEADER_DEPTH = 6
+// Matches the header icon slot (`size-4`) so a level's guide drops from the center of its icon.
+const PROJECT_GROUP_HEADER_ICON_SIZE = 16
 
 function clampDepth(depth: number): number {
   return Math.max(0, Math.floor(Number.isFinite(depth) ? depth : 0))
@@ -31,6 +34,10 @@ export function getProjectGroupHeaderPaddingLeft(depth: number): number {
     PROJECT_GROUP_HEADER_BASE_PADDING +
     Math.min(clampDepth(depth), MAX_PROJECT_GROUP_HEADER_DEPTH) * PROJECT_GROUP_HEADER_INDENT
   )
+}
+
+export function getIndentGuideOffset(level: number): number {
+  return getProjectGroupHeaderPaddingLeft(level) + PROJECT_GROUP_HEADER_ICON_SIZE / 2
 }
 
 export function getWorktreeCardContentIndent(args: {
