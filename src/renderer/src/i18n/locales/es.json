@@ -20504,7 +20504,10 @@
           "onCloud": "Pulsa {{shortcut}} en cualquier panel. {{model}} se ejecuta en la nube.",
           "offTitle": "El dictado está desactivado",
           "offDescription": "Actívalo para dictar con {{shortcut}} en cualquier panel.",
-          "savedMicrophone": "Tu micrófono"
+          "savedMicrophone": "Tu micrófono",
+          "description": "Habla en lugar de escribir en cualquier panel. La voz se reconoce en este equipo, así que tu audio se queda aquí.",
+          "setUp": "Configurar",
+          "asksForMicrophone": "Orca pedirá acceso al micrófono."
         },
         "quality": {
           "unsupported": "No admite tu idioma",

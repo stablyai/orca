@@ -19996,7 +19996,10 @@
           "onCloud": "在任意面板中按 {{shortcut}}。{{model}} 在云端运行。",
           "offTitle": "听写已关闭",
           "offDescription": "开启后，可在任意面板中按 {{shortcut}} 听写。",
-          "savedMicrophone": "你的麦克风"
+          "savedMicrophone": "你的麦克风",
+          "description": "在任意面板中用说话代替打字。语音在这台电脑上识别，你的音频不会离开这里。",
+          "setUp": "设置",
+          "asksForMicrophone": "Orca 会请求麦克风权限。"
         },
         "quality": {
           "unsupported": "不支持你的语言",

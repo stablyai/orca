@@ -20821,7 +20821,10 @@
           "onCloud": "Appuyez sur {{shortcut}} dans n’importe quel volet. {{model}} tourne dans le cloud.",
           "offTitle": "La dictée est désactivée",
           "offDescription": "Activez-la pour dicter avec {{shortcut}} dans n’importe quel volet.",
-          "savedMicrophone": "Votre micro"
+          "savedMicrophone": "Votre micro",
+          "description": "Parlez au lieu de taper, dans n’importe quel volet. La parole est reconnue sur cet ordinateur, votre audio reste donc ici.",
+          "setUp": "Configurer",
+          "asksForMicrophone": "Orca demandera l’accès au micro."
         },
         "quality": {
           "unsupported": "Ne prend pas en charge votre langue",

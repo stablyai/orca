@@ -47,6 +47,8 @@ export type SpeechModelManifest = {
   sampleRate: number
   streaming: boolean
   recommended?: boolean
+  /** Languages one-click setup offers this model for, ahead of the recommended default. */
+  suggestedFor?: readonly string[]
   /** Retired: never offered for selection, and a saved selection moves to this model on load. */
   replacedBy?: string
   /** Codes the engine accepts (others crash or fail to load it); absent when it ignores the setting. */

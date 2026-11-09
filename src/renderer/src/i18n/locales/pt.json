@@ -21686,7 +21686,10 @@
           "onCloud": "Pressione {{shortcut}} em qualquer painel. {{model}} roda na nuvem.",
           "offTitle": "O ditado está desativado",
           "offDescription": "Ative para ditar com {{shortcut}} em qualquer painel.",
-          "savedMicrophone": "Seu microfone"
+          "savedMicrophone": "Seu microfone",
+          "description": "Fale em vez de digitar em qualquer painel. A fala é reconhecida neste computador, então seu áudio fica aqui.",
+          "setUp": "Configurar",
+          "asksForMicrophone": "O Orca vai pedir acesso ao microfone."
         },
         "quality": {
           "unsupported": "Não suporta seu idioma",

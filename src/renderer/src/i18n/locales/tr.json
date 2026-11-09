@@ -20698,7 +20698,10 @@
           "onCloud": "Herhangi bir bölmede {{shortcut}} tuşuna basın. {{model}} bulutta çalışır.",
           "offTitle": "Dikte kapalı",
           "offDescription": "Her bölmede {{shortcut}} ile dikte etmek için açın.",
-          "savedMicrophone": "Mikrofonunuz"
+          "savedMicrophone": "Mikrofonunuz",
+          "description": "Her bölmede yazmak yerine konuşun. Konuşma bu bilgisayarda tanındığı için sesiniz burada kalır.",
+          "setUp": "Kur",
+          "asksForMicrophone": "Orca mikrofon erişimi isteyecek."
         },
         "quality": {
           "unsupported": "Dilinizi desteklemiyor",
