@@ -1,0 +1,9 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "Cho phép Orca dùng máy ảnh để quét mã QR.",
+    "NSLocalNetworkUsageDescription": "Orca kết nối với ứng dụng máy tính qua mạng LAN của bạn.",
+    "NSMicrophoneUsageDescription": "Cho phép Orca dùng micrô để đọc chính tả bằng giọng nói, được chuyển thành chữ trên điện thoại này hoặc trên máy tính đã ghép nối.",
+    "NSPhotoLibraryAddUsageDescription": "Cho phép Orca lưu ảnh từ các phiên của bạn vào Ảnh.",
+    "NSPhotoLibraryUsageDescription": "Cho phép Orca đính kèm ảnh từ thư viện của bạn vào phiên terminal trên máy tính đã ghép nối."
+  }
+}
