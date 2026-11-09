@@ -9,7 +9,8 @@ import { sessionSortTime } from './session-scanner-accumulator'
 import { dedupeScannedSessions } from './session-root-dedup'
 import {
   createAntigravityWorkspaceResolver,
-  readLocalAntigravityHistory
+  readLocalAntigravityHistory,
+  readLocalAntigravitySummaryWorkspaces
 } from './scanners/antigravity/session-scanner-antigravity-history'
 import { sessionCandidatesFromDiscoveries } from './session-scanner-candidates'
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
@@ -60,8 +61,9 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
         const issues: AiVaultScanIssue[] = []
         const parseStats = createSessionParseStats()
-        const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver((path) =>
-          readLocalAntigravityHistory(path, options.signal)
+        const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver(
+          (path) => readLocalAntigravityHistory(path, options.signal),
+          (path) => readLocalAntigravitySummaryWorkspaces(path, options.signal)
         )
         throwIfAiVaultScanCancelled(options.signal)
         const discoveries = await discoverAiVaultSessionSources({
