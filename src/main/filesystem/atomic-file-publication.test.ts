@@ -3,7 +3,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { removeFileAtomicallyIfUnchanged, writeFileAtomicallyIfUnchanged } from './fs-utils'
+import {
+  removeFileAtomicallyIfUnchanged,
+  writeFileAtomicallyIfUnchanged
+} from './atomic-file-publication'
 
 const fsMock = vi.hoisted(() => ({ linkSync: vi.fn(), renameSync: vi.fn() }))
 

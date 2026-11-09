@@ -1298,6 +1298,28 @@
       "sessionLimit": "このコンピュータでディクテーション中のデバイスが多すぎます。いずれかが終わってから、もう一度お試しください。",
       "sessionLost": "ディクテーション中にコンピュータとの接続が切れました。再試行してください。",
       "updateFailed": "ディクテーション設定の更新に失敗しました。"
+    },
+    "controls": {
+      "start": "音声入力",
+      "starting": "音声入力を開始しています",
+      "stop": "停止して挿入",
+      "finishing": "音声入力を仕上げています",
+      "cancel": "音声入力をキャンセル",
+      "meterOnPhone": "録音中、{{duration}}、このスマートフォンで処理",
+      "meterOn": "録音中、{{duration}}、{{computer}} で処理",
+      "meterOnComputer": "録音中、{{duration}}、コンピュータで処理",
+      "meter": "録音中、{{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} 秒",
+      "durationSeconds_other": "{{count}} 秒",
+      "durationMinutes_one": "{{count}} 分",
+      "durationMinutes_other": "{{count}} 分"
+    },
+    "status": {
+      "finishingOn": "{{computer}} で仕上げています",
+      "finishingOnComputer": "コンピュータで仕上げています",
+      "movedTo": "{{computer}} に切り替えました",
+      "movedToComputer": "コンピュータに切り替えました"
     }
   },
   "files": {
@@ -2398,11 +2420,7 @@
     "terminalInputActions": {
       "attachFileHint": "長押しすると、写真の代わりにファイルを添付できます。",
       "attachPhoto": "写真を添付",
-      "sendingImage": "画像を送信中…",
-      "startDictation": "音声ディクテーションを開始",
-      "startingDictation": "音声ディクテーションを開始中",
-      "stopDictation": "音声ディクテーションを停止",
-      "transcribingDictation": "音声ディクテーションを文字起こし中"
+      "sendingImage": "画像を送信中…"
     },
     "terminalLiveInputStatus": {
       "listening": "聞き取り中",
@@ -2411,8 +2429,6 @@
       "processing": "処理中",
       "releaseMicHint": "マイクボタンから指を離すと停止",
       "startingMic": "マイクを起動中",
-      "stopHint": "マイクをタップして停止",
-      "transcribing": "デスクトップで文字起こし中",
       "uploadingImage": "ホストに画像をアップロード中",
       "uploadingImageTitle": "画像をアップロード中"
     },

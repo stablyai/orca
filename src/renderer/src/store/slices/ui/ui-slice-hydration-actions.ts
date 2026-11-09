@@ -31,7 +31,7 @@ import {
 } from '../../../../../shared/workspace-statuses'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
-import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
+import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'

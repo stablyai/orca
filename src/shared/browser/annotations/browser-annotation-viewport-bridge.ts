@@ -1,5 +1,5 @@
-import type { BrowserGrabRect } from './browser-grab-types'
-import { COMPOSED_TREE_SCRIPT } from './browser-composed-tree-script'
+import type { BrowserGrabRect } from '../element-grab/browser-grab-types'
+import { COMPOSED_TREE_SCRIPT } from '../element-grab/browser-composed-tree-script'
 import { isValidBrowserGrabRect } from './browser-annotation-viewport-report'
 
 export type BrowserAnnotationViewportBridgeMarker = {

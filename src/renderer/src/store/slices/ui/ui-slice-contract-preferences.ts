@@ -1,6 +1,6 @@
 import type { ProjectRepoFilterWriteIntent } from '../../../../../shared/project-repo-filter-capability'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
+import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
   ActivityGroupBy,
   ThreadReadFilter

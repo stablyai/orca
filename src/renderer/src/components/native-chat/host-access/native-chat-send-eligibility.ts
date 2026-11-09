@@ -1,7 +1,9 @@
-import type { DriverState } from '@/lib/pane-manager/mobile-driver-state'
+import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
 
 /** Mirror terminal mobile-driver locks; unresolved driver state stays usable until send-time PTY validation. */
-export function deriveNativeChatCanSend(driver: DriverState | null | undefined): boolean {
+export function deriveNativeChatCanSend(
+  driver: RuntimeTerminalDriverState | null | undefined
+): boolean {
   return driver?.kind !== 'mobile'
 }
 

@@ -1,6 +1,6 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
-import { getRepoIdFromWorktreeId } from './worktree/id'
-import { parseWorkspaceKey } from './workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../constants'
+import { getRepoIdFromWorktreeId } from '../../worktree/id'
+import { parseWorkspaceKey } from '../../workspace-scope'
 
 /** Which browser profile new tabs in a workspace use: the shared Default, or one Orca manages per repo or per workspace. */
 export type BrowserProfileScope = 'shared' | 'repo' | 'worktree'

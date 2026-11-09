@@ -4610,6 +4610,9 @@
             "accounts": "Cuentas de Antigravity guardadas",
             "readAgo": "Consultado {{time}}",
             "notRead": "Uso desconocido: aún no consultado"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Se restablece a las {{when}}"
           }
         }
       },

@@ -5,7 +5,7 @@ import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-
 import type { RuntimeTerminalWriteOptions } from '../input/runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
-import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 import type { RuntimeTerminalAttention } from '../../../../shared/runtime-terminal-contracts'
@@ -222,7 +222,10 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     return addListenerToMap(this.fitOverrideListeners, ptyId, listener)
   }
 
-  subscribeToDriverChanges(ptyId: string, listener: (driver: DriverState) => void): () => void {
+  subscribeToDriverChanges(
+    ptyId: string,
+    listener: (driver: RuntimeTerminalDriverState) => void
+  ): () => void {
     return this.terminalDrivers.subscribe(ptyId, listener)
   }
 

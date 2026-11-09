@@ -4474,6 +4474,9 @@
             "accounts": "已保存的 Antigravity 账户",
             "readAgo": "读取于 {{time}}",
             "notRead": "用量未知：尚未读取"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "将在 {{when}} 重置"
           }
         }
       },

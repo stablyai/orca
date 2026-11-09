@@ -1341,6 +1341,30 @@
       "sessionLimit": "Hay demasiados dispositivos dictando en este ordenador. Inténtalo de nuevo cuando termine uno.",
       "sessionLost": "El dictado perdió la conexión con el ordenador. Inténtalo de nuevo.",
       "updateFailed": "No se pudieron actualizar los ajustes de dictado"
+    },
+    "controls": {
+      "start": "Dictar",
+      "starting": "Iniciando el dictado",
+      "stop": "Detener e insertar",
+      "finishing": "Terminando el dictado",
+      "cancel": "Cancelar dictado",
+      "meterOnPhone": "Grabando, {{duration}}, en este teléfono",
+      "meterOn": "Grabando, {{duration}}, en {{computer}}",
+      "meterOnComputer": "Grabando, {{duration}}, en el ordenador",
+      "meter": "Grabando, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} segundo",
+      "durationSeconds_other": "{{count}} segundos",
+      "durationSeconds_many": "{{count}} segundos",
+      "durationMinutes_one": "{{count}} minuto",
+      "durationMinutes_other": "{{count}} minutos",
+      "durationMinutes_many": "{{count}} minutos"
+    },
+    "status": {
+      "finishingOn": "Terminando en {{computer}}",
+      "finishingOnComputer": "Terminando en el ordenador",
+      "movedTo": "Pasado a {{computer}}",
+      "movedToComputer": "Pasado al ordenador"
     }
   },
   "files": {
@@ -2470,11 +2494,7 @@
     "terminalInputActions": {
       "attachFileHint": "Mantén pulsado para adjuntar un archivo en su lugar.",
       "attachPhoto": "Adjuntar una foto",
-      "sendingImage": "Enviando imagen",
-      "startDictation": "Iniciar dictado de voz",
-      "startingDictation": "Iniciando dictado de voz",
-      "stopDictation": "Detener dictado de voz",
-      "transcribingDictation": "Transcribiendo dictado de voz"
+      "sendingImage": "Enviando imagen"
     },
     "terminalLiveInputStatus": {
       "listening": "Escuchando",
@@ -2483,8 +2503,6 @@
       "processing": "Procesando",
       "releaseMicHint": "Suelta el micrófono para detener la grabación",
       "startingMic": "Iniciando micrófono",
-      "stopHint": "Toca el micrófono para parar",
-      "transcribing": "Transcribiendo en el escritorio",
       "uploadingImage": "Subiendo imagen al host",
       "uploadingImageTitle": "Subiendo imagen"
     },

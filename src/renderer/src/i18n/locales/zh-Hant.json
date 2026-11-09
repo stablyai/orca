@@ -4929,6 +4929,9 @@
             "accounts": "已儲存的 Antigravity 帳戶",
             "readAgo": "讀取於 {{time}}",
             "notRead": "用量未知：尚未讀取"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "將於 {{when}} 重設"
           }
         }
       },

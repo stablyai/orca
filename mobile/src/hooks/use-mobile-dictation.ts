@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AppState } from 'react-native'
 import { useDictationCapture } from '../platform/dictation-capture'
 import { useOnDeviceSpeech } from '../platform/on-device-speech'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileDictationMeter } from './mobile-dictation-meter'
+import { useMobileDictationEngineShown } from './mobile-dictation-engine-shown'
+import { useMobileDictationInterruptions } from './use-mobile-dictation-interruptions'
 import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import {
   useMobileDictationTranscriptSoFar,
@@ -40,6 +41,11 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [transcriptSoFar, setTranscriptSoFar, keptTranscript] = useMobileDictationTranscriptSoFar()
+  const {
+    shown: shownEngine,
+    show: showEngine,
+    clear: clearEngine
+  } = useMobileDictationEngineShown()
   // Read from an abort that may run between a commit and its passive Effects, where state is stale.
   const statusRef = useRef<DictationStatus>('idle')
   const activeIdRef = useRef<string | null>(null)
@@ -68,12 +74,19 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     onErrorRef.current = onError
   }, [client, speech, enabled, onTranscript, onError])
 
-  const applyStatus = useCallback((next: DictationStatus) => {
-    statusRef.current = next
-    setStatus(next)
-    // Kept through processing so the text so far stays in place until the final transcript replaces it in the same render.
-    setTranscriptSoFar((text) => (next === 'recording' || next === 'processing' ? text : ''))
-  }, [])
+  const applyStatus = useCallback(
+    (next: DictationStatus) => {
+      statusRef.current = next
+      setStatus(next)
+      // Kept through processing so the text so far stays in place until the final transcript replaces it in the same render.
+      const live = next === 'recording' || next === 'processing'
+      setTranscriptSoFar((text) => (live ? text : ''))
+      if (!live) {
+        clearEngine()
+      }
+    },
+    [clearEngine]
+  )
 
   const reportError = useCallback(
     (err: unknown) => {
@@ -138,11 +151,12 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       onTranscript: onTranscriptRef,
       keptTranscript,
       applyStatus,
+      showEngine,
       closeDictationAudio,
       reportError,
       failActiveDictation
     }),
-    [applyStatus, closeDictationAudio, failActiveDictation, keptTranscript, reportError]
+    [applyStatus, closeDictationAudio, failActiveDictation, keptTranscript, reportError, showEngine]
   )
 
   useEffect(() => {
@@ -270,35 +284,15 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
 
   const cancel = useCallback(() => abandonDictation(null), [abandonDictation])
 
-  useEffect(() => {
-    // Finish what was already streamed; only the user's own cancel may discard it.
-    const interrupted = () => {
-      if (statusRef.current === 'recording') {
-        void finishDictation(dictationSessionErrorMessage('interrupted'))
-      } else if (audioPhaseRef.current === 'holding') {
-        // The mic is live while the host start is pending: close it now, and finish with what it heard once the start commits.
-        stopWhenStartedRef.current = true
-        applyStatus('processing')
-        void capture.end()
-      } else if (statusRef.current === 'starting') {
-        void abandonDictation(dictationSessionErrorMessage('interrupted'))
-      }
-    }
-    const sub = capture.onInterruption(interrupted)
-    // A backgrounded app loses the microphone, so leaving finishes. Not before the mic opens: Android's permission prompt reports background.
-    const appState = AppState.addEventListener('change', (state) => {
-      if (
-        state === 'background' &&
-        (statusRef.current === 'recording' || audioPhaseRef.current === 'holding')
-      ) {
-        interrupted()
-      }
-    })
-    return () => {
-      sub.remove()
-      appState.remove()
-    }
-  }, [abandonDictation, applyStatus, capture, finishDictation])
+  useMobileDictationInterruptions({
+    capture,
+    status: statusRef,
+    audioPhase: audioPhaseRef,
+    stopWhenStarted: stopWhenStartedRef,
+    applyStatus,
+    finish: finishDictation,
+    abandon: abandonDictation
+  })
 
   useEffect(() => {
     if (!enabled) {
@@ -324,6 +318,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     isProcessing: status === 'processing',
     transcriptSoFar,
     error,
+    engine: shownEngine,
     start,
     stop,
     cancel,

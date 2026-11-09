@@ -5028,6 +5028,9 @@
             "accounts": "Kayıtlı Antigravity Hesapları",
             "readAgo": "Okunma zamanı: {{time}}",
             "notRead": "Kullanım bilinmiyor: henüz okunmadı"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Sıfırlanma zamanı: {{when}}"
           }
         }
       },

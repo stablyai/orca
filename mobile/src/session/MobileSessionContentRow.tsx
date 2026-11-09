@@ -10,6 +10,8 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 import { MobileDictationStatusAnnouncement } from '../dictation/MobileDictationStatusAnnouncement'
+import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
+import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
 
 export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
@@ -25,8 +27,10 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
     setCreateWarningState,
     createWarning,
     dictation,
+    cancelDictation,
     handleSessionContentRowLayout
   } = controller
+  const dictationLive = useMobileDictationLive(dictation, cancelDictation, hostId)
   return (
     <View style={styles.sessionContentRow} onLayout={handleSessionContentRowLayout}>
       <View style={styles.sessionContentMain}>
@@ -47,9 +51,11 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
             </Pressable>
           </View>
         ) : null}
-        <MobileSessionActiveContent controller={controller} />
-        {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
-        <MobileSessionCommandDock controller={controller} />
+        <MobileDictationLiveContext.Provider value={dictationLive}>
+          <MobileSessionActiveContent controller={controller} />
+          {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
+          <MobileSessionCommandDock controller={controller} />
+        </MobileDictationLiveContext.Provider>
         <MobileDictationStatusAnnouncement dictation={dictation} />
       </View>
       {canDockPanel && activePanel !== null && (

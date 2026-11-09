@@ -1,3 +1,4 @@
+import { getMainHttpClient } from '../network/http-client'
 import { resampleToRate } from './stt-audio-resample'
 import { replaceRetiredSpeechModelId } from './model-catalog'
 
@@ -66,6 +67,22 @@ function encodePcm16Wav(chunks: Float32Array[], sampleRate: number): Buffer<Arra
   }
 
   return buffer
+}
+
+/** The one request both transcription and the key check send; the main HTTP client follows the app's proxy. */
+export function postOpenAiTranscription(
+  apiKey: string,
+  form: FormData,
+  signal: AbortSignal
+): Promise<Response> {
+  return getMainHttpClient().fetch(OPENAI_TRANSCRIPTION_URL, {
+    method: 'POST',
+    // Bearer auth only: keep OpenAI's cookies out of the shared desktop session.
+    credentials: 'omit',
+    signal,
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form
+  })
 }
 
 export function readOpenAiErrorMessage(data: OpenAiTranscriptionResponse): string | undefined {
@@ -151,14 +168,7 @@ export class OpenAiTranscriptionSession {
   }
 
   private async upload(form: FormData, signal: AbortSignal): Promise<string> {
-    const response = await fetch(OPENAI_TRANSCRIPTION_URL, {
-      method: 'POST',
-      signal,
-      headers: {
-        Authorization: `Bearer ${this.readApiKey()}`
-      },
-      body: form
-    })
+    const response = await postOpenAiTranscription(this.readApiKey(), form, signal)
 
     const data = (await response.json().catch(() => ({}))) as OpenAiTranscriptionResponse
     if (!response.ok) {

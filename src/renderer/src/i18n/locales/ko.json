@@ -4474,6 +4474,9 @@
             "accounts": "저장된 Antigravity 계정",
             "readAgo": "{{time}}에 조회",
             "notRead": "사용량을 알 수 없음: 아직 조회하지 않음"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "{{when}}에 초기화"
           }
         }
       },
