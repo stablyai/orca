@@ -3,6 +3,7 @@ import {
   RECIPE_VM_REFUSAL_CODES,
   RecipeVmWakeUnavailableError
 } from '../../../shared/remote-runtime/recipe-vm-wake'
+import { RecipeWorkspaceRemovalError } from '../../../shared/recipe-host-removal'
 import { formatTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch/contracts/agent-launch-surface'
@@ -157,6 +158,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worker_prompt_too_large',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',
+  // Another open Dispatch holds the terminal; data names it and says no effects were applied.
+  'terminal_busy',
   // The user chose Keep open; only they can undo it, so a coordinator must not retry blindly.
   'terminal_kept_open',
   'worker_cannot_coordinate_own_run',
@@ -199,8 +202,12 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
   }
-  if (error instanceof RecipeVmWakeUnavailableError) {
-    return errorResponse(id, meta, error.code, message)
+  // A recipe workspace removal keeps its environment's own code (archive hook, PTY stop, selector).
+  if (
+    error instanceof RecipeVmWakeUnavailableError ||
+    error instanceof RecipeWorkspaceRemovalError
+  ) {
+    return errorResponse(id, meta, error.code, message, 'data' in error ? error.data : undefined)
   }
   if (
     error instanceof BranchSwitchCollisionError ||
@@ -237,21 +244,8 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     error instanceof Error &&
     'code' in error &&
     typeof (error as { code: unknown }).code === 'string' &&
-    LINEAR_PASSTHROUGH_CODES.has((error as { code: string }).code)
-  ) {
-    return errorResponse(
-      id,
-      meta,
-      (error as { code: string }).code,
-      message,
-      (error as { data?: unknown }).data
-    )
-  }
-  if (
-    error instanceof Error &&
-    'code' in error &&
-    typeof (error as { code: unknown }).code === 'string' &&
-    STRUCTURED_RUNTIME_PASSTHROUGH_CODES.has((error as { code: string }).code)
+    (LINEAR_PASSTHROUGH_CODES.has((error as { code: string }).code) ||
+      STRUCTURED_RUNTIME_PASSTHROUGH_CODES.has((error as { code: string }).code))
   ) {
     return errorResponse(
       id,

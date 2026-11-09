@@ -9,7 +9,7 @@ import {
   getWorktreeIdFromVisitKey,
   getWorktreeVisitKey,
   getWorktreeVisitTimestamp
-} from '@/lib/worktree-visit-recency'
+} from '@/lib/workspace/activation/worktree-visit-recency'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo

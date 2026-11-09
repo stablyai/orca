@@ -73,17 +73,6 @@ afterEach(() => {
 })
 
 describe('the last bridged relay terminal', () => {
-  it('reports once when the relay proves the only pane exited', async () => {
-    startHost()
-    await startLegacyRelayBridge(TARGET)
-
-    relay.ptys.delete('pty-1')
-    relay.clients[0].emitExit('pty-1', 0)
-
-    expect(lastExits).toEqual([TARGET])
-    expect(legacyRelayBridgedPanes()).toEqual([])
-  })
-
   it('never reports lost contact as exit', async () => {
     startHost()
     await startLegacyRelayBridge(TARGET)

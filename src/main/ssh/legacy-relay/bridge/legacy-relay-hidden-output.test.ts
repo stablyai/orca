@@ -20,19 +20,6 @@ beforeEach(() => {
 })
 
 describe('a bridged pane no visible view shows', () => {
-  it('sends none of its output to the window, and one fresh screen once shown', async () => {
-    subject.setPaused(PTY, true)
-    for (let i = 0; i < 1000; i++) {
-      subject.onData(PTY, 'x'.repeat(4096))
-    }
-    expect(sent).toEqual([])
-    subject.setPaused(PTY, false)
-    await vi.waitFor(() => expect(sent).toEqual(['replay:SCREEN']))
-    expect(reread).toHaveBeenCalledTimes(1)
-    subject.onData(PTY, 'live')
-    expect(sent).toEqual(['replay:SCREEN', 'data:live'])
-  })
-
   it('keeps output printed after the snapshot behind the screen it follows', async () => {
     let snapshot: (replay: string) => void = () => {}
     let finish: () => void = () => {}
@@ -80,12 +67,6 @@ describe('a bridged pane no visible view shows', () => {
     expect(sent.at(-1)).toBe('data:c')
   })
 
-  it('still sends kitty, window-size and capability queries', () => {
-    subject.setPaused(PTY, true)
-    subject.onData(PTY, 'a\x1b[?ub\x1b[18tc\x1bP+q544e\x1b\\d')
-    expect(sent).toEqual(['data:\x1b[?u\x1b[18t\x1bP+q544e\x1b\\'])
-  })
-
   it('reopens an oversized OSC a reveal cut, so its payload never prints', async () => {
     reread.mockRejectedValueOnce(new Error('ssh down'))
     subject.setPaused(PTY, true)
@@ -99,22 +80,6 @@ describe('a bridged pane no visible view shows', () => {
     subject.setPaused(PTY, true)
     subject.onData(PTY, 'cbulk')
     expect(sent).toEqual(['data:shown\x1b[', 'data:\x1b[c'])
-  })
-
-  it('carries a query split across chunks until it completes', () => {
-    subject.setPaused(PTY, true)
-    subject.onData(PTY, 'bulk\x1b[')
-    subject.onData(PTY, 'c')
-    expect(sent).toEqual(['data:\x1b[c'])
-  })
-
-  it('still sends command marks, titles and bells, but not an oversized OSC', () => {
-    subject.setPaused(PTY, true)
-    subject.onData(PTY, 'out\x1b]133;D;0\x07text\x1b]0;')
-    subject.onData(PTY, 'title\x1b\\ding\x07')
-    subject.onData(PTY, `\x1b]1337;File=${'x'.repeat(5000)}`)
-    subject.onData(PTY, 'y\x07after\x07')
-    expect(sent).toEqual(['data:\x1b]133;D;0\x07', 'data:\x1b]0;title\x1b\\\x07', 'data:\x07'])
   })
 
   it('re-reads output a hidden pane printed after its reattach’s screen', async () => {

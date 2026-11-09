@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({ getConnectionId: () => null }))
 vi.mock('./terminal-drop-worktree-path', () => ({ resolveTerminalDropWorktreePath: () => '/repo' }))
 vi.mock('./terminal-drop-shell', () => ({
   resolveTerminalDropTargetShell: () => ({ kind: 'posix' })

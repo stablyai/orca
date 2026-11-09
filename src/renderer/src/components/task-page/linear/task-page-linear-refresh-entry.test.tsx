@@ -3,7 +3,7 @@ import { reads, task, store, source } from './task-page-linear-refresh-test-fixt
 
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 import { useLinearIssueWorkspaceDetail } from '../../linear-issue-workspace-detail-state'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'

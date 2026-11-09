@@ -1,7 +1,7 @@
 // Main applies renames and frames draw titles without a second window write. Shared transport checks each flush against full-build behavior.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { useAppStore } from '@/store/index'
 import { localDesktopSession } from '../../../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import { leaf } from '../../../../../shared/workspace-layout/workspace-layout-session.test-fixture'
@@ -31,7 +31,7 @@ vi.mock('./workspace-layout-frame-sync', async (importOriginal) => ({
   showStartupLayoutFrames: () => {}
 }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

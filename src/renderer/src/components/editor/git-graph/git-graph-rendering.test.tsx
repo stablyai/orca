@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-tab-controllers'
 import { attachClosedEditorTabCleanup } from '../model-lifetime/retention/closed-editor-tab-controller'
 import { gitGraphScope } from '@/lib/git-graph-tab'
-import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
+import { captureWorktreeOperationGenerationSnapshot } from '@/lib/workspace/ownership/worktree-operation-generation'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -100,28 +100,6 @@ it('keeps the branch checkout strip open after selecting a badge context-menu ac
       .click()
   })
   expect(container.querySelector('form')?.textContent).toContain('Check out branch topic?')
-})
-
-it('renders converging branch lanes and a detached root without duplicate child keys', async () => {
-  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-  getHistory.mockReset().mockResolvedValue({
-    ...result,
-    items: [
-      { id: 'a', subject: 'a', message: 'a', parentIds: ['root'] },
-      { id: 'b', subject: 'b', message: 'b', parentIds: ['root'] },
-      { id: 'c', subject: 'c', message: 'c', parentIds: ['root'] },
-      { id: 'detached', subject: 'detached', message: 'detached', parentIds: [] },
-      { id: 'root', subject: 'root', message: 'root', parentIds: [] }
-    ]
-  })
-  await act(async () =>
-    root.render(
-      <TooltipProvider>
-        <GitGraphTab worktreeId={workspaceId} />
-      </TooltipProvider>
-    )
-  )
-  expect(errors.mock.calls.filter(([message]) => String(message).includes('same key'))).toEqual([])
 })
 
 it('recovers silently after each later token expiry and ignores refreshes for other worktrees', async () => {

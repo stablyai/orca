@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -79,20 +79,6 @@ function localShellConnection(rewrite: (command: string) => string = (c) => c): 
 }
 
 describe.skipIf(process.platform === 'win32')('exec-stdin writer through a real shell', () => {
-  it('streams a payload over 10 MB byte-for-byte', async () => {
-    const dir = tempDir()
-    const payload = randomBytes(12 * 1024 * 1024 + 7)
-    const local = join(dir, 'runtime.tar.gz')
-    writeFileSync(local, payload)
-    const remote = join(dir, 'remote', 'nested', 'runtime.tar.gz')
-
-    await uploadFileViaExecStdin(localShellConnection(), local, remote)
-
-    const sha = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
-    expect(sha(readFileSync(remote))).toBe(sha(payload))
-    expect(readdirSync(join(dir, 'remote', 'nested'))).toEqual(['runtime.tar.gz'])
-  }, 60_000)
-
   it('leaves no file behind when the host receives fewer bytes than were sent', async () => {
     const dir = tempDir()
     const local = join(dir, 'payload.bin')

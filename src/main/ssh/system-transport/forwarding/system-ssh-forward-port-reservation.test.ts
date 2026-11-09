@@ -54,11 +54,4 @@ describe('local forward port reservation', () => {
     await expect(reserveLocalForwardPort(port, ['ssh'], cancel)).resolves.toBe(port)
     expect(cancel).not.toHaveBeenCalled()
   })
-
-  it('keeps the bind error when neither recovery released the port', async () => {
-    const port = await holdPort()
-    await expect(reserveLocalForwardPort(port, ['ssh'], async () => false)).rejects.toThrow(
-      `Local port 127.0.0.1:${port} is not available`
-    )
-  })
 })

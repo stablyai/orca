@@ -16,6 +16,11 @@ export type ResolveActiveSessionTabResult<T extends SessionTabLike> = {
   retainSelectedSessionTabId: boolean
 }
 
+/** The tab a strip marks active, else its first. */
+export function activeSessionTabOf<T extends SessionTabLike>(tabs: readonly T[]): T | null {
+  return tabs.find((tab) => tab.isActive) ?? tabs[0] ?? null
+}
+
 export function resolveActiveSessionTab<T extends SessionTabLike>(
   tabs: readonly T[],
   opts: {
@@ -24,7 +29,7 @@ export function resolveActiveSessionTab<T extends SessionTabLike>(
     navigationIntent?: 'follow'
   }
 ): ResolveActiveSessionTabResult<T> {
-  const snapshotActive = tabs.find((tab) => tab.isActive) ?? tabs[0] ?? null
+  const snapshotActive = activeSessionTabOf(tabs)
   const pendingActiveSessionTabId = opts.pendingActiveSessionTabId
   // Why: targeted follow is the only host action allowed to supersede phone-local intent.
   if (opts.navigationIntent === 'follow') {

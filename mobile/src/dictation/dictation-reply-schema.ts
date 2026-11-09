@@ -32,6 +32,10 @@ export const dictationSetupSchema = z.looseObject({
   enabled: salvagedOptional('enabled', z.boolean()),
   selectedModelId: salvagedOptional('selectedModelId', z.string()),
   dictationMode: salvagedOptional('dictationMode', z.string()),
+  // Absent from older hosts, which have no Auto mode; the phone then offers only Toggle and Hold.
+  dictationHoldToRecord: salvagedOptional('dictationHoldToRecord', z.boolean()),
+  // Absent from older hosts, which remove no fillers either; the phone then keeps them on, the host default.
+  removeFillerWords: salvagedOptional('removeFillerWords', z.boolean()),
   models: salvagingArray(speechModelSchema)
 })
 

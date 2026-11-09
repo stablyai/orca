@@ -40,6 +40,7 @@ export type ActivityLiveAgentSnapshot = {
   entry: AgentStatusEntry
   tab: TerminalTab
   agentType: AgentType
+  migrationUnsupportedPtyId?: string
 }
 
 // Why: keyed per agent pane (tab + leaf id), not per workspace, so the list shows one row per agent; paneKey is `${tabId}:${leafId}`.

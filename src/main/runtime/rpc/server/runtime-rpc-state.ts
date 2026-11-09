@@ -86,6 +86,7 @@ export class RuntimeRpcState {
   protected mobileDesktopRelay: MobileDesktopRelay | null = null
   protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null
   protected detachPairedServerRows: (() => void) | null = null
+  protected detachRelayHostsChanges: (() => void) | null = null
   protected readonly declaredDesktopClients = new DeclaredDesktopClients()
   protected readonly authenticatedSourceRecorder: AuthenticatedSourceRecorder
   // Why: lets an automatic mint install a provider whose launch-time construction failed.

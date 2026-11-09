@@ -18,7 +18,7 @@ import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity
 } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import type { Translate } from '@/i18n/use-translate'
 
 /** Cache by candidate identity and reuse unchanged row arrays. useMemo owns invalidation; content-addressed/idempotent fills survive discarded renders without unsafe ref mutation. */

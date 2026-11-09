@@ -52,15 +52,15 @@ const DESCRIPTIONS: Record<string, () => string> = {
       'settings.voice.modelDescriptions.senseVoice',
       'Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.'
     ),
-  'openai-gpt-4o-mini-transcribe': () =>
+  'openai-compatible': () =>
     translate(
-      'settings.voice.modelDescriptions.gpt4oMiniTranscribe',
-      'Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.'
+      'settings.voice.modelDescriptions.openAiCompatible',
+      'Any service with an OpenAI-style transcription API, such as Groq, Mistral or a local server.'
     ),
-  'openai-gpt-4o-transcribe': () =>
+  'openai-gpt-transcribe': () =>
     translate(
-      'settings.voice.modelDescriptions.gpt4oTranscribe',
-      'Cloud transcription with higher accuracy. Requires an OpenAI API key.'
+      'settings.voice.modelDescriptions.gptTranscribe',
+      'Cloud transcription with high accuracy. Requires an OpenAI API key.'
     )
 }
 

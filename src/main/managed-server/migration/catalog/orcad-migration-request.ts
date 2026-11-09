@@ -3,7 +3,7 @@ import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runt
 import type { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../../../shared/orcad-runtime-capabilities'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 
 /** Missing capability/method is definite refusal; other failures require catalog re-read because a lost reply may hide staged state. */
@@ -32,11 +32,15 @@ export async function sendSupportedMigrationRequest(
   requiredSourceCapability: string | null = null,
   assertCapabilities: (capabilities: readonly string[]) => void = () => {}
 ): Promise<RuntimeRpcResponse<unknown>> {
-  const response = await sendRemoteRuntimeRequestWithStatusPreflight<unknown>(
-    pairedRuntimeConnectionFromOffer(pairing),
+  const pairingConnection = pairedRuntimeConnectionFromOffer(pairing)
+  const requestTimeoutMs = options.timeoutMs ?? 15_000
+  const requestSignal = options.signal
+  const response = await sendRemoteRuntimeRequestOnSocket<unknown>(
+    pairingConnection,
     method,
     params,
-    options.timeoutMs ?? 15_000,
+    requestTimeoutMs,
+    undefined,
     (status) => {
       if (!status.ok) {
         throw new Error(`orcad_migration_status_failed:${status.error.message}`)
@@ -64,9 +68,10 @@ export async function sendSupportedMigrationRequest(
       }
       assertCapabilities(status.result.capabilities ?? [])
     },
-    undefined,
+    requestSignal,
     ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-    options.signal
+    undefined,
+    undefined
   )
   if (!response.ok && response.error.code === 'method_not_found') {
     throw new Error(ORCAD_MIGRATION_DESTINATION_UNSUPPORTED)
