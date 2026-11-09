@@ -191,7 +191,7 @@ function installStatusProjection(): () => void {
     // Mark consumed only after a normal return: a throwing commit leaves the input for the next emission to retry.
     for (const input of inputs) {
       input.member.captured = input
-      input.member.group?.owed.delete(input.member)
+      membership.settle(input.member)
     }
   }
   const activateGroups = (): void => {
@@ -227,7 +227,9 @@ function installStatusProjection(): () => void {
       // Launch ticks and full host ticks carry every member; skip the unchanged ones.
       if (!sameCapturedInput(member.captured, input)) {
         inputs.push(input)
-        member.group?.owed.add(member)
+        membership.owe(member)
+      } else {
+        membership.settle(member)
       }
     }
     enqueue(
@@ -238,13 +240,7 @@ function installStatusProjection(): () => void {
       inputs.map(({ member }) => ({ host: member.hostKey, paneKey: member.paneKey }))
     )
   }
-  const withOwed = (selected: Iterable<Member>): Set<Member> => {
-    const result = new Set(selected)
-    for (const group of groups.values()) {
-      group.owed.forEach((member) => result.add(member))
-    }
-    return result
-  }
+  const withOwed = (selected: Iterable<Member>) => membership.withDebt(selected, groups.values())
   const groupFor = (
     state: AppState,
     tab: StructuredTab
@@ -340,7 +336,8 @@ function installStatusProjection(): () => void {
         group.release?.()
       }
     }
-    if (changed.size || retiring.length) {
+    // Existing projection or retirement debt drains on any reconciliation, not only on new changes.
+    if (changed.size || retired.size || membership.hasDebt(groups.values())) {
       enqueue(() => {
         activateGroups()
         capture(withOwed(changed))

@@ -60,6 +60,28 @@ export function createStructuredSessionMembership() {
   }
   /** Unstamped tabs resolve their host from workspace owner inputs; stamped tabs never do. */
   const legacy = new Set<Member>()
+  /** Projection debt of members no host feed owns (SSH, unresolved); grouped debt lives on the group. */
+  const ungroupedOwed = new Set<Member>()
+  const owe = (member: Member): void => {
+    if (member.group) {
+      member.group.owed.add(member)
+    } else {
+      ungroupedOwed.add(member)
+    }
+  }
+  const settle = (member: Member): void => {
+    member.group?.owed.delete(member)
+    ungroupedOwed.delete(member)
+  }
+  const withDebt = (selected: Iterable<Member>, groups: Iterable<HostGroup>): Set<Member> => {
+    const result = new Set([...selected, ...ungroupedOwed])
+    for (const group of groups) {
+      group.owed.forEach((member) => result.add(member))
+    }
+    return result
+  }
+  const hasDebt = (groups: Iterable<HostGroup>): boolean =>
+    ungroupedOwed.size > 0 || [...groups].some((group) => group.owed.size > 0)
 
   const attach = (member: Member): void => {
     members.set(member.paneKey, member)
@@ -85,6 +107,7 @@ export function createStructuredSessionMembership() {
       membersByTabId.delete(member.tab.id)
     }
     legacy.delete(member)
+    ungroupedOwed.delete(member)
     const group = member.group
     if (group) {
       group.members.delete(member)
@@ -125,7 +148,12 @@ export function createStructuredSessionMembership() {
     } else {
       legacy.add(member)
     }
-    return semanticChange ? member : null
+    if (!semanticChange) {
+      return null
+    }
+    // Owed from attach or change on, so a pass that throws before capturing still retries it.
+    owe(member)
+    return member
   }
   /** Places listed tabs that changed and returns members no longer listed: all of them, or within `tabIds`. */
   const reconcileTabs = (
@@ -153,6 +181,19 @@ export function createStructuredSessionMembership() {
     members.clear()
     membersByTabId.clear()
     legacy.clear()
+    ungroupedOwed.clear()
   }
-  return { members, membersByTabId, legacy, place, detach, reconcileTabs, clear }
+  return {
+    members,
+    membersByTabId,
+    legacy,
+    owe,
+    settle,
+    withDebt,
+    hasDebt,
+    place,
+    detach,
+    reconcileTabs,
+    clear
+  }
 }
