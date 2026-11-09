@@ -20,6 +20,7 @@ import type {
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { findTerminalTabForPane } from '../terminal-tab-id'
+import { installAgentSignInSpawnGate } from './agent-sign-in-spawn-gate'
 
 export function releaseDeferredCwdFence(session: ConnectPanePtySession): void {
   if (!session.transport.getPtyId()) {
@@ -320,4 +321,5 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     pendingSpawnGenerationByPaneKey.set(session.pendingSpawnKey, session.tabGeneration)
     return trackedPromise
   }
+  installAgentSignInSpawnGate(session)
 }

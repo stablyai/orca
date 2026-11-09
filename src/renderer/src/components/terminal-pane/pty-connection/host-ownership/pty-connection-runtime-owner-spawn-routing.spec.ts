@@ -186,7 +186,8 @@ export function registerPtyConnectionRuntimeOwnerSpawnRoutingTests(): void {
       )
       expect(createdTransportOptions[0]?.cwdFallback).toBeUndefined()
       expect(createdTransportOptions[0]?.agentArgsOverride).toBe('--profile recipe')
-      expect(transport.connect).toHaveBeenCalled()
+      // A runtime host's Codex launch first asks whether Codex is signed in there.
+      await vi.waitFor(() => expect(transport.connect).toHaveBeenCalled())
     })
 
     it('spawns fresh PTYs locally for explicitly local worktrees while a runtime is focused', async () => {
