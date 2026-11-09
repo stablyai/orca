@@ -1,6 +1,9 @@
 import { resolve } from 'node:path'
 import type { CommandHandler } from '../dispatch'
-import type { EnvironmentDoctorResult } from '../../shared/environment-doctor-types'
+import {
+  formatEnvironmentDoctorChecks,
+  type EnvironmentDoctorResult
+} from '../../shared/environment-doctor-types'
 import { runEnvironmentDoctor } from '../../main/environment-doctor/environment-doctor'
 import { createHostEnvironmentDoctorDeps } from '../../main/environment-doctor/environment-doctor-host'
 
@@ -21,14 +24,10 @@ export const VM_ENV_HANDLERS: Record<string, CommandHandler> = {
 
 function formatEnvironmentDoctorResult(result: EnvironmentDoctorResult): string {
   const counts = { pass: 0, warn: 0, fail: 0 }
-  const lines = [`path: ${result.worktreePath}`]
   for (const check of result.checks) {
     counts[check.status] += 1
-    lines.push(`${check.status.toUpperCase().padEnd(4)} ${check.id}: ${check.message}`)
-    if (check.remediation) {
-      lines.push(...check.remediation.split('\n').map((line) => `     ${line}`))
-    }
   }
+  const lines = [`path: ${result.worktreePath}`, ...formatEnvironmentDoctorChecks(result.checks)]
   lines.push(`${counts.pass} passed, ${counts.warn} warnings, ${counts.fail} failed`)
   return lines.join('\n')
 }

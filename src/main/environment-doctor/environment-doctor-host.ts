@@ -23,7 +23,12 @@ const SETUP_TIMEOUT_MS = 30 * 60_000
 const SETUP_OUTPUT_BYTES = 256 * 1024
 
 /** Real host I/O for the doctor; it runs on the machine that owns the checkout. */
-export function createHostEnvironmentDoctorDeps(): EnvironmentDoctorDeps {
+export function createHostEnvironmentDoctorDeps(
+  options: {
+    /** Long-lived servers re-read the login shell so a retry sees tools installed since startup. */
+    refreshShellPath?: boolean
+  } = {}
+): EnvironmentDoctorDeps {
   const baseEnv = (): NodeJS.ProcessEnv => buildLocalPreflightEnv() ?? process.env
   const run: EnvironmentDoctorDeps['run'] = async (program, args, options) => {
     const env = options.guardGitPrompts ? gitCredentialPromptGuardEnv(baseEnv()) : baseEnv()
@@ -42,7 +47,7 @@ export function createHostEnvironmentDoctorDeps(): EnvironmentDoctorDeps {
   return {
     platform: process.platform,
     // Agent detection's login-shell PATH, applied before any probe so all checks agree.
-    prepare: () => hydrateShellPathForAgentDetection(),
+    prepare: () => hydrateShellPathForAgentDetection(undefined, options.refreshShellPath === true),
     run,
     findCommands: (commands) => findCommandsOnLocalPath(commands, { env: baseEnv() }),
     detectAgents: () => detectInstalledAgents(),
