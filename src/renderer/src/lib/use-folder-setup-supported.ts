@@ -29,10 +29,10 @@ function probeFolderSetup(environmentId: string): Promise<boolean> {
   return runtimeEnvironmentSupportsCapability(
     environmentId,
     WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY
-  ).catch(() => false)
+  )
 }
 
-/** Folder setup runs only on hosts that report it; older hosts would save scripts that never run. */
+/** Folder setup runs only on hosts that report it; older hosts would save scripts that never run. Rejects when the host can't answer. */
 export function resolveFolderSetupSupported(repo: Repo | null | undefined): Promise<boolean> {
   const host = folderSetupHost(repo)
   return host.kind === 'known'
@@ -49,11 +49,15 @@ export function useFolderSetupSupport(repo: Repo | null | undefined): FolderSetu
       return
     }
     let cancelled = false
-    void probeFolderSetup(environmentId).then((supported) => {
-      if (!cancelled) {
-        setProbe({ environmentId, supported })
-      }
-    })
+    // A failed probe stays pending so Create re-asks instead of treating it as unsupported.
+    probeFolderSetup(environmentId).then(
+      (supported) => {
+        if (!cancelled) {
+          setProbe({ environmentId, supported })
+        }
+      },
+      () => {}
+    )
     return () => {
       cancelled = true
     }

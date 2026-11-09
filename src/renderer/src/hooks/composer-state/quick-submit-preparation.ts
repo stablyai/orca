@@ -16,6 +16,7 @@ import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
 import { resolveFolderSetupSupported } from '@/lib/use-folder-setup-supported'
+import { translate } from '@/i18n/i18n'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/source-control/worktree-creation/worktree-create-base'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
@@ -81,7 +82,14 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       // Create waits for the host's answer so an unanswered probe can't drop an ask-policy prompt.
       const supportSettlement = await settleComposerSubmit(
         setupSupport === 'pending'
-          ? resolveFolderSetupSupported(selectedRepo)
+          ? resolveFolderSetupSupported(selectedRepo).catch(() => {
+              throw new Error(
+                translate(
+                  'auto.hooks.useComposerState.folderSetupSupportCheckFailed',
+                  "Couldn't confirm whether this host runs folder setup scripts. Try again."
+                )
+              )
+            })
           : Promise.resolve(setupSupport === 'supported'),
         isSubmissionCancelled
       )
