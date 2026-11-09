@@ -54,6 +54,7 @@ export function federatedWorkerAddress(
   terminalHandle: string
 ): string {
   const sessionId = structuredSession?.identity.sessionId
+  // ast-grep-ignore: orchestration-agent-kind-branch -- a remote chat worker's own address, as a local one's
   return sessionId && isOrcaSessionId(sessionId)
     ? formatOrcaSessionAddress(canonicalOrcaSessionId(sessionId))
     : terminalHandle

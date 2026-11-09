@@ -145,6 +145,18 @@ Each line is `supported` (or `supported: <note>`), ``refused `<code>`: <reason>`
 
 - All: n/a: the Orca app and phone call it; no agent command
 
+## `orchestration.peerMailAck`
+
+- All: n/a: a home Orca calls it on its paired Orca; no agent command
+
+## `orchestration.peerMailDeliver`
+
+- All: n/a: a home Orca calls it on its paired Orca; no agent command
+
+## `orchestration.peerMailPull`
+
+- All: n/a: a home Orca calls it on its paired Orca; no agent command
+
 ## `orchestration.reply`
 
 - Terminal · Local: supported
