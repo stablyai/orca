@@ -10,7 +10,8 @@ export function WorkspaceSetupChoice({
   disabled = false,
   runLabel,
   skipLabel,
-  revealRequest = 0
+  revealRequest = 0,
+  onRevealed
 }: {
   decision: 'run' | 'skip' | null
   onChange: (decision: 'run' | 'skip') => void
@@ -18,6 +19,7 @@ export function WorkspaceSetupChoice({
   runLabel: string
   skipLabel: string
   revealRequest?: number
+  onRevealed?: () => void
 }): React.JSX.Element {
   const runButtonRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -28,9 +30,10 @@ export function WorkspaceSetupChoice({
     const timer = setTimeout(() => {
       runButtonRef.current?.scrollIntoView({ block: 'nearest' })
       runButtonRef.current?.focus()
+      onRevealed?.()
     }, REVEAL_AFTER_EXPAND_MS)
     return () => clearTimeout(timer)
-  }, [revealRequest])
+  }, [revealRequest, onRevealed])
 
   return (
     <div className="flex flex-wrap items-center gap-2">

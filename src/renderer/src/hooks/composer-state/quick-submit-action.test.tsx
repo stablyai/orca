@@ -9,7 +9,7 @@ afterEach(cleanup)
 type QuickSubmitActionInput = Parameters<typeof useQuickSubmitAction>[0]
 
 function renderQuickSubmit(overrides: Partial<QuickSubmitActionInput>) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the setup reveal returns before reading the omitted repo, target and store fields.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the omitted repo and target fields are not read before the reveal; the real store starts with no pending creations.
   const input = {
     effectiveLinkedPR: null,
     executeQuickCreation: vi.fn(),

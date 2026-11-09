@@ -115,6 +115,7 @@ export type NewWorkspaceComposerCardProps = {
   onOpenAgentSettings: (invoker: HTMLButtonElement) => void
   advancedOpen: boolean
   setupChoiceRevealRequest: number
+  onSetupChoiceRevealed: () => void
   onToggleAdvanced: () => void
   createDisabled: boolean
   projectError: string | null

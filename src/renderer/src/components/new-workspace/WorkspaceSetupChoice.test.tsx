@@ -13,7 +13,14 @@ describe('WorkspaceSetupChoice', () => {
     vi.useFakeTimers()
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView
-    const props = { decision: null, onChange: vi.fn(), runLabel: 'Run', skipLabel: 'Skip' }
+    const onRevealed = vi.fn()
+    const props = {
+      decision: null,
+      onChange: vi.fn(),
+      runLabel: 'Run',
+      skipLabel: 'Skip',
+      onRevealed
+    }
     const { rerender } = render(<WorkspaceSetupChoice {...props} revealRequest={0} />)
     vi.runAllTimers()
     expect(scrollIntoView).not.toHaveBeenCalled()
@@ -25,5 +32,7 @@ describe('WorkspaceSetupChoice', () => {
       expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Run' }))
     }
     expect(scrollIntoView).toHaveBeenCalledTimes(2)
+    // Each handled request is cleared so a remount after a project switch cannot replay it.
+    expect(onRevealed).toHaveBeenCalledTimes(2)
   })
 })

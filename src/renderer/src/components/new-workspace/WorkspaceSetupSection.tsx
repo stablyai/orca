@@ -18,6 +18,7 @@ export function WorkspaceSetupSection({
   copy,
   requiresExplicitSetupChoice,
   revealRequest,
+  onRevealed,
   resolvedSetupDecision,
   setupDecision,
   onSetupDecisionChange,
@@ -30,6 +31,7 @@ export function WorkspaceSetupSection({
   copy: WorkspaceSetupCopy
   requiresExplicitSetupChoice: boolean
   revealRequest?: number
+  onRevealed?: () => void
   resolvedSetupDecision: SetupDecision | null
   setupDecision: 'run' | 'skip' | null
   onSetupDecisionChange: (decision: 'run' | 'skip') => void
@@ -109,6 +111,7 @@ export function WorkspaceSetupSection({
             decision={setupDecision}
             onChange={onSetupDecisionChange}
             revealRequest={revealRequest}
+            onRevealed={onRevealed}
             runLabel={copy.runButtonLabel}
             skipLabel={copy.skipButtonLabel}
             disabled={Boolean(unavailable)}

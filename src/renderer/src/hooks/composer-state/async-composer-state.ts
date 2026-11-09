@@ -109,12 +109,14 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     persistDraft ? Boolean((newWorkspaceDraft?.note ?? '').trim()) : false
   )
 
-  // Each request opens Advanced and brings the Run/Skip choice into view, even if Advanced was open.
+  // A pending request (non-zero) opens Advanced and brings the Run/Skip choice into view once; the
+  // choice clears it after revealing so a later remount (project switch) cannot replay it.
   const [setupChoiceRevealRequest, setSetupChoiceRevealRequest] = useState(0)
   const revealSetupChoice = useCallback(() => {
     setAdvancedOpen(true)
     setSetupChoiceRevealRequest((current) => current + 1)
   }, [])
+  const clearSetupChoiceReveal = useCallback(() => setSetupChoiceRevealRequest(0), [])
 
   const [sparseEnabled, setSparseEnabled] = useState(false)
 
@@ -246,6 +248,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     setAdvancedOpen,
     setupChoiceRevealRequest,
     revealSetupChoice,
+    clearSetupChoiceReveal,
     sparseEnabled,
     setSparseEnabled,
     sparseDirectories,
