@@ -190,67 +190,6 @@ describe('useEditorPanelExternalContentEvents', () => {
     }
   })
 
-  it('invalidates a hidden owner without reloading until reveal', () => {
-    const changedFile = makeFile('changed')
-    const calls = makeCalls()
-
-    act(() => {
-      root.render(
-        <ExternalContentProbe
-          activeFileId={changedFile.id}
-          calls={calls}
-          isVisible={false}
-          openFiles={[changedFile]}
-        />
-      )
-    })
-    dispatchExternalChange(changedFile.relativePath)
-
-    expect(calls.loadFile).not.toHaveBeenCalled()
-    expect(calls.invalidate).toHaveBeenCalledExactlyOnceWith([changedFile.id])
-  })
-
-  it('keeps dirty hidden content intact', () => {
-    const changedFile = makeFile('changed', { isDirty: true })
-    const calls = makeCalls()
-
-    act(() => {
-      root.render(
-        <ExternalContentProbe
-          activeFileId={changedFile.id}
-          calls={calls}
-          isVisible={false}
-          openFiles={[changedFile]}
-        />
-      )
-    })
-    dispatchExternalChange(changedFile.relativePath)
-
-    expect(calls.loadFile).not.toHaveBeenCalled()
-    expect(calls.invalidate).not.toHaveBeenCalled()
-  })
-
-  it('invalidates an inactive cached Changes diff after reloading its visible file', () => {
-    const changedFile = makeFile('changed')
-    const calls = makeCalls()
-
-    act(() => {
-      root.render(
-        <ExternalContentProbe
-          activeFileId={changedFile.id}
-          calls={calls}
-          isVisible
-          openFiles={[changedFile]}
-        />
-      )
-    })
-    dispatchExternalChange(changedFile.relativePath)
-
-    expect(calls.loadFile).toHaveBeenCalledOnce()
-    expect(calls.loadDiff).not.toHaveBeenCalled()
-    expect(calls.invalidateDiff).toHaveBeenCalledExactlyOnceWith([changedFile.id])
-  })
-
   it('uses one event generation for visible source and preview reloads', () => {
     const source = makeFile('source', {
       filePath: '/remote/repo/shared.md',

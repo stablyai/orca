@@ -6,19 +6,19 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type {
-  RuntimeTerminalCreate,
-  RuntimeMobileSessionCreateTerminalResult,
-  RuntimeTerminalPresentation
-} from '../../../../shared/runtime-types'
-import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import {
   type RuntimeNavigationTarget,
   navigationTargetsHost
 } from '../../../../shared/runtime-navigation'
-import { MOBILE_TERMINAL_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
+
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
+// Allow lost-response reconnect retries for one minute; later intentional resumes fork fresh.
+const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 
 /** A paired client's terminal create request. */
 export type MobileTerminalCreateOptions = {
@@ -36,6 +36,7 @@ export type MobileTerminalCreateOptions = {
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   clientNavigationId?: string
@@ -56,6 +57,7 @@ export type OwnedMobileTerminalCreateOptions = {
   identity?: { tabId: string; leafId: string; sessionId?: string }
   createMutation?: { clientIdentity: string; id: string }
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   targetGroupId?: string
   afterDesktopTabId?: string
@@ -109,6 +111,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchAgent?: TuiAgent
+      trustWorktreeId?: string
       terminalImageViewerSupported?: boolean
       viewMode?: 'terminal' | 'chat'
       activate?: boolean

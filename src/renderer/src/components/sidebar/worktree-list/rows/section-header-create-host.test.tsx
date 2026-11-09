@@ -10,11 +10,12 @@ import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-r
 import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
 import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace-statuses'
-import { INITIAL_REPO_DRAG_STATE } from '../../project-header-drag-contract'
-import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../../project-group-header-drag-contract'
-import { openHeaderCreateComposer } from '../../header-create-workspace-target'
-import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
-import { renderWorktreeSectionHeaderRow, type SectionHeaderRowContext } from './SectionHeader'
+import { INITIAL_REPO_DRAG_STATE } from '../drag/project-header-drag-contract'
+import { INITIAL_PROJECT_GROUP_DRAG_STATE } from '../drag/project-group-header-drag-contract'
+import { openHeaderCreateComposer } from './header-create-workspace-target'
+import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
+import { renderWorktreeSectionHeaderRow } from './SectionHeader'
+import type { SectionHeaderRowContext } from './section-header-row-context'
 
 const initial = useAppStore.getInitialState()
 afterEach(() => {
@@ -100,7 +101,9 @@ function headerContext(): SectionHeaderRowContext {
       projectGroupHeaderIndexByGroupId: new Map(),
       projectGroupHeaderBucketByGroupId: new Map(),
       repoHeaderSectionEndByRepoId: new Map(),
-      projectGroupHeaderSectionEndByGroupId: new Map()
+      projectGroupHeaderSectionEndByGroupId: new Map(),
+      rootProjectHeaderKeys: undefined,
+      rootProjectHeaderSectionEndByKey: new Map()
     },
     projectActions: {
       getWorktreeVisibilityDefaults: () => undefined,

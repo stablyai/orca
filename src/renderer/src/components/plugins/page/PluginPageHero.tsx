@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { PluginHostImages } from '../../../../../shared/plugins/images/plugin-image-url'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { PluginCardArt, type PluginArtPalette } from '../list/PluginCardArt'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { pluginArtShortcut, pluginArtTypes } from '../list/PluginRowArt'
@@ -20,9 +20,7 @@ export function PluginPageHero({
 }): React.JSX.Element {
   const cover = images?.cover
   return (
-    // Why capped: the decision below the header must stay in view at 1280×800 and 900×700; a
-    // taller column crops the 16:10 picture from its centre instead of growing.
-    <div className="relative aspect-[16/10] max-h-64 w-full overflow-hidden rounded-xl border border-border/70 bg-muted/40">
+    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-border/70 bg-muted/40">
       {cover ? (
         <img
           src={cover.url}
@@ -53,6 +51,7 @@ export function PluginScreenshots({
 }: {
   images: PluginHostImages | undefined
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [open, setOpen] = useState<number | null>(null)
   const thumbs = useRef<(HTMLButtonElement | null)[]>([])
   const returnTo = useRef<number | null>(null)
@@ -69,7 +68,7 @@ export function PluginScreenshots({
   return (
     <section className="mt-6">
       <h3 className="mb-2 flex items-baseline gap-2 px-0.5 text-2xs font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-        {translate('auto.components.settings.PluginPageHero.screenshots', 'Screenshots')}
+        {t('auto.components.settings.PluginPageHero.screenshots', 'Screenshots')}
         <span className="font-normal tracking-normal normal-case">{shots.length}</span>
       </h3>
       <ul className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 scrollbar-sleek">
@@ -81,7 +80,7 @@ export function PluginScreenshots({
               }}
               type="button"
               className="block w-full overflow-hidden rounded-lg border border-border/70 bg-muted/40 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.settings.PluginPageHero.openScreenshot',
                 'Open screenshot: {{value0}}',
                 { value0: shot.alt }
@@ -139,7 +138,7 @@ export function PluginScreenshots({
                 {shots.length > 1 ? (
                   <>
                     <span className="text-xs text-muted-foreground tabular-nums">
-                      {translate(
+                      {t(
                         'auto.components.settings.PluginPageHero.position',
                         '{{value0}} of {{value1}}',
                         { value0: (open ?? 0) + 1, value1: shots.length }
@@ -148,7 +147,7 @@ export function PluginScreenshots({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.settings.PluginPageHero.previous',
                         'Previous screenshot'
                       )}
@@ -159,7 +158,7 @@ export function PluginScreenshots({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.settings.PluginPageHero.next',
                         'Next screenshot'
                       )}

@@ -10,8 +10,8 @@ import {
   GRAB_BUDGET,
   type BrowserAnnotationIntent,
   type BrowserGrabPayload
-} from '../../../../../shared/browser-grab-types'
-import { translate } from '@/i18n/i18n'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   BROWSER_ANNOTATION_INTENT_OPTIONS,
   type BrowserOverlayAnchor
@@ -35,6 +35,7 @@ export function PendingBrowserAnnotationCard({
   onAdd: (comment: string, intent: BrowserAnnotationIntent, imagePaths: string[]) => void
   onCancel: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [card, setCard] = useState<HTMLDivElement | null>(null)
   const [cardHeight, setCardHeight] = useState<number | null>(null)
   useEffect(() => {
@@ -79,7 +80,7 @@ export function PendingBrowserAnnotationCard({
         collisionPadding={12}
         portalContainer={portalContainer}
         className="z-40 w-[22rem] max-w-[calc(var(--radix-popover-content-available-width)-1rem)] p-3 shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.browser.pane.BrowserPane.b472c5fe03',
           'Add browser annotation'
         )}
@@ -100,14 +101,14 @@ export function PendingBrowserAnnotationCard({
           </span>
         </div>
         <Label htmlFor="browser-annotation-comment" className="sr-only">
-          {translate('auto.components.browser.pane.BrowserPane.d2a7092e6e', 'Annotation comment')}
+          {t('auto.components.browser.pane.BrowserPane.d2a7092e6e', 'Annotation comment')}
         </Label>
         <ImeTextarea
           id="browser-annotation-comment"
           value={comment}
           onChange={(event) => setComment(event.target.value)}
           onPaste={handlePaste}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.browser.pane.BrowserPane.532bac48c5',
             'Describe what the agent should change here...'
           )}
@@ -142,10 +143,7 @@ export function PendingBrowserAnnotationCard({
             }
           }}
           className="mt-2 h-8 w-full [&_[data-slot=toggle-group-item]]:h-8 [&_[data-slot=toggle-group-item]]:flex-1"
-          aria-label={translate(
-            'auto.components.browser.pane.BrowserPane.0cb3bd6221',
-            'Annotation intent'
-          )}
+          aria-label={t('auto.components.browser.pane.BrowserPane.0cb3bd6221', 'Annotation intent')}
         >
           {BROWSER_ANNOTATION_INTENT_OPTIONS.map((option) => {
             const Icon = option.icon
@@ -164,7 +162,7 @@ export function PendingBrowserAnnotationCard({
         </ToggleGroup>
         <div className="mt-3 flex justify-end gap-2">
           <Button size="sm" variant="ghost" className="h-8" onClick={onCancel}>
-            {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
+            {t('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
           </Button>
           <Button
             size="sm"
@@ -173,7 +171,7 @@ export function PendingBrowserAnnotationCard({
             onClick={() => onAdd(trimmed, intent, imagePaths)}
           >
             <MessageSquarePlus className="size-3.5" />
-            {translate('auto.components.browser.pane.BrowserPane.90d021f2ad', 'Add')}
+            {t('auto.components.browser.pane.BrowserPane.90d021f2ad', 'Add')}
             <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
               <span>{submitModifierLabel}</span>
               <CornerDownLeft className="size-3" />

@@ -5,7 +5,7 @@ import { useLanguageReadiness } from '../i18n/language-readiness'
 import { memo, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import NewWorkspaceComposerModal from '../components/NewWorkspaceComposerModal'
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
@@ -18,6 +18,7 @@ import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
+import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
@@ -56,14 +57,19 @@ const ProjectAddedDialog = lazy(
   () => import('../components/sidebar/project-admission/completion/ProjectAddedDialog')
 )
 const NodeDistMirrorDialog = lazy(
-  () => import('../components/settings/advanced/network/NodeDistMirrorDialog')
+  () => import('../components/ssh-host-recovery/NodeDistMirrorDialog')
 )
 const AiVaultSessionHistoryDialog = lazy(
-  () => import('../components/right-sidebar/AiVaultSessionHistoryDialog')
+  () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
 )
-const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
+const NativeChatAccountUsageDialog = lazy(
+  () => import('../components/native-chat/usage/NativeChatAccountUsageDialog')
+)
+const DeleteWorktreeDialog = lazy(
+  () => import('../components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog')
+)
 const PreservedBranchBatchReviewModal = lazy(
-  () => import('../components/sidebar/PreservedBranchBatchReviewModal')
+  () => import('../components/sidebar/workspace-actions/deletion/PreservedBranchBatchReviewModal')
 )
 const DictationController = lazy(() =>
   import('../components/dictation/DictationController').then((module) => ({
@@ -113,6 +119,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   floatingWorkspace: FloatingWorkspacePanelState
   onboardingGate: OnboardingGate
 }): React.JSX.Element {
+  const t = useTranslate()
   const { floatingWorkspace, onboardingGate } = props
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
@@ -145,8 +152,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           <OverlayBoundary
             boundaryId="overlay.floating-workspace"
             resetKey={floatingWorkspace.open}
-            title={translate('auto.App.1b3024bcd6', 'The floating workspace hit an error.')}
-            description={translate(
+            title={t('auto.App.1b3024bcd6', 'The floating workspace hit an error.')}
+            description={t(
               'auto.App.7cbfbf622f',
               'Retry the floating workspace or close and reopen it.'
             )}
@@ -168,11 +175,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           <OverlayBoundary
             boundaryId="overlay.status-bar"
             resetKey={activeView}
-            title={translate('auto.App.2e8ff36f94', 'The status bar hit an error.')}
-            description={translate(
-              'auto.App.8a023cea1f',
-              'Retry the status bar to remount its controls.'
-            )}
+            title={t('auto.App.2e8ff36f94', 'The status bar hit an error.')}
+            description={t('auto.App.8a023cea1f', 'Retry the status bar to remount its controls.')}
           >
             <StatusBar floatingTerminalOpen={floatingWorkspace.open} />
           </OverlayBoundary>
@@ -206,10 +210,15 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <ProjectAddedDialog />
           </ModalBoundary>
         ) : null}
-        {/* Root hosting prevents chat capture handlers receiving history-dialog events. */}
+        {/* Root hosting prevents chat capture handlers receiving /resume and /usage dialog events. */}
         {activeModal === 'agent-session-history' ? (
           <ModalBoundary boundaryId="modal.agent-session-history" resetKey>
             <AiVaultSessionHistoryDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'chat-account-usage' ? (
+          <ModalBoundary boundaryId="modal.chat-account-usage" resetKey>
+            <NativeChatAccountUsageDialog />
           </ModalBoundary>
         ) : null}
         {/* Own store, not activeModal: another modal must never evict a running move. */}
@@ -286,6 +295,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      <MacosUpdateRequirementHost />
       <AppNotificationCards
         activeView={activeView}
         shouldMountUpdateCard={shouldMountUpdateCard}
@@ -334,8 +344,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         reportAsCrash={false}
         resetKey={activeModal}
         compact
-        title={translate('auto.App.722d03aa62', 'The crash report dialog hit an error.')}
-        description={translate(
+        title={t('auto.App.722d03aa62', 'The crash report dialog hit an error.')}
+        description={t(
           'auto.App.acd66311dc',
           'Use the Help menu after retrying if you still need diagnostics.'
         )}
@@ -349,8 +359,8 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
                 boundaryId="modal.onboarding"
                 surface="modal"
                 className="fixed inset-0 z-40 bg-background"
-                title={translate('auto.App.f02d37278a', 'Onboarding hit an error.')}
-                description={translate(
+                title={t('auto.App.f02d37278a', 'Onboarding hit an error.')}
+                description={t(
                   'auto.App.221a95ba38',
                   'Retry onboarding or close it and continue in the app.'
                 )}

@@ -2,26 +2,27 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as Browser
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as MobileSessionProjection } from './prune-mobile-session-tab-group-layout'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/structured-session-tab-close'
 import type { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh as MobileSessionRefresh } from './perform-mobile-session-pty-records-refresh'
-import type { RuntimeWorkspaceCatalog as WorkspaceCatalog } from '../../workspaces/workspace-catalog'
+import type { RuntimeWorkspaceCatalog as WorkspaceCatalog } from '../../workspaces/catalog/workspace-catalog'
 import type { OrcaRuntimeWithResolveMobileSessionTerminalCommand as MobileTerminalStartup } from '../../terminal/launch/mobile-terminal-startup'
 import type { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal as OwnedMobileTerminalCreate } from '../../terminal/launch/mobile-terminal-owned-create'
 import { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession } from '../../session-tabs/mobile-session-hydration'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionSnapshotTab,
-  RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
-import { headlessBrowserTabsUnchanged } from '../../mobile-session-browser-equality'
-import { appendBrowserTabOrder } from '../../mobile-session-browser-group-projection'
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import { headlessBrowserTabsUnchanged } from './mobile-session-browser-equality'
+import { withReconciledBrowserTabs } from './mobile-session-browser-group-projection'
 import { parseAppSshPtyId, toComparableRelaySshPtyId } from '../../../../shared/ssh-pty-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { sshRemotePtyLeaseAllowsReattach } from '../../../../shared/ssh-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { RuntimeStore } from '../../runtime-store-contract'
-import { SSH_PANE_RECOVERY_GRACE_MS } from '../../orca-runtime-core'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { SSH_PANE_RECOVERY_GRACE_MS } from '../../terminal/recovery/ssh-pane-recovery-window'
 import { findTerminalTabIdForLeaf } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import { isServeMintedPtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession {
   protected abstract getAcceptedRendererIdentityKeysForMobileSessionSnapshot(
@@ -89,30 +90,10 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     }
     const nonBrowserTabs = existing.tabs.filter((tab) => tab.type !== 'browser')
     const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...nonBrowserTabs, ...liveBrowserTabs]
-    const liveIdSet = new Set(liveIds)
-    const tabGroups = appendBrowserTabOrder(
-      (existing.tabGroups ?? []).map((group) => ({
-        ...group,
-        // Drop closed browser ids; appendBrowserTabOrder re-adds the live ones.
-        tabOrder: group.tabOrder.filter(
-          (id) => liveIdSet.has(id) || !existingBrowserIds.includes(id)
-        )
-      })),
-      liveIds
+    this.storeMobileSessionSnapshot(
+      worktreeId,
+      withReconciledBrowserTabs(existing, nextTabs, liveIds, new Set(existingBrowserIds))
     )
-    const activeStillPresent = nextTabs.some((tab) => tab.id === existing.activeTabId)
-    const active = activeStillPresent
-      ? null
-      : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
-    this.storeMobileSessionSnapshot(worktreeId, {
-      ...existing,
-      snapshotVersion: existing.snapshotVersion + 1,
-      ...(activeStillPresent
-        ? {}
-        : { activeTabId: active?.id ?? null, activeTabType: active?.type ?? null }),
-      tabGroups,
-      tabs: nextTabs
-    })
   }
 
   // Why: offscreen live pages replace only headless-owned rows; unmounted renderer tabs stay.
@@ -156,32 +137,14 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
         (!existingHeadlessBrowserIds.has(tab.id) && !liveIdSet.has(tab.id))
     )
     const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...retainedTabs, ...liveBrowserTabs]
-    const tabGroups = appendBrowserTabOrder(
-      (existing.tabGroups ?? []).map((group) => ({
-        ...group,
-        tabOrder: group.tabOrder.filter(
-          (id) => liveIdSet.has(id) || !existingHeadlessBrowserIds.has(id)
-        )
-      })),
-      liveIds
+    this.storeMobileSessionSnapshot(
+      worktreeId,
+      withReconciledBrowserTabs(existing, nextTabs, liveIds, existingHeadlessBrowserIds)
     )
-    const activeStillPresent = nextTabs.some((tab) => tab.id === existing.activeTabId)
-    const active = activeStillPresent
-      ? null
-      : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
-    this.storeMobileSessionSnapshot(worktreeId, {
-      ...existing,
-      snapshotVersion: existing.snapshotVersion + 1,
-      ...(activeStillPresent
-        ? {}
-        : { activeTabId: active?.id ?? null, activeTabType: active?.type ?? null }),
-      tabGroups,
-      tabs: nextTabs
-    })
   }
 
   protected isServeOwnedPtyId(ptyId: string | null | undefined): boolean {
-    return typeof ptyId === 'string' && ptyId.startsWith('serve-')
+    return typeof ptyId === 'string' && isServeMintedPtySessionId(ptyId)
   }
 
   protected isSshOwnedPtyId(ptyId: string | null | undefined): boolean {

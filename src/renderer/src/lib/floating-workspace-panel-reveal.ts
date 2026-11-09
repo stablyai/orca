@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 
 function toggleFloatingWorkspacePanel(): void {

@@ -4,7 +4,7 @@ import type {
   BrowserPagePromptDetails,
   BrowserPagePromptKind,
   BrowserPagePromptRequest
-} from '../../../../shared/browser-page-prompt'
+} from '../../../../shared/browser/prompts/browser-page-prompt'
 import {
   useConfirmationDialog,
   type ConfirmationDialogContextValue

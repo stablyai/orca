@@ -1,4 +1,4 @@
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
@@ -12,19 +12,19 @@ import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migra
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AppState } from '@/store/types'
 import { applyAgentRowLineage, type DashboardAgentRowWithLineage } from './agent-row-lineage'
-import { buildWorktreeAgentRows } from '../sidebar/worktree-agent-rows'
+import { buildWorktreeAgentRows } from '../sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree,
   selectTerminalLayoutsForWorktree
-} from '../sidebar/worktree-agent-row-selectors'
+} from '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
   selectPaneForegroundAgentsForWorktree,
   selectRuntimePaneTitlesForWorktree
-} from '../sidebar/worktree-card-status-inputs'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+} from '../sidebar/workspace-card/activity/worktree-card-status-inputs'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 
 type WorktreeAgentRowsCacheEntry = {
   /** Caller-provided invalidation token for time-based freshness (agentStatusEpoch). */

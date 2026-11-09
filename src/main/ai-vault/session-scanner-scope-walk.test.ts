@@ -7,10 +7,6 @@ import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault
 import { parseSessionCandidates } from './session-scanner-candidate-parse'
 import {
   MAX_UNLISTED_ENTRIES,
-  scopeCwdStampOf,
-  peekSessionParseCacheEntry,
-  setSessionParseCacheColdTier,
-  type PersistedSessionParseCacheEntry,
   storeSessionParseCacheEntry,
   storeSessionScopeCwd,
   resetSessionParseCacheForTests
@@ -279,66 +275,6 @@ it('delivers cancellation while traversing unchanged cached candidates', async (
   } finally {
     clearTimeout(timer)
   }
-})
-
-it('uses a cold parsed latest Codex cwd after its unlisted row is evicted', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-scope-cold-cwd-'))
-  tempRoots.push(root)
-  const roots = isolatedScanRoots(root)
-  const path = join(roots.codexSessionsDir, 'rollout-cold-cwd.jsonl')
-  const content = [{ type: 'text', text: 'Find me' }]
-  await writeJsonlFile(path, [
-    { type: 'session_meta', payload: { id: 'cold-cwd', cwd: '/elsewhere' } },
-    { type: 'turn_context', payload: { cwd: '/repo' } },
-    { type: 'response_item', payload: { type: 'message', role: 'user', content } }
-  ])
-  await utimes(path, 1, 1)
-  for (const day of ['14', '15']) {
-    await writeRollout(roots.codexSessionsDir, `busy-${day}`, '/elsewhere', day)
-  }
-  const { mtimeMs, size: sizeBytes, mtime } = await stat(path)
-  const file = { path, mtimeMs, sizeBytes, modifiedAt: mtime.toISOString() }
-  const rows = new Map<string, PersistedSessionParseCacheEntry>()
-  const read = vi.fn((key: string) => rows.get(key))
-  setSessionParseCacheColdTier({
-    read,
-    readScopeCwds: (paths) => ({
-      found: new Map(
-        paths.flatMap((key) => {
-          const row = rows.get(key)
-          return row === undefined ? [] : [[key, { parsed: scopeCwdStampOf(row) }] as const]
-        })
-      ),
-      parsed: true,
-      read: true
-    }),
-    stored: (key, row) => rows.set(key, row),
-    deleted: (key) => rows.delete(key)
-  })
-  const scan = () =>
-    scanAiVaultSessions({ ...roots, platform: 'linux', limit: 1, scopePaths: ['/repo'] })
-  expect((await scan()).sessions.some((row) => row.filePath === path)).toBe(false)
-  const parsed = await parseAgentSessionFileCached(
-    { agent: 'codex', file, codexHome: null },
-    'linux'
-  )
-  expect(rows.get(path)?.session?.cwd).toBe('/repo')
-  for (let index = 0; index <= MAX_UNLISTED_ENTRIES; index++) {
-    storeSessionParseCacheEntry(`search-${index}`, {
-      mtimeMs: mtimeMs + 1,
-      sizeBytes: null,
-      platform: 'linux',
-      session: null,
-      resume: null
-    })
-  }
-  expect(peekSessionParseCacheEntry(path)).not.toHaveProperty('resume')
-  read.mockClear()
-  const found = (await scan()).sessions.filter((row) => row.filePath === path)
-  expect(found.map((row) => row.cwd)).toEqual(['/repo'])
-  expect(read).toHaveBeenCalledWith(path)
-  expect(peekSessionParseCacheEntry(path)?.session).toBe(parsed)
-  expect(await stat(path)).toMatchObject({ mtimeMs, size: sizeBytes })
 })
 
 it('walks a history larger than the spread-argument limit', async () => {

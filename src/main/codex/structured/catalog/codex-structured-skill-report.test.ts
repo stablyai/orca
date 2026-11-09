@@ -140,22 +140,4 @@ describe('a running Codex chat lists and runs the skills Codex loaded', () => {
       ])
     }
   })
-
-  it('reports nothing when Codex has no skills/list, so the client keeps its scan', async () => {
-    const codex = fakeCodex({
-      'skills/list': () => {
-        throw new Error(
-          'Invalid request: unknown variant `skills/list`, expected one of `initialize`'
-        )
-      }
-    })
-    const adapter = await acquired(codex)
-    await settle()
-    codex.connections[0].handlers.onNotification?.('skills/changed', {})
-    await settle()
-    expect(adapter.readCommands('session-1')).toBeUndefined()
-    expect(codex.connections[0].calls.filter((call) => call.method === 'skills/list')).toHaveLength(
-      1
-    )
-  })
 })

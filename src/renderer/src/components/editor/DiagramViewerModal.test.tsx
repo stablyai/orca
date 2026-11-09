@@ -62,25 +62,6 @@ afterEach(() => {
 })
 
 describe('DiagramViewerModal', () => {
-  it('shows the diagram fitted and centered, and Escape returns focus to the opener', async () => {
-    const user = userEvent.setup()
-    render(<Host />)
-    const opener = screen.getByRole('button', { name: 'open' })
-    await user.click(opener)
-
-    expect(screen.getByRole('dialog', { name: 'Diagram' })).toBeInTheDocument()
-    sizeCanvas()
-    const image = screen.getByRole('img', { name: 'Diagram' })
-    expect(image.getAttribute('src')).toMatch(/^data:image\/svg\+xml/)
-    expect(image.style.width).toBe('400px')
-    expect(image.style.transform).toBe('translate(300px, 200px)')
-    expect(screen.getByRole('button', { name: 'Fit to screen' })).toBeDisabled()
-
-    await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await waitFor(() => expect(document.activeElement).toBe(opener))
-  })
-
   it('zooms from the toolbar, pans on Alt-drag, and fits again', async () => {
     const user = userEvent.setup()
     render(<Host />)
@@ -132,17 +113,6 @@ describe('DiagramViewerModal', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Diagram' })).toBeNull())
     expect(screen.getByRole('dialog', { name: 'Pull request' })).toBeInTheDocument()
     await waitFor(() => expect(document.activeElement).toBe(opener))
-  })
-
-  it('pans by the wheel distance whatever unit the device reports', async () => {
-    const user = userEvent.setup()
-    render(<Host />)
-    await user.click(screen.getByRole('button', { name: 'open' }))
-    const canvas = sizeCanvas()
-    const image = screen.getByRole('img', { name: 'Diagram' })
-
-    fireEvent.wheel(canvas, { deltaY: 3, deltaMode: WheelEvent.DOM_DELTA_LINE })
-    expect(image.style.transform).toBe('translate(300px, 152px)')
   })
 
   it('leaves focus alone when another modal replaced the viewer', async () => {

@@ -3,20 +3,23 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-se
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import { resolveOwnerOrLocal } from './worktree-runtime-owner'
-import { namedHostForOwnerRef, runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import { resolveOwnerOrLocal } from './workspace/ownership/worktree-runtime-owner'
+import {
+  namedHostForOwnerRef,
+  runtimeEnvironmentIdUnlessTwin
+} from './workspace/ownership/resolve-owner'
+import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
 import {
   resolveWorktreeOperationRouteResultForHost,
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteResolution
-} from './worktree-operation-route'
-import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
+} from './workspace/ownership/worktree-operation-route'
+import { getSingleFocusedRuntimeEnvironmentId } from './workspace/ownership/single-runtime-legacy-owner'
 import {
   hasIndexedDetectedWorktree,
-  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import { resolveIndexedRepoOwner } from './workspace/ownership/repo-owner-index'
 
 export type TerminalWorktreeRoute = {
   runtimeEnvironmentId: string | null

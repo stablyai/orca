@@ -1,6 +1,6 @@
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { namedSubagents } from '../../shared/native-chat/transcript/native-chat-subagent-items'
-import type { StructuredAgentSessionLinkageJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionLinkageJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { isBoundedClaudeTaskId } from './claude-background-task-tracker'
 
 type Reading = {

@@ -1,21 +1,24 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
-import { OrcaRuntimeWithVisibleSnapshotPreview } from './terminal-visible-state'
+import { OrcaRuntimeWithRestoredAgentDialogScreen } from './restored-agent-dialog-screen'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import type {
   OrchestrationCompatibilitySshAttachmentAuthority,
   OrchestrationCompatibilitySshTerminal
-} from '../../runtime-terminal-contracts'
+} from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
 import { randomUUID } from 'node:crypto'
+import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
 
-export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeWithVisibleSnapshotPreview {
+export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeWithRestoredAgentDialogScreen {
   /** Keyed by the attachment that carries each one, so releasing it forgets the terminal. */
   protected readonly orchestrationCompatibilitySshTerminals = new Map<
     string,
     OrchestrationCompatibilitySshTerminal
   >()
-
-  protected abstract getLeafKey(tabId: string, leafId: string): string
+  private readonly headlessExitHolds = new Map<
+    string,
+    { count: number; exited: RuntimeHeadlessTerminal | null }
+  >()
 
   protected async serializeHeadlessTerminalBuffer(
     ptyId: string,
@@ -36,7 +39,12 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     // Restore dangling escapes last, after resets, so the next live chunk completes them (#7329).
     pendingEscapeTailAnsi?: string
   } | null> {
-    const state = this.headlessTerminals.get(ptyId)
+    // An exited PTY's held model answers only while no live PTY has taken its id.
+    const state =
+      this.headlessTerminals.get(ptyId) ??
+      (this.ptysById.get(ptyId)?.connected === true
+        ? undefined
+        : this.headlessExitHolds.get(ptyId)?.exited)
     if (!state) {
       return null
     }
@@ -76,17 +84,59 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
       : null
   }
 
+  /** Keeps the PTY's model readable through its exit until released, so a stream mid-publication can still serialize it. */
+  holdHeadlessTerminalThroughExit(ptyId: string): () => void {
+    const hold = this.headlessExitHolds.get(ptyId) ?? { count: 0, exited: null }
+    this.headlessExitHolds.set(ptyId, hold)
+    hold.count += 1
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      hold.count -= 1
+      if (hold.count > 0) {
+        return
+      }
+      this.headlessExitHolds.delete(ptyId)
+      if (hold.exited) {
+        disposeHeadlessEmulator(hold.exited)
+      }
+    }
+  }
+
+  protected disposeHeadlessTerminalOnExit(ptyId: string): void {
+    const hold = this.headlessExitHolds.get(ptyId)
+    const state = this.headlessTerminals.get(ptyId)
+    if (!hold || !state) {
+      this.disposeHeadlessTerminal(ptyId)
+      return
+    }
+    this.headlessHydrationState.delete(ptyId)
+    // Out of the live map, so a same-id PTY starts fresh; the last hold's release disposes the emulator.
+    this.detachHeadlessTerminal(ptyId, state)
+    if (hold.exited) {
+      disposeHeadlessEmulator(hold.exited)
+    }
+    hold.exited = state
+  }
+
   protected disposeHeadlessTerminal(ptyId: string): void {
     this.headlessHydrationState.delete(ptyId)
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return
     }
+    this.detachHeadlessTerminal(ptyId, state)
+    disposeHeadlessEmulator(state)
+  }
+
+  private detachHeadlessTerminal(ptyId: string, state: RuntimeHeadlessTerminal): void {
     this.headlessTerminals.delete(ptyId)
     // Sever reply forwarding before queued writes finish so reused PTY ids cannot receive stale replies.
     state.emulator.disableQueryReplyForwarding()
     state.ownership.dispose()
-    state.writeChain.finally(() => state.emulator.dispose()).catch(() => state.emulator.dispose())
   }
 
   resolveLeafForHandle(handle: string): { ptyId: string | null } | null {
@@ -199,4 +249,8 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     }
     return found?.terminal
   }
+}
+
+function disposeHeadlessEmulator(state: RuntimeHeadlessTerminal): void {
+  state.writeChain.finally(() => state.emulator.dispose()).catch(() => state.emulator.dispose())
 }

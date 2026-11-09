@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { isWebClient } from '../components/sidebar/worktree-card-model'
+import { isWebClient } from '../components/sidebar/workspace-card/controller/worktree-card-model'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike

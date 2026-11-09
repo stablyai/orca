@@ -1,3 +1,4 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
@@ -7,7 +8,6 @@ import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../shared/ta
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
-import type * as RpcClientModule from '@/runtime/runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({
   createIntent: vi.fn(),
@@ -56,7 +56,7 @@ const owner = vi.hoisted((): { store: ReturnType<typeof createTestStore> | null 
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), message: vi.fn() } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentLabel: () => 'Codex',
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))
@@ -101,27 +101,29 @@ vi.mock(
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mocks.refreshTabs
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   // Sends reach the runtime RPC through this wrapper, as in the app.
   callStructuredAgentSession: (target: unknown, method: string, params?: unknown) =>
     mocks.callRuntimeRpc(target, method, params)
 }))
 // Switch-on, main answers the window's chat opens and its frames draw them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply({
-    ...(await importOriginal<typeof RpcClientModule>()),
-    callRuntimeRpc: mocks.callRuntimeRpc,
-    ensureRuntimeEnvironmentCompatible: vi.fn(async () => null)
+    ...(await importOriginal<typeof RuntimeRpcCallModule>()),
+    callRuntimeRpc: mocks.callRuntimeRpc
   })
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
+  ensureRuntimeEnvironmentCompatible: vi.fn(async () => null)
+}))
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
-vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
+vi.mock('@/runtime/native-chat/status/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => ({
     getSessionObservation: (sessionId: string) =>
       mocks.liveSessions.has(sessionId) ? 'live' : 'unverifiable',
@@ -135,9 +137,9 @@ vi.mock('@/store/index', async () =>
   (await import('../../launch-parity-renderer.test-fixture')).launchStoreModuleMock(owner)
 )
 
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
-import { clearNativeChatDraftCacheForTests } from '@/components/native-chat/native-chat-draft-cache'
-import { adoptAgentSessionLaunchVerdict } from '../../agent-session-launch-plan'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { adoptAgentSessionLaunchVerdict } from './routing/agent-session-launch-plan'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
   type StructuredAgentSessionProvisionalLaunch
@@ -151,15 +153,15 @@ import {
   hasStagedStructuredLaunchPrompt
 } from './structured-agent-session-launch-prompt'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { isPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { createTestStore, seedStore } from '@/store/slices/store-test-helpers'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const WORKTREE_ID = 'wt-new-chat'
 

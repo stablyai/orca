@@ -1,4 +1,4 @@
-import { reuseArrayIfEqual } from '@/components/sidebar/worktree-agent-row-selectors'
+import { reuseArrayIfEqual } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { sameBucketRecords } from '@/lib/bucket-record-equality'
 import { sameStringRecord } from '../../../../shared/workspace-layout/terminal-layout-equality'
 import {

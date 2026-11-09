@@ -1,4 +1,4 @@
-import { entryWithRuntimeOrchestration } from '../sidebar/worktree-agent-row-orchestration'
+import { entryWithRuntimeOrchestration } from '../sidebar/workspace-card/activity/worktree-agent-row-orchestration'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -110,7 +110,8 @@ export function resolvePaneBuild(
           repo: request.repo,
           entry: rowEntry,
           tab: request.tab,
-          agentType: request.agentType
+          agentType: request.agentType,
+          migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
         }
 
   cache?.panes.set(request.cacheKey, {

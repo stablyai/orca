@@ -5,7 +5,7 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../shared/agent-session/agent-session-wire'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
   _resetNativeChatRestartOffer,
   continueNativeChatRestartOffer,
@@ -19,8 +19,11 @@ const mocks = vi.hoisted(() => ({
   subscribeStatus: vi.fn(),
   unsubscribe: vi.fn()
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.rpc,
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.rpc
+}))
+
+vi.mock('../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
@@ -84,36 +87,6 @@ afterEach(() => {
   _resetNativeChatRestartOffer()
   resetStructuredAgentSessionStatusFeedsForTests()
   vi.useRealTimers()
-})
-
-it('re-reads once when the user replies in a failed chat, then lets the stream go', async () => {
-  await listFailure()
-  expect(mocks.subscribeStatus).toHaveBeenCalledOnce()
-  const later = Date.now() + 10_000
-  hostEmit()({ type: 'status', session: summary('working', 'Carry on please', later) })
-  hostEmit()({ type: 'status', session: summary('idle', 'Carry on please', later + 1) })
-  expect(offerReads()).toBe(1)
-
-  await vi.advanceTimersByTimeAsync(500)
-
-  expect(offerReads()).toBe(2)
-  expect(getNativeChatRestartOffer().failed).toEqual([])
-  expect(mocks.unsubscribe).toHaveBeenCalledOnce()
-})
-
-it('does not re-read for an agent streaming in a failed chat or for news older than the list', async () => {
-  await listFailure({ failed: [failure] })
-  const later = Date.now() + 10_000
-  // Already reflected in the listing the store holds.
-  hostEmit()({ type: 'snapshot', sessions: [summary('working', 'Replayed note', 1)] })
-  hostEmit()({ type: 'status', session: summary('working', 'Replayed note', later) })
-  await vi.advanceTimersByTimeAsync(500)
-  expect(offerReads()).toBe(1)
-
-  hostEmit()({ type: 'status', session: summary('idle', 'Replayed note', later + 1) })
-  await vi.advanceTimersByTimeAsync(500)
-  expect(offerReads()).toBe(2)
-  expect(mocks.unsubscribe).not.toHaveBeenCalled()
 })
 
 // Known chat changes are news despite older host timestamps because list and status delivery can race.

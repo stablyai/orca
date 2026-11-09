@@ -5,8 +5,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Automation } from '../../../../shared/automations-types'
-import type { AppState } from '@/store'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 
@@ -23,11 +23,12 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args)
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args)
 }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 import { useAutomationHostCatalog } from './use-automation-host-catalog'
 

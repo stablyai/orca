@@ -7,17 +7,15 @@ import {
   keepImportedWorktreesHiddenCard,
   showImportedWorktreesCard,
   type ImportedWorktreeCardActionState
-} from '../../imported-worktrees-card-actions'
-import {
-  buildImportedWorktreesCardCandidates,
-  getHiddenImportedWorktrees
-} from '../../imported-worktrees-card-candidates'
+} from './imported-worktrees-card-actions'
+import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
+import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/external-worktree-inbox'
 import {
   suppressNewExternalWorktreeInbox,
   type NewExternalWorktreesInboxActionState
-} from '../../new-external-worktrees-inbox-actions'
-import { buildNewExternalWorktreesInboxCandidates } from '../../new-external-worktrees-inbox-candidates'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+} from './new-external-worktrees-inbox-actions'
+import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useSidebarExternalWorktreeCards(args: {
   repos: readonly Repo[]

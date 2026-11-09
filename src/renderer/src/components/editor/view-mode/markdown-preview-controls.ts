@@ -3,7 +3,11 @@ import '../../../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import type { EditorToggleValue } from './EditorViewToggle'
-import { isSvgFilePath } from '../../../../../shared/svg-document'
+import { isSvgFilePath } from '../../../../../shared/file-preview/svg-document'
+import {
+  normalizeMarkdownDefaultViewMode,
+  type MarkdownDefaultViewMode
+} from '../../../../../shared/markdown-default-view-mode'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string
@@ -75,9 +79,17 @@ export function getEditorViewLanguage(filePath: string, language: string): strin
   return isSvgFilePath(filePath) ? 'svg' : language
 }
 
-export function getDefaultMarkdownViewMode(target: MarkdownPreviewTarget): MarkdownViewMode {
+/** The view a tab shows before its own toggle is used; only Markdown edit tabs honor the user preference. */
+export function getDefaultMarkdownViewMode(
+  target: MarkdownPreviewTarget,
+  markdownDefaultViewMode?: MarkdownDefaultViewMode
+): MarkdownViewMode {
   if (target.language === 'markdown' && target.mode === 'diff') {
     return 'source'
+  }
+  // Why: Mermaid/SVG/CSV/notebook "rich" slots are viewers unrelated to how the user reads Markdown.
+  if (target.language === 'markdown' && target.mode === 'edit') {
+    return normalizeMarkdownDefaultViewMode(markdownDefaultViewMode)
   }
   const modes = getMarkdownViewModes(target)
   return modes.includes('rich') ? 'rich' : 'source'

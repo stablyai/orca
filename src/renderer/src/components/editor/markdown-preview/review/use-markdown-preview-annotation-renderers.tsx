@@ -1,5 +1,5 @@
-import { diffCommentOwnerKey } from '@/store/diff-comment-owner'
-import { useCallback } from 'react'
+import { diffCommentOwnerKey } from '@/store/slices/diff-comments/diff-comment-owner'
+import { cloneElement, isValidElement, useCallback } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -7,7 +7,7 @@ import {
   formatMarkdownReviewCardQuote,
   getMarkdownReviewCardQuote,
   type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { DiffCommentCard } from '../../../diff-comments/DiffCommentCard'
 import {
   MarkdownPreviewAnnotationComposer,
@@ -245,7 +245,14 @@ export function useMarkdownPreviewAnnotationRenderers({
         getMarkdownPreviewAnnotationQuote(rendered)
       )
       if (!controls) {
-        return rendered
+        // Without review controls there is no wrapper, so the block itself names its source lines;
+        // a component that doesn't forward them (a callout) falls back to path and text.
+        return isValidElement<Record<string, unknown>>(rendered)
+          ? cloneElement(rendered, {
+              'data-source-line': range.startLine,
+              'data-source-end-line': range.endLine
+            })
+          : rendered
       }
       const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
       return (

@@ -29,7 +29,7 @@ export async function listTeams(
     entries.map(async (entry) => {
       await acquire()
       try {
-        return fetchAllTeamsForWorkspace(entry)
+        return await fetchAllTeamsForWorkspace(entry)
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)

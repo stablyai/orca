@@ -1,5 +1,5 @@
 import { countAgentTuiInputLines } from './agent-tui-input-clear'
-import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../orchestration-timing-budgets'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../orchestration/orchestration-timing-budgets'
 import {
   iterateTerminalInputChunks,
   TERMINAL_INPUT_CHUNK_MAX_BYTES
@@ -100,6 +100,16 @@ export const PASTED_CONTENT_PLACEHOLDER = /\[Pasted Content (\d+) chars\](?: #\d
 const HELD_PROMPT_EXTRA_CHARS_PER_LINE_FEED = 2
 const HELD_PROMPT_COUNT_SLACK_CHARS = 8
 const HELD_PROMPT_TEXT_MIN_CHARS = 32
+
+/** Whether the composer's typed text is exactly `prompt`: proof its paste landed. Spacing the
+ *  projection can't vouch for, such as a wrap or trailing whitespace, fails it and keeps the wait. */
+export function isCompleteAgentPromptDraft(
+  draft: string | null | undefined,
+  prompt: string
+): boolean {
+  const lineEndings = (text: string): string => text.replace(/\r\n?/g, '\n')
+  return !!draft && lineEndings(draft) === lineEndings(sanitizeAgentPromptText(prompt))
+}
 
 /** Whether a composer draft is `prompt` still held, as Codex's paste placeholders or as text;
  *  `absorbedEnters` is how many Enters may have joined the paste as newlines. */

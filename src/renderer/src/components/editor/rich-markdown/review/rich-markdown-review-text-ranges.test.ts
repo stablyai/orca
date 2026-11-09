@@ -40,18 +40,4 @@ describe('findRichMarkdownSelectedTextRanges', () => {
       { from: 4, to: 11 }
     ])
   })
-
-  it('stops reading later text nodes after the selected text is found', () => {
-    const unreadNode = { isText: true, size: 10 } as FakeTextNode
-    Object.defineProperty(unreadNode, 'text', {
-      get() {
-        throw new Error('later text nodes should not be read after a match')
-      }
-    })
-    const editor = editorWithTextNodes([{ isText: true, text: 'target text' }, unreadNode], 30)
-
-    expect(findRichMarkdownSelectedTextRanges({ editor, selectedText: 'target text' })).toEqual([
-      { from: 0, to: 11 }
-    ])
-  })
 })

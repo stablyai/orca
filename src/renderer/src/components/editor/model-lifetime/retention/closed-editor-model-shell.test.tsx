@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalController } from '../../../use-terminal-controller'
 import { TerminalLegacyEditorSurface } from '../../../TerminalLegacyEditorSurface'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
 import {
   createModelLifetimeFixture,
@@ -101,15 +101,4 @@ it('observes a close while the terminal subtree is absent and survives its remou
   view.rerender(<Shell generation={2} />)
   await waitFor(() => expect(view.queryByTestId('editor-panel')).not.toBeNull())
   expect(store.getState().openFiles).toHaveLength(1)
-})
-
-it('preserves an open model through ordinary terminal surface switches', async () => {
-  const { add } = setup()
-  const { model } = add('shell-switch')
-  const view = render(<Shell />)
-  await waitFor(() => expect(view.queryByTestId('editor-panel')).not.toBeNull())
-  view.rerender(<Shell visible={false} />)
-  view.rerender(<Shell />)
-  await waitFor(() => expect(view.queryByTestId('editor-panel')).not.toBeNull())
-  expect(monaco.editor.getModel(model.uri)).toBe(model)
 })

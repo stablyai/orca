@@ -3,24 +3,25 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
-import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
+import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { scrollTopCache } from '@/lib/scroll-cache'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { readingCheck, readingDetails } from '../reading/check-details-reading-fixture'
 import {
   capturedCheckLogExcerpt,
   capturedCheckLogFailure
-} from '../../../right-sidebar/check-job-log-captured-fixture'
+} from '../../../right-sidebar/checks-panel/logs/check-job-log-captured-fixture'
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
+  getIntlLocale: () => 'en',
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>
     fallback.replace(/{{(\w+)}}/g, (_match, key) => String(values?.[key] ?? ''))
 }))
 vi.mock('@/components/sidebar/CommentMarkdown', () => ({
   default: ({ content }: { content: string }) => content
 }))
-vi.mock('@/components/right-sidebar/source-control-fix-split-button', () => ({
+vi.mock('@/components/right-sidebar/source-control/panel/source-control-fix-split-button', () => ({
   SourceControlFixSplitButton: () => null
 }))
 vi.mock('../actions/check-run-details-fix-with-ai', () => ({

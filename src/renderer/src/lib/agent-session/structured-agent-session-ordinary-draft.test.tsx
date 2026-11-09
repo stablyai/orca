@@ -9,11 +9,11 @@ import {
 } from './structured-agent-session-draft-position.test-fixture'
 import { act, render, renderHook, within, fireEvent } from '@testing-library/react'
 import { createRef, StrictMode } from 'react'
-import type { NativeChatComposerInput } from '@/components/native-chat/native-chat-composer-input'
-import { promptEditor } from '@/components/native-chat/native-chat-prompt-editor.test-support'
+import type { NativeChatComposerInput } from '@/components/native-chat/composer/editor/native-chat-composer-input'
+import { promptEditor } from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from './launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import {
   getStructuredLaunchStateBySessionId,
@@ -22,28 +22,30 @@ import {
 import { hasStagedStructuredLaunchPrompt } from './launch/structured-agent-session-launch-prompt'
 import { wasStructuredAgentLaunchClosedByLocalCancel } from './launch/structured-agent-session-local-launch-cancel'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   flushNativeChatComposerDrafts,
-  hydrateNativeChatComposerDrafts,
-  nativeChatComposerDraftWritesSettled,
+  nativeChatComposerDraftWritesSettled
+} from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import {
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
   addNativeChatPendingAttachment,
   nativeChatPendingAttachmentSnapshot
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
-import { useNativeChatDraft } from '@/components/native-chat/use-native-chat-draft'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
+import { useNativeChatDraft } from '@/components/native-chat/drafts/use-native-chat-draft'
 import { openStructuredAgentSessionProvisionalTab } from './launch/structured-agent-session-launch-surface'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   handBackStructuredAgentSessionMessage,
   returnMessageToComposer
-} from '@/components/native-chat/structured-agent-session-message-hand-back'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back'
 import { CreateIntentParams } from '../../../../shared/rpc-contract/structured-agent-session-params'
 it.each(['close', 'cancel', 'abort', 'edited-close'] as const)(
   'keeps a nonresume Hand Off through actual %s and late create settlement',

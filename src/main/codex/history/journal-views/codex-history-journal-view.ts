@@ -1,4 +1,8 @@
-import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/journal-history-origin'
+import type { JournalInputKeys } from '../../../native-chat/agent-session-journal/input-order/journal-input-observations'
+import {
+  nativeCopyIds,
+  usableJournalHistoryOrigin
+} from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
@@ -10,30 +14,38 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
+import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 const TURN_LIFECYCLE_RECORD_PREFIX = 'turn-lifecycle:'
 
 export type CodexHistoryJournalView = {
   epoch: string
-  nativePromptKeys: ReadonlySet<string>
+  nativePromptKeys: ReadonlySet<string> | JournalInputKeys
+  unresolvedIds?: ReadonlySet<string>
   /** Provider turns represented by saved rows or native receipts. */
   known: ReadonlySet<string>
+  terminal?: ReadonlySet<string>
+  assistants?: ReadonlySet<string>
   /** Latest represented turn by journal position, including within a batch. */
   latest: string | null
   latestPosition: AgentJournalPosition | null
   hasRows: boolean
   /** Proven transcript origin, independent of subsequently imported provider identities. */
   importedAt: number | null
+  covered?: ReadonlySet<string>
+  origin?: unknown
   unresolvedOrigin: boolean
 }
 
 export function readCodexHistoryJournalView(
   journal: StructuredAgentSessionHistoryJournal,
-  threadId: string
+  threadId: string,
+  signal: AbortSignal
 ): CodexHistoryJournalView {
   const known = new Set<string>()
   const nativePromptKeys = new Set<string>()
+  const lifecycles = new Set<string>()
+  const assistants = new Set<string>()
   let latest: string | null = null
   let latestPosition: AgentJournalPosition | null = null
   let hasRows = false
@@ -64,46 +76,65 @@ export function readCodexHistoryJournalView(
     }
     const turnId = codexTurnIdOfRow(itemId, body, threadId)
     if (turnId) {
+      if (body.kind === 'message' && body.role === 'assistant') {
+        assistants.add(turnId)
+      }
+      const turn = readAgentJournalTurn(body)
+      if (turn && turn.state !== 'running' && turn.state !== 'unverifiable') {
+        lifecycles.add(turnId)
+      }
       note(turnId, agentJournalItemPosition(journal.item(itemId) ?? { sequence }))
     }
   })
   // Accepted submissions can identify turns whose rows have not landed yet.
-  for (const submission of journal.submissions()) {
+  for (const submission of journal.currentRead().submissions) {
     const promptKey = agentJournalSubmissionKey(submission.clientMessageId)
     nativePromptKeys.add(promptKey)
     const identity = submission.providerItemId
       ? parseAgentJournalItemKey(submission.providerItemId)
       : null
     if (identity?.provider === 'codex' && identity.threadId === threadId) {
-      known.add(identity.turnId)
       const prompt = journal.item(promptKey)
-      const receipt = journal.receiptFor(submission.clientMessageId)
       if (prompt) {
         note(identity.turnId, agentJournalItemPosition(prompt))
-      } else if (
-        receipt?.cursor.epoch === journal.epoch &&
-        Number.isSafeInteger(receipt.cursor.sequence) &&
-        receipt.cursor.sequence > 0
-      ) {
-        note(identity.turnId, { sequence: receipt.cursor.sequence, index: 0 })
       }
     }
   }
   const rawOrigin = journal.historyOrigin()
   const origin = usableJournalHistoryOrigin(rawOrigin)
   const importedAt =
-    origin?.providerHandle.kind === 'codex' && origin.providerHandle.threadId === threadId
+    origin?.kind === 'legacy_import' &&
+    origin.providerHandle.kind === 'codex' &&
+    origin.providerHandle.threadId === threadId
       ? origin.importedAt
       : null
+  const copy =
+    origin?.kind === 'native_copy' &&
+    origin.unit === 'codex-turn' &&
+    origin.agent === 'codex' &&
+    origin.providerHandle.kind === 'codex' &&
+    origin.providerHandle.threadId === threadId
+      ? origin
+      : null
   return {
+    ...(copy ? { covered: nativeCopyIds(copy) } : {}),
+    origin: rawOrigin,
     epoch: journal.epoch,
-    nativePromptKeys,
+    nativePromptKeys: journal.inputOrder.captureKeys(nativePromptKeys, signal),
+    unresolvedIds: new Set(
+      journal.inputOrder
+        .unsettledSubmissions()
+        .filter((send) => send.dispatchState === 'unknown' || send.dispatchState === 'pending')
+        .map((send) => send.clientMessageId)
+    ),
     known,
+    terminal: lifecycles,
+    assistants,
     latest,
     latestPosition,
     hasRows,
     importedAt,
-    unresolvedOrigin: (hasLegacy || rawOrigin !== null) && importedAt === null
+    unresolvedOrigin: (hasLegacy || rawOrigin !== null) && importedAt === null && !copy
   }
 }
 
@@ -138,14 +169,30 @@ export function sameCodexHistoryJournalView(
 ): boolean {
   return (
     a.epoch === b.epoch &&
+    a.origin === b.origin &&
+    JSON.stringify([...(a.unresolvedIds ?? [])]) === JSON.stringify([...(b.unresolvedIds ?? [])]) &&
     a.unresolvedOrigin === b.unresolvedOrigin &&
     a.importedAt === b.importedAt &&
     a.hasRows === b.hasRows &&
     a.latest === b.latest &&
     JSON.stringify(a.latestPosition) === JSON.stringify(b.latestPosition) &&
+    JSON.stringify([...(a.terminal ?? [])]) === JSON.stringify([...(b.terminal ?? [])]) &&
+    JSON.stringify([...(a.assistants ?? [])]) === JSON.stringify([...(b.assistants ?? [])]) &&
     a.known.size === b.known.size &&
     [...a.known].every((id) => b.known.has(id)) &&
-    a.nativePromptKeys.size === b.nativePromptKeys.size &&
-    [...a.nativePromptKeys].every((key) => b.nativePromptKeys.has(key))
+    sameNativePromptKeys(a.nativePromptKeys, b.nativePromptKeys)
   )
+}
+
+function sameNativePromptKeys(
+  a: CodexHistoryJournalView['nativePromptKeys'],
+  b: CodexHistoryJournalView['nativePromptKeys']
+): boolean {
+  if ('same' in a && 'same' in b) {
+    return a.same(b)
+  }
+  if ('size' in a && 'size' in b) {
+    return a.size === b.size && [...a].every((key) => b.has(key))
+  }
+  return false
 }

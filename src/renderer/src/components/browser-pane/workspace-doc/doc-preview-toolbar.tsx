@@ -5,7 +5,7 @@ import {
   type BrowserChromeShareControl
 } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
 import { BrowserReloadControl } from '@/components/browser-pane/assemble-chrome/browser-reload-control'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { DocPreviewAddressEdit } from './doc-preview-address-edit'
 import type { DocPreviewDocumentIdentity } from './doc-preview-document-identity'
 import type { DocPreviewHistory } from './doc-preview-webview-history'
@@ -48,14 +48,16 @@ export function DocPreviewToolbar({
   /** Absent for documents a share link can't render. */
   shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
-  const reloadLabel = translate(
+  const reloadLabel = t(
     'auto.components.editor.HtmlDocPreview.reloadPreviewControl',
     'Reload preview'
   )
 
   return (
     <BrowserChromeToolbar
+      closeTabOwner={{ worktreeId, browserPageId: previewId }}
       controls={{
         canGoBack: history.canGoBack,
         canGoForward: history.canGoForward,
@@ -94,15 +96,12 @@ export function DocPreviewToolbar({
       shareControl={shareControl}
       viewSource={{
         onSelect: onOpenSource,
-        label: translate(
-          'auto.components.editor.HtmlDocPreview.openSourceControl',
-          'Open source file'
-        ),
+        label: t('auto.components.editor.HtmlDocPreview.openSourceControl', 'Open source file'),
         alreadyInOverflowMenu: true
       }}
       openExternal={{
         onSelect: onOpenExternally,
-        label: translate(
+        label: t(
           'auto.components.editor.HtmlDocPreview.openExternallyControl',
           'Open with default app'
         )

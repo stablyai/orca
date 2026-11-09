@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SkillDeleteResult } from '../../../../shared/skill-delete-contract'
 import { skillDeleteResultLines } from './skill-delete-copy'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
@@ -14,7 +14,8 @@ export function SkillDeleteResultBand({
   result: SkillDeleteResult
   onDismiss: () => void
 }): React.JSX.Element | null {
-  const lines = skillDeleteResultLines(result.skills)
+  const t = useTranslate()
+  const lines = skillDeleteResultLines(result.skills, t)
   if (lines.length === 0) {
     return null
   }
@@ -33,7 +34,7 @@ export function SkillDeleteResultBand({
           variant="ghost"
           size="icon-sm"
           onClick={onDismiss}
-          aria-label={translate('auto.components.skills.SkillDelete.dismissResults', 'Dismiss')}
+          aria-label={t('auto.components.skills.SkillDelete.dismissResults', 'Dismiss')}
         >
           <X />
         </Button>

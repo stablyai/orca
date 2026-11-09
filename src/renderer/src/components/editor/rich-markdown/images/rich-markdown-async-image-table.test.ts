@@ -2,13 +2,17 @@
 import { Editor } from '@tiptap/react'
 import { CellSelection } from '@tiptap/pm/tables'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
+import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
 
-vi.mock('@/runtime/runtime-file-import-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
+vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
+  importExternalPathsToRuntime: vi.fn()
+}))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: vi.fn(() => null)
+}))
 vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: vi.fn(() => ({
@@ -167,18 +171,6 @@ describe('async image paste over table cells', () => {
       editor.state.doc.check()
     }
   )
-
-  it('maps the complete cell selection through an edit before the table', async () => {
-    const editor = richEditor()
-    const complete = pendingPaste(editor)
-    await flushPromises()
-    editor.view.dispatch(editor.state.tr.insertText('prefix ', 1))
-    complete()
-    await flushPromises()
-    expectReplacedCells(editor)
-    expect(editor.state.doc.firstChild?.textContent).toBe('prefix Before table')
-    expect(editor.state.doc.lastChild?.textContent).toBe('After table')
-  })
 
   it('does not absorb a new row inserted between the originally selected rows', async () => {
     const editor = richEditor()

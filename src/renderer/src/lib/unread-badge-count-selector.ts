@@ -1,6 +1,6 @@
-import { getVisibleWorkspaceHostIdSet } from '@/components/sidebar/visible-worktree-host-scope'
+import { getVisibleWorkspaceHostIdSet } from '@/components/sidebar/worktree-list/listing/visible-worktree-host-scope'
 import { getPairedDeviceIdsByEnvironment } from '../../../shared/workspace-creator-visibility'
-import { getRepoMapFromState } from '@/store/selectors'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -8,7 +8,10 @@ import { sameBucketRecords } from './bucket-record-equality'
 import { getUnreadBadgeCount } from './unread-badge-count'
 import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type UnreadBadgeCountState = Pick<
   AppState,
@@ -103,7 +106,7 @@ export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState)
         unifiedTabsByWorktree: state.unifiedTabsByWorktree,
         unreadTerminalTabs: state.unreadTerminalTabs,
         projectGroups: state.projectGroups,
-        repoMap: getRepoMapFromState(state),
+        repoMap: getIndexedRepoMap(state.repos),
         visibleHostIds: getVisibleWorkspaceHostIdSet(state),
         defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
         hiddenOtherDevicePairings: state.hideWorkspacesFromOtherDevices

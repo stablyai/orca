@@ -2,12 +2,12 @@ import { existsSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   hookDefinitionHasManagedCommand,
-  removeManagedCommands,
-  writeHooksJson
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJsonWithRaw } from '../../../agent-hooks/hooks-json-read'
-import { resolveHooksJsonWritePath } from '../../../agent-hooks/hook-config-write-path'
-import { findManagedTomlBlocks } from '../../../agent-hooks/managed-toml-ownership'
+  removeManagedCommands
+} from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import { writeHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-write'
+import { readHooksJsonWithRaw } from '../../../agent-hooks/installation/configuration/hooks-json-read'
+import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/configuration/hook-config-write-path'
+import { findManagedTomlBlocks } from '../../../agent-hooks/installation/configuration/managed-toml-ownership'
 import type { CodexTrustEntry } from '../../trust/toml/config-toml-trust'
 import { writeTomlConfigAtomically as writeConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
 import {

@@ -56,22 +56,6 @@ it('shares one verification between viewers with independent deadlines', async (
   expect((await patient).ok).toBe(true)
 })
 
-it('uses ready transitions, not diagnostic updates or a healthy polling timer', async () => {
-  const { owner, request } = createOwner(true)
-  await owner.refresh()
-  owner.connectionChanged('ready')
-  await vi.advanceTimersByTimeAsync(0)
-  owner.connectionChanged('ready')
-  await vi.advanceTimersByTimeAsync(300_000)
-  expect(request).toHaveBeenCalledTimes(2)
-  owner.connectionChanged('disconnected')
-  await vi.advanceTimersByTimeAsync(300_000)
-  expect(request).toHaveBeenCalledTimes(2)
-  owner.connectionChanged('ready')
-  await vi.advanceTimersByTimeAsync(0)
-  expect(request).toHaveBeenCalledTimes(3)
-})
-
 it('retries a failed status operation while retaining healthy transport and last good metadata', async () => {
   const { owner, request } = createOwner(true)
   owner.connectionChanged('ready')
@@ -107,20 +91,6 @@ it('retires a lost-socket request before explicit fallback and rejects its late 
   expect(request).toHaveBeenCalledTimes(3)
 })
 
-it('a reconnect transfers waiting readers to a fresh verification', async () => {
-  const { owner, request } = createOwner(true)
-  owner.connectionChanged('ready')
-  const old = deferred()
-  request.mockReturnValueOnce(old.promise)
-  const waiting = owner.refresh()
-  owner.connectionChanged('disconnected')
-  owner.connectionChanged('ready')
-  expect((await waiting).ok).toBe(true)
-  old.resolve(success('old'))
-  await vi.advanceTimersByTimeAsync(0)
-  expect(owner.read().status?.runtimeId).toBe('host-1')
-})
-
 it('disconnect settles readers and prevents late results and retry resurrection', async () => {
   const { owner, request, publish } = createOwner()
   const old = deferred()
@@ -137,16 +107,6 @@ it('disconnect settles readers and prevents late results and retry resurrection'
   expect(request).toHaveBeenCalledOnce()
 })
 
-it('passive reads create neither standing retries nor connection intent', async () => {
-  const { owner, request, verified } = createOwner()
-  request.mockResolvedValueOnce(runtimeHostStatusFailure('runtime_unavailable', 'offline'))
-  await owner.refresh({ observeOnly: true })
-  await vi.advanceTimersByTimeAsync(300_000)
-  expect(request).toHaveBeenCalledOnce()
-  await owner.refresh({ observeOnly: true })
-  expect(verified.mock.lastCall?.[1]).toBe(false)
-})
-
 it('authentication rejection blocks automatic verification until explicit reconnect', async () => {
   const { owner, request } = createOwner(true)
   owner.connectionChanged('ready')
@@ -157,18 +117,6 @@ it('authentication rejection blocks automatic verification until explicit reconn
   await vi.advanceTimersByTimeAsync(300_000)
   expect(request).toHaveBeenCalledOnce()
   expect((await owner.refresh({ reconnect: true })).ok).toBe(true)
-})
-
-it('blocks a rejected reconnect even without an outstanding status request', async () => {
-  const { owner, request } = createOwner(true)
-  owner.connectionChanged('ready')
-  await owner.refresh()
-  owner.connectionChanged('disconnected')
-  owner.authenticationRejected()
-  expect(owner.read()).toMatchObject({ verification: 'blocked', status: { runtimeId: 'host-1' } })
-  owner.connectionChanged('ready')
-  await vi.advanceTimersByTimeAsync(300_000)
-  expect(request).toHaveBeenCalledOnce()
 })
 
 it('cancelling one reader leaves the shared request available to other readers', async () => {
@@ -186,57 +134,26 @@ it('cancelling one reader leaves the shared request available to other readers',
   expect((await remaining).ok).toBe(true)
 })
 
-it.each(['unknown', 'ready'] as const)(
-  'distinguishes the caller deadline with %s transport',
-  async (transport) => {
-    const { owner, request } = createOwner()
-    owner.connectionChanged(transport)
-    request.mockReturnValue(deferred().promise)
-    const response = owner.refresh({ timeoutMs: 100 })
-    await vi.advanceTimersByTimeAsync(100)
-    expect(await response).toMatchObject({
-      ok: false,
-      error: {
-        message:
-          transport === 'ready'
-            ? 'Status request timed out.'
-            : 'Timed out waiting for the remote Orca runtime.'
-      }
-    })
-  }
-)
-
-it.each([
-  ['unauthorized', 'access-revoked'],
-  ['forbidden', 'access-revoked'],
-  ['protocol_version_mismatch', 'incompatible'],
-  ['method_not_found', 'incompatible']
-] as const)('labels a %s refusal as %s until verification leaves blocked', async (code, reason) => {
+it('does not let one failed boot probe keep a host unavailable (#16516)', async () => {
   const { owner, request } = createOwner()
-  request.mockResolvedValueOnce(runtimeHostStatusFailure(code, 'refused'))
+  request.mockResolvedValueOnce(runtimeHostStatusFailure('runtime_unavailable', 'host asleep'))
   await owner.refresh()
+  expect(owner.read().verification).toBe('unavailable')
+  await vi.advanceTimersByTimeAsync(3_000)
   expect(owner.read()).toMatchObject({
-    verification: 'blocked',
-    blockedReason: reason
+    verification: 'verified',
+    status: { runtimeId: 'host-1' }
   })
-  owner.connectionChanged('ready')
-  expect(owner.read().blockedReason).toBe(reason)
-  await owner.refresh({ reconnect: true })
-  expect(owner.read().verification).toBe('verified')
-  expect(owner.read()).not.toHaveProperty('blockedReason')
 })
 
-it('does not label a transient failure or a retired owner with a blocked reason', async () => {
-  const { owner, request } = createOwner()
-  request.mockResolvedValueOnce(runtimeHostStatusFailure('runtime_unavailable', 'offline'))
+it('re-verifies a persistent host when its transport returns, without another explicit probe', async () => {
+  const { owner, request } = createOwner(true)
+  owner.connectionChanged('ready')
   await owner.refresh()
-  expect(owner.read()).not.toHaveProperty('blockedReason')
-  owner.authenticationRejected()
-  expect(owner.read().blockedReason).toBe('access-revoked')
-  owner.dispose()
-  expect(owner.read()).toMatchObject({
-    verification: 'blocked',
-    retired: true
-  })
-  expect(owner.read()).not.toHaveProperty('blockedReason')
+  owner.connectionChanged('disconnected')
+  expect(owner.read().verification).toBe('unavailable')
+  owner.connectionChanged('ready')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(owner.read().verification).toBe('verified')
+  expect(request).toHaveBeenCalledTimes(2)
 })

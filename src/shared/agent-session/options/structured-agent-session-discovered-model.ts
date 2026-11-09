@@ -42,6 +42,13 @@ function fastModeOption(): CatalogOption {
   }
 }
 
+/** The tier Codex names Fast, by label or id; the only one the single Fast toggle stands for. */
+export function isFastServiceTier(
+  tier: Pick<AgentSessionOptionChoice, 'label' | 'value'>
+): boolean {
+  return tier.label.toLowerCase() === 'fast' || tier.value.toLowerCase() === 'fast'
+}
+
 /** Standard plus the tiers the model lists, valued by tier id; one choice in place of Fast. */
 export function serviceTierOption(tiers: readonly AgentSessionOptionChoice[]): CatalogOption {
   return {
@@ -72,6 +79,7 @@ export function discoveredModel(
       ? { declaredDefaultEffort: model.declaredDefaultEffort }
       : {}),
     id: model.id,
+    ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
     label: model.label,
     ...(model.description ? { description: model.description } : {}),
     ...(model.isDefault ? { isDefault: true } : {}),
