@@ -11,7 +11,7 @@ export function buildHookProcessCapture(): string[] {
     // Field 2 after the command name is ppid; field 20 is the start time in clock ticks since boot.
     'orca_agent_stat_fields() { orca_agent_ppid=${2-}; orca_agent_start=${20-}; }',
     '[ -z "${ORCA_PANE_KEY:-}" ] || case "$orca_agent_pid" in ""|*[!0-9]*) ;; *)',
-    '  if [ -r "/proc/$orca_agent_pid/stat" ]; then',
+    '  if case "${OSTYPE-}" in darwin*) false ;; *) [ -r "/proc/$orca_agent_pid/stat" ] ;; esac; then',
     '    orca_agent_stat= orca_agent_line= orca_agent_boot= orca_agent_start= orca_agent_ppid= orca_agent_cmdline=',
     // Read to EOF: a command name may contain a newline, and the strip below takes the last ") ".
     '    while IFS= read -r orca_agent_line || [ -n "$orca_agent_line" ]; do orca_agent_stat="$orca_agent_stat$orca_agent_line "; orca_agent_line=; done 2>/dev/null < "/proc/$orca_agent_pid/stat"',
@@ -31,11 +31,15 @@ export function buildHookProcessCapture(): string[] {
     '      [ -z "$orca_agent_boot" ] || orca_agent_process="{\\"pid\\":$orca_agent_pid,\\"platform\\":\\"linux\\",\\"startTime\\":\\"$orca_agent_boot:$orca_agent_start\\"}" ;; esac',
     // Bash sets OSTYPE on macOS; other shells still ask uname.
     '  elif case "${OSTYPE-}" in darwin*) ;; *) [ "$(uname -s 2>/dev/null)" = Darwin ] ;; esac; then',
-    '    case "$(exec /bin/ps -p "$orca_agent_pid" -o ppid=,args= 2>/dev/null)" in *[0-9]*ORCA_HOOK_AGENT_PID=*)',
-    '      orca_agent_ppid=$(exec /bin/ps -p "$orca_agent_pid" -o ppid= 2>/dev/null)',
-    '      orca_agent_ppid=${orca_agent_ppid#"${orca_agent_ppid%%[! ]*}"}',
-    '      orca_agent_ppid=${orca_agent_ppid%"${orca_agent_ppid##*[! ]}"}',
-    '      case "$orca_agent_ppid" in ""|0|1|*[!0-9]*) ;; *) orca_agent_pid=$orca_agent_ppid ;; esac ;; esac',
+    '    orca_agent_cmdline=$(exec /bin/ps -p "$orca_agent_pid" -o ppid=,args= 2>/dev/null)',
+    '    orca_agent_cmdline=${orca_agent_cmdline#"${orca_agent_cmdline%%[! ]*}"}',
+    '    orca_agent_ppid=${orca_agent_cmdline%% *}',
+    '    orca_agent_cmdline=${orca_agent_cmdline#* }',
+    '    orca_agent_cmdline=${orca_agent_cmdline#"${orca_agent_cmdline%%[! ]*}"}',
+    '    case "$orca_agent_cmdline" in',
+    '      sh\\ *ORCA_HOOK_AGENT_PID=*|*/sh\\ *ORCA_HOOK_AGENT_PID=*|dash\\ *ORCA_HOOK_AGENT_PID=*|*/dash\\ *ORCA_HOOK_AGENT_PID=*|bash\\ *ORCA_HOOK_AGENT_PID=*|*/bash\\ *ORCA_HOOK_AGENT_PID=*|zsh\\ *ORCA_HOOK_AGENT_PID=*|*/zsh\\ *ORCA_HOOK_AGENT_PID=*)',
+    '        case "$orca_agent_ppid" in ""|0|1|*[!0-9]*) ;; *) orca_agent_pid=$orca_agent_ppid ;; esac ;;',
+    '    esac',
     // Match the host probe's timezone when comparing local-time lstart strings.
     '    orca_agent_start=$(TZ=UTC0 LC_ALL=C exec /bin/ps -p "$orca_agent_pid" -o lstart= 2>/dev/null)',
     '    orca_agent_start=${orca_agent_start#"${orca_agent_start%%[! ]*}"}',
