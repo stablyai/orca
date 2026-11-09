@@ -457,9 +457,12 @@ export async function createSandbox(
     deps.background?.(refill)
   }
   const claimedAt = deps.now()
-  const prelude: StartInputs['prelude'] = request.repo
-    ? { script: WORKSPACE_PRELUDE_SCRIPT, env: source?.repoDir ? { ORCA_ENV_REPO_DIR: source.repoDir } : {} }
-    : undefined
+  // Every first boot gets the prelude: with no repo it makes an empty repository, so Orca can still
+  // create the workspace's worktree in it.
+  const prelude: StartInputs['prelude'] = {
+    script: WORKSPACE_PRELUDE_SCRIPT,
+    env: source?.repoDir ? { ORCA_ENV_REPO_DIR: source.repoDir } : {}
+  }
   const id = pooled?.id ?? randomId()
   // Write-ahead row and the VM-independent prep (secrets, repo token) run together.
   const [row, prep] = await timer.time('prepare', async () => {

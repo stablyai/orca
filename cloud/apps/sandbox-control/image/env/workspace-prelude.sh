@@ -10,6 +10,7 @@
 #   and checked out; if that fails the workspace still opens at the build's commit.
 # - Otherwise clone ORCA_REPO_URL here so a repo with no commits yet also opens: it gets an empty
 #   first commit on the requested branch, which Orca needs to create the workspace's worktree.
+# - No repo at all (the user chose "Start empty"): a fresh repository with that same first commit.
 set -uo pipefail
 P=/vercel/sandbox/project
 ROOT=/vercel/sandbox/repos
@@ -49,6 +50,9 @@ elif [ ! -e "$P" ] && [ -n "${ORCA_REPO_URL:-}" ]; then
       git -C "$P" checkout --quiet -b "$ref" -- || true
     fi
   fi
+  first_commit
+elif [ ! -e "$P" ]; then
+  git init --quiet "$P" || exit 1
   first_commit
 fi
 exit 0
