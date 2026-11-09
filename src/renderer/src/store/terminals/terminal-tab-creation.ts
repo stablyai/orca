@@ -9,7 +9,10 @@ import {
 import { getNextTerminalOrdinal } from '../../../../shared/workspace-layout/terminal-tab-ordinal'
 import { singlePaneLayoutSnapshot } from './terminal-single-pane-layout'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-cleanup'
+import {
+  buildOrphanTerminalCompanionCleanupPatch,
+  getOrphanTerminalIds
+} from './terminal-orphan-cleanup'
 import {
   ensureWorktreeGroup,
   findTabByEntityInGroup,
@@ -60,16 +63,9 @@ export function createTerminalTabCreationActions(
         const worktreeLayout = splitEntries?.layout ?? current.layoutByWorktree[worktreeId]
         const requestedGroupId = splitGroupId ?? targetGroupId
         const orphanTerminalIds = getOrphanTerminalIds(s, worktreeId)
-        // Seam records are built once below from the orphan IDs; the builder gets only the bucket it reads.
-        const orphanCleanupPatch = buildOrphanTerminalCleanupPatch(
-          {
-            ...s,
-            tabsByWorktree: { [worktreeId]: s.tabsByWorktree[worktreeId] ?? [] },
-            ptyIdsByTabId: {},
-            runtimePaneTitlesByTabId: {},
-            terminalLayoutsByTabId: {},
-            pendingStartupByTabId: {}
-          },
+        // Seam records are built once below from the orphan IDs; this cleans only the orphans' caches.
+        const orphanCleanupPatch = buildOrphanTerminalCompanionCleanupPatch(
+          s,
           worktreeId,
           orphanTerminalIds
         )

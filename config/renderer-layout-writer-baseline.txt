@@ -111,7 +111,7 @@
 1 src/renderer/src/store/terminals/terminal-tab-agent-launch-pane.ts
 2 src/renderer/src/store/terminals/terminal-tab-appearance.ts
 6 src/renderer/src/store/terminals/terminal-tab-close.ts
-13 src/renderer/src/store/terminals/terminal-tab-creation.ts # orphan-cleanup input view names three records it must not copy; no new layout write
+10 src/renderer/src/store/terminals/terminal-tab-creation.ts
 7 src/renderer/src/store/terminals/terminal-tab-navigation.ts
 3 src/renderer/src/store/terminals/terminal-tab-presentation.ts
 2 src/renderer/src/store/terminals/terminal-tab-title-batch.ts
