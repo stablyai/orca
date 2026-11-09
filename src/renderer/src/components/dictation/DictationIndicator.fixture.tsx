@@ -51,10 +51,25 @@ export const liveText = defineFixture({
   width: 520,
   store: {
     dictationState: 'listening',
-    partialTranscript:
-      'It should go back to the page you came from. Check where returnTo gets dropped'
+    liveText: {
+      committed: 'It should go back to the page you came from.',
+      tentative: 'Check where returnTo gets dropped'
+    }
   },
   setup: () => publishDictationMeter({ level: 0.6, isSpeaking: true, isClipping: false }),
+  render: () => <PaneWithPill />
+})
+
+export const committedText = defineFixture({
+  width: 520,
+  store: {
+    dictationState: 'listening',
+    liveText: {
+      committed: 'It should go back to the page you came from. Check where returnTo gets dropped.',
+      tentative: ''
+    }
+  },
+  setup: () => publishDictationMeter({ level: 0.2, isSpeaking: false, isClipping: false }),
   render: () => <PaneWithPill />
 })
 
