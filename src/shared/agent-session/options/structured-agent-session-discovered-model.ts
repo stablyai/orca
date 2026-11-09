@@ -2,6 +2,7 @@ import type { CatalogModel, CatalogOption } from './agent-session-option-catalog
 import type { AgentSessionOptionChoice } from '../agent-session-wire'
 import type { AgentSessionOptionsResult } from './agent-session-options-result'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import { agentChoiceCliApply } from '../../agent-launch/choices/agent-choice-cli-apply'
 import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
 
 export function structuredModelEfforts(
@@ -28,7 +29,16 @@ function effortOption(
       defaultValue: model.defaultEffort ?? model.efforts[0]!.value,
       ...(model.defaultEffort ? { defaultIsCliDefault: true as const } : {})
     },
-    apply: { midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` } }
+    apply: {
+      ...(agent === 'mcode'
+        ? agentChoiceCliApply(
+            'mcode',
+            [{ kind: 'value', names: ['--effort'], lift: 'separate-and-long-equals' }],
+            '--effort'
+          )
+        : {}),
+      midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
+    }
   }
 }
 

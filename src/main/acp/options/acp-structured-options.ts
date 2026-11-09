@@ -1,7 +1,7 @@
 import { acpSelectChoices } from './acp-select-choices'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
+import { buildSessionModelOptions } from './acp-session-model-options'
 import type {
-  AgentSessionModelOption,
   AgentSessionOptionChoice,
   AgentSessionSlashCommand
 } from '../../../shared/agent-session/agent-session-wire'
@@ -28,10 +28,6 @@ export type AcpOptionWrite =
   | { method: 'config'; configId: string; value: string }
   | { method: 'model'; modelId: string }
 
-function isSelect(option: SessionConfigOption): option is SelectOption {
-  return option.type === 'select'
-}
-
 export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
@@ -41,6 +37,7 @@ export class AcpStructuredOptions {
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
+      | 'normalizeConfigOptions'
     > = {}
   ) {}
 
@@ -102,7 +99,8 @@ export class AcpStructuredOptions {
     },
     origin: 'new' | 'loaded' = 'loaded'
   ): void {
-    this.configOptions = response.configOptions ?? []
+    const rawOptions = response.configOptions ?? []
+    this.configOptions = this.dialect.normalizeConfigOptions?.(rawOptions) ?? rawOptions
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
     this.appliedInput.clear()
@@ -146,7 +144,7 @@ export class AcpStructuredOptions {
     if (!configOptions) {
       return
     }
-    this.configOptions = configOptions
+    this.configOptions = this.dialect.normalizeConfigOptions?.(configOptions) ?? configOptions
     const proof = this.selectorProof
     if (!proof || this.writing > 0) {
       return
@@ -199,20 +197,31 @@ export class AcpStructuredOptions {
     const option = this.select('thought_level')
     return !!(
       option &&
-      (this.dialect.clampsUnlistedEffort ||
-        acpSelectChoices(option).some((choice) => choice.value === value))
+      (this.dialect.clampsUnlistedEffort || acpSelectChoices(option).some((c) => c.value === value))
     )
   }
 
   write(key: string, value: string): AcpOptionWrite | null {
     if (key === 'model') {
       const option = this.select('model')
-      if (option) {
-        return { method: 'config', configId: option.id, value }
-      }
-      return this.models ? { method: 'model', modelId: value } : null
+      return option
+        ? { method: 'config', configId: option.id, value }
+        : this.models
+          ? { method: 'model', modelId: value }
+          : null
     }
     if (key === 'effort') {
+      if (this.dialect.effortChangesModel && (value === 'off' || value === 'on')) {
+        const modelOption = this.select('model')
+        if (modelOption) {
+          const base = modelOption.currentValue.replace(/:v:.*$/, '')
+          return {
+            method: 'config',
+            configId: modelOption.id,
+            value: value === 'off' ? `${base}:v:` : `${base}:v:thinking`
+          }
+        }
+      }
       const option = this.select('thought_level')
       return option ? { method: 'config', configId: option.id, value } : null
     }
@@ -223,57 +232,37 @@ export class AcpStructuredOptions {
   read(): Pick<AgentSessionOptionsResult, 'models' | 'current' | 'forkSupport'> {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
+    const toChoice = (id: string, label: string, description?: string | null) => ({
+      id,
+      label,
+      ...(description && { description })
+    })
     const sessionEfforts: AgentSessionOptionChoice[] = effortOption
-      ? acpSelectChoices(effortOption).map((choice) => ({
-          value: choice.value,
-          label: choice.name,
-          ...(choice.description ? { description: choice.description } : {})
+      ? acpSelectChoices(effortOption).map((c) => ({
+          value: c.value,
+          label: c.name,
+          ...(c.description && { description: c.description })
         }))
       : []
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
-    const listed: { id: string; label: string; description?: string }[] = modelOption
-      ? acpSelectChoices(modelOption).map((choice) => ({
-          id: choice.value,
-          label: choice.name,
-          ...(choice.description ? { description: choice.description } : {})
-        }))
-      : (this.models?.availableModels.map((model) => ({
-          id: model.modelId,
-          label: model.name,
-          ...(model.description ? { description: model.description } : {})
-        })) ?? [])
-    const models: AgentSessionModelOption[] = listed.map((model) => {
-      const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
-      const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
-      // A current-session menu supplies no negative evidence about an unobserved model.
-      const sessionMenu =
-        model.id === currentModel
-          ? { efforts: sessionEfforts }
-          : (modelOption || effortOption) && !advertised
-            ? {
-                efforts: this.dialect.clampsUnlistedEffort ? sessionEfforts : [],
-                effortsKnown: false as const
-              }
-            : { efforts: [] }
-      return {
-        ...model,
-        isDefault: false,
-        // Fall back to the running session's menu when the advertised menu is empty.
-        ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
-          ? advertised
-          : sessionMenu),
-        ...(advertised?.declaredDefaultEffort !== undefined
-          ? { declaredDefaultEffort: advertised.declaredDefaultEffort }
-          : {})
-      }
+    const listed = modelOption
+      ? acpSelectChoices(modelOption).map((c) => toChoice(c.value, c.name, c.description))
+      : (this.models?.availableModels.map((m) => toChoice(m.modelId, m.name, m.description)) ?? [])
+    const models = buildSessionModelOptions({
+      listed,
+      currentModel,
+      sessionEfforts,
+      hasModelOrEffort: !!(modelOption || effortOption),
+      availableModels: this.models?.availableModels,
+      dialect: this.dialect
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
     return {
       models,
       forkSupport: this.forkSupport,
       current: {
-        ...(currentModel ? { model: currentModel } : {}),
-        ...(effortOption ? { effort: effortOption.currentValue } : {}),
+        ...(currentModel && { model: currentModel }),
+        ...(effortOption && { effort: effortOption.currentValue }),
         confirmed
       }
     }
@@ -297,8 +286,8 @@ export class AcpStructuredOptions {
   reported(): Readonly<Record<string, string>> {
     const { current } = this.read()
     return {
-      ...(current.model ? { model: current.model } : {}),
-      ...(current.effort ? { effort: current.effort } : {})
+      ...(current.model && { model: current.model }),
+      ...(current.effort && { effort: current.effort })
     }
   }
 
@@ -335,6 +324,6 @@ export class AcpStructuredOptions {
     const option = this.configOptions.find(
       (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
     )
-    return option && isSelect(option) ? option : null
+    return option?.type === 'select' ? option : null
   }
 }

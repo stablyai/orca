@@ -15,6 +15,7 @@ import type {
   ClientCapabilities,
   InitializeResponse,
   ModelInfo,
+  SessionConfigOption,
   SessionNotification,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
@@ -191,6 +192,7 @@ export type AcpDialect = {
   signInAccount?: AgentSessionAccountKind
   /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
+  normalizeConfigOptions?(options: SessionConfigOption[]): SessionConfigOption[]
 }
 
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }

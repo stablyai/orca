@@ -25,6 +25,8 @@ const PIECES: Record<NativeChatSessionOptionCopyId, (values?: { value0: string }
   mediumShort: () => translate('components.native-chat.composer.optionValueShort.medium', 'Med'),
   xhighShort: () => translate('components.native-chat.composer.optionValueShort.xhigh', 'XHigh'),
   fast: () => translate('components.native-chat.composer.optionValue.fast', 'Fast'),
+  off: () => translate('components.native-chat.composer.optionValue.off', 'Off'),
+  on: () => translate('components.native-chat.composer.optionValue.on', 'On'),
   toggleOption: (values) =>
     translate('components.native-chat.composer.toggleOption', 'Toggle {{value0}}', values),
   chooseInAgentPicker: () =>
