@@ -155,7 +155,7 @@ function SettingsSearchableSelectControl({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant={compact ? 'ghost' : 'outline'}
           size="sm"
           role="combobox"
           aria-expanded={open && !disabled}
@@ -163,9 +163,7 @@ function SettingsSearchableSelectControl({
           disabled={disabled}
           onKeyDown={handleTriggerKeyDown}
           className={
-            compact
-              ? 'h-7 w-auto min-w-0 max-w-56 justify-between border-transparent bg-transparent px-2 shadow-none'
-              : 'min-w-[220px] justify-between'
+            compact ? 'w-auto min-w-0 max-w-56 justify-between' : 'min-w-[220px] justify-between'
           }
         >
           <span className="inline-flex min-w-0 flex-1 items-center gap-2">
