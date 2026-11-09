@@ -1,6 +1,8 @@
+import { TEXT_GENERATION_FAILURE_COPY } from '../../shared/text-generation-failure-copy'
 import { codexForkHistory } from './codex-fork-history'
 import {
   AgentConversationCopyError,
+  AgentConversationCopyStartError,
   agentConversationCopyRefusal
 } from '../native-chat/agent-conversation-copy-error'
 import { isAgentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -74,6 +76,7 @@ export async function copyCodexConversation(
   input: CopyInput,
   invocation: CodexProviderInvocationDeps | undefined
 ) {
+  let starting = false
   let dispatched = false
   try {
     if (!input.record || !input.checkpoint || !invocation) {
@@ -113,6 +116,7 @@ export async function copyCodexConversation(
       )
     }
     let history = legacy && !checkpoint.turnId ? await physicalHistory(undefined) : undefined
+    starting = true
     return await runCodexProviderAppServer(
       record,
       {
@@ -121,6 +125,7 @@ export async function copyCodexConversation(
       },
       { timeoutMs: 60_000, signal, experimentalApi: true },
       async (rpc, cwd) => {
+        starting = false
         let metadata
         try {
           metadata = asRecord(
@@ -276,8 +281,13 @@ export async function copyCodexConversation(
         : agentConversationCopyRefusal(
             'agent_session_identity_required',
             { reason: 'transcriptUnreadable' },
-            'Codex could not read the saved chat. Open it again, then try forking the response.'
+            starting
+              ? TEXT_GENERATION_FAILURE_COPY.agentCouldNotStart.replace('{{label}}', 'Codex')
+              : 'Codex could not read the saved chat. Open it again, then try forking the response.'
           )
+      if (starting) {
+        refusal.cause = new AgentConversationCopyStartError(refusal.refusal.message)
+      }
       refusal.refusal.createAttemptRefusedBeforeCommit = true
       throw refusal
     }

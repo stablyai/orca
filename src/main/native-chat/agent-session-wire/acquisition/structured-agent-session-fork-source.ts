@@ -20,6 +20,7 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 import {
   AgentConversationCopyError,
+  AgentConversationCopyStartError,
   agentConversationCopyRefusal
 } from '../../agent-conversation-copy-error'
 import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
@@ -87,7 +88,7 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
           ? agentConversationCopyRefusal('agent_session_operation_invalid', { reason }, message)
           : message
       const failureReason = refusal.refusal.details?.reason
-      if (original) {
+      if (original && !(refusal.cause instanceof AgentConversationCopyStartError)) {
         const piece =
           failureReason === 'savedConversationMissing'
             ? 'forkOriginalMissing'
