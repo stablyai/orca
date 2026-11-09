@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { getGitCloneFailureMessage } from '../../../shared/git/remotes/git-clone-failure-message'
@@ -20,7 +21,7 @@ import {
   getSavedProjectPathKeys
 } from '../../git/repo-clone-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { emitRepoAdded } from './repo-added-telemetry'
@@ -100,7 +101,11 @@ function settleCloneAbortCleanup(metadata: ActiveCloneMetadata): void {
   metadata.resolvePendingAbortCleanup = null
 }
 
-export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerRepoCloneHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
+): void {
   ipcMain.handle('repos:cloneAbort', async () => {
     for (const controller of pendingLocalCloneControllers) {
       controller.abort()
@@ -130,7 +135,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
               savedPathKeys.includes(getClonePathComparisonKey(r.path)) &&
               getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
           )
-      return runWithClonePathLock(clonePathKey, async () => {
+      const repo = await runWithClonePathLock(clonePathKey, async () => {
         await pendingAbortCleanupByPath.get(clonePathKey)
         // Read after the lock so lookup sees what a queued clone of this path registered.
         savedPathKeys = await getSavedProjectPathKeys(clonePath)
@@ -293,7 +298,7 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
 
           // Register Git's checkout path so the clone stays its own selected checkout.
           const repoPath = (await inspectGitRepoForRegistrationAsync(clonePath)).rootPath
-          const detected = await detectRepoIconAndUpstream({
+          const detected = await detectRepoLocalMetadata({
             repoPath,
             kind: 'git',
             executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -323,6 +328,8 @@ export function registerRepoCloneHandlers(mainWindow: BrowserWindow, store: Stor
           }
         }
       })
+      enqueueMetadata([repo])
+      return repo
     }
   )
 }
