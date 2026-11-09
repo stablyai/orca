@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { hashKey, useQueryClient } from '@tanstack/react-query'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSourceControlSettings } from './mobile-source-control-settings-operations'
 import { useMobileSourceControlSettings } from './mobile-source-control-settings'
@@ -16,7 +16,12 @@ import {
   readBranchCompareOutcome,
   type BranchCompareAttempt
 } from './mobile-branch-compare-outcome'
-import { gitStatusQuery, publishGitStatusSummary } from './mobile-git-status-query'
+import {
+  gitStatusQuery,
+  publishGitStatusSummary,
+  type GitStatusRead
+} from './mobile-git-status-query'
+import { hostQueryKey } from '../query/host-query-key'
 import type {
   LoadStatusOptions,
   MobileBranchCompareState,
@@ -103,12 +108,27 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     enabled: statusEnabled,
     subscribed: focused
   })
-  const { data: publishedRead, dataUpdatedAt: publishedAt } = statusQuery
+  // Published as each read is accepted: a summary read answering just after would otherwise look newer.
   useEffect(() => {
-    if (publishedRead) {
-      void publishGitStatusSummary(queryClient, hostId, target, publishedRead, publishedAt)
+    const statusKey = hostQueryKey(hostId, gitStatusQuery.family, target, NO_INPUT)
+    const statusHash = hashKey(statusKey)
+    const publish = () => {
+      const state = queryClient.getQueryState<GitStatusRead>(statusKey)
+      if (state?.data) {
+        void publishGitStatusSummary(queryClient, hostId, target, state.data, state.dataUpdatedAt)
+      }
     }
-  }, [hostId, publishedAt, publishedRead, queryClient, target])
+    publish()
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === 'updated' &&
+        event.action.type === 'success' &&
+        event.query.queryHash === statusHash
+      ) {
+        publish()
+      }
+    })
+  }, [hostId, queryClient, target])
   const mountedRef = useRef(true)
   const setRootRef = useCallback((node: View | null): void => {
     // Invalidate route-detached RPC writes without waiting for passive cleanup.

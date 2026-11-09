@@ -10,7 +10,12 @@ import {
   documentQueryClient,
   settleQueryNotifications
 } from '../../test-support/rpc-recording/hook-mount'
-import { publishGitStatusSummary, type GitStatusRead } from '../mobile-git-status-query'
+import { hostQueryKey } from '../../query/host-query-key'
+import {
+  publishGitStatusSummary,
+  serverGitStatusSummaryQuery,
+  type GitStatusRead
+} from '../mobile-git-status-query'
 import { useFolderWorktreeStatus } from './use-folder-worktree-status'
 
 const STATUS = { branch: 'feature', entries: [] }
@@ -206,5 +211,29 @@ describe.each([
       (row) => shown.get(rowKey(row))?.data !== before.get(rowKey(row))?.data
     )
     expect(changed).toEqual([opened])
+  })
+
+  it("keeps a summary's newer failure over an older detailed read", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const host = countingClient()
+    const opened: RowSpec = { worktreeId: 'repo-s::/w0', routeHost: 'runtime:env-0' }
+    await mountFolder(folderRows(n, servers), host.client)
+    const listed = shown.get(rowKey(opened))!
+    const target = { exec: opened.routeHost!, worktree: opened.worktreeId }
+    const key = hostQueryKey('host-1', serverGitStatusSummaryQuery.family, target, {})
+    const cachedDetailAt = Date.now() + 1_000
+    vi.setSystemTime(cachedDetailAt + 1_000)
+    const failure = new Error('status read failed')
+    await act(async () =>
+      queryClient!
+        .getQueryCache()
+        .find({ queryKey: key, exact: true })!
+        .setState({ status: 'error', error: failure, errorUpdatedAt: Date.now() })
+    )
+
+    await act(() =>
+      publishGitStatusSummary(queryClient!, 'host-1', target, listed.data!, cachedDetailAt)
+    )
+    expect(queryClient!.getQueryState(key)?.error).toBe(failure)
   })
 })

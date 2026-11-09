@@ -1,10 +1,15 @@
 import { createElement } from 'react'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientEventStreamMessage } from '../../../../src/shared/runtime-client-events'
 import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { Worktree } from '../../worktree/workspace-list-types'
+import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
+import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
+import { HOST_LIST_TARGET, hostServerWorkspacesQuery } from '../../host-screen/host-list-queries'
+import { hostQueryKey } from '../../query/host-query-key'
 import {
   documentQueryClient,
   settleQueryNotifications
@@ -15,6 +20,10 @@ import {
 } from './use-mobile-folder-attached-worktrees'
 
 vi.mock('react-native', () => ({ AppState: {} }))
+const gates = vi.hoisted(() => ({ hostCapabilities: [] as string[] }))
+vi.mock('../../components/host-protocol-gates-context', () => ({
+  useOptionalHostProtocolGates: () => gates
+}))
 const host = vi.hoisted(() => ({ client: null as unknown }))
 vi.mock('../../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: host.client, clientId: 'client-1', state: 'connected' })
@@ -112,14 +121,18 @@ let renderer: ReactTestRenderer | null = null
 const queries = documentQueryClient()
 
 afterEach(async () => {
+  gates.hostCapabilities = []
   act(() => renderer?.unmount())
   renderer = null
   await queries.end()
   vi.useRealTimers()
 })
 
+let queryClient: QueryClient | null = null
+
 async function mount(read: { current: MobileFolderAttachedWorktrees | null }) {
   function Harness(): null {
+    queryClient = useQueryClient()
     read.current = useMobileFolderAttachedWorktrees('host-1', 'folder:f-1', true)
     return null
   }
@@ -200,5 +213,44 @@ describe.each([
     )
     expect(lineage.resolutions).toBe(1)
     expect(read.current?.worktrees).toHaveLength(n + 1)
+  })
+
+  it('resolves lineage again for a server store change, not for its health', async () => {
+    gates.hostCapabilities = [MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY]
+    const fake = catalogHost(catalog(h, n))
+    host.client = fake.client
+    const read: { current: MobileFolderAttachedWorktrees | null } = { current: null }
+    await mount(read)
+    const serversKey = hostQueryKey('host-1', hostServerWorkspacesQuery.family, HOST_LIST_TARGET, {
+      deltas: false
+    })
+    const servers = (overrides: Partial<MobileRelayHost>) => ({
+      hosts: Array.from({ length: 30 }, (_, i) => ({
+        hostId: `runtime:env-${i}` as const,
+        label: `env ${i}`,
+        health: 'available' as const,
+        relay: 'ready' as const,
+        installationId: `install-${i}`,
+        ...(i === 0 ? overrides : {})
+      })),
+      worktrees: []
+    })
+    const setServers = async (overrides: Partial<MobileRelayHost>) => {
+      await act(async () => {
+        queryClient!.setQueryData(serversKey, servers(overrides))
+      })
+      await settleQueryNotifications()
+    }
+    await setServers({})
+    expect(read.current?.worktrees).toHaveLength(n)
+    const members = read.current!.worktrees
+    lineage.resolutions = 0
+
+    await setServers({ health: 'connecting', relay: 'unavailable' })
+    expect(lineage.resolutions).toBe(0)
+    expect(read.current?.worktrees).toBe(members)
+
+    await setServers({ installationId: 'install-new' })
+    expect(lineage.resolutions).toBe(1)
   })
 })

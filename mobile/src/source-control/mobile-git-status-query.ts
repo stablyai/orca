@@ -142,16 +142,19 @@ export async function publishGitStatusSummary(
   const summary =
     target.exec === LOCAL_EXECUTION_HOST_ID ? gitStatusSummaryQuery : serverGitStatusSummaryQuery
   const queryKey = hostQueryKey(hostId, summary.family, target, {})
-  const state = queryClient.getQueryState(queryKey)
-  // No list reads this worktree, or its summary is newer than this read.
-  if (!state || state.dataUpdatedAt >= readAt) {
+  // No list reads this worktree, or its summary, a failed read included, is newer than this read.
+  const supersedes = () => {
+    const state = queryClient.getQueryState(queryKey)
+    return state !== undefined && Math.max(state.dataUpdatedAt, state.errorUpdatedAt) < readAt
+  }
+  if (!supersedes()) {
     return
   }
   // A summary read already out started before this answer; landing later, it would undo it.
-  if (state.fetchStatus === 'fetching') {
+  if (queryClient.getQueryState(queryKey)?.fetchStatus === 'fetching') {
     await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
   }
-  if ((queryClient.getQueryState(queryKey)?.dataUpdatedAt ?? 0) < readAt) {
+  if (supersedes()) {
     queryClient.setQueryData(queryKey, read, { updatedAt: readAt })
   }
 }

@@ -110,6 +110,18 @@ export function useMobileFolderAttachedWorktrees(
   }
   const lineageRows = held?.rows
   const serverRowsRead = serverRows !== undefined
+  // Health and relay state flip often; the resolver reads only each server's installation.
+  const storesKey = JSON.stringify(
+    serverHosts?.map((server) => [server.hostId, server.installationId]) ?? []
+  )
+  const [heldStores, setHeldStores] = useState<{ key: string; stores: MobileLineageStores } | null>(
+    null
+  )
+  let stores = heldStores?.stores
+  if (heldStores?.key !== storesKey || stores?.ownInstallationId !== ownInstallationId) {
+    stores = { ownInstallationId, servers: serverHosts ?? NO_SERVER_HOSTS }
+    setHeldStores({ key: storesKey, stores })
+  }
   const membership = useMemo(() => {
     // A server's folder is unknown, not missing, until its rows are read.
     if (!lineageRows || (executionHost && relays && !serverRowsRead)) {
@@ -119,7 +131,6 @@ export function useMobileFolderAttachedWorktrees(
     if (!folder) {
       return null
     }
-    const stores: MobileLineageStores = { ownInstallationId, servers: serverHosts ?? [] }
     const indexOf = new Map(lineageRows.map((row, index) => [row, index]))
     return {
       folderIndex: indexOf.get(folder)!,
@@ -127,15 +138,7 @@ export function useMobileFolderAttachedWorktrees(
         indexOf.get(row)!
       )
     }
-  }, [
-    lineageRows,
-    serverRowsRead,
-    serverHosts,
-    folderWorktreeId,
-    executionHost,
-    ownInstallationId,
-    relays
-  ])
+  }, [lineageRows, serverRowsRead, stores, folderWorktreeId, executionHost, relays])
   // Same lineage means same row order, so the current rows supply the labels shown.
   const currentRows = held?.source
   const shown = useMemo(

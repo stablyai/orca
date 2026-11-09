@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +8,9 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
+import { prefetchHostQuery } from '../query/host-query'
+import { hostQueryKey } from '../query/host-query-key'
+import { gitStatusSummaryQuery, serverGitStatusSummaryQuery } from './mobile-git-status-query'
 
 import {
   documentQueryClient,
@@ -176,5 +180,94 @@ describe('useMobileSourceControlLoaders branch compare', () => {
     await rerender('host-1:repo42::/other', 'repo42::/other')
     await rerender(IDENTITY, WORKTREE)
     expect(read.loaders?.branchCompareState.kind).toBe('ready')
+  })
+})
+
+describe('useMobileSourceControlLoaders status summary', () => {
+  let renderer: ReactTestRenderer | null = null
+  const queries = documentQueryClient()
+
+  afterEach(async () => {
+    act(() => renderer?.unmount())
+    renderer = null
+    await queries.end()
+    vi.useRealTimers()
+  })
+
+  function statusReply(branch: string): RpcResponse {
+    return success({ branch, head: `${branch}-oid`, entries: [] })
+  }
+
+  it("hands each status read to the folder list's summary of the same worktree, and only that one", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const calls: PendingCall[] = []
+    const client = fakeClient(calls)
+    const read: { loaders: ReturnType<typeof useMobileSourceControlLoaders> | null } = {
+      loaders: null
+    }
+    let queryClient: QueryClient | null = null
+    function Harness(): null {
+      queryClient = useQueryClient()
+      read.loaders = useMobileSourceControlLoaders({
+        hostId: 'host-1',
+        client,
+        connState: 'connected',
+        statusIdentityKey: IDENTITY,
+        worktreeId: WORKTREE,
+        setActionError: IGNORE_ACTION_ERROR
+      })
+      return null
+    }
+    await act(async () => {
+      renderer = create(queries.wrap(createElement(Harness)))
+    })
+    const local = { exec: 'local' as const, worktree: WORKTREE }
+    const summaryKey = hostQueryKey('host-1', gitStatusSummaryQuery.family, local, {})
+    // The same worktree id on a relayed server keeps its own summary.
+    const elsewhere = { exec: 'runtime:env-1' as const, worktree: WORKTREE }
+    const elsewhereKey = hostQueryKey('host-1', serverGitStatusSummaryQuery.family, elsewhere, {})
+    const elsewhereData = { kind: 'unavailable' as const }
+    queryClient!.setQueryData(elsewhereKey, elsewhereData)
+    // The folder list's summary read is out when the screen's own read lands.
+    void prefetchHostQuery(
+      queryClient!,
+      gitStatusSummaryQuery,
+      { hostId: 'host-1', client },
+      local,
+      {}
+    )
+    // Summary reads skip line stats.
+    const summaryRead = calls.findIndex(
+      (call) =>
+        call.method === 'git.status' &&
+        (call.params as { includeLineStats?: boolean }).includeLineStats === false
+    )
+    const [stale] = calls.splice(summaryRead, 1)
+
+    // Landing just after the screen's read, the earlier summary read must not undo it.
+    const opened = calls.findIndex((call) => call.method === 'git.status')
+    const [screenRead] = calls.splice(opened, 1)
+    await act(async () => {
+      screenRead.settle(statusReply('opened'))
+      for (let i = 0; i < 20; i++) {
+        await Promise.resolve()
+      }
+      vi.setSystemTime(Date.now() + 1)
+      stale.settle(statusReply('before'))
+    })
+    await settleQueryNotifications()
+    expect(queryClient!.getQueryData(summaryKey)).toMatchObject({ status: { branch: 'opened' } })
+
+    // An action's forced reread.
+    const reread = read.loaders!.loadStatus({ force: true })
+    await settleQueryNotifications()
+    await settleOldest(calls, 'git.status', statusReply('after'))
+    await act(async () => {
+      await reread
+    })
+    await settleQueryNotifications()
+    expect(queryClient!.getQueryData(summaryKey)).toMatchObject({ status: { branch: 'after' } })
+    expect(queryClient!.getQueryData(elsewhereKey)).toBe(elsewhereData)
+    expect(calls.filter((call) => call.method === 'git.status')).toHaveLength(0)
   })
 })
