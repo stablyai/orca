@@ -4,7 +4,9 @@
 #   stablyai/orca main (origin)
 #   + nwparker/orca-private nwparker/accounts-billing, nwparker/vercel-driver (until they are retired)
 #   + open upstream PR branches stacked in while under review: nwparker/agent-host-sign-in (#40228),
-#     nwparker/agent-api-keys (#40303). Once a PR lands, main brings it; drop it from STACKED.
+#     nwparker/agent-sign-in-followups (#40283, stacked on #40228), nwparker/agent-api-keys (#40303).
+#     Once a PR lands, main brings it; drop it from STACKED. A source force-pushed (rebased) still merges: resolve to
+#     its new structure and never re-add what it removed (see the vercel-driver rebase merge).
 # Never based on stablyai/orca-private (Bots). git rerere replays conflict resolutions made before in this clone.
 # Conflict policy: billing files (cloud/apps/billing, cloud/docs/accounts-billing-design.md, src/main/billing,
 # src/renderer/src/components/billing, src/shared/orca-billing.ts, billing keys in en.json) keep accounts-billing;
@@ -18,7 +20,7 @@
 set -euo pipefail
 
 PRIVATE_BRANCHES=(${PRIVATE_BRANCHES:-nwparker/accounts-billing nwparker/vercel-driver})
-STACKED=(${STACKED:-nwparker/agent-host-sign-in nwparker/agent-api-keys})
+STACKED=(${STACKED:-nwparker/agent-host-sign-in nwparker/agent-sign-in-followups nwparker/agent-api-keys})
 
 git remote get-url private >/dev/null 2>&1 || git remote add private https://github.com/nwparker/orca-private.git
 git config rerere.enabled true
