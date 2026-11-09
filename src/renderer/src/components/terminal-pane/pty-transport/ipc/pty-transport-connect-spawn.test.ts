@@ -398,7 +398,10 @@ describe('createIpcPtyTransport', () => {
     const { captureParkedTerminalPaneCandidates } =
       await import('../../parking/output-watchers/terminal-parked-watcher-registry')
     const REVIVED_PTY_ID = 'repo::/wt@@revived'
-    const tab = { id: 'tab-revived', ptyId: REVIVED_PTY_ID }
+    const { useAppStore } = await import('@/store/index')
+    const { makeTab } = await import('@/store/terminals/terminal-tab.test-fixture')
+    const tab = makeTab({ id: 'tab-revived', worktreeId: 'repo::/wt', ptyId: REVIVED_PTY_ID })
+    useAppStore.setState({ tabsByWorktree: { 'repo::/wt': [tab] } })
     captureParkedTerminalPaneCandidates(tab.id, 'repo::/wt', [
       {
         ptyId: REVIVED_PTY_ID,
