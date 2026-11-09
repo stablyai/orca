@@ -11,14 +11,17 @@ import {
   unlinkSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import {
   clearCopiedResourceMarker,
   markCopiedResource,
+  readCopiedResourceSourcePath,
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
 import { syncSystemCodexRulesIntoManagedHome } from './codex-managed-home-rules'
 import { observe, observeResolvedPathEntry } from '../codex-path-observation'
+import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
@@ -34,8 +37,7 @@ const CODEX_SYSTEM_RESOURCE_ENTRIES = [
   'profile-v2',
   'themes',
   'prompts',
-  CODEX_BUNDLED_MARKETPLACES_ENTRY,
-  CODEX_GLOBAL_INSTRUCTIONS_ENTRY
+  CODEX_BUNDLED_MARKETPLACES_ENTRY
 ] as const
 
 export function getSystemCodexHomePath(): string {
@@ -91,7 +93,27 @@ export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
     linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
+  const instructionsHome = getCodexGlobalInstructionsHomePath(systemHomePath, targetHome)
+  linkSystemCodexResource(instructionsHome, targetHome, CODEX_GLOBAL_INSTRUCTIONS_ENTRY, {
+    // Copies retain source ownership when CODEX_HOME changes between launches.
+    preferCopy: instructionsHome !== systemHomePath,
+    previousSourcePath:
+      readCopiedResourceSourcePath(targetHome, CODEX_GLOBAL_INSTRUCTIONS_ENTRY) ??
+      join(systemHomePath, CODEX_GLOBAL_INSTRUCTIONS_ENTRY)
+  })
   syncSystemCodexRulesIntoManagedHome(systemHomePath, targetHome)
+}
+
+function getCodexGlobalInstructionsHomePath(systemHomePath: string, targetHome: string): string {
+  const configuredHome = resolve(resolveAbsoluteDirOverride(process.env.CODEX_HOME, systemHomePath))
+  const configuredKey = normalizeRuntimePathForComparison(configuredHome)
+  // An Orca child can inherit an account home; never use it as another account's global source.
+  const managedHomes = [targetHome, process.env.ORCA_CODEX_HOME?.trim()]
+  return managedHomes.some(
+    (home) => home && normalizeRuntimePathForComparison(resolve(home)) === configuredKey
+  )
+    ? systemHomePath
+    : configuredHome
 }
 
 export function syncCodexGlobalInstructionsIntoManagedHome({
@@ -112,7 +134,10 @@ function linkSystemCodexResource(
   systemHomePath: string,
   managedHomePath: string,
   entryName: string,
-  { preferCopy = false }: { preferCopy?: boolean } = {}
+  {
+    preferCopy = false,
+    previousSourcePath
+  }: { preferCopy?: boolean; previousSourcePath?: string } = {}
 ): void {
   const sourcePath = join(systemHomePath, entryName)
   const targetPath = join(managedHomePath, entryName)
@@ -120,6 +145,9 @@ function linkSystemCodexResource(
   const sourceObservation = observeResolvedPathEntry(sourcePath)
   if (sourceObservation.kind === 'indeterminate') {
     return
+  }
+  if (previousSourcePath && previousSourcePath !== sourcePath) {
+    removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, previousSourcePath)
   }
   if (sourceObservation.kind === 'absent') {
     removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
