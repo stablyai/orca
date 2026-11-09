@@ -130,7 +130,16 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
   alwaysShowDefaultBranchWorkspace: () => {}
 }
 
-function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo | undefined) {
+function getRevealTargetHostId(
+  state: AppState,
+  worktree: Worktree,
+  repo: Repo | undefined,
+  executionHostId?: ExecutionHostId
+) {
+  // The sidebar row's own host wins; same-id folders on other hosts must not steer the reveal.
+  if (executionHostId) {
+    return executionHostId
+  }
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const workspaceScope = parseWorkspaceKey(worktree.id)
   if (workspaceScope?.type === 'folder') {
@@ -153,20 +162,23 @@ function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo |
 export function useSidebarWorktreeFilters() {
   const filterState = useAppStore(useShallow(selectSidebarFilterState))
 
-  const revealWorkspaceFilters = useCallback((worktree: Worktree) => {
-    const state = useAppStore.getState()
-    const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
-    const context = {
-      state,
-      statuses: readRuntimeStatuses(),
-      worktree,
-      repo,
-      targetHostId: getRevealTargetHostId(state, worktree, repo)
-    }
-    for (const key of activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state))) {
-      REVEAL_WORKSPACE[key](context)
-    }
-  }, [])
+  const revealWorkspaceFilters = useCallback(
+    (worktree: Worktree, executionHostId?: ExecutionHostId) => {
+      const state = useAppStore.getState()
+      const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
+      const context = {
+        state,
+        statuses: readRuntimeStatuses(),
+        worktree,
+        repo,
+        targetHostId: getRevealTargetHostId(state, worktree, repo, executionHostId)
+      }
+      for (const key of activeWorkspaceRowFilterKeys(sidebarWorkspaceRowFilters(state))) {
+        REVEAL_WORKSPACE[key](context)
+      }
+    },
+    []
+  )
 
   return {
     filterState,
