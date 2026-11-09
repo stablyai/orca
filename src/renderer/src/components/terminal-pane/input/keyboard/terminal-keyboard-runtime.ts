@@ -33,7 +33,7 @@ import { titleHasExplicitAgentIdentity } from '../../titles/title-agent-identity
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
 import { isTerminalPaneLocalWindowsConpty } from '../../host-state/terminal-pane-local-windows-conpty'
-import { readLocalWindowsCmdConptyPane } from './terminal-local-windows-cmd-conpty'
+import { readLocalWindowsCmdPromptPane } from './terminal-local-windows-cmd-conpty'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { isEditableTarget } from './terminal-keyboard-shortcut-matching'
 import { resolveTerminalShortcutAction as resolveTerminalKeyboardShortcutAction } from './terminal-shortcut-policy'
@@ -217,16 +217,16 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
     }
     return !titleHasExplicitAgentIdentity(state.runtimePaneTitlesByTabId[tabId]?.[pane.id] ?? '')
   }
-  const isLocalWindowsCmdConptyPane = () =>
-    readLocalWindowsCmdConptyPane({
-      isLocalWindowsConptyPane,
-      getPaneId: () =>
-        (managerRef.current?.getActivePane() ?? managerRef.current?.getPanes()[0])?.id,
-      getSessionShell: (paneId) =>
-        paneTransportsRef.current.get(paneId)?.getLocalSessionMetadata?.()?.shellOverride,
-      worktreeId,
-      tabId
+  const isActivePaneLocalCmdPrompt = (): boolean => {
+    const pane = managerRef.current?.getActivePane() ?? managerRef.current?.getPanes()[0]
+    return readLocalWindowsCmdPromptPane({
+      isWindows,
+      tabId,
+      pane,
+      transport: pane && paneTransportsRef.current.get(pane.id),
+      isLocalWindowsConpty: isLocalWindowsConptyPane
     })
+  }
   const resolveShortcutEvent = (
     event: Parameters<typeof resolveTerminalKeyboardShortcutAction>[0]
   ) =>
@@ -246,7 +246,7 @@ export function createTerminalKeyboardRuntime(options: RuntimeOptions) {
       hasActivePaneCtrlEnterCsiUAuthority,
       getModifyOtherKeysActivePane,
       isActivePaneNonAgentFullScreen,
-      isLocalWindowsCmdConptyPane
+      isActivePaneLocalCmdPrompt
     )
   const createCapturedInputSender = (pane: { id: number; leafId: string }, data: string) => {
     const capturedTransport = paneTransportsRef.current.get(pane.id)

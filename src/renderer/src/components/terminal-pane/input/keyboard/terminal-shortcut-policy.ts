@@ -95,8 +95,8 @@ export function resolveTerminalShortcutAction(
   getModifyOtherKeysActivePane?: () => number,
   // Why: vim/nano treat ESC d as Escape + d, so a non-agent full-screen app keeps xterm's CSI 3;3~.
   isActivePaneNonAgentFullScreen?: () => boolean,
-  // Why: lazy so the cmd shell lookup runs only for Ctrl+Backspace.
-  isLocalWindowsCmdConptyPane?: () => boolean
+  // Why: lazy so the shell and agent lookup runs only for Ctrl+Backspace.
+  isActivePaneLocalCmdPrompt?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
   const matchOptions: KeybindingMatchOptions = { context: 'terminal', terminalShortcutPolicy }
@@ -227,7 +227,7 @@ export function resolveTerminalShortcutAction(
     event.key === 'Backspace'
   ) {
     // Why: ConPTY maps BS to cooked erase-previous-word. Ctrl+W is echoed as ^W by cmd (#40325).
-    const data = isLocalWindowsCmdConptyPane?.() === true ? '\b' : TERMINAL_CTRL_BACKSPACE_INPUT
+    const data = isActivePaneLocalCmdPrompt?.() === true ? '\b' : TERMINAL_CTRL_BACKSPACE_INPUT
     return { type: 'sendInput', data }
   }
 
