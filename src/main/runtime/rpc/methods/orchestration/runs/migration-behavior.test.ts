@@ -289,6 +289,7 @@ describe('orchestration migration behavior', () => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the federated call forwards an opaque params object; this asserts the injected effort was stripped.
         expect((params as { effort?: string }).effort).toBeUndefined()
         return {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the federated call forwards an opaque params object; the dispatch id it carries is echoed back unchanged.
           dispatchId: (params as { dispatchId: string }).dispatchId,
           state: 'ready',
           runtimeEpoch: runtime.getRuntimeId(),
