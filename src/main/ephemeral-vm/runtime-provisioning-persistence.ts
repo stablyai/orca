@@ -1,3 +1,4 @@
+import { toEphemeralVmRuntimeRecipeSnapshot } from '../../shared/ephemeral-vm-recipe-timeouts'
 import { randomUUID } from 'node:crypto'
 import { assertEphemeralVmRuntimeCheckoutModeCanPersist } from '../../shared/ephemeral-vm-runtime-feature-store'
 import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
@@ -49,7 +50,7 @@ export async function persistProvisionedEphemeralVmRuntime(
     return upsertEphemeralVmRuntime(args.userDataPath, {
       id: start.context.instanceId ?? start.context.recipeId,
       recipeId: args.recipe.id,
-      recipe: args.recipe,
+      recipe: toEphemeralVmRuntimeRecipeSnapshot(args.recipe),
       ...(args.repoId ? { repoId: args.repoId } : {}),
       ...(args.projectId ? { projectId: args.projectId } : {}),
       ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),

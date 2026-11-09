@@ -1,5 +1,5 @@
 import { markUnreadFollowUpMail } from './worker-follow-up-lineage'
-import type { WorkerReportOutcome, WorkerReportSettlement } from '../../types'
+import type { WorkerReportOutcome, WorkerReportSettlement } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { settleActiveDispatchesForTask } from './dispatch-completion'
 import { getActiveDispatchForTask } from './task-dispatch-reconciliation'
@@ -10,7 +10,7 @@ import {
   reportCorrectsUnobservedPrompt,
   SETTLEABLE_WORKER_STATES,
   UNPROVEN_WORKER_STATES
-} from '../../worker-report-admission'
+} from '../../workers/reports/worker-report-admission'
 
 type WorkerReportObservation = {
   id: string

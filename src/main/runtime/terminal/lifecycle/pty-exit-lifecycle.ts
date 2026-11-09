@@ -33,6 +33,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
 
   protected abstract cancelPendingDriverMutations(ptyId: string): void
 
+  protected abstract dropLayoutQueue(ptyId: string): void
+
   protected abstract rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void
 
   /** Its process ended on its own: no close, kill, sleep or restart, nor a lost host or replayed exit. */
@@ -181,7 +183,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.mobileDisplayModes.delete(ptyId)
       this.resizeListeners.delete(ptyId)
       this.lastRendererSizes.delete(ptyId)
-      this.recentPtyOutputById.delete(ptyId)
+      this.releaseRecentPtyOutput(ptyId, pty)
       this.launchComposerReadyByPtyId.delete(ptyId)
       this.setupCompletionTokenByPtyId.delete(ptyId)
       this.clearWaitBlockedCheckState(ptyId)
@@ -192,8 +194,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.providerModeTrackersByPtyId.delete(ptyId)
       this.providerModeSnapshotScansByPtyId.delete(ptyId)
       this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-      this.providerVisibleStateByPtyId.delete(ptyId)
-      this.providerVisibleRetryAtByPtyId.delete(ptyId)
+      this.forgetProviderVisibleState(ptyId)
       this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
       this.ptyLifecycleGenerationById.delete(ptyId)
       this.agentStatusOscProcessorsByPtyId.delete(ptyId)
@@ -210,9 +211,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       if (exitedTeamLeaderHandle) {
         this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
       }
-      // Queued layout work rechecks missing layout and refuses pty-exited after cleanup.
       this.layouts.delete(ptyId)
-      this.layoutQueues.delete(ptyId)
+      this.dropLayoutQueue(ptyId)
       this.freshSubscribeGuard.delete(ptyId)
       this.cancelPendingDriverMutations(ptyId)
       // Cold restore can reuse ids during delayed Enter; revoke it before it injects into a replacement.
@@ -238,7 +238,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       // Clear and notify driver state so dead panes cannot retain mobile lock banners.
       this.terminalDrivers.clear(ptyId)
       this.remoteDesktopFloor.clearPty(ptyId)
-      this.disposeHeadlessTerminal(ptyId)
+      this.disposeHeadlessTerminalOnExit(ptyId)
       this.trustDialogStatus.forget(ptyId)
       if (processDeathCertified) {
         // The bounded verdict register also fences late graphs after the PTY record was pruned.

@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type PickerOption = { key: string; primary: string; secondary?: string }
@@ -51,31 +52,30 @@ export function filterPullRequestPickerOptions(
   )
 }
 
-function pickerFallbackText({
-  loading,
-  queryTooLarge,
-  error,
-  emptyText
-}: {
-  loading: boolean
-  queryTooLarge: boolean
-  error: string | null
-  emptyText?: string
-}): string {
+function pickerFallbackText(
+  {
+    loading,
+    queryTooLarge,
+    error,
+    emptyText
+  }: {
+    loading: boolean
+    queryTooLarge: boolean
+    error: string | null
+    emptyText?: string
+  },
+  t: Translate = translate
+): string {
   if (loading) {
-    return translate('auto.components.github.PRFilterPickers.loading', 'Loading…')
+    return t('auto.components.github.PRFilterPickers.loading', 'Loading…')
   }
   if (queryTooLarge) {
-    return translate(
+    return t(
       'auto.components.github.PRFilterPickers.searchTextTooLarge',
       'Search text is too large.'
     )
   }
-  return (
-    error ??
-    emptyText ??
-    translate('auto.components.github.PRFilterPickers.noMatches', 'No matches')
-  )
+  return error ?? emptyText ?? t('auto.components.github.PRFilterPickers.noMatches', 'No matches')
 }
 
 export function SingleSelectList({
@@ -100,6 +100,7 @@ export function SingleSelectList({
   allowCustomValue?: boolean
   onSelect: (value: string | null) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
   const { queryTooLarge, trimmedQuery } = getPullRequestPickerQueryState(query)
@@ -109,11 +110,11 @@ export function SingleSelectList({
     !queryTooLarge &&
     !filtered.some((o) => o.key.toLowerCase() === trimmedQuery.toLowerCase())
   const fallback = showCustom
-    ? translate(
+    ? t(
         'auto.components.github.PRFilterPickers.pressEnterToUseValue',
         'Press Enter to use the typed value.'
       )
-    : pickerFallbackText({ loading, queryTooLarge, error, emptyText })
+    : pickerFallbackText({ loading, queryTooLarge, error, emptyText }, t)
 
   return (
     <Command shouldFilter={false}>
@@ -134,10 +135,7 @@ export function SingleSelectList({
             <span className="min-w-0 truncate text-muted-foreground">
               <Trans
                 i18n={i18n}
-                defaults={translate(
-                  'auto.components.github.PRFilterPickers.useTypedValue',
-                  'Use <value/>'
-                )}
+                defaults={t('auto.components.github.PRFilterPickers.useTypedValue', 'Use <value/>')}
                 components={{
                   value: <span className="font-medium text-foreground">{trimmedQuery}</span>
                 }}
@@ -151,7 +149,7 @@ export function SingleSelectList({
             onSelect={() => onSelect(null)}
             className="gap-2 px-3 py-1.5 text-xs text-muted-foreground"
           >
-            {translate('auto.components.github.PRFilterPickers.472c12ae03', 'Clear')}
+            {t('auto.components.github.PRFilterPickers.472c12ae03', 'Clear')}
           </CommandItem>
         ) : null}
         {filtered.map((opt) => {
@@ -195,16 +193,20 @@ export function MultiSelectList({
   emptyText?: string
   onChange: (next: string[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const { queryTooLarge } = getPullRequestPickerQueryState(query)
-  const fallback = pickerFallbackText({
-    loading,
-    queryTooLarge,
-    error,
-    emptyText
-  })
+  const fallback = pickerFallbackText(
+    {
+      loading,
+      queryTooLarge,
+      error,
+      emptyText
+    },
+    t
+  )
 
   const toggle = (key: string): void => {
     const next = new Set(selectedSet)
@@ -232,13 +234,9 @@ export function MultiSelectList({
             onSelect={() => onChange([])}
             className="gap-2 px-3 py-1.5 text-xs text-muted-foreground"
           >
-            {translate(
-              'auto.components.github.PRFilterPickers.clearSelected',
-              'Clear ({{count}})',
-              {
-                count: selected.length
-              }
-            )}
+            {t('auto.components.github.PRFilterPickers.clearSelected', 'Clear ({{count}})', {
+              count: selected.length
+            })}
           </CommandItem>
         ) : null}
         {filtered.map((opt) => {

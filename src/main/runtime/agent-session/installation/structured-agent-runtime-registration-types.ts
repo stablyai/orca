@@ -5,11 +5,12 @@ import type { StructuredAgentCliConversations } from '../../../native-chat/struc
 import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionLifecycleEvent
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
-import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/structured-agent-definition'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
+import type { AcpHostBackendSettings } from '../../../acp/launch/acp-launch-contract'
+import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import type { AgentModelCatalogDiscovery } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { createStructuredAgentSessionDispatchFollowUps } from '../structured-agent-session-dispatch-followups'
@@ -49,6 +50,8 @@ export type StructuredAgentAccountHomeRequest = {
   purpose: 'launch' | 'read' | 'identity'
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
+  /** The permission mode a new chat starts in, when it names one. */
+  permissionMode?: string
 }
 
 /** What resolving an account may ask of the runtime around it. */
@@ -58,8 +61,16 @@ export type StructuredAgentAccountHomeServices = {
   prepareCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   readCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   workspaceTrustSettings: () => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['settings']
+  /** The launching repo's pre-trust decision; undefined outside a repo or before one is made. */
+  workspaceTrustRepoDecision: (
+    location: AgentSessionExecutionLocation | null
+  ) => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['repoDecision']
   /** Orca's data folder on this host, where an agent's chats may keep an account of their own. */
   stateDirectory: string
+  /** The environment a chat start of `agent` on this host would launch from. */
+  hostLaunchEnvironment: (agent: string) => Promise<Record<string, string>>
+  /** This host's saved settings, read per launch. */
+  hostSettings: () => AcpHostBackendSettings
 }
 
 /** What a catalog probe is built from: the same runtime resolvers its sessions launch through. */
@@ -100,6 +111,11 @@ export type StructuredAgentChatProgram = {
   resolve: StructuredAgentLaunchCheck['resolveLaunch']
   /** Whether Orca can download this program on this host when none is found. */
   installable?: () => boolean
+  /** Whether a new chat would run a compatible program the host already has instead. */
+  hostAlternative?: (
+    env: Record<string, string>,
+    settings: AcpHostBackendSettings
+  ) => Promise<boolean>
 }
 
 export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {

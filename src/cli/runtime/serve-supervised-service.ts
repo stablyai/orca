@@ -1,4 +1,5 @@
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
+import { ORCAD_EXIT_TERMINALS_NOT_DURABLE } from '../../shared/serve-supervised-terminal-durability'
 import { orcadStaleLockReclaimCommand } from '../../shared/orcad-stale-lock-reclaim'
 import {
   brakeForBuild,
@@ -277,7 +278,10 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
           await sleep(delayMs)
           continue
         }
-        failure = `exited with code ${code}`
+        failure =
+          code === ORCAD_EXIT_TERMINALS_NOT_DURABLE
+            ? `exited with code ${code}: the terminal daemon did not start, and terminals outside it would not survive a restart (orcad's log above has the cause)`
+            : `exited with code ${code}`
       } else {
         const error: unknown = attempt.settled.reason
         failure = (error instanceof Error ? error.message : String(error))

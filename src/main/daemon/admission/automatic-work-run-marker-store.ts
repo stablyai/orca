@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { uptime } from 'node:os'
 import { durableWriteTempPath, writeFileDurableSync } from '../../filesystem/durable-file-write'
-import type { AutomaticWorkMode } from '../../../shared/host-spawn-admission'
+import type { AutomaticWorkMode } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import {
   decideStartupAutomaticWorkMode,
   parseAutomaticWorkRunMarker,
   type AutomaticWorkRunMarker as AutomaticWorkRunMarkerFile,
   type BootIdentity
-} from '../../../shared/automatic-work-run-marker'
+} from '../../../shared/terminal/pty/admission/automatic-work-run-marker'
 
 const PRIVATE_FILE_MODE = 0o600
 

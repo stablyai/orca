@@ -1,14 +1,13 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
+import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { toast } from 'sonner'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
-import { openHttpLink } from '@/lib/http-link-routing'
+import { openHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { translate } from '@/i18n/i18n'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
+import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
@@ -23,7 +22,11 @@ import {
   findMarkdownPreviewOpenedEditFileId,
   findMarkdownPreviewTargetWorktree
 } from './markdown-preview-source-routing'
-import { handleMarkdownPreviewSystemLinkClick } from './markdown-preview-system-link-action'
+import {
+  handleMarkdownPreviewSystemLinkClick,
+  markdownPreviewLinkEditorOpener
+} from './markdown-preview-system-link-action'
+import { openMarkdownFileLinkWithSystemDefault } from '../../markdown/link-routing/markdown-file-link-system-open'
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
 import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 
@@ -149,7 +152,10 @@ export async function handleMarkdownPreviewLinkClick({
       showLocalPathOpenBlockedToast()
       return
     }
-    void window.api.shell.openFileUri(target.toString(), LOCAL_EXECUTION_HOST_ID)
+    void openMarkdownFileLinkWithSystemDefault(
+      target.toString(),
+      markdownPreviewLinkEditorOpener(href, filePath, context)
+    )
     return
   }
 

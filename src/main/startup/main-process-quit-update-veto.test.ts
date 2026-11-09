@@ -8,9 +8,9 @@ const dependencyExports: [string, string[]][] = [
   ['../ipc/pty/kill-all', ['killAllPty']],
   ['../daemon/providers/lifecycle/daemon-provider-state', ['disconnectDaemon', 'shutdownDaemon']],
   ['../ipc/ssh-shutdown-drain', ['beginSshShutdown']],
-  ['../agent-hooks/server', ['agentHookServer']],
-  ['../agent-hooks/wsl-hook-relay-manager', ['wslHookRelayManager']],
-  ['../agent-hooks/managed-agent-hook-controls', ['removeManagedAgentHooksAsync']],
+  ['../agent-hooks/server/agent-hook-server', ['agentHookServer']],
+  ['../agent-hooks/wsl-relay/wsl-hook-relay-manager', ['wslHookRelayManager']],
+  ['../agent-hooks/installation/managed-agent-hook-controls', ['removeManagedAgentHooksAsync']],
   [
     '../runtime/agent-session/structured-agent-session-runtime',
     ['stopStructuredAgentSessionRuntime']
@@ -27,7 +27,7 @@ const dependencyExports: [string, string[]][] = [
   ],
   ['../ipc/browser/desktop-browser-bridge-wiring', ['disposeDesktopBrowserBridge']],
   ['../orca-profiles/profile-cloud-session-owner', ['flushUnsavedCloudSessions']],
-  ['../browser/browser-manager', ['browserManager']],
+  ['../browser/guest-lifecycle/manager/browser-manager', ['browserManager']],
   ['../browser/sessions/browser-session-registry', ['browserSessionRegistry']],
   ['../codex/codex-state-db-backfill-recovery', ['stopCodexStateDbBackfillRecoveries']],
   ['../codex/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],

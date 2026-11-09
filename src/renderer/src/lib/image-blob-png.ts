@@ -1,6 +1,9 @@
 import {
+  CLIPBOARD_IMAGE_MAX_PIXELS,
   assertClipboardImageByteLengthWithinLimit,
-  assertClipboardImageDimensionsWithinLimit
+  assertClipboardImageDimensionsWithinLimit,
+  encodeClipboardImageWithinLimit,
+  type ClipboardImageDimensions
 } from '../../../shared/clipboard-image'
 
 export function blobToBase64(blob: Blob): Promise<string> {
@@ -24,7 +27,35 @@ async function hasPngSignature(blob: Blob): Promise<boolean> {
   return PNG_SIGNATURE.every((byte, index) => head[index] === byte)
 }
 
-export async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
+function encodeImagePng(
+  image: HTMLImageElement,
+  { height, width }: ClipboardImageDimensions
+): Promise<Blob> {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d')
+  if (!context) {
+    throw new Error('Clipboard image could not be decoded')
+  }
+  context.imageSmoothingQuality = 'high'
+  context.drawImage(image, 0, 0, width, height)
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((png) => {
+      if (png) {
+        resolve(png)
+      } else {
+        reject(new Error('Clipboard image could not be encoded as PNG'))
+      }
+    }, 'image/png')
+  })
+}
+
+// Pastes shrink to fit the save limit; copies keep full size and fail instead of silently degrading.
+export async function convertImageBlobToPng(
+  blob: Blob,
+  { downscaleToFit = false }: { downscaleToFit?: boolean } = {}
+): Promise<Blob> {
   assertClipboardImageByteLengthWithinLimit(blob.size)
   const url = URL.createObjectURL(blob)
   try {
@@ -33,34 +64,23 @@ export async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
     await image.decode()
     const width = image.naturalWidth
     const height = image.naturalHeight
-    assertClipboardImageDimensionsWithinLimit({ width, height })
+    const pastedOverPixelCap = downscaleToFit && width * height > CLIPBOARD_IMAGE_MAX_PIXELS
     // Why: re-encoding a PNG costs time and can grow it past the clipboard size limit.
-    if (await hasPngSignature(blob)) {
+    if (!pastedOverPixelCap && (await hasPngSignature(blob))) {
+      assertClipboardImageDimensionsWithinLimit({ width, height })
       return blob
     }
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    const context = canvas.getContext('2d')
-    if (!context || canvas.width <= 0 || canvas.height <= 0) {
-      throw new Error('Clipboard image could not be decoded')
+    if (!downscaleToFit) {
+      assertClipboardImageDimensionsWithinLimit({ width, height })
+      const png = await encodeImagePng(image, { width, height })
+      assertClipboardImageByteLengthWithinLimit(png.size)
+      return png
     }
-    context.drawImage(image, 0, 0)
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((png) => {
-        if (!png) {
-          reject(new Error('Clipboard image could not be encoded as PNG'))
-          return
-        }
-        try {
-          assertClipboardImageByteLengthWithinLimit(png.size)
-        } catch (error) {
-          reject(error)
-          return
-        }
-        resolve(png)
-      }, 'image/png')
-    })
+    return await encodeClipboardImageWithinLimit(
+      { width, height },
+      (size) => encodeImagePng(image, size),
+      (png) => png.size
+    )
   } finally {
     URL.revokeObjectURL(url)
   }

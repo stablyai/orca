@@ -176,7 +176,9 @@ export async function finalizeClaudeSessionParseState(
       snapshot.accumulator.filePath
     )
   }
-  return finalizeSession(snapshot.accumulator, platform, options)
+  // A rename (custom-title) or Claude's generated name is the session's own; prompts and metadata are stand-ins.
+  const titleKind = snapshot.accumulator.title || snapshot.generatedTitle ? 'named' : 'fallback'
+  return finalizeSession(snapshot.accumulator, platform, { ...options, titleKind })
 }
 
 export function createClaudeSessionResumeState(

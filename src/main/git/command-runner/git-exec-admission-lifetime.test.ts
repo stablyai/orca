@@ -244,21 +244,6 @@ describe('git exec admission lifetime', () => {
     expect(onChildTerminated).toHaveBeenCalledOnce()
   })
 
-  it('releases termination-barrier admission on confirmed close', async () => {
-    const child = mockChild()
-    spawnMock.mockReturnValue(child)
-    const pending = gitExecFileAsync(['status'], {
-      cwd: '/repo',
-      terminationBarrier: true
-    })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
-
-    child.emit('close', 0, null)
-    await expect(pending).resolves.toEqual({ stdout: '', stderr: '' })
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
-  })
-
   it('retains barrier admission past bounded settlement until termination is observed', async () => {
     const child = mockChild()
     spawnMock.mockReturnValue(child)

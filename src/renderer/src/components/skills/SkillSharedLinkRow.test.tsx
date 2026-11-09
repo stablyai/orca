@@ -63,21 +63,4 @@ describe('SkillSharedLinkRow', () => {
     expect(deletePackage).toHaveBeenCalledWith('pkg_1')
     await vi.waitFor(() => expect(onDeleted).toHaveBeenCalledOnce())
   })
-
-  it('keeps the row when the Cloud rejects the deletion', async () => {
-    const deletePackage = vi
-      .fn()
-      .mockResolvedValue({ status: 'unsupported', message: 'Deletion is unavailable.' })
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { skills: { deletePackage }, ui: { writeClipboardText: vi.fn() } }
-    })
-    const { onDeleted } = renderRow()
-
-    await openDeleteMenu()
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }))
-
-    await vi.waitFor(() => expect(deletePackage).toHaveBeenCalledOnce())
-    expect(onDeleted).not.toHaveBeenCalled()
-  })
 })

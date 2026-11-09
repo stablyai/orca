@@ -21,11 +21,11 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,
   isStructuredWorkerHandle
-} from '../../../../../shared/structured-worker-handle'
+} from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
-} from '../../../../../shared/worker-terminal-host-scope'
+} from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 
 export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 

@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
-import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
-import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
-import { hardenExistingSecureFile } from './secure-file'
+import { JsonStringifyByteLimitError } from './json-stream/node-bounded-json-stringify'
+import { readNodeFileSyncWithinLimit } from './file-content/node-bounded-file-reader'
+import { writeSecureJsonFileWithinLimit } from './secure-storage/bounded-secure-json-file'
+import { hardenExistingSecureFile } from './secure-storage/secure-file'
 import { toCleanupLastErrorFields, type EphemeralVmFailure } from './ephemeral-vm-failure-copy'
 import {
   featureEntryFromRuntime,
@@ -50,6 +50,20 @@ export function getEphemeralVmRuntimeStorePath(userDataPath: string): string {
 
 export function listEphemeralVmRuntimes(userDataPath: string): EphemeralVmRuntimeRecord[] {
   return readEphemeralVmRuntimeStore(userDataPath).store.runtimes
+}
+
+/** The live recipe VM behind a workspace, if it has one its recipe can suspend and resume. */
+export function findWorkspaceEphemeralVmRuntime(
+  userDataPath: string,
+  workspaceId: string
+): (EphemeralVmRuntimeRecord & { repoId: string }) | undefined {
+  const runtime = listEphemeralVmRuntimes(userDataPath).find(
+    (entry) =>
+      entry.workspaceId === workspaceId &&
+      entry.status !== 'cleaned' &&
+      entry.status !== 'cleanup_pending'
+  )
+  return runtime?.repoId ? { ...runtime, repoId: runtime.repoId } : undefined
 }
 
 export function upsertEphemeralVmRuntime(

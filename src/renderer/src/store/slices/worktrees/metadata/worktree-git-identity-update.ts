@@ -2,7 +2,8 @@ import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
-import { type WorktreeSlice, getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { branchName } from '@/lib/git-utils'
 import { detachedHeadAutoDerivedDisplayNames } from './detached-head-display-name'
 import {
@@ -30,9 +31,9 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../sh
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   selectWorkspaceByHostTarget,
-  selectWorktreesByRepo,
   type WorkspaceRecordState
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/selection/workspace-host-target'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
 type GitIdentityTargets = {
   rows: Set<Worktree>

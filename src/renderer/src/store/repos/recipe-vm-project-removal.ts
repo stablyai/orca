@@ -7,7 +7,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { AppState } from '../types'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
-import { selectWorktreesByRepo } from '../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../workspaces/catalog/workspace-record-fields'
 
 /** Destroy backing recipe VM before project removal to prevent leaks. Return false synchronously without a VM; resolve true if VM destruction also removed the owning managed server/catalog. */
 export function destroyRecipeVmBeforeProjectRemoval(

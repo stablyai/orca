@@ -60,6 +60,7 @@ export type GitHubWorkItemDetails = {
   // Main lacks Orca Repo.id; renderer stamps it when storing details.
   item: Omit<GitHubWorkItem, 'repoId'>
   body: string
+  bodyImageUrls?: Record<string, string>
   comments: PRComment[]
   /** Issue-only provider activity such as assignment, references, project moves, and state changes. */
   timelineItems?: GitHubIssueTimelineItem[]

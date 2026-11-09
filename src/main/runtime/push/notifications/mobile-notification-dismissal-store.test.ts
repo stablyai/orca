@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -87,7 +95,7 @@ it('lists only live deliveries across a restart', async () => {
   expect(restarted.liveDeliveries()[0]).toMatchObject({ workspaceExecutionHostId: null })
 })
 
-it('keeps a record whose origin a newer build wrote, losing only that origin', () => {
+it("imports an older build's file, keeping a record whose origin it cannot read", async () => {
   const h = fixture()
   const origin = {
     scope: {
@@ -114,7 +122,12 @@ it('keeps a record whose origin a newer build wrote, losing only that origin', (
       }
     ])
   )
-  expect(new MobileNotificationDismissalStore(h.path).liveDeliveries()).toEqual([
+  const imported = new MobileNotificationDismissalStore(h.path)
+  await imported.close()
+  expect(existsSync(join(h.path, 'mobile-notification-dismissals.json'))).toBe(false)
+  const restarted = new MobileNotificationDismissalStore(h.path)
+  stores.push(restarted)
+  expect(restarted.liveDeliveries()).toEqual([
     shown,
     expect.objectContaining({ notificationId: 'known', structuredOrigin: expect.anything() })
   ])
@@ -123,7 +136,7 @@ it('keeps a record whose origin a newer build wrote, losing only that origin', (
 it('retains in-memory delivery and retirement when durable writes fail', async () => {
   const h = fixture()
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  mkdirSync(join(h.path, 'mobile-notification-dismissals.json'))
+  mkdirSync(join(h.path, 'mobile-notification-dismissals.db'))
   h.store.record({ ...alert, ...shown })
   expect(h.store.liveDeliveries()).toHaveLength(1)
   h.store.record({
@@ -142,29 +155,13 @@ it('retains in-memory delivery and retirement when durable writes fail', async (
   expect(h.store.reconcile([shown])).toEqual([shown])
 })
 
-it('coalesces a burst of records into writes of the latest entries, off the caller', async () => {
-  const h = fixture()
-  const file = join(h.path, 'mobile-notification-dismissals.json')
-  for (let seq = 0; seq < 20; seq += 1) {
-    h.store.record({
-      ...alert,
-      notificationId: `n${seq}`,
-      notificationEpoch: 'e',
-      notificationSeq: seq
-    })
-  }
-  expect(existsSync(file)).toBe(false)
-  await h.store.flush()
-  const saved: unknown = JSON.parse(readFileSync(file, 'utf8'))
-  expect(Array.isArray(saved) ? saved.length : 0).toBe(20)
-})
-
 it('saves records synchronously from the moment close() is called, ahead of the queued async write', async () => {
   const h = fixture()
-  const savedIds = () =>
-    new MobileNotificationDismissalStore(h.path)
-      .liveDeliveries()
-      .map((entry) => entry.notificationId)
+  const savedIds = () => {
+    const reader = new MobileNotificationDismissalStore(h.path)
+    void reader.close()
+    return reader.liveDeliveries().map((entry) => entry.notificationId)
+  }
   h.store.record({ ...alert, ...shown, notificationId: 'before-close' })
   const closing = h.store.close()
   h.store.record({ ...alert, ...shown, notificationId: 'while-closing' })
@@ -172,19 +169,6 @@ it('saves records synchronously from the moment close() is called, ahead of the 
   await closing
   h.store.record({ ...alert, ...shown, notificationId: 'after-close' })
   expect(savedIds()).toEqual(['before-close', 'while-closing', 'after-close'])
-})
-
-it('only warns when a synchronous save after close fails', async () => {
-  const h = fixture()
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  mkdirSync(join(h.path, 'mobile-notification-dismissals.json'))
-  await h.store.close()
-  expect(() => h.store.record({ ...alert, ...shown })).not.toThrow()
-  expect(warn).toHaveBeenCalledWith(
-    '[notifications] Could not persist dismissal recovery state',
-    expect.anything()
-  )
-  expect(h.store.liveDeliveries()).toHaveLength(1)
 })
 
 it('a targeted old delivery cannot retire a newer replacement with the same logical id', () => {
@@ -206,4 +190,25 @@ it('a targeted old delivery cannot retire a newer replacement with the same logi
     ['different', 12]
   ])
   expect(h.store.reconcile([shown, { ...shown, notificationSeq: 13 }])).toEqual([shown])
+})
+
+it('does not let an imported file left behind override later dismissals', async () => {
+  const h = fixture()
+  const legacyPath = join(h.path, 'mobile-notification-dismissals.json')
+  const legacy = JSON.stringify([
+    { ...shown, dismissedThrough: -1, expiresAt: Date.now() + 86400_000 }
+  ])
+  writeFileSync(legacyPath, legacy)
+  const { atimeMs, mtimeMs } = statSync(legacyPath)
+  const imported = new MobileNotificationDismissalStore(h.path)
+  imported.record({ type: 'dismiss', ...shown, notificationEpoch: 'now', dismissedDelivery: shown })
+  await imported.close()
+  // The same bytes reappear, as when deleting the imported file failed.
+  writeFileSync(legacyPath, legacy)
+  utimesSync(legacyPath, atimeMs / 1000, mtimeMs / 1000)
+
+  const restarted = new MobileNotificationDismissalStore(h.path)
+  stores.push(restarted)
+  expect(restarted.reconcile([shown])).toEqual([shown])
+  expect(existsSync(legacyPath)).toBe(false)
 })

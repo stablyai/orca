@@ -2,17 +2,17 @@ import { watchSnapshotInputs } from './useDashboardPopoutBridge'
 import { createDashboardChatProgramHolds } from './dashboard-chat-program-acquisition'
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 import { useChatProgramFactsVersion } from '@/lib/host-chat-program-acquisition'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
-import { selectAgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Build in-window snapshots from the store; pop-out windows instead receive the bridge’s serialized version of the same builder. */
 export function useLiveDashboardSnapshot(): DashboardSnapshot {

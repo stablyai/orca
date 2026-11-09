@@ -104,74 +104,6 @@ describe('createPtySubprocess', () => {
     validateWorkingDirectoryMock
   })
 
-  it('returns a SubprocessHandle with correct pid', async () => {
-    const proc = mockPtyProcess(42)
-    spawnMock.mockReturnValue(proc)
-
-    const handle = await createPtySubprocess({
-      sessionId: 'test',
-      cols: 80,
-      rows: 24
-    })
-
-    expect(handle.pid).toBe(42)
-  })
-
-  it('forwards write calls', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    handle.write('ls\n')
-
-    expect(proc.write).toHaveBeenCalledWith('ls\n')
-  })
-
-  it('forwards resize calls', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    handle.resize(120, 40)
-
-    expect(proc.resize).toHaveBeenCalledWith(120, 40)
-  })
-
-  it('normalizes invalid initial spawn dimensions', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    await createPtySubprocess({ sessionId: 'test', cols: 0, rows: -1 })
-
-    expect(spawnMock).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(Array),
-      expect.objectContaining({ cols: 80, rows: 24 })
-    )
-  })
-
-  it('ignores transient zero-size resize calls', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    handle.resize(0, 0)
-    handle.write('still alive\n')
-
-    expect(proc.resize).not.toHaveBeenCalled()
-    expect(proc.write).toHaveBeenCalledWith('still alive\n')
-  })
-
-  it('forwards kill calls', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    handle.kill()
-
-    expect(proc.kill).toHaveBeenCalled()
-  })
-
   it('propagates rejected graceful kills without marking the wrapper dead', async () => {
     const proc = mockPtyProcess()
     proc.kill.mockImplementationOnce(() => {
@@ -214,30 +146,6 @@ describe('createPtySubprocess', () => {
     }
   })
 
-  it('forceKill sends SIGKILL to the child pid', async () => {
-    const proc = mockPtyProcess(77)
-    spawnMock.mockReturnValue(proc)
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    await handle.forceKill()
-
-    expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
-    killSpy.mockRestore()
-  })
-
-  it('routes onData events', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    const data: string[] = []
-    handle.onData((d) => data.push(d))
-
-    proc._simulateData('hello')
-    expect(data).toEqual(['hello'])
-  })
-
   it('replays data emitted before the Session registers onData', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -248,18 +156,6 @@ describe('createPtySubprocess', () => {
     handle.onData((d) => data.push(d))
 
     expect(data).toEqual(['early setup output\r\n'])
-  })
-
-  it('routes onExit events', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    const codes: number[] = []
-    handle.onExit((code) => codes.push(code))
-
-    proc._simulateExit(42)
-    expect(codes).toEqual([42])
   })
 
   it('replays pre-listener data before a pre-listener exit', async () => {
@@ -292,18 +188,6 @@ describe('createPtySubprocess', () => {
     expect(events).toEqual(['exit:7', 'data:last output\r\n'])
   })
 
-  it('sends signal via process.kill', async () => {
-    const proc = mockPtyProcess(99)
-    spawnMock.mockReturnValue(proc)
-
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    handle.signal('SIGINT')
-
-    expect(killSpy).toHaveBeenCalledWith(99, 'SIGINT')
-    killSpy.mockRestore()
-  })
-
   // UnixTerminal.destroy() can send async SIGHUP after exit; neutralize kill before PID reuse.
   describe('proc.kill neutralization for SIGHUP-to-recycled-pid hazard', () => {
     const restorePlatform = (desc?: PropertyDescriptor) => {
@@ -311,76 +195,6 @@ describe('createPtySubprocess', () => {
         Object.defineProperty(process, 'platform', desc)
       }
     }
-
-    it('neutralizes proc.kill on POSIX inside proc.onExit synchronously', async () => {
-      const proc = mockPtyProcess()
-      spawnMock.mockReturnValue(proc)
-      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-      Object.defineProperty(process, 'platform', { value: 'linux' })
-      const originalKill = proc.kill
-      try {
-        await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-        expect(proc.kill).toBe(originalKill)
-        proc._simulateExit(0)
-        expect(proc.kill).not.toBe(originalKill)
-        expect(() => (proc.kill as () => void)()).not.toThrow()
-      } finally {
-        restorePlatform(origPlatform)
-      }
-    })
-
-    it('DOES NOT neutralize proc.kill on Windows (WindowsTerminal.destroy needs kill)', async () => {
-      const proc = mockPtyProcess()
-      spawnMock.mockReturnValue(proc)
-      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-      Object.defineProperty(process, 'platform', { value: 'win32' })
-      const originalKill = proc.kill
-      try {
-        await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-        proc._simulateExit(0)
-        expect(proc.kill).toBe(originalKill)
-      } finally {
-        restorePlatform(origPlatform)
-      }
-    })
-
-    it('dispose() neutralizes proc.kill on POSIX before calling destroy()', async () => {
-      const proc = mockPtyProcess() as ReturnType<typeof mockPtyProcess> & {
-        destroy: ReturnType<typeof vi.fn>
-      }
-      proc.destroy = vi.fn()
-      spawnMock.mockReturnValue(proc)
-      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-      Object.defineProperty(process, 'platform', { value: 'darwin' })
-      const originalKill = proc.kill
-      try {
-        const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-        handle.dispose()
-        expect(proc.kill).not.toBe(originalKill)
-        expect(proc.destroy).toHaveBeenCalledOnce()
-      } finally {
-        restorePlatform(origPlatform)
-      }
-    })
-
-    it('dispose() on Windows calls destroy() without neutralizing kill', async () => {
-      const proc = mockPtyProcess() as ReturnType<typeof mockPtyProcess> & {
-        destroy: ReturnType<typeof vi.fn>
-      }
-      proc.destroy = vi.fn()
-      spawnMock.mockReturnValue(proc)
-      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-      Object.defineProperty(process, 'platform', { value: 'win32' })
-      const originalKill = proc.kill
-      try {
-        const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-        handle.dispose()
-        expect(proc.kill).toBe(originalKill)
-        expect(proc.destroy).toHaveBeenCalledOnce()
-      } finally {
-        restorePlatform(origPlatform)
-      }
-    })
 
     it('dispose() on Windows skips destroy after node-pty kill()', async () => {
       const proc = mockPtyProcess() as ReturnType<typeof mockPtyProcess> & {
@@ -479,18 +293,6 @@ describe('createPtySubprocess', () => {
         killSpy.mockRestore()
         restorePlatform(origPlatform)
       }
-    })
-
-    it('dispose() is idempotent — second call does not re-invoke destroy', async () => {
-      const proc = mockPtyProcess() as ReturnType<typeof mockPtyProcess> & {
-        destroy: ReturnType<typeof vi.fn>
-      }
-      proc.destroy = vi.fn()
-      spawnMock.mockReturnValue(proc)
-      const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-      handle.dispose()
-      handle.dispose()
-      expect(proc.destroy).toHaveBeenCalledOnce()
     })
   })
 

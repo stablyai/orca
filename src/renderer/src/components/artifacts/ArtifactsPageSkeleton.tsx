@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ARTIFACTS_TABLE_GRID_CLASS } from './artifacts-table-layout'
 import { LIST_TABLE_CONTAINER_CLASS, LIST_TABLE_HEADER_CLASS } from '@/lib/list-table-layout'
 
@@ -17,16 +17,14 @@ const TABLE_ROW_SKELETONS = [
 ] as const
 
 export function ArtifactsPageSkeleton(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-3 pb-4 md:px-5"
       // Why: aria-label on a roleless div is not exposed to screen readers.
       role="status"
       aria-busy="true"
-      aria-label={translate(
-        'auto.components.artifacts.ArtifactsPageSkeleton.loading',
-        'Loading artifacts'
-      )}
+      aria-label={t('auto.components.artifacts.ArtifactsPageSkeleton.loading', 'Loading artifacts')}
     >
       <div className="flex shrink-0 items-center gap-2">
         <SkeletonBar className="h-8 w-56 shrink-0 rounded-md" />

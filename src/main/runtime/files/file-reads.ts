@@ -1,12 +1,12 @@
 import { open, stat } from 'node:fs/promises'
 import { extname, win32 } from 'node:path'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type {
   RuntimeFileReadResult,
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../shared/runtime-types'
+} from '../../../shared/file-content/runtime-file-read'
 import { isMobileBinaryPath, isSafeMobileRelativePath } from './mobile-file-kind'
 import { joinWorktreeRelativePath } from './paths/runtime-relative-paths'
 import { truncateMobileFilePreview } from '../terminal/artifacts/artifact-integrity'
@@ -28,8 +28,8 @@ import type { ResolveAuthorizedPathOptions } from '../../ipc/filesystem/filesyst
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { resolveLocalFileRequestPath } from '../../ipc/filesystem/access/local-file-access-resolution'
-import type { LocalFileAccess } from '../../../shared/local-file-access'
-import { filePreviewForPath } from '../../../shared/file-preview-kind'
+import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
+import { filePreviewForPath } from '../../../shared/file-preview/file-preview-kind'
 import {
   extraRootsForPersistedOpenFile,
   resolveRuntimeAuthorizedPath
@@ -37,13 +37,13 @@ import {
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
-} from '../../../shared/node-bounded-file-reader'
-import { isBinaryBuffer } from '../../../shared/binary-buffer'
+} from '../../../shared/file-content/node-bounded-file-reader'
+import { isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import type {
   DocPreviewFileAccessResult,
   DocPreviewFileChunk,
   DocPreviewFileTarget
-} from '../../../shared/doc-preview-file-access'
+} from '../../../shared/document-preview/doc-preview-file-access'
 import type { LocalFilesystemProvider } from '../../providers/local-filesystem-provider'
 
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }

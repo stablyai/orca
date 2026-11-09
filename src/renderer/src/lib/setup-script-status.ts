@@ -1,6 +1,6 @@
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import type { Repo } from '../../../shared/repo-types'
-import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
+import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 
 export function hasEffectiveSetupCommand(repo: Repo, hooksResult: HookCheckResult): boolean {
   const localSetup = repo.hookSettings?.scripts?.setup?.trim()

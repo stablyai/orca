@@ -1,6 +1,6 @@
 // Preserve legacy relay directories until the relay-era upgrade window closes.
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { probeInstallLockExistsCommand } from './remote-install-lock-commands'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
@@ -18,17 +18,19 @@ import {
 import { cleanupRemoteInstallGcTombstones } from './remote-install-gc-tombstone'
 import {
   listRemoteInstallBaseDirsCommand,
-  MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES,
+  MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES
+} from './remote-install-gc-listing-command'
+import {
   moveRemoteTreeCommand,
   probeFileExistsCommand,
   removeRemoteTreeCommand
-} from '../../ssh/ssh-remote-commands'
+} from '../../ssh/remote-exec/ssh-remote-commands'
 import {
   getRemoteHostPlatform,
   joinRemotePath,
   remoteBasename,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')

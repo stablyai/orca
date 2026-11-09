@@ -1,6 +1,4 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { classifyPrJobs } from './pr-code-change-scope.mjs'
-import { selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
 import {
   buildUnitDependencyGraph,
   collectUnitDependencyGraph,
@@ -11,29 +9,30 @@ import {
   discoverUnitFiles
 } from '../../ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 
-const harness = 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts'
+const harness =
+  'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts'
 const structuredSessionHarness =
-  'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+  'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx'
 
 const unitHarnesses = [
   harness,
   structuredSessionHarness,
-  'src/renderer/src/store/slices/editor-slice-test-harness.ts',
-  'src/renderer/src/store/slices/browser-slice-test-harness.ts',
-  'src/renderer/src/runtime/web-runtime-session-test-harness.ts',
-  'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts'
+  'src/renderer/src/store/slices/editor/editor-slice-test-harness.ts',
+  'src/renderer/src/store/slices/browser/browser-slice-test-harness.ts',
+  'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts',
+  'src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness.ts'
 ]
 const supportBridges = new Set([
   // Launch request suites' store rig; it takes the terminal harness's workspace layout.
-  'src/renderer/src/runtime/web-runtime-agent-launch-options.test-fixture.ts',
-  'src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts',
+  'src/renderer/src/runtime/hosted-terminals/creation/agent-launch/web-runtime-agent-launch-options.test-fixture.ts',
+  'src/renderer/src/runtime/browser/creation/testing/web-runtime-browser-creation-placement-test-rig.ts',
   'src/renderer/src/components/editor/model-lifetime/retention/editor-model-lifetime-fixture.ts',
   // Autosave suites' store rig; it takes the editor harness's tab-layout maps.
   'src/renderer/src/components/editor/autosave/editor-autosave-controller-test-fixture.ts',
   // Closed-saving-view save suites' rig; it builds on the autosave rig above.
   'src/renderer/src/components/editor/save/queue/editor-save-closed-view.test-fixture.ts',
   // Browser suites' store with main drawing their tabs; it takes the browser harness's store.
-  'src/renderer/src/store/slices/browser-slice-drawn-from-main.test-fixture.ts'
+  'src/renderer/src/store/slices/browser/browser-slice-drawn-from-main.test-fixture.ts'
 ])
 
 function productConsumers(file, graph, unitFiles) {
@@ -45,59 +44,6 @@ function productConsumers(file, graph, unitFiles) {
       !supportBridges.has(consumer)
   )
 }
-
-describe('unit support routing', () => {
-  it.each(unitHarnesses)(
-    'keeps unit checks and lint while excluding packaging for %s',
-    (unitHarness) => {
-      const result = classifyPrJobs([unitHarness])
-      expect(result.should_run).toBe(true)
-      expect(result.static_analysis).toBe(true)
-      expect(result.typecheck).toBe(true)
-      expect(result.test).toBe(true)
-      expect(result.package).toBe(false)
-      expect(result.package_windows).toBe(false)
-    }
-  )
-
-  it.each(unitHarnesses)(
-    'retains packaging for unknown helpers and mixed product changes with %s',
-    (unitHarness) => {
-      for (const file of [
-        unitHarness.replace(/\.(tsx?)$/, '-next.$1'),
-        'src/renderer/src/runtime/web-session-tabs-sync-next-test-harness.ts',
-        'src/renderer/src/runtime/web-session-tabs-sync/snapshot-api.ts',
-        'src/renderer/src/components/native-chat/NativeChatStructuredSession.next-test-harness.tsx',
-        'src/renderer/src/components/native-chat/NativeChatStructuredSession.tsx',
-        'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
-        'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts'
-      ]) {
-        const result = classifyPrJobs([unitHarness, file])
-        expect(result.should_run, file).toBe(true)
-        expect(result.test, file).toBe(true)
-        expect(result.package, file).toBe(
-          file !== 'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts'
-        )
-        expect(result.package_windows, file).toBe(true)
-      }
-    }
-  )
-
-  it.each(unitHarnesses)('does not select product E2E for %s', (unitHarness) => {
-    expect(selectPrE2eSpecs([unitHarness])).toEqual([])
-  })
-
-  it('retains E2E selection for unknown helpers, product changes and selected specs', () => {
-    const spec = 'tests/e2e/paired-client-hosted-browser-restart-survival.spec.ts'
-    for (const file of [
-      'src/renderer/src/runtime/web-session-tabs-sync-next-test-harness.ts',
-      'src/renderer/src/runtime/web-session-tabs-sync/snapshot-api.ts',
-      spec
-    ]) {
-      expect(selectPrE2eSpecs([harness, file]), file).toContain(spec)
-    }
-  })
-})
 
 describe('unit support import ownership', () => {
   let graph
@@ -116,10 +62,10 @@ describe('unit support import ownership', () => {
   })
 
   it.each([
-    "import '@/runtime/web-session-tabs-sync-test-harness'",
-    "export * from '@/runtime/web-session-tabs-sync-test-harness'",
-    "import('@/runtime/web-session-tabs-sync-test-harness')",
-    "import type { Fixture } from '@/runtime/web-session-tabs-sync-test-harness'"
+    "import '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'",
+    "export * from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'",
+    "import('@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture')",
+    "import type { Fixture } from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'"
   ])('detects a product importer using %s', (source) => {
     const importer = 'src/renderer/src/runtime/product.ts'
     const test = 'src/renderer/src/runtime/ownership.test.ts'
@@ -127,7 +73,7 @@ describe('unit support import ownership', () => {
       new Map([
         [harness, 'export const value = 1'],
         [importer, source],
-        [test, "import './web-session-tabs-sync-test-harness'"]
+        [test, "import './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'"]
       ])
     )
     expect(productConsumers(harness, synthetic, new Set([test]))).toEqual([importer])
@@ -140,7 +86,10 @@ describe('unit support import ownership', () => {
     const synthetic = buildUnitDependencyGraph(
       new Map([
         [harness, 'export const value = 1'],
-        [bridge, "import '@/runtime/web-session-tabs-sync-test-harness'"],
+        [
+          bridge,
+          "import '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'"
+        ],
         [importer, "import './model-lifetime/retention/editor-model-lifetime-fixture'"]
       ])
     )

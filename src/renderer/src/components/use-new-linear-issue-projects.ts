@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { defaultScopeSource } from '@/lib/default-creation-host'
-import { linearListProjects } from '@/runtime/runtime-linear-project-client'
+import { linearListProjects } from '@/runtime/linear/runtime-linear-project-client'
 
 export function useNewLinearIssueProjects(args: {
   open: boolean

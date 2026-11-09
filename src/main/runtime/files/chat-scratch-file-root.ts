@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   isDeviceNamespacePath,
   isNetworkSharePath,

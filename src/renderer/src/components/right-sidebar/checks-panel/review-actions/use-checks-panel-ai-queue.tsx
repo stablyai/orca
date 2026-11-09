@@ -8,13 +8,13 @@ import {
 } from '../comments/pr-comments-ai-launch-ack'
 import type { ChecksAgentComposerState } from '../panel-state-types'
 import type { ChecksPanelAiAcknowledgementState } from './use-checks-panel-ai-acknowledgement'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { toast } from 'sonner'
 import { buildResolvePullRequestConflictsPrompt } from '../../../../../../shared/source-control/recovery/source-control-conflict-prompts'
 import { buildPRCommentsResolutionPrompt } from '../../../../../../shared/source-control/review-comments/pr-comments-resolution-prompt'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/links'
 import type { PRCommentGroup } from '../../../../../../shared/source-control/review-comments/pr-comment-groups'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
 import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
@@ -48,6 +48,7 @@ type ChecksPanelAiQueueInput = Pick<
   Pick<ChecksPanelAiAcknowledgementState, 'commentLaunchCallbacks'>
 
 export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
+  const t = useTranslate()
   const {
     activeConflictReview,
     activeReview,
@@ -88,7 +89,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
         : {
             onLaunched: () =>
               toast.success(
-                translate(
+                t(
                   'auto.components.right.sidebar.ChecksPanel.a0181a8d76',
                   'Started an AI agent for the conflicts.'
                 )
@@ -137,11 +138,11 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
     const conflictFiles = activeConflictReview.conflictSummary?.files ?? []
     openOrStart({
       actionId: 'resolveConflicts',
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.ChecksPanel.4ede779461',
         'Resolve Review Conflicts With AI'
       ),
-      description: translate(
+      description: t(
         'auto.components.right.sidebar.ChecksPanel.abf59262fb',
         'Review and edit the full command input before starting an agent.'
       ),
@@ -172,7 +173,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
     }
     if (selectedGroups.length === 0) {
       toast.message(
-        translate(
+        t(
           'auto.components.right.sidebar.ChecksPanel.f316a8ca2b',
           'No unresolved comments selected.'
         )
@@ -251,7 +252,7 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
     }
     openOrStart({
       actionId: 'resolveComments',
-      title: translate(
+      title: t(
         'auto.components.right.sidebar.ChecksPanel.d00ebdc402',
         'Resolve {{value0}} Comments With AI',
         { value0: activeReview.provider === 'gitlab' ? 'MR' : 'PR' }
@@ -261,11 +262,11 @@ export function useChecksPanelAiQueue(model: ChecksPanelAiQueueInput) {
       // resolving alone, so the copy leads with that.
       description:
         githubTarget && activeReview.provider === 'github'
-          ? translate(
+          ? t(
               'auto.components.right.sidebar.ChecksPanel.5eb2163b6b',
               'Review the prompt before starting an agent. After the prompt is delivered, Orca resolves the selected host threads and replies to comments it cannot resolve.'
             )
-          : translate(
+          : t(
               'auto.components.right.sidebar.ChecksPanel.abf59262fb',
               'Review and edit the full command input before starting an agent.'
             ),

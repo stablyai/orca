@@ -3,7 +3,7 @@ import type { BrowserTabListResult } from '../../../../shared/runtime-browser-co
 import { browserSessionRegistry } from '../../../browser/sessions/browser-session-registry'
 import { mergeBrowserTabListing } from './browser-tab-listing'
 import { BrowserError } from '../../../browser/browser-error'
-import { browserManager } from '../../../browser/browser-manager'
+import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost

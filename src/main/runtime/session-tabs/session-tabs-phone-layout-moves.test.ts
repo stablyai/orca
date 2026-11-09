@@ -1,6 +1,8 @@
 // Windowless phone split moves and subsequent creates must retain main-owned groups/order.
 import { describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import * as selection from './mobile-session-tab-selection'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -17,9 +19,43 @@ const WORKTREE = `id:${TEST_WORKTREE_ID}`
 const CHAT = 'agent-session:s1'
 
 /** The three saved tabs on a server with no window, whose spawns bind their pane as the host's do. */
-async function headlessRuntime() {
+async function headlessRuntime(count = 3) {
   const harness = threeTabSurfaceRuntime()
   const { runtime, bindPane } = harness
+  if (count > 3) {
+    const session = harness.store.getSession()
+    const tabs = session.tabsByWorktree[TEST_WORKTREE_ID]!
+    const extra = Array.from({ length: count - 3 }, (_, index) => ({
+      ...tabs[0]!,
+      id: `00000000-0000-4000-8000-${index.toString().padStart(12, '0')}`,
+      ptyId: null,
+      sortOrder: index + 3,
+      createdAt: index + 4
+    }))
+    harness.setSession({
+      ...session,
+      tabsByWorktree: { ...session.tabsByWorktree, [TEST_WORKTREE_ID]: [...tabs, ...extra] },
+      terminalLayoutsByTabId: {
+        ...session.terminalLayoutsByTabId,
+        ...Object.fromEntries(
+          extra.map((tab, index) => {
+            const leafId = `10000000-0000-4000-8000-${index.toString().padStart(12, '0')}`
+            return [
+              tab.id,
+              { root: { type: 'leaf', leafId }, activeLeafId: leafId, expandedLeafId: null }
+            ]
+          })
+        )
+      },
+      tabGroups: {
+        ...session.tabGroups,
+        [TEST_WORKTREE_ID]: session.tabGroups![TEST_WORKTREE_ID]!.map((group) => ({
+          ...group,
+          tabOrder: [...group.tabOrder, ...extra.map((tab) => tab.id)]
+        }))
+      }
+    })
+  }
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   runtime.setPtyController({
     spawn: vi.fn(async (args: { worktreeId?: string; tabId?: string; leafId?: string }) => {
@@ -47,8 +83,72 @@ const orderOf = (rows: readonly { type: string; id: string; parentTabId?: string
 ]
 
 describe("a phone's layout change on a windowless server (switch on)", () => {
+  it('bounds explicit split selection traversal at N and 10N tabs', async () => {
+    const measurements: number[] = []
+    const select = selection.selectMobileSessionTab
+    for (const count of [50, 500]) {
+      const { runtime } = await headlessRuntime(count)
+      let visits = 0
+      function observed<T>(items: T[]): T[] {
+        const rows = [...items]
+        items.forEach((item, index) => {
+          Object.defineProperty(rows, index, {
+            get() {
+              visits++
+              return item
+            }
+          })
+        })
+        return rows
+      }
+      let selectionVisits = 0
+      const selected = vi
+        .spyOn(selection, 'selectMobileSessionTab')
+        .mockImplementation((snapshot, active) => {
+          const tabs = observed(snapshot.tabs)
+          const tabGroups = snapshot.tabGroups?.map((group) => ({
+            ...group,
+            tabOrder: observed(group.tabOrder)
+          }))
+          visits = 0
+          const result = select({ ...snapshot, tabs, tabGroups }, active)
+          selectionVisits += visits
+          return result
+        })
+      await runtime.moveMobileSessionTab(WORKTREE, {
+        kind: 'split',
+        tabId: SECOND_TAB_ID,
+        targetGroupId: SAVED_GROUP_ID,
+        splitDirection: 'right'
+      })
+      expect(selected).toHaveBeenCalledTimes(1)
+      // The original tab has two panes: resolve + flags + one row copy, plus one tab-order scan.
+      expect(selectionVisits).toBeGreaterThan(0)
+      expect(selectionVisits).toBeLessThanOrEqual(3 * (count + 1) + count)
+      measurements.push(selectionVisits)
+      const stored = runtime.mobileSessionTabsByWorktree.get(TEST_WORKTREE_ID)!
+      expect(stored.tabs).toHaveLength(count + 1)
+      expect(stored.activeTabId).toBe(`${SECOND_TAB_ID}::77777777-7777-4777-8777-777777777777`)
+      expect(stored.tabGroups?.[1]?.tabOrder).toEqual([SECOND_TAB_ID])
+      expect(stored.tabs.filter((row) => row.isActive).map((row) => row.id)).toEqual([
+        `${SECOND_TAB_ID}::77777777-7777-4777-8777-777777777777`
+      ])
+      selected.mockRestore()
+    }
+    expect(measurements[1]).toBeLessThanOrEqual(10 * measurements[0]!)
+  })
   it("splits a tab into a group of its own in main's layout, and selects it there", async () => {
     const { runtime, store } = await headlessRuntime()
+    const selected = `${SECOND_TAB_ID}::77777777-7777-4777-8777-777777777777`
+    const before = await runtime.listMobileSessionTabs(WORKTREE)
+    expect(before.tabs.find((row) => row.id === selected)).toMatchObject({
+      type: 'terminal',
+      parentTabId: SECOND_TAB_ID,
+      leafId: '77777777-7777-4777-8777-777777777777',
+      terminal: null
+    })
+    const frames: RuntimeMobileSessionTabsResult[] = []
+    runtime.onMobileSessionTabsChanged((snapshot) => frames.push(snapshot))
 
     await runtime.moveMobileSessionTab(WORKTREE, {
       kind: 'split',
@@ -58,14 +158,38 @@ describe("a phone's layout change on a windowless server (switch on)", () => {
     })
 
     const strip = [[SURFACE_TAB_ID, THIRD_TAB_ID], [SECOND_TAB_ID]]
+    const stored = runtime.mobileSessionTabsByWorktree.get(TEST_WORKTREE_ID)!
+    expect(stored.tabGroups?.map((group) => group.tabOrder)).toEqual(strip)
+    expect(stored.activeGroupId).toBe(stored.tabGroups?.[1]?.id)
+    expect(stored.tabGroups?.[1]?.activeTabId).toBe(SECOND_TAB_ID)
+    expect(stored.activeTabId).toBe(selected)
+    expect(stored.tabs.filter((row) => row.isActive).map((row) => row.id)).toEqual([selected])
+    expect(stored.tabGroupLayout).toMatchObject({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: SAVED_GROUP_ID },
+      second: { type: 'leaf', groupId: stored.tabGroups?.[1]?.id }
+    })
+    expect(frames.at(-1)).toMatchObject({
+      activeGroupId: stored.activeGroupId,
+      activeTabId: selected
+    })
+    expect(
+      frames
+        .at(-1)
+        ?.tabs.filter((row) => row.isActive)
+        .map((row) => row.id)
+    ).toEqual([selected])
     const listed = await runtime.listMobileSessionTabs(WORKTREE)
     expect(tabStrip(listed)).toEqual(strip)
     expect(listed.activeGroupId).toBe(listed.tabGroups?.[1]?.id)
     expect(listed.activeTabId?.startsWith(`${SECOND_TAB_ID}::`)).toBe(true)
+    expect(listed.activeTabId).toBe(selected)
     // Main's own layout holds the split, so every later write of the rows keeps it.
     expect(
       store.getSession().tabGroups?.[TEST_WORKTREE_ID]?.map((group) => group.tabOrder)
     ).toEqual(strip)
+    expect(store.getSession().tabGroupLayouts?.[TEST_WORKTREE_ID]).toEqual(stored.tabGroupLayout)
   })
 
   it("refuses a split of a row main's layout does not hold, sending nothing (#31925)", async () => {
