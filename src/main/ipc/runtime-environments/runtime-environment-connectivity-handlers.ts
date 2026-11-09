@@ -40,6 +40,7 @@ import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from './runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
 import { withWslOrcadAccountEnv } from '../../wsl/orcad/wsl-orcad-account-env'
+import { withAgentApiKeyRuntimeEnv } from '../../agent-api-keys/agent-api-key-runtime-call'
 import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/authentication/ssh-credential-decline'
 import {
   disconnectManagedHostOfEnvironmentForUser,
@@ -285,7 +286,9 @@ function registerPassiveCallHandler(
           getUserDataPath(),
           environment.id,
           args.method,
-          accounts.params,
+          await withAgentApiKeyRuntimeEnv(environment.id, args.method, accounts.params, () =>
+            callRuntimeEnvironment(getUserDataPath(), environment.id, 'status.get', undefined)
+          ),
           args.timeoutMs,
           args.expectedEnvironmentPairingRevision,
           undefined,

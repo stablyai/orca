@@ -118,6 +118,8 @@ export type RuntimeEnsureAgentSessionRequest =
       spawnIntent?: SpawnIntent
       /** Account routing env a desktop prepared for a host with no account services (WSL orcad). */
       accountEnv?: Record<string, string>
+      /** API keys the desktop carries for this launch only. */
+      keyEnv?: Record<string, string>
     }
 
 export type RuntimeEnsureAgentSessionResult = {
@@ -144,6 +146,8 @@ export type RuntimeCreateAgentSessionRequest = {
   viewMode?: 'terminal' | 'chat'
   /** Account routing env a desktop prepared for a host with no account services (WSL orcad). */
   accountEnv?: Record<string, string>
+  /** API keys the desktop carries for this launch only. */
+  keyEnv?: Record<string, string>
 }
 
 export type RuntimeCreateAgentSessionResult = {

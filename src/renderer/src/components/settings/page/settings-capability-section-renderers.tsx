@@ -1,6 +1,7 @@
 import { AccountsPane } from '../accounts/AccountsPane'
 import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { AgentsPane } from '../agents/AgentsPane'
+import { AgentApiKeysSection } from '../agent-api-keys/AgentApiKeysSection'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
 import { ComputerUsePane } from '../computer-use/ComputerUsePane'
 import { LinearAgentSkillPane } from '../skills/linear/LinearAgentSkillPane'
@@ -107,6 +108,27 @@ export function renderAccountsSettingsSection(
       )}
     </SettingsSection>
   )
+}
+
+export function renderAgentApiKeysSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
+  const { model, navigation, view } = context
+  return model.showDesktopOnlySettings ? (
+    <SettingsSection
+      id="agent-api-keys"
+      title={t('auto.components.settings.agentApiKeys.title', 'Agent API Keys')}
+      description={t(
+        'auto.components.settings.agentApiKeys.description',
+        'Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine.'
+      )}
+      badge={t('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')}
+      searchEntries={navigation.getSectionSearchEntries('agent-api-keys')}
+    >
+      {view.isSectionMounted('agent-api-keys') ? <AgentApiKeysSection /> : null}
+    </SettingsSection>
+  ) : null
 }
 
 export function renderOrchestrationSettingsSection(

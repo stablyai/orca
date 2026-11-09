@@ -13872,6 +13872,46 @@
           "noMatches": "No matches.",
           "searchHosts": "Search hosts…",
           "searchLanguages": "Search languages…"
+        },
+        "agentApiKeys": {
+          "editor": {
+            "noHosts": "Choose at least one host.",
+            "variable": "Variable",
+            "otherVariable": "Other variable…",
+            "variableName": "Variable name",
+            "value": "Key",
+            "keepValue": "Leave empty to keep ••••{{hint}}",
+            "where": "Use it on",
+            "allHosts": "Every host",
+            "someHosts": "Only these hosts",
+            "cancel": "Cancel",
+            "update": "Save",
+            "add": "Add key",
+            "customPlaceholder": "MY_PROVIDER_API_KEY"
+          },
+          "scope": {
+            "all": "Every host",
+            "gone": "A host that is no longer listed"
+          },
+          "keep": "Keep",
+          "confirmRemove": "Remove key",
+          "edit": "Edit key",
+          "remove": "Remove key",
+          "promise": "Keys are sealed in your OS keychain. When an agent starts, here, on an SSH host or on a paired machine, Orca passes it the key for that run only and never writes it to that machine.",
+          "unavailableTitle": "Orca won't store API keys on this computer",
+          "noKey": "No key. The agent uses its own sign-in.",
+          "addKey": "Add key",
+          "anotherAgent": "Add a key for another agent",
+          "search": {
+            "title": "Agent API Keys",
+            "description": "Give agents an API key on every host or only some, without signing in on each machine.",
+            "apiKey": "api key",
+            "secret": "secret",
+            "env": "environment",
+            "bedrock": "bedrock"
+          },
+          "title": "Agent API Keys",
+          "description": "Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine."
         }
       },
       "right": {
