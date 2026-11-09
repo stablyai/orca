@@ -248,6 +248,40 @@ describe('federation host liveness verdicts', () => {
       hostScope: { kind: 'local', hostId: 'local' }
     } as never)
 
+    const earlierPane = 'tab_earlier:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_earlier_worker' ? earlierPane : PANE_KEY
+    )
+    vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
+      handle === 'term_earlier_worker' ? 'runtime:pty:earlier' : INCARNATION
+    )
+    // Started for this server's earlier pairing with the home, so it is held under another fingerprint.
+    db.createRemoteDispatchAttachment({
+      runId: 'run-home',
+      dispatchId: 'ctx_from_an_earlier_pairing',
+      taskId: 'task_earlier',
+      homePeerFingerprint: 'earlier-pairing-fingerprint',
+      protocolVersion: ORCHESTRATION_CONTRACT_VERSION,
+      runtimeEpoch: runtime.getRuntimeId(),
+      mutationReceipt: {
+        callerFingerprint: 'earlier-pairing-fingerprint',
+        requestId: 'rpc_attach_earlier',
+        method: 'orchestration.federationStart',
+        payloadHash: 'hash'
+      }
+    })
+    db.prepareRemoteAttachmentAuthority({
+      dispatchId: 'ctx_from_an_earlier_pairing',
+      paneKey: earlierPane,
+      processIncarnation: 'runtime:pty:earlier',
+      worktreeId: 'repo::remote-worktree',
+      terminalHandle: 'term_earlier_worker',
+      setupState: 'not_applicable',
+      effects: [],
+      terminalOwnership: 'created'
+    })
+    db.markRemoteAttachmentReady('ctx_from_an_earlier_pairing')
+
     await expect(
       call('orchestration.federationFleetSnapshot', {
         dispatchIds: ['ctx_from_an_earlier_pairing', DISPATCH_ID]
@@ -256,11 +290,23 @@ describe('federation host liveness verdicts', () => {
       items: [
         {
           dispatchId: 'ctx_from_an_earlier_pairing',
+          // Nothing of another fingerprint's Dispatch is read or returned.
           observation: { status: 'unverifiable', exactWorker: false }
         },
         { dispatchId: DISPATCH_ID, observation: { status: 'live', exactWorker: true } }
       ]
     })
+    const earlier = (
+      (await call('orchestration.federationFleetSnapshot', {
+        dispatchIds: ['ctx_from_an_earlier_pairing']
+      })) as { items: unknown[] }
+    ).items
+    expect(earlier).toEqual([
+      {
+        dispatchId: 'ctx_from_an_earlier_pairing',
+        observation: { status: 'unverifiable', exactWorker: false }
+      }
+    ])
   })
 
   it('keeps a disconnected verdict-less pane unverifiable rather than exited', async () => {
