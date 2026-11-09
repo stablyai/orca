@@ -19475,6 +19475,8 @@
         "showAgent": "在對話中顯示 {{value0}}"
       },
       "jumpToLatest": "跳到最新訊息",
+      "newRowsAnnouncement": "你離開期間有新訊息",
+      "newRowsMarker": "新訊息",
       "find": {
         "label": "在聊天中查詢",
         "noResults": "沒有結果",
@@ -20326,6 +20328,9 @@
         "scrollToLatestOnSendTitle": "傳送時捲動到最新訊息",
         "scrollToLatestOnSendCopy": "向上捲動時傳送訊息會跳到最新訊息並跟隨回覆。關閉後會保留目前位置。",
         "scrollToLatestOnSendSearchPosition": "位置",
+        "markNewMessagesTitle": "返回聊天時標記新訊息",
+        "markNewMessagesCopy": "返回聊天時，在你離開期間收到的內容上方顯示「新訊息」分隔線；如果你之前在看最新訊息，會捲動到該處。",
+        "markNewMessagesSearchUnread": "未讀",
         "inlineVisualsTitle": "內嵌視覺化",
         "inlineVisualsCopy": "允許代理程式在其回覆中顯示圖表、示意圖和原型圖。適用於新啟動的聊天。",
         "inlineVisualsToggleLabel": "切換內嵌視覺化",

@@ -1,5 +1,7 @@
 import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
+import { useAppStore } from '@/store'
 import { hasAskAnswer } from '../../../../../../shared/native-chat/input/native-chat-ask-answer'
+import { nativeChatScrollsToLatestOnSend } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import type { NativeChatInteractiveSend } from '../../session/terminal/send/use-native-chat-interactive-send'
@@ -86,22 +88,36 @@ export function useNativeChatRevealLatest(): {
   return { messageListRef, revealLatest, captureRevealLatest }
 }
 
-function ignoreFindMatch(): void {}
-
-function alwaysAtEnd(): boolean {
-  return true
-}
-
-function ignoreSubagent(): void {}
-
+/** Own sends follow the latest; with that setting off, only a reader who was at the end does. */
 export function useNativeChatMessageListHandle(
   ref: React.Ref<NativeChatMessageListHandle> | undefined,
-  revealLatest: NativeChatMessageListHandle['revealLatest'],
-  revealFindMatch: NativeChatMessageListHandle['revealFindMatch'] = ignoreFindMatch,
-  slots: readonly NativeChatTranscriptSlot[] = [],
-  readerAtEnd: NativeChatMessageListHandle['readerAtEnd'] = alwaysAtEnd,
-  revealSubagent: NativeChatMessageListHandle['revealSubagent'] = ignoreSubagent
+  {
+    readerAtEnd,
+    beginNavigation,
+    scrollToBottom,
+    onSent,
+    revealFindMatch,
+    slots,
+    revealSubagent
+  }: Pick<NativeChatMessageListHandle, 'readerAtEnd' | 'revealFindMatch' | 'revealSubagent'> & {
+    beginNavigation: () => void
+    scrollToBottom: (reason: 'send') => void
+    /** The reader answered, whether or not the view moves. */
+    onSent: () => void
+    slots: readonly NativeChatTranscriptSlot[]
+  }
 ): void {
+  const revealLatest = useCallback(
+    (readerWasAtEnd = readerAtEnd()) => {
+      onSent()
+      if (!nativeChatScrollsToLatestOnSend(useAppStore.getState().settings) && !readerWasAtEnd) {
+        return
+      }
+      beginNavigation()
+      scrollToBottom('send')
+    },
+    [beginNavigation, onSent, readerAtEnd, scrollToBottom]
+  )
   useImperativeHandle(
     ref,
     () => ({

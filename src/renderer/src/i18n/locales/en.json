@@ -20358,6 +20358,8 @@
         "showAgent": "Show {{value0}} in the conversation"
       },
       "jumpToLatest": "Jump to latest",
+      "newRowsAnnouncement": "New messages arrived while you were away",
+      "newRowsMarker": "New",
       "find": {
         "label": "Find in chat",
         "noResults": "No results",
@@ -21309,6 +21311,9 @@
         "scrollToLatestOnSendTitle": "Scroll to latest when sending",
         "scrollToLatestOnSendCopy": "Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.",
         "scrollToLatestOnSendSearchPosition": "position",
+        "markNewMessagesTitle": "Mark new messages when returning to a chat",
+        "markNewMessagesCopy": "Coming back to a chat draws a New line above what arrived while you were away, and scrolls to it if you were reading the latest.",
+        "markNewMessagesSearchUnread": "unread",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",

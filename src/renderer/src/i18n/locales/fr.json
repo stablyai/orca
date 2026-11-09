@@ -19652,6 +19652,8 @@
         "toggleDetails": "Basculer les détails du tour"
       },
       "jumpToLatest": "Aller au dernier message",
+      "newRowsAnnouncement": "De nouveaux messages sont arrivés en votre absence",
+      "newRowsMarker": "Nouveau",
       "find": {
         "label": "Rechercher dans le chat",
         "noResults": "Aucun résultat",
@@ -20743,6 +20745,9 @@
         "scrollToLatestOnSendTitle": "Défiler jusqu’au dernier message à l’envoi",
         "scrollToLatestOnSendCopy": "Envoyer après avoir remonté le fil fait défiler jusqu’au dernier message et suit la réponse. Désactivez cette option pour garder votre position.",
         "scrollToLatestOnSendSearchPosition": "position",
+        "markNewMessagesTitle": "Signaler les nouveaux messages au retour dans un chat",
+        "markNewMessagesCopy": "En revenant dans un chat, une ligne Nouveau s'affiche au-dessus de ce qui est arrivé pendant votre absence, et le chat y défile si vous lisiez les derniers messages.",
+        "markNewMessagesSearchUnread": "non lu",
         "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour, au lieu d’entrer dans le tour en cours. Cmd/Ctrl+Entrée fait l’inverse pour un message et, si rien n’est saisi, dirige la première carte en attente vers le tour en cours. Les messages contenant des images attendent aussi sous forme de cartes.",
         "inlineVisualsTitle": "Visuels intégrés",
         "inlineVisualsCopy": "Laissez l'agent afficher des graphiques, des diagrammes et des maquettes dans ses réponses. S'applique aux nouveaux chats.",

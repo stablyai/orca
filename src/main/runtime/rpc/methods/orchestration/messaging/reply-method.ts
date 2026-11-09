@@ -14,6 +14,7 @@ import { recordReceiptBeforeNudge, replayMutationNudge } from './mutation-replay
 import { resolveReplyRecipient } from './recipient-routing'
 import { helperQuestionAnswerer } from './helper-question-answerer'
 import { replyToRemoteRunHome } from './reply-remote'
+import { replyOverPeerMail } from './peer-mail-reply'
 import { withAnswerNext } from '../receipt-next'
 import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import {
@@ -35,6 +36,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       legacyCoordinatorRunId,
       recordMutationReceipt,
       replayedMutationReceipt,
+      orchestrationMutation,
       signal
     }
   ) => {
@@ -157,6 +159,25 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
       )
     }
 
+    const peerRoute = db.getPeerMailMessage(original.id)
+    if (peerRoute) {
+      return await replyOverPeerMail({
+        runtime,
+        original,
+        route: peerRoute,
+        params,
+        orchestrationCaller,
+        orchestrationMutation,
+        recordMutationReceipt
+      })
+    }
+    if (params.on !== undefined) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        `${params.id} did not come from another server, so its reply stays on this Orca. Drop --on. No reply was sent.`,
+        { effectsApplied: false }
+      )
+    }
     if (db.getRun(original.run_id)?.home_database === 'remote') {
       return await replyToRemoteRunHome({ runtime, db, original, params, signal })
     }
