@@ -22326,6 +22326,40 @@
       "stillStarting": "Still starting…",
       "retry": "Try Again",
       "openWorkspace": "Open Workspace"
+    },
+    "orcaCloud": {
+      "offline": {
+        "queued": "Queued · sends when the workspace wakes",
+        "sending": "Delivering…",
+        "delivered": "Delivered",
+        "failed": "Not delivered",
+        "unconfirmed": "May have been delivered",
+        "editQueued": "Edit queued message",
+        "cancelEdit": "Cancel",
+        "saveEdit": "Save",
+        "edit": "Edit",
+        "remove": "Remove from queue",
+        "announceQueued": "Message queued. It sends when the workspace wakes.",
+        "announceSending": "Delivering your message.",
+        "announceDelivered": "Message delivered.",
+        "announceFailed": "Message not delivered.",
+        "noChats": "No chats were open in this workspace.",
+        "chats": "Chats",
+        "chatN": "Chat {{n}}",
+        "composerPlaceholder": "Message the agent",
+        "composerLabel": "Message to queue",
+        "sendAndWake": "Send and wake",
+        "region": "Sleeping workspace (read-only)",
+        "wake": "Wake",
+        "emptyBody": "Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.",
+        "tabChat": "Chat",
+        "tabTerminals": "Terminals",
+        "tabChanges": "Changes",
+        "noTerminals": "No terminal output was saved.",
+        "readOnly": "Read-only",
+        "terminalOutput": "Saved output of {{title}}",
+        "noGit": "No source control state was saved."
+      }
     }
   },
   "dashboardPopout": {
@@ -25323,5 +25357,147 @@
       "unreachable": "Couldn’t reach Orca Cloud. Try again in a moment.",
       "ok": "OK"
     }
+  },
+  "orcaCloudWorkspace": {
+    "archived": {
+      "prOpen": "Open",
+      "prDraft": "Draft",
+      "prMerged": "Merged",
+      "prClosed": "Closed",
+      "since": "Archived {{when}}",
+      "keptUntilShort": "kept until {{date}}",
+      "title": "Archived workspace",
+      "readOnly": "A read-only snapshot. Unarchive to open terminals and agents again.",
+      "unarchiving": "Unarchiving…",
+      "loadFailed": "Couldn’t load the archive details.",
+      "nothing": "Nothing was captured.",
+      "pullRequests": "Pull requests",
+      "lastChanges": "Last changes",
+      "filesTitle": "Files",
+      "moreFiles": "{{count}} more files not shown",
+      "detached": "Detached HEAD",
+      "ahead": "{{count}} ahead",
+      "behind": "{{count}} behind",
+      "files": "{{count}} files",
+      "uncommitted": "Uncommitted changes",
+      "moreChanges": "{{count}} more",
+      "noCommits": "No commits on this branch yet."
+    },
+    "state": {
+      "archived": "Archived",
+      "restarting": "Restarting",
+      "running": "Running",
+      "asleep": "Asleep",
+      "waking": "Waking",
+      "notResponding": "Not responding",
+      "failed": "Couldn’t start",
+      "unknown": "Checking…"
+    },
+    "unarchive": "Unarchive",
+    "retry": "Retry",
+    "change": {
+      "modified": "Modified",
+      "added": "Added",
+      "deleted": "Deleted",
+      "renamed": "Renamed",
+      "copied": "Copied",
+      "untracked": "Untracked",
+      "unknown": "Changed"
+    },
+    "thisWorkspaceTitle": "This workspace",
+    "overlay": {
+      "restarting": "Restarting…",
+      "unarchiving": "Restoring from archive…",
+      "waking": "Waking…",
+      "stuck": "This is taking much longer than usual.",
+      "slow": "Taking longer than usual…",
+      "messageQueued": "Your message sends as soon as it’s up.",
+      "failedTitle": "Couldn’t wake {{name}}",
+      "failedDetail": "Your files and chats are saved.",
+      "tryAgain": "Try again",
+      "stalled": "Orca Cloud stopped responding while waking."
+    },
+    "announce": {
+      "restarting": "Restarting {{name}}.",
+      "unarchiving": "Restoring {{name}} from archive.",
+      "waking": "Waking {{name}}.",
+      "archived": "{{name}} is archived.",
+      "asleep": "{{name}} is asleep."
+    },
+    "dismiss": "Dismiss",
+    "restartSandbox": "Restart sandbox",
+    "sandboxMarkLabel": "Sandbox: {{state}}",
+    "archive": "Archive",
+    "oom": {
+      "titleRan": "{{name}} ran out of memory",
+      "titleProcess": "A process ran out of memory",
+      "stopped": "It was stopped so the sandbox stays up. Restart to recover."
+    },
+    "unresponsive": {
+      "sandboxTitle": "This sandbox isn’t responding"
+    },
+    "detail": {
+      "restartKeeps": "Restart keeps your files; agents resume.",
+      "restarting": "Orca resumes your agents after the restart.",
+      "asleep": "Files and chats are saved. Opening it wakes it.",
+      "starting": "Starting…",
+      "archived": "Kept as a snapshot. Unarchive to work in it again.",
+      "failed": "The last start failed. Your files are saved."
+    },
+    "restarting": "Restarting…",
+    "restart": "Restart",
+    "sandboxTitle": "Sandbox",
+    "statusUnavailable": "Status unavailable",
+    "statusUnavailableDetail": "Orca Cloud didn’t answer.",
+    "loading": "Loading status",
+    "cpu": "CPU",
+    "cpuValue": "{{percent}}% of {{cpus}} vCPU",
+    "memory": "Memory",
+    "usedOfTotal": "{{used}} / {{total}}",
+    "disk": "Disk",
+    "uptime": "Up for",
+    "usedLabel": "Used",
+    "overage": "Overage so far",
+    "keptUntil": "Kept until",
+    "ago": "{{ago}} ago",
+    "wake": "Wake",
+    "error": {
+      "noHours": "You’re out of sandbox hours. Your files are safe.",
+      "seePlans": "See plans",
+      "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
+      "signIn": "Sign in to Orca again, then try again.",
+      "generic": "Something went wrong. Try again."
+    },
+    "restartConfirmTitle": "Restart sandbox?",
+    "restartConfirm": "Running agents stop and resume after the restart. Your files are kept.",
+    "restartFailed": "Couldn’t restart the sandbox",
+    "restarted": "Sandbox restarted",
+    "restartedDetail": "Orca resumes your agents after the restart.",
+    "archiveFailed": "Couldn’t archive the workspace",
+    "archivingNamed": "Archiving {{name}}…",
+    "archiving": "Archiving workspace…",
+    "archivingDetail": "It stops and stays browsable: PRs, last changes and files.",
+    "undo": "Undo",
+    "unarchiveFailed": "Couldn’t unarchive the workspace",
+    "asleep": {
+      "noCopy": "Asleep · nothing cached yet",
+      "copyFrom": "Asleep · copy from {{when}}",
+      "readOnly": "Read-only copy kept on this computer."
+    },
+    "bytes": {
+      "gb": "{{value}} GB",
+      "mb": "{{value}} MB"
+    },
+    "duration": {
+      "seconds": "{{s}}s",
+      "minutes": "{{m}}m",
+      "hoursMinutes": "{{h}}h {{m}}m",
+      "daysHours": "{{d}}d {{h}}h",
+      "hours": "{{value}} h"
+    },
+    "sandboxHoursValue": "{{value}} sandbox hours",
+    "idleSleptMinutes": "{{name}} slept after {{count}} minutes idle",
+    "idleSleptNoTime": "{{name}} went to sleep while idle",
+    "idleSleptDetail": "Files and chats are saved. It uses no sandbox hours until you open it."
   }
 }

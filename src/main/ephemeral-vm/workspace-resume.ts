@@ -15,6 +15,8 @@ import {
 } from '../../shared/ephemeral-vm-failure-copy'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { syncHostedSessions } from '../hosted-sandbox/hosted-session-sync'
+import { isCloudWorkspaceArchivedOnControlPlane } from '../hosted-sandbox/hosted-workspace-runtime'
+import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
 import { applyResumedRuntimePairing } from './runtime-resume-pairing'
@@ -67,6 +69,15 @@ export async function resumeEphemeralVmWorkspace(
       // The record stays as it was; a lifecycle error only shows on a resume_failed VM.
       updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, { status: runtime.status })
     }
+  }
+  // An archived Orca Cloud workspace is browsed from its archive; only Unarchive wakes it, so a
+  // stale window (or a cold start before its status loaded) can never wake it by opening it.
+  if (
+    runtime.recipe?.provider === 'orca-cloud' &&
+    (await isCloudWorkspaceArchivedOnControlPlane(workspaceId))
+  ) {
+    restoreAfterFailedRecovery()
+    throw new Error(CLOUD_WORKSPACE_ARCHIVED_ERROR)
   }
   // After the recipe marked the VM running, an SSH host Orca cannot reach again is still a failed
   // resume, saved with its reason so the row can explain it after a restart.

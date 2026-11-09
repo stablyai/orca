@@ -10,6 +10,7 @@ import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
+import { CloudWorkspaceMenuItems } from '@/components/orca-cloud/CloudWorkspaceMenuItems'
 import { WorktreeOpenInAndSshSubMenus } from '../cloud-ssh/WorktreeOpenInAndSshSubMenus'
 import { WorkspaceVmLifecycleMenuItems } from '../sleep/WorkspaceVmLifecycleMenuItems'
 import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controller/worktree-card-dom-events'
@@ -167,6 +168,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               replacesSleep={lineageDescendantCount === 0}
             />
           )}
+          {!isMultiContext && <CloudWorkspaceMenuItems worktreeId={worktree.id} />}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
               {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}

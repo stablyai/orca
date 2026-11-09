@@ -9,6 +9,7 @@ import {
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import {
   ORCAD_WORK_VERDICT_METHOD,
+  type HostedSessionIdleSleepEvent,
   type HostedSessionWarningEvent
 } from '../../shared/hosted-sandbox/hosted-session-events'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
@@ -133,7 +134,11 @@ export function createHostedSessionRegistry(deps: {
       onSuspended: () =>
         log(`[orca-cloud] idle sleep requested for ${runtime.workspaceName ?? runtime.id}`),
       suspend: async () => {
-        broadcast('orcaCloud:idleSleepRequested', { workspaceId: runtime.workspaceId ?? null })
+        const event: HostedSessionIdleSleepEvent = {
+          workspaceId: runtime.workspaceId ?? null,
+          idleMs: deps.driver.capabilities.idleStopMs ?? null
+        }
+        broadcast('orcaCloud:idleSleepRequested', event)
       }
     })
     running.set(environmentId, { scheduler, runtimeId: runtime.id })

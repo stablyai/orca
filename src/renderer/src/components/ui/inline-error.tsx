@@ -16,6 +16,9 @@ type InlineErrorProps = {
   retrying?: boolean
   /** 'compact' for narrow panels (sidebar sections): tighter padding, xs text. */
   density?: 'default' | 'compact'
+  /** A next step other than retry (e.g. "Sign in"), rendered inside the box after the text.
+   *  Pass an outline xs Button with a short verb-first label; never a primary button. */
+  action?: React.ReactNode
   className?: string
 }
 
@@ -32,6 +35,7 @@ function InlineError({
   onRetry,
   retrying = false,
   density = 'default',
+  action,
   className
 }: InlineErrorProps): React.JSX.Element {
   const Icon = tone === 'error' ? CircleAlert : Info
@@ -59,8 +63,19 @@ function InlineError({
       />
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="font-medium text-foreground">{title}</p>
-        {detail ? <p className="text-xs text-muted-foreground">{detail}</p> : null}
+        {detail ? (
+          <p
+            className={cn(
+              'text-muted-foreground',
+              // Compact titles are already xs, so the detail steps down to keep the hierarchy.
+              density === 'compact' ? 'text-2xs' : 'text-xs'
+            )}
+          >
+            {detail}
+          </p>
+        ) : null}
       </div>
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       {onRetry && retryLabel ? (
         <Button
           type="button"
