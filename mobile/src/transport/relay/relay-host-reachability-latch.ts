@@ -1,24 +1,7 @@
-import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
-import { RelayDirectorHttpError } from './mobile-relay-resume-director'
-import {
-  relayHostReachabilityForCloseCode,
-  type RelayHostReachability
-} from './relay-host-reachability'
+import type { RelayHostReachability } from './relay-host-reachability'
 
 // A single failure is a blip; the same verdict twice in a row is a state.
 const RELAY_HOST_REACHABILITY_STREAK = 2
-
-// One failed relay dial, read as what it says about the desktop. A director 401
-// is the same refusal as a cell 4401, delivered before the cell was reached.
-export function relayHostReachabilityForFailure(error: Error | null): RelayHostReachability {
-  if (error instanceof RelayOuterError) {
-    return relayHostReachabilityForCloseCode(error.code)
-  }
-  if (error instanceof RelayDirectorHttpError && error.status === 401) {
-    return 'credential-refused'
-  }
-  return 'connecting'
-}
 
 // Latch consecutive identical failures until authenticated connection; app resume/gate lifts provide no recovery evidence.
 export class RelayHostReachabilityLatch {
@@ -36,12 +19,11 @@ export class RelayHostReachabilityLatch {
     reporter(this.reported)
   }
 
-  record(error: Error | null): void {
+  record(next: RelayHostReachability): void {
     // A later unlabelled offline close only lost its reason; retain signed-out until connection.
     if (this.reported === 'signed-out') {
       return
     }
-    const next = relayHostReachabilityForFailure(error)
     // Unmapped failures break the streak but do not prove the last reported outage ended.
     if (next === 'connecting') {
       this.streak = 0
