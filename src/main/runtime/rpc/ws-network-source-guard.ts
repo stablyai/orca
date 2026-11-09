@@ -1,8 +1,19 @@
-// Refuses public-address peers at TCP accept, before HTTP parsing or the WebSocket upgrade.
+// Decides at TCP accept whether a peer is refused; refused peers get a reply naming the fix, never the RPC protocol.
+import type { ServerResponse } from 'node:http'
 import { classifyNetworkSource, normalizeSourceAddress } from './network-source-class'
 import { OnLinkPrefixes } from './on-link-prefixes'
 
 const REFUSAL_LOG_INTERVAL_MS = 60 * 60_000
+
+// WebSocket close reasons are capped at 123 bytes; clients show this text.
+export const PUBLIC_SOURCE_REFUSAL_REASON =
+  'This Orca server refuses public addresses. Restart orca serve with --allow-public to accept them.'
+export const PUBLIC_SOURCE_REFUSAL_CLOSE_CODE = 1008
+
+export function answerRefusedSource(response: ServerResponse): void {
+  response.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8', Connection: 'close' })
+  response.end(`${PUBLIC_SOURCE_REFUSAL_REASON}\n`)
+}
 
 export type WebSocketSourceGuard = {
   admit(remoteAddress: string | undefined): boolean

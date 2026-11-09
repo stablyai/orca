@@ -10,8 +10,13 @@ export async function buildServePairingReadiness(
     mobilePairing?: boolean
     grantDesktopControl?: boolean
   },
-  rpc: Pick<OrcaRuntimeRpcServer, 'getWebSocketEndpoint' | 'createPairingOffer'>
-): Promise<Pick<ServeReadiness, 'boundEndpoint' | 'advertisedEndpoint' | 'pairing'>> {
+  rpc: Pick<
+    OrcaRuntimeRpcServer,
+    'getWebSocketEndpoint' | 'createPairingOffer' | 'getPublicSourceRefusalNotice'
+  >
+): Promise<
+  Pick<ServeReadiness, 'boundEndpoint' | 'advertisedEndpoint' | 'pairing' | 'networkNotice'>
+> {
   const boundEndpoint = rpc.getWebSocketEndpoint()
   const advertised = boundEndpoint
     ? resolveAdvertisedPairingEndpoint(boundEndpoint, options.pairingAddress)
@@ -32,6 +37,7 @@ export async function buildServePairingReadiness(
   return {
     boundEndpoint,
     advertisedEndpoint: advertised?.ok ? advertised.endpoint : null,
+    networkNotice: rpc.getPublicSourceRefusalNotice(),
     pairing: offer.available
       ? {
           available: true,

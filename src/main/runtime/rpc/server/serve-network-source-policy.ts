@@ -1,4 +1,7 @@
 // Which source addresses `orca serve` accepts, decided once at startup.
+import { isPairingWildcardHostname } from '../../../../shared/network/pairing-url'
+import { isIP } from 'node:net'
+import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os'
 import { classifyRemotePairingHostname } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import { resolveAdvertisedPairingHostname } from './pairing/network/pairing-endpoint'
 import { classifyNetworkSource } from '../network-source-class'
@@ -18,13 +21,14 @@ export type ServeNetworkSourceOptions = {
 
 export type ServeNetworkSourcePolicy =
   | { kind: 'local-only'; forced?: true }
-  | { kind: 'public-allowed'; reason: 'flag' | 'paired-public' | 'pairing-address' }
+  | { kind: 'public-allowed'; reason: 'flag' | 'paired-public' | 'pairing-address' | 'bind' }
   | { kind: 'grandfathered'; devices: number }
 
 export function resolveServeNetworkSourcePolicy(args: {
   options: ServeNetworkSourceOptions
   record: NetworkSourcePolicyRecord & { guardSince: number }
   devices: readonly DeviceEntry[]
+  bindHost?: string
 }): ServeNetworkSourcePolicy {
   if (args.options.allowPublic) {
     return { kind: 'public-allowed', reason: 'flag' }
@@ -37,6 +41,14 @@ export function resolveServeNetworkSourcePolicy(args: {
   }
   if (advertisesNonLocalAddress(args.options.pairingAddress)) {
     return { kind: 'public-allowed', reason: 'pairing-address' }
+  }
+  // Wildcards classify as public too, but only a literal public bind states intent.
+  if (
+    args.bindHost !== undefined &&
+    !isPairingWildcardHostname(args.bindHost) &&
+    classifyNetworkSource(args.bindHost) === 'public'
+  ) {
+    return { kind: 'public-allowed', reason: 'bind' }
   }
   // Any row from before the guard (pending offers included) may belong to a client that reaches us from a public address.
   const predating = args.devices.filter(
@@ -57,7 +69,8 @@ function advertisesNonLocalAddress(pairingAddress: string | null): boolean {
 
 export function describeServeNetworkSourcePolicy(
   policy: ServeNetworkSourcePolicy,
-  pairingAddress: string | null
+  pairingAddress: string | null,
+  bindHost?: string
 ): string {
   switch (policy.kind) {
     case 'local-only':
@@ -67,12 +80,34 @@ export function describeServeNetworkSourcePolicy(
     case 'grandfathered':
       return `Accepting connections from any address: ${policy.devices} paired device(s) predate the public-address check and may rely on one. Once they are removed, public addresses are refused unless a paired device has connected from one or --allow-public is set; --refuse-public refuses them now.`
     case 'public-allowed':
-      return policy.reason === 'flag'
-        ? 'Accepting connections from any address (--allow-public).'
-        : policy.reason === 'paired-public'
-          ? 'Accepting connections from any address: a paired device has connected from a public address.'
-          : `Accepting connections from any address: --pairing-address ${pairingAddress ?? ''} is not a localhost, LAN or Tailscale IP address.`
+      switch (policy.reason) {
+        case 'flag':
+          return 'Accepting connections from any address (--allow-public).'
+        case 'paired-public':
+          return 'Accepting connections from any address: a paired device has connected from a public address.'
+        case 'pairing-address':
+          return `Accepting connections from any address: --pairing-address ${pairingAddress ?? ''} is not a localhost, LAN or Tailscale IP address.`
+        case 'bind':
+          return `Accepting connections from any address: --bind ${bindHost ?? ''} is a public IP address.`
+      }
   }
+}
+
+/** A public IPv4 on an interface (a typical VPS) is dialable directly; global IPv6 on home hosts is usually firewalled, so it is not named. */
+export function publicSourceRefusalNotice(
+  interfaces: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces()
+): string | null {
+  const address = Object.values(interfaces)
+    .flatMap((entries) => entries ?? [])
+    .find(
+      (entry) =>
+        !entry.internal &&
+        isIP(entry.address) === 4 &&
+        classifyNetworkSource(entry.address) === 'public'
+    )?.address
+  return address
+    ? `This host has public address ${address}, but clients connecting from public addresses are refused. Restart orca serve with --allow-public to accept them.`
+    : null
 }
 
 /** Null when nothing is refused: not serving, loopback-only, or public addresses allowed. */
@@ -90,9 +125,12 @@ export function createServeNetworkSourceGuard(args: {
   const policy = resolveServeNetworkSourcePolicy({
     options: args.options,
     record: ensureNetworkSourceGuardSince(args.userDataPath, args.now ?? Date.now()),
-    devices: args.devices
+    devices: args.devices,
+    bindHost: args.bindHost
   })
   const log = args.log ?? console.log
-  log(`[runtime] ${describeServeNetworkSourcePolicy(policy, args.options.pairingAddress)}`)
+  log(
+    `[runtime] ${describeServeNetworkSourcePolicy(policy, args.options.pairingAddress, args.bindHost)}`
+  )
   return policy.kind === 'local-only' ? new PublicSourceRefusal() : null
 }

@@ -7,7 +7,7 @@ import { answerWithoutWebClient, createStaticWebClientHandler } from './static-w
 import {
   attachNodeWebSocketLifecycle,
   clearNodeWebSocketPreAuthTimer,
-  rejectNodeWebSocketOverCapacity,
+  rejectNodeWebSocket,
   stopNodeWebSocketTransport,
   type WebSocketConnectionCloseHandler,
   type WebSocketMessageHandler
@@ -17,7 +17,12 @@ import { assertPortNotShadowingListener } from './shadowed-port-probe'
 import { REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES } from '../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { classifyNetworkSource, type NetworkSourceClass } from './network-source-class'
 import { UnauthenticatedSourceCap } from './ws-unauthenticated-source-cap'
-import type { WebSocketSourceGuard } from './ws-network-source-guard'
+import {
+  answerRefusedSource,
+  PUBLIC_SOURCE_REFUSAL_CLOSE_CODE,
+  PUBLIC_SOURCE_REFUSAL_REASON,
+  type WebSocketSourceGuard
+} from './ws-network-source-guard'
 
 export const WEBSOCKET_TRANSPORT_MAX_MESSAGE_BYTES = REMOTE_RUNTIME_MAX_INBOUND_FRAME_BYTES
 // Allow many remote-desktop streams so stale ones cannot starve control RPCs.
@@ -74,6 +79,8 @@ export class WebSocketTransport implements RpcTransport {
   private heartbeatConnections = new Set<WebSocket>()
   private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
   private readonly sourceCap = new UnauthenticatedSourceCap()
+  // Refused peers are answered, not dropped, so clients can show why.
+  private readonly refusedSockets = new WeakSet<Socket>()
   // Captured at upgrade: a closed socket no longer reports its peer.
   private readonly peers = new WeakMap<
     WebSocket,
@@ -217,8 +224,13 @@ export class WebSocketTransport implements RpcTransport {
   private async tryListen(port: number): Promise<void> {
     await assertPortNotShadowingListener(this.host, port)
     // Without an HTTP request listener, plain HTTP hangs instead of receiving 404 (#30100).
-    const httpServer = createHttpServer(
-      this.staticRoot ? createStaticWebClientHandler(this.staticRoot) : answerWithoutWebClient
+    const answer = this.staticRoot
+      ? createStaticWebClientHandler(this.staticRoot)
+      : answerWithoutWebClient
+    const httpServer = createHttpServer((request, response) =>
+      this.refusedSockets.has(request.socket)
+        ? answerRefusedSource(response)
+        : answer(request, response)
     )
 
     await new Promise<void>((resolve, reject) => {
@@ -231,12 +243,12 @@ export class WebSocketTransport implements RpcTransport {
 
     // Post-upgrade WS cap cannot bound raw TCP descriptors.
     httpServer.maxConnections = WEBSOCKET_TRANSPORT_MAX_TCP_CONNECTIONS
+    // The per-source cap also bounds refused peers until their reply closes them.
     httpServer.on('connection', (socket) => {
-      if (
-        this.sourceGuard?.admit(socket.remoteAddress) === false ||
-        !this.sourceCap.admit(socket)
-      ) {
+      if (!this.sourceCap.admit(socket)) {
         socket.destroy()
+      } else if (this.sourceGuard?.admit(socket.remoteAddress) === false) {
+        this.refusedSockets.add(socket)
       }
     })
 
@@ -250,8 +262,12 @@ export class WebSocketTransport implements RpcTransport {
         socket: request.socket,
         sourceClass: classifyNetworkSource(request.socket.remoteAddress)
       })
+      if (this.refusedSockets.has(request.socket)) {
+        rejectNodeWebSocket(ws, PUBLIC_SOURCE_REFUSAL_CLOSE_CODE, PUBLIC_SOURCE_REFUSAL_REASON)
+        return
+      }
       if (wss.clients.size > WEBSOCKET_TRANSPORT_MAX_CONNECTIONS) {
-        rejectNodeWebSocketOverCapacity(ws)
+        rejectNodeWebSocket(ws, 1013, 'Maximum connections reached')
         return
       }
       this.handleConnection(ws)

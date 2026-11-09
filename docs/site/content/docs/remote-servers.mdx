@@ -172,10 +172,11 @@ Paste the printed pairing URL into **Settings → Remote Orca Servers → Add Se
 
 - you pass `--allow-public`;
 - `--pairing-address` is a hostname or a public IP;
+- `--bind` is a public IP;
 - a paired client has already connected from a public address; or
 - clients paired before this check was added are still paired.
 
-The startup log says which rule applies, and the first refused public address each hour is logged. Pass `--refuse-public` to refuse public addresses in every case, for example on a server whose older pairings would otherwise keep them accepted.
+The startup log says which rule applies, and the first refused public address each hour is logged. A refused client is told to restart `orca serve` with `--allow-public` instead of losing the connection without a reason, and when the server has a public IPv4 address the pairing output says that public clients will be refused. Pass `--refuse-public` to refuse public addresses in every case, for example on a server whose older pairings would otherwise keep them accepted.
 
 Add `--port 6768` when a firewall, tunnel, or service definition requires a fixed port:
 
