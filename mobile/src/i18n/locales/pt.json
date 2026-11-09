@@ -304,6 +304,7 @@
       "plan": "Plano",
       "stoppedManually": "Interrompido manualmente",
       "permissionDenied": "{{agent}} negou a permissão. Ver detalhes.",
+      "safetyReviewApproved": "{{agent}} aprovou esta ação. Ver detalhes.",
       "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
       "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
       "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
@@ -637,6 +638,7 @@
       "fullCopySaveUpdate": "Copiar tudo e Salvar para este anexo estarão disponíveis em uma atualização do celular."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} está off-line · em {{time}}",
       "reconnecting": "{{hostName}} está reconectando…",
       "stopped": "{{hostName}} está parado. Inicie-o no seu computador.",
       "server": "O servidor",

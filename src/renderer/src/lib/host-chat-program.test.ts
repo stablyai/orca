@@ -1,6 +1,6 @@
 import { agentTabLaunchStore } from './agent-session/launch/new-tab/launch-agent-execution-context'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
-import { resolveDefaultAgentForWorkspace } from './agent-tab-shortcuts'
+import { resolveDefaultAgentForWorkspace } from './agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'

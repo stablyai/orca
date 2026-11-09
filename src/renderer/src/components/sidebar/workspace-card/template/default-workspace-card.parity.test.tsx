@@ -71,7 +71,8 @@ vi.mock('../activity/use-worktree-activity-status', () => ({
   useWorktreeActivityStatus: () => 'active'
 }))
 vi.mock('../../workspace-actions/sleep/use-worktree-sleep-state', () => ({
-  useIsSleepingWorktree: () => false
+  useIsSleepingWorktree: () => false,
+  selectIsSleepingWorktree: () => false
 }))
 vi.mock('../activity/CacheTimer', () => ({
   default: ({ startedAt }: { startedAt: number }) => <span data-cache-timer={startedAt} />,

@@ -129,6 +129,13 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
             this.runtime.describeRecipeWorkspaceEnvironments(hostId)
         })
       : null
+    this.detachRelayHostsChanges?.()
+    this.detachRelayHostsChanges =
+      this.mobileRelayHostCatalog?.publishListChanges({
+        onClientEvent: (listener) =>
+          this.runtime.onClientEvent(listener, { consumesTerminalSideEffects: false }),
+        changed: () => this.runtime.notifyRelayHostsChanged()
+      }) ?? null
     this.runtime.setPairedWorkspaceContextSource(this.mobileRelayHostCatalog)
   }
 

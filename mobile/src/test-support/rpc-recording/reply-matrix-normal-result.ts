@@ -30,6 +30,12 @@ export const REPLY_MATRIX_NORMAL_RESULT_INVENTORY: readonly ReplyMatrixNormalRes
     result: { ok: true }
   },
   {
+    family: 'query.event-router-catalog',
+    request: 'worktree.ps#1',
+    reason: 'the scenario refuses the first read by design: it pins the read floor after a failure',
+    result: { worktrees: [] }
+  },
+  {
     family: 'settings-best-effort',
     request: 'settings.update#1',
     reason: 'a best-effort write whose reply body no call site reads',

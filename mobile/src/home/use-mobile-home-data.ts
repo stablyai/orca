@@ -1,5 +1,14 @@
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  notifyManager,
+  queryOptions,
+  replaceEqualDeep,
+  skipToken,
+  useQueries,
+  useQueryClient,
+  type QueryObserverResult
+} from '@tanstack/react-query'
 import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src'
 import {
   countAgentsNeedingYouByHost,
@@ -7,9 +16,13 @@ import {
   type AgentListInput
 } from '../agents/agent-list-rows'
 import { useAgentActivityWrites } from '../agents/use-agent-activity-writes'
-import { loadHomeSnapshot, saveHomeSnapshot } from '../cache/home-snapshot-cache'
+import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import type { AccountsSnapshot } from '../components/AccountUsage'
-import { setCachedWorktrees } from '../cache/worktree-cache'
+import {
+  HOST_LIST_TARGET,
+  homeWorktreeCountsKey,
+  NO_HOST_LIST_INPUT
+} from '../host-screen/host-list-queries'
 import { useNow } from '../hooks/use-now'
 import {
   loadMobileOnboardingSteps,
@@ -21,76 +34,156 @@ import {
 } from '../transport/hosts/host-catalog-selection'
 import { loadHostCatalog } from '../transport/hosts/host-store'
 import type { HostCatalogEntry } from '../transport/hosts/host-profile'
-import { fetchHomeHostWorktreeInfo } from '../worktree/home-host-worktree-fetch'
-import { withoutHomeAgentStates, type HostWorktreeInfo } from '../worktree/home-worktree-info'
-import { fetchHomeHostStats } from '../stats/home-stats-summary-read'
+import { hostObserverOptions, type HostQuery } from '../query/host-query'
+import { isHostNotConnectedError } from '../query/host-query-errors'
+import type { HostQueryKey } from '../query/host-query-key'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import {
+  homeWorktreeCountsQuery,
+  type HomeWorktreeCounts
+} from '../worktree/home-host-worktree-fetch'
+import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/home-worktree-info'
+import { homeStatsQuery } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import { projectHomeHostConnections } from './home-host-connection-projection'
+import { restoreHomeQueries } from './home-query-restore'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
 export type MobileHomeData = ReturnType<typeof useMobileHomeData>
 
+// A paired desktop with its client, or none while Home holds no connection to it (disconnected, never opened).
+type HomeHost = { hostId: string; client: RpcClient | null }
+
+// Home reads one of each per paired desktop. Reads stay on while a desktop connects: the connected edge
+// re-reads them the moment it lands, with no render in between, and a read tried before it is refused at once.
+const homeQueryOptions = <TData>(
+  query: HostQuery<typeof NO_HOST_LIST_INPUT, TData>,
+  host: HomeHost
+) => hostObserverOptions(query, host.client, host.hostId, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+
+// Kept by the accounts stream (use-mobile-home-host-connections), never fetched.
+const homeAccountsOptions = (hostId: string) =>
+  queryOptions<AccountsSnapshot | null, Error, AccountsSnapshot | null, HostQueryKey>({
+    queryKey: accountsSnapshotKey(hostId),
+    queryFn: skipToken,
+    gcTime: Infinity,
+    meta: { streamBacked: true, persist: accountsSnapshotFamily.persist }
+  })
+
+const readOf = (result: QueryObserverResult<HomeWorktreeCounts>) => ({
+  data: result.data,
+  dataUpdatedAt: result.dataUpdatedAt,
+  // A read refused because the desktop isn't connected yet says nothing about its list.
+  failed: result.isError && !isHostNotConnectedError(result.error)
+})
+
 export function useMobileHomeData() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
   // Until the catalog read lands, an empty list says nothing; a paired user must not see first-run.
   const [hostCatalogLoaded, setHostCatalogLoaded] = useState(false)
-  const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
-  const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsRow>>({})
-  const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
-  const hostSetters = useMemo(
-    () => ({ setWorktreeInfo, setStats: setStatsByHost, setAccounts: setAccountsByHost }),
-    []
-  )
   const onboardingCheckedRef = useRef(false)
-  const hydratedRef = useRef(false)
-  const focusedRef = useRef(false)
-  const isHomeFocused = useCallback(() => focusedRef.current, [])
-  // Drives the agent clock; Home stays mounted under other screens.
+  // Drives the agent clock and Home's reads; Home stays mounted under other screens.
   const [homeFocused, setHomeFocused] = useState(false)
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
-  const connections = useMobileHomeHostConnections(hosts, hostCatalog, hostSetters, isHomeFocused)
-  const allClientsRef = useRef(connections.allClients)
+  const connections = useMobileHomeHostConnections(hosts, hostCatalog)
+  const { allClients, hostLastConnected, hostStates } = connections
+  const allClientsRef = useRef(allClients)
+  // Every paired desktop keeps its last counts and totals on Home, connected or not.
+  const homeHosts = useMemo((): HomeHost[] => {
+    const clients = new Map(allClients.map((entry) => [entry.hostId, entry.client]))
+    return hosts.map((host) => ({ hostId: host.id, client: clients.get(host.id) ?? null }))
+  }, [hosts, allClients])
+  // A read from before the desktop's latest connect, or from an earlier launch, can't vouch for agents or usage.
+  const isLive = useCallback(
+    (hostId: string, readAt: number): boolean => {
+      const connectedAt = hostLastConnected[hostId]
+      return connectedAt != null && readAt >= connectedAt
+    },
+    [hostLastConnected]
+  )
 
+  // Once the first desktop list is up: counts show only after a desktop connects, so the rows never wait
+  // for the store, and its keychain read doesn't compete with the list's. Before the queries below, whose
+  // observers then join this batched read instead of each reading its own row.
+  const storeRestoredRef = useRef(false)
   useEffect(() => {
-    if (hydratedRef.current) {
+    if (storeRestoredRef.current || hostCatalog.length === 0) {
       return
     }
-    hydratedRef.current = true
-    let cancelled = false
-    void loadHomeSnapshot().then((snapshot) => {
-      if (cancelled || !snapshot) {
-        return
-      }
-      setWorktreeInfo((previous) =>
-        Object.keys(previous).length > 0
-          ? previous
-          : Object.fromEntries(
-              Object.entries(snapshot.worktreeInfo).map(([hostId, info]) => [
-                hostId,
-                withoutHomeAgentStates(info)
-              ])
-            )
-      )
-      for (const [hostId, info] of Object.entries(snapshot.worktreeInfo)) {
-        if (info.lastActiveWorktree) {
-          setCachedWorktrees(hostId, [info.lastActiveWorktree])
-        }
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    storeRestoredRef.current = true
+    void restoreHomeQueries(
+      queryClient,
+      hostCatalog.map((host) => host.id)
+    )
+  }, [hostCatalog, queryClient])
 
-  useEffect(() => {
-    if (Object.keys(worktreeInfo).length > 0) {
-      const saved = Object.fromEntries(
-        Object.entries(worktreeInfo).map(([hostId, info]) => [hostId, withoutHomeAgentStates(info)])
-      )
-      saveHomeSnapshot({ worktreeInfo: saved, savedAt: Date.now() })
-    }
-  }, [worktreeInfo])
+  const countsQueries = useMemo(
+    () => homeHosts.map((host) => homeQueryOptions(homeWorktreeCountsQuery, host)),
+    [homeHosts]
+  )
+  const combineCounts = useCallback(
+    (results: QueryObserverResult<HomeWorktreeCounts>[]): Record<string, HostWorktreeInfo> => {
+      const byHost: Record<string, HostWorktreeInfo> = {}
+      homeHosts.forEach(({ hostId }, at) => {
+        const result = results[at]
+        const info = result && homeWorktreeInfo(hostId, readOf(result), isLive)
+        if (info) {
+          byHost[hostId] = info
+        }
+      })
+      return byHost
+    },
+    [homeHosts, isLive]
+  )
+  // A hidden Home reads nothing; coming back reads what went stale meanwhile.
+  const worktreeInfo = useQueries({
+    queries: countsQueries,
+    combine: combineCounts,
+    subscribed: homeFocused
+  })
+  const statsQueries = useMemo(
+    () => homeHosts.map((host) => homeQueryOptions(homeStatsQuery, host)),
+    [homeHosts]
+  )
+  const combineStats = useCallback(
+    (results: QueryObserverResult<HomeStatsRow>[]): Record<string, HomeStatsRow> =>
+      Object.fromEntries(homeHosts.map(({ hostId }, at) => [hostId, results[at]?.data])),
+    [homeHosts]
+  )
+  const statsByHost = useQueries({
+    queries: statsQueries,
+    combine: combineStats,
+    subscribed: homeFocused
+  })
+  const accountsQueries = useMemo(
+    () => homeHosts.map(({ hostId }) => homeAccountsOptions(hostId)),
+    [homeHosts]
+  )
+  // Usage is live: only a snapshot from this connection shows, never a stored or disconnected one.
+  const combineAccounts = useCallback(
+    (results: QueryObserverResult<AccountsSnapshot | null>[]): Record<string, AccountsSnapshot> => {
+      const byHost: Record<string, AccountsSnapshot> = {}
+      homeHosts.forEach(({ hostId }, at) => {
+        const result = results[at]
+        if (
+          result?.data &&
+          hostStates[hostId] === 'connected' &&
+          isLive(hostId, result.dataUpdatedAt)
+        ) {
+          byHost[hostId] = result.data
+        }
+      })
+      return byHost
+    },
+    [homeHosts, hostStates, isLive]
+  )
+  const accountsByHost = useQueries({
+    queries: accountsQueries,
+    combine: combineAccounts,
+    subscribed: homeFocused
+  })
 
   const hasPairedHost = hosts.length > 0
   useEffect(() => {
@@ -100,13 +193,12 @@ export function useMobileHomeData() {
   }, [hasPairedHost])
 
   useEffect(() => {
-    allClientsRef.current = connections.allClients
-  }, [connections.allClients])
+    allClientsRef.current = allClients
+  }, [allClients])
 
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      focusedRef.current = true
       setHomeFocused(true)
       void loadHostCatalog()
         // A failed read proves nothing about the desktops; keep the ones already shown.
@@ -119,7 +211,8 @@ export function useMobileHomeData() {
           if (!catalog) {
             return
           }
-          setHostCatalog(catalog)
+          // An unchanged list keeps its identity, so focusing Home again redraws nothing.
+          setHostCatalog((previous) => replaceEqualDeep(previous, catalog))
           if (catalog.length === 0 || onboardingCheckedRef.current) {
             return
           }
@@ -129,15 +222,8 @@ export function useMobileHomeData() {
             router.replace(mobileOnboardingDestination(steps))
           }
         })
-      for (const entry of allClientsRef.current) {
-        if (entry.client.getState() === 'connected') {
-          void fetchHomeHostWorktreeInfo(entry.client, entry.hostId, setWorktreeInfo, () => stale)
-          fetchHomeHostStats(entry.client, entry.hostId, setStatsByHost, () => stale)
-        }
-      }
       return () => {
         stale = true
-        focusedRef.current = false
         setHomeFocused(false)
       }
     }, [router])
@@ -147,23 +233,36 @@ export function useMobileHomeData() {
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
   // One clock for every agent count, so Feed, the Agents badge and each desktop agree.
   const now = useNow(30_000, homeFocused)
-  const refetchHostAgents = useCallback((hostId: string) => {
-    const entry = allClientsRef.current.find((candidate) => candidate.hostId === hostId)
-    return entry?.client.getState() === 'connected'
-      ? fetchHomeHostWorktreeInfo(entry.client, hostId, setWorktreeInfo, () => false)
-      : Promise.resolve()
-  }, [])
-  const agentActivity = useAgentActivityWrites(connections.allClients, refetchHostAgents)
+  // A fresh read, not one already out: that one may predate the write it must carry. The cached rows stay
+  // its delta base, so the desktop answers with only what changed.
+  const refetchHostAgents = useCallback(
+    async (hostId: string): Promise<void> => {
+      const entry = allClientsRef.current.find((candidate) => candidate.hostId === hostId)
+      if (entry?.client.getState() !== 'connected') {
+        return
+      }
+      await queryClient
+        .refetchQueries(
+          { queryKey: homeWorktreeCountsKey(hostId), exact: true },
+          { cancelRefetch: true, throwOnError: false }
+        )
+        .catch(() => undefined)
+      // Resolves once observers hold the answer, so the write's guess isn't dropped a frame early.
+      await new Promise<void>((resolve) => notifyManager.schedule(resolve))
+    },
+    [queryClient]
+  )
+  const agentActivity = useAgentActivityWrites(allClients, refetchHostAgents)
   const { pendingActivity } = agentActivity
   const agentList = useMemo<AgentListInput>(
     () => ({
       hosts: sortedHosts,
-      hostStates: connections.hostStates,
+      hostStates,
       worktreeInfo,
       now,
       pendingActivity
     }),
-    [sortedHosts, connections.hostStates, worktreeInfo, now, pendingActivity]
+    [sortedHosts, hostStates, worktreeInfo, now, pendingActivity]
   )
   const agentsNeedingYou = useMemo(() => selectAgentsNeedingYou(agentList), [agentList])
   const needsYouByHost = useMemo(
@@ -171,20 +270,17 @@ export function useMobileHomeData() {
     [agentsNeedingYou]
   )
   const connectedHosts = useMemo(
-    () => sortedHosts.filter((host) => connections.hostStates[host.id] === 'connected'),
-    [sortedHosts, connections.hostStates]
+    () => sortedHosts.filter((host) => hostStates[host.id] === 'connected'),
+    [sortedHosts, hostStates]
   )
   // Before a desktop's first connect settles, "not connected" is not yet true.
   const hostsConnecting = hosts.some((host) => {
-    const state = connections.hostStates[host.id]
+    const state = hostStates[host.id]
     return state === undefined || state === 'connecting' || state === 'handshaking'
   })
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
-  const hostConnections = useMemo(
-    () => projectHomeHostConnections(connections.allClients),
-    [connections.allClients]
-  )
+  const hostConnections = useMemo(() => projectHomeHostConnections(allClients), [allClients])
 
   return {
     ...connections,

@@ -1,4 +1,4 @@
-import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
+import { nonRefusedAgentLaunch } from '@/lib/agent-session/launch/new-tab/agent-tab-launch-outcome.test-fixture'
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -63,8 +63,10 @@ vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
 vi.mock('../../../../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: vi.fn()
 }))
-vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn(async () => true) }))
-vi.mock('@/lib/agent-ready-wait', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
+  pasteDraftWhenAgentReady: vi.fn(async () => true)
+}))
+vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))
 // Mock structured execution while retaining real route selection; callers must still reach the correct surface.

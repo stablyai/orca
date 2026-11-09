@@ -7,7 +7,7 @@ import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-wor
 import { selectReviewRepositoryForWorkspace } from '@/store/slices/hosted-review/workspace-review-repository'
 import { useChecksPanelTerminalWorktree } from './refresh/use-checks-panel-terminal-worktree'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
-import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import { readDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { getWorktreeGitIdentityDisplay } from '../../../../../shared/worktree/git-identity-display'

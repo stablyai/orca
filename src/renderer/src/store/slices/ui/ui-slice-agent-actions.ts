@@ -1,12 +1,12 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import { agentKindForAgentType } from '../../../lib/agent-status'
+import { agentKindForAgentType } from '../../../lib/agent-status/aggregation/worktree-agent-status'
 import {
   deriveRunningAgentSendTargets,
   resolveRunningAgentSendTarget,
   runningAgentMessageTarget,
   runningAgentSendTargetAgentType
-} from '../../../lib/running-agent-targets'
+} from '../../../lib/agent-session/messaging/running-agent-targets'
 import { translate } from '@/i18n/i18n'
 import { createUiActivityActions } from './ui-slice-activity-actions'
 
@@ -154,9 +154,10 @@ export function createUiAgentActions(
 
       const agentType = runningAgentSendTargetAgentType(target)
       const label = formatAgentTypeLabel(agentType)
-      const [{ activeAgentNotesSendFailureMessage }, { sendMessageToAgent }] = await Promise.all([
-        import('@/lib/active-agent-note-send'),
-        import('@/lib/agent-message-send')
+      const [, { activeAgentNotesSendFailureMessage }, { sendMessageToAgent }] = await Promise.all([
+        import('@/lib/agent-session/messaging/terminal/active-agent-note-send'),
+        import('@/lib/agent-session/messaging/terminal/active-agent-note-send-result'),
+        import('@/lib/agent-session/messaging/agent-message-send')
       ])
       const sending = sendMessageToAgent({
         worktreeId: mode.worktreeId,

@@ -9,8 +9,8 @@ import { sourceControlConnectionId, useSourceControlScope } from '../panel/workt
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
-import { resolveDefaultAgentForWorktreeNewTab } from '@/lib/agent-tab-shortcuts'
-import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-detection-target-inventory'
+import { resolveDefaultAgentForWorktreeNewTab } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
+import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { translate } from '@/i18n/i18n'
 import type { GitHistoryItem } from '../../../../../../shared/git/history/git-history-types'
 import type {
