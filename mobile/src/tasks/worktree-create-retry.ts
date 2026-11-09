@@ -98,6 +98,7 @@ export async function createWorktreeWithNameRetry(
       worktreeCreateIdempotency
     )
     let response = sent.response
+    let replayed = sent.replayed
     if (
       !response.ok &&
       !sent.replayed &&
@@ -108,9 +109,15 @@ export async function createWorktreeWithNameRetry(
     ) {
       // Method refusal can mean the client advertisement lagged the probe; downgrade permanently for this create.
       launch = null
-      response = (
-        await sendWorktreeCreateResilient(client, null, null, params, worktreeCreateIdempotency)
-      ).response
+      const fallback = await sendWorktreeCreateResilient(
+        client,
+        null,
+        null,
+        params,
+        worktreeCreateIdempotency
+      )
+      response = fallback.response
+      replayed = fallback.replayed
     }
     // Ledger refusal may follow creation; never retry unnamed. Inspect raw refusal messages for legacy collision handling.
     if (response.ok) {
@@ -126,10 +133,10 @@ export async function createWorktreeWithNameRetry(
       break
     }
     lastError = response.error.message
-    lastReplayed = sent.replayed
+    lastReplayed = replayed
     // A replayed refusal may follow a create whose reply was lost; another name could be a second worktree.
     if (
-      sent.replayed ||
+      replayed ||
       candidateParams.branchIntent === 'open-existing-v2' ||
       launch?.replay ||
       !isRetryableWorktreeCreateConflict(lastError ?? '')
