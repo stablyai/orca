@@ -60,9 +60,7 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
         return
       }
       const folder = folderResult.value.workspace
-      const groupRepos = state.repos.filter(
-        (repo) => repo.projectGroupId === folder.projectGroupId
-      )
+      const groupRepos = state.repos.filter((repo) => repo.projectGroupId === folder.projectGroupId)
       // A selected repo of the group already passes this filter; another filter hides the folder.
       if (groupRepos.some((repo) => state.filterRepoIds.includes(repo.id))) {
         return

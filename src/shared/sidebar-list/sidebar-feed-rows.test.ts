@@ -17,6 +17,7 @@ import {
   type SidebarFeedView
 } from './sidebar-feed-rows'
 import { indexSidebarFeed, rankSidebarFeedWorktrees } from './sidebar-feed-index'
+import { buildWorkspaceRows } from './workspace-rows'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return { id, path: `/${id}`, displayName: id, badgeColor: '', addedAt: 0, ...overrides }
