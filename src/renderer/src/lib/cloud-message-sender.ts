@@ -10,6 +10,24 @@ import {
 
 const REFRESH_MS = 60_000
 let sharedEnvironments = new Set<string>()
+/** Every cloud workspace environment this desktop uses (own or teammate's) → its sandbox id. */
+let cloudSandboxByEnvironment = new Map<string, string>()
+const SEND_REPORT_MIN_MS = 30_000
+const lastSendReport = new Map<string, number>()
+
+/**
+ * Tells the control plane "I just sent a message in this workspace" with my own Orca token: git as
+ * the sender works for me only for a while after this, so nothing in the sandbox can push as me
+ * when I am not driving it. Throttled; best effort.
+ */
+export function noteCloudSend(environmentId: string, now: number = Date.now()): void {
+  const sandboxId = cloudSandboxByEnvironment.get(environmentId)
+  if (!sandboxId || now - (lastSendReport.get(sandboxId) ?? 0) < SEND_REPORT_MIN_MS) {
+    return
+  }
+  lastSendReport.set(sandboxId, now)
+  void window.api.cloudWorkspaces?.noteSent(sandboxId).catch(() => undefined)
+}
 
 /** Me, as teammates' agents should see me; null when not signed into an org. */
 function currentSender(): MessageSender | null {
@@ -29,6 +47,7 @@ export function withCloudSenderBody<T extends { blocks: readonly { type: string 
   environmentId: string,
   body: T
 ): T {
+  noteCloudSend(environmentId)
   const sender = cloudSenderForEnvironment(environmentId)
   if (!sender) {
     return body
@@ -61,17 +80,25 @@ export async function refreshCloudMessageSenders(): Promise<void> {
   }
   const team = new Set(list.value.filter((w) => w.visibility === 'team').map((w) => w.id))
   const next = new Set<string>()
+  const byEnvironment = new Map<string, string>()
   for (const l of local) {
-    if (team.has(l.sandboxId) && l.runtimeEnvironmentId) {
-      next.add(l.runtimeEnvironmentId)
+    if (l.runtimeEnvironmentId) {
+      byEnvironment.set(l.runtimeEnvironmentId, l.sandboxId)
+      if (team.has(l.sandboxId)) {
+        next.add(l.runtimeEnvironmentId)
+      }
     }
   }
   for (const [sandboxId, binding] of Object.entries(bindings)) {
-    if (team.has(sandboxId) && binding.environmentId) {
-      next.add(binding.environmentId)
+    if (binding.environmentId) {
+      byEnvironment.set(binding.environmentId, sandboxId)
+      if (team.has(sandboxId)) {
+        next.add(binding.environmentId)
+      }
     }
   }
   sharedEnvironments = next
+  cloudSandboxByEnvironment = byEnvironment
 }
 
 export function installCloudMessageSender(): () => void {

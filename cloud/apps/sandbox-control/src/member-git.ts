@@ -12,6 +12,28 @@ import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { gitBasicAuthorization } from './network-policy'
 import type { SandboxRow } from './store'
 
+/** A member's GitHub identity works only this long after they themselves sent a message (default). */
+export const MEMBER_GIT_WINDOW_MS = 30 * 60_000
+
+/** Their own client reports each send (their Orca token): the window cannot be opened from the VM. */
+export async function recordMemberSend(db: D1Database, sandboxId: string, userId: string, now: number): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO workspace_member_sends (sandbox_id, user_id, sent_at) VALUES (?, ?, ?)
+       ON CONFLICT (sandbox_id, user_id) DO UPDATE SET sent_at = excluded.sent_at`
+    )
+    .bind(sandboxId, userId, now)
+    .run()
+}
+
+export async function memberSentWithin(db: D1Database, sandboxId: string, userId: string, now: number, windowMs: number): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT sent_at FROM workspace_member_sends WHERE sandbox_id = ? AND user_id = ?')
+    .bind(sandboxId, userId)
+    .first<{ sent_at: number }>()
+  return row !== null && now - row.sent_at <= windowMs
+}
+
 export type MemberGitDeps = {
   db: D1Database
   identity: (row: SandboxRow, userId: string) => Promise<MemberGitIdentity | null>

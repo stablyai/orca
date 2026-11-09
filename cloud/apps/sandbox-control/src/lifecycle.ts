@@ -12,6 +12,7 @@ import {
 } from './guardrails'
 import { DEFAULT_EGRESS_ALLOWLIST, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
 import { applyQueuedRevokes } from './grant-revokes'
+import { ensureEntryPoints } from './golden-images'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { connectedMembers, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
@@ -382,6 +383,7 @@ export async function syncMemberGit(deps: LifecycleDeps, row: SandboxRow, sessio
     return 0
   }
   try {
+    await ensureEntryPoints(deps, sessionId)
     await refreshGitCredentials(deps, row, sessionId)
     const configs = await memberGitConfigs({ db: deps.db, identity: deps.memberIdentity }, row)
     const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(configs))))

@@ -11,7 +11,7 @@ import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { markRevoked, runVmRevoke, type GrantRow } from './grant-revokes'
 import { LifecycleError, resumeSandbox, syncMemberGit, type LifecycleDeps } from './lifecycle'
-import { installEntryPoints } from './golden-images'
+import { ensureEntryPoints } from './golden-images'
 import type { CommandResult } from './sandbox-provider'
 import { ORCAD_PORT } from './sandbox-vm-commands'
 import { getSandbox, touchActivity, type SandboxRow } from './store'
@@ -55,15 +55,9 @@ export async function withEntryPoints(
   command: string,
   run: () => Promise<CommandResult>
 ): Promise<CommandResult> {
-  const first = await run().catch((error: unknown) => ({ exitCode: -1, stdout: '', stderr: String(error) }))
-  if (first.exitCode === 0) {
-    return first
-  }
-  const probe = await deps.provider.runCommand(sessionId, { command: 'test', args: ['-x', command], timeoutMs: 15_000 }).catch(() => null)
-  if (!probe || probe.exitCode === 0) {
-    return first
-  }
-  await installEntryPoints(deps, sessionId)
+  // Stale or missing scripts from an older image are replaced first (one marker check when current).
+  await ensureEntryPoints(deps, sessionId).catch(() => undefined)
+  void command
   return run()
 }
 

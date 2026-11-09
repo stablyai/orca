@@ -131,7 +131,7 @@ import {
   storeUserToken,
   userAuthorizeUrl
 } from './github-user-tokens'
-import { memberGitRoutes } from './member-git'
+import { MEMBER_GIT_WINDOW_MS, memberGitRoutes, memberSentWithin, recordMemberSend } from './member-git'
 import {
   PatchSchema,
   PresenceSchema,
@@ -217,8 +217,10 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
     db: env.SANDBOX_DB,
     identity: async (row, userId) => {
       const keyring = keyringFor(env)
-      return keyring && memberGit(row.account_id)
-        ? memberGitIdentity(env.SANDBOX_DB, await keyring, githubConnect(env, deps), row.account_id, userId, (deps.now ?? Date.now)())
+      const now = (deps.now ?? Date.now)()
+      // Only while the member is actively driving this workspace (their own client reported a send).
+      return keyring && memberGit(row.account_id) && (await memberSentWithin(env.SANDBOX_DB, row.id, userId, now, memberGitWindowMs(env)))
+        ? memberGitIdentity(env.SANDBOX_DB, await keyring, githubConnect(env, deps), row.account_id, userId, now)
         : null
     }
   })
@@ -593,6 +595,11 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
  * orca-git-identity hands an agent only that member's identity. Residual risk: members share the VM
  * user, so a member with a shell could subvert orcad itself; agents and prompts cannot.
  */
+function memberGitWindowMs(env: Env): number {
+  const minutes = Number(env.MEMBER_GIT_WINDOW_MINUTES)
+  return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : MEMBER_GIT_WINDOW_MS
+}
+
 export function memberGitEnabled(env: Env): (accountId: string) => boolean {
   // On by default: orcad attests each turn's sender and orca-git-identity refuses any other member.
   if (env.MEMBER_GIT_IDENTITY === undefined || env.MEMBER_GIT_IDENTITY.trim() === '') {
@@ -1163,7 +1170,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   if (url.pathname === '/v1/team/workspaces') {
     return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now)) : fail('not_found', 404)
   }
-  const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
+  const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants|sent)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
   if (!match) {
     return fail('not_found', 404)
   }
@@ -1173,6 +1180,14 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const view = async (r = row) => (await workspaceViews(db, caller, [r], clock()))[0]
   if (route === 'GET ') {
     return json({ workspace: await view() })
+  }
+  if (route === 'POST sent') {
+    // The caller's own client: "I just sent a message here" (opens their git-as-sender window).
+    if (!canOpen(caller, row)) {
+      throw new WorkspaceError('not_found')
+    }
+    await recordMemberSend(db, row.id, caller.userId, now)
+    return json({ ok: true })
   }
   if (route === 'POST presence') {
     const body = PresenceSchema.safeParse(await readJson(request))

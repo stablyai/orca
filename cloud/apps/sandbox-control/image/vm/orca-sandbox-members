@@ -6,11 +6,13 @@
 # sudoers rule) hands an agent only the identity of the member whose device drove its turn, as orcad
 # attests it. No token lives here: the placeholder is swapped at egress, for this repository only.
 # Env: ORCA_MEMBERS_B64 = base64 JSON [{userId, name, email, authorization, deviceIds:[...]}]
-# ORCA_SANDBOX_USER = the VM user agents run as. Prints {"members":<n>,"devices":<n>}.
+# The VM user agents run as is orcad's own user (detected). Prints {"members":<n>,"devices":<n>}.
 set -euo pipefail
 umask 077
 DIR=/etc/orca/members
-USER_NAME="${ORCA_SANDBOX_USER:-vercel-sandbox}"
+orcad_pid="$(pgrep -f orcad-server.js | head -n 1 || true)"
+USER_NAME="$( [ -n "$orcad_pid" ] && ps -o user= -p "$orcad_pid" | tr -d ' ' || true)"
+USER_NAME="${USER_NAME:-${ORCA_SANDBOX_USER:-${SUDO_USER:-}}}"
 case "$USER_NAME" in '' | *[!a-z0-9_-]*) echo 'bad user' >&2; exit 2 ;; esac
 mkdir -p /etc/orca
 json="$(printf '%s' "${ORCA_MEMBERS_B64:-W10=}" | base64 -d)"
@@ -46,5 +48,7 @@ else
   exit 1
 fi
 # Pre-attestation layout (agent-readable member files) must not linger.
-rm -rf "/home/$USER_NAME/.orca-sandbox/members"
+user_home="$(getent passwd "$USER_NAME" | cut -d: -f6)"
+[ -n "$orcad_pid" ] && user_home="$(tr '\0' '\n' <"/proc/$orcad_pid/environ" | sed -n 's/^HOME=//p' | head -n 1)"
+[ -n "$user_home" ] && rm -rf "$user_home/.orca-sandbox/members"
 echo "{\"members\":$count,\"devices\":$devices}"

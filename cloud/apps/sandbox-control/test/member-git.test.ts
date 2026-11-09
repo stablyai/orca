@@ -37,11 +37,19 @@ async function setup(memberGit: string | undefined = undefined) {
     body: { workspaceId: 'ws-1', machineSize: 'standard', repo: { url: REPO }, visibility: 'team' }
   })
   const id: string = created.body.sandbox.id
-  const seed = (userId: string, login: string, githubUserId: number) =>
-    h.call('POST', '/v1/internal/dev/member-github', {
+  const sent = async (userId: string) =>
+    h.call('POST', `/v1/team/workspaces/${id}/sent`, { bearer: await as(userId) })
+  // Connect GitHub, then (their own client) report a send so their identity window is open.
+  const seed = async (userId: string, login: string, githubUserId: number, send = true) => {
+    const stored = await h.call('POST', '/v1/internal/dev/member-github', {
       bearer: OP,
       body: { accountId: 'org:acme', userId, repoUrl: REPO, login, githubUserId, name: `${login} name` }
     })
+    if (send) {
+      await sent(userId)
+    }
+    return stored
+  }
   async function oidc() {
     return new SignJWT({ team_id: 'team_orca', project_id: 'prj_orca', sandbox_id: 'sbx-v', sandbox_name: `orca-test-${id}` })
       .setProtectedHeader({ alg: 'RS256', kid: 'v1' })
@@ -68,7 +76,7 @@ async function setup(memberGit: string | undefined = undefined) {
     )
     return { status: response.status, body: await response.text() }
   }
-  return { h, id, as, seed, proxied, upstream }
+  return { h, id, as, seed, sent, proxied, upstream }
 }
 
 describe('git as the sender', () => {
@@ -131,5 +139,20 @@ describe('git as the sender', () => {
     const alicePh = await memberPlaceholder(t.id, 'alice')
     expect(await t.proxied('github.com', '/acme/app.git/git-receive-pack', gitBasicAuthorization(alicePh))).toEqual({ status: 403, body: 'credential_unavailable' })
     expect(t.h.vercel.commands.some((c) => c.command === MEMBERS_COMMAND)).toBe(false)
+  })
+
+  it('honors a member identity only within the window after their own client reported a send', async () => {
+    const t = await setup()
+    await t.seed('alice', 'alice-gh', 11, false)
+    const ph = gitBasicAuthorization(await memberPlaceholder(t.id, 'alice'))
+    // Connected, but never sent: nothing in the VM can use Alice's identity.
+    expect(await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).toEqual({ status: 403, body: 'credential_unavailable' })
+    await t.sent('alice')
+    expect((await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).status).toBe(200)
+    t.h.advance(31 * 60_000)
+    expect(await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).toEqual({ status: 403, body: 'credential_unavailable' })
+    // A teammate cannot open Alice's window for her.
+    expect((await t.h.call('POST', `/v1/team/workspaces/${t.id}/sent`, { bearer: await t.as('bob') })).status).toBe(200)
+    expect(await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).toEqual({ status: 403, body: 'credential_unavailable' })
   })
 })

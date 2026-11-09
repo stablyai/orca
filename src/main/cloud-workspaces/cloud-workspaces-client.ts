@@ -1,6 +1,6 @@
 // HTTPS client for the team workspace registry on the sandbox control plane. Same auth as the
 // hosted sandbox driver: a short-lived Orca token (aud=orca-sandbox), never a provider credential.
-import type { z } from 'zod'
+import { z } from 'zod'
 import { errorMessage } from '../../shared/error-message'
 import {
   CloudWorkspaceGrantIssuedSchema,
@@ -14,6 +14,8 @@ import {
   type CloudWorkspacePatch,
   type OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
+
+const NoteSentSchema = z.object({ ok: z.literal(true) })
 
 export class CloudWorkspacesError extends Error {
   constructor(
@@ -126,6 +128,9 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     },
     async patch(id: string, patch: CloudWorkspacePatch) {
       return call('PATCH', ws(id), CloudWorkspaceResponseSchema.extend({}).passthrough(), patch)
+    },
+    async noteSent(id: string) {
+      await call('POST', `${ws(id)}/sent`, NoteSentSchema, {})
     },
     async presence(
       id: string,

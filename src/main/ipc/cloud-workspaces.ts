@@ -155,6 +155,13 @@ export function registerCloudWorkspacesHandlers(): void {
     const s = await getService()
     return !s ? NOT_CONFIGURED : parsed.success ? s.get(parsed.data.id) : INVALID
   })
+  handle('cloudWorkspaces:noteSent', async (args) => {
+    const parsed = z.object({ id: Id }).safeParse(args)
+    const s = await getService()
+    if (s && parsed.success) {
+      await s.noteSent(parsed.data.id)
+    }
+  })
   handle('cloudWorkspaces:patch', async (args) => {
     const parsed = z.object({ id: Id, patch: Patch }).safeParse(args)
     const s = await getService()
