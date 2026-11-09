@@ -1,6 +1,6 @@
 import React from 'react'
 import { ExternalLink } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PRCheckAnnotation } from '../../../../../../shared/github/check-types'
 import { openAnnotationLocation } from '../actions/check-annotation-open'
 import { getOpenableAnnotationLine } from '../actions/check-annotation-path'
@@ -14,6 +14,7 @@ export function CheckRunAnnotations({
   annotations: PRCheckAnnotation[]
   worktreeId: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const openAnnotation = React.useCallback(
     (path: string, line: number) => {
       if (!worktreeId) {
@@ -24,7 +25,7 @@ export function CheckRunAnnotations({
     [worktreeId]
   )
 
-  const annotationFallback = translate(
+  const annotationFallback = t(
     'auto.components.editor.CheckRunDetailsPanel.cdbfda4dec',
     'Annotation'
   )
@@ -34,11 +35,11 @@ export function CheckRunAnnotations({
     <section className="rounded-md border border-border bg-background">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="text-sm font-medium">
-          {translate('auto.components.editor.CheckRunDetailsPanel.f2fe8a4e8f', 'Annotations')}
+          {t('auto.components.editor.CheckRunDetailsPanel.f2fe8a4e8f', 'Annotations')}
         </div>
         <CheckRunCopyButton
           text={clipboardText}
-          label={translate('auto.components.editor.CheckRunAnnotations.copy', 'Copy annotations')}
+          label={t('auto.components.editor.CheckRunAnnotations.copy', 'Copy annotations')}
         />
       </div>
       <div className="divide-y divide-border/50">
@@ -54,7 +55,7 @@ export function CheckRunAnnotations({
                   <button
                     type="button"
                     onClick={() => openAnnotation(openable.path, openable.line)}
-                    title={translate(
+                    title={t(
                       'auto.components.editor.CheckRunDetailsPanel.5e2a9c3f88',
                       'Open file at this line'
                     )}

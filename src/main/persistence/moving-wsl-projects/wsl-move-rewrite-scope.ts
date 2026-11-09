@@ -8,7 +8,7 @@ import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey
 } from '../../../shared/workspace-scope'
-import { rewriteOrcadMigrationWorktreeId } from '../../ssh/orcad-migration-path-rewrite'
+import { rewriteOrcadMigrationWorktreeId } from '../migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 import type { WslMoveDesktopRewriteContext } from './wsl-move-desktop-rewrite-stores'
 
 export type WslMoveRewriteScope = {

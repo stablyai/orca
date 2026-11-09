@@ -1,11 +1,14 @@
 /**
  * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
  */
+/**
+ * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
+ */
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   getRepoSshConnectionId,
   parseExecutionHostId,
@@ -13,20 +16,20 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   findIndexedWorktreeOwnerForHost,
-  resolveQualifiedIndexedRepoOwnerForHost,
   findIndexedDetectedWorktrees,
   resolveIndexedFolderWorkspaceOwner,
   resolveIndexedProjectGroupOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import { resolveQualifiedIndexedRepoOwnerForHost } from './workspace/ownership/repo-owner-index'
 import {
   hostAuthorityFromOperationRoute,
   SELF_LOCAL_AUTHORITY,
   type HostAuthority
 } from '../../../shared/host-authority'
-import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
+import type { ExecutionHostOwnerMatch } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRouteResultForHost,
@@ -41,7 +44,7 @@ import {
 } from './folder-workspace-runtime-owner'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { warnAmbiguousOwnerOnce } from './ambiguous-owner-warning'
-import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
+import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /** A worktree id, a `folder:` workspace key, or the floating workspace; `hostId` when the row names one. */

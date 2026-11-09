@@ -17,7 +17,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   supportsSkillRuntimeBundleInstall,
   supportsSkillRuntimeManagement
-} from '../skills/skill-runtime-capability'
+} from '../skills/runtime-transfer/skill-runtime-capability'
 import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
 import { callRuntimeEnvironment } from './runtime-environments/runtime-environment-transport-routing'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'

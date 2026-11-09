@@ -1,5 +1,5 @@
 import { claudeBackgroundArgs } from './claude-background-run-isolation'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './json-stream/json-text-structure-limit'
 import { labelFromModelId } from './model-id-label'
 
 // claude models starts chat; list_models over --print stream-json reads the picker without an API turn. Older CLIs return error with exit 0; keep seed models.

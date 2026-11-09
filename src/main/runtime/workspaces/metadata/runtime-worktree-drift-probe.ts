@@ -6,7 +6,7 @@ import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions
 } from '../../../workspaces/execution-host/project-runtime-git-options'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RemoteTrackingBase } from '../../repositories/runtime-remote-fetch-controller'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 

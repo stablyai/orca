@@ -4,7 +4,7 @@ import { admitConnectorAgent, CONNECTOR_AGENTS } from '../external-conversations
 import { runtimeConversationHost } from '../external-conversations/external-conversation-seam'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { ConnectorCloud } from './connector-cloud'
 import { resolveConnectorOrigin } from './connector-origin'
 import { connectorProjects, type ConnectorPlacesStore } from './connector-places'

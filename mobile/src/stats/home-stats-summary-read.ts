@@ -1,8 +1,8 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
-import type { RpcClient } from '../transport/rpc-client'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import type { HomeStatsRow } from './home-stats-total'
 
 // An unreadable field decodes as absent so one bad number cannot hide the host's other totals.

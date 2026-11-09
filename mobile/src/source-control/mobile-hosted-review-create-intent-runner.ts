@@ -10,7 +10,7 @@ import {
   prepareMobileHostedReviewCreateIntent,
   type MobileHostedReviewCreateIntentProgress
 } from './mobile-hosted-review-create-intent'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 
 type RunInput = {
   branch: string

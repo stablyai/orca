@@ -14,7 +14,7 @@ const ROOT = path.join(import.meta.dirname, '../../..', '..')
 
 const ENTRY_POINTS = [
   path.join(ROOT, 'src', 'main', 'runtime', 'orca-runtime.ts'),
-  path.join(ROOT, 'src', 'main', 'runtime', 'runtime-rpc.ts'),
+  path.join(ROOT, 'src', 'main', 'runtime', 'rpc', 'server', 'runtime-rpc.ts'),
   // orcad imports ipc/pty directly; checking only runtime entries once missed regressions in its larger graph.
   path.join(ROOT, 'src', 'main', 'orcad', 'main.ts'),
   // Why the CLI: it runs under ELECTRON_RUN_AS_NODE, and its tsconfig follows imports into src/main.

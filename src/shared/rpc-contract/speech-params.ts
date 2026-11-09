@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { OptionalString, requiredString } from './rpc-param-primitives'
 
 export const AUDIO_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/

@@ -1,12 +1,17 @@
-import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import type {
   DispatchContextRow,
   LegacyCompatibilityPrincipalRow,
   LegacyPrincipalRole
-} from '../orchestration/types'
+} from '../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../orchestration/orchestration-error'
-import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
-import { LEGACY_CONTRACT_VERSION } from '../orchestration/db'
+import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
+import '../orchestration/db/orchestration-db'
+import { LEGACY_CONTRACT_VERSION } from '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
 import type { RpcRequest } from './core'
 import {
   equivalentLegacyPaneKey,

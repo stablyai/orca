@@ -8,7 +8,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-send-contract'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import type { AgentPaneWorkspace } from '../agent-hooks/agent-transition-detector'
+import type { AgentPaneWorkspace } from '../agent-hooks/observations/agent-transition-detector'
 import type { LaunchedAgentForeground } from '../runtime/terminal/wait/launched-agent-foreground'
 
 import type { ExternalConversationLinkStore } from './external-conversation-links'

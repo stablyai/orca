@@ -1,5 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises'
-import { OrcaRuntimeWithSleepResolvedWorktreeTerminals } from './worktree-terminal-sleep'
+import { OrcaRuntimeWithTerminalSleepSnapshot } from './worktree-terminal-sleep-snapshot'
 import { setsEqual } from '../identity/runtime-worktree-binding-index'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
@@ -10,13 +10,13 @@ import {
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
 
 // Overlapping inventories can invalidate post-stop checks; retry within a fresh list budget before calling confirmed exits unverifiable.
 const POST_STOP_LIVENESS_RETRY_MS = PTY_CONTROLLER_LIST_TIMEOUT_MS
 const POST_STOP_LIVENESS_RETRY_DELAY_MS = 100
 
-export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWithSleepResolvedWorktreeTerminals {
+export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWithTerminalSleepSnapshot {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
 
   async stopExactTerminalsForWorktree(

@@ -1,22 +1,28 @@
-import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionForkSourceFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
+import { sayMobileAgentSessionFailure } from './agent-session-failure-copy'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../src/shared/agent-session/agent-session-wire'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
+import {
+  isDefinitiveAgentSessionCreateRefusal,
+  isAgentSessionForkSourceAdmissionRefusal
+} from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
-  type StructuredAgentSessionCreateParams
+  type StructuredAgentSessionCreateParams,
+  type StructuredAgentSessionForkSource
 } from '../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentCreateSupportReply } from '../../../src/shared/agent-session/structured-agent-create-support-reply'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   structuredAgentSessionCreate,
   structuredAgentSupportProbe
-} from './mobile-session-launch-operations'
+} from './native-chat/agent-session/mobile-structured-create-operations'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
@@ -37,36 +43,37 @@ export type MobileStructuredAgentLaunchResult =
   | { kind: 'unknown'; message: string }
 
 function createParamsFor(
-  agent: AgentSessionHandleProvider,
-  worktree: string
+  agent: TuiAgent,
+  worktree: string,
+  forkFrom: StructuredAgentSessionForkSource | undefined,
+  tabPlacement: StructuredAgentSessionCreateParams['tabPlacement']
 ): StructuredAgentSessionCreateParams {
   return structuredAgentSessionCreateParams({
     sessionId: createStructuredAgentSessionId(agent, randomV4Uuid),
     worktree,
     agent,
+    ...(forkFrom ? { forkFrom } : {}),
+    ...(tabPlacement ? { tabPlacement } : {}),
     randomUuid: randomV4Uuid
   })
 }
 
-function unknownCreateResult(
-  agent: AgentSessionHandleProvider,
-  error: unknown
-): MobileStructuredAgentLaunchResult {
+function unknownCreateResult(agent: TuiAgent, error: unknown): MobileStructuredAgentLaunchResult {
   const message = error instanceof Error ? error.message.trim() : ''
   return { kind: 'unknown', message: message || unconfirmedMessage(agent) }
 }
 
-function unconfirmedMessage(agent: AgentSessionHandleProvider): string {
+function unconfirmedMessage(agent: TuiAgent): string {
   return `The ${TUI_AGENT_DISPLAY_NAMES[agent]} chat result could not be confirmed.`
 }
 
-function failedMessage(agent: AgentSessionHandleProvider): string {
+function failedMessage(agent: TuiAgent): string {
   return `Could not open ${TUI_AGENT_DISPLAY_NAMES[agent]} chat.`
 }
 
 // Only definitive refusal permits failure/fallback; uncertain creates may already own a session and must not create a sibling.
 function classifyCreateRefusal(
-  agent: AgentSessionHandleProvider,
+  agent: TuiAgent,
   code: string,
   message: string
 ): MobileStructuredAgentLaunchResult {
@@ -79,7 +86,11 @@ function classifyCreateRefusal(
 export async function createMobileStructuredAgentSession(
   client: RpcClient,
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: TuiAgent,
+  /** Sent only to a host advertising forks. */
+  forkFrom?: StructuredAgentSessionForkSource,
+  /** Sent only to a host advertising create placement; the replay keeps it. */
+  tabPlacement?: StructuredAgentSessionCreateParams['tabPlacement']
 ): Promise<MobileStructuredAgentLaunchResult> {
   const worktree = `id:${worktreeId}`
   let supportResponse
@@ -120,15 +131,17 @@ export async function createMobileStructuredAgentSession(
     return { kind: 'unsupported', reason: support?.reason }
   }
 
-  const params = createParamsFor(agent, worktree)
+  const params = createParamsFor(agent, worktree, forkFrom, tabPlacement)
   rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
+  let priorCreateOutcomeUnknown = false
   try {
     response = await structuredAgentSessionCreate.request(client, params, {
       timeoutMs: 15_000,
       budgetSpansConnect: true
     })
   } catch {
+    priorCreateOutcomeUnknown = true
     // Replay the durable envelope once so a lost acknowledgement cannot create a sibling.
     try {
       response = await structuredAgentSessionCreate.request(client, params, {
@@ -169,6 +182,22 @@ export async function createMobileStructuredAgentSession(
       typeof result.refusal.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
+    }
+    if (
+      forkFrom &&
+      !priorCreateOutcomeUnknown &&
+      result.refusal.createAttemptRefusedBeforeCommit === true &&
+      isAgentSessionForkSourceAdmissionRefusal(result.refusal)
+    ) {
+      return {
+        kind: 'failed',
+        message:
+          agentSessionForkSourceFailureWords(
+            result.refusal.message,
+            TUI_AGENT_DISPLAY_NAMES[agent],
+            sayMobileAgentSessionFailure
+          ) ?? result.refusal.message
+      }
     }
     return classifyCreateRefusal(agent, result.refusal.code, result.refusal.message)
   }

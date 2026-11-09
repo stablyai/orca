@@ -23,6 +23,9 @@ import {
   type WebRuntimeCredentialSource
 } from './web-runtime-credential-source'
 import { migrateWebRuntimeToDeviceKey } from './web-runtime-device-key-migration'
+import { WebTokenFraming } from './web-token-framing'
+
+const UNSUPPORTED_HELLO_CLOSE_CODE = 4001
 
 export type WebRuntimeConnectionLifecycle = {
   onStateChanged?: (state: WebRuntimeConnectionState) => void
@@ -43,6 +46,7 @@ export class WebRuntimeConnectionAuth {
   private readonly credential: WebRuntimeCredentialSource
   private readonly allowKeyMigration: boolean
   private readonly retryLater: () => void
+  private readonly tokenFraming: WebTokenFraming
 
   constructor(
     connection: PairedRuntimeConnection,
@@ -58,6 +62,12 @@ export class WebRuntimeConnectionAuth {
     // Absent: the pairing token over legacy framing, as before device keys.
     this.credential = options.credential ?? tokenOnlyCredentialSource(deviceToken)
     this.allowKeyMigration = options.allowKeyMigration === true
+    this.tokenFraming = new WebTokenFraming(
+      connection.hostPublicKeyB64,
+      this.credential.tryV2Token === true &&
+        options.reconnect !== false &&
+        options.crewAttempt !== true
+    )
   }
 
   /** Resolves the next plan, then opens; synchronous for a token-only source. */
@@ -74,8 +84,15 @@ export class WebRuntimeConnectionAuth {
     )
   }
 
-  framingFor(plan: WebRuntimeAuthPlan): 'legacy' | 'v2' {
-    return plan.kind === 'legacy-token' ? 'legacy' : 'v2'
+  createHandshake(plan: WebRuntimeAuthPlan): PairedE2EEClientHandshake {
+    return this.tokenFraming.createHandshake(plan)
+  }
+
+  /** True when this socket only checks a latched host's status, then reconnects. */
+  checkLatchedHostIfPlanned(
+    args: Parameters<WebTokenFraming['checkLatchedHostIfPlanned']>[0]
+  ): boolean {
+    return this.tokenFraming.checkLatchedHostIfPlanned(args)
   }
 
   async sendAuth(args: {
@@ -130,6 +147,14 @@ export class WebRuntimeConnectionAuth {
   async rejected(
     reply: Extract<PairedE2EEAuthReply, { kind: 'rejected' }>
   ): Promise<{ kind: 'retry' } | { kind: 'failed'; error: WebRuntimeClientError }> {
+    // Hosts that predate capabilities on v2 token auth answer bad_auth; reconnect with legacy.
+    if (
+      reply.errorCode === 'bad_auth' &&
+      this.tokenFraming.sentTokenOverV2 &&
+      this.tokenFraming.noteV2Refused()
+    ) {
+      return { kind: 'retry' }
+    }
     const outcome = await resolveWebRuntimeAuthRejection(this.plan, reply, this.credential)
     if (outcome.kind === 'retry') {
       return outcome
@@ -138,10 +163,14 @@ export class WebRuntimeConnectionAuth {
     return { kind: 'failed', error: this.failureError() }
   }
 
-  socketClosed(): void {
+  socketClosed(closeCode?: number): void {
     // Why: a host that refuses a v2 hello predates device keys; fall back to the token.
     if (this.plan?.kind === 'migrate' && !this.readyAccepted) {
       this.credential.migrationUnavailable()
+    }
+    const v2Hello = this.tokenFraming.sentTokenOverV2 || this.plan?.kind === 'migrate'
+    if (v2Hello && !this.readyAccepted && closeCode === UNSUPPORTED_HELLO_CLOSE_CODE) {
+      this.tokenFraming.noteV2Refused()
     }
   }
 }

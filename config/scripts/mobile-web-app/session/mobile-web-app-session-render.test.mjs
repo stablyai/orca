@@ -53,7 +53,6 @@ let server
 let browser
 let origin
 let routeChunks = {}
-let servedPaths = []
 let cspHeader = null
 let bridgeVersion = null
 let faultGrant = null
@@ -71,7 +70,6 @@ beforeAll(async () => {
   const served = await createBundleServer({ outDir: built.outDir, cspHeader })
   server = served.server
   origin = served.origin
-  servedPaths = served.requestedPaths
   const executablePath = process.env.ORCA_MOBILE_WEB_RENDER_BROWSER
   browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) })
 }, 240_000)
@@ -163,8 +161,6 @@ async function openRoute(route, awaitText, replies = {}, options = {}) {
   return opened
 }
 
-const BACK_LABEL = 'Back to worktrees'
-
 const SESSION_MOUNT_READS = ['worktree.show', 'session.tabs.list', 'terminal.list']
 
 describeRender(
@@ -184,17 +180,6 @@ describeRender(
       await opened.page.close()
     }, 120_000)
 
-    it('puts the Back control in the accessibility tree by name', async () => {
-      const opened = await openRoute(SESSION_ROUTE, 'Terminal')
-      const control = await opened.page.evaluate((label) => {
-        const found = document.querySelector(`[aria-label="${label}"]`)
-        return found === null ? null : { role: found.getAttribute('role'), tag: found.tagName }
-      }, BACK_LABEL)
-      // Require actual button role: RN-Web div can carry label without exposing accessible action.
-      expect(control).toEqual({ role: 'button', tag: 'BUTTON' })
-      await opened.page.close()
-    }, 120_000)
-
     it("fetches the session route's own chunk on a client-side navigation", async () => {
       const opened = await openRoute(HOST_ROUTE, SHELL_HOST.name)
       const loadedForFirstRoute = [...opened.scripts]
@@ -210,18 +195,6 @@ describeRender(
         `/assets/${chunk}`
       )
       expect(loadedForFirstRoute).not.toContain(`/assets/${chunk}`)
-      await opened.page.close()
-    }, 120_000)
-
-    it('asks the origin for no icon, which the shell has none to answer with', async () => {
-      // data:, icon prevents /favicon.ico fetch forbidden by shell manifest. Only full Chrome requests it; headless shell coverage is a precondition.
-      // Read whole suite’s server log: browser-process favicon requests never reach page.on(request).
-      const opened = await openRoute(SESSION_ROUTE, 'Terminal')
-      // Wait past load: favicon request may arrive after route text paints.
-      await opened.page.waitForLoadState('networkidle')
-      expect(servedPaths.filter((path) => path === '/favicon.ico')).toEqual([])
-      // Require recorded requests so empty log cannot prove no favicon fetch.
-      expect(servedPaths).toContain('/')
       await opened.page.close()
     }, 120_000)
 

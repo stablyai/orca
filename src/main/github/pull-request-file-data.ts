@@ -1,3 +1,4 @@
+import { GITHUB_BODY_MEDIA_TYPE, githubBodyImageUrls } from './body-image-urls'
 import type { GitHubPRFile } from '../../shared/github/pull-request-types'
 import type { PRFileViewedStatesResult } from './pull-request-detail-context'
 import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from './gh-utils'
@@ -49,7 +50,12 @@ export async function getPRMetadata(
   repository: GitHubApiRepository | null,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<{ body: string; headSha?: string; baseSha?: string }> {
+): Promise<{
+  body: string
+  bodyImageUrls?: Record<string, string>
+  headSha?: string
+  baseSha?: string
+}> {
   if (!repository) {
     return { body: '' }
   }
@@ -63,19 +69,27 @@ export async function getPRMetadata(
   try {
     noteRepositoryRateLimitSpend(repository, 'core', 1, ghOptions)
     const { stdout } = await ghExecFileAsync(
-      ['api', '--cache', '60s', `repos/${repository.owner}/${repository.repo}/pulls/${prNumber}`],
+      [
+        'api',
+        '-H',
+        GITHUB_BODY_MEDIA_TYPE,
+        `repos/${repository.owner}/${repository.repo}/pulls/${prNumber}`
+      ],
       ghOptions
     )
-    const data = JSON.parse(stdout) as {
+    const data: {
       body?: string | null
+      body_html?: unknown
       head?: { sha?: string }
       base?: { sha?: string }
-    }
-    return {
+    } = JSON.parse(stdout)
+    const metadata = {
       body: data.body ?? '',
+      bodyImageUrls: githubBodyImageUrls(data.body, data.body_html),
       ...(data.head?.sha ? { headSha: data.head.sha } : {}),
       ...(data.base?.sha ? { baseSha: data.base.sha } : {})
     }
+    return metadata
   } catch {
     return { body: '' }
   }

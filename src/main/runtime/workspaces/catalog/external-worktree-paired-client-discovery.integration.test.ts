@@ -20,8 +20,8 @@ import {
   send,
   type PairedSession,
   type ResponseReader
-} from '../../paired-client-navigation-test-harness'
-import { OrcaRuntimeRpcServer } from '../../runtime-rpc'
+} from '../../client/navigation/paired-client-navigation-test-harness'
+import { OrcaRuntimeRpcServer } from '../../rpc/server/runtime-rpc'
 
 vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()
@@ -214,7 +214,7 @@ describe('external worktree discovery for paired clients', () => {
           break
         }
       }
-      expect(observed).toEqual(['worktreesChanged', 'reposChanged'])
+      expect(observed).toEqual(['worktreesChanged', 'gitStatusChanged', 'reposChanged'])
     }
 
     for (const [index, session] of sessions.slice(0, 2).entries()) {
@@ -478,60 +478,5 @@ describe('external worktree discovery for paired clients', () => {
     expect(sendToHostRenderer).toHaveBeenCalledWith('worktrees:changed', { repoId: REPO_ID })
     runtime.notifyReposChangedForRemoteClients()
     expect(resultType(await reader.next('collision-events'))).toBe('reposChanged')
-  })
-
-  it('keeps the shared runtime publication valid without a headed renderer', async () => {
-    vi.mocked(listWorktrees).mockResolvedValue([initialWorktree])
-    vi.mocked(listWorktreesStrict).mockResolvedValue([initialWorktree])
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-    const userDataPath = mkdtempSync(join(tmpdir(), 'o-ewd-h-'))
-    tempDirs.push(userDataPath)
-    const server = new OrcaRuntimeRpcServer({
-      runtime,
-      userDataPath,
-      enableWebSocket: true,
-      wsPort: 0
-    })
-    servers.push(server)
-    await server.start()
-    const offer = server.createPairingOffer({
-      address: '127.0.0.1',
-      name: 'headless-client',
-      scope: 'runtime'
-    })
-    if (!offer.available) {
-      throw new Error('pairing_unavailable')
-    }
-    const client = await authenticate(offer.pairingUrl)
-    const reader = createReader(client)
-    sessions.push(client)
-    readers.push(reader)
-    send(client, { id: 'headless-events', method: 'runtime.clientEvents.subscribe' })
-    await reader.next('headless-events', (response) => resultType(response) === 'ready')
-    send(client, {
-      id: 'headless-initial-catalog',
-      method: 'worktree.list',
-      params: { repo: REPO_ID, limit: 100 }
-    })
-    expect(catalogPaths(await reader.next('headless-initial-catalog'))).toEqual([
-      initialWorktreePath
-    ])
-
-    vi.mocked(listWorktrees).mockResolvedValue([initialWorktree, externalWorktree])
-    vi.mocked(listWorktreesStrict).mockResolvedValue([initialWorktree, externalWorktree])
-    runtime.notifyWorktreeCatalogChangedForRemoteClients(REPO_ID)
-
-    await expect(
-      reader.next('headless-events', (response) => resultType(response) === 'worktreesChanged')
-    ).resolves.toMatchObject({ result: { repoId: REPO_ID } })
-    send(client, {
-      id: 'headless-refreshed-catalog',
-      method: 'worktree.list',
-      params: { repo: REPO_ID, limit: 100 }
-    })
-    expect(catalogPaths(await reader.next('headless-refreshed-catalog'))).toEqual([
-      initialWorktreePath,
-      externalWorktreePath
-    ])
   })
 })

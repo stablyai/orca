@@ -46,12 +46,18 @@ for (const paneCount of PANE_COUNTS) {
 
 const { nextCadenceInspectionDelayMs } = await import(
   pathToFileURL(
-    path.join(ROOT, 'src/renderer/src/components/terminal-pane/agent-completion-poll-interval.ts')
+    path.join(
+      ROOT,
+      'src/renderer/src/components/terminal-pane/agent-completion/agent-completion-poll-interval.ts'
+    )
   ).href
 )
 const { POLL_TIER_INTERVAL_MS } = await import(
   pathToFileURL(
-    path.join(ROOT, 'src/renderer/src/components/terminal-pane/agent-completion-poll-cadence.ts')
+    path.join(
+      ROOT,
+      'src/renderer/src/components/terminal-pane/agent-completion/agent-completion-poll-cadence.ts'
+    )
   ).href
 )
 const { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } = await import(

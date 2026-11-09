@@ -2,6 +2,7 @@ import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-atta
 import type { DiffCommentBaseMutation } from '../../../shared/diff-comment-mutation'
 
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
+import { toWorkspaceLineageRow } from '../../../shared/worktree/worktree-lineage-workspace-row'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -181,6 +182,9 @@ export class MetadataLineageOperations {
       delete this[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey[
         worktreeWorkspaceKey(worktreeId)
       ]
+      delete this[metadataLineageOperationsContext].runtime.state.crossStoreLineageByChildKey?.[
+        worktreeWorkspaceKey(worktreeId)
+      ]
     }
     for (const partition of partitions) {
       removeWorkspaceSessionOwnerInPartition(
@@ -239,6 +243,10 @@ export class MetadataLineageOperations {
       return undefined
     }
     state.worktreeLineageById[target.id] = lineage
+    // A child has at most one parent record; the workspace row mirrors this link.
+    state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)] =
+      toWorkspaceLineageRow(lineage)
+    delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(target.id)]
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
     return lineage
   }
@@ -250,6 +258,7 @@ export class MetadataLineageOperations {
     }
     delete state.worktreeLineageById[target.id]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(target.id)]
+    delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(target.id)]
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
   }
 
@@ -283,17 +292,19 @@ export class MetadataLineageOperations {
     return this[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey
   }
 
+  /** For a worktree parent whose worktree link couldn't be recorded; folder parents use
+   * setFolderParentLineage, which keeps the child to one parent. */
   setWorkspaceLineage(lineage: WorkspaceLineage): WorkspaceLineage {
-    this[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey[
-      lineage.childWorkspaceKey
-    ] = lineage
+    const state = this[metadataLineageOperationsContext].runtime.state
+    state.workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
+    delete state.crossStoreLineageByChildKey?.[lineage.childWorkspaceKey]
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
     return lineage
   }
 }
 
 // The first host stamp owns raw-ID metadata and lineage buckets.
-function ownsRawIdBucket(
+export function ownsRawIdBucket(
   state: MetadataLineageOperationsRuntime['state'],
   target: HostWorktreeTarget
 ): boolean {
@@ -301,15 +312,19 @@ function ownsRawIdBucket(
   return !owner || owner === target.hostId
 }
 
-export function removeWorkspaceLineageForFolderParent(
+export function removeWorkspaceLineageForRemovedFolder(
   owner: MetadataLineageOperations,
   folderWorkspaceId: string
 ): void {
-  const parentKey = folderWorkspaceKey(folderWorkspaceId)
+  const folderKey = folderWorkspaceKey(folderWorkspaceId)
+  // A cross-store record moves or drops with its child only.
+  delete owner[metadataLineageOperationsContext].runtime.state.crossStoreLineageByChildKey?.[
+    folderKey
+  ]
   for (const [childKey, lineage] of Object.entries(
     owner[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey
   )) {
-    if (lineage.parentWorkspaceKey === parentKey) {
+    if (lineage.parentWorkspaceKey === folderKey) {
       delete owner[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey[
         childKey as WorkspaceKey
       ]

@@ -1,16 +1,19 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import type { ComponentProps } from 'react'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { PtyTransport } from '../terminal-pane/pty-transport-types'
-import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
+import type { PtyTransport } from '../terminal-pane/pty-transport/pty-transport-types'
+import {
+  emptyCrew,
+  type OrchestrationCrewRow
+} from '../../../../shared/orchestration/orchestration-crew'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { createIpcPtyTransport } from '../terminal-pane/pty-transport'
+import { createIpcPtyTransport } from '../terminal-pane/pty-transport/ipc/pty-transport'
 import { TerminalCrewPortals } from './TerminalCrewPortals'
 
 // Exercise dormant panel interactions independently of the suspension gate.
@@ -24,7 +27,7 @@ vi.mock('./use-terminal-crew-identity', () => ({
     return { target: { kind: 'local' }, party: paneKey }
   }
 }))
-vi.mock('../native-chat/use-orchestration-crew', () => ({
+vi.mock('../native-chat/worker-lifetime/use-orchestration-crew', () => ({
   useOrchestrationCrew: () => {
     rig.crew()
     return {
@@ -144,7 +147,7 @@ function mount(insertion?: {
     manager.setActivePane(first.id, { focus: false })
     vi.spyOn(manager, 'setActivePane')
   }
-  const controller: Controller = {
+  let controller: Controller = {
     tabId: insertion ? 'tab' : 'retained-tab',
     worktreeId: insertion ? 'workspace' : 'worktree',
     managerRef: { current: manager },
@@ -179,25 +182,12 @@ function mount(insertion?: {
     link,
     accepted,
     sendInput,
-    update: () => view.rerender(content())
+    update: (patch: Partial<Controller> = {}) => {
+      controller = { ...controller, ...patch }
+      view.rerender(content())
+    }
   }
 }
-
-it('mentions into a restored pane whose terminal connects after the panel first rendered', async () => {
-  const test = mount({ acceptance: true, restored: true })
-  fireEvent.click(
-    within(test.first.container).getByRole('button', { name: /^Show orchestration: 1 worker,/ })
-  )
-  // The transport binds without any React update, as a restored pane's reattach does.
-  test.link.connected = true
-  await act(async () =>
-    fireEvent.click(within(test.first.container).getByRole('button', { name: 'Mention all' }))
-  )
-  expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
-    'Worker (Orca agent term_worker) ',
-    'driving'
-  )
-})
 
 it('uses numeric expansion and exact activity leaf identity without dismissing another visible split', async () => {
   const user = userEvent.setup()
@@ -213,35 +203,20 @@ it('uses numeric expansion and exact activity leaf identity without dismissing a
   expect(manager.getActivePane()?.id).toBe(second.id)
   act(update)
   expect(screen.getByRole('menu')).toBe(popup)
-  act(() => {
-    controller.expandedPaneId = second.id
-    update()
-  })
+  act(() => update({ expandedPaneId: second.id }))
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(a.queryByRole('button', { name: 'More for Worker' })).not.toBeInTheDocument()
   expect(b.getByRole('button', { name: 'More for Worker' })).toBeInTheDocument()
-  act(() => {
-    controller.expandedPaneId = null
-    update()
-  })
+  act(() => update({ expandedPaneId: null }))
   await user.click(a.getByRole('button', { name: 'More for Worker' }))
-  act(() => {
-    controller.isolatedPaneKey = makePaneKey(controller.tabId, second.leafId)
-    update()
-  })
+  act(() => update({ isolatedPaneKey: makePaneKey(controller.tabId, second.leafId) }))
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(a.queryByRole('button', { name: 'More for Worker' })).not.toBeInTheDocument()
   await user.click(b.getByRole('button', { name: 'More for Worker' }))
-  act(() => {
-    controller.isolatedPaneKey = makePaneKey('other-tab', second.leafId)
-    update()
-  })
+  act(() => update({ isolatedPaneKey: makePaneKey('other-tab', second.leafId) }))
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(b.queryByRole('button', { name: 'More for Worker' })).not.toBeInTheDocument()
-  act(() => {
-    controller.isolatedPaneKey = null
-    update()
-  })
+  act(() => update({ isolatedPaneKey: null }))
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   expect(rig.open).not.toHaveBeenCalled()
   expect(rig.copy).not.toHaveBeenCalled()

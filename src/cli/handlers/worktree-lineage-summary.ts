@@ -1,4 +1,4 @@
-import type { RuntimeWorktreeCreateResult } from '../../shared/runtime-types'
+import type { RuntimeWorktreeCreateResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
 
 function getLineageSourceLabel(source: string): string {
   switch (source) {
@@ -19,9 +19,34 @@ function getLineageSourceLabel(source: string): string {
   }
 }
 
+/** The summary line for a parent saved in another Orca store. */
+export function formatCrossStoreParentLine(
+  lineage: NonNullable<RuntimeWorktreeCreateResult['crossStoreLineage']>
+): string {
+  return `parent: ${lineage.parent.workspaceKey} on another machine (${lineage.capture.confidence} from ${getLineageSourceLabel(lineage.capture.source)})`
+}
+
+export function formatFolderParentLine(
+  lineage: NonNullable<RuntimeWorktreeCreateResult['workspaceLineage']>
+): string {
+  return `parent: ${lineage.parentWorkspaceKey} (folder workspace)`
+}
+
+/** The parent `worktree set` attached; same-store lineage fields stay null for both kinds. */
+export function printSetParentLine(
+  worktree: RuntimeWorktreeRecord,
+  parentFields: { crossStoreParent?: unknown; parentWorktree?: string }
+): void {
+  if (parentFields.crossStoreParent && worktree.crossStoreLineage) {
+    console.error(formatCrossStoreParentLine(worktree.crossStoreLineage))
+  } else if (parentFields.parentWorktree && worktree.workspaceLineage) {
+    console.error(formatFolderParentLine(worktree.workspaceLineage))
+  }
+}
+
 export function printLineageSummary(
   result: Pick<RuntimeWorktreeCreateResult, 'lineage' | 'workspaceLineage'> &
-    Partial<Pick<RuntimeWorktreeCreateResult, 'warnings'>>,
+    Partial<Pick<RuntimeWorktreeCreateResult, 'warnings' | 'crossStoreLineage'>>,
   json: boolean
 ): void {
   if (json) {
@@ -29,6 +54,10 @@ export function printLineageSummary(
   }
   for (const warning of result.warnings ?? []) {
     console.error(`warning: ${warning.message}`)
+  }
+  if (result.crossStoreLineage) {
+    console.error(formatCrossStoreParentLine(result.crossStoreLineage))
+    return
   }
   if (result.workspaceLineage) {
     const { parentWorkspaceKey, capture } = result.workspaceLineage

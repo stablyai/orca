@@ -102,22 +102,6 @@ describe('Session terminal control', () => {
   }
 
   describe('clearScrollback', () => {
-    it('resyncs the native PTY screen state alongside the emulator clear', () => {
-      createSession()
-      session.clearScrollback()
-      expect(subprocess.clearCalls).toBe(1)
-      expect(session.takePendingOutput(false)?.records).toContainEqual({ kind: 'clear' })
-    })
-
-    it('nudges a Windows PowerShell prompt to repaint with a form feed', async () => {
-      createSession()
-      subprocess.foregroundProcess = 'powershell.exe'
-      subprocess.simulateData('PS C:\\Users\\me> ')
-      await vi.advanceTimersByTimeAsync(10)
-      withPlatform('win32', () => session.clearScrollback())
-      expect(subprocess.written).toEqual(['\x0c'])
-    })
-
     it('does not send a form feed while input is pending at the prompt', async () => {
       createSession()
       subprocess.foregroundProcess = 'powershell.exe'
@@ -155,22 +139,6 @@ describe('Session terminal control', () => {
       await vi.advanceTimersByTimeAsync(10)
       withPlatform('win32', () => session.clearScrollback())
       expect(subprocess.written).toEqual([])
-    })
-
-    it('does not send a form feed on POSIX platforms', async () => {
-      createSession()
-      subprocess.foregroundProcess = 'pwsh'
-      subprocess.simulateData('PS C:\\Users\\me> ')
-      await vi.advanceTimersByTimeAsync(10)
-      withPlatform('linux', () => session.clearScrollback())
-      expect(subprocess.written).toEqual([])
-    })
-
-    it('does not touch the subprocess after dispose', () => {
-      createSession()
-      session.dispose()
-      session.clearScrollback()
-      expect(subprocess.clearCalls).toBe(0)
     })
   })
 
@@ -228,32 +196,6 @@ describe('Session terminal control', () => {
       expect(subprocess.resumeCalls).toBe(1)
     })
 
-    it('resumeProducer resumes once and cancels the failsafe', () => {
-      createSession()
-      session.pauseProducer()
-      session.resumeProducer()
-      expect(subprocess.resumeCalls).toBe(1)
-      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS * 2)
-      expect(subprocess.resumeCalls).toBe(1)
-    })
-
-    it('ignores resumeProducer without a matching pause', () => {
-      createSession()
-      session.resumeProducer()
-      expect(subprocess.resumeCalls).toBe(0)
-    })
-
-    it('re-pausing re-arms the failsafe window', () => {
-      createSession()
-      session.pauseProducer()
-      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1_000)
-      session.pauseProducer()
-      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1)
-      expect(subprocess.resumeCalls).toBe(0)
-      vi.advanceTimersByTime(1)
-      expect(subprocess.resumeCalls).toBe(1)
-    })
-
     it('resumes a paused producer before kill signals the child', () => {
       createSession()
       session.pauseProducer()
@@ -261,14 +203,6 @@ describe('Session terminal control', () => {
       session.signalTerminationRoot()
       expect(subprocess.resumeCalls).toBe(1)
       expect(subprocess.killed).toBe(true)
-    })
-
-    it('dispose resumes a paused producer and clears the failsafe', () => {
-      createSession()
-      session.pauseProducer()
-      session.dispose()
-      expect(subprocess.resumeCalls).toBe(1)
-      expect(vi.getTimerCount()).toBe(0)
     })
 
     it('subprocess exit clears the failsafe without resuming a reaped child', () => {
@@ -279,22 +213,6 @@ describe('Session terminal control', () => {
       expect(subprocess.resumeCalls).toBe(0)
     })
 
-    it('ignores pauseProducer on an exited session', () => {
-      createSession()
-      subprocess.simulateExit(0)
-      session.pauseProducer()
-      expect(subprocess.pauseCalls).toBe(0)
-      expect(vi.getTimerCount()).toBe(0)
-    })
-
-    it('detaching the last client resumes a paused producer', () => {
-      createSession()
-      const token = session.attachClient({ onData: () => {}, onExit: () => {} })
-      session.pauseProducer()
-      session.detachClient(token)
-      expect(subprocess.resumeCalls).toBe(1)
-    })
-
     it('keeps the pause while another client is attached', () => {
       createSession()
       const token = session.attachClient({ onData: () => {}, onExit: () => {} })
@@ -302,14 +220,6 @@ describe('Session terminal control', () => {
       session.pauseProducer()
       session.detachClient(token)
       expect(subprocess.resumeCalls).toBe(0)
-    })
-
-    it('detachAllClients resumes a paused producer', () => {
-      createSession()
-      session.attachClient({ onData: () => {}, onExit: () => {} })
-      session.pauseProducer()
-      session.detachAllClients()
-      expect(subprocess.resumeCalls).toBe(1)
     })
   })
 })

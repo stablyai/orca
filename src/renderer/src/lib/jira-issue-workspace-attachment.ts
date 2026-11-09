@@ -6,7 +6,7 @@ import {
 } from '../../../shared/jira/jira-issue-url'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { WorkspaceAttachment, Worktree } from '../../../shared/worktree/types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 
 export type JiraIssueWorkspaceAttachmentIndex = ReadonlyMap<string, readonly Worktree[]>
 export type LinkedJiraIssueRef = { key: string; siteId: string; sourceContext?: TaskSourceContext }

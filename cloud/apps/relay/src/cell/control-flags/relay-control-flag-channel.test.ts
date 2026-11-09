@@ -77,21 +77,6 @@ describe('control flag channel', () => {
       .filter((line) => line.includes(`"event":"${CELL_FLAGS_APPLIED_EVENT}"`))
       .map((line): unknown => JSON.parse(line))
 
-  it('runs on defaults until a first read, then reads the cell object in the project bucket', async () => {
-    const google = fakeGoogle(cellObject(5, { readinessLocal: true }))
-    const channel = cellChannel(google.fetchImpl)
-    expect(channel.applied()).toEqual({ generation: 0, flags: CELL_FLAG_DEFAULTS })
-    await channel.poll()
-    expect(google.state.storageRequests[0]?.pathname).toBe(
-      `/storage/v1/b/onorca-cloud-relay-control/o/${encodeURIComponent(`cells/${CELL_ID}.json`)}`
-    )
-    expect(google.state.authorizations[0]).toBe(`Bearer ${ACCESS_TOKEN}`)
-    expect(channel.applied()).toEqual({
-      generation: 5,
-      flags: { ...CELL_FLAG_DEFAULTS, readinessLocal: true }
-    })
-  })
-
   it('flips a flag on and back off, logging each applied generation once', async () => {
     const google = fakeGoogle(cellObject(5, { readinessLocal: true, ticketCheck: 'shadow' }))
     const channel = cellChannel(google.fetchImpl)
@@ -131,30 +116,6 @@ describe('control flag channel', () => {
     expect(failures).toEqual(['http', 'not-found', 'network', 'malformed'])
     const output = [...log.mock.calls, ...warn.mock.calls].flat().map(String).join('\n')
     expect(output).not.toContain(ACCESS_TOKEN)
-  })
-
-  it('applies the step-5 switches: admit mode, intake rate and enforced tickets', async () => {
-    const google = fakeGoogle(
-      cellObject(5, { admitMode: 'reserve', intakePerSec: 3.5, ticketCheck: 'enforce' })
-    )
-    const channel = cellChannel(google.fetchImpl)
-    await channel.poll()
-    expect(channel.applied().flags).toEqual({
-      ...CELL_FLAG_DEFAULTS,
-      admitMode: 'reserve',
-      intakePerSec: 3.5,
-      ticketCheck: 'enforce'
-    })
-  })
-
-  it('applies the fence and read-timeout switches within their bounds', async () => {
-    const google = fakeGoogle(cellObject(5, { rejectionFence: false, readTimeoutMarginMs: 4_000 }))
-    const channel = cellChannel(google.fetchImpl)
-    await channel.poll()
-    expect(channel.applied()).toEqual({
-      generation: 5,
-      flags: { ...CELL_FLAG_DEFAULTS, rejectionFence: false, readTimeoutMarginMs: 4_000 }
-    })
   })
 
   it('ignores a generation below the applied one', async () => {

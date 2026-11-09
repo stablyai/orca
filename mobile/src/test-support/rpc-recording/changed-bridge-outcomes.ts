@@ -5,6 +5,7 @@ import type { RecordedValue } from './recording-values'
 // Producers whose input or recorded product contract this PR changed (the re-recorded set). Each earns its own
 // direct page outcomes; none is judged by a legacy label or counted in the unchanged tally.
 export const CHANGED_PRODUCERS: readonly string[] = [
+  'matrix-tasks.item-review-github-pr-check-discovery',
   'matrix-github.pr-read-github.listassignableusers-1',
   'matrix-github.pr-read-github.prcheckdetails-1',
   'matrix-github.pr-read-github.prchecks-1',
@@ -154,7 +155,8 @@ export const MOVED_FROM_BASELINE: Readonly<Record<string, BaselineClass>> = {
 // Producers the PR removed from the corpus, with their branch-base class.
 export const REMOVED_FROM_BASELINE: Readonly<Record<string, BaselineClass>> = {
   'matrix-tasks.item-detail-metadata-github.listassignableusers-1': 'result-absent-settlement',
-  'matrix-tasks.item-detail-metadata-github.listlabels-1': 'result-absent-settlement'
+  'matrix-tasks.item-detail-metadata-github.listlabels-1': 'result-absent-settlement',
+  'speech-desktop-start-recording-failed': 'identical'
 }
 
 export function expectedUnchangedTally(

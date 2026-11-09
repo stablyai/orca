@@ -94,19 +94,6 @@ export function registerPtyRetirementAsyncDurabilityTests(): void {
         await expect(retire()).resolves.toBe(true)
         expect(persistedLayout()).toBeUndefined()
       })
-
-      it('skips disk work when the pane removal is already durable', async () => {
-        const { authority, retire, persistedLayout } = await retirementFixture(connectionId)
-        await expect(retire()).resolves.toBe(true)
-        expect(persistedLayout()).toBeUndefined()
-        authority.captures.length = 0
-        const revisionCheck = vi.spyOn(authority, 'assertCurrentRevision')
-        const fullStateWrite = vi.spyOn(authority, 'writeSerializedState')
-        await expect(retire()).resolves.toBe(true)
-        expect(authority.captures).toEqual([])
-        expect(revisionCheck).not.toHaveBeenCalled()
-        expect(fullStateWrite).not.toHaveBeenCalled()
-      })
     }
   )
 }

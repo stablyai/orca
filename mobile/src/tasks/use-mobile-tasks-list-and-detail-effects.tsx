@@ -9,7 +9,8 @@ import {
   useLayoutEffect,
   useEffect
 } from './mobile-tasks-dependencies'
-import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
+import { scopeGitHubTaskSearch } from '../../../src/shared/work-items/task-github-search'
 import {
   linearComposerTeamListRead,
   linearTeamStateListRead
@@ -42,6 +43,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     provider,
     query,
     refreshTasks,
+    repoListEnsureLoaded,
     selectGitHubProject,
     setAppliedQuery,
     setCreateRepoId,
@@ -137,6 +139,13 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     }
   }, [provider, refreshJiraConnection, taskStateHydrated])
 
+  // Repos load beside the hydration reads, so the first list read waits on one round trip, not two.
+  useEffect(() => {
+    if (tasksSupported) {
+      void repoListEnsureLoaded().catch(() => {})
+    }
+  }, [repoListEnsureLoaded, tasksSupported])
+
   useEffect(() => {
     if (connState !== 'connected' || !taskStateHydrated) {
       return
@@ -206,7 +215,6 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       return
     }
     let stale = false
-    setCreateTeamId(null)
     void linearComposerTeamListRead
       .request(client)
       .then((response) => {
@@ -217,7 +225,9 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
         if (accepted.accepted) {
           const teams = accepted.value
           setLinearTeams(teams)
-          setCreateTeamId((current) => current ?? teams[0]?.id ?? null)
+          setCreateTeamId((current) =>
+            current && teams.some((team) => team.id === current) ? current : (teams[0]?.id ?? null)
+          )
         } else {
           setLinearTeams([])
           setCreateTeamId(null)
@@ -234,18 +244,20 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     }
   }, [client, hostedRepos, provider, showCreateTask, taskStateHydrated, tasksSupported])
 
+  const linearMetadataKey = linearMetadataItem?.key ?? null
+  useEffect(() => {
+    setLinearCommentDraft('')
+    setLinearSubIssueTitle('')
+  }, [linearMetadataKey])
+
   useEffect(() => {
     if (!tasksSupported || !linearMetadataItem || !client) {
       setLinearStates([])
-      setLinearCommentDraft('')
-      setLinearSubIssueTitle('')
       return
     }
     let stale = false
     setLinearStatesLoading(true)
     setLinearStatesError('')
-    setLinearCommentDraft('')
-    setLinearSubIssueTitle('')
     const baseParams = {
       teamId: linearMetadataItem.source.team.id,
       workspaceId: linearMetadataItem.source.workspaceId
@@ -344,24 +356,9 @@ export function useMobileTasksItemSelectionEffects(
     resetPrFiles()
   }, [actionIdentity, client, fileRevision, resetPrFiles])
 
+  // Keyed on identity: status edits, refreshes and reconnects hand over a new object for the same item.
   useEffect(() => {
-    if (!actionItem) {
-      setItemTitleDraft('')
-      setItemBodyDraft('')
-      setItemCommentDraft('')
-      setItemAddLabelsDraft('')
-      setItemRemoveLabelsDraft('')
-      setItemAddAssigneesDraft('')
-      setItemRemoveAssigneesDraft('')
-      setItemReviewersDraft('')
-      setItemReplyDrafts({})
-      setExpandedPrFilePath(null)
-      resetPrFiles()
-      setPrFileCommentDrafts({})
-      setExpandedResolvedCommentGroups(new Set())
-      return
-    }
-    setItemTitleDraft(actionItem.title)
+    setItemTitleDraft(actionItem?.title ?? '')
     setItemBodyDraft('')
     setItemCommentDraft('')
     setItemAddLabelsDraft('')
@@ -374,7 +371,7 @@ export function useMobileTasksItemSelectionEffects(
     resetPrFiles()
     setPrFileCommentDrafts({})
     setExpandedResolvedCommentGroups(new Set())
-  }, [actionItem])
+  }, [actionIdentity])
 }
 
 // A failed read must not read as a team with no states.

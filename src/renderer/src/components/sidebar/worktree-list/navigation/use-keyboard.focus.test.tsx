@@ -28,10 +28,10 @@ vi.mock('@/store', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activate(...args)
 }))
-vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
+vi.mock('@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry', () => ({
   focusRuntimeTerminalSurface: (...args: unknown[]) => focusRuntime(...args)
 }))
 const { useWorktreeListKeyboardNavigation } = await import('./use-keyboard')
@@ -181,6 +181,7 @@ describe('workspace list focus ownership', () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')
     const composer = document.createElement('div')
     composer.contentEditable = 'true'
+    composer.setAttribute('data-native-chat-prompt-editor', 'true')
     const editor = document.createElement('div')
     editor.className = 'monaco-editor'
     const field = editor.appendChild(document.createElement('textarea'))

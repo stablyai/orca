@@ -1,4 +1,4 @@
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import {
   probePtyRunningWorkWithInspection,
   type PtyRunningWorkProbe

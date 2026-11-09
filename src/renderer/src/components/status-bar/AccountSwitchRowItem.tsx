@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react'
 import React from 'react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 
 export function AccountSwitchRowItem({
@@ -22,6 +22,7 @@ export function AccountSwitchRowItem({
   /** Rendered beside the item, not inside it, so its own menu item stays separately focusable. */
   action?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex items-center">
       <DropdownMenuItem
@@ -36,7 +37,7 @@ export function AccountSwitchRowItem({
             <>
               <Check className="size-3.5" />
               <span className="sr-only">
-                {translate('auto.components.status.bar.StatusBar.ff0fbe9311', 'Active')}
+                {t('auto.components.status.bar.StatusBar.ff0fbe9311', 'Active')}
               </span>
             </>
           ) : null}

@@ -1,8 +1,9 @@
-import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
+import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from '@/lib/agent-launch-failure'
+import type { DirectWorkItemLaunchResult } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { buildFixBrokenChecksPrompt } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { saveSourceControlAiActionRecipeForTarget } from '../../right-sidebar/source-control/ai/recipe-persistence'
@@ -43,6 +44,7 @@ export async function startFixChecksFromDialog(args: {
   commandInput: string
   /** Omitted when CLI arguments do not apply, so the launch resolves the global Agents setting. */
   agentArgs?: string
+  actionAgentArgs?: string
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   preferredSurface?: 'chat'
@@ -53,10 +55,15 @@ export async function startFixChecksFromDialog(args: {
   if (!args.targetRepoId) {
     return false
   }
+  let failureNotified = false
+  const onFailureNotified = () => {
+    failureNotified = true
+    args.onFailureNotified?.()
+  }
   return await launchWorkItemDirect({
     signal: args.signal,
     onCreateAccepted: args.onCreateAccepted,
-    onFailureNotified: args.onFailureNotified,
+    onFailureNotified,
     item: { ...args.item, repoId: args.targetRepoId, pasteContent: args.commandInput },
     repoId: args.targetRepoId,
     launchSource: 'task_page',
@@ -65,6 +72,7 @@ export async function startFixChecksFromDialog(args: {
     agentOverride: args.agent,
     agentLaunchPreferences: args.agentLaunchPreferences,
     agentArgs: args.agentArgs,
+    actionAgentArgs: args.actionAgentArgs,
     ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
     ...(args.chatSessionOptions !== undefined
       ? { chatSessionOptions: args.chatSessionOptions }
@@ -79,12 +87,20 @@ export async function startFixChecksFromDialog(args: {
       : {}),
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     openModalFallback: () => {
-      toast.error(
-        translate(
-          'auto.components.PullRequestPage.c4c02ea23e',
-          'Unable to create a fix workspace automatically.'
+      if (failureNotified) {
+        return
+      }
+      if (args.agent) {
+        notifyAgentLaunchFailure(args.agent, agentLaunchRecoveryMessage('refreshProjects'))
+      } else {
+        toast.error(
+          translate(
+            'auto.components.PullRequestPage.c4c02ea23e',
+            'Unable to create a fix workspace automatically.'
+          )
         )
-      )
+      }
+      onFailureNotified()
     }
   })
 }

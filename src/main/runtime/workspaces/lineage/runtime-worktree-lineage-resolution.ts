@@ -6,8 +6,11 @@ import type {
   WorktreeLineage,
   WorktreeLineageWarning
 } from '../../../../shared/worktree/lineage-types'
+import { crossStoreCreateLineage } from './runtime-worktree-lineage-recording'
+import type { CrossStoreLineageResolution } from './runtime-worktree-lineage-recording'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
+import { RuntimeLineageError, explicitParentError } from './runtime-lineage-error'
 
 export type WorktreeLineageInput = NonNullable<RuntimeManagedWorktreeCreateArgs['lineage']>
 
@@ -36,6 +39,7 @@ export type WorktreeLineageResolution =
       coordinatorHandle?: string
       createdByTerminalHandle?: string
     }
+  | CrossStoreLineageResolution
   | { kind: 'none'; warnings: WorktreeLineageWarning[] }
 
 export type WorktreeLineageCandidate = {
@@ -46,32 +50,10 @@ export type WorktreeLineageCandidate = {
   coordinatorHandle?: string
 }
 
-export class RuntimeLineageError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly data?: unknown
-  ) {
-    super(message)
-  }
-}
-
-export const LINEAGE_PARENT_AMBIGUOUS = 'LINEAGE_PARENT_AMBIGUOUS'
-
 export function formatAmbiguousCwdParentMessage(agent?: TuiAgent): string {
   return `Orca did not create the workspace${agent ? ` or start ${agent}` : ''} because more than one workspace matched the current directory when this request was prepared.
 Run \`orca worktree list --limit 10000 --json\` with the same server and host selection. Match path and host; if truncated, repeat with a larger --limit using totalCount. Choose id:<id> (or identity:<identity.key> for a shared ID), then add --parent-worktree <selector> to your original invocation, or deliberately use --no-parent. Pass the selector as one argument quoted for your shell.
 To choose a parent, start a fresh request without --retry-launch; retrying the old ID returns this refusal.`
-}
-
-export class WorktreeIdRequiresFullPathError extends Error {
-  readonly code = 'worktree_id_requires_full_path'
-
-  constructor() {
-    super(
-      'Worktree id selectors must use the full <repo-id>::<path> value. Use the id from `orca worktree list --json`, or target by path:<path>, branch:<branch>, or issue:<number>.'
-    )
-  }
 }
 
 type LineageResolutionDependencies = {
@@ -89,28 +71,20 @@ export async function resolveRuntimeWorktreeCreateLineage(
   input: WorktreeLineageInput | undefined,
   deps: LineageResolutionDependencies
 ): Promise<WorktreeLineageResolution> {
-  const nextSteps = [
-    'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
-    'Retry with --no-parent to create without lineage.'
-  ]
-  const notFoundMessage = (error: unknown): string =>
-    error instanceof WorktreeIdRequiresFullPathError
-      ? error.message
-      : 'Parent selector was not found.'
   if (!input) {
     return { kind: 'none', warnings: [] }
   }
-  if (
-    (input.noParent === true && (input.parentWorkspace || input.parentWorktree)) ||
-    (input.parentWorkspace && input.parentWorktree)
-  ) {
+  const parents = [input.parentWorkspace, input.parentWorktree, input.crossStoreParent]
+  if (parents.filter(Boolean).length > (input.noParent === true ? 0 : 1)) {
     throw new RuntimeLineageError(
       'LINEAGE_PARENT_CONTEXT_CONFLICT',
       'Choose either one parent selector or --no-parent.'
     )
   }
-  if (input.noParent === true) {
-    return { kind: 'none', warnings: [] }
+  if (input.noParent === true || input.crossStoreParent) {
+    return input.crossStoreParent
+      ? crossStoreCreateLineage({ ...input, crossStoreParent: input.crossStoreParent })
+      : { kind: 'none', warnings: [] }
   }
   if (input.parentWorkspace) {
     try {
@@ -128,9 +102,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
           : { source: 'explicit-cli-flag', confidence: 'explicit' }
       }
     } catch (error) {
-      throw new RuntimeLineageError('LINEAGE_PARENT_NOT_FOUND', notFoundMessage(error), {
-        nextSteps
-      })
+      throw explicitParentError(error)
     }
   }
   if (input.parentWorktree) {
@@ -142,9 +114,7 @@ export async function resolveRuntimeWorktreeCreateLineage(
         capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
       }
     } catch (error) {
-      throw new RuntimeLineageError('LINEAGE_PARENT_NOT_FOUND', notFoundMessage(error), {
-        nextSteps
-      })
+      throw explicitParentError(error)
     }
   }
   const warnings: WorktreeLineageWarning[] = []

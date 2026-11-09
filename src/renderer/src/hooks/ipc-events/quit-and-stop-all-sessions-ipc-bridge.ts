@@ -5,7 +5,7 @@ import {
   snapshotKillAllTerminalSurfaceIds,
   type KillAllTerminalSurfacesSummary
 } from '@/components/shared/kill-all-terminal-surfaces'
-import { waitForWorkspaceSessionReady } from '@/lib/worktree-agent-activation-gate'
+import { waitForWorkspaceSessionReady } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { useAppStore } from '../../store'
 
 let stopAllInFlight = false

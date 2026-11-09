@@ -106,7 +106,10 @@ export function createWslMoveStoreHost(options: WslMoveStoreHostOptions): WslMov
           })
         ),
       stageChunk: (request) =>
-        mutate('snapshot-chunk', () => store().stageOrcadMigrationSnapshotChunk(request))
+        mutate('snapshot-chunk', () => store().stageOrcadMigrationSnapshotChunk(request)),
+      readCapabilities: async () => WSL_MOVE_STORE_HOST_CAPABILITIES,
+      stageBlobChunk: (request) =>
+        mutate(`blob:${request.blob.blobKind}`, () => store().stageOrcadMigrationBlobChunk(request))
     },
     commitWithBlobs: (manifest, expectedBlobs) =>
       mutate('commit', () =>

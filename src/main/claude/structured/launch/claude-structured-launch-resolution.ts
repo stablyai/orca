@@ -30,7 +30,7 @@ import type { ClaudeCliFlagCheck, ClaudeCliFlagSupport } from '../../claude-cli-
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import { withNativeChatVisualsEnv } from '../../../native-chat/native-chat-visuals-delivery'
 import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
-import type { StructuredAgentLaunchPartResolver } from '../../../runtime/structured-agent-launch-composition'
+import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { claudeSessionIdForOrcaSession } from '../claude-structured-session-id'
 import {
   pendingAgentSessionRewindFork,
@@ -55,9 +55,7 @@ export function withClaudeArtifactDefault(
   return chosen ? env : { ...env, [CLAUDE_ARTIFACT_ENV]: '1' }
 }
 
-type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'> & {
-  resolvePermissionModeInCli?: true
-}
+type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'>
 
 export type ClaudeStructuredSdkOptions = Pick<
   ClaudeAgentSdkOptions,
@@ -100,8 +98,8 @@ export function claudeStructuredPermissionOptions(
   mode: AgentChatPermissionChoice
 ): ClaudePermissionOptions {
   if (mode === 'own') {
-    // upstream request: https://github.com/anthropics/claude-agent-sdk-typescript/issues/519
-    return { resolvePermissionModeInCli: true }
+    // An omitted mode lets the CLI apply the user's settings defaultMode.
+    return {}
   }
   return mode === 'full-access'
     ? { extraArgs: { 'dangerously-skip-permissions': null } }
@@ -245,6 +243,7 @@ export function claudeStructuredLaunchPart(
         providerSessionId,
         claudeConfigDir,
         recordHome: accountHome.path,
+        cwd,
         hasTranscript: deps.hasTranscript
       }))
     // Fixed homes can be checked before the final account-routing recheck.
@@ -275,6 +274,7 @@ export function claudeStructuredLaunchPart(
         providerSessionId: fork.sourceSessionId,
         claudeConfigDir: launchHome,
         recordHome: accountHome.path,
+        cwd,
         hasTranscript: deps.hasTranscript
       })
     }

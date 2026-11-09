@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeTerminalIdlePolls } from './terminal-idle-polls'
-import type { TerminalWaiter } from '../../runtime-terminal-contracts'
+import type { TerminalWaiter } from './terminal-waiter'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'

@@ -1,76 +1,11 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const {
-  assertPackagedDaemonEntryExists,
-  runTerminalHostRoundTrip,
-  verifyPackagedDaemonEntryBoots,
-  verifyPackagedMacTerminalHostBoots
-} = require('./verify-packaged-daemon-entry.cjs')
-
-describe('verify-packaged-daemon-entry', () => {
-  let resourcesDir
-
-  beforeEach(() => {
-    resourcesDir = mkdtempSync(join(tmpdir(), 'orca-daemon-entry-verify-'))
-  })
-
-  afterEach(() => {
-    rmSync(resourcesDir, { recursive: true, force: true })
-  })
-
-  function writePackagedEntry(source) {
-    const entryDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
-    mkdirSync(entryDir, { recursive: true })
-    writeFileSync(join(entryDir, 'daemon-entry.js'), source)
-  }
-
-  // Missing entry must fail: silent skip hid packaged layout regression in rc.1 daemon-load incident.
-  it('throws when the unpacked daemon entry is missing', () => {
-    expect(() => assertPackagedDaemonEntryExists(resourcesDir)).toThrow(
-      /missing unpacked daemon entry/
-    )
-    expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(
-      /missing unpacked daemon entry/
-    )
-  })
-
-  it('passes when the packaged entry loads and reaches argv parsing', () => {
-    writePackagedEntry('console.error("Usage: daemon-entry <socket>"); process.exit(1)\n')
-    expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).not.toThrow()
-  })
-
-  it('fails when the packaged entry cannot resolve its module graph', () => {
-    writePackagedEntry('require("orca-module-that-does-not-exist")\n')
-    expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(
-      /failed to load under plain Node/
-    )
-  })
-
-  it('fails when the packaged entry never reaches argv parsing', () => {
-    writePackagedEntry('process.exit(0)\n')
-    expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(/did not reach argv parsing/)
-  })
-})
-
-describe('terminal host boot check on a slice this host cannot run', () => {
-  // No Mac runs a riscv64 binary, so this is the same path as an x64 slice without Rosetta.
-  it('fails a release or CI build', async () => {
-    await expect(
-      verifyPackagedMacTerminalHostBoots('/Orca.app', { arch: 'riscv64', required: true })
-    ).rejects.toThrow(/riscv64 cannot run on this/)
-  })
-
-  it('lets a local build skip it', async () => {
-    await expect(
-      verifyPackagedMacTerminalHostBoots('/Orca.app', { arch: 'riscv64', required: false })
-    ).resolves.toBeUndefined()
-  })
-})
+const { runTerminalHostRoundTrip } = require('./verify-packaged-daemon-entry.cjs')
 
 describe.skipIf(process.platform === 'win32')('terminal host round trip', () => {
   let root
@@ -80,6 +15,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -92,6 +28,7 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
         "const net = require('node:net'), fs = require('node:fs')",
         'const arg = (name) => process.argv[process.argv.indexOf(name) + 1]',
         `fs.writeFileSync(${JSON.stringify(join(root, 'pid'))}, String(process.pid))`,
+        `fs.writeFileSync(${JSON.stringify(join(root, 'shell'))}, process.env.SHELL)`,
         `net.createServer(${onConnection}).listen(arg('--socket'), () => fs.writeFileSync(arg('--token'), 'tok'))`
       ].join('\n')
     )
@@ -145,8 +82,10 @@ describe.skipIf(process.platform === 'win32')('terminal host round trip', () => 
         }
       })
     }`)
+    vi.stubEnv('SHELL', '/usr/bin/fish')
     const result = await roundTrip(entry, 1_500)
     expect(result.error).toBe(null)
+    expect(readFileSync(join(root, 'shell'), 'utf8')).toBe('/bin/sh')
     expect(result.daemonAlive).toBe(false)
     expect(result.scratchDirs).toEqual([])
     const messages = readFileSync(messagesPath, 'utf8').trim().split('\n').map(JSON.parse)

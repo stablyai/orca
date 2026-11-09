@@ -2,13 +2,13 @@ import {
   isWslShellName,
   type LocalWindowsTerminalRuntimeOptions
 } from '../../../shared/local-windows-terminal-runtime'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
 import {
   resolveTerminalStartupCwd,
   type TerminalStartupCwdMissingDirFallback
 } from '../../../shared/shell/launch/terminal-startup-cwd'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime/runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { isWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 import { resolveWslSessionContext } from '../../daemon/pty-subprocess/wsl-session-context'

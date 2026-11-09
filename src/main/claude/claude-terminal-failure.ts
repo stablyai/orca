@@ -7,10 +7,8 @@ import {
   providerDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionRevisionJournal
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionRevisionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
   agentJournalTurnRowReservedBytes,
   resolveAgentJournalTurnRowWrite,

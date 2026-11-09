@@ -1,10 +1,13 @@
-import type { RuntimeFileOpenPosition } from '../../../shared/runtime-file-contracts'
+import type {
+  RuntimeFileOpenPosition,
+  RuntimeFileOpenResult
+} from '../../../shared/file-access/runtime-editor-file-open'
 import { listFilesystemMarkdownDocuments } from '../../providers/filesystem-markdown-listing'
-import type { MarkdownDocument } from '../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
 import {
   validatePathExistenceBatch,
   type PathExistenceResult
-} from '../../../shared/path-existence-batch'
+} from '../../../shared/file-access/path-existence-batch'
 import { readRuntimeFilePathExistence } from './file-path-existence'
 import {
   isMobileBinaryPath,
@@ -13,9 +16,8 @@ import {
   isMobilePreviewableImagePath
 } from './mobile-file-kind'
 import type { RuntimeFileCommandHost } from './file-command-host'
-import type { RuntimeFileOpenResult } from '../../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
-import { joinWorktreeRelativePath } from '../runtime-relative-paths'
+import { joinWorktreeRelativePath } from './paths/runtime-relative-paths'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
 import {
   requireRuntimeFileProvider,

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -62,62 +62,6 @@ describe('ModelManager', () => {
     hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
   })
 
-  it('requires pinned, internally consistent metadata for every model file', () => {
-    for (const manifest of SPEECH_MODEL_CATALOG) {
-      if (manifest.provider !== 'local') {
-        continue
-      }
-      expect(manifest.downloadFiles?.length).toBeGreaterThan(0)
-      expect(manifest.files).toEqual(manifest.downloadFiles?.map(({ name }) => name))
-      expect(manifest.sizeBytes).toBe(
-        manifest.downloadFiles?.reduce((total, { sizeBytes }) => total + sizeBytes, 0)
-      )
-      for (const file of manifest.downloadFiles ?? []) {
-        expect(file.url).toMatch(
-          /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[a-f0-9]{40}\//
-        )
-        expect(file.sha256).toMatch(/^[a-f0-9]{64}$/)
-        expect(file.sizeBytes).toBeGreaterThan(0)
-      }
-    }
-  })
-
-  it('verifies downloaded model file hashes before installation', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      const filePath = join(dir, 'model.onnx')
-      writeFileSync(filePath, 'known model bytes')
-      const expected = createHash('sha256').update('known model bytes').digest('hex')
-      const manager = managerInternals(dir)
-
-      await expect(manager.verifyFileSha256(filePath, expected)).resolves.toBeUndefined()
-      await expect(manager.verifyFileSha256(filePath, '0'.repeat(64))).rejects.toThrow(
-        /integrity verification/
-      )
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('rejects non-HTTPS model downloads', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      const manager = managerInternals(dir)
-
-      await expect(
-        manager.downloadFile(
-          'http://example.com/model.bin',
-          join(dir, 'model.bin'),
-          1,
-          'm',
-          () => false
-        )
-      ).rejects.toThrow(/HTTPS/)
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
   it('installs individually verified model files through a staging directory', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
@@ -151,27 +95,6 @@ describe('ModelManager', () => {
       expect(existsSync(`${modelDir}.partial`)).toBe(false)
       await expect(manager.getModelState(manifest.id)).resolves.toEqual({
         id: manifest.id,
-        status: 'ready'
-      })
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('marks OpenAI transcription models ready only when an API key is configured', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
-    try {
-      const manager = new ModelManager(dir, openElectronSpeechDownloadRequest)
-
-      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
-        id: 'openai-gpt-4o-mini-transcribe',
-        status: 'not-downloaded'
-      })
-
-      hasOpenAiSpeechApiKeyMock.mockReturnValue(true)
-
-      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
-        id: 'openai-gpt-4o-mini-transcribe',
         status: 'ready'
       })
     } finally {

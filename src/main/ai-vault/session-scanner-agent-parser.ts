@@ -1,9 +1,9 @@
+import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from './ai-vault-scan-cancellation'
 import { parseQoderSessionFile } from './scanners/qoder/session-scanner-qoder-parser'
 import { parseCodebuddySessionFile } from './scanners/codebuddy/session-scanner-codebuddy-parser'
 import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { splitHermesSqliteCandidate } from './scanners/hermes/session-scanner-hermes-sqlite-paths'
 import { parseHermesSqliteSession } from './scanners/hermes/session-scanner-hermes-sqlite'
-import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { parseDevinSessionFile } from './scanners/devin/session-scanner-devin-parser'
 import { parseAntigravitySessionFile } from './scanners/antigravity/session-scanner-antigravity-parser'
 import { parseDroidSessionFile } from './scanners/droid/session-scanner-droid-parser'
@@ -45,7 +45,7 @@ async function readOpenCodeSqliteCandidate(
   signal?: AbortSignal,
   agent?: 'opencode2' | 'zcode'
 ): Promise<AiVaultSession | null> {
-  throwIfSignalAborted(signal)
+  throwIfAiVaultScanCancelled(signal)
   const request = { ...sqliteCandidate, platform, signal }
   if (!messages?.active) {
     const parse =
@@ -54,8 +54,8 @@ async function readOpenCodeSqliteCandidate(
         : agent === 'zcode'
           ? parseZcodeSqliteSessionViaWorker
           : parseOpenCodeSqliteSessionViaWorker
-    const session = await parse(request)
-    throwIfSignalAborted(signal)
+    const session = await waitForAiVaultScan(parse(request), signal)
+    throwIfAiVaultScanCancelled(signal)
     return session
   }
   const capture =
@@ -64,12 +64,13 @@ async function readOpenCodeSqliteCandidate(
       : agent === 'zcode'
         ? captureZcodeSqliteSessionViaWorker
         : captureOpenCodeSqliteSessionViaWorker
-  const result = await capture(request)
+  const result = await waitForAiVaultScan(capture(request), signal)
   for (const message of result.messages) {
-    throwIfSignalAborted(signal)
+    throwIfAiVaultScanCancelled(signal)
     messages.push(message)
+    await waitForAiVaultScan(messages.drain?.() ?? Promise.resolve(), signal)
   }
-  throwIfSignalAborted(signal)
+  throwIfAiVaultScanCancelled(signal)
   return result.session
 }
 
@@ -109,7 +110,7 @@ export async function parseAgentSessionFile(
       if (sqliteCandidate) {
         return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal)
       }
-      return parseOpenCodeSessionFile(candidate.file, platform, messages)
+      return parseOpenCodeSessionFile(candidate.file, platform, messages, signal)
     }
     case 'opencode2': {
       const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
@@ -125,7 +126,7 @@ export async function parseAgentSessionFile(
         : null
     }
     case 'grok':
-      return parseGrokSessionFile(candidate.file, platform, messages)
+      return parseGrokSessionFile(candidate.file, platform, messages, signal)
     case 'hermes': {
       const sqliteCandidate = splitHermesSqliteCandidate(candidate.file.path)
       if (sqliteCandidate) {
@@ -139,7 +140,7 @@ export async function parseAgentSessionFile(
       return parseHermesSessionFile(candidate.file, platform, messages, signal)
     }
     case 'rovo':
-      return parseRovoSessionFile(candidate.file, platform, messages)
+      return parseRovoSessionFile(candidate.file, platform, messages, signal)
     case 'openclaw':
       return parseMessageGraphSessionFile('openclaw', candidate.file, platform, messages)
     case 'pi':
@@ -155,12 +156,12 @@ export async function parseAgentSessionFile(
     case 'devin':
       return parseDevinSessionFile(candidate.file, platform, messages, signal)
     case 'kimi':
-      return parseKimiSessionFile(candidate.file, platform, messages)
+      return parseKimiSessionFile(candidate.file, platform, messages, signal)
     case 'muse':
-      return parseMuseSessionFile(candidate.file, platform, messages)
+      return parseMuseSessionFile(candidate.file, platform, messages, signal)
     case 'jcode':
-      return parseJcodeSessionFile(candidate.file, platform, messages)
+      return parseJcodeSessionFile(candidate.file, platform, messages, signal)
     case 'kiro':
-      return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords)
+      return parseKiroSessionFile(candidate.file, platform, messages, onSkippedRecords, signal)
   }
 }

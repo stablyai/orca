@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { ImportSkipReason } from '../../../shared/filesystem-import-result-types'
+import type { ImportSkipReason } from '../../../shared/file-import/filesystem-import-result'
 
 const SKIP_REASON_COPY: Record<ImportSkipReason, { key: string; fallback: string }> = {
   missing: {

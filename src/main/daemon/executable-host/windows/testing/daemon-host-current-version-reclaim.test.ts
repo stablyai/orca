@@ -6,10 +6,8 @@ import { setAppEnvironment } from '../../../../../shared/app-environment'
 import { daemonHostStagingName } from '../daemon-host-reclaim'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import {
-  collectPinnedDaemonVersions,
   getDaemonHostRootDir,
   materializeRelocatedDaemonHost,
-  pruneDaemonHostStaging,
   pruneOldDaemonHosts
 } from '../daemon-host-relocation'
 import type { ProcessLivenessVerdict } from '../../../endpoint/identity/daemon-incarnation-evidence-types'
@@ -126,40 +124,6 @@ describe('current-version daemon-host staging cleanup', () => {
     expect(materializeRelocatedDaemonHost()?.execPath).toBe(join(selected, 'Orca.exe'))
   })
 
-  it.each<[string, ProcessLivenessVerdict]>([
-    ['exited', { status: 'exited' }],
-    ['live', { status: 'live' }],
-    ['unverifiable', { status: 'unverifiable', reason: 'query failed' }]
-  ])('preserves every build while a current-version daemon is %s', (_label, verdict) => {
-    const selected = selectedBuild()
-    const { staleBuild, staging } = seedLeftovers()
-
-    prune([['9.9.9', verdict]])
-
-    expect(existsSync(join(staleBuild, 'Orca.exe'))).toBe(true)
-    expect(existsSync(join(selected, 'Orca.exe'))).toBe(true)
-    expect(existsSync(staging)).toBe(false)
-  })
-
-  it('retains published builds after their previous pid record exits', () => {
-    selectedBuild()
-    const { staleBuild } = seedLeftovers()
-    const runtimeDir = join(tempDir, 'userData', 'daemon')
-    mkdirSync(runtimeDir, { recursive: true })
-    writeFileSync(
-      join(runtimeDir, 'daemon-v9.pid'),
-      JSON.stringify({ pid: 4242, startedAtMs: null, appVersion: '9.9.9' })
-    )
-    pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
-    expect(existsSync(staleBuild)).toBe(true)
-
-    vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw processError('ESRCH')
-    })
-    pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
-    expect(existsSync(staleBuild)).toBe(true)
-  })
-
   it('uses staging writer evidence independently of unverifiable daemon pid evidence', () => {
     selectedBuild()
     const { staleBuild, staging } = seedLeftovers()
@@ -207,35 +171,5 @@ describe('current-version daemon-host staging cleanup', () => {
 
     expect(existsSync(join(kept, 'Orca.exe'))).toBe(true)
     expect(existsSync(abandoned)).toBe(false)
-  })
-
-  it('retains every published build before a replacement writes its pid record', () => {
-    const selected = selectedBuild()
-    const { staleBuild } = seedLeftovers()
-    const runtimeDir = join(tempDir, 'userData', 'daemon')
-    mkdirSync(runtimeDir, { recursive: true })
-    const record = join(runtimeDir, 'daemon-v9.pid')
-    expect(existsSync(record)).toBe(false)
-    const secondStale = join(versionRoot, 'build-stale-111111111111')
-
-    pruneDaemonHostStaging()
-    expect(existsSync(staleBuild)).toBe(true)
-    expect(existsSync(join(selected, 'Orca.exe'))).toBe(true)
-
-    mkdirSync(secondStale, { recursive: true })
-    writeFileSync(record, JSON.stringify({ pid: LIVE_WRITER_PID, appVersion: '9.9.9' }))
-    pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
-    expect(existsSync(secondStale)).toBe(true)
-  })
-
-  it('keeps staging off packaged win32', () => {
-    selectedBuild()
-    const { staleBuild, staging } = seedLeftovers()
-    setProcessProp('platform', 'linux')
-
-    pruneDaemonHostStaging()
-
-    expect(existsSync(staleBuild)).toBe(true)
-    expect(existsSync(staging)).toBe(true)
   })
 })

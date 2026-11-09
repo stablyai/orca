@@ -1,3 +1,4 @@
+import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../../body-image-urls'
 import type { Nodes } from 'mdast'
 import { z } from 'zod'
 import remarkParse from 'remark-parse'
@@ -5,6 +6,7 @@ import { unified } from 'unified'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { mapGraphQLReactionGroups } from '../../comment-reactions'
 import { tailDiffHunk } from '../../../../shared/github/pr-comment-diff-hunk'
+import { viewerAuthorship } from '../../../source-control/comment-viewer-authorship'
 
 const commentSchema = z.object({
   id: z.string(),
@@ -13,9 +15,11 @@ const commentSchema = z.object({
     .object({ __typename: z.string().optional(), login: z.string(), avatarUrl: z.string() })
     .nullable(),
   body: z.string().nullish(),
+  bodyHTML: z.unknown().optional(),
   createdAt: z.string(),
   submittedAt: z.string().nullish(),
   url: z.string(),
+  viewerDidAuthor: z.boolean().nullish().catch(undefined),
   reactionGroups: z
     .array(
       z.object({
@@ -80,17 +84,20 @@ function hasDatabaseId<T extends { databaseId: number | null }>(
 function mapGraphQLComment(
   comment: z.infer<typeof commentSchema> & { databaseId: number }
 ): PRComment {
-  return {
+  const mapped: PRComment = {
     id: comment.databaseId,
     author: comment.author?.login ?? 'ghost',
     authorAvatarUrl: comment.author?.avatarUrl ?? '',
     body: comment.body ?? '',
+    bodyImageUrls: githubBodyImageUrls(comment.body, comment.bodyHTML),
     createdAt: comment.submittedAt ?? comment.createdAt,
     url: comment.url,
     isBot: comment.author?.__typename === 'Bot',
+    ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {}),
     reactionSubjectId: comment.id,
     reactions: mapGraphQLReactionGroups(comment.reactionGroups)
   }
+  return mapped
 }
 
 const reviewMarkdown = unified().use(remarkParse)
@@ -120,10 +127,11 @@ export function parsePRConversationResponse(stdout: string): {
   reviewComments: PRComment[]
 } {
   const envelope = envelopeSchema.parse(JSON.parse(stdout))
+  const errors = removeFailedGitHubBodyHtml(envelope.data, envelope.errors)
   const pr = envelope.data?.repository?.pullRequest
   const failed = (source: string): boolean =>
     Boolean(
-      envelope.errors?.some(
+      errors?.some(
         (error) =>
           !error.path?.length || !error.path.includes('pullRequest') || error.path[2] === source
       )
@@ -146,19 +154,20 @@ export function parsePRConversationResponse(stdout: string): {
     reviewComments: threads.success
       ? threads.data.nodes.flatMap((thread) =>
           thread
-            ? thread.comments.nodes.filter(hasDatabaseId).map((c) => ({
-                ...mapGraphQLComment(c),
-                // Left-side threads count old-file lines, which the shared tail numbering cannot place.
-                ...(c === thread.comments.nodes[0] && thread.diffSide !== 'LEFT'
-                  ? rootDiffHunk(thread.rootHunk)
-                  : {}),
-                path: c.path,
-                threadId: thread.id,
-                isResolved: thread.isResolved,
-                isOutdated: thread.line == null,
-                line: thread.line ?? thread.originalLine ?? undefined,
-                startLine: thread.startLine ?? thread.originalStartLine ?? undefined
-              }))
+            ? thread.comments.nodes.filter(hasDatabaseId).map((c) =>
+                Object.assign(mapGraphQLComment(c), {
+                  // Left-side threads count old-file lines, which the shared tail numbering cannot place.
+                  ...(c === thread.comments.nodes[0] && thread.diffSide !== 'LEFT'
+                    ? rootDiffHunk(thread.rootHunk)
+                    : {}),
+                  path: c.path,
+                  threadId: thread.id,
+                  isResolved: thread.isResolved,
+                  isOutdated: thread.line == null,
+                  line: thread.line ?? thread.originalLine ?? undefined,
+                  startLine: thread.startLine ?? thread.originalStartLine ?? undefined
+                })
+              )
             : []
         )
       : []
@@ -178,12 +187,17 @@ const restCommentSchema = z.object({
     .object({ login: z.string(), avatar_url: z.string(), type: z.string().optional() })
     .nullable(),
   body: z.string().nullish(),
+  body_html: z.unknown().optional(),
   created_at: z.string().optional(),
   submitted_at: z.string().nullish(),
   html_url: z.string()
 })
 
-export function parseRestPRComments(stdout: string, reviews: boolean): PRComment[] {
+export function parseRestPRComments(
+  stdout: string,
+  reviews: boolean,
+  viewerLogin: string | null
+): PRComment[] {
   return z
     .array(restCommentSchema)
     .parse(JSON.parse(stdout))
@@ -193,8 +207,10 @@ export function parseRestPRComments(stdout: string, reviews: boolean): PRComment
       author: c.user?.login ?? 'ghost',
       authorAvatarUrl: c.user?.avatar_url ?? '',
       body: c.body ?? '',
+      bodyImageUrls: githubBodyImageUrls(c.body, c.body_html),
       createdAt: (reviews ? c.submitted_at : c.created_at) ?? '',
       url: c.html_url,
-      isBot: c.user?.type === 'Bot'
+      isBot: c.user?.type === 'Bot',
+      ...viewerAuthorship(c.user?.login, viewerLogin)
     }))
 }

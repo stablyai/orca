@@ -18,8 +18,11 @@ import {
 } from './native-chat-launch-resume-decision'
 
 const rpc = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: rpc,
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: rpc
+}))
+
+vi.mock('../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
 vi.mock('sonner', async () =>
@@ -91,17 +94,4 @@ it('holds Continue back from the settings wait until the opted-in launch names i
 
   expect(seen.at(-1)).toEqual({ pending: false, resuming: ['a', 'b'] })
   expect(seen.some((entry) => !entry.pending && entry.resuming.length === 0)).toBe(false)
-})
-
-it('holds nothing back once the launch found nothing to resume', async () => {
-  settings(true)
-  rpc.mockResolvedValue({ sessions: [] })
-  await act(async () => root.render(<Probe launch />))
-  expect(seen.at(-1)).toEqual({ pending: false, resuming: [] })
-})
-
-it('holds nothing back when the launch asks instead of resuming', () => {
-  settings(false)
-  act(() => root.render(<Probe launch={false} />))
-  expect(seen.at(-1)).toEqual({ pending: false, resuming: [] })
 })

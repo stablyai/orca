@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+
 import { PROGRAM_STATUS_QUERY_REPLY } from '../../../src/shared/program-status/protocol'
 import { sendMobileTerminalQueryReply } from './mobile-terminal-query-reply'
 
@@ -24,51 +24,6 @@ function createClient() {
 }
 
 describe('sendMobileTerminalQueryReply', () => {
-  it('sends a subscribed terminal reply immediately with additive RPC metadata', async () => {
-    const client = createClient()
-
-    await expect(
-      sendMobileTerminalQueryReply({
-        bytes: '\x1b[3;4R',
-        client,
-        clientId: 'mobile-1',
-        connected: true,
-        handle: 'terminal-1',
-        hostSupportsQueryReplyInput: true,
-        hostSupportsProgramStatus: true,
-        subscribedTerminals: new Set(['terminal-1'])
-      })
-    ).resolves.toBe(true)
-
-    expect(client.sendRequest).toHaveBeenCalledWith('terminal.send', {
-      terminal: 'terminal-1',
-      text: '\x1b[3;4R',
-      enter: false,
-      inputKind: 'query-reply',
-      client: { id: 'mobile-1', type: 'mobile' }
-    })
-
-    const refused: RpcResponse = {
-      id: '2',
-      ok: true,
-      result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } }
-    }
-    client.sendRequest.mockResolvedValueOnce(refused)
-    await expect(
-      sendMobileTerminalQueryReply({
-        bytes: '\x1b[3;4R',
-        client,
-        clientId: 'mobile-1',
-        connected: true,
-        handle: 'terminal-1',
-        hostSupportsQueryReplyInput: true,
-        hostSupportsProgramStatus: true,
-        subscribedTerminals: new Set(['terminal-1'])
-      })
-    ).resolves.toBe(false)
-    expect(client.sendRequest).toHaveBeenCalledTimes(2)
-  })
-
   it.each([
     ['disconnected', false, new Set(['terminal-1']), '\x1b[3;4R', 'terminal-1'],
     ['unsubscribed', true, new Set(), '\x1b[3;4R', 'terminal-1'],

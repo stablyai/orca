@@ -4,12 +4,11 @@ import {
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget
 } from '../../../../shared/agent-session/agent-session-attachments'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
-  CLIPBOARD_IMAGE_MAX_PIXELS,
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR,
   assertClipboardImageByteLengthWithinLimit,
@@ -26,8 +25,6 @@ import { callRuntimeEnvelope, callRuntimeResult } from './web-runtime-calls'
 export const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
 
 export const MAX_CLIPBOARD_IMAGE_SOURCE_BYTES = CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
-
-export const MAX_CLIPBOARD_IMAGE_PIXELS = CLIPBOARD_IMAGE_MAX_PIXELS
 
 export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 
@@ -96,8 +93,7 @@ export async function readClipboardImagePngBase64(): Promise<string | null> {
     }
     const blob = await item.getType(imageType)
     assertClipboardImageBlobWithinLimit(blob)
-    const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
-    return blobToBase64(pngBlob)
+    return blobToBase64(await convertImageBlobToPng(blob, { downscaleToFit: true }))
   }
   return null
 }
@@ -126,7 +122,7 @@ const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
 
 export async function writeWebClipboardImage(dataUrl: string): Promise<void> {
   if (!dataUrl.startsWith(PNG_DATA_URL_PREFIX)) {
-    return
+    throw new Error('Clipboard image must be a PNG data URL')
   }
   if (typeof ClipboardItem === 'undefined' || typeof navigator.clipboard?.write !== 'function') {
     throw new Error('Image clipboard is unavailable in this browser context')

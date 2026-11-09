@@ -2,8 +2,8 @@ import type { BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
-import { browserManager } from '../browser/browser-manager'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import {
   enforceLocalSshWebRtcPolicyForGuest,
   isLocalSshBrowserPartition
@@ -13,7 +13,10 @@ import {
   browserRouteWebContentsRegistry
 } from '../browser/routing/sessions/browser-route-session-runtime'
 import { ORCA_BROWSER_BLANK_URL } from '../../shared/constants'
-import { DOC_PREVIEW_PARTITION, parseDocPreviewUrl } from '../../shared/doc-preview-scheme'
+import {
+  DOC_PREVIEW_PARTITION,
+  parseDocPreviewUrl
+} from '../../shared/document-preview/doc-preview-scheme'
 import { setDocPreviewFailureSink } from '../browser/document-preview/doc-preview-failure-notice'
 import {
   getDocPreviewGrant,
